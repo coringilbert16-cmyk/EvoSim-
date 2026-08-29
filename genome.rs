@@ -1,7 +1,7 @@
 use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
- 
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TraitDef {
     pub name: String,
@@ -9,12 +9,12 @@ pub struct TraitDef {
     pub mutation_probability: f64,
     pub mutation_sigma: f64,
 }
- 
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Genome {
     pub traits: Vec<TraitDef>,
 }
- 
+
 impl Genome {
     pub fn trait_value(&self, name: &str, default: f64) -> f64 {
         self.traits
@@ -23,7 +23,7 @@ impl Genome {
             .map(|t| t.value)
             .unwrap_or(default)
     }
- 
+
     pub fn mass_affinity(&self) -> f64 {
         self.trait_value("mass_affinity", 0.0).clamp(-1.0, 1.0)
     }
@@ -65,7 +65,7 @@ impl Genome {
     pub fn adult_mass(&self) -> f64 {
         self.trait_value("adult_mass", 16.0).clamp(4.0, 80.0)
     }
- 
+
     pub fn mutate(&mut self, rng: &mut ChaCha8Rng) {
         for t in &mut self.traits {
             if rng.gen::<f64>() < t.mutation_probability.clamp(1e-6, 0.25) {
@@ -79,7 +79,7 @@ impl Genome {
         }
     }
 }
- 
+
 fn trait_def(name: &str, value: f64, sigma: f64) -> TraitDef {
     TraitDef {
         name: name.into(),
@@ -88,7 +88,7 @@ fn trait_def(name: &str, value: f64, sigma: f64) -> TraitDef {
         mutation_sigma: sigma,
     }
 }
- 
+
 pub fn initial_genome() -> Genome {
     Genome {
         traits: vec![
