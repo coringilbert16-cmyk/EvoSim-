@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
- 
+
 use crate::math::{complexity, exponential_influence};
- 
+
 /// Immutable type properties. These never change and never evolve.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct ResourceProperties {
@@ -10,17 +10,17 @@ pub struct ResourceProperties {
     pub reactivity: f64,
     pub cohesion: f64,
 }
- 
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BaseResource {
     pub name: String,
     pub properties: ResourceProperties,
- 
+
     // Immutable geometric representation of this resource type (never
     // evolves, same status as `properties` - see Shape doc comment).
     pub shape: Shape,
 }
- 
+
 // ============================================================
 // SHAPE (immutable geometric property)
 // ============================================================
@@ -69,7 +69,7 @@ pub struct BaseResource {
 //     mechanic may attempt a connection. Compatibility rules belong
 //     to that future mechanic, not to this representation.
 // ============================================================
- 
+
 /// A small, deliberately limited vocabulary of 2D primitives. Each
 /// variant is parameterized rather than fixed-size, so the same small
 /// enum produces a large range of distinct silhouettes:
@@ -90,19 +90,19 @@ pub enum Form {
     /// since it has a curved boundary a renderer draws natively
     /// rather than tessellating.
     Circle { radius: f64 },
- 
+
     /// An axis-aligned rectangle centered on the shape's local
     /// origin. Independent width/height (unlike `RegularPolygon`)
     /// makes this the natural primitive for elongated bar/rod forms.
     Rectangle { width: f64, height: f64 },
- 
+
     /// A regular (equal-sided, equal-angled) polygon with `sides`
     /// vertices at distance `radius` from the local origin, first
     /// vertex fixed at angle 0 (along +x) by convention, remaining
     /// vertices spaced by 2*PI/sides. `sides` is a free parameter:
     /// 3 -> triangle, 5 -> pentagon, 6 -> hexagon, etc.
     RegularPolygon { sides: u8, radius: f64 },
- 
+
     /// An explicit, immutable list of vertices (local coordinates,
     /// wound consistently) describing an irregular silhouette that
     /// the parameterized primitives above can't express - concave
@@ -111,7 +111,7 @@ pub enum Form {
     /// hatch so the enum doesn't need one variant per named shape.
     Polygon { vertices: Vec<(f64, f64)> },
 }
- 
+
 impl Form {
     pub fn is_valid(&self) -> bool {
         match self {
@@ -128,7 +128,7 @@ impl Form {
             }
         }
     }
- 
+
     /// Resolves this Form into actual 2D vertices, local to the
     /// shape's own origin - the concrete mechanism that lets "many of
     /// these forms ultimately resolve into actual 2D vertices/polygons
@@ -139,13 +139,13 @@ impl Form {
     pub fn polygon_vertices(&self) -> Option<Vec<(f64, f64)>> {
         match self {
             Form::Circle { .. } => None,
- 
+
             Form::Rectangle { width, height } => {
                 let hw = width / 2.0;
                 let hh = height / 2.0;
                 Some(vec![(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)])
             }
- 
+
             Form::RegularPolygon { sides, radius } => {
                 let n = *sides as usize;
                 Some(
@@ -157,12 +157,12 @@ impl Form {
                         .collect(),
                 )
             }
- 
+
             Form::Polygon { vertices } => Some(vertices.clone()),
         }
     }
 }
- 
+
 /// A single immutable connection point on a resource's shape.
 /// Position is relative to the shape's own local origin, direction is
 /// the outward-facing orientation in radians, and strength is a
@@ -176,7 +176,7 @@ pub struct ConnectionPoint {
     pub direction_radians: f64,
     pub strength: f64,
 }
- 
+
 impl ConnectionPoint {
     pub fn is_valid(&self) -> bool {
         self.x.is_finite()
@@ -186,20 +186,20 @@ impl ConnectionPoint {
             && self.strength >= 0.0
     }
 }
- 
+
 /// The complete immutable geometric property of a resource type.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Shape {
     pub form: Form,
     pub connection_points: Vec<ConnectionPoint>,
 }
- 
+
 impl Shape {
     pub fn is_valid(&self) -> bool {
         self.form.is_valid() && self.connection_points.iter().all(ConnectionPoint::is_valid)
     }
 }
- 
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct ResourceBaselines {
     pub mass: f64,
@@ -207,7 +207,7 @@ pub struct ResourceBaselines {
     pub reactivity: f64,
     pub cohesion: f64,
 }
- 
+
 impl ResourceBaselines {
     /// Average of each property across base resource *types*, not abundance.
     pub fn from_catalog(catalog: &[BaseResource]) -> Self {
@@ -236,7 +236,7 @@ impl ResourceBaselines {
         }
     }
 }
- 
+
 /// A stack of material in the world or in an organism.
 ///
 /// `bonded == false`: uncombined base stock (a pile of carbon is still
@@ -247,7 +247,7 @@ pub struct Material {
     pub parts: Vec<(String, f64)>,
     pub bonded: bool,
 }
- 
+
 impl Material {
     pub fn free_base(name: impl Into<String>, amount: f64) -> Self {
         Self {
@@ -255,7 +255,7 @@ impl Material {
             bonded: false,
         }
     }
- 
+
     /// Potential energy is NOT stored on Material. It is derived on demand
     /// from immutable per-resource-type properties in the catalog, per the
     /// locked rule that potential energy is an absolute maximum tied to the
@@ -266,19 +266,19 @@ impl Material {
             .map(|(name, amount)| fresh_energy(catalog, name, *amount))
             .sum()
     }
- 
+
     pub fn total_amount(&self) -> f64 {
         self.parts.iter().map(|(_, a)| *a).sum()
     }
- 
+
     pub fn is_empty(&self) -> bool {
         self.total_amount() <= 1e-12
     }
- 
+
     pub fn can_break(&self) -> bool {
         self.bonded && self.total_amount() >= 2.0 - 1e-9
     }
- 
+
     pub fn mass(&self, catalog: &[BaseResource]) -> f64 {
         self.parts
             .iter()
@@ -291,7 +291,7 @@ impl Material {
             })
             .sum()
     }
- 
+
     pub fn weighted_properties(&self, catalog: &[BaseResource]) -> ResourceProperties {
         let mut mass = 0.0;
         let mut pe = 0.0;
@@ -325,7 +325,7 @@ impl Material {
             cohesion: coh / w,
         }
     }
- 
+
     pub fn take(&mut self, amount: f64) -> Option<Material> {
         let total = self.total_amount();
         if amount <= 0.0 || total <= 0.0 {
@@ -346,7 +346,7 @@ impl Material {
         })
     }
 }
- 
+
 pub fn merge_parts(parts: &[(String, f64)]) -> Vec<(String, f64)> {
     let mut out: Vec<(String, f64)> = Vec::new();
     for (name, amount) in parts {
@@ -359,7 +359,7 @@ pub fn merge_parts(parts: &[(String, f64)]) -> Vec<(String, f64)> {
     out.retain(|(_, a)| *a > 1e-12);
     out
 }
- 
+
 pub fn combine_materials(inputs: &[Material]) -> Material {
     let mut parts = Vec::new();
     for mat in inputs {
@@ -370,7 +370,7 @@ pub fn combine_materials(inputs: &[Material]) -> Material {
         bonded: true,
     }
 }
- 
+
 pub fn combine_work_cost(material: &Material, catalog: &[BaseResource], water_field: f64) -> f64 {
     let n = material.total_amount().max(2.0);
     let props = material.weighted_properties(catalog);
@@ -379,11 +379,11 @@ pub fn combine_work_cost(material: &Material, catalog: &[BaseResource], water_fi
     let c = complexity(n);
     (c * (1.0 + cohesion) * (1.25 - reac)).max(0.2)
 }
- 
+
 pub fn effective_reactivity(reactivity: f64, water_field: f64) -> f64 {
     reactivity / (1.0 + water_field.max(0.0))
 }
- 
+
 pub fn property_ranges(catalog: &[BaseResource]) -> ResourceProperties {
     if catalog.is_empty() {
         return ResourceProperties {
@@ -419,7 +419,7 @@ pub fn property_ranges(catalog: &[BaseResource]) -> ResourceProperties {
         cohesion: (max_coh - min_coh).max(f64::EPSILON),
     }
 }
- 
+
 pub fn default_catalog() -> Vec<BaseResource> {
     vec![
         // Carbon: high cohesion (0.95) -> a hexagon, chosen specifically
@@ -607,7 +607,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
         },
     ]
 }
- 
+
 pub fn fresh_energy(catalog: &[BaseResource], name: &str, amount: f64) -> f64 {
     catalog
         .iter()
@@ -615,7 +615,7 @@ pub fn fresh_energy(catalog: &[BaseResource], name: &str, amount: f64) -> f64 {
         .map(|b| b.properties.potential_energy * amount)
         .unwrap_or(0.0)
 }
- 
+
 // ============================================================
 // TESTS - Shape geometry representation only.
 //
@@ -623,16 +623,16 @@ pub fn fresh_energy(catalog: &[BaseResource], name: &str, amount: f64) -> f64 {
 // serialization round-trip, and catalog construction. No COMBINE
 // tests - COMBINE is not implemented in this task.
 // ============================================================
- 
+
 #[cfg(test)]
 mod shape_tests {
     use super::*;
- 
+
     #[test]
     fn catalog_still_constructs_with_seven_resources() {
         let catalog = default_catalog();
         assert_eq!(catalog.len(), 7);
- 
+
         let expected_names = [
             "Carbon", "Methane", "Hydrogen", "Sulfur", "Nitrogen", "Phosphorus", "Water",
         ];
@@ -643,7 +643,7 @@ mod shape_tests {
             );
         }
     }
- 
+
     #[test]
     fn every_catalog_resource_has_a_valid_shape() {
         for resource in default_catalog() {
@@ -655,7 +655,7 @@ mod shape_tests {
             );
         }
     }
- 
+
     #[test]
     fn form_parameters_are_valid() {
         for resource in default_catalog() {
@@ -667,7 +667,7 @@ mod shape_tests {
             );
         }
     }
- 
+
     #[test]
     fn polygon_vertices_resolve_correctly_per_form() {
         for resource in default_catalog() {
@@ -718,23 +718,23 @@ mod shape_tests {
             }
         }
     }
- 
+
     #[test]
     fn carbon_is_a_hexagon_with_explicit_non_derived_connection_points() {
         let catalog = default_catalog();
         let carbon = catalog.iter().find(|r| r.name == "Carbon").unwrap();
- 
+
         match carbon.shape.form {
             Form::RegularPolygon { sides, .. } => assert_eq!(sides, 6, "Carbon must be a hexagon"),
             _ => panic!("Carbon must use RegularPolygon"),
         }
- 
+
         // Six-sided shape, but connection point count is NOT six -
         // proving point count is explicitly authored, not derived from
         // side count.
         assert_ne!(carbon.shape.connection_points.len(), 6);
     }
- 
+
     #[test]
     fn connection_points_are_valid_and_present() {
         for resource in default_catalog() {
@@ -758,24 +758,24 @@ mod shape_tests {
             }
         }
     }
- 
+
     #[test]
     fn different_resources_have_different_shapes() {
         let catalog = default_catalog();
- 
+
         let carbon = catalog.iter().find(|r| r.name == "Carbon").unwrap();
         let hydrogen = catalog.iter().find(|r| r.name == "Hydrogen").unwrap();
- 
+
         // Different form variant entirely (RegularPolygon vs Circle).
         assert_ne!(carbon.shape.form, hydrogen.shape.form);
- 
+
         // Different connection point counts across the catalog in
         // general (spot-check a few, not exhaustive).
         assert_ne!(
             carbon.shape.connection_points.len(),
             hydrogen.shape.connection_points.len()
         );
- 
+
         // Spot-check that the vocabulary is actually being exercised:
         // at least one Polygon (explicit-vertex escape hatch) and at
         // least one RegularPolygon with a side count other than
@@ -794,16 +794,16 @@ mod shape_tests {
             "expected a RegularPolygon with a side count other than Carbon's hexagon"
         );
     }
- 
+
     #[test]
     fn serialization_round_trip_preserves_shape() {
         for resource in default_catalog() {
             let json = serde_json::to_string(&resource).expect("serialize BaseResource");
             let restored: BaseResource =
                 serde_json::from_str(&json).expect("deserialize BaseResource");
- 
+
             assert_eq!(restored.name, resource.name);
- 
+
             // Form parameters preserved (Circle/Rectangle/RegularPolygon
             // carry exact literal parameters with no trig involved, so
             // these compare bit-exact via PartialEq; Polygon vertices
@@ -831,7 +831,7 @@ mod shape_tests {
                 }
                 (a, b) => panic!("{} form variant changed across round-trip: {:?} vs {:?}", resource.name, a, b),
             }
- 
+
             assert_eq!(
                 restored.shape.connection_points.len(),
                 resource.shape.connection_points.len()
@@ -867,4 +867,3 @@ mod shape_tests {
         }
     }
 }
- 
