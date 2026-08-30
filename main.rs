@@ -20,15 +20,21 @@ use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 use tower_http::cors::CorsLayer;
 
+mod environment;
 mod genome;
 mod math;
 mod resources;
+mod structure;
+mod contact;
 
+use environment::{
+    apply_settling, apply_vents, ActiveMaterialField, DeepReservoir, Vent,
+    DEFAULT_CELL_SIZE, DEFAULT_DIFFUSION_FRACTION, DEFAULT_RESERVOIR_BLOCK_SIZE,
+    DEFAULT_SETTLING_FRACTION, DEFAULT_SETTLING_INTERVAL_TICKS,
+};
 use genome::{initial_genome, Genome};
 use math::exponential_influence;
-use resources::{
-    property_ranges, BaseResource, Material, ResourceBaselines, ResourceProperties,
-};
+use resources::{BaseResource, Material};
 
 
 // ============================================================
@@ -43,54 +49,20 @@ struct AppState {
 
 
 // ============================================================
-// FUNDAMENTAL RESOURCE MODEL
-// ============================================================
-//
-// Resource properties are immutable.
-// Amount is environmental quantity and is NOT a property of the
-// resource itself.
-//
-// The four universal properties are:
-//   mass
-//   potential_energy
-//   reactivity
-//   cohesion
-//
-// Energy is NOT a fundamental resource. It is produced as a
-// consequence of resource transformations (see TRANSFORMATIONS
-// below).
-// ============================================================
-
-// ResourceProperties, BaseResource (the catalog entry), ResourceBaselines,
-// and Material now come from `resources.rs` (the canonical implementation -
-// see PRIMARY OBJECTIVE of this integration). Main.rs no longer keeps its
-// own duplicate copies of these types.
-//
-// Environmental *amount* bookkeeping (how much raw material exists) is not
-// part of the canonical catalog (which only models immutable per-type
-// properties), so it's tracked here as a separate, minimal reservoir.
-
-#[derive(Serialize, Deserialize, Clone)]
-struct ReservoirEntry {
-    name: String,
-    amount: f64,
-}
-
-
-// Genome (mutable organism traits) now comes from `genome.rs` (the
-// canonical implementation). Main.rs no longer keeps its own copy.
-
-
-// ============================================================
 // RESOURCE PERCEPTION
 // ============================================================
 //
 // A ResourceObservation is what the organism currently perceives.
 // It is NOT itself a stored environmental resource.
 //
-// Desirability is explicitly represented here so the frontend can
-// inspect the organism's actual evaluation rather than inferring
-// desire from raw quantity.
+// Perception now reads directly from the active material field's
+// grid cells (see environment.rs) instead of the legacy
+// ResourceCloud list. A field cell holds exactly one bonded stack
+// and one unbonded stack, so each cell can contribute up to two
+// observations (one per stack) - `bonded` on the observation records
+// which stack it came from, and `field_index` identifies exactly
+// which cell to act on later (initiation no longer needs to re-find
+// a cloud by float-comparing positions).
 // ============================================================
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -112,17 +84,15 @@ struct AffinityResponses {
 #[derive(Serialize, Deserialize, Clone)]
 struct ResourceObservation {
     // Display label only (e.g. "Methane+Hydrogen" for a mixed bonded
-    // blob). No longer used for lookup - see try_start_transformation,
-    // which now locates the source cloud by position, not by name,
-    // since a Material stack can span multiple resource types.
+    // stack).
     name: String,
-    properties: ResourceProperties,
+    properties: resources::ResourceProperties,
 
-    // Whether the source Material is bonded. Raw/unbonded material
-    // cannot BREAK (hard rule, §4) - this lets initiation filter out
-    // non-bondable sources before picking a target, rather than
-    // picking the "best" target and only then discovering it's
-    // ineligible.
+    // Whether this observation came from the cell's bonded or
+    // unbonded stack. Raw/unbonded material cannot BREAK (hard rule,
+    // §4) - this lets initiation filter out non-bondable sources
+    // before picking a target, rather than picking the "best" target
+    // and only then discovering it's ineligible.
     bonded: bool,
 
     perceived_amount: f64,
@@ -136,23 +106,21 @@ struct ResourceObservation {
 
     desirability: f64,
 
-    // Distance from the organism to this specific cloud, retained
-    // so the processing-initiation step does not need to re-walk
-    // the environment a second time to find "is this in reach".
+    // Distance from the organism to this specific cell's center,
+    // retained so the processing-initiation step does not need to
+    // re-walk the environment a second time to find "is this in
+    // reach".
     distance: f64,
 
-    // Coordinates of the cloud this observation came from. Needed
-    // so a transformation can be started against the correct
-    // physical source without re-deriving it from direction alone.
+    // World-space center of the source cell, for display/frontend
+    // purposes only - not used for lookup.
     source_x: f64,
     source_y: f64,
 
-    // Index of the specific Material stack within that cloud's
-    // `materials` list. A cloud can (in principle) hold more than one
-    // Material stack, and a Material can span several resource types,
-    // so lookup by name is no longer sufficient - see
-    // try_start_transformation.
-    material_index: usize,
+    // Index of the field cell this observation came from. Combined
+    // with `bonded`, this is exactly what a transformation needs to
+    // take material from the correct stack with no re-derivation.
+    field_index: usize,
 }
 
 
@@ -216,10 +184,7 @@ struct MemoryPoint {
 // RESOURCE TRANSFORMATIONS  (Master Spec §15-19)
 // ============================================================
 //
-// Only BREAK is implemented at this stage. COMBINE is deferred
-// until physical body construction (programming step 8) exists,
-// since combining resources into constructed material without a
-// body to attach it to has nothing to justify it under §0.
+// Only BREAK is implemented at this stage.
 //
 // A transformation:
 //   - commits its input resources for its full duration (§18.1)
@@ -230,14 +195,11 @@ struct MemoryPoint {
 // Because derived materials (§16) are not implemented yet, spent mass
 // is ejected as waste using the *same* resource-type composition it
 // had going in, rather than a lower-energy derived composition.
-// Resource properties stay immutable as required; what is not yet
-// modeled is the fact that this particular mass has already been
-// "spent" once. This should be replaced with a proper derived-material
-// representation once §16 is built.
-// (Integration note: this waste is now ejected into the environment at
-// the organism's location - see resolve_transformation - rather than
-// being dissolved back into the abstract global reservoir, which was a
-// rule violation fixed during the resources.rs integration.)
+// (Integration note: waste is now deposited directly into the active
+// material field at the organism's location, and behaves exactly
+// like any other field material afterward - it can diffuse, be
+// perceived, be processed, and eventually settle to the reservoir.
+// It is not given any special automatic cleanup.)
 // ============================================================
 
 const PROCESSING_REACH: f64 = 20.0;
@@ -255,11 +217,7 @@ struct ActiveTransformation {
     kind: TransformationKind,
 
     // The committed input, held as a canonical bonded Material for the
-    // full duration of the transformation (§18.1). Reactivity, cohesion,
-    // and potential energy are derived from this via the catalog at
-    // resolution time rather than being snapshotted into loose fields -
-    // resource properties are immutable per-type, so there's nothing to
-    // snapshot that the catalog can't already give us.
+    // full duration of the transformation (§18.1).
     material: Material,
 
     complexity: f64,
@@ -267,17 +225,9 @@ struct ActiveTransformation {
     remaining_ticks: u64,
 }
 
-// complexity() now comes from math.rs (the shared canonical
-// implementation) - see PRIMARY OBJECTIVE of this integration.
-
 
 // ============================================================
 // ENERGY LEDGER  (Master Spec §21, §101)
-// ============================================================
-//
-// A running diagnostic ledger, not part of the causal simulation
-// itself. It exists so conservation can be observed/tested (§103:
-// "energy never appears, energy never disappears").
 // ============================================================
 
 #[derive(Serialize, Deserialize, Clone, Copy, Default)]
@@ -305,62 +255,59 @@ struct Organism {
 
     memory: Vec<MemoryPoint>,
 
-    // Energy is an organism state, not a fundamental environmental
-    // resource. It changes only through resolved transformations.
     usable_energy: f64,
 
-    // Accumulated physiological consequence of processing heat (see
-    // resolve_transformation). This is a stand-in for real physical
-    // damage (§24) until the damage system (programming step 15)
-    // exists to consume it. A death-on-threshold consequence is
-    // deliberately not implemented yet - out of scope for the
-    // resources.rs integration.
     stress: f64,
 
-    stored_resources: Vec<Material>,
+    // Material the organism physically holds, mirroring FieldCell's
+    // "one bonded stack + one unbonded stack" shape (Phase 1
+    // decision 4, applied consistently here rather than reintroducing
+    // an arbitrary Vec<Material>). stored_unbonded is raw material
+    // acquired from the environment, not yet usable for BREAK.
+    // stored_bonded is material that has been through COMBINE (or was
+    // acquired already-bonded) and can be committed to a BREAK
+    // transformation.
+    stored_unbonded: Material,
+    stored_bonded: Material,
 
     development_stage: DevelopmentStage,
 
     age: u64,
 
-    // At most one active transformation per organism at this stage
-    // (minimum-information simplification; nothing in the spec
-    // requires supporting concurrent transformations yet).
     active_transformation_id: Option<u64>,
 }
 
 
-// ============================================================
-// ENVIRONMENTAL SOURCES
-// ============================================================
-
-#[derive(Serialize, Deserialize, Clone)]
-struct Vent {
-    x: f64,
-    y: f64,
-
-    composition: Vec<(String, f64)>,
-
-    emission_amount: f64,
-    emission_interval: u64,
-    emission_timer: u64,
+impl Organism {
+    /// Merges acquired material into the matching stack, preserving
+    /// whatever bonded state it already had - a relocation into the
+    /// organism, not a transformation of the material (same principle
+    /// as field deposit/settling/venting).
+    fn store_material(&mut self, material: Material) {
+        if material.parts.is_empty() {
+            return;
+        }
+        let target = if material.bonded {
+            &mut self.stored_bonded
+        } else {
+            &mut self.stored_unbonded
+        };
+        let mut parts = std::mem::take(&mut target.parts);
+        parts.extend(material.parts);
+        target.parts = resources::merge_parts(&parts);
+    }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-struct ResourceCloud {
-    x: f64,
-    y: f64,
 
-    radius: f64,
-    maximum_radius: f64,
-    expansion_rate: f64,
-
-    // Canonical Material stacks (see resources.rs), not raw named
-    // Resource entries. A cloud normally holds a single Material - one
-    // vent emission or one BREAK's ejected waste - but the Vec allows
-    // more than one to accumulate without special-casing.
-    materials: Vec<Material>,
-}
+// ============================================================
+// ENVIRONMENT
+// ============================================================
+//
+// This is now the sole authoritative environmental state. It wraps
+// exactly one active material field and one deep reservoir (see
+// environment.rs) - there is no competing resource-cloud or flat
+// global-reservoir representation anywhere in the simulation.
+// ============================================================
 
 #[derive(Serialize, Deserialize, Clone)]
 struct Environment {
@@ -371,17 +318,14 @@ struct Environment {
     // this world. Never mutated after construction - see resources.rs.
     catalog: Vec<BaseResource>,
 
-    // How much raw material of each catalog type currently exists in
-    // the abstract global pool (§7: finite in implementation, large
-    // enough to behave as inexhaustible). This is NOT part of the
-    // canonical resources.rs types, since the catalog only models
-    // immutable properties, not quantity - amount is deliberately kept
-    // separate here.
-    reservoir: Vec<ReservoirEntry>,
+    // Layer 2: the active material field organisms actually perceive
+    // and interact with.
+    field: ActiveMaterialField,
+
+    // Layer 1: the coarse, spatially-distributed deep reservoir.
+    reservoir: DeepReservoir,
 
     vents: Vec<Vent>,
-
-    resource_clouds: Vec<ResourceCloud>,
 }
 
 
@@ -469,14 +413,16 @@ impl Simulation {
     // ========================================================
 
     fn create_environment() -> Environment {
-        // The catalog (immutable per-type properties) is the canonical
-        // one from resources.rs, not a duplicate hand-rolled list.
         let catalog = resources::default_catalog();
 
-        // Starting abundance per type. This is bookkeeping the catalog
-        // itself deliberately doesn't carry (see Environment::reservoir
-        // doc comment), so it's declared here alongside catalog
-        // construction rather than embedded in a duplicate resource type.
+        let width = 1000.0;
+        let height = 1000.0;
+
+        let field = ActiveMaterialField::new(width, height, DEFAULT_CELL_SIZE);
+        let mut reservoir = DeepReservoir::new_matching_field(&field, DEFAULT_RESERVOIR_BLOCK_SIZE);
+
+        // Starting abundance per type, seeded uniformly across the
+        // reservoir as raw stock (see environment::seed_uniform).
         let starting_amounts: [(&str, f64); 7] = [
             ("Carbon", 10_000.0),
             ("Methane", 5_000.0),
@@ -487,81 +433,77 @@ impl Simulation {
             ("Water", 20_000.0),
         ];
 
-        let reservoir = starting_amounts
-            .iter()
-            .map(|(name, amount)| ReservoirEntry {
-                name: (*name).into(),
-                amount: *amount,
-            })
-            .collect();
+        for (name, amount) in starting_amounts {
+            reservoir.seed_uniform(name, amount);
+        }
+
+        let vents = vec![
+            Vent {
+                x: 250.0,
+                y: 250.0,
+
+                composition: vec![
+                    ("Carbon".into(), 0.10),
+                    ("Methane".into(), 0.45),
+                    ("Hydrogen".into(), 0.25),
+                    ("Sulfur".into(), 0.10),
+                    ("Nitrogen".into(), 0.05),
+                    ("Phosphorus".into(), 0.02),
+                    ("Water".into(), 0.03),
+                ],
+
+                emission_amount: 100.0,
+                emission_interval: 20,
+                emission_timer: 0,
+            },
+
+            Vent {
+                x: 750.0,
+                y: 300.0,
+
+                composition: vec![
+                    ("Carbon".into(), 0.35),
+                    ("Methane".into(), 0.10),
+                    ("Hydrogen".into(), 0.15),
+                    ("Sulfur".into(), 0.25),
+                    ("Nitrogen".into(), 0.05),
+                    ("Phosphorus".into(), 0.05),
+                    ("Water".into(), 0.05),
+                ],
+
+                emission_amount: 100.0,
+                emission_interval: 30,
+                emission_timer: 0,
+            },
+
+            Vent {
+                x: 520.0,
+                y: 550.0,
+
+                composition: vec![
+                    ("Carbon".into(), 0.25),
+                    ("Methane".into(), 0.15),
+                    ("Hydrogen".into(), 0.30),
+                    ("Sulfur".into(), 0.10),
+                    ("Nitrogen".into(), 0.10),
+                    ("Phosphorus".into(), 0.02),
+                    ("Water".into(), 0.08),
+                ],
+
+                emission_amount: 100.0,
+                emission_interval: 25,
+                emission_timer: 0,
+            },
+        ];
 
         Environment {
-            width: 1000.0,
-            height: 1000.0,
+            width,
+            height,
 
             catalog,
+            field,
             reservoir,
-
-            vents: vec![
-                Vent {
-                    x: 250.0,
-                    y: 250.0,
-
-                    composition: vec![
-                        ("Carbon".into(), 0.10),
-                        ("Methane".into(), 0.45),
-                        ("Hydrogen".into(), 0.25),
-                        ("Sulfur".into(), 0.10),
-                        ("Nitrogen".into(), 0.05),
-                        ("Phosphorus".into(), 0.02),
-                        ("Water".into(), 0.03),
-                    ],
-
-                    emission_amount: 100.0,
-                    emission_interval: 20,
-                    emission_timer: 0,
-                },
-
-                Vent {
-                    x: 750.0,
-                    y: 300.0,
-
-                    composition: vec![
-                        ("Carbon".into(), 0.35),
-                        ("Methane".into(), 0.10),
-                        ("Hydrogen".into(), 0.15),
-                        ("Sulfur".into(), 0.25),
-                        ("Nitrogen".into(), 0.05),
-                        ("Phosphorus".into(), 0.05),
-                        ("Water".into(), 0.05),
-                    ],
-
-                    emission_amount: 100.0,
-                    emission_interval: 30,
-                    emission_timer: 0,
-                },
-
-                Vent {
-                    x: 520.0,
-                    y: 550.0,
-
-                    composition: vec![
-                        ("Carbon".into(), 0.25),
-                        ("Methane".into(), 0.15),
-                        ("Hydrogen".into(), 0.30),
-                        ("Sulfur".into(), 0.10),
-                        ("Nitrogen".into(), 0.10),
-                        ("Phosphorus".into(), 0.02),
-                        ("Water".into(), 0.08),
-                    ],
-
-                    emission_amount: 100.0,
-                    emission_interval: 25,
-                    emission_timer: 0,
-                },
-            ],
-
-            resource_clouds: Vec::new(),
+            vents,
         }
     }
 
@@ -581,10 +523,6 @@ impl Simulation {
                 },
             ],
 
-            // The canonical genome constructor from genome.rs - this also
-            // picks up adult_mass, which Main's hand-rolled trait list was
-            // missing (genome.rs's Genome::adult_mass() would otherwise
-            // have silently fallen back to its default every time).
             genome: initial_genome(),
 
             resource_sense: ResourceSense {
@@ -600,7 +538,8 @@ impl Simulation {
             usable_energy: 0.0,
             stress: 0.0,
 
-            stored_resources: Vec::new(),
+            stored_unbonded: Material { parts: Vec::new(), bonded: false },
+            stored_bonded: Material { parts: Vec::new(), bonded: true },
 
             development_stage: DevelopmentStage::Juvenile,
 
@@ -611,18 +550,14 @@ impl Simulation {
     }
 
 
-    // property_ranges() now comes from resources.rs (canonical) - called
-    // as `property_ranges(&environment.catalog)` at call sites below.
-
-
     // ========================================================
     // PROPERTY DEVIATION
     // ========================================================
 
     fn calculate_property_deviations(
-        properties: &ResourceProperties,
-        baselines: &ResourceBaselines,
-        ranges: &ResourceProperties,
+        properties: &resources::ResourceProperties,
+        baselines: &resources::ResourceBaselines,
+        ranges: &resources::ResourceProperties,
     ) -> PropertyDeviations {
         PropertyDeviations {
             mass: (
@@ -674,11 +609,6 @@ impl Simulation {
     // ========================================================
     // ENERGY NEED
     // ========================================================
-    //
-    // Now load-bearing: usable_energy actually changes once
-    // transformations resolve, so this genuinely modulates
-    // potential-energy affinity as energy state changes, per §38.
-    // ========================================================
 
     fn energy_need_factor(usable_energy: f64) -> f64 {
         1.0 / (1.0 + usable_energy.max(0.0))
@@ -691,10 +621,10 @@ impl Simulation {
 
     fn calculate_desirability(
         organism: &Organism,
-        properties: &ResourceProperties,
+        properties: &resources::ResourceProperties,
         perceived_amount: f64,
-        baselines: &ResourceBaselines,
-        ranges: &ResourceProperties,
+        baselines: &resources::ResourceBaselines,
+        ranges: &resources::ResourceProperties,
     ) -> (
         PropertyDeviations,
         AffinityResponses,
@@ -768,101 +698,37 @@ impl Simulation {
 
 
     // ========================================================
-    // CLOUD EMISSION
+    // ENVIRONMENT STEP (vents -> diffusion -> settling)
+    // ========================================================
+    //
+    // Replaces the legacy emit_resource_clouds/update_resource_clouds
+    // pair. This is now the ONLY pathway by which material moves
+    // between the reservoir and the active field:
+    //
+    //     reservoir --(vent)--> field --(diffusion)--> field
+    //     field --(settling, throttled)--> reservoir
+    //
+    // Settling is deliberately throttled (not every tick) since the
+    // reservoir is meant to update far less often than the field -
+    // per architectural decision, this asymmetry is what keeps the
+    // reservoir cheap relative to the higher-resolution field.
     // ========================================================
 
-    fn emit_resource_clouds(&mut self) {
-        let mut new_clouds = Vec::new();
+    fn step_environment(&mut self) {
+        apply_vents(
+            &mut self.environment.field,
+            &mut self.environment.reservoir,
+            &mut self.environment.vents,
+        );
 
-        for vent in &mut self.environment.vents {
-            if vent.emission_timer > 0 {
-                vent.emission_timer -= 1;
-                continue;
-            }
+        self.environment.field.diffuse_step(DEFAULT_DIFFUSION_FRACTION);
 
-            let mut parts = Vec::new();
-
-            for (resource_name, proportion) in &vent.composition {
-                if let Some(entry) = self
-                    .environment
-                    .reservoir
-                    .iter_mut()
-                    .find(|r| &r.name == resource_name)
-                {
-                    let requested = vent.emission_amount * proportion;
-
-                    let amount = requested.min(entry.amount);
-
-                    entry.amount -= amount;
-
-                    if amount > 0.0 {
-                        parts.push((entry.name.clone(), amount));
-                    }
-                }
-            }
-
-            if !parts.is_empty() {
-                // §4 / Correction #5: raw/unbonded material cannot BREAK,
-                // so vents supply their emission pre-bonded - otherwise
-                // there is no viable initial energy pathway for the first
-                // organism(s). This is a data decision explicitly
-                // permitted by the spec ("some material emitted by
-                // environmental vents may be pre-bonded when necessary"),
-                // not new bonding mechanics.
-                let material = Material {
-                    parts,
-                    bonded: true,
-                };
-
-                new_clouds.push(ResourceCloud {
-                    x: vent.x,
-                    y: vent.y,
-
-                    radius: 8.0,
-                    maximum_radius: 100.0,
-                    expansion_rate: 1.0,
-
-                    materials: vec![material],
-                });
-            }
-
-            vent.emission_timer = vent.emission_interval;
-        }
-
-        self.environment.resource_clouds.extend(new_clouds);
-    }
-
-
-    // ========================================================
-    // CLOUD DISPERSION
-    // ========================================================
-
-    fn update_resource_clouds(&mut self) {
-        for cloud in &mut self.environment.resource_clouds {
-            cloud.radius += cloud.expansion_rate;
-        }
-
-        let (still_active, expired): (Vec<_>, Vec<_>) = self
-            .environment
-            .resource_clouds
-            .drain(..)
-            .partition(|cloud| cloud.radius < cloud.maximum_radius);
-
-        self.environment.resource_clouds = still_active;
-
-        for expired_cloud in expired {
-            for material in expired_cloud.materials {
-                for (name, amount) in material.parts {
-                    if let Some(entry) = self
-                        .environment
-                        .reservoir
-                        .iter_mut()
-                        .find(|r| r.name == name)
-                    {
-                        entry.amount += amount;
-                    }
-                }
-            }
+        if self.tick % DEFAULT_SETTLING_INTERVAL_TICKS == 0 {
+            apply_settling(
+                &mut self.environment.field,
+                &mut self.environment.reservoir,
+                DEFAULT_SETTLING_FRACTION,
+            );
         }
     }
 
@@ -898,39 +764,28 @@ impl Simulation {
         organism.resource_sense.direction_y = 0.0;
         organism.resource_sense.direction_strength = 0.0;
 
-        let baselines = ResourceBaselines::from_catalog(
+        let baselines = resources::ResourceBaselines::from_catalog(
             &environment.catalog,
         );
 
-        let ranges = property_ranges(
+        let ranges = resources::property_ranges(
             &environment.catalog,
         );
 
-        for cloud in &environment.resource_clouds {
-            let dx = cloud.x - px;
-            let dy = cloud.y - py;
+        for cell_index in environment.field.cells_within_radius(px, py, perception_radius) {
+            let (cell_x, cell_y) = environment.field.cell_center(cell_index);
 
+            let dx = cell_x - px;
+            let dy = cell_y - py;
             let distance = (dx * dx + dy * dy).sqrt();
 
-            if distance > perception_radius + cloud.radius {
-                continue;
-            }
+            let direction_x = if distance > 0.0 { dx / distance } else { 0.0 };
+            let direction_y = if distance > 0.0 { dy / distance } else { 0.0 };
 
-            let direction_x = if distance > 0.0 {
-                dx / distance
-            } else {
-                0.0
-            };
+            let cell = &environment.field.cells[cell_index];
 
-            let direction_y = if distance > 0.0 {
-                dy / distance
-            } else {
-                0.0
-            };
-
-            for (material_index, material) in cloud.materials.iter().enumerate() {
-                let perceived_amount =
-                    material.total_amount() * sensory_resolution;
+            for (bonded, material) in [(true, &cell.bonded), (false, &cell.unbonded)] {
+                let perceived_amount = material.total_amount() * sensory_resolution;
 
                 if perceived_amount <= 0.0 {
                     continue;
@@ -968,7 +823,7 @@ impl Simulation {
 
                         properties,
 
-                        bonded: material.bonded,
+                        bonded,
 
                         perceived_amount,
 
@@ -987,10 +842,10 @@ impl Simulation {
 
                         distance,
 
-                        source_x: cloud.x,
-                        source_y: cloud.y,
+                        source_x: cell_x,
+                        source_y: cell_y,
 
-                        material_index,
+                        field_index: cell_index,
                     });
 
                 organism.resource_sense.direction_x +=
@@ -1047,15 +902,6 @@ impl Simulation {
     // ========================================================
     // MEMORY UPDATE (outcome-linked)
     // ========================================================
-    //
-    // Location + strength derived from the strongest currently
-    // perceived positive-desirability source. This intentionally
-    // does not yet distinguish "saw something good" from
-    // "processing it actually succeeded" - that refinement belongs
-    // to §65 interaction/consequence history and is layered on by
-    // reinforce_memory_from_transformation() below once a
-    // transformation resolves.
-    // ========================================================
 
     fn update_memory_from_sources(
         organism: &mut Organism,
@@ -1081,30 +927,23 @@ impl Simulation {
             organism.genome.sensory_resolution();
 
         let baselines =
-            ResourceBaselines::from_catalog(
+            resources::ResourceBaselines::from_catalog(
                 &environment.catalog,
             );
 
         let ranges =
-            property_ranges(
+            resources::property_ranges(
                 &environment.catalog,
             );
 
         let mut strongest_source:
             Option<(f64, f64, f64)> = None;
 
-        for cloud in &environment.resource_clouds {
-            let dx = cloud.x - px;
-            let dy = cloud.y - py;
+        for cell_index in environment.field.cells_within_radius(px, py, perception_radius) {
+            let (cell_x, cell_y) = environment.field.cell_center(cell_index);
+            let cell = &environment.field.cells[cell_index];
 
-            let distance =
-                (dx * dx + dy * dy).sqrt();
-
-            if distance > perception_radius + cloud.radius {
-                continue;
-            }
-
-            for material in &cloud.materials {
+            for material in [&cell.bonded, &cell.unbonded] {
                 let perceived_amount =
                     material.total_amount() * sensory_resolution;
 
@@ -1133,8 +972,8 @@ impl Simulation {
                     .unwrap_or(true)
                 {
                     strongest_source = Some((
-                        cloud.x,
-                        cloud.y,
+                        cell_x,
+                        cell_y,
                         desirability,
                     ));
                 }
@@ -1290,11 +1129,6 @@ impl Simulation {
                 memory_total_weight;
         }
 
-        // An organism mid-transformation holds physical position
-        // rather than drifting away from committed resources. This
-        // is a movement-physics consequence of an active process,
-        // not a special-cased rule (§18.1 resource commitment still
-        // implies physical presence at the source).
         if organism.active_transformation_id.is_some() {
             return;
         }
@@ -1352,13 +1186,16 @@ impl Simulation {
     // ========================================================
     //
     // An organism with no active transformation, standing within
-    // PROCESSING_REACH of a positively-desirable resource cloud,
-    // commits a bounded amount of that resource and begins a BREAK.
+    // PROCESSING_REACH of a positively-desirable resource cell,
+    // commits a bounded amount of that cell's bonded stack and
+    // begins a BREAK. Takes the field directly now - no more
+    // matching a cloud by float-comparing positions, since
+    // perception already resolved the exact field cell index.
     // ========================================================
 
     fn try_start_transformation(
         organism: &mut Organism,
-        environment: &mut Environment,
+        field: &mut ActiveMaterialField,
         next_id: &mut u64,
     ) -> Option<ActiveTransformation> {
         if organism.active_transformation_id.is_some() {
@@ -1373,9 +1210,6 @@ impl Simulation {
                 r.desirability > 0.0
                     && r.distance <= PROCESSING_REACH
                     // Hard rule (§4): raw/unbonded material cannot BREAK.
-                    // Filtered here, before picking a target, so an
-                    // organism never "chooses" a source it's physically
-                    // unable to process.
                     && r.bonded
             })
             .max_by(|a, b| {
@@ -1385,25 +1219,17 @@ impl Simulation {
             })?
             .clone();
 
-        let cloud = environment
-            .resource_clouds
-            .iter_mut()
-            .find(|c| {
-                (c.x - target.source_x).abs() < f64::EPSILON
-                    && (c.y - target.source_y).abs() < f64::EPSILON
-            })?;
-
-        let material = cloud.materials.get_mut(target.material_index)?;
+        let cell = &mut field.cells[target.field_index];
 
         // Defensive re-check: can_break() requires bonded && total >= 2.0,
         // matching the hard rule at the mechanical level too, not just at
         // the perception-filter level above.
-        if !material.can_break() {
+        if !cell.bonded.can_break() {
             return None;
         }
 
         let committed_amount =
-            PROCESSING_RATE.min(material.total_amount());
+            PROCESSING_RATE.min(cell.bonded.total_amount());
 
         if committed_amount <= 0.0 {
             return None;
@@ -1411,11 +1237,7 @@ impl Simulation {
 
         // §18.1 resource commitment: remove from the environment now,
         // the transformation owns it until it resolves.
-        let committed = material.take(committed_amount)?;
-
-        if material.is_empty() {
-            cloud.materials.remove(target.material_index);
-        }
+        let committed = field.take_at_index(target.field_index, true, committed_amount)?;
 
         let n = 2.0_f64; // baseline "resource + processing" component count, §18 example
         let c = math::complexity(n);
@@ -1458,19 +1280,11 @@ impl Simulation {
         let input_potential_energy =
             transformation.material.potential_energy(&environment.catalog);
 
-        // Reactivity's influence is exponential (§11) but bounded so
-        // it can never extract more potential energy than the input
-        // actually contains (§21 - no formula may create energy).
-        // Uses the shared canonical helper from math.rs rather than a
-        // locally duplicated formula.
         let yield_fraction = exponential_influence(props.reactivity);
 
         let gross_extracted =
             input_potential_energy * yield_fraction;
 
-        // Cohesion resists breaking apart (§12): high-cohesion
-        // material taxes the extraction as an overhead cost that is
-        // dissipated as heat rather than becoming usable energy.
         let cohesion_tax_fraction =
             (props.cohesion * 0.5).clamp(0.0, 1.0);
         let cohesion_tax = gross_extracted * cohesion_tax_fraction;
@@ -1486,24 +1300,15 @@ impl Simulation {
 
         organism.usable_energy += usable_gained;
 
-        // Heat generated by processing is internal physiological stress
-        // (per this integration's rules), not the old "excess held
-        // energy" trigger apply_energy_capacity() used to check. Stress
-        // still decays over time (see apply_energy_capacity) and a
-        // death-on-threshold consequence is deliberately NOT implemented
-        // yet - that formula is out of scope for this task.
         organism.stress += heat;
 
         // §5 / Correction #3: spent material does not simply disappear
-        // and must NOT be dissolved back into the abstract global
-        // reservoir. BREAK breaks the bonds, so the leftover mass becomes
-        // waste (unbonded) and is physically ejected at the organism's
-        // current location as a new environmental Material, discoverable
-        // by other organisms (§5, §6 ecological-opportunity intent).
-        // "Build self" (retaining spent mass as organism structure) is
-        // NOT implemented here - that requires a body/structure system
-        // that hasn't been integrated yet, so 100% of spent mass
-        // currently becomes waste.
+        // and must NOT be dissolved back into the abstract reservoir.
+        // BREAK breaks the bonds, so the leftover mass becomes waste
+        // (unbonded) and is deposited directly into the active field
+        // at the organism's current location - it then behaves exactly
+        // like any other field material (can diffuse, be perceived,
+        // be processed by another organism, eventually settle).
         let (px, py) = {
             let p = &organism.occupied_cells[0];
             (p.x, p.y)
@@ -1515,16 +1320,7 @@ impl Simulation {
                 bonded: false,
             };
 
-            environment.resource_clouds.push(ResourceCloud {
-                x: px,
-                y: py,
-
-                radius: 8.0,
-                maximum_radius: 100.0,
-                expansion_rate: 1.0,
-
-                materials: vec![waste],
-            });
+            environment.field.deposit(px, py, waste);
         }
 
         ledger.total_potential_energy_released += gross_extracted;
@@ -1533,10 +1329,6 @@ impl Simulation {
 
         organism.active_transformation_id = None;
 
-        // Outcome-based reinforcement (§65): a transformation that
-        // actually completed here is stronger evidence than merely
-        // perceiving desirability, so it reinforces memory again.
-        // (px, py) was already computed above for waste ejection.
         if usable_gained > 0.0 {
             let reinforcement =
                 (usable_gained * organism.genome.memory_strength())
@@ -1552,12 +1344,6 @@ impl Simulation {
     // ========================================================
 
     fn apply_energy_capacity(organism: &mut Organism) {
-        // Stress now accumulates from processing heat at the moment a
-        // transformation resolves (see resolve_transformation) rather
-        // than from held usable_energy exceeding a capacity placeholder.
-        // This function's remaining job is just the decay side (§24).
-        // A death consequence once stress exceeds some threshold is
-        // explicitly deferred - see integration notes.
         organism.stress *= STRESS_DECAY_PER_TICK;
     }
 
@@ -1576,11 +1362,10 @@ impl Simulation {
         self.tick += 1;
 
         // ----------------------------------------------------
-        // ENVIRONMENT / RESOURCES
+        // ENVIRONMENT: vents -> diffusion -> (throttled) settling
         // ----------------------------------------------------
 
-        self.emit_resource_clouds();
-        self.update_resource_clouds();
+        self.step_environment();
 
         // ----------------------------------------------------
         // RESOURCE TRANSFORMATIONS - advance & resolve
@@ -1650,7 +1435,7 @@ impl Simulation {
         for organism in &mut self.organisms {
             if let Some(transformation) = Self::try_start_transformation(
                 organism,
-                &mut self.environment,
+                &mut self.environment.field,
                 &mut self.next_transformation_id,
             ) {
                 self.active_transformations.push(transformation);
@@ -1688,6 +1473,37 @@ impl Simulation {
 
             energy_ledger: self.energy_ledger,
         }
+    }
+
+    // ========================================================
+    // CONSERVATION DIAGNOSTIC  (Phase 1, Task 5)
+    // ========================================================
+    //
+    // Total material currently accounted for across the WHOLE
+    // system: reservoir + active field + every in-flight
+    // transformation's committed material + every organism's stored
+    // material. Not called every tick (summing the field is not
+    // free) - intended for tests and periodic debug checks, to catch
+    // the class of bug where material is silently created or
+    // destroyed by a code path that isn't a defined physical
+    // operation.
+    // ========================================================
+
+    #[cfg(test)]
+    fn total_material_in_system(&self) -> f64 {
+        let mut total = self.environment.field.total_amount();
+        total += self.environment.reservoir.total_amount();
+
+        for transformation in &self.active_transformations {
+            total += transformation.material.total_amount();
+        }
+
+        for organism in &self.organisms {
+            total += organism.stored_unbonded.total_amount();
+            total += organism.stored_bonded.total_amount();
+        }
+
+        total
     }
 }
 
@@ -1872,4 +1688,127 @@ async fn main() {
     )
     .await
     .unwrap();
+}
+
+
+// ============================================================
+// TESTS - Phase 1, Task 5: environmental conservation, run
+// through the actual Simulation (not just environment.rs in
+// isolation) so integration bugs at the call sites show up too.
+// ============================================================
+
+#[cfg(test)]
+mod integration_tests {
+    use super::*;
+
+    #[test]
+    fn fresh_simulation_conserves_total_material_over_many_ticks() {
+        let mut sim = Simulation::new(1, 10.0);
+
+        let before = sim.total_material_in_system();
+
+        for _ in 0..3000 {
+            sim.step();
+        }
+
+        let after = sim.total_material_in_system();
+
+        assert!(
+            (before - after).abs() < 1e-3,
+            "total material must be conserved across a full simulation run: before={before}, after={after}"
+        );
+    }
+
+    #[test]
+    fn no_resource_cloud_pathway_exists() {
+        // Compile-time proof, not a runtime assertion: Environment no
+        // longer has a `resource_clouds` field or any cloud-related
+        // method. If this test compiles, the legacy pathway is gone.
+        let env = Simulation::create_environment();
+        assert!(env.field.cells.len() > 0);
+        assert!(env.reservoir.cells.len() > 0);
+    }
+
+    #[test]
+    fn organism_can_perceive_material_from_the_field() {
+        // Run long enough for a vent to emit near the organism's
+        // starting position - proves perception is correctly wired
+        // to the field (not the old ResourceCloud list).
+        let mut sim = Simulation::new(7, 10.0);
+
+        let mut ever_sensed_something = false;
+
+        for _ in 0..500 {
+            sim.step();
+            if !sim.organisms[0].resource_sense.sensed_resources.is_empty() {
+                ever_sensed_something = true;
+            }
+        }
+
+        assert!(ever_sensed_something, "organism should perceive field material at some point");
+    }
+
+    #[test]
+    fn organism_can_break_bonded_material_once_available() {
+        // KNOWN PHASE 1 GAP, surfaced deliberately by this test rather
+        // than hidden: a freshly-seeded world currently has NO viable
+        // path to bonded material anywhere. seed_uniform only seeds
+        // unbonded reservoir stock, vents are now required to be
+        // indiscriminate (no bonded preference/fallback), and COMBINE
+        // - the only mechanism that legitimately creates bonded
+        // material - is out of scope until Phase 2. So organisms
+        // cannot actually gain energy in a real, freshly-started
+        // simulation right now (see organism_can_perceive_and_process_
+        // material_from_the_field, which used to assert this and has
+        // been narrowed to perception-only above).
+        //
+        // This test instead proves the INITIATION -> RESOLUTION
+        // mechanism itself is correctly wired to the field, by
+        // manually placing bonded material directly into the field
+        // (bypassing vents entirely) and confirming the organism can
+        // still sense it, commit to it, and gain usable energy from
+        // it. Once COMBINE exists, the real bootstrap path will feed
+        // this same mechanism - this test does not need to change
+        // when that happens.
+        let mut sim = Simulation::new(7, 10.0);
+
+        let (px, py) = {
+            let p = &sim.organisms[0].occupied_cells[0];
+            (p.x, p.y)
+        };
+
+        sim.environment.field.deposit(
+            px,
+            py,
+            Material {
+                parts: vec![("Methane".into(), 50.0)],
+                bonded: true,
+            },
+        );
+
+        let mut ever_gained_energy = false;
+        for _ in 0..200 {
+            sim.step();
+            if sim.organisms[0].usable_energy > 0.0 {
+                ever_gained_energy = true;
+                break;
+            }
+        }
+
+        assert!(ever_gained_energy, "organism should be able to BREAK bonded material and gain energy");
+    }
+
+    #[test]
+    fn vent_emission_does_not_create_or_destroy_material() {
+        let mut sim = Simulation::new(3, 10.0);
+        let before = sim.total_material_in_system();
+
+        for _ in 0..1000 {
+            sim.step_environment();
+            sim.tick += 1;
+        }
+
+        let after = sim.total_material_in_system();
+        assert!((before - after).abs() < 1e-3);
+    }
 }
