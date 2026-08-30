@@ -61,13 +61,19 @@ pub struct BaseResource {
 //     structure will, and that placement (position, rotation, later
 //     layer/depth for stacking) belongs to that future compound
 //     representation, not to this immutable per-type definition.
-//   - Connection points are NOT universal snap points, and their
-//     count/position is NEVER derived from the primitive's side
-//     count or curvature - they are always explicitly authored per
-//     resource. They mark immutable physical locations/orientations
-//     on the resource's own geometry where a *future* COMBINE
-//     mechanic may attempt a connection. Compatibility rules belong
-//     to that future mechanic, not to this representation.
+//   - Connection points mark physical locations/orientations on the
+//     resource's own geometry where a *future* bonding mechanic may
+//     attempt a connection. SUPERSEDED DESIGN NOTE: an earlier
+//     version of this file authored connection points independently
+//     per resource, explicitly NOT derived from side count. That is
+//     now obsolete - the locked rule is "every physical corner is a
+//     connection point," so polygonal points are now derived from
+//     `Form::polygon_vertices()` (see `Shape::connection_sites()`)
+//     and can never drift out of sync with the actual geometry.
+//     Circle is the deliberate exception: it has a continuous
+//     circumference, not a finite point list - see `ConnectionSites`.
+//     Compatibility/contact rules still belong to that future
+//     bonding mechanic, not to this representation.
 // ============================================================
 
 /// A small, deliberately limited vocabulary of 2D primitives. Each
@@ -163,40 +169,88 @@ impl Form {
     }
 }
 
-/// A single immutable connection point on a resource's shape.
-/// Position is relative to the shape's own local origin, direction is
-/// the outward-facing orientation in radians, and strength is a
-/// property of this specific point (per design decision #9 - not a
-/// separate global resource property). Always explicitly authored -
-/// never derived from the Form's side count or curvature.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+/// A single connection point, always DERIVED from a resource's Form,
+/// never independently authored. Position is relative to the shape's
+/// own local origin; direction is the outward-facing orientation in
+/// radians, computed as the angle from the shape's local origin
+/// through the point itself (a deterministic, geometry-derived value,
+/// not authored).
+///
+/// There is no independent connection-point strength. The only
+/// strength value in the eventual bonding system belongs to a Bond
+/// itself (formed between two points), not to a point in isolation -
+/// so this type deliberately carries no such field.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 pub struct ConnectionPoint {
     pub x: f64,
     pub y: f64,
     pub direction_radians: f64,
-    pub strength: f64,
 }
 
 impl ConnectionPoint {
     pub fn is_valid(&self) -> bool {
-        self.x.is_finite()
-            && self.y.is_finite()
-            && self.direction_radians.is_finite()
-            && self.strength.is_finite()
-            && self.strength >= 0.0
+        self.x.is_finite() && self.y.is_finite() && self.direction_radians.is_finite()
     }
 }
 
+/// Where a future bonding/contact system can find connection
+/// locations on a resource's shape. Polygonal forms get exactly one
+/// discrete, corner-derived point per vertex (rule: "every physical
+/// corner is a connection point"). Circle is structurally different -
+/// it has a continuous accessible circumference, not a finite point
+/// list, so it is NOT represented as a Vec<ConnectionPoint> at all.
+/// This session establishes only the representation; actually
+/// resolving a contact location on a Circumference at bonding time is
+/// explicitly out of scope here.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum ConnectionSites {
+    Corners(Vec<ConnectionPoint>),
+    Circumference { radius: f64 },
+}
+
 /// The complete immutable geometric property of a resource type.
+/// Connection points are no longer stored here as authored data -
+/// they are derived on demand from `form` via `connection_sites()`,
+/// so there is no way for a resource's connection points to drift
+/// out of sync with its actual geometry.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Shape {
     pub form: Form,
-    pub connection_points: Vec<ConnectionPoint>,
 }
 
 impl Shape {
     pub fn is_valid(&self) -> bool {
-        self.form.is_valid() && self.connection_points.iter().all(ConnectionPoint::is_valid)
+        self.form.is_valid()
+    }
+
+    /// Derives this shape's connection sites purely from its Form.
+    /// Circle -> its continuous circumference (no discrete points).
+    /// Every other Form -> one ConnectionPoint per polygon vertex,
+    /// positioned exactly at that vertex, with an outward direction
+    /// computed as the angle from the local origin through the
+    /// vertex (the same convention the old authored data already
+    /// used for regular polygons - this just makes it automatic and
+    /// universal instead of hand-authored per resource).
+    pub fn connection_sites(&self) -> ConnectionSites {
+        match &self.form {
+            Form::Circle { radius } => ConnectionSites::Circumference { radius: *radius },
+            other => {
+                let vertices = other
+                    .polygon_vertices()
+                    .expect("non-Circle forms always resolve to a vertex list");
+
+                let points = vertices
+                    .into_iter()
+                    .map(|(x, y)| ConnectionPoint {
+                        x,
+                        y,
+                        direction_radians: y.atan2(x),
+                    })
+                    .collect();
+
+                ConnectionSites::Corners(points)
+            }
+        }
     }
 }
 
@@ -422,69 +476,43 @@ pub fn property_ranges(catalog: &[BaseResource]) -> ResourceProperties {
 
 pub fn default_catalog() -> Vec<BaseResource> {
     vec![
-        // Carbon: high cohesion (0.95) -> a hexagon, chosen specifically
-        // because hexagonal packing creates useful, varied structural
-        // possibilities for future construction mechanics. Six sides
-        // does NOT mean six connection points - three are explicitly
-        // placed at alternating edge midpoints (not vertices), leaving
-        // the other three edges bare. That asymmetry (relative to the
-        // shape's own 6-fold symmetry) is deliberate: it's an explicit
-        // authoring choice, never derived from side count.
-        {
-            let radius = 0.6_f64;
-            // Apothem (center-to-edge-midpoint distance) for a regular
-            // hexagon: radius * cos(PI / sides).
-            let apothem = radius * (std::f64::consts::PI / 6.0).cos();
-            let angle_a = std::f64::consts::PI / 6.0; // 30 deg
-            let angle_b = 5.0 * std::f64::consts::PI / 6.0; // 150 deg
-            let angle_c = 3.0 * std::f64::consts::PI / 2.0; // 270 deg
-            BaseResource {
-                name: "Carbon".into(),
-                properties: ResourceProperties {
-                    mass: 1.0,
-                    potential_energy: 1.0,
-                    reactivity: 0.1,
-                    cohesion: 0.95,
-                },
-                shape: Shape {
-                    form: Form::RegularPolygon { sides: 6, radius },
-                    connection_points: vec![
-                        ConnectionPoint { x: apothem * angle_a.cos(), y: apothem * angle_a.sin(), direction_radians: angle_a, strength: 0.9 },
-                        ConnectionPoint { x: apothem * angle_b.cos(), y: apothem * angle_b.sin(), direction_radians: angle_b, strength: 0.9 },
-                        ConnectionPoint { x: apothem * angle_c.cos(), y: apothem * angle_c.sin(), direction_radians: angle_c, strength: 0.9 },
-                    ],
-                },
-            }
+        // Carbon: hexagon. Six sides -> six connection points, one per
+        // vertex, derived automatically via Shape::connection_sites()
+        // (superseded note: an earlier version hand-authored only
+        // three points here specifically to prove points weren't
+        // derived from side count - that design is now obsolete; the
+        // locked rule is exactly the opposite).
+        BaseResource {
+            name: "Carbon".into(),
+            properties: ResourceProperties {
+                mass: 1.0,
+                potential_energy: 1.0,
+                reactivity: 0.1,
+                cohesion: 0.95,
+            },
+            shape: Shape {
+                form: Form::RegularPolygon { sides: 6, radius: 0.6 },
+            },
         },
-        // Methane: reactive, low cohesion (0.1) -> a small circle with
-        // three connection points at deliberately irregular (not evenly
-        // spaced) angles - a round, unstable-feeling blob rather than a
-        // tidy symmetric one.
-        {
-            let radius = 0.5_f64;
-            let angle_a = 20.0_f64.to_radians();
-            let angle_b = 160.0_f64.to_radians();
-            let angle_c = 260.0_f64.to_radians();
-            BaseResource {
-                name: "Methane".into(),
-                properties: ResourceProperties {
-                    mass: 1.0,
-                    potential_energy: 20.0,
-                    reactivity: 4.0,
-                    cohesion: 0.1,
-                },
-                shape: Shape {
-                    form: Form::Circle { radius },
-                    connection_points: vec![
-                        ConnectionPoint { x: radius * angle_a.cos(), y: radius * angle_a.sin(), direction_radians: angle_a, strength: 0.2 },
-                        ConnectionPoint { x: radius * angle_b.cos(), y: radius * angle_b.sin(), direction_radians: angle_b, strength: 0.2 },
-                        ConnectionPoint { x: radius * angle_c.cos(), y: radius * angle_c.sin(), direction_radians: angle_c, strength: 0.2 },
-                    ],
-                },
-            }
+        // Methane: triangle. Locked geometry assignment (was
+        // previously a Circle, before Hydrogen was designated the
+        // catalog's one and only circular resource). Three sides ->
+        // three corner-derived connection points.
+        BaseResource {
+            name: "Methane".into(),
+            properties: ResourceProperties {
+                mass: 1.0,
+                potential_energy: 20.0,
+                reactivity: 4.0,
+                cohesion: 0.1,
+            },
+            shape: Shape {
+                form: Form::RegularPolygon { sides: 3, radius: 0.5 },
+            },
         },
-        // Hydrogen: smallest, weakest circle - a single connection
-        // point, a plain terminal/cap-like piece.
+        // Hydrogen: the catalog's one and only circular resource
+        // (locked assignment). Continuous circumference, no discrete
+        // connection point list.
         BaseResource {
             name: "Hydrogen".into(),
             properties: ResourceProperties {
@@ -495,40 +523,28 @@ pub fn default_catalog() -> Vec<BaseResource> {
             },
             shape: Shape {
                 form: Form::Circle { radius: 0.3 },
-                connection_points: vec![
-                    ConnectionPoint { x: 0.3, y: 0.0, direction_radians: 0.0, strength: 0.15 },
-                ],
             },
         },
-        // Sulfur: moderate cohesion (0.4) -> an equilateral triangle
-        // (RegularPolygon with 3 sides). Only two of its three vertices
-        // carry a connection point, again to make clear that point
-        // count is never implied by side count - the third vertex is
-        // deliberately bare.
-        {
-            let radius = 0.5_f64;
-            let angle_a = 0.0_f64;
-            let angle_b = 2.0 * std::f64::consts::PI / 3.0; // 120 deg
-            BaseResource {
-                name: "Sulfur".into(),
-                properties: ResourceProperties {
-                    mass: 1.0,
-                    potential_energy: 8.0,
-                    reactivity: 2.0,
-                    cohesion: 0.4,
-                },
-                shape: Shape {
-                    form: Form::RegularPolygon { sides: 3, radius },
-                    connection_points: vec![
-                        ConnectionPoint { x: radius * angle_a.cos(), y: radius * angle_a.sin(), direction_radians: angle_a, strength: 0.4 },
-                        ConnectionPoint { x: radius * angle_b.cos(), y: radius * angle_b.sin(), direction_radians: angle_b, strength: 0.4 },
-                    ],
-                },
-            }
+        // Sulfur: pentagon (locked assignment, was previously a
+        // triangle before Methane took that shape). Five sides ->
+        // five corner-derived connection points.
+        BaseResource {
+            name: "Sulfur".into(),
+            properties: ResourceProperties {
+                mass: 1.0,
+                potential_energy: 8.0,
+                reactivity: 2.0,
+                cohesion: 0.4,
+            },
+            shape: Shape {
+                form: Form::RegularPolygon { sides: 5, radius: 0.5 },
+            },
         },
-        // Nitrogen: cohesion 0.7 -> an elongated rectangle (a bar/rod
-        // silhouette, independent width/height rather than a regular
-        // polygon), with one connection point at each end.
+        // Nitrogen: an elongated rectangle (a bar/rod silhouette,
+        // independent width/height rather than a regular polygon).
+        // Four corners -> four corner-derived connection points (the
+        // old design authored only two, at edge midpoints rather than
+        // actual corners - now obsolete).
         BaseResource {
             name: "Nitrogen".into(),
             properties: ResourceProperties {
@@ -539,21 +555,13 @@ pub fn default_catalog() -> Vec<BaseResource> {
             },
             shape: Shape {
                 form: Form::Rectangle { width: 1.6, height: 0.35 },
-                connection_points: vec![
-                    ConnectionPoint { x: 0.8, y: 0.0, direction_radians: 0.0, strength: 0.65 },
-                    ConnectionPoint { x: -0.8, y: 0.0, direction_radians: std::f64::consts::PI, strength: 0.65 },
-                ],
             },
         },
-        // Phosphorus: cohesion 0.6 -> an explicit-vertex L-shape. This
-        // is the concrete demonstration of the Polygon escape hatch:
-        // a concave, asymmetric silhouette that a parameterized
-        // primitive can't express. Two connection points sit on its
-        // outer edges (moderate strength); the third sits in the
-        // concave inner corner - a deliberately awkward, partially
-        // enclosed attachment site (weaker strength), which is the
-        // kind of "difficult attachment configuration" this
-        // representation is meant to make possible.
+        // Phosphorus: explicit-vertex L-shape (six vertices) - the
+        // concrete demonstration of the Polygon escape hatch, a
+        // concave silhouette a parameterized primitive can't express.
+        // Six vertices -> six corner-derived connection points,
+        // including one at the concave inner corner.
         BaseResource {
             name: "Phosphorus".into(),
             properties: ResourceProperties {
@@ -573,37 +581,31 @@ pub fn default_catalog() -> Vec<BaseResource> {
                         (-0.5, 0.5),
                     ],
                 },
-                connection_points: vec![
-                    ConnectionPoint { x: 0.5, y: -0.25, direction_radians: 0.0, strength: 0.55 },
-                    ConnectionPoint { x: -0.25, y: 0.5, direction_radians: std::f64::consts::FRAC_PI_2, strength: 0.55 },
-                    ConnectionPoint { x: 0.0, y: 0.0, direction_radians: std::f64::consts::FRAC_PI_4, strength: 0.3 },
-                ],
             },
         },
-        // Water: diluent, cohesion 0.5 -> a pentagon with two
-        // connection points at non-adjacent vertices, set apart at a
-        // bent angle (a nod to water's familiar bent silhouette, not a
-        // claim of real chemistry).
-        {
-            let radius = 0.4_f64;
-            let angle_a = std::f64::consts::FRAC_PI_2; // 90 deg
-            let angle_b = 210.0_f64.to_radians();
-            BaseResource {
-                name: "Water".into(),
-                properties: ResourceProperties {
-                    mass: 1.0,
-                    potential_energy: 0.0,
-                    reactivity: 0.0,
-                    cohesion: 0.5,
-                },
-                shape: Shape {
-                    form: Form::RegularPolygon { sides: 5, radius },
-                    connection_points: vec![
-                        ConnectionPoint { x: radius * angle_a.cos(), y: radius * angle_a.sin(), direction_radians: angle_a, strength: 0.5 },
-                        ConnectionPoint { x: radius * angle_b.cos(), y: radius * angle_b.sin(), direction_radians: angle_b, strength: 0.5 },
-                    ],
-                },
-            }
+        // Water: the locked long-term design is that water fills
+        // accessible gaps between rigid materials (fluid/gap-filling
+        // behavior) - that requires dynamic physical geometry, not a
+        // fixed rigid polygon, and is explicitly NOT implemented here
+        // (see report). Sulfur now occupies the pentagon, so Water
+        // needs a placeholder Form purely so it remains a valid,
+        // unique catalog entry in the meantime. Using a square
+        // (RegularPolygon, 4 sides - distinct from Nitrogen's
+        // Rectangle variant and every other resource's Form) as that
+        // placeholder. This is NOT a claim about Water's eventual
+        // shape - it is a temporary rigid stand-in only, chosen to
+        // avoid inventing any part of the future fluid system.
+        BaseResource {
+            name: "Water".into(),
+            properties: ResourceProperties {
+                mass: 1.0,
+                potential_energy: 0.0,
+                reactivity: 0.0,
+                cohesion: 0.5,
+            },
+            shape: Shape {
+                form: Form::RegularPolygon { sides: 4, radius: 0.4 },
+            },
         },
     ]
 }
@@ -720,39 +722,99 @@ mod shape_tests {
     }
 
     #[test]
-    fn carbon_is_a_hexagon_with_explicit_non_derived_connection_points() {
+    fn locked_resource_geometry_assignments_are_correct() {
+        // Pins down the exact locked assignments: Hydrogen=Circle,
+        // Carbon=hexagon(6), Methane=triangle(3), Sulfur=pentagon(5),
+        // Nitrogen=square/rectangle(4), Phosphorus=L-shaped hexagon(6).
+        // Supersedes the old test, which proved the OPPOSITE for
+        // Carbon (that it deliberately had fewer points than sides -
+        // obsolete design).
         let catalog = default_catalog();
-        let carbon = catalog.iter().find(|r| r.name == "Carbon").unwrap();
+        let find = |name: &str| catalog.iter().find(|r| r.name == name).unwrap();
 
-        match carbon.shape.form {
-            Form::RegularPolygon { sides, .. } => assert_eq!(sides, 6, "Carbon must be a hexagon"),
-            _ => panic!("Carbon must use RegularPolygon"),
+        assert!(
+            matches!(find("Hydrogen").shape.form, Form::Circle { .. }),
+            "Hydrogen must be the circular resource"
+        );
+
+        assert!(matches!(find("Carbon").shape.form, Form::RegularPolygon { sides: 6, .. }));
+        assert!(matches!(find("Methane").shape.form, Form::RegularPolygon { sides: 3, .. }));
+        assert!(matches!(find("Sulfur").shape.form, Form::RegularPolygon { sides: 5, .. }));
+        assert!(matches!(find("Nitrogen").shape.form, Form::Rectangle { .. }));
+
+        match &find("Phosphorus").shape.form {
+            Form::Polygon { vertices } => {
+                assert_eq!(vertices.len(), 6, "Phosphorus L-shape must have 6 vertices")
+            }
+            other => panic!("Phosphorus must use the explicit Polygon escape hatch, got {other:?}"),
         }
 
-        // Six-sided shape, but connection point count is NOT six -
-        // proving point count is explicitly authored, not derived from
-        // side count.
-        assert_ne!(carbon.shape.connection_points.len(), 6);
+        let expected_corners = [
+            ("Hydrogen", None),
+            ("Carbon", Some(6)),
+            ("Methane", Some(3)),
+            ("Sulfur", Some(5)),
+            ("Nitrogen", Some(4)),
+            ("Phosphorus", Some(6)),
+        ];
+
+        for (name, expected) in expected_corners {
+            match (find(name).shape.connection_sites(), expected) {
+                (ConnectionSites::Circumference { .. }, None) => {}
+                (ConnectionSites::Corners(points), Some(n)) => {
+                    assert_eq!(points.len(), n, "{name} should have {n} connection points")
+                }
+                (sites, expected) => {
+                    panic!("{name}: unexpected connection sites {sites:?} (expected corners={expected:?})")
+                }
+            }
+        }
     }
 
     #[test]
-    fn connection_points_are_valid_and_present() {
+    fn every_polygonal_resource_has_one_connection_point_per_corner() {
         for resource in default_catalog() {
-            assert!(
-                !resource.shape.connection_points.is_empty(),
-                "{} has no connection points",
-                resource.name
-            );
-            for cp in &resource.shape.connection_points {
-                assert!(
-                    cp.is_valid(),
-                    "{} has an invalid connection point: {:?}",
+            let expected_corners = match &resource.shape.form {
+                Form::Circle { .. } => continue, // circle is covered separately below
+                Form::Rectangle { .. } => 4,
+                Form::RegularPolygon { sides, .. } => *sides as usize,
+                Form::Polygon { vertices } => vertices.len(),
+            };
+
+            match resource.shape.connection_sites() {
+                ConnectionSites::Corners(points) => assert_eq!(
+                    points.len(),
+                    expected_corners,
+                    "{} should have exactly {} connection points (one per corner), got {}",
                     resource.name,
-                    cp
-                );
-                assert!(
-                    cp.strength >= 0.0,
-                    "{} connection point strength must be non-negative",
+                    expected_corners,
+                    points.len()
+                ),
+                ConnectionSites::Circumference { .. } => {
+                    panic!("{} is polygonal but returned Circumference sites", resource.name)
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn polygon_connection_points_correspond_to_actual_vertices() {
+        for resource in default_catalog() {
+            let Some(vertices) = resource.shape.form.polygon_vertices() else {
+                continue; // circle has no vertex list
+            };
+
+            let ConnectionSites::Corners(points) = resource.shape.connection_sites() else {
+                panic!("{} is polygonal but returned Circumference sites", resource.name);
+            };
+
+            assert_eq!(points.len(), vertices.len());
+
+            for (point, vertex) in points.iter().zip(vertices.iter()) {
+                assert_eq!(
+                    (point.x, point.y),
+                    *vertex,
+                    "{} connection point does not match its polygon vertex exactly",
                     resource.name
                 );
             }
@@ -760,26 +822,86 @@ mod shape_tests {
     }
 
     #[test]
-    fn different_resources_have_different_shapes() {
+    fn connection_points_are_valid_where_present() {
+        for resource in default_catalog() {
+            if let ConnectionSites::Corners(points) = resource.shape.connection_sites() {
+                assert!(!points.is_empty(), "{} has a polygonal form but zero connection points", resource.name);
+                for cp in &points {
+                    assert!(cp.is_valid(), "{} has an invalid connection point: {:?}", resource.name, cp);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn circle_has_no_finite_connection_point_list() {
+        // Confirms Circle forms resolve to Circumference, never Corners -
+        // i.e. never an authored/arbitrary Vec<ConnectionPoint>.
+        let circle_resources: Vec<_> = default_catalog()
+            .into_iter()
+            .filter(|r| matches!(r.shape.form, Form::Circle { .. }))
+            .collect();
+
+        assert!(!circle_resources.is_empty(), "expected at least one circular resource in the catalog");
+
+        for resource in &circle_resources {
+            match resource.shape.connection_sites() {
+                ConnectionSites::Circumference { radius } => {
+                    assert!(radius > 0.0, "{} circumference radius must be positive", resource.name);
+                }
+                ConnectionSites::Corners(_) => {
+                    panic!("{} is a Circle but returned discrete Corners", resource.name)
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn connection_point_has_no_independent_strength_field() {
+        // Compile-time proof, not a runtime assertion: this exhaustive
+        // struct pattern only compiles if ConnectionPoint has exactly
+        // these three fields. If a `strength` (or equivalent) field is
+        // ever reintroduced, this stops compiling as a deliberate
+        // tripwire - the only strength value belongs to a future Bond.
+        let ConnectionPoint { x: _, y: _, direction_radians: _ } =
+            ConnectionPoint { x: 0.0, y: 0.0, direction_radians: 0.0 };
+    }
+
+    #[test]
+    fn every_resource_has_a_unique_shape() {
+        // Uses the actual Form definitions (via Form's own PartialEq)
+        // rather than a hardcoded name list, so this fails automatically
+        // if a future edit accidentally gives two resources the same
+        // Form - including same-variant-different-parameters cases
+        // like two RegularPolygons with the same side count.
         let catalog = default_catalog();
 
-        let carbon = catalog.iter().find(|r| r.name == "Carbon").unwrap();
-        let hydrogen = catalog.iter().find(|r| r.name == "Hydrogen").unwrap();
+        let circle_count = catalog
+            .iter()
+            .filter(|r| matches!(r.shape.form, Form::Circle { .. }))
+            .count();
+        assert_eq!(circle_count, 1, "exactly one resource should be circular");
 
-        // Different form variant entirely (RegularPolygon vs Circle).
-        assert_ne!(carbon.shape.form, hydrogen.shape.form);
+        for i in 0..catalog.len() {
+            for j in (i + 1)..catalog.len() {
+                assert_ne!(
+                    catalog[i].shape.form,
+                    catalog[j].shape.form,
+                    "{} and {} have identical shapes: {:?}",
+                    catalog[i].name,
+                    catalog[j].name,
+                    catalog[i].shape.form
+                );
+            }
+        }
+    }
 
-        // Different connection point counts across the catalog in
-        // general (spot-check a few, not exhaustive).
-        assert_ne!(
-            carbon.shape.connection_points.len(),
-            hydrogen.shape.connection_points.len()
-        );
+    #[test]
+    fn shape_vocabulary_is_actually_exercised() {
+        let catalog = default_catalog();
 
-        // Spot-check that the vocabulary is actually being exercised:
-        // at least one Polygon (explicit-vertex escape hatch) and at
-        // least one RegularPolygon with a side count other than
-        // Carbon's are present in the catalog.
+        // At least one Polygon (explicit-vertex escape hatch) and a
+        // spread of different RegularPolygon side counts are present.
         assert!(
             catalog
                 .iter()
@@ -832,38 +954,12 @@ mod shape_tests {
                 (a, b) => panic!("{} form variant changed across round-trip: {:?} vs {:?}", resource.name, a, b),
             }
 
-            assert_eq!(
-                restored.shape.connection_points.len(),
-                resource.shape.connection_points.len()
-            );
-            for (a, b) in restored
-                .shape
-                .connection_points
-                .iter()
-                .zip(resource.shape.connection_points.iter())
-            {
-                // Epsilon comparison, not bit-exact equality: some
-                // connection points are derived from sin()/cos() (see
-                // Carbon/Water), and JSON's decimal text round-trip is
-                // not guaranteed bit-exact for every irrational-derived
-                // f64 - this is a property of text serialization, not
-                // of the Shape representation itself.
-                const EPS: f64 = 1e-9;
-                assert!((a.x - b.x).abs() < EPS, "x mismatch: {} vs {}", a.x, b.x);
-                assert!((a.y - b.y).abs() < EPS, "y mismatch: {} vs {}", a.y, b.y);
-                assert!(
-                    (a.direction_radians - b.direction_radians).abs() < EPS,
-                    "direction mismatch: {} vs {}",
-                    a.direction_radians,
-                    b.direction_radians
-                );
-                assert!(
-                    (a.strength - b.strength).abs() < EPS,
-                    "strength mismatch: {} vs {}",
-                    a.strength,
-                    b.strength
-                );
-            }
+            // Connection sites are derived from `form`, which was just
+            // proven to round-trip correctly above - so sites computed
+            // from the restored form must match sites computed from the
+            // original form exactly (they're not independently stored,
+            // so there's no separate serialization path to break).
+            assert_eq!(restored.shape.connection_sites(), resource.shape.connection_sites());
         }
     }
 }
