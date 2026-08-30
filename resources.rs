@@ -116,6 +116,18 @@ pub enum Form {
     /// triangle), trapezoids, etc. This is the deliberate escape
     /// hatch so the enum doesn't need one variant per named shape.
     Polygon { vertices: Vec<(f64, f64)> },
+
+    /// A non-rigid material with no fixed silhouette - currently only
+    /// Water. Locked design: water is capable of filling accessible
+    /// gaps between rigid materials while remaining constrained by a
+    /// nominal physical area, but the actual fluid/gap-filling
+    /// mechanics are explicitly NOT implemented yet. This variant is
+    /// deliberately just an interface/marker (a nominal area, nothing
+    /// more) so nothing downstream has to fake rigidity for water -
+    /// see is_valid/polygon_vertices/bounding_radius below, all of
+    /// which treat this as "no rigid geometry" rather than inventing
+    /// placeholder physics.
+    Fluid { nominal_area: f64 },
 }
 
 impl Form {
@@ -132,6 +144,7 @@ impl Form {
                 vertices.len() >= 3
                     && vertices.iter().all(|(x, y)| x.is_finite() && y.is_finite())
             }
+            Form::Fluid { nominal_area } => nominal_area.is_finite() && *nominal_area > 0.0,
         }
     }
 
@@ -139,12 +152,14 @@ impl Form {
     /// shape's own origin - the concrete mechanism that lets "many of
     /// these forms ultimately resolve into actual 2D vertices/polygons
     /// without requiring a separate geometry engine for every shape."
-    /// `Circle` has no finite vertex list (a renderer draws it
-    /// natively as a circle, not a tessellated polygon), so it
-    /// returns `None`; every polygonal form returns `Some(vertices)`.
+    /// `Circle` and `Fluid` have no finite vertex list - a renderer
+    /// draws a circle natively, and fluid has no fixed silhouette at
+    /// all - so both return `None`; every rigid polygonal form
+    /// returns `Some(vertices)`.
     pub fn polygon_vertices(&self) -> Option<Vec<(f64, f64)>> {
         match self {
             Form::Circle { .. } => None,
+            Form::Fluid { .. } => None,
 
             Form::Rectangle { width, height } => {
                 let hw = width / 2.0;
@@ -165,6 +180,30 @@ impl Form {
             }
 
             Form::Polygon { vertices } => Some(vertices.clone()),
+        }
+    }
+
+    /// A cheap, conservative bounding radius (the largest local
+    /// distance from origin to any part of the shape) - used only for
+    /// broad/precise-phase physical-reach checks (see contact.rs), NOT
+    /// for rendering or exact contact resolution. This is deliberately
+    /// an approximation (bounding circle, not exact silhouette) per
+    /// the locked "keep precise geometry local and cheap" direction.
+    pub fn bounding_radius(&self) -> f64 {
+        match self {
+            Form::Circle { radius } => *radius,
+            Form::Rectangle { width, height } => {
+                ((width / 2.0).powi(2) + (height / 2.0).powi(2)).sqrt()
+            }
+            Form::RegularPolygon { radius, .. } => *radius,
+            Form::Polygon { vertices } => vertices
+                .iter()
+                .map(|(x, y)| (x * x + y * y).sqrt())
+                .fold(0.0_f64, f64::max),
+            // No fixed silhouette - approximate with the radius of a
+            // circle of the same nominal area. Explicitly an
+            // approximation, not a claim about fluid's real shape.
+            Form::Fluid { nominal_area } => (nominal_area / std::f64::consts::PI).sqrt(),
         }
     }
 }
@@ -199,13 +238,16 @@ impl ConnectionPoint {
 /// corner is a connection point"). Circle is structurally different -
 /// it has a continuous accessible circumference, not a finite point
 /// list, so it is NOT represented as a Vec<ConnectionPoint> at all.
-/// This session establishes only the representation; actually
-/// resolving a contact location on a Circumference at bonding time is
-/// explicitly out of scope here.
+/// Fluid is different again - it has no fixed connection geometry at
+/// all yet (bonding to/through a fluid is unresolved future design),
+/// so it gets its own explicit "undetermined" variant rather than
+/// being forced into Corners or Circumference.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum ConnectionSites {
     Corners(Vec<ConnectionPoint>),
     Circumference { radius: f64 },
+    /// Fluid materials have no locked connection representation yet.
+    Undetermined,
 }
 
 /// The complete immutable geometric property of a resource type.
@@ -225,6 +267,7 @@ impl Shape {
 
     /// Derives this shape's connection sites purely from its Form.
     /// Circle -> its continuous circumference (no discrete points).
+    /// Fluid -> Undetermined (no locked connection design yet).
     /// Every other Form -> one ConnectionPoint per polygon vertex,
     /// positioned exactly at that vertex, with an outward direction
     /// computed as the angle from the local origin through the
@@ -234,10 +277,11 @@ impl Shape {
     pub fn connection_sites(&self) -> ConnectionSites {
         match &self.form {
             Form::Circle { radius } => ConnectionSites::Circumference { radius: *radius },
+            Form::Fluid { .. } => ConnectionSites::Undetermined,
             other => {
                 let vertices = other
                     .polygon_vertices()
-                    .expect("non-Circle forms always resolve to a vertex list");
+                    .expect("rigid non-Circle/Fluid forms always resolve to a vertex list");
 
                 let points = vertices
                     .into_iter()
@@ -474,14 +518,21 @@ pub fn property_ranges(catalog: &[BaseResource]) -> ResourceProperties {
     }
 }
 
+/// Every base resource unit represents the same nominal physical
+/// area (locked design decision), regardless of shape type. This is
+/// the single source of truth for that invariant - shape SIZE
+/// parameters below are all solved to match this area for their
+/// given shape TYPE (which stays exactly as locked); nothing scales
+/// mass/other properties to compensate. If the common-area value
+/// itself ever needs to change, this is the only constant to touch.
+pub const NOMINAL_UNIT_AREA: f64 = 0.5;
+
 pub fn default_catalog() -> Vec<BaseResource> {
     vec![
         // Carbon: hexagon. Six sides -> six connection points, one per
-        // vertex, derived automatically via Shape::connection_sites()
-        // (superseded note: an earlier version hand-authored only
-        // three points here specifically to prove points weren't
-        // derived from side count - that design is now obsolete; the
-        // locked rule is exactly the opposite).
+        // vertex, derived automatically via Shape::connection_sites().
+        // Radius solved so hexagon area == NOMINAL_UNIT_AREA:
+        // area = 0.5*n*r^2*sin(2*pi/n) => r = sqrt(2*A/(n*sin(2*pi/n))).
         BaseResource {
             name: "Carbon".into(),
             properties: ResourceProperties {
@@ -491,13 +542,12 @@ pub fn default_catalog() -> Vec<BaseResource> {
                 cohesion: 0.95,
             },
             shape: Shape {
-                form: Form::RegularPolygon { sides: 6, radius: 0.6 },
+                form: Form::RegularPolygon { sides: 6, radius: 0.438_691 },
             },
         },
-        // Methane: triangle. Locked geometry assignment (was
-        // previously a Circle, before Hydrogen was designated the
-        // catalog's one and only circular resource). Three sides ->
-        // three corner-derived connection points.
+        // Methane: triangle. Locked geometry assignment. Radius
+        // solved the same way as Carbon, for n=3, to match
+        // NOMINAL_UNIT_AREA.
         BaseResource {
             name: "Methane".into(),
             properties: ResourceProperties {
@@ -507,12 +557,12 @@ pub fn default_catalog() -> Vec<BaseResource> {
                 cohesion: 0.1,
             },
             shape: Shape {
-                form: Form::RegularPolygon { sides: 3, radius: 0.5 },
+                form: Form::RegularPolygon { sides: 3, radius: 0.620_403 },
             },
         },
         // Hydrogen: the catalog's one and only circular resource
         // (locked assignment). Continuous circumference, no discrete
-        // connection point list.
+        // connection point list. Radius solved from area = pi*r^2.
         BaseResource {
             name: "Hydrogen".into(),
             properties: ResourceProperties {
@@ -522,12 +572,11 @@ pub fn default_catalog() -> Vec<BaseResource> {
                 cohesion: 0.05,
             },
             shape: Shape {
-                form: Form::Circle { radius: 0.3 },
+                form: Form::Circle { radius: 0.398_942 },
             },
         },
-        // Sulfur: pentagon (locked assignment, was previously a
-        // triangle before Methane took that shape). Five sides ->
-        // five corner-derived connection points.
+        // Sulfur: pentagon (locked assignment). Radius solved for
+        // n=5 to match NOMINAL_UNIT_AREA.
         BaseResource {
             name: "Sulfur".into(),
             properties: ResourceProperties {
@@ -537,14 +586,13 @@ pub fn default_catalog() -> Vec<BaseResource> {
                 cohesion: 0.4,
             },
             shape: Shape {
-                form: Form::RegularPolygon { sides: 5, radius: 0.5 },
+                form: Form::RegularPolygon { sides: 5, radius: 0.458_577 },
             },
         },
-        // Nitrogen: an elongated rectangle (a bar/rod silhouette,
-        // independent width/height rather than a regular polygon).
-        // Four corners -> four corner-derived connection points (the
-        // old design authored only two, at edge midpoints rather than
-        // actual corners - now obsolete).
+        // Nitrogen: rectangle, aspect ratio preserved from the
+        // original bar/rod silhouette (1.6:0.35), both dimensions
+        // scaled by the same factor so width*height == NOMINAL_UNIT_AREA.
+        // Four corners -> four corner-derived connection points.
         BaseResource {
             name: "Nitrogen".into(),
             properties: ResourceProperties {
@@ -554,14 +602,15 @@ pub fn default_catalog() -> Vec<BaseResource> {
                 cohesion: 0.7,
             },
             shape: Shape {
-                form: Form::Rectangle { width: 1.6, height: 0.35 },
+                form: Form::Rectangle { width: 1.511_858, height: 0.330_719 },
             },
         },
         // Phosphorus: explicit-vertex L-shape (six vertices) - the
-        // concrete demonstration of the Polygon escape hatch, a
-        // concave silhouette a parameterized primitive can't express.
-        // Six vertices -> six corner-derived connection points,
-        // including one at the concave inner corner.
+        // concrete demonstration of the Polygon escape hatch. Original
+        // vertices uniformly scaled by sqrt(NOMINAL_UNIT_AREA / original_area)
+        // so the L-shape's area also matches NOMINAL_UNIT_AREA, without
+        // changing its proportions. Six vertices -> six corner-derived
+        // connection points, including one at the concave inner corner.
         BaseResource {
             name: "Phosphorus".into(),
             properties: ResourceProperties {
@@ -573,28 +622,24 @@ pub fn default_catalog() -> Vec<BaseResource> {
             shape: Shape {
                 form: Form::Polygon {
                     vertices: vec![
-                        (-0.5, -0.5),
-                        (0.5, -0.5),
-                        (0.5, 0.0),
+                        (-0.408_248, -0.408_248),
+                        (0.408_248, -0.408_248),
+                        (0.408_248, 0.0),
                         (0.0, 0.0),
-                        (0.0, 0.5),
-                        (-0.5, 0.5),
+                        (0.0, 0.408_248),
+                        (-0.408_248, 0.408_248),
                     ],
                 },
             },
         },
-        // Water: the locked long-term design is that water fills
+        // Water: locked long-term design is that water fills
         // accessible gaps between rigid materials (fluid/gap-filling
-        // behavior) - that requires dynamic physical geometry, not a
-        // fixed rigid polygon, and is explicitly NOT implemented here
-        // (see report). Sulfur now occupies the pentagon, so Water
-        // needs a placeholder Form purely so it remains a valid,
-        // unique catalog entry in the meantime. Using a square
-        // (RegularPolygon, 4 sides - distinct from Nitrogen's
-        // Rectangle variant and every other resource's Form) as that
-        // placeholder. This is NOT a claim about Water's eventual
-        // shape - it is a temporary rigid stand-in only, chosen to
-        // avoid inventing any part of the future fluid system.
+        // behavior). Rather than faking that with another rigid
+        // polygon, this uses Form::Fluid - a minimal interface that
+        // only carries the one thing that IS locked (a nominal
+        // physical area, matching every other resource unit) and
+        // deliberately nothing else. The actual fluid/gap-filling
+        // mechanics remain unimplemented; see report.
         BaseResource {
             name: "Water".into(),
             properties: ResourceProperties {
@@ -604,7 +649,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
                 cohesion: 0.5,
             },
             shape: Shape {
-                form: Form::RegularPolygon { sides: 4, radius: 0.4 },
+                form: Form::Fluid { nominal_area: NOMINAL_UNIT_AREA },
             },
         },
     ]
@@ -717,6 +762,15 @@ mod shape_tests {
                         resource.name
                     );
                 }
+                Form::Fluid { .. } => {
+                    // Fluid has no fixed silhouette - no finite vertex
+                    // list is expected, same as Circle.
+                    assert!(
+                        resource.shape.form.polygon_vertices().is_none(),
+                        "{} (Fluid) should not resolve to vertices",
+                        resource.name
+                    );
+                }
             }
         }
     }
@@ -776,6 +830,7 @@ mod shape_tests {
         for resource in default_catalog() {
             let expected_corners = match &resource.shape.form {
                 Form::Circle { .. } => continue, // circle is covered separately below
+                Form::Fluid { .. } => continue,  // fluid has no rigid corners
                 Form::Rectangle { .. } => 4,
                 Form::RegularPolygon { sides, .. } => *sides as usize,
                 Form::Polygon { vertices } => vertices.len(),
@@ -790,8 +845,8 @@ mod shape_tests {
                     expected_corners,
                     points.len()
                 ),
-                ConnectionSites::Circumference { .. } => {
-                    panic!("{} is polygonal but returned Circumference sites", resource.name)
+                other => {
+                    panic!("{} is polygonal but returned {:?}", resource.name, other)
                 }
             }
         }
@@ -849,8 +904,8 @@ mod shape_tests {
                 ConnectionSites::Circumference { radius } => {
                     assert!(radius > 0.0, "{} circumference radius must be positive", resource.name);
                 }
-                ConnectionSites::Corners(_) => {
-                    panic!("{} is a Circle but returned discrete Corners", resource.name)
+                other => {
+                    panic!("{} is a Circle but returned {:?}", resource.name, other)
                 }
             }
         }
@@ -865,6 +920,54 @@ mod shape_tests {
         // tripwire - the only strength value belongs to a future Bond.
         let ConnectionPoint { x: _, y: _, direction_radians: _ } =
             ConnectionPoint { x: 0.0, y: 0.0, direction_radians: 0.0 };
+    }
+
+    #[test]
+    fn every_base_resource_unit_has_the_same_nominal_area() {
+        // Shoelace formula for polygonal forms; pi*r^2 for Circle;
+        // nominal_area directly for Fluid (that's the whole point of
+        // the field). Proves the computed shape parameters actually
+        // hit NOMINAL_UNIT_AREA, rather than just trusting hand-solved
+        // literals in default_catalog().
+        fn polygon_area(vertices: &[(f64, f64)]) -> f64 {
+            let mut sum = 0.0;
+            for i in 0..vertices.len() {
+                let (x1, y1) = vertices[i];
+                let (x2, y2) = vertices[(i + 1) % vertices.len()];
+                sum += x1 * y2 - x2 * y1;
+            }
+            (sum / 2.0).abs()
+        }
+
+        const EPS: f64 = 1e-4;
+
+        for resource in default_catalog() {
+            let area = match &resource.shape.form {
+                Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+                Form::Fluid { nominal_area } => *nominal_area,
+                other => polygon_area(&other.polygon_vertices().unwrap()),
+            };
+
+            assert!(
+                (area - NOMINAL_UNIT_AREA).abs() < EPS,
+                "{} has area {area}, expected {NOMINAL_UNIT_AREA} (within {EPS})",
+                resource.name
+            );
+        }
+    }
+
+    #[test]
+    fn water_is_a_fluid_with_undetermined_connection_sites() {
+        let catalog = default_catalog();
+        let water = catalog.iter().find(|r| r.name == "Water").unwrap();
+
+        assert!(
+            matches!(water.shape.form, Form::Fluid { .. }),
+            "Water must use Form::Fluid, not a rigid polygon placeholder"
+        );
+        assert!(water.shape.is_valid());
+        assert_eq!(water.shape.connection_sites(), ConnectionSites::Undetermined);
+        assert!(water.shape.form.polygon_vertices().is_none());
     }
 
     #[test]
@@ -949,6 +1052,9 @@ mod shape_tests {
                     assert_eq!(a_radius, b_radius);
                 }
                 (Form::Polygon { vertices: a }, Form::Polygon { vertices: b }) => {
+                    assert_eq!(a, b);
+                }
+                (Form::Fluid { nominal_area: a }, Form::Fluid { nominal_area: b }) => {
                     assert_eq!(a, b);
                 }
                 (a, b) => panic!("{} form variant changed across round-trip: {:?} vs {:?}", resource.name, a, b),
