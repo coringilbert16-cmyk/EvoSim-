@@ -1,9 +1,8 @@
-//! COMBINE support: deterministic recipe caching, formation evaluation, and
-//! locked energy-accounting primitives.
+//! COMBINE support: deterministic recipe caching and formation evaluation.
 //!
-//! The exact interaction-energy, bond-strength, and surplus-partition
-//! equations remain intentionally injectable/testable. This module owns the
-//! architectural rules without prematurely choosing those equations.
+//! Energy accounting lives in `energy.rs` so COMBINE and BREAK have one
+//! authoritative energetic implementation. The exact interaction-energy,
+//! bond-strength, and surplus-partition equations remain injectable/testable.
 
 use std::collections::HashMap;
 
@@ -21,10 +20,8 @@ impl MaterialRecipeKey {
     pub fn from_material(material: &Material) -> Self {
         Self {
             bonded: vec![material.bonded],
-            parts: material.parts.iter()
-                .filter(|(_, amount)| *amount > 1e-12)
-                .map(|(name, amount)| (name.clone(), amount.to_bits()))
-                .collect(),
+            parts: material.parts.iter().filter(|(_, amount)| *amount > 1e-12)
+                .map(|(name, amount)| (name.clone(), amount.to_bits())).collect(),
         }
     }
 
@@ -33,8 +30,7 @@ impl MaterialRecipeKey {
         let mut bonded = Vec::with_capacity(inputs.len());
         for material in inputs {
             bonded.push(material.bonded);
-            parts.extend(material.parts.iter()
-                .filter(|(_, amount)| *amount > 1e-12)
+            parts.extend(material.parts.iter().filter(|(_, amount)| *amount > 1e-12)
                 .map(|(name, amount)| (name.clone(), amount.to_bits())));
         }
         parts.sort_by(|a, b| a.cmp(b));
@@ -80,80 +76,10 @@ pub fn formation_succeeds(evaluation: FormationEvaluation, investment: f64) -> b
     surplus.is_finite() && surplus >= 0.0
 }
 
-/// Result of one COMBINE energy event.
-///
-/// Incoming resource potential energy is the only energetic opportunity
-/// supplied by the raw inputs. Formation work is paid first. A favorable
-/// interaction leaves a surplus that is partitioned among bond energy,
-/// usable energy, and heat/stress. An unfavorable interaction requires the
-/// organism to pay the deficit from its usable-energy reserve.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct CombineEnergyResult {
-    pub potential_energy_in: f64,
-    pub formation_work: f64,
-    pub organism_energy_deficit: f64,
-    pub interaction_surplus: f64,
-    pub bond_energy: f64,
-    pub usable_energy: f64,
-    pub heat_stress: f64,
-}
-
-/// Temporary equation boundary. The exact genome/material-driven partition
-/// is deliberately not locked yet; tests can exercise conservation while
-/// different candidate equations are evaluated experimentally.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct CombineEnergyAllocation {
-    pub bond_fraction: f64,
-    pub usable_fraction: f64,
-    pub heat_fraction: f64,
-}
-
-impl CombineEnergyAllocation {
-    pub fn normalized(self) -> Self {
-        let b = self.bond_fraction.max(0.0);
-        let u = self.usable_fraction.max(0.0);
-        let h = self.heat_fraction.max(0.0);
-        let total = b + u + h;
-        if total <= 0.0 {
-            return Self { bond_fraction: 0.0, usable_fraction: 0.0, heat_fraction: 1.0 };
-        }
-        Self { bond_fraction: b / total, usable_fraction: u / total, heat_fraction: h / total }
-    }
-}
-
-pub fn resolve_combine_energy(
-    potential_energy_in: f64,
-    formation_work: f64,
-    organism_usable_energy: f64,
-    allocation: CombineEnergyAllocation,
-) -> CombineEnergyResult {
-    let p = potential_energy_in.max(0.0);
-    let work = formation_work.max(0.0);
-    let deficit = (work - p).max(0.0);
-    let organism_paid = deficit.min(organism_usable_energy.max(0.0));
-    let interaction_surplus = (p - work).max(0.0);
-    let alloc = allocation.normalized();
-
-    let bond_energy = interaction_surplus * alloc.bond_fraction;
-    let usable_energy = interaction_surplus * alloc.usable_fraction;
-    let heat_stress = interaction_surplus * alloc.heat_fraction + (deficit - organism_paid);
-
-    CombineEnergyResult {
-        potential_energy_in: p,
-        formation_work: work,
-        organism_energy_deficit: organism_paid,
-        interaction_surplus,
-        bond_energy,
-        usable_energy,
-        heat_stress,
-    }
-}
-
-/// Transfer the resolved COMBINE bond energy into the actual mutable bond
-/// state. Bond-strength reinforcement remains a separate equation.
-pub fn assign_combine_bond_energy(bond: &mut Bond, result: CombineEnergyResult, bond_strength: f64) {
-    bond.bond_energy = result.bond_energy.max(0.0);
-    bond.strength = bond_strength.max(0.0);
+/// Transfer resolved COMBINE bond energy into mutable bond state.
+pub fn assign_combine_bond_energy(bond: &mut Bond, bond_energy: f64, bond_strength: f64) {
+    bond.bond_energy = bond_energy.max(0.0);
+    bond.strength = bond_strength.clamp(0.0, 1.0);
 }
 
 pub fn evaluate_candidates(
@@ -179,7 +105,6 @@ mod tests {
     fn candidate(load_a: f64, load_b: f64) -> ConnectionPairCandidate {
         ConnectionPairCandidate { point_a: 0, point_b: 0, distance: 0.0, facing: 1.0, load_a, load_b }
     }
-
     #[test] fn recipe_key_is_independent_of_input_order() { assert_eq!(MaterialRecipeKey::from_inputs(&[carbon(1.0), methane(2.0)]), MaterialRecipeKey::from_inputs(&[methane(2.0), carbon(1.0)])); }
     #[test] fn different_quantities_do_not_collide() { assert_ne!(MaterialRecipeKey::from_inputs(&[carbon(1.0), methane(2.0)]), MaterialRecipeKey::from_inputs(&[carbon(1.0), methane(3.0)])); }
     #[test] fn bonded_state_participates_in_cache_key() { let free=carbon(1.0); let mut bonded=carbon(1.0); bonded.bonded=true; assert_ne!(MaterialRecipeKey::from_material(&free), MaterialRecipeKey::from_material(&bonded)); }
@@ -192,37 +117,4 @@ mod tests {
     #[test] fn surplus_is_negative_below_threshold() { let e=evaluate_formation(candidate(0.0,0.0),0.8,0.4); assert!(formation_surplus(e,e.threshold-0.25)<0.0); }
     #[test] fn investment_must_meet_threshold() { let e=evaluate_formation(candidate(0.0,0.0),0.8,0.4); assert!(!formation_succeeds(e,e.threshold-1e-9)); assert!(formation_succeeds(e,e.threshold)); assert!(formation_succeeds(e,e.threshold+1.0)); }
     #[test] fn non_finite_investment_cannot_form() { let e=evaluate_formation(candidate(0.0,0.0),0.8,0.4); assert!(!formation_succeeds(e,f64::NAN)); assert!(!formation_succeeds(e,f64::INFINITY)); assert!(formation_surplus(e,f64::NAN).is_nan()); }
-
-    #[test]
-    fn favorable_combine_pays_work_then_partitions_surplus() {
-        let r=resolve_combine_energy(10.0,4.0,0.0,CombineEnergyAllocation{bond_fraction:0.5,usable_fraction:0.25,heat_fraction:0.25});
-        assert_eq!(r.interaction_surplus,6.0);
-        assert_eq!(r.bond_energy,3.0);
-        assert_eq!(r.usable_energy,1.5);
-        assert_eq!(r.heat_stress,1.5);
-        assert_eq!(r.bond_energy+r.usable_energy+r.heat_stress+r.formation_work, r.potential_energy_in);
-    }
-
-    #[test]
-    fn unfavorable_combine_requires_organism_energy() {
-        let r=resolve_combine_energy(3.0,5.0,2.0,CombineEnergyAllocation{bond_fraction:0.5,usable_fraction:0.25,heat_fraction:0.25});
-        assert_eq!(r.organism_energy_deficit,2.0);
-        assert_eq!(r.interaction_surplus,0.0);
-        assert_eq!(r.bond_energy,0.0);
-        assert_eq!(r.usable_energy,0.0);
-        assert_eq!(r.heat_stress,0.0);
-    }
-
-    #[test]
-    fn failed_unfavorable_combine_reports_unpaid_deficit() {
-        let r=resolve_combine_energy(3.0,5.0,1.0,CombineEnergyAllocation{bond_fraction:1.0,usable_fraction:0.0,heat_fraction:0.0});
-        assert_eq!(r.organism_energy_deficit,1.0);
-        assert_eq!(r.heat_stress,1.0);
-    }
-
-    #[test]
-    fn allocation_is_normalized() {
-        let r=resolve_combine_energy(10.0,0.0,0.0,CombineEnergyAllocation{bond_fraction:2.0,usable_fraction:1.0,heat_fraction:1.0});
-        assert!((r.bond_energy+r.usable_energy+r.heat_stress-10.0).abs()<1e-12);
-    }
 }
