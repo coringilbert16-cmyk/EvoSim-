@@ -2,6 +2,16 @@
 // PHYSICAL CONTACT / ACCESSIBILITY (broad-phase + precise-local)
 // ============================================================
 //
+// PROVISIONAL NOTICE: the "precise phase" in this module currently
+// approximates every unit as its own bounding circle
+// (Form::bounding_radius()). This is a cheap, honest stand-in for
+// real polygon-vs-polygon contact resolution, NOT a claim of exact
+// geometric contact. Do not treat bounding-circle overlap anywhere
+// downstream as if it were final physical contact - when real
+// contact geometry is implemented, only the body of
+// unit_within_envelope needs to change; every caller's signature
+// stays the same.
+//
 // Locked architecture: organisms are spatially PERMEABLE - they are
 // not rigid collision objects and can overlap environmental material
 // or other organisms. What matters is whether material within an
@@ -64,6 +74,47 @@ pub struct Envelope {
 /// has no finer-grained geometry to test against.
 pub fn broad_phase_field_cells(field: &ActiveMaterialField, envelope: Envelope) -> Vec<usize> {
     field.cells_within_radius(envelope.x, envelope.y, envelope.radius)
+}
+
+/// Identifies which field-cell material stacks are physically
+/// reachable from an organism's envelope RIGHT NOW - i.e. answers
+/// "what material exists and could be acquired from here," not "how
+/// much gets acquired" or "at what rate." The actual transfer amount
+/// is part of the still-undecided acquisition mechanism and is
+/// deliberately NOT decided by this function - see main.rs's
+/// Organism::store_unbonded_material for where that boundary is
+/// picked back up once acquisition is locked.
+///
+/// Read-only: never modifies the field. Bulk field material has no
+/// per-unit geometry to precise-test against (the field deliberately
+/// stays coarse/aggregate - Phase 1), so broad-phase cell membership
+/// IS the complete accessibility test for this case; there is no
+/// finer "precise phase" possible here, unlike candidate_units_in_envelope
+/// below which tests real per-unit geometry for structural material.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AccessibleFieldMaterial {
+    pub field_index: usize,
+    pub bonded: bool,
+}
+
+pub fn accessible_field_material(
+    field: &ActiveMaterialField,
+    envelope: Envelope,
+) -> Vec<AccessibleFieldMaterial> {
+    let mut found = Vec::new();
+
+    for field_index in broad_phase_field_cells(field, envelope) {
+        let cell = &field.cells[field_index];
+
+        if cell.bonded.total_amount() > 0.0 {
+            found.push(AccessibleFieldMaterial { field_index, bonded: true });
+        }
+        if cell.unbonded.total_amount() > 0.0 {
+            found.push(AccessibleFieldMaterial { field_index, bonded: false });
+        }
+    }
+
+    found
 }
 
 /// Broad-phase candidate structural units: a cheap distance-only
@@ -133,7 +184,37 @@ mod contact_tests {
     use super::*;
     use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
     use crate::resources::default_catalog;
+    use crate::resources::Material;
     use crate::structure::{Placement, StructuralUnit};
+
+    #[test]
+    fn accessible_field_material_finds_material_within_envelope() {
+        let mut field = ActiveMaterialField::new(1000.0, 1000.0, DEFAULT_CELL_SIZE);
+        field.deposit(500.0, 500.0, Material { parts: vec![("Carbon".into(), 10.0)], bonded: true });
+        field.deposit(500.0, 500.0, Material { parts: vec![("Water".into(), 3.0)], bonded: false });
+
+        let envelope = Envelope { x: 500.0, y: 500.0, radius: 5.0 };
+        let found = accessible_field_material(&field, envelope);
+
+        assert!(found.iter().any(|f| f.bonded));
+        assert!(found.iter().any(|f| !f.bonded));
+    }
+
+    #[test]
+    fn accessible_field_material_excludes_empty_cells() {
+        let field = ActiveMaterialField::new(1000.0, 1000.0, DEFAULT_CELL_SIZE);
+        let envelope = Envelope { x: 500.0, y: 500.0, radius: 5.0 };
+        assert!(accessible_field_material(&field, envelope).is_empty());
+    }
+
+    #[test]
+    fn accessible_field_material_excludes_material_out_of_envelope() {
+        let mut field = ActiveMaterialField::new(1000.0, 1000.0, DEFAULT_CELL_SIZE);
+        field.deposit(10.0, 10.0, Material { parts: vec![("Carbon".into(), 10.0)], bonded: true });
+
+        let envelope = Envelope { x: 900.0, y: 900.0, radius: 5.0 };
+        assert!(accessible_field_material(&field, envelope).is_empty());
+    }
 
     #[test]
     fn broad_phase_field_cells_matches_the_underlying_field_query() {
