@@ -51,15 +51,22 @@ impl StructuralUnit {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 pub struct Bond {
     pub unit_a: usize,
     pub point_a: usize,
     pub unit_b: usize,
     pub point_b: usize,
-    /// 0.0-1.0, fixed at formation. Whether strength can later change
-    /// (decay/reinforcement) is unresolved - not assumed either way.
+    /// 0.0-1.0, mutable structural strength.
     pub strength: f64,
+    /// Energy stored in this specific bond.
+    ///
+    /// This is deliberately independent from the raw resources' intrinsic
+    /// potential energy. Once a bond exists, BREAK uses this stored value;
+    /// it never reconstructs energy from the original resource properties.
+    /// The exact COMBINE equation that assigns this value remains an
+    /// experimental parameter and is intentionally not hard-coded here.
+    pub bond_energy: f64,
 }
 
 impl Bond {
@@ -77,6 +84,9 @@ impl Bond {
         if !self.strength.is_finite() || !(0.0..=1.0).contains(&self.strength) {
             return false;
         }
+        if !self.bond_energy.is_finite() || self.bond_energy < 0.0 {
+            return false;
+        }
         match (
             connection_point_count(self.unit_a),
             connection_point_count(self.unit_b),
@@ -84,6 +94,47 @@ impl Bond {
             (Some(a_count), Some(b_count)) => self.point_a < a_count && self.point_b < b_count,
             _ => false,
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BreakEnergyResult {
+    /// Positive energy remaining after the break work.
+    pub net_energy: f64,
+    /// Energy entering the organism's usable-energy pool.
+    pub usable_energy: f64,
+    /// Energy lost to stress/heat, including any unfavorable break deficit.
+    pub stress_heat: f64,
+}
+
+/// Resolve BREAK energetics from the bond's stored energy.
+///
+/// The architectural rule is fixed:
+///   E_net = E_bond - W_break
+///
+/// A favorable break converts the positive net amount through processing
+/// efficiency. An unfavorable break produces no usable energy and the
+/// deficit becomes stress/heat. Processing inefficiency also becomes
+/// stress/heat. The exact W_break equation is intentionally supplied by the
+/// caller until that experimental equation is locked.
+pub fn resolve_break_energy(
+    bond_energy: f64,
+    break_work: f64,
+    processing_efficiency: f64,
+) -> BreakEnergyResult {
+    let bond_energy = bond_energy.max(0.0);
+    let break_work = break_work.max(0.0);
+    let efficiency = processing_efficiency.clamp(0.0, 1.0);
+
+    let net_energy = bond_energy - break_work;
+    let positive_net = net_energy.max(0.0);
+    let usable_energy = positive_net * efficiency;
+    let stress_heat = (-net_energy).max(0.0) + (positive_net - usable_energy);
+
+    BreakEnergyResult {
+        net_energy,
+        usable_energy,
+        stress_heat,
     }
 }
 
@@ -116,8 +167,6 @@ impl OrganismStructure {
             self.units.get(unit_index).and_then(|unit| {
                 unit.connection_sites(catalog).and_then(|sites| match sites {
                     ConnectionSites::Corners(points) => Some(points.len()),
-                    // Continuous circumference and undetermined fluid sites
-                    // have no discrete point indices in the current model.
                     ConnectionSites::Circumference { .. } | ConnectionSites::Undetermined => None,
                 })
             })
@@ -174,6 +223,10 @@ mod structure_tests {
         Placement { x, y, rotation_radians: 0.0 }
     }
 
+    fn bond(a: usize, b: usize, point_a: usize, point_b: usize, strength: f64, energy: f64) -> Bond {
+        Bond { unit_a: a, point_a, unit_b: b, point_b, strength, bond_energy: energy }
+    }
+
     #[test]
     fn add_unit_returns_a_usable_index() {
         let mut structure = OrganismStructure::new();
@@ -198,17 +251,19 @@ mod structure_tests {
     }
 
     #[test]
-    fn invalid_bond_indices_and_strength_are_rejected_by_validation() {
+    fn invalid_bond_indices_strength_and_energy_are_rejected() {
         let catalog = crate::resources::default_catalog();
         let mut structure = OrganismStructure::new();
         let a = structure.add_unit(StructuralUnit::new("Carbon", placement(0.0, 0.0)));
         let b = structure.add_unit(StructuralUnit::new("Methane", placement(1.0, 0.0)));
 
-        assert!(structure.is_valid_bond(&Bond { unit_a: a, point_a: 0, unit_b: b, point_b: 0, strength: 0.5 }, &catalog));
-        assert!(!structure.is_valid_bond(&Bond { unit_a: a, point_a: 99, unit_b: b, point_b: 0, strength: 0.5 }, &catalog));
-        assert!(!structure.is_valid_bond(&Bond { unit_a: a, point_a: 0, unit_b: 999, point_b: 0, strength: 0.5 }, &catalog));
-        assert!(!structure.is_valid_bond(&Bond { unit_a: a, point_a: 0, unit_b: b, point_b: 0, strength: 1.1 }, &catalog));
-        assert!(!structure.is_valid_bond(&Bond { unit_a: a, point_a: 0, unit_b: b, point_b: 0, strength: f64::NAN }, &catalog));
+        assert!(structure.is_valid_bond(&bond(a, b, 0, 0, 0.5, 1.0), &catalog));
+        assert!(!structure.is_valid_bond(&bond(a, b, 99, 0, 0.5, 1.0), &catalog));
+        assert!(!structure.is_valid_bond(&bond(a, 999, 0, 0, 0.5, 1.0), &catalog));
+        assert!(!structure.is_valid_bond(&bond(a, b, 0, 0, 1.1, 1.0), &catalog));
+        assert!(!structure.is_valid_bond(&bond(a, b, 0, 0, f64::NAN, 1.0), &catalog));
+        assert!(!structure.is_valid_bond(&bond(a, b, 0, 0, 0.5, -1.0), &catalog));
+        assert!(!structure.is_valid_bond(&bond(a, b, 0, 0, 0.5, f64::NAN), &catalog));
     }
 
     #[test]
@@ -217,8 +272,7 @@ mod structure_tests {
         let mut structure = OrganismStructure::new();
         let water = structure.add_unit(StructuralUnit::new("Water", placement(0.0, 0.0)));
         let carbon = structure.add_unit(StructuralUnit::new("Carbon", placement(1.0, 0.0)));
-        let bond = Bond { unit_a: water, point_a: 0, unit_b: carbon, point_b: 0, strength: 0.5 };
-        assert!(!structure.is_valid_bond(&bond, &catalog));
+        assert!(!structure.is_valid_bond(&bond(water, carbon, 0, 0, 0.5, 1.0), &catalog));
     }
 
     #[test]
@@ -226,9 +280,10 @@ mod structure_tests {
         let mut structure = OrganismStructure::new();
         let a = structure.add_unit(StructuralUnit::new("Carbon", placement(0.0, 0.0)));
         let b = structure.add_unit(StructuralUnit::new("Methane", placement(1.0, 0.0)));
-        structure.add_bond(Bond { unit_a: a, point_a: 0, unit_b: b, point_b: 0, strength: 0.5 });
+        structure.add_bond(bond(a, b, 0, 0, 0.5, 1.25));
         assert_eq!(structure.units.len(), 2);
         assert_eq!(structure.bonds.len(), 1);
+        assert!((structure.bonds[0].bond_energy - 1.25).abs() < 1e-12);
     }
 
     #[test]
@@ -237,9 +292,9 @@ mod structure_tests {
         let a = structure.add_unit(StructuralUnit::new("Carbon", placement(0.0, 0.0)));
         let b = structure.add_unit(StructuralUnit::new("Methane", placement(1.0, 0.0)));
         let c = structure.add_unit(StructuralUnit::new("Sulfur", placement(2.0, 0.0)));
-        structure.add_bond(Bond { unit_a: a, point_a: 0, unit_b: b, point_b: 0, strength: 0.3 });
-        structure.add_bond(Bond { unit_a: a, point_a: 0, unit_b: c, point_b: 0, strength: 0.4 });
-        structure.add_bond(Bond { unit_a: a, point_a: 1, unit_b: c, point_b: 1, strength: 0.9 });
+        structure.add_bond(bond(a, b, 0, 0, 0.3, 1.0));
+        structure.add_bond(bond(a, c, 0, 0, 0.4, 2.0));
+        structure.add_bond(bond(a, c, 1, 1, 0.9, 3.0));
         assert!((structure.connection_load(a, 0) - 0.7).abs() < 1e-12);
         assert_eq!(structure.connection_count(a, 0), 2);
         assert_eq!(structure.connection_count(a, 1), 1);
@@ -247,22 +302,15 @@ mod structure_tests {
     }
 
     #[test]
-    fn break_bond_removes_only_that_one_bond() {
+    fn break_bond_returns_the_stored_bond_energy() {
         let mut structure = OrganismStructure::new();
         let a = structure.add_unit(StructuralUnit::new("Carbon", placement(0.0, 0.0)));
-        let units: Vec<usize> = ["Methane", "Sulfur", "Nitrogen", "Phosphorus"].iter().enumerate().map(|(k, name)| structure.add_unit(StructuralUnit::new(*name, placement(k as f64 + 1.0, 0.0)))).collect();
-        let bond_ab = structure.add_bond(Bond { unit_a: a, point_a: 0, unit_b: units[0], point_b: 0, strength: 0.5 });
-        structure.add_bond(Bond { unit_a: a, point_a: 1, unit_b: units[1], point_b: 0, strength: 0.5 });
-        structure.add_bond(Bond { unit_a: a, point_a: 2, unit_b: units[2], point_b: 0, strength: 0.5 });
-        structure.add_bond(Bond { unit_a: a, point_a: 3, unit_b: units[3], point_b: 0, strength: 0.5 });
-        assert_eq!(structure.bonds.len(), 4);
-        structure.break_bond(bond_ab);
-        assert_eq!(structure.bonds.len(), 3);
-        assert_eq!(structure.connection_count(a, 0), 0);
-        assert_eq!(structure.connection_count(a, 1), 1);
-        assert_eq!(structure.connection_count(a, 2), 1);
-        assert_eq!(structure.connection_count(a, 3), 1);
-        assert_eq!(structure.units.len(), 5);
+        let b = structure.add_unit(StructuralUnit::new("Methane", placement(1.0, 0.0)));
+        let index = structure.add_bond(bond(a, b, 0, 0, 0.5, 7.5));
+        let removed = structure.break_bond(index).unwrap();
+        assert!((removed.bond_energy - 7.5).abs() < 1e-12);
+        assert!(structure.bonds.is_empty());
+        assert_eq!(structure.units.len(), 2);
     }
 
     #[test]
@@ -270,8 +318,8 @@ mod structure_tests {
         let mut structure = OrganismStructure::new();
         let a = structure.add_unit(StructuralUnit::new("Carbon", placement(0.0, 0.0)));
         let b = structure.add_unit(StructuralUnit::new("Methane", placement(1.0, 0.0)));
-        let bond = structure.add_bond(Bond { unit_a: a, point_a: 0, unit_b: b, point_b: 0, strength: 0.5 });
-        structure.break_bond(bond);
+        let index = structure.add_bond(bond(a, b, 0, 0, 0.5, 1.0));
+        structure.break_bond(index);
         assert_eq!(structure.connection_count(a, 0), 0);
         assert_eq!(structure.units.len(), 2);
     }
@@ -283,9 +331,9 @@ mod structure_tests {
         let b = structure.add_unit(StructuralUnit::new("Methane", placement(1.0, 0.0)));
         let c = structure.add_unit(StructuralUnit::new("Sulfur", placement(2.0, 0.0)));
         let d = structure.add_unit(StructuralUnit::new("Nitrogen", placement(3.0, 0.0)));
-        structure.add_bond(Bond { unit_a: a, point_a: 0, unit_b: b, point_b: 0, strength: 0.2 });
-        structure.add_bond(Bond { unit_a: a, point_a: 0, unit_b: c, point_b: 0, strength: 0.3 });
-        let surviving = structure.add_bond(Bond { unit_a: a, point_a: 1, unit_b: d, point_b: 0, strength: 0.4 });
+        structure.add_bond(bond(a, b, 0, 0, 0.2, 1.0));
+        structure.add_bond(bond(a, c, 0, 0, 0.3, 2.0));
+        let surviving = structure.add_bond(bond(a, d, 1, 0, 0.4, 3.0));
         let removed = structure.disconnect_point(a, 0);
         assert_eq!(removed.len(), 2);
         assert_eq!(structure.bonds.len(), 1);
@@ -320,5 +368,28 @@ mod structure_tests {
         let t = formation_threshold(0.5, 0.5, -1.0, -1.0);
         assert!(t.is_finite());
         assert!((t - formation_threshold(0.5, 0.5, 0.0, 0.0)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn favorable_break_releases_only_stored_bond_energy() {
+        let result = resolve_break_energy(10.0, 4.0, 0.5);
+        assert!((result.net_energy - 6.0).abs() < 1e-12);
+        assert!((result.usable_energy - 3.0).abs() < 1e-12);
+        assert!((result.stress_heat - 3.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn unfavorable_break_has_no_usable_energy_and_pays_deficit() {
+        let result = resolve_break_energy(2.0, 5.0, 0.9);
+        assert!((result.net_energy + 3.0).abs() < 1e-12);
+        assert_eq!(result.usable_energy, 0.0);
+        assert!((result.stress_heat - 3.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn_break_processing_efficiency_only_affects_positive_net_energy() {
+        let result = resolve_break_energy(10.0, 0.0, 0.8);
+        assert!((result.usable_energy - 8.0).abs() < 1e-12);
+        assert!((result.stress_heat - 2.0).abs() < 1e-12);
     }
 }
