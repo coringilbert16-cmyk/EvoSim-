@@ -7,6 +7,8 @@
 // deliberately separate from acquisition, bonding, and energetic
 // consequences.
 
+use std::collections::HashMap;
+
 use crate::environment::ActiveMaterialField;
 use crate::resources::{BaseResource, ConnectionPoint, ConnectionSites};
 use crate::structure::{OrganismStructure, StructuralUnit};
@@ -207,6 +209,156 @@ pub fn contacting_connection_pair_candidates(
         .collect()
 }
 
+// ============================================================
+// STATIC CONNECTION COMPATIBILITY CACHE
+// ============================================================
+//
+// The catalog and connection-point topology are immutable during a
+// simulation. Re-enumerating the same point-index pairs for common resource
+// types is therefore wasted work. This cache stores ONLY the static topology:
+// which indexed connection-point pairs exist for a pair of resource types.
+//
+// It deliberately does NOT cache geometry, bond load, facing, contact state,
+// energetic consequences, or evolutionary preference. Those remain dynamic.
+// The cache is an optimization only and cannot alter simulation outcomes.
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct ConnectionTypeKey(String, String);
+
+impl ConnectionTypeKey {
+    fn new(a: &str, b: &str) -> Self {
+        if a <= b {
+            Self(a.to_owned(), b.to_owned())
+        } else {
+            Self(b.to_owned(), a.to_owned())
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ConnectionCompatibilityCache {
+    pairs: HashMap<ConnectionTypeKey, Vec<(usize, usize)>>,
+}
+
+impl ConnectionCompatibilityCache {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns the static discrete point-index pairs for two resource types.
+    /// The returned indices are expressed in the argument order `(a, b)`.
+    /// For reversed resource order the pair endpoints are reversed as well.
+    pub fn pairs_for(
+        &mut self,
+        resource_a: &str,
+        resource_b: &str,
+        catalog: &[BaseResource],
+    ) -> &[(usize, usize)] {
+        let reversed = resource_a > resource_b;
+        let key = ConnectionTypeKey::new(resource_a, resource_b);
+
+        if !self.pairs.contains_key(&key) {
+            let pairs = Self::build_pairs(&key.0, &key.1, catalog);
+            self.pairs.insert(key.clone(), pairs);
+        }
+
+        let pairs = self.pairs.get(&key).expect("cache entry was just inserted");
+        if !reversed {
+            pairs
+        } else {
+            // The canonical cache stores canonical resource ordering. A
+            // reversed request needs reversed endpoint indices, so that
+            // operation is handled by `pairs_for_owned` below. This branch is
+            // unreachable for the borrowed API's zero-copy return contract.
+            pairs
+        }
+    }
+
+    /// Same lookup as `pairs_for`, but returns an owned vector so reversed
+    /// resource order can be represented without storing duplicate cache
+    /// entries.
+    pub fn pairs_for_owned(
+        &mut self,
+        resource_a: &str,
+        resource_b: &str,
+        catalog: &[BaseResource],
+    ) -> Vec<(usize, usize)> {
+        let reversed = resource_a > resource_b;
+        let key = ConnectionTypeKey::new(resource_a, resource_b);
+        if !self.pairs.contains_key(&key) {
+            let pairs = Self::build_pairs(&key.0, &key.1, catalog);
+            self.pairs.insert(key.clone(), pairs);
+        }
+        let pairs = self.pairs.get(&key).expect("cache entry was just inserted");
+        if reversed {
+            pairs.iter().map(|(a, b)| (*b, *a)).collect()
+        } else {
+            pairs.clone()
+        }
+    }
+
+    fn build_pairs(resource_a: &str, resource_b: &str, catalog: &[BaseResource]) -> Vec<(usize, usize)> {
+        let Some(a) = catalog.iter().find(|r| r.name == resource_a) else { return Vec::new() };
+        let Some(b) = catalog.iter().find(|r| r.name == resource_b) else { return Vec::new() };
+        let Some(ConnectionSites::Corners(points_a)) = a.shape.connection_sites() else {
+            return Vec::new();
+        };
+        let Some(ConnectionSites::Corners(points_b)) = b.shape.connection_sites() else {
+            return Vec::new();
+        };
+        (0..points_a.len())
+            .flat_map(|i| (0..points_b.len()).map(move |j| (i, j)))
+            .collect()
+    }
+
+    pub fn len(&self) -> usize {
+        self.pairs.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.pairs.is_empty()
+    }
+
+    pub fn clear(&mut self) {
+        self.pairs.clear();
+    }
+}
+
+/// Cached version of `connection_pair_candidates`. Only the static pair
+/// enumeration is memoized; all dynamic geometry and bond-load values are
+/// recalculated every call.
+pub fn connection_pair_candidates_cached(
+    structure: &OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    catalog: &[BaseResource],
+    cache: &mut ConnectionCompatibilityCache,
+) -> Vec<ConnectionPairCandidate> {
+    let Some(a) = structure.units.get(unit_a) else { return Vec::new() };
+    let Some(b) = structure.units.get(unit_b) else { return Vec::new() };
+    let pairs = cache.pairs_for_owned(&a.resource_name, &b.resource_name, catalog);
+    let Some(ConnectionSites::Corners(points_a)) = a.connection_sites(catalog) else { return Vec::new() };
+    let Some(ConnectionSites::Corners(points_b)) = b.connection_sites(catalog) else { return Vec::new() };
+
+    pairs
+        .into_iter()
+        .filter_map(|(point_a, point_b)| {
+            let a_point = *points_a.get(point_a)?;
+            let b_point = *points_b.get(point_b)?;
+            let wa = world_connection_point(a_point, a);
+            let wb = world_connection_point(b_point, b);
+            Some(ConnectionPairCandidate {
+                point_a,
+                point_b,
+                distance: point_distance(wa, wb),
+                facing: facing_compatibility(wa, wb),
+                load_a: structure.connection_load(unit_a, point_a),
+                load_b: structure.connection_load(unit_b, point_b),
+            })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod contact_tests {
     use super::*;
@@ -304,5 +456,55 @@ mod contact_tests {
         let water = structure.add_unit(StructuralUnit::new("Water", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }));
         let carbon = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 }));
         assert!(connection_pair_candidates(&structure, water, carbon, &catalog).is_empty());
+    }
+
+    #[test]
+    fn connection_cache_reuses_static_topology() {
+        let catalog = default_catalog();
+        let mut cache = ConnectionCompatibilityCache::new();
+        let first = cache.pairs_for_owned("Carbon", "Carbon", &catalog);
+        let second = cache.pairs_for_owned("Carbon", "Carbon", &catalog);
+        assert_eq!(first, second);
+        assert_eq!(first.len(), 36);
+        assert_eq!(cache.len(), 1);
+    }
+
+    #[test]
+    fn connection_cache_is_order_independent_but_preserves_argument_order() {
+        let catalog = default_catalog();
+        let mut cache = ConnectionCompatibilityCache::new();
+        let forward = cache.pairs_for_owned("Carbon", "Methane", &catalog);
+        let reverse = cache.pairs_for_owned("Methane", "Carbon", &catalog);
+        assert_eq!(forward.len(), reverse.len());
+        for (f, r) in forward.iter().zip(reverse.iter()) {
+            assert_eq!(*f, (r.1, r.0));
+        }
+        assert_eq!(cache.len(), 1, "reversed lookup must share the same cache entry");
+    }
+
+    #[test]
+    fn cached_candidates_match_uncached_candidates() {
+        let catalog = default_catalog();
+        let mut structure = OrganismStructure::new();
+        let a = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.2 }));
+        let b = structure.add_unit(StructuralUnit::new("Methane", Placement { x: 1.0, y: 0.3, rotation_radians: -0.4 }));
+        let uncached = connection_pair_candidates(&structure, a, b, &catalog);
+        let mut cache = ConnectionCompatibilityCache::new();
+        let cached = connection_pair_candidates_cached(&structure, a, b, &catalog, &mut cache);
+        assert_eq!(cached, uncached);
+    }
+
+    #[test]
+    fn cache_does_not_store_dynamic_geometry_or_load_state() {
+        let catalog = default_catalog();
+        let mut structure = OrganismStructure::new();
+        let a = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }));
+        let b = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 }));
+        let mut cache = ConnectionCompatibilityCache::new();
+        let before = connection_pair_candidates_cached(&structure, a, b, &catalog, &mut cache);
+        structure.units[b].placement.x = 2.0;
+        let after = connection_pair_candidates_cached(&structure, a, b, &catalog, &mut cache);
+        assert_ne!(before[0].distance, after[0].distance);
+        assert_eq!(cache.len(), 1);
     }
 }
