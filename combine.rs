@@ -81,13 +81,24 @@ pub fn evaluate_formation(
     }
 }
 
-/// Returns true only when finite available investment meets the threshold.
-/// No material is consumed and no bond is created here.
-pub fn formation_succeeds(evaluation: FormationEvaluation, investment: f64) -> bool {
-    investment.is_finite() && investment >= evaluation.threshold
+/// Returns the amount by which available investment exceeds the threshold.
+/// A negative value means formation has not yet met the threshold.
+/// This is deliberately only arithmetic; it does not decide what surplus
+/// becomes or create/modify a bond.
+pub fn formation_surplus(evaluation: FormationEvaluation, investment: f64) -> f64 {
+    if !investment.is_finite() {
+        return f64::NAN;
+    }
+    investment - evaluation.threshold
 }
 
-/// Bridge from contact candidates to the formation-threshold stage.
+/// Returns true only when finite available investment meets the threshold.
+pub fn formation_succeeds(evaluation: FormationEvaluation, investment: f64) -> bool {
+    let surplus = formation_surplus(evaluation, investment);
+    surplus.is_finite() && surplus >= 0.0
+}
+
+/// Non-mutating bridge from contact candidates to the formation-threshold stage.
 /// Static connection topology is cached; geometry and bond load remain dynamic.
 pub fn evaluate_candidates(
     structure: &OrganismStructure,
@@ -132,18 +143,12 @@ mod tests {
 
     #[test]
     fn recipe_key_is_independent_of_input_order() {
-        assert_eq!(
-            MaterialRecipeKey::from_inputs(&[carbon(1.0), methane(2.0)]),
-            MaterialRecipeKey::from_inputs(&[methane(2.0), carbon(1.0)]),
-        );
+        assert_eq!(MaterialRecipeKey::from_inputs(&[carbon(1.0), methane(2.0)]), MaterialRecipeKey::from_inputs(&[methane(2.0), carbon(1.0)]));
     }
 
     #[test]
     fn different_quantities_do_not_collide() {
-        assert_ne!(
-            MaterialRecipeKey::from_inputs(&[carbon(1.0), methane(2.0)]),
-            MaterialRecipeKey::from_inputs(&[carbon(1.0), methane(3.0)]),
-        );
+        assert_ne!(MaterialRecipeKey::from_inputs(&[carbon(1.0), methane(2.0)]), MaterialRecipeKey::from_inputs(&[carbon(1.0), methane(3.0)]));
     }
 
     #[test]
@@ -190,6 +195,18 @@ mod tests {
     }
 
     #[test]
+    fn surplus_is_zero_at_threshold() {
+        let e = evaluate_formation(candidate(0.0, 0.0), 0.8, 0.4);
+        assert!(formation_surplus(e, e.threshold).abs() < 1e-12);
+    }
+
+    #[test]
+    fn surplus_is_negative_below_threshold() {
+        let e = evaluate_formation(candidate(0.0, 0.0), 0.8, 0.4);
+        assert!(formation_surplus(e, e.threshold - 0.25) < 0.0);
+    }
+
+    #[test]
     fn investment_must_meet_threshold() {
         let e = evaluate_formation(candidate(0.0, 0.0), 0.8, 0.4);
         assert!(!formation_succeeds(e, e.threshold - 1e-9));
@@ -202,5 +219,6 @@ mod tests {
         let e = evaluate_formation(candidate(0.0, 0.0), 0.8, 0.4);
         assert!(!formation_succeeds(e, f64::NAN));
         assert!(!formation_succeeds(e, f64::INFINITY));
+        assert!(formation_surplus(e, f64::NAN).is_nan());
     }
 }
