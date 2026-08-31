@@ -10,27 +10,39 @@ use crate::resources::{combine_materials, BaseResource, Material};
 use crate::structure::{formation_threshold, OrganismStructure};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct MaterialRecipeKey(Vec<(String, u64)>);
+pub struct MaterialRecipeKey {
+    bonded: Vec<bool>,
+    parts: Vec<(String, u64)>,
+}
 
 impl MaterialRecipeKey {
     pub fn from_material(material: &Material) -> Self {
-        let mut parts: Vec<(String, u64)> = material.parts.iter()
-            .filter(|(_, amount)| *amount > 1e-12)
-            .map(|(name, amount)| (name.clone(), amount.to_bits()))
-            .collect();
-        parts.sort_by(|a, b| a.cmp(b));
-        Self(parts)
+        Self {
+            bonded: vec![material.bonded],
+            parts: material.parts.iter()
+                .filter(|(_, amount)| *amount > 1e-12)
+                .map(|(name, amount)| (name.clone(), amount.to_bits()))
+                .collect(),
+        }
     }
 
     pub fn from_inputs(inputs: &[Material]) -> Self {
         let mut parts = Vec::new();
+        let mut bonded = Vec::with_capacity(inputs.len());
+
         for material in inputs {
+            bonded.push(material.bonded);
             parts.extend(material.parts.iter()
                 .filter(|(_, amount)| *amount > 1e-12)
                 .map(|(name, amount)| (name.clone(), amount.to_bits())));
         }
+
+        // Bonded/unbonded classification is part of Material state and must
+        // therefore participate in the cache key. Parts remain order-independent.
         parts.sort_by(|a, b| a.cmp(b));
-        Self(parts)
+        bonded.sort_unstable();
+
+        Self { bonded, parts }
     }
 }
 
@@ -136,6 +148,14 @@ mod tests {
     #[test]
     fn different_quantities_do_not_collide() {
         assert_ne!(MaterialRecipeKey::from_inputs(&[carbon(1.0), methane(2.0)]), MaterialRecipeKey::from_inputs(&[carbon(1.0), methane(3.0)]));
+    }
+
+    #[test]
+    fn bonded_state_participates_in_cache_key() {
+        let free = carbon(1.0);
+        let mut bonded = carbon(1.0);
+        bonded.bonded = true;
+        assert_ne!(MaterialRecipeKey::from_material(&free), MaterialRecipeKey::from_material(&bonded));
     }
 
     #[test]
