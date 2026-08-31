@@ -1,0 +1,19 @@
+[package]
+name = "evosim"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "evosim"
+path = "main.rs"
+
+[dependencies]
+axum = { version = "0.8.9", features = ["ws"] }
+futures-util = "0.3"
+parking_lot = "0.12"
+rand = "0.8.5"
+rand_chacha = "0.3.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.44", features = ["full"] }
+tower-http = { version = "0.6.8", features = ["cors"] }
