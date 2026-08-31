@@ -57,7 +57,6 @@ impl CombineCache {
     pub fn clear(&mut self) { self.results.clear(); }
 }
 
-/// A contact candidate together with the locked formation threshold.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FormationEvaluation {
     pub candidate: ConnectionPairCandidate,
@@ -81,10 +80,6 @@ pub fn evaluate_formation(
     }
 }
 
-/// Returns the amount by which available investment exceeds the threshold.
-/// A negative value means formation has not yet met the threshold.
-/// This is deliberately only arithmetic; it does not decide what surplus
-/// becomes or create/modify a bond.
 pub fn formation_surplus(evaluation: FormationEvaluation, investment: f64) -> f64 {
     if !investment.is_finite() {
         return f64::NAN;
@@ -92,7 +87,6 @@ pub fn formation_surplus(evaluation: FormationEvaluation, investment: f64) -> f6
     investment - evaluation.threshold
 }
 
-/// Returns true only when finite available investment meets the threshold.
 pub fn formation_succeeds(evaluation: FormationEvaluation, investment: f64) -> bool {
     let surplus = formation_surplus(evaluation, investment);
     surplus.is_finite() && surplus >= 0.0
@@ -119,13 +113,6 @@ pub fn evaluate_candidates(
     candidates.into_iter()
         .map(|candidate| evaluate_formation(candidate, cohesion_a, cohesion_b))
         .collect()
-}
-
-/// Boundary type for eventual material-consuming COMBINE integration.
-#[derive(Clone, Debug, PartialEq)]
-pub struct CombineInput {
-    pub material_a: Material,
-    pub material_b: Material,
 }
 
 #[cfg(test)]
