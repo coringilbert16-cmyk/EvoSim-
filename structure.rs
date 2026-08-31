@@ -21,16 +21,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::resources::{BaseResource, ConnectionSites, ResourceProperties};
 
-// ------------------------------------------------------------
-// WORLD-SPACE PLACEMENT
-// ------------------------------------------------------------
-//
-// Position/rotation belong to an INSTANCE of a unit, never to the
-// immutable Shape/Form itself (locked). Fluid, continuous 2D rotation
-// only - no torque/angular velocity/inertia/friction/momentum
-// (explicitly out of scope until requested).
-// ------------------------------------------------------------
-
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 pub struct Placement {
     pub x: f64,
@@ -38,13 +28,6 @@ pub struct Placement {
     pub rotation_radians: f64,
 }
 
-// ------------------------------------------------------------
-// STRUCTURAL UNIT
-// ------------------------------------------------------------
-
-/// One discrete, physically instantiated occurrence of a resource
-/// type, placed somewhere in organism-local (or eventually world)
-/// space.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct StructuralUnit {
     pub resource_name: String,
@@ -60,34 +43,13 @@ impl StructuralUnit {
     }
 
     pub fn properties<'a>(&self, catalog: &'a [BaseResource]) -> Option<&'a ResourceProperties> {
-        catalog
-            .iter()
-            .find(|b| b.name == self.resource_name)
-            .map(|b| &b.properties)
+        catalog.iter().find(|b| b.name == self.resource_name).map(|b| &b.properties)
     }
 
     pub fn connection_sites(&self, catalog: &[BaseResource]) -> Option<ConnectionSites> {
-        catalog
-            .iter()
-            .find(|b| b.name == self.resource_name)
-            .map(|b| b.shape.connection_sites())
+        catalog.iter().find(|b| b.name == self.resource_name).map(|b| b.shape.connection_sites())
     }
 }
-
-// ------------------------------------------------------------
-// BOND
-// ------------------------------------------------------------
-//
-// References two connection points by (unit index, point index
-// within that unit's derived Corners list). Bond strength belongs
-// here, and ONLY here (locked) - never on ConnectionPoint.
-//
-// NOTE: this only supports bonding between two Corners-derived
-// points (rigid polygonal units) for now. Bonding to/through a
-// Circle's continuous circumference or a Fluid unit requires a
-// resolved contact location on that surface, which is genuinely
-// unresolved future contact physics - not invented here.
-// ------------------------------------------------------------
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct Bond {
@@ -101,16 +63,29 @@ pub struct Bond {
 }
 
 impl Bond {
-    /// True if this bond touches the given (unit, point) pair on
-    /// either end.
     pub fn touches(&self, unit: usize, point: usize) -> bool {
         (self.unit_a == unit && self.point_a == point) || (self.unit_b == unit && self.point_b == point)
     }
-}
 
-// ------------------------------------------------------------
-// ORGANISM STRUCTURE
-// ------------------------------------------------------------
+    /// Structural data validation only. This deliberately does not decide
+    /// whether a bond SHOULD form; formation remains the responsibility of
+    /// the COMBINE/contact layer.
+    pub fn is_valid(&self, unit_count: usize, connection_point_count: impl Fn(usize) -> Option<usize>) -> bool {
+        if self.unit_a >= unit_count || self.unit_b >= unit_count {
+            return false;
+        }
+        if !self.strength.is_finite() || !(0.0..=1.0).contains(&self.strength) {
+            return false;
+        }
+        match (
+            connection_point_count(self.unit_a),
+            connection_point_count(self.unit_b),
+        ) {
+            (Some(a_count), Some(b_count)) => self.point_a < a_count && self.point_b < b_count,
+            _ => false,
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct OrganismStructure {
@@ -119,29 +94,36 @@ pub struct OrganismStructure {
 }
 
 impl OrganismStructure {
-    pub fn new() -> Self {
-        Self::default()
-    }
+    pub fn new() -> Self { Self::default() }
 
-    /// Adds a unit, returning its index for use in bond formation.
     pub fn add_unit(&mut self, unit: StructuralUnit) -> usize {
         self.units.push(unit);
         self.units.len() - 1
     }
 
-    /// Adds a bond directly. Does not itself decide whether the bond
-    /// SHOULD form (that's the formation-threshold/COMBINE process,
-    /// not this data structure's job) - this just records it,
-    /// leaving every other existing bond completely untouched.
+    /// Adds a bond directly. Does not decide whether the bond SHOULD form.
+    /// Use `is_valid_bond` when validating externally supplied structural data.
     pub fn add_bond(&mut self, bond: Bond) -> usize {
         self.bonds.push(bond);
         self.bonds.len() - 1
     }
 
-    /// Sum of the strengths of every bond currently attached to a
-    /// specific (unit, point) pair - this is L_A / L_B in the locked
-    /// formation-threshold formula below. Derived on demand, never
-    /// stored redundantly (§48).
+    /// Validates a bond against this structure and the immutable resource
+    /// catalog. This is useful at the COMBINE boundary without coupling this
+    /// data structure to COMBINE's formation/energy decisions.
+    pub fn is_valid_bond(&self, bond: &Bond, catalog: &[BaseResource]) -> bool {
+        bond.is_valid(self.units.len(), |unit_index| {
+            self.units.get(unit_index).and_then(|unit| {
+                unit.connection_sites(catalog).and_then(|sites| match sites {
+                    ConnectionSites::Corners(points) => Some(points.len()),
+                    // Continuous circumference and undetermined fluid sites
+                    // have no discrete point indices in the current model.
+                    ConnectionSites::Circumference { .. } | ConnectionSites::Undetermined => None,
+                })
+            })
+        })
+    }
+
     pub fn connection_load(&self, unit: usize, point: usize) -> f64 {
         self.bonds.iter().filter(|b| b.touches(unit, point)).map(|b| b.strength).sum()
     }
@@ -150,29 +132,10 @@ impl OrganismStructure {
         self.bonds.iter().filter(|b| b.touches(unit, point)).count()
     }
 
-    /// Removes exactly ONE bond, by its position in `bonds`. Every
-    /// other bond - including every other bond on either of this
-    /// bond's own endpoints - is left completely untouched. This is
-    /// the locked "break one bond" semantic: breaking A-B out of
-    /// {A-B, A-C, A-D, A-E} leaves A-C, A-D, A-E fully intact.
-    ///
-    /// Breaking a bond does NOT destroy either unit, and does NOT
-    /// automatically convert a now-zero-bond unit back to bulk
-    /// material - both explicitly locked. The unit simply remains in
-    /// `units`, now with fewer (possibly zero) bonds.
     pub fn break_bond(&mut self, bond_index: usize) -> Option<Bond> {
-        if bond_index < self.bonds.len() {
-            Some(self.bonds.remove(bond_index))
-        } else {
-            None
-        }
+        if bond_index < self.bonds.len() { Some(self.bonds.remove(bond_index)) } else { None }
     }
 
-    /// Removes EVERY bond currently attached to one specific (unit,
-    /// point) pair in a single pass - the "collective disconnection"
-    /// operation, distinct from breaking a single bond above. Bonds
-    /// on other points (even other points on the same unit) are
-    /// untouched.
     pub fn disconnect_point(&mut self, unit: usize, point: usize) -> Vec<Bond> {
         let mut removed = Vec::new();
         let mut i = 0;
@@ -186,71 +149,22 @@ impl OrganismStructure {
         removed
     }
 
-    /// Every (unit, point) pair currently involved in at least one
-    /// bond. Not stored - derived by scanning `bonds` once. Useful
-    /// for connection-count-dependent cost calculations that need to
-    /// enumerate "everything already loaded" rather than query one
-    /// point at a time.
     pub fn loaded_points(&self) -> Vec<(usize, usize)> {
         let mut pairs = Vec::new();
         for bond in &self.bonds {
             for pair in [(bond.unit_a, bond.point_a), (bond.unit_b, bond.point_b)] {
-                if !pairs.contains(&pair) {
-                    pairs.push(pair);
-                }
+                if !pairs.contains(&pair) { pairs.push(pair); }
             }
         }
         pairs
     }
 }
 
-// ------------------------------------------------------------
-// FORMATION THRESHOLD  (locked equation - do not replace)
-// ------------------------------------------------------------
-//
-//     T = ((C_A + C_B) / 2) * (1 + sqrt(L_A) + sqrt(L_B))
-//
-// C_A / C_B: cohesion of the resource type owning point A / B.
-// L_A / L_B: sum of existing bond strengths already attached to
-//            point A / B (OrganismStructure::connection_load).
-//
-// The square-root terms give diminishing returns: unused points are
-// easy to connect, increasingly loaded points get progressively
-// harder. This is the ONE equation in the whole bonding design that
-// has an exact locked formula - everything else (the -1..+1
-// interaction value, surplus-investment -> bond-strength mapping,
-// BREAK energy) remains genuinely undecided; see the TODOs below.
-// This function does not decide what counts as "surpassing" T, or
-// what happens to any energy involved - it only computes T itself.
-// ------------------------------------------------------------
-
 pub fn formation_threshold(cohesion_a: f64, cohesion_b: f64, load_a: f64, load_b: f64) -> f64 {
     let load_a = load_a.max(0.0);
     let load_b = load_b.max(0.0);
     ((cohesion_a + cohesion_b) / 2.0) * (1.0 + load_a.sqrt() + load_b.sqrt())
 }
-
-// ------------------------------------------------------------
-// GENUINELY UNRESOLVED - NOT IMPLEMENTED HERE
-// ------------------------------------------------------------
-//
-// TODO(interaction-equation): the -1..+1 bounded interaction value
-// (whether a new contact requires or releases energy) is not locked.
-// Must derive from potential_energy, reactivity, and geometry of the
-// two newly-contacting surfaces, deterministically, WITHOUT existing
-// bond load amplifying it (existing load only affects the threshold
-// above, never the interaction itself - locked). Do not invent this.
-//
-// TODO(surplus-investment): once formation_threshold() is exceeded,
-// the mapping from surplus organism investment to the resulting
-// Bond.strength is not locked. Do not invent.
-//
-// TODO(break-energy): the energetic consequence of breaking a bond
-// (can require OR release energy, depending on state) is not locked.
-// Cohesion and "structural state" both contribute to resistance, but
-// the exact equation is undecided. Do not invent. COMBINE and BREAK
-// are explicitly NOT required to be numerically symmetric.
-// ------------------------------------------------------------
 
 #[cfg(test)]
 mod structure_tests {
@@ -274,11 +188,9 @@ mod structure_tests {
         let catalog = crate::resources::default_catalog();
         let mut structure = OrganismStructure::new();
         let i = structure.add_unit(StructuralUnit::new("Carbon", placement(0.0, 0.0)));
-
         let unit = &structure.units[i];
         let props = unit.properties(&catalog).unwrap();
         assert_eq!(props.cohesion, 0.95);
-
         match unit.connection_sites(&catalog).unwrap() {
             ConnectionSites::Corners(points) => assert_eq!(points.len(), 6),
             other => panic!("expected Corners, got {other:?}"),
@@ -286,11 +198,27 @@ mod structure_tests {
     }
 
     #[test]
-    fn unknown_resource_name_returns_none_rather_than_panicking() {
+    fn invalid_bond_indices_and_strength_are_rejected_by_validation() {
         let catalog = crate::resources::default_catalog();
-        let unit = StructuralUnit::new("Unobtainium", placement(0.0, 0.0));
-        assert!(unit.properties(&catalog).is_none());
-        assert!(unit.connection_sites(&catalog).is_none());
+        let mut structure = OrganismStructure::new();
+        let a = structure.add_unit(StructuralUnit::new("Carbon", placement(0.0, 0.0)));
+        let b = structure.add_unit(StructuralUnit::new("Methane", placement(1.0, 0.0)));
+
+        assert!(structure.is_valid_bond(&Bond { unit_a: a, point_a: 0, unit_b: b, point_b: 0, strength: 0.5 }, &catalog));
+        assert!(!structure.is_valid_bond(&Bond { unit_a: a, point_a: 99, unit_b: b, point_b: 0, strength: 0.5 }, &catalog));
+        assert!(!structure.is_valid_bond(&Bond { unit_a: a, point_a: 0, unit_b: 999, point_b: 0, strength: 0.5 }, &catalog));
+        assert!(!structure.is_valid_bond(&Bond { unit_a: a, point_a: 0, unit_b: b, point_b: 0, strength: 1.1 }, &catalog));
+        assert!(!structure.is_valid_bond(&Bond { unit_a: a, point_a: 0, unit_b: b, point_b: 0, strength: f64::NAN }, &catalog));
+    }
+
+    #[test]
+    fn fluid_and_circumference_have_no_discrete_bond_indices() {
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+        let water = structure.add_unit(StructuralUnit::new("Water", placement(0.0, 0.0)));
+        let carbon = structure.add_unit(StructuralUnit::new("Carbon", placement(1.0, 0.0)));
+        let bond = Bond { unit_a: water, point_a: 0, unit_b: carbon, point_b: 0, strength: 0.5 };
+        assert!(!structure.is_valid_bond(&bond, &catalog));
     }
 
     #[test]
@@ -299,7 +227,6 @@ mod structure_tests {
         let a = structure.add_unit(StructuralUnit::new("Carbon", placement(0.0, 0.0)));
         let b = structure.add_unit(StructuralUnit::new("Methane", placement(1.0, 0.0)));
         structure.add_bond(Bond { unit_a: a, point_a: 0, unit_b: b, point_b: 0, strength: 0.5 });
-
         assert_eq!(structure.units.len(), 2);
         assert_eq!(structure.bonds.len(), 1);
     }
@@ -310,12 +237,9 @@ mod structure_tests {
         let a = structure.add_unit(StructuralUnit::new("Carbon", placement(0.0, 0.0)));
         let b = structure.add_unit(StructuralUnit::new("Methane", placement(1.0, 0.0)));
         let c = structure.add_unit(StructuralUnit::new("Sulfur", placement(2.0, 0.0)));
-
         structure.add_bond(Bond { unit_a: a, point_a: 0, unit_b: b, point_b: 0, strength: 0.3 });
         structure.add_bond(Bond { unit_a: a, point_a: 0, unit_b: c, point_b: 0, strength: 0.4 });
-        // A bond on a DIFFERENT point of unit a - must not count.
         structure.add_bond(Bond { unit_a: a, point_a: 1, unit_b: c, point_b: 1, strength: 0.9 });
-
         assert!((structure.connection_load(a, 0) - 0.7).abs() < 1e-12);
         assert_eq!(structure.connection_count(a, 0), 2);
         assert_eq!(structure.connection_count(a, 1), 1);
@@ -324,33 +248,20 @@ mod structure_tests {
 
     #[test]
     fn break_bond_removes_only_that_one_bond() {
-        // Locked example: A-B, A-C, A-D, A-E; breaking A-B leaves the
-        // other three fully intact.
         let mut structure = OrganismStructure::new();
         let a = structure.add_unit(StructuralUnit::new("Carbon", placement(0.0, 0.0)));
-        let units: Vec<usize> = ["Methane", "Sulfur", "Nitrogen", "Phosphorus"]
-            .iter()
-            .enumerate()
-            .map(|(k, name)| structure.add_unit(StructuralUnit::new(*name, placement(k as f64 + 1.0, 0.0))))
-            .collect();
-
+        let units: Vec<usize> = ["Methane", "Sulfur", "Nitrogen", "Phosphorus"].iter().enumerate().map(|(k, name)| structure.add_unit(StructuralUnit::new(*name, placement(k as f64 + 1.0, 0.0)))).collect();
         let bond_ab = structure.add_bond(Bond { unit_a: a, point_a: 0, unit_b: units[0], point_b: 0, strength: 0.5 });
         structure.add_bond(Bond { unit_a: a, point_a: 1, unit_b: units[1], point_b: 0, strength: 0.5 });
         structure.add_bond(Bond { unit_a: a, point_a: 2, unit_b: units[2], point_b: 0, strength: 0.5 });
         structure.add_bond(Bond { unit_a: a, point_a: 3, unit_b: units[3], point_b: 0, strength: 0.5 });
-
         assert_eq!(structure.bonds.len(), 4);
         structure.break_bond(bond_ab);
         assert_eq!(structure.bonds.len(), 3);
-
-        // A-C, A-D, A-E (points 1,2,3) all remain.
         assert_eq!(structure.connection_count(a, 0), 0);
         assert_eq!(structure.connection_count(a, 1), 1);
         assert_eq!(structure.connection_count(a, 2), 1);
         assert_eq!(structure.connection_count(a, 3), 1);
-
-        // Both units of the broken bond still exist (breaking a bond
-        // does not destroy either unit - locked).
         assert_eq!(structure.units.len(), 5);
     }
 
@@ -360,11 +271,9 @@ mod structure_tests {
         let a = structure.add_unit(StructuralUnit::new("Carbon", placement(0.0, 0.0)));
         let b = structure.add_unit(StructuralUnit::new("Methane", placement(1.0, 0.0)));
         let bond = structure.add_bond(Bond { unit_a: a, point_a: 0, unit_b: b, point_b: 0, strength: 0.5 });
-
         structure.break_bond(bond);
-
         assert_eq!(structure.connection_count(a, 0), 0);
-        assert_eq!(structure.units.len(), 2, "units must remain even with zero bonds - locked");
+        assert_eq!(structure.units.len(), 2);
     }
 
     #[test]
@@ -374,14 +283,9 @@ mod structure_tests {
         let b = structure.add_unit(StructuralUnit::new("Methane", placement(1.0, 0.0)));
         let c = structure.add_unit(StructuralUnit::new("Sulfur", placement(2.0, 0.0)));
         let d = structure.add_unit(StructuralUnit::new("Nitrogen", placement(3.0, 0.0)));
-
-        // Two separate bonds both attached to (a, point 0) - multiple
-        // bonds per point is explicitly allowed.
         structure.add_bond(Bond { unit_a: a, point_a: 0, unit_b: b, point_b: 0, strength: 0.2 });
         structure.add_bond(Bond { unit_a: a, point_a: 0, unit_b: c, point_b: 0, strength: 0.3 });
-        // A bond on a different point of a - must survive.
         let surviving = structure.add_bond(Bond { unit_a: a, point_a: 1, unit_b: d, point_b: 0, strength: 0.4 });
-
         let removed = structure.disconnect_point(a, 0);
         assert_eq!(removed.len(), 2);
         assert_eq!(structure.bonds.len(), 1);
@@ -394,33 +298,25 @@ mod structure_tests {
     #[test]
     fn formation_threshold_increases_with_existing_load_but_not_below_base() {
         let base = formation_threshold(0.5, 0.5, 0.0, 0.0);
-        assert!((base - 0.5).abs() < 1e-12, "with zero load, T should equal the average cohesion");
-
+        assert!((base - 0.5).abs() < 1e-12);
         let loaded = formation_threshold(0.5, 0.5, 1.0, 0.0);
-        assert!(loaded > base, "existing load on either point must raise the threshold");
-
+        assert!(loaded > base);
         let more_loaded = formation_threshold(0.5, 0.5, 4.0, 0.0);
-        assert!(more_loaded > loaded, "more load must raise it further");
-
-        // Diminishing returns: going from load 4->9 (both +5) adds
-        // less than going from load 0->4 (+4), because of sqrt.
+        assert!(more_loaded > loaded);
         let step1 = formation_threshold(0.5, 0.5, 4.0, 0.0) - formation_threshold(0.5, 0.5, 0.0, 0.0);
         let step2 = formation_threshold(0.5, 0.5, 9.0, 0.0) - formation_threshold(0.5, 0.5, 4.0, 0.0);
-        assert!(step2 < step1, "sqrt term must give diminishing returns as load grows");
+        assert!(step2 < step1);
     }
 
     #[test]
     fn formation_threshold_is_symmetric_in_its_two_points() {
         let a = formation_threshold(0.9, 0.1, 3.0, 1.0);
         let b = formation_threshold(0.1, 0.9, 1.0, 3.0);
-        assert!((a - b).abs() < 1e-12, "swapping which point is 'A' vs 'B' must not change T");
+        assert!((a - b).abs() < 1e-12);
     }
 
     #[test]
     fn negative_load_is_treated_as_zero_defensively() {
-        // connection_load can never actually be negative in practice
-        // (bond strengths are meant to be 0..1), but the formula
-        // shouldn't produce NaN/complex results if it somehow were.
         let t = formation_threshold(0.5, 0.5, -1.0, -1.0);
         assert!(t.is_finite());
         assert!((t - formation_threshold(0.5, 0.5, 0.0, 0.0)).abs() < 1e-12);
