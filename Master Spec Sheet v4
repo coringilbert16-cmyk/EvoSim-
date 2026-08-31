@@ -93,7 +93,7 @@ These values are current implementation values and remain subject to future expl
 
 Resources are physical objects, not merely scalar quantities.
 
-Each resource shape contains a compact Form and explicitly authored ConnectionPoints.
+Each resource shape contains a compact Form. Connection sites are derived from the geometry where the current shape type provides discrete sites; they are not separately authored as a second independent physical representation.
 
 The geometry is 2D. The geometry system is deliberately compact and is not intended to become a general-purpose physics engine.
 
@@ -103,17 +103,23 @@ Current Form vocabulary:
     Rectangle
     RegularPolygon
     Polygon
+    Fluid
 
 RegularPolygon uses a side count and radius rather than separate named shape variants. Polygon is the explicit escape hatch for irregular or concave forms. The system should not grow a new enum variant for every named shape.
 
-Each ConnectionPoint contains:
+Current discrete connection-site behavior:
 
-    x
-    y
-    direction_radians
-    strength
+    - Regular polygons derive one connection site per vertex.
+    - Rectangles derive one connection site per corner.
+    - Explicit polygons derive one connection site per authored vertex.
+    - Circles do not have a finite list of discrete connection sites; their boundary is continuous.
+    - Fluid geometry does not yet have a finalized connection/contact implementation.
 
-Coordinates are local to the resource shape. Connection count is NOT inferred from polygon side count, curvature, cohesion, mass, or any other generic formula. A hexagon does not automatically have six connection points.
+Connection count is therefore a consequence of the chosen geometry representation for shapes that have discrete vertices. It is not a universal formula based on cohesion, mass, or another resource property, and no separate hand-authored connection-point list is maintained independently of the shape.
+
+The current connection-site representation does NOT assign an independent per-site strength value. Bond strength belongs to the resulting structural bond and is part of the unresolved COMBINE design where the final surplus-to-strength mapping has not yet been locked.
+
+Coordinates are local to the resource shape. Geometry is used to determine physical contact candidates; it does not by itself decide whether a bond forms.
 
 ============================================================
 6. MATERIAL
@@ -167,15 +173,31 @@ This preserves the critical distinction between raw material and breakable bonde
 
 VENTS
 
-Vents transfer material from Layer 1 into Layer 2. Vents are transfer mechanisms, not resource judges. A vent's composition determines what it emits, but the vent does not inspect material and prefer bonded over unbonded material. Vent transfer is indiscriminate with respect to bonded/unbonded state.
+Vents transfer existing material from Layer 1 into Layer 2. A vent's composition determines which resource types it attempts to draw and its emission amount determines the requested quantity.
+
+Vents are transfer mechanisms, not resource judges. A vent does NOT inspect bonded versus unbonded state, prefer one state over the other, convert raw material into bonded material, or use bonded stock as a fallback before raw stock.
+
+For each requested resource type, the vent draws from the combined local reservoir stock without bonded/unbonded preference. The current implementation performs this as a proportional draw from the available bonded and unbonded amounts. Each transferred portion retains its existing bonded/unbonded state when deposited into the active field.
+
+Therefore:
+
+    bonded reservoir material -> bonded field material
+    unbonded reservoir material -> unbonded field material
+
+The vent does not create a bond. It only relocates material. If the local reservoir lacks the requested material, the vent emits only what is actually available there; it does not draw from another region or create the deficit.
 
 DIFFUSION
 
-Material in the active field can diffuse between field cells. Diffusion is an environmental movement process, not an organism decision.
+Material in the active field can diffuse between field cells. Diffusion is an environmental movement process, not an organism decision. Bonded and unbonded material remain in their respective states during diffusion.
 
 SETTLING
 
 Material can move from the active field back into the deep reservoir through settling. Settling is intentionally throttled relative to field updates so Layer 2 can operate at higher resolution while Layer 1 remains comparatively cheap.
+
+Settling preserves bonded/unbonded state:
+
+    bonded field material -> bonded reservoir stock
+    unbonded field material -> unbonded reservoir stock
 
 AUTHORITATIVE RESOURCE PATH
 
@@ -265,13 +287,15 @@ Structural geometry and bond topology remain distinct from the bulk Material rep
 14. CONNECTION GEOMETRY AND CONTACT
 ============================================================
 
-Connection points provide physical attachment locations.
+Connection sites provide physical attachment locations where the current geometry supports discrete attachment.
 
 Contact analysis determines which connection-pair candidates are physically available.
 
 The current architecture separates static compatibility information, dynamic geometry, dynamic load, and formation threshold.
 
 Static connection topology can be cached. Geometry and load remain dynamic and must be evaluated from current structure state.
+
+Circular and fluid contact behavior that requires continuous-boundary or gap-filling treatment remains intentionally incomplete.
 
 ============================================================
 15. COMBINE — CURRENTLY LOCKED ARCHITECTURE
@@ -532,6 +556,8 @@ The following must not return:
     - bonded bulk material used as a substitute for organism structure
     - material deleted as a convenience after processing
     - vents making biological/resource-state decisions
+    - vents preferring bonded or unbonded reservoir stock
+    - vents converting unbonded material into bonded material
     - preference overriding physical access
     - hard-coded ecological identities
     - hidden creation/destruction of material
@@ -555,6 +581,8 @@ Important existing architectural tests include:
     - field perception works without the old cloud pathway
     - bonded material can be BREAK-processed when explicitly present
     - vent transfer conserves material
+    - vent draws do not prefer bonded over unbonded stock
+    - vent transfer preserves bonded/unbonded state
     - formation succeeds only at or above threshold
     - increasing existing load raises formation threshold
     - formation surplus behaves correctly
@@ -584,6 +612,7 @@ The current project has completed substantial groundwork for:
 
     - layered environmental resources
     - field/reservoir conservation
+    - indiscriminate vent transfer with bonded-state preservation
     - physical access and acquisition
     - resource perception
     - genome-based desirability
