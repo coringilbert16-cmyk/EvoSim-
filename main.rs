@@ -259,16 +259,27 @@ struct Organism {
 
     stress: f64,
 
-    // Material the organism physically holds, mirroring FieldCell's
-    // "one bonded stack + one unbonded stack" shape (Phase 1
-    // decision 4, applied consistently here rather than reintroducing
-    // an arbitrary Vec<Material>). stored_unbonded is raw material
-    // acquired from the environment, not yet usable for BREAK.
-    // stored_bonded is material that has been through COMBINE (or was
-    // acquired already-bonded) and can be committed to a BREAK
-    // transformation.
+    // Bulk, pre-instantiation raw material the organism has acquired
+    // but not yet built into anything - a continuous (name, amount)
+    // stock, exactly like a field cell's unbonded stack. This is
+    // deliberately still bulk: instantiating it into discrete
+    // StructuralUnits is what COMBINE will do, and COMBINE remains
+    // unimplemented (the interaction/threshold/surplus-strength
+    // equations are not locked yet).
     stored_unbonded: Material,
-    stored_bonded: Material,
+
+    // Real bonded structure the organism has built (or acquired
+    // already-bonded material into - see the TODO on
+    // Organism::store_unbonded_material below for why "acquiring
+    // already-bonded material" isn't wired yet either). This REPLACES
+    // the old bulk `stored_bonded: Material` field: a bulk blob with
+    // a single bonded=true flag cannot represent individual
+    // connection points, per-bond strength, or per-point load, so it
+    // was a genuinely conflicting representation once real bonds
+    // exist (see structure.rs). Nothing ever read the old field live
+    // (grepped before removing it), so this is a clean replacement,
+    // not a migration of live behavior.
+    structure: structure::OrganismStructure,
 
     development_stage: DevelopmentStage,
 
@@ -279,22 +290,27 @@ struct Organism {
 
 
 impl Organism {
-    /// Merges acquired material into the matching stack, preserving
-    /// whatever bonded state it already had - a relocation into the
-    /// organism, not a transformation of the material (same principle
-    /// as field deposit/settling/venting).
-    fn store_material(&mut self, material: Material) {
-        if material.parts.is_empty() {
+    /// Merges acquired UNBONDED material into bulk raw storage - a
+    /// relocation into the organism, not a transformation (same
+    /// principle as field deposit/settling/venting).
+    ///
+    /// TODO(bonded-acquisition boundary): this deliberately does NOT
+    /// accept bonded material. Acquiring already-bonded material from
+    /// the environment would need to become a specific StructuralUnit
+    /// (with a real Placement), but instantiation position/rotation
+    /// and how many discrete units a contacted bulk amount represents
+    /// are part of the still-undecided acquisition mechanism (see
+    /// contact.rs's accessible_field_material, which identifies WHICH
+    /// bonded material is physically reachable without deciding how
+    /// much/how it gets acquired). Left isolated here rather than
+    /// guessed at.
+    fn store_unbonded_material(&mut self, material: Material) {
+        if material.parts.is_empty() || material.bonded {
             return;
         }
-        let target = if material.bonded {
-            &mut self.stored_bonded
-        } else {
-            &mut self.stored_unbonded
-        };
-        let mut parts = std::mem::take(&mut target.parts);
+        let mut parts = std::mem::take(&mut self.stored_unbonded.parts);
         parts.extend(material.parts);
-        target.parts = resources::merge_parts(&parts);
+        self.stored_unbonded.parts = resources::merge_parts(&parts);
     }
 }
 
@@ -539,7 +555,7 @@ impl Simulation {
             stress: 0.0,
 
             stored_unbonded: Material { parts: Vec::new(), bonded: false },
-            stored_bonded: Material { parts: Vec::new(), bonded: true },
+            structure: structure::OrganismStructure::new(),
 
             development_stage: DevelopmentStage::Juvenile,
 
@@ -1500,7 +1516,11 @@ impl Simulation {
 
         for organism in &self.organisms {
             total += organism.stored_unbonded.total_amount();
-            total += organism.stored_bonded.total_amount();
+            // Each StructuralUnit is exactly one discrete unit of its
+            // resource type (locked: "resource units are discrete
+            // physical units") - nominal amount 1.0 each, matching
+            // how a bulk Material's (name, amount) pairs count units.
+            total += organism.structure.units.len() as f64;
         }
 
         total
@@ -1700,6 +1720,48 @@ async fn main() {
 #[cfg(test)]
 mod integration_tests {
     use super::*;
+
+    #[test]
+    fn fresh_organism_owns_an_empty_structure() {
+        let organism = Simulation::create_initial_organism();
+        assert!(organism.structure.units.is_empty());
+        assert!(organism.structure.bonds.is_empty());
+    }
+
+    #[test]
+    fn store_unbonded_material_accepts_raw_material_only() {
+        let mut organism = Simulation::create_initial_organism();
+
+        organism.store_unbonded_material(Material { parts: vec![("Carbon".into(), 5.0)], bonded: false });
+        assert!((organism.stored_unbonded.total_amount() - 5.0).abs() < 1e-9);
+
+        // Bonded material is explicitly rejected here (see the TODO
+        // on store_unbonded_material) rather than silently absorbed
+        // into a bulk pool that would conflict with real structure.
+        organism.store_unbonded_material(Material { parts: vec![("Carbon".into(), 3.0)], bonded: true });
+        assert!((organism.stored_unbonded.total_amount() - 5.0).abs() < 1e-9, "bonded material must not be silently absorbed");
+        assert!(organism.structure.units.is_empty(), "bonded material must not be silently instantiated either");
+    }
+
+    #[test]
+    fn structural_units_count_toward_total_material_conservation() {
+        let mut sim = Simulation::new(1, 10.0);
+        sim.organisms[0].structure.add_unit(structure::StructuralUnit::new(
+            "Carbon",
+            structure::Placement { x: 500.0, y: 500.0, rotation_radians: 0.0 },
+        ));
+
+        let before = sim.total_material_in_system();
+        for _ in 0..500 {
+            sim.step();
+        }
+        let after = sim.total_material_in_system();
+
+        assert!(
+            (before - after).abs() < 1e-3,
+            "a structural unit sitting on an organism must be conserved like any other material: before={before}, after={after}"
+        );
+    }
 
     #[test]
     fn fresh_simulation_conserves_total_material_over_many_ticks() {
