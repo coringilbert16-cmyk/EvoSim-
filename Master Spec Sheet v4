@@ -1,0 +1,626 @@
+# MASTER SPEC SHEET — EVOSIM
+
+STATUS: AUTHORITATIVE
+VERSION: 4
+DATE: August 2026
+
+This document is the current authoritative design specification for EvoSim.
+
+The previous specification, `Master Spec Sheet 3`, is obsolete. It remains in Git history for historical reference. Where this document differs from the previous specification, Version 4 governs.
+
+The purpose of this document is to describe WHAT EvoSim represents and the constraints under which it operates. It must not invent implementation details whose behavior has not been deliberately decided.
+
+A system may have implementation groundwork without having a locked behavioral rule. Such boundaries are explicitly identified below.
+
+============================================================
+1. PURPOSE AND DESIGN PHILOSOPHY
+============================================================
+
+EvoSim is an evolutionary simulation, not a numbers-go-up game.
+
+The central architectural principle is:
+
+    Calculate the minimum amount of information necessary to produce the desired emergent behavior.
+
+The simulator should be able to operate without player intervention.
+
+The long-term objective is for simple life to evolve through increasingly complex organization into large, integrated organisms.
+
+Within this project, "dinosaur" / "dino" is shorthand for the conceptual endpoint: a large, complex organism that emerges from the original cell through the simulator's evolutionary process. It does not mean literal dinosaur evolution and must never become a hard-coded evolutionary pathway.
+
+Higher-level phenomena should emerge from lower-level rules rather than being implemented as named outcomes.
+
+Do not create dedicated fundamental systems merely because we want to observe predator, prey, scavenger, colony, organ, body plan, social class, or dinosaur. These may emerge if the underlying rules make them advantageous.
+
+============================================================
+2. FUNDAMENTAL ENTITIES
+============================================================
+
+The simulation has three fundamental entities:
+
+    1. Environment
+    2. Organisms
+    3. Resources
+
+Everything else should emerge from interactions among these systems wherever practical.
+
+Energy is NOT a fourth fundamental resource.
+
+============================================================
+3. RESOURCE MODEL
+============================================================
+
+Every base resource has immutable physical properties:
+
+    mass
+    potential energy
+    reactivity
+    cohesion
+
+These properties belong to the base resource definition. They do not evolve, mutate, or become depleted because an instance was previously processed.
+
+Organisms evolve their responses to resources. Base resource physics does not evolve.
+
+MASS represents physical quantity/inertial contribution.
+
+POTENTIAL ENERGY is a property of a resource and is derived from the resource catalog when needed. It is NOT a mutable energy reservoir. There must be no legacy `energy_content` field whose value is progressively subtracted from Material. Energy becomes usable through physical interactions/processes such as BREAK.
+
+REACTIVITY describes how readily material participates in relevant processes. It is immutable at the base-resource level and its influence is intentionally nonlinear/exponential. Water can dilute effective reactivity through environmental interaction without mutating intrinsic reactivity.
+
+COHESION describes the tendency of material to remain structurally associated. It is immutable at the base-resource level and participates in construction/formation behavior and energy-processing consequences without becoming a hard-coded ecological role.
+
+============================================================
+4. CURRENT BASE RESOURCE CATALOG
+============================================================
+
+The current catalog contains Carbon, Methane, Hydrogen, Sulfur, Nitrogen, Phosphorus, and Water.
+
+Current physical values:
+
+    Carbon:      mass 1.0, potential_energy 1.0, reactivity 0.1, cohesion 0.95
+    Methane:     mass 1.0, potential_energy 20.0, reactivity 4.0, cohesion 0.1
+    Hydrogen:    mass 1.0, potential_energy 12.0, reactivity 3.0, cohesion 0.05
+    Sulfur:      mass 1.0, potential_energy 8.0, reactivity 2.0, cohesion 0.4
+    Nitrogen:    mass 1.0, potential_energy 0.5, reactivity 0.2, cohesion 0.7
+    Phosphorus:  mass 1.0, potential_energy 0.8, reactivity 0.3, cohesion 0.6
+    Water:       mass 1.0, potential_energy 0.0, reactivity 0.0, cohesion 0.5
+
+These values are current implementation values and remain subject to future explicit balancing decisions. The four-property model and immutability rules are locked.
+
+============================================================
+5. RESOURCE GEOMETRY
+============================================================
+
+Resources are physical objects, not merely scalar quantities.
+
+Each resource shape contains a compact Form and explicitly authored ConnectionPoints.
+
+The geometry is 2D. The geometry system is deliberately compact and is not intended to become a general-purpose physics engine.
+
+Current Form vocabulary:
+
+    Circle
+    Rectangle
+    RegularPolygon
+    Polygon
+
+RegularPolygon uses a side count and radius rather than separate named shape variants. Polygon is the explicit escape hatch for irregular or concave forms. The system should not grow a new enum variant for every named shape.
+
+Each ConnectionPoint contains:
+
+    x
+    y
+    direction_radians
+    strength
+
+Coordinates are local to the resource shape. Connection count is NOT inferred from polygon side count, curvature, cohesion, mass, or any other generic formula. A hexagon does not automatically have six connection points.
+
+============================================================
+6. MATERIAL
+============================================================
+
+Material represents physical quantities of resource components.
+
+A Material contains resource parts such as `(resource_name, amount)` and a bonded/unbonded state.
+
+    bonded = false  -> raw/unbonded material
+    bonded = true   -> bonded material
+
+Material may contain multiple resource types.
+
+Material remains physical throughout the simulation. Defined processes may move, transform, bond, break, or eject material, but material must not disappear by accident.
+
+============================================================
+7. RAW MATERIAL AND THE BONDING BARRIER
+============================================================
+
+Hard rule:
+
+    RAW / UNBONDED MATERIAL CANNOT BREAK.
+
+Quantity alone does not make raw material breakable. Desirability alone does not make it breakable. High potential energy alone does not make it breakable.
+
+Material must first become bonded through COMBINE.
+
+This barrier prevents the simulation from becoming a simple "find high-energy resource and extract energy" system.
+
+============================================================
+8. ENVIRONMENTAL RESOURCE ARCHITECTURE
+============================================================
+
+The environment is divided into two resource layers.
+
+LAYER 1 — DEEP RESERVOIR
+
+The deep reservoir is the main mass pool of environmental resources. It is spatially distributed in coarse blocks rather than represented as one flat global quantity. It is lower-resolution and cheaper to update than the active field and is not directly perceived by organisms.
+
+LAYER 2 — ACTIVE MATERIAL FIELD
+
+The active material field is the higher-resolution layer organisms actually perceive and physically interact with.
+
+Each field cell has two material stacks:
+
+    bonded
+    unbonded
+
+This preserves the critical distinction between raw material and breakable bonded material.
+
+VENTS
+
+Vents transfer material from Layer 1 into Layer 2. Vents are transfer mechanisms, not resource judges. A vent's composition determines what it emits, but the vent does not inspect material and prefer bonded over unbonded material. Vent transfer is indiscriminate with respect to bonded/unbonded state.
+
+DIFFUSION
+
+Material in the active field can diffuse between field cells. Diffusion is an environmental movement process, not an organism decision.
+
+SETTLING
+
+Material can move from the active field back into the deep reservoir through settling. Settling is intentionally throttled relative to field updates so Layer 2 can operate at higher resolution while Layer 1 remains comparatively cheap.
+
+AUTHORITATIVE RESOURCE PATH
+
+    reservoir -> vent -> active field -> diffusion within field -> settling -> reservoir
+
+There is no competing legacy ResourceCloud pathway and no flat global reservoir representation.
+
+============================================================
+9. RESOURCE PERCEPTION
+============================================================
+
+Organisms perceive the active material field, not the deep reservoir.
+
+Perception produces observations. An observation is NOT itself a stored resource.
+
+A perception observation records material properties, bonded/unbonded state, perceived amount, property deviations, genome-derived affinity responses, desirability, distance, source position, and exact field-cell identity.
+
+The field-cell identity is retained for later action so the simulation does not have to rediscover a target by float-comparing world coordinates.
+
+Organism preference is based on deviations from resource-property baselines. The four properties are evaluated independently: mass, potential energy, reactivity, and cohesion.
+
+Desirability is a calculated behavioral signal, not a physical resource. It combines property responses, perceived amount, and organism state. Potential-energy preference can be modulated by current usable-energy need. Desirability may influence movement and acquisition/processing choice, but it does not override physical eligibility.
+
+============================================================
+10. PHYSICAL ACCESS BEFORE PREFERENCE
+============================================================
+
+The interaction order is:
+
+    PHYSICAL ACCESS
+        -> GENOMIC PREFERENCE
+        -> ACTION
+        -> MATERIAL TRANSFER / TRANSFORMATION
+
+A highly desirable resource outside physical reach cannot be selected.
+
+Among physically accessible candidates, genome-derived desirability can decide which candidate is preferred.
+
+============================================================
+11. ACQUISITION
+============================================================
+
+Acquisition is the physical transfer of accessible raw material from the active field into an organism.
+
+The current pathway:
+
+    - considers only unbonded material
+    - requires physical reach
+    - uses genomic desirability among eligible candidates
+    - transfers only material physically within the contact limit
+    - places acquired material into organism raw-material storage
+
+Acquisition does NOT create bonds, create structural units, produce energy, BREAK material, or silently convert bonded field material into raw storage.
+
+Bonded-material acquisition is intentionally not implemented through this bulk storage path because bonded material represents actual structural topology, not merely a scalar pile.
+
+============================================================
+12. ORGANISM MATERIAL STORAGE
+============================================================
+
+Organisms distinguish:
+
+    stored_unbonded
+    structure
+
+`stored_unbonded` is bulk raw material acquired but not yet instantiated into physical organism structure.
+
+`structure` contains actual structural units and bonds.
+
+A bulk bonded Material field is intentionally NOT used as a substitute for real organism structure.
+
+Once material becomes structural, its individual placement, connection points, loads, and bonds must be represented explicitly.
+
+============================================================
+13. ORGANISM STRUCTURE
+============================================================
+
+The organism structure is a graph-like physical representation consisting of structural units and bonds.
+
+A structural unit represents a discrete physical resource unit incorporated into the organism.
+
+A bond represents an actual connection between structural units.
+
+Structural geometry and bond topology remain distinct from the bulk Material representation so future organism complexity can emerge from physical construction rather than a hard-coded body-plan system.
+
+============================================================
+14. CONNECTION GEOMETRY AND CONTACT
+============================================================
+
+Connection points provide physical attachment locations.
+
+Contact analysis determines which connection-pair candidates are physically available.
+
+The current architecture separates static compatibility information, dynamic geometry, dynamic load, and formation threshold.
+
+Static connection topology can be cached. Geometry and load remain dynamic and must be evaluated from current structure state.
+
+============================================================
+15. COMBINE — CURRENTLY LOCKED ARCHITECTURE
+============================================================
+
+COMBINE converts suitable raw material into bonded material / physical structure.
+
+Conceptually:
+
+    unbonded material + unbonded material
+        -> bonded material / structural connection
+
+COMBINE is not simply a boolean `bond = true` operation once real organism structure is involved. The architecture must preserve physical connection locations and bond state.
+
+Current groundwork includes deterministic material-combination caching, contact candidate generation, connection compatibility caching, formation-threshold evaluation, and formation surplus calculation.
+
+These are infrastructure, not permission to invent unresolved biological behavior.
+
+LOCKED FORMATION THRESHOLD
+
+Formation uses a threshold based on participating-unit cohesion and current loads. The current implementation evaluates the threshold from:
+
+    cohesion_a
+    cohesion_b
+    load_a
+    load_b
+
+Formation succeeds only when investment meets or exceeds the threshold.
+
+    surplus = investment - threshold
+
+Negative surplus fails formation. Zero surplus is the minimum successful condition.
+
+UNRESOLVED COMBINE BEHAVIOR
+
+The following are intentionally unresolved:
+
+    - final interaction-energy / work-cost equation for COMBINE
+    - exact mapping from surplus investment to resulting bond strength
+    - complete organism-level decision rule for when to COMBINE
+    - complete material-selection strategy for multi-input COMBINE
+    - final orientation/placement policy beyond existing geometry
+    - complete structural-stability system
+    - full construction/reorganization behavior
+
+These are design questions, not bugs to be filled with arbitrary constants.
+
+============================================================
+16. COMBINE EQUATION DESIGN PRINCIPLE
+============================================================
+
+Before COMBINE is wired into evolution, its equations must be designed and tested in isolation.
+
+The equations should be chosen by asking what physical/evolutionary behavior we want the resulting system to produce, then testing whether the equations actually generate that behavior.
+
+Tests should examine at minimum:
+
+    - scale behavior
+    - cohesion effects
+    - reactivity effects
+    - water dilution effects where applicable
+    - increasing complexity cost
+    - threshold behavior
+    - surplus behavior
+    - pathological values
+    - conservation
+    - whether trivial exploitation strategies dominate
+
+Only after isolated tests demonstrate the intended behavior should COMBINE be wired into organism evolution.
+
+============================================================
+17. BREAK
+============================================================
+
+BREAK is the process by which bonded material can be processed to release usable energy.
+
+Hard rule:
+
+    raw/unbonded material cannot BREAK.
+
+A BREAK transformation commits its input material for the duration of the transformation. The committed material is removed from the field while active and remains owned by that transformation until resolution.
+
+The current implementation derives potential energy from material composition, applies exponential reactivity influence, applies a cohesion-related extraction consequence, and then applies organism processing efficiency to determine usable energy and heat. This is current implementation behavior to be validated during future balancing; it does not mutate the underlying resource properties.
+
+BREAK waste does not disappear. The current implementation converts committed bonded material into unbonded waste and deposits it directly into the active field at the organism's location.
+
+Waste can diffuse, be perceived, be acquired if eligible, eventually settle, and potentially participate in later processes.
+
+The current same-composition waste model is an explicit simplification. Derived-material chemistry is not yet implemented.
+
+============================================================
+18. TRANSFORMATIONS
+============================================================
+
+Transformations have identity, organism owner, kind, committed Material, complexity, duration, and remaining duration.
+
+A transformation owns its committed input for its full duration. The input cannot simultaneously remain in the environmental field. This prevents double-counting and preserves conservation.
+
+============================================================
+19. ENERGY LEDGER
+============================================================
+
+Energy is tracked as an organism/process consequence, not as environmental resource mass.
+
+The current ledger records:
+
+    total potential energy released
+    total usable energy gained
+    total heat dissipated
+    total usable energy held
+
+Usable energy held is derived from the sum of organism-held usable energy.
+
+Energy ledger values must never be mistaken for physical material mass.
+
+============================================================
+20. MATERIAL CONSERVATION
+============================================================
+
+At diagnostic checkpoints, total physical material must be accounted for across:
+
+    - deep reservoir
+    - active field
+    - in-flight transformations
+    - organism raw storage
+    - organism structural units
+
+Material may move between these compartments or change bonded state through defined physical processes, but it must not be silently created or destroyed.
+
+Energy generation does not justify deleting source material.
+
+============================================================
+21. MEMORY
+============================================================
+
+Organisms possess bounded spatial memory represented as location plus strength.
+
+The current system limits memory capacity and applies decay and pruning.
+
+Memory can be reinforced by desirable resource encounters and by successful transformation outcomes. A successful processing event can strengthen memory of the location where useful energy was obtained.
+
+The architectural intent is that memory contributes to decision-making rather than being a decorative statistic.
+
+Memory must remain bounded and must not become an unlimited historical log.
+
+============================================================
+22. MOVEMENT AND PERCEPTION
+============================================================
+
+Movement combines current resource perception with spatial memory. Genome traits influence the balance between these information sources.
+
+Resource attraction is not a hard-coded "go toward food" rule; it is the result of desirability and perception.
+
+Memory can pull behavior toward previously reinforced locations.
+
+Movement respects world bounds and does not continue as a side effect while an organism is committed to an active transformation.
+
+============================================================
+23. GENOME AND HERITABLE BEHAVIOR
+============================================================
+
+Genome traits provide heritable parameters that influence organism responses.
+
+Current resource-interaction traits include responses associated with mass, potential energy, reactivity, and cohesion.
+
+Other current traits include perception radius, sensory resolution, directional resolution, memory strength, movement efficiency, and processing efficiency.
+
+The genome should encode behavioral tendencies, not explicit ecological identities.
+
+Do not add predator genes, colony genes, dinosaur genes, or equivalent outcome-forcing traits merely to force an emergent result.
+
+============================================================
+24. DEVELOPMENT AND ORGANIZATION
+============================================================
+
+Organisms have developmental state and physical structure.
+
+The architecture supports progression from a simple initial organism toward larger integrated structures.
+
+Developmental stages may be used where necessary, but must not become a shortcut that directly assigns complex body plans.
+
+Complexity should arise from resource acquisition, construction, energy availability, survival, reproduction, and heritable behavioral differences.
+
+============================================================
+25. REPRODUCTION AND FUTURE COMPLEXITY
+============================================================
+
+Reproduction remains an organism process and must remain consistent with the physical resource and energy model.
+
+Organism mass is physical material, not an abstract integer. Future reproduction must not create offspring mass or energy from nothing.
+
+Structural complexity should be inherited through physical/genetic mechanisms rather than through a hard-coded upgrade system.
+
+============================================================
+26. ORDER OF OPERATIONS
+============================================================
+
+The current architecture follows this general causal order:
+
+    1. environment processes
+    2. active transformation progression/resolution
+    3. organism perception
+    4. memory update
+    5. movement
+    6. physical acquisition
+    7. transformation initiation
+    8. energy/stress consequences
+    9. snapshot / observation
+
+The placement of a future subsystem may change only if its causal relationship is explicitly reconsidered.
+
+No system should read a future state that has not yet been produced for the current tick.
+
+============================================================
+27. INTENTIONAL "NOT DECIDED YET" BOUNDARIES
+============================================================
+
+The following are explicitly unresolved and their absence is intentional:
+
+A. COMBINE interaction-energy/work-cost equation.
+
+B. Exact surplus-investment -> bond-strength mapping.
+
+C. Full organism-level COMBINE decision-making.
+
+D. Multi-material selection rules for construction.
+
+E. Final orientation/placement policy for constructed units.
+
+F. Structural stability and failure rules beyond the current formation stage.
+
+G. Derived-material chemistry after BREAK.
+
+H. Complete maintenance-cost equation.
+
+I. Full reproduction mechanics and resource allocation where not yet locked.
+
+J. Higher-level social/colonial behavior.
+
+K. Any ecological role system that would hard-code predator, prey, scavenger, colony, organ, or similar identities.
+
+These boundaries must remain visible in both code and specification.
+
+"Not implemented" and "not decided" are different states. A design decision must be made deliberately before code is allowed to imply one.
+
+============================================================
+28. ARCHITECTURAL ANTI-PATTERNS
+============================================================
+
+The following must not return:
+
+    - ResourceCloud as a competing authoritative resource system
+    - flat global environmental resource pools
+    - mutable Material.energy_content
+    - energy treated as a fundamental environmental resource
+    - raw material producing energy through BREAK
+    - bonded state inferred from quantity alone
+    - bonded bulk material used as a substitute for organism structure
+    - material deleted as a convenience after processing
+    - vents making biological/resource-state decisions
+    - preference overriding physical access
+    - hard-coded ecological identities
+    - hidden creation/destruction of material
+    - arbitrary equations introduced solely to eliminate an unresolved TODO
+
+============================================================
+29. TESTING REQUIREMENTS
+============================================================
+
+Every major physical process must have isolated tests before being integrated into evolutionary behavior.
+
+Important existing architectural tests include:
+
+    - raw acquisition only accepts unbonded material
+    - inaccessible material cannot be acquired
+    - genomic preference operates only among accessible candidates
+    - acquisition cannot create bonds or structural units
+    - bonded material is not silently absorbed into raw storage
+    - material conservation over long runs
+    - structural units count toward conservation
+    - field perception works without the old cloud pathway
+    - bonded material can be BREAK-processed when explicitly present
+    - vent transfer conserves material
+    - formation succeeds only at or above threshold
+    - increasing existing load raises formation threshold
+    - formation surplus behaves correctly
+    - non-finite formation investment cannot succeed
+
+Future COMBINE equations must be tested in isolation before they are connected to evolutionary decision-making.
+
+============================================================
+30. SOURCE-OF-TRUTH RULE
+============================================================
+
+This document is the current design source of truth.
+
+Code is the implementation source of truth for behavior that has already been implemented and tested.
+
+When a behavior is implemented but not yet deliberately locked, the spec must identify it as current implementation behavior rather than falsely calling it a final design decision.
+
+When the spec deliberately locks a rule and code disagrees, the code must be corrected rather than the rule silently weakened.
+
+When the design is unresolved, code must not invent the missing rule merely to make the program appear complete.
+
+============================================================
+31. CURRENT ARCHITECTURAL STATE
+============================================================
+
+The current project has completed substantial groundwork for:
+
+    - layered environmental resources
+    - field/reservoir conservation
+    - physical access and acquisition
+    - resource perception
+    - genome-based desirability
+    - spatial memory
+    - material representation
+    - bonded/unbonded distinction
+    - structural units and bonds
+    - connection geometry
+    - contact candidate generation
+    - formation threshold evaluation
+    - BREAK transformation lifecycle
+    - usable-energy generation from bonded material
+    - waste return to the active field
+    - conservation diagnostics
+
+The next major design task is therefore not to add arbitrary mechanics, but to deliberately finish the unresolved COMBINE mathematics and then integrate it into organism behavior.
+
+============================================================
+32. NEXT DESIGN PRIORITY
+============================================================
+
+The next major system should be COMBINE.
+
+Correct sequence:
+
+    1. Define desired physical behavior.
+    2. Derive candidate equations.
+    3. Test equations in isolation.
+    4. Reject equations that produce pathological incentives.
+    5. Select the simplest equation set that produces the desired behavior.
+    6. Document the equations here.
+    7. Implement them in the combine subsystem.
+    8. Test integration.
+    9. Only then allow evolution to discover and exploit COMBINE.
+
+Do not reverse this order merely to make the simulator "do more".
+
+============================================================
+END OF MASTER SPEC SHEET V4
+============================================================
