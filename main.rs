@@ -3,6 +3,7 @@ mod genome;
 mod math;
 mod resources;
 mod structure;
+mod connection_geometry;
 mod contact;
 mod combine;
 mod structural_combine;
