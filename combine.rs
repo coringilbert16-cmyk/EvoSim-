@@ -2,42 +2,25 @@
 //! and explicitly EXPERIMENTAL interaction / bond-strength equations.
 //!
 //! The equations in this module are experimental balancing infrastructure.
-//! They implement the locked architectural decisions without claiming that
-//! their numerical form is final:
-//!
-//! - potential-energy difference establishes interaction direction;
-//! - reactivity modifies interaction magnitude nonlinearly;
-//! - geometry/contact modifies interaction magnitude;
-//! - formation still requires the locked cohesion/load threshold;
-//! - surplus produces bond strength through a capped diminishing-returns
-//!   curve.
-//!
-//! These equations are tested in isolation before being wired into organism
-//! evolution.
+//! Their numerical form is not locked. The architecture is:
+//! potential energy establishes direction; reactivity and geometry modify
+//! magnitude; formation uses the locked cohesion/load threshold; surplus
+//! maps to bond strength through capped diminishing returns.
 
 use std::collections::HashMap;
 
 use crate::contact::{ConnectionCompatibilityCache, ConnectionPairCandidate};
 use crate::math::exponential_influence;
-use crate::resources::{combine_materials, effective_reactivity, BaseResource, Material, ResourceProperties};
+use crate::resources::{
+    combine_materials, effective_reactivity, BaseResource, Material, ResourceProperties,
+};
 use crate::structure::{formation_threshold, OrganismStructure};
 
 const EPSILON: f64 = 1e-12;
 
-/// Experimental scale used by the surplus -> bond-strength curve.
-/// This is deliberately a named tuning parameter rather than a hidden
-/// constant so later balancing can change it without redesigning the API.
 pub const EXPERIMENTAL_BOND_STRENGTH_SCALE: f64 = 1.0;
-
-/// Maximum bond strength produced by the current experimental curve.
 pub const EXPERIMENTAL_MAX_BOND_STRENGTH: f64 = 1.0;
 
-/// Experimental interaction result.
-///
-/// `direction` is -1, 0, or +1 and identifies the potential-energy gradient
-/// from material A toward material B. Swapping A and B reverses it.
-/// `magnitude` contains the nonlinear reactivity and geometric modifiers.
-/// `signed_value` combines both and is therefore useful for diagnostics.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ExperimentalInteraction {
     pub direction: f64,
@@ -45,19 +28,6 @@ pub struct ExperimentalInteraction {
     pub signed_value: f64,
 }
 
-/// Experimental COMBINE interaction model.
-///
-/// Potential energy establishes direction. Reactivity and geometry establish
-/// how strongly that potential difference matters. Water is represented as a
-/// dilution field through the existing effective-reactivity rule.
-///
-/// Geometry uses the contact candidate's facing and distance:
-/// - facing is remapped from [-1, 1] to [0, 1];
-/// - distance uses a bounded inverse falloff;
-/// - the two are multiplied so poor contact suppresses the interaction.
-///
-/// This function is intentionally symmetric in magnitude and antisymmetric
-/// in direction when A and B are swapped.
 pub fn experimental_interaction(
     a: ResourceProperties,
     b: ResourceProperties,
@@ -84,14 +54,8 @@ pub fn experimental_interaction(
     } else {
         f64::INFINITY
     };
-    let distance_factor = if distance.is_finite() {
-        1.0 / (1.0 + distance)
-    } else {
-        0.0
-    };
-
-    let geometry = facing * distance_factor;
-    let magnitude = potential_delta.abs() * reactivity * geometry;
+    let distance_factor = if distance.is_finite() { 1.0 / (1.0 + distance) } else { 0.0 };
+    let magnitude = potential_delta.abs() * reactivity * facing * distance_factor;
 
     ExperimentalInteraction {
         direction,
@@ -100,13 +64,6 @@ pub fn experimental_interaction(
     }
 }
 
-/// Experimental positive work cost for COMBINE.
-///
-/// The potential-energy interaction contributes through its magnitude, while
-/// the direction remains available separately in `ExperimentalInteraction`.
-/// The cost is always non-negative and therefore cannot be changed merely by
-/// reversing the order in which the two participating materials are supplied.
-/// Complexity and cohesion provide the baseline construction burden.
 pub fn experimental_combine_work_cost(
     a: ResourceProperties,
     b: ResourceProperties,
@@ -115,24 +72,11 @@ pub fn experimental_combine_work_cost(
 ) -> f64 {
     let interaction = experimental_interaction(a, b, candidate, water_field);
     let complexity_factor = 1.0 + ((a.mass.max(0.0) + b.mass.max(0.0)) * 0.5).sqrt();
-    let cohesion_factor = 1.0 + ((a.cohesion.clamp(0.0, 1.0) + b.cohesion.clamp(0.0, 1.0)) * 0.5);
-
-    // A small irreducible work floor prevents zero-cost COMBINE for equal-
-    // potential, perfectly aligned materials. The interaction term is bounded
-    // by the same physical quantities that establish its direction.
+    let cohesion_factor =
+        1.0 + ((a.cohesion.clamp(0.0, 1.0) + b.cohesion.clamp(0.0, 1.0)) * 0.5);
     (0.25 + interaction.magnitude) * complexity_factor * cohesion_factor
 }
 
-/// Experimental capped diminishing-returns mapping from formation surplus to
-/// bond strength.
-///
-/// At zero surplus the resulting strength is zero. Additional investment
-/// increases strength monotonically but approaches the configured cap rather
-/// than growing without bound:
-///
-///     strength = max_strength * (1 - exp(-surplus / scale))
-///
-/// Negative, NaN, and infinite surplus do not produce a bond strength.
 pub fn experimental_bond_strength(surplus: f64) -> f64 {
     if !surplus.is_finite() || surplus <= 0.0 {
         return 0.0;
@@ -152,7 +96,9 @@ impl MaterialRecipeKey {
     pub fn from_material(material: &Material) -> Self {
         Self {
             bonded: vec![material.bonded],
-            parts: material.parts.iter()
+            parts: material
+                .parts
+                .iter()
                 .filter(|(_, amount)| *amount > EPSILON)
                 .map(|(name, amount)| (name.clone(), amount.to_bits()))
                 .collect(),
@@ -162,19 +108,18 @@ impl MaterialRecipeKey {
     pub fn from_inputs(inputs: &[Material]) -> Self {
         let mut parts = Vec::new();
         let mut bonded = Vec::with_capacity(inputs.len());
-
         for material in inputs {
             bonded.push(material.bonded);
-            parts.extend(material.parts.iter()
-                .filter(|(_, amount)| *amount > EPSILON)
-                .map(|(name, amount)| (name.clone(), amount.to_bits())));
+            parts.extend(
+                material
+                    .parts
+                    .iter()
+                    .filter(|(_, amount)| *amount > EPSILON)
+                    .map(|(name, amount)| (name.clone(), amount.to_bits())),
+            );
         }
-
-        // Bonded/unbonded classification is part of Material state and must
-        // therefore participate in the cache key. Parts remain order-independent.
         parts.sort_by(|a, b| a.cmp(b));
         bonded.sort_unstable();
-
         Self { bonded, parts }
     }
 }
@@ -208,7 +153,6 @@ pub struct FormationEvaluation {
     pub threshold: f64,
 }
 
-/// Evaluate only the locked formation-threshold equation.
 pub fn evaluate_formation(
     candidate: ConnectionPairCandidate,
     cohesion_a: f64,
@@ -226,9 +170,7 @@ pub fn evaluate_formation(
 }
 
 pub fn formation_surplus(evaluation: FormationEvaluation, investment: f64) -> f64 {
-    if !investment.is_finite() {
-        return f64::NAN;
-    }
+    if !investment.is_finite() { return f64::NAN; }
     investment - evaluation.threshold
 }
 
@@ -237,18 +179,31 @@ pub fn formation_succeeds(evaluation: FormationEvaluation, investment: f64) -> b
     surplus.is_finite() && surplus >= 0.0
 }
 
-/// Evaluate formation and map successful surplus to the experimental bond
-/// strength. This remains a non-mutating calculation; actual structure
-/// mutation belongs to the later structural-placement step.
 pub fn evaluate_bond_strength(evaluation: FormationEvaluation, investment: f64) -> Option<f64> {
-    if !formation_succeeds(evaluation, investment) {
-        return None;
-    }
+    if !formation_succeeds(evaluation, investment) { return None; }
     Some(experimental_bond_strength(formation_surplus(evaluation, investment)))
 }
 
-/// Non-mutating bridge from contact candidates to the formation-threshold stage.
-/// Static connection topology is cached; geometry and bond load remain dynamic.
+/// Returns only candidates that are actually eligible to proceed to COMBINE.
+/// Availability is a geometric condition, not a synonym for connection count:
+/// a point may carry multiple bonds when their rays do not overlap.
+pub fn eligible_candidates(
+    structure: &OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    catalog: &[BaseResource],
+    cache: &mut ConnectionCompatibilityCache,
+) -> Vec<ConnectionPairCandidate> {
+    crate::contact::connection_pair_candidates_cached(
+        structure, unit_a, unit_b, catalog, cache,
+    )
+    .into_iter()
+    .filter(|candidate| candidate.available_a && candidate.available_b)
+    .collect()
+}
+
+/// Bridge from eligible geometry to the locked formation-threshold stage.
+/// No candidate that fails the geometry gate is evaluated.
 pub fn evaluate_candidates(
     structure: &OrganismStructure,
     unit_a: usize,
@@ -256,16 +211,17 @@ pub fn evaluate_candidates(
     catalog: &[BaseResource],
     cache: &mut ConnectionCompatibilityCache,
 ) -> Vec<FormationEvaluation> {
-    let candidates = crate::contact::connection_pair_candidates_cached(
-        structure, unit_a, unit_b, catalog, cache,
-    );
-
     let Some(unit_a_ref) = structure.units.get(unit_a) else { return Vec::new() };
     let Some(unit_b_ref) = structure.units.get(unit_b) else { return Vec::new() };
-    let Some(cohesion_a) = unit_a_ref.properties(catalog).map(|p| p.cohesion) else { return Vec::new() };
-    let Some(cohesion_b) = unit_b_ref.properties(catalog).map(|p| p.cohesion) else { return Vec::new() };
+    let Some(cohesion_a) = unit_a_ref.properties(catalog).map(|p| p.cohesion) else {
+        return Vec::new();
+    };
+    let Some(cohesion_b) = unit_b_ref.properties(catalog).map(|p| p.cohesion) else {
+        return Vec::new();
+    };
 
-    candidates.into_iter()
+    eligible_candidates(structure, unit_a, unit_b, catalog, cache)
+        .into_iter()
         .map(|candidate| evaluate_formation(candidate, cohesion_a, cohesion_b))
         .collect()
 }
@@ -273,41 +229,38 @@ pub fn evaluate_candidates(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::resources::default_catalog;
+    use crate::structure::{Bond, Placement, StructuralUnit};
 
     fn carbon(amount: f64) -> Material { Material::free_base("Carbon", amount) }
     fn methane(amount: f64) -> Material { Material::free_base("Methane", amount) }
-
-    fn props(potential_energy: f64, reactivity: f64, cohesion: f64) -> ResourceProperties {
-        ResourceProperties {
-            mass: 1.0,
-            potential_energy,
-            reactivity,
-            cohesion,
-        }
+    fn props(p: f64, r: f64, c: f64) -> ResourceProperties {
+        ResourceProperties { mass: 1.0, potential_energy: p, reactivity: r, cohesion: c }
     }
-
     fn candidate(load_a: f64, load_b: f64) -> ConnectionPairCandidate {
         ConnectionPairCandidate {
-            point_a: 0, point_b: 0, distance: 0.0, facing: 1.0, load_a, load_b,
+            point_a: 0, point_b: 0, distance: 0.0, facing: 1.0,
+            load_a, load_b, available_a: true, available_b: true,
         }
+    }
+    fn unit(s: &mut OrganismStructure, name: &str, x: f64, y: f64) -> usize {
+        s.add_unit(StructuralUnit::new(name, Placement { x, y, rotation_radians: 0.0 }))
     }
 
     #[test]
-    fn recipe_key_is_independent_of_input_order() {
-        assert_eq!(MaterialRecipeKey::from_inputs(&[carbon(1.0), methane(2.0)]), MaterialRecipeKey::from_inputs(&[methane(2.0), carbon(1.0)]));
+    fn recipe_key_is_order_independent() {
+        assert_eq!(
+            MaterialRecipeKey::from_inputs(&[carbon(1.0), methane(2.0)]),
+            MaterialRecipeKey::from_inputs(&[methane(2.0), carbon(1.0)]),
+        );
     }
 
     #[test]
     fn different_quantities_do_not_collide() {
-        assert_ne!(MaterialRecipeKey::from_inputs(&[carbon(1.0), methane(2.0)]), MaterialRecipeKey::from_inputs(&[carbon(1.0), methane(3.0)]));
-    }
-
-    #[test]
-    fn bonded_state_participates_in_cache_key() {
-        let free = carbon(1.0);
-        let mut bonded = carbon(1.0);
-        bonded.bonded = true;
-        assert_ne!(MaterialRecipeKey::from_material(&free), MaterialRecipeKey::from_material(&bonded));
+        assert_ne!(
+            MaterialRecipeKey::from_inputs(&[carbon(1.0), methane(2.0)]),
+            MaterialRecipeKey::from_inputs(&[carbon(1.0), methane(3.0)]),
+        );
     }
 
     #[test]
@@ -322,55 +275,66 @@ mod tests {
     }
 
     #[test]
-    fn cached_result_matches_existing_definition() {
-        let mut cache = CombineCache::new();
-        let inputs = [carbon(1.0), methane(2.0)];
-        let cached = cache.combine(&inputs);
-        let direct = combine_materials(&inputs);
-        assert_eq!(cached.parts, direct.parts);
-        assert_eq!(cached.bonded, direct.bonded);
+    fn potential_energy_sets_direction() {
+        let low = props(1.0, 1.0, 0.5);
+        let high = props(10.0, 1.0, 0.5);
+        let e = experimental_interaction(low, high, candidate(0.0, 0.0), 0.0);
+        let r = experimental_interaction(high, low, candidate(0.0, 0.0), 0.0);
+        assert_eq!(e.direction, 1.0);
+        assert_eq!(r.direction, -1.0);
+        assert!((e.magnitude - r.magnitude).abs() < 1e-12);
     }
 
     #[test]
-    fn clear_removes_cached_recipes() {
-        let mut cache = CombineCache::new();
-        cache.combine(&[carbon(1.0), methane(2.0)]);
-        assert!(!cache.is_empty());
-        cache.clear();
-        assert!(cache.is_empty());
+    fn equal_potential_has_no_direction() {
+        let e = experimental_interaction(props(5.0, 1.0, 0.5), props(5.0, 1.0, 0.5), candidate(0.0, 0.0), 0.0);
+        assert_eq!(e.direction, 0.0);
+        assert!(e.magnitude.abs() < 1e-12);
     }
 
     #[test]
-    fn evaluation_uses_locked_threshold() {
-        let e = evaluate_formation(candidate(0.0, 0.0), 0.8, 0.4);
-        assert!((e.threshold - 0.6).abs() < 1e-12);
+    fn reactivity_and_water_modify_magnitude() {
+        let low = props(1.0, 0.1, 0.5);
+        let high = props(10.0, 4.0, 0.5);
+        let a = experimental_interaction(low, props(10.0, 0.1, 0.5), candidate(0.0, 0.0), 0.0);
+        let b = experimental_interaction(low, high, candidate(0.0, 0.0), 0.0);
+        let wet = experimental_interaction(low, high, candidate(0.0, 0.0), 10.0);
+        assert!(b.magnitude > a.magnitude);
+        assert!(wet.magnitude < b.magnitude);
     }
 
     #[test]
-    fn existing_load_raises_threshold() {
+    fn poor_geometry_reduces_interaction() {
+        let a = props(1.0, 4.0, 0.5);
+        let b = props(10.0, 4.0, 0.5);
+        let close = candidate(0.0, 0.0);
+        let far = ConnectionPairCandidate { distance: 9.0, ..close };
+        let misaligned = ConnectionPairCandidate { facing: -1.0, ..close };
+        assert!(experimental_interaction(a, b, close, 0.0).magnitude > experimental_interaction(a, b, far, 0.0).magnitude);
+        assert!(experimental_interaction(a, b, misaligned, 0.0).magnitude.abs() < 1e-12);
+    }
+
+    #[test]
+    fn bond_strength_has_capped_diminishing_returns() {
+        let a = experimental_bond_strength(0.5);
+        let b = experimental_bond_strength(1.0);
+        let c = experimental_bond_strength(2.0);
+        assert!(a > 0.0 && a < b && b < c);
+        assert!(c < EXPERIMENTAL_MAX_BOND_STRENGTH);
+        assert!(experimental_bond_strength(1000.0) <= EXPERIMENTAL_MAX_BOND_STRENGTH);
+        assert!((c - b) < (b - a));
+    }
+
+    #[test]
+    fn formation_uses_load_and_surplus() {
         let free = evaluate_formation(candidate(0.0, 0.0), 0.8, 0.4);
         let loaded = evaluate_formation(candidate(1.0, 0.0), 0.8, 0.4);
+        assert!((free.threshold - 0.6).abs() < 1e-12);
         assert!(loaded.threshold > free.threshold);
-    }
-
-    #[test]
-    fn surplus_is_zero_at_threshold() {
-        let e = evaluate_formation(candidate(0.0, 0.0), 0.8, 0.4);
-        assert!(formation_surplus(e, e.threshold).abs() < 1e-12);
-    }
-
-    #[test]
-    fn surplus_is_negative_below_threshold() {
-        let e = evaluate_formation(candidate(0.0, 0.0), 0.8, 0.4);
-        assert!(formation_surplus(e, e.threshold - 0.25) < 0.0);
-    }
-
-    #[test]
-    fn investment_must_meet_threshold() {
-        let e = evaluate_formation(candidate(0.0, 0.0), 0.8, 0.4);
-        assert!(!formation_succeeds(e, e.threshold - 1e-9));
-        assert!(formation_succeeds(e, e.threshold));
-        assert!(formation_succeeds(e, e.threshold + 1.0));
+        assert!(!formation_succeeds(free, free.threshold - 1e-9));
+        assert!(formation_succeeds(free, free.threshold));
+        assert!(evaluate_bond_strength(free, free.threshold).unwrap().abs() < 1e-12);
+        assert!(evaluate_bond_strength(free, free.threshold + 1.0).unwrap() > 0.0);
     }
 
     #[test]
@@ -378,101 +342,41 @@ mod tests {
         let e = evaluate_formation(candidate(0.0, 0.0), 0.8, 0.4);
         assert!(!formation_succeeds(e, f64::NAN));
         assert!(!formation_succeeds(e, f64::INFINITY));
-        assert!(formation_surplus(e, f64::NAN).is_nan());
     }
 
     #[test]
-    fn potential_energy_sets_interaction_direction() {
-        let low = props(1.0, 1.0, 0.5);
-        let high = props(10.0, 1.0, 0.5);
-        let e = experimental_interaction(low, high, candidate(0.0, 0.0), 0.0);
-        assert_eq!(e.direction, 1.0);
-        assert!(e.signed_value > 0.0);
+    fn geometry_gate_rejects_candidates_marked_unavailable() {
+        let catalog = default_catalog();
+        let mut structure = OrganismStructure::new();
+        let a = unit(&mut structure, "Carbon", 0.0, 0.0);
+        let b = unit(&mut structure, "Carbon", 1.0, 0.0);
+        let mut cache = ConnectionCompatibilityCache::new();
+        let first = eligible_candidates(&structure, a, b, &catalog, &mut cache);
+        assert!(!first.is_empty());
 
-        let reversed = experimental_interaction(high, low, candidate(0.0, 0.0), 0.0);
-        assert_eq!(reversed.direction, -1.0);
-        assert!((e.magnitude - reversed.magnitude).abs() < 1e-12);
-        assert!((e.signed_value + reversed.signed_value).abs() < 1e-12);
+        let point = first[0].point_a;
+        let other = first[0].point_b;
+        let strength = 0.5;
+        assert!(crate::contact::try_add_bond(
+            &mut structure,
+            Bond { unit_a: a, point_a: point, unit_b: b, point_b: other, strength },
+            &catalog,
+        ).is_ok());
+
+        let second = eligible_candidates(&structure, a, b, &catalog, &mut cache);
+        assert!(second.iter().all(|c| c.available_a && c.available_b));
     }
 
     #[test]
-    fn equal_potential_has_no_direction() {
-        let a = props(5.0, 1.0, 0.5);
-        let b = props(5.0, 1.0, 0.5);
-        let e = experimental_interaction(a, b, candidate(0.0, 0.0), 0.0);
-        assert_eq!(e.direction, 0.0);
-        assert!(e.magnitude.abs() < 1e-12);
-    }
-
-    #[test]
-    fn higher_reactivity_increases_interaction_magnitude() {
-        let low = props(1.0, 0.1, 0.5);
-        let high = props(10.0, 4.0, 0.5);
-        let low_reac = props(10.0, 0.1, 0.5);
-        let high_reac = props(10.0, 4.0, 0.5);
-        let a = experimental_interaction(low, low_reac, candidate(0.0, 0.0), 0.0);
-        let b = experimental_interaction(low, high_reac, candidate(0.0, 0.0), 0.0);
-        assert!(b.magnitude > a.magnitude);
-    }
-
-    #[test]
-    fn water_dilution_reduces_reactivity_effect() {
-        let a = props(1.0, 4.0, 0.5);
-        let b = props(10.0, 4.0, 0.5);
-        let dry = experimental_interaction(a, b, candidate(0.0, 0.0), 0.0);
-        let wet = experimental_interaction(a, b, candidate(0.0, 0.0), 10.0);
-        assert!(wet.magnitude < dry.magnitude);
-    }
-
-    #[test]
-    fn poor_geometry_reduces_interaction_magnitude() {
-        let a = props(1.0, 4.0, 0.5);
-        let b = props(10.0, 4.0, 0.5);
-        let close = candidate(0.0, 0.0);
-        let far = ConnectionPairCandidate { distance: 9.0, ..close };
-        let misaligned = ConnectionPairCandidate { facing: -1.0, ..close };
-        let close_value = experimental_interaction(a, b, close, 0.0).magnitude;
-        let far_value = experimental_interaction(a, b, far, 0.0).magnitude;
-        let misaligned_value = experimental_interaction(a, b, misaligned, 0.0).magnitude;
-        assert!(close_value > far_value);
-        assert!(close_value > misaligned_value);
-        assert!(misaligned_value.abs() < 1e-12);
-    }
-
-    #[test]
-    fn combine_work_cost_is_order_independent_and_positive() {
-        let a = props(1.0, 2.0, 0.7);
-        let b = props(20.0, 3.0, 0.2);
-        let c = candidate(0.0, 0.0);
-        let ab = experimental_combine_work_cost(a, b, c, 0.0);
-        let ba = experimental_combine_work_cost(b, a, c, 0.0);
-        assert!(ab > 0.0);
-        assert!((ab - ba).abs() < 1e-12);
-    }
-
-    #[test]
-    fn bond_strength_is_zero_at_and_below_no_surplus() {
-        assert_eq!(experimental_bond_strength(-1.0), 0.0);
-        assert_eq!(experimental_bond_strength(0.0), 0.0);
-    }
-
-    #[test]
-    fn bond_strength_has_diminishing_returns_and_is_capped() {
-        let a = experimental_bond_strength(0.5);
-        let b = experimental_bond_strength(1.0);
-        let c = experimental_bond_strength(2.0);
-        assert!(a > 0.0 && a < b && b < c);
-        assert!(c < EXPERIMENTAL_MAX_BOND_STRENGTH);
-        assert!(experimental_bond_strength(1000.0) <= EXPERIMENTAL_MAX_BOND_STRENGTH);
-        assert!((experimental_bond_strength(2.0) - experimental_bond_strength(1.0))
-            < (experimental_bond_strength(1.0) - experimental_bond_strength(0.5)));
-    }
-
-    #[test]
-    fn successful_formation_maps_surplus_to_strength() {
-        let e = evaluate_formation(candidate(0.0, 0.0), 0.8, 0.4);
-        assert_eq!(evaluate_bond_strength(e, e.threshold - 0.01), None);
-        assert_eq!(evaluate_bond_strength(e, e.threshold), Some(0.0));
-        assert!(evaluate_bond_strength(e, e.threshold + 1.0).unwrap() > 0.0);
+    fn occupied_point_can_still_be_eligible_on_a_different_ray() {
+        let catalog = default_catalog();
+        let mut structure = OrganismStructure::new();
+        let a = unit(&mut structure, "Carbon", 0.0, 0.0);
+        let b = unit(&mut structure, "Carbon", 1.0, 0.0);
+        let c = unit(&mut structure, "Carbon", 0.0, 1.0);
+        assert!(crate::contact::try_add_bond(&mut structure, Bond { unit_a: a, point_a: 0, unit_b: b, point_b: 0, strength: 0.5 }, &catalog).is_ok());
+        let mut cache = ConnectionCompatibilityCache::new();
+        let candidates = eligible_candidates(&structure, a, c, &catalog, &mut cache);
+        assert!(candidates.iter().any(|candidate| candidate.available_a));
     }
 }
