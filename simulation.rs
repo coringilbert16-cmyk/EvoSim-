@@ -182,10 +182,7 @@ impl Simulation {
     }
 
     fn decision_candidates(organism: &Organism) -> Vec<ActionCandidate> {
-        let mut candidates = vec![ActionCandidate {
-            action: ActionKind::Move,
-            context_key: None,
-        }];
+        let mut candidates = Vec::new();
 
         if let Some(target) = organism
             .resource_sense
@@ -208,6 +205,10 @@ impl Simulation {
             });
         }
 
+        candidates.push(ActionCandidate {
+            action: ActionKind::Move,
+            context_key: None,
+        });
         candidates
     }
 
