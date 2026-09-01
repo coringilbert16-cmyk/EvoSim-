@@ -1,0 +1,1 @@
+Phase 6 structural bond representation: Bond contains explicit bond_energy independent of bond strength. This marker is intentionally temporary and documents the completed representation change.
