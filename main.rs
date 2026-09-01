@@ -1709,7 +1709,7 @@ async fn handle_socket(
                 rx.recv().await
             {
                 if sender
-                    .send(Message::Text(message))
+                    .send(Message::Text(message.into()))
                     .await
                     .is_err()
                 {

@@ -120,6 +120,58 @@ impl ActiveMaterialField {
         ((col as f64 + 0.5) * self.cell_size, (row as f64 + 0.5) * self.cell_size)
     }
 
+    /// Return field cells whose centers fall within the supplied Euclidean
+    /// perception radius of a world-space point. The returned indices are
+    /// always valid field indices and are ordered row-major by the grid.
+    /// Invalid/non-finite inputs return an empty set rather than risking an
+    /// out-of-bounds conversion.
+    pub fn cells_within_radius(&self, x: f64, y: f64, radius: f64) -> Vec<usize> {
+        if !x.is_finite() || !y.is_finite() || !radius.is_finite() || radius < 0.0 {
+            return Vec::new();
+        }
+
+        if self.cells.is_empty() || self.width_cells == 0 || self.height_cells == 0 {
+            return Vec::new();
+        }
+
+        let min_x = (x - radius).max(0.0);
+        let max_x = x + radius;
+        let min_y = (y - radius).max(0.0);
+        let max_y = y + radius;
+
+        let min_col = (min_x / self.cell_size).floor() as usize;
+        let max_col = ((max_x / self.cell_size).floor() as usize)
+            .min(self.width_cells.saturating_sub(1));
+        let min_row = (min_y / self.cell_size).floor() as usize;
+        let max_row = ((max_y / self.cell_size).floor() as usize)
+            .min(self.height_cells.saturating_sub(1));
+
+        if min_col >= self.width_cells
+            || min_row >= self.height_cells
+            || min_col > max_col
+            || min_row > max_row
+        {
+            return Vec::new();
+        }
+
+        let radius_squared = radius * radius;
+        let mut indices = Vec::new();
+
+        for row in min_row..=max_row {
+            for col in min_col..=max_col {
+                let index = row * self.width_cells + col;
+                let (cell_x, cell_y) = self.cell_center(index);
+                let dx = cell_x - x;
+                let dy = cell_y - y;
+                if dx * dx + dy * dy <= radius_squared {
+                    indices.push(index);
+                }
+            }
+        }
+
+        indices
+    }
+
     pub fn neighbor_indices(&self, index: usize) -> Vec<usize> {
         let (row, col) = self.row_col_for_index(index);
         let mut out = Vec::with_capacity(4);
@@ -507,6 +559,23 @@ mod field_tests {
         assert!((taken.total_amount() - 4.0).abs() < 1e-9);
         let index = field.index_for_position(50.0, 50.0).unwrap();
         assert!((field.cells[index].unbonded.total_amount() - 9.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn cells_within_radius_returns_only_cells_inside_radius() {
+        let field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+        let cells = field.cells_within_radius(37.5, 37.5, 1.0);
+        assert_eq!(cells, vec![5]);
+    }
+
+    #[test]
+    fn cells_within_radius_handles_grid_edges_and_invalid_input() {
+        let field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+        let cells = field.cells_within_radius(0.0, 0.0, 20.0);
+        assert!(cells.contains(&0));
+        assert!(cells.iter().all(|&i| i < field.cells.len()));
+        assert!(field.cells_within_radius(f64::NAN, 0.0, 10.0).is_empty());
+        assert!(field.cells_within_radius(0.0, 0.0, -1.0).is_empty());
     }
 
     #[test]
