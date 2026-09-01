@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod integration_tests {
+    use crate::decision::{ActionKind, OutcomeKind};
     use crate::resources::Material;
     use crate::state::Simulation;
 
@@ -8,6 +9,7 @@ mod integration_tests {
         let organism = Simulation::create_initial_organism();
         assert!(organism.structure.units.is_empty());
         assert!(organism.structure.bonds.is_empty());
+        assert!(organism.decision_history.entries.is_empty());
     }
 
     #[test]
@@ -63,7 +65,7 @@ mod integration_tests {
     }
 
     #[test]
-    fn organism_can_break_bonded_material_once_available() {
+    fn organism_can_break_bonded_material_once_available_and_records_outcome() {
         let mut sim = Simulation::new(7, 10.0);
         let (px, py) = {
             let p = &sim.organisms[0].occupied_cells[0];
@@ -84,6 +86,30 @@ mod integration_tests {
             }
         }
         assert!(ever_gained_energy);
+        assert!(sim.organisms[0].decision_history.has_knowledge(
+            ActionKind::Break,
+            Some("Methane")
+        ));
+        assert!(matches!(
+            sim.organisms[0].decision_history.outcome(ActionKind::Break, Some("Methane")),
+            Some(OutcomeKind::Beneficial | OutcomeKind::Neutral | OutcomeKind::Harmful)
+        ));
+    }
+
+    #[test]
+    fn movement_records_an_actual_physical_outcome() {
+        let mut sim = Simulation::new(11, 10.0);
+        for _ in 0..50 {
+            sim.step();
+        }
+        let entry = sim.organisms[0]
+            .decision_history
+            .entries
+            .iter()
+            .find(|entry| entry.action == ActionKind::Move)
+            .expect("MOVE should have an executed outcome");
+        assert!(entry.count > 0);
+        assert_eq!(entry.context_key, None);
     }
 
     #[test]
