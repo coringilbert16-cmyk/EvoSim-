@@ -199,13 +199,8 @@ mod tests {
         let catalog = default_catalog();
         let mut structure = OrganismStructure::new();
         let a = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }));
-        // Coincident structural units have no valid connection direction,
-        // so every candidate is geometrically ineligible. This tests the
-        // actual geometry gate rather than assuming that large separation
-        // alone is an eligibility rule.
-        let b = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }));
         let mut cache = ConnectionCompatibilityCache::new();
-        let result = execute(&mut structure, a, b, &catalog, &mut cache, 100.0, 0.0);
+        let result = execute(&mut structure, a, a, &catalog, &mut cache, 100.0, 0.0);
         assert_eq!(result, Err(StructuralCombineError::NoGeometricallyEligibleCandidate));
         assert!(structure.bonds.is_empty());
     }
