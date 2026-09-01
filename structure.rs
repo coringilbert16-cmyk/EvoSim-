@@ -138,7 +138,9 @@ impl OrganismStructure {
     pub fn available_connection_sites(&self, catalog: &[BaseResource]) -> Vec<ConnectionSiteRef> {
         let mut sites = Vec::new();
         for unit_index in 0..self.units.len() {
-            let Some(ConnectionSites::Corners(points)) = self.units[unit_index].connection_sites(catalog) else {
+            let Some(ConnectionSites::Corners(points)) =
+                self.units[unit_index].connection_sites(catalog)
+            else {
                 continue;
             };
             for point_index in 0..points.len() {
@@ -304,9 +306,22 @@ mod tests {
         let catalog = crate::resources::default_catalog();
         let mut s = OrganismStructure::new();
         let i = unit(&mut s, "Carbon", 0.0, 0.0);
-        let point = s.connection_site(ConnectionSiteRef { unit_index: i, point_index: 0 }, &catalog);
+        let point = s.connection_site(
+            ConnectionSiteRef {
+                unit_index: i,
+                point_index: 0,
+            },
+            &catalog,
+        );
         assert!(point.is_some());
-        assert_eq!(point.unwrap(), ConnectionPoint { x: 1.0, y: 0.0, direction_radians: 0.0 });
+        assert_eq!(
+            point.unwrap(),
+            ConnectionPoint {
+                x: 1.0,
+                y: 0.0,
+                direction_radians: 0.0
+            }
+        );
     }
 
     #[test]
@@ -318,10 +333,22 @@ mod tests {
         s.add_bond(bond(a, 0, b, 0, 0.5, 2.0));
 
         let sites = s.available_connection_sites(&catalog);
-        assert!(!sites.contains(&ConnectionSiteRef { unit_index: a, point_index: 0 }));
-        assert!(!sites.contains(&ConnectionSiteRef { unit_index: b, point_index: 0 }));
-        assert!(sites.contains(&ConnectionSiteRef { unit_index: a, point_index: 1 }));
-        assert!(sites.contains(&ConnectionSiteRef { unit_index: b, point_index: 1 }));
+        assert!(!sites.contains(&ConnectionSiteRef {
+            unit_index: a,
+            point_index: 0
+        }));
+        assert!(!sites.contains(&ConnectionSiteRef {
+            unit_index: b,
+            point_index: 0
+        }));
+        assert!(sites.contains(&ConnectionSiteRef {
+            unit_index: a,
+            point_index: 1
+        }));
+        assert!(sites.contains(&ConnectionSiteRef {
+            unit_index: b,
+            point_index: 1
+        }));
     }
 
     #[test]
@@ -367,9 +394,17 @@ mod tests {
         let first_sites = s.component_connection_sites(&components[0], &catalog);
         let second_sites = s.component_connection_sites(&components[1], &catalog);
 
-        assert!(!first_sites.contains(&ConnectionSiteRef { unit_index: a, point_index: 0 }));
-        assert!(!first_sites.contains(&ConnectionSiteRef { unit_index: b, point_index: 0 }));
-        assert!(first_sites.iter().all(|site| site.unit_index == a || site.unit_index == b));
+        assert!(!first_sites.contains(&ConnectionSiteRef {
+            unit_index: a,
+            point_index: 0
+        }));
+        assert!(!first_sites.contains(&ConnectionSiteRef {
+            unit_index: b,
+            point_index: 0
+        }));
+        assert!(first_sites
+            .iter()
+            .all(|site| site.unit_index == a || site.unit_index == b));
         assert!(second_sites.iter().all(|site| site.unit_index == c));
     }
 
