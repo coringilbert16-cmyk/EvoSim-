@@ -164,8 +164,10 @@ impl Simulation {
         CurrentNeeds {
             energy: organism.usable_energy < parameters.energy_need_threshold,
             material: raw_material < parameters.raw_material_need_threshold,
-            construction: raw_material >= parameters.construction_material_threshold
-                && organism.structure.units.is_empty(),
+            // Structural construction remains relevant once an organism has
+            // multiple structural units that can be assembled. The decision
+            // layer does not evaluate the chemistry or geometry of that work.
+            construction: organism.structure.units.len() >= 2,
             relief: organism.stress >= parameters.stress_relief_threshold,
             exploration: organism.resource_sense.sensed_resources.is_empty(),
         }
