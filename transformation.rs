@@ -2,7 +2,7 @@ use crate::decision::{ActionKind, OutcomeKind};
 use crate::decision_runtime::ActionCandidate;
 use crate::state::{
     ActiveTransformation, EnergyLedger, Environment, Organism, Simulation,
-    PROCESSING_REACH, STRESS_DECAY_PER_TICK,
+    STRESS_DECAY_PER_TICK,
 };
 
 impl Simulation {
@@ -25,14 +25,15 @@ impl Simulation {
         // BREAK acts on an existing structural bond. It does not remove bulk
         // field material and it never recomputes energy from raw resource
         // potential energy. The bond itself carries the stored energetic state.
-        let duration = 1_u64.max(crate::math::complexity(2.0).ceil() as u64);
+        let complexity = crate::math::complexity(2.0);
+        let duration = 1_u64.max(complexity.ceil() as u64);
         let transformation = ActiveTransformation {
             id: *next_id,
             organism_id: organism.id.clone(),
             kind: crate::state::TransformationKind::Break,
             material: crate::resources::Material { parts: Vec::new(), bonded: true },
             bond: Some(bond),
-            complexity: crate::math::complexity(2.0),
+            complexity,
             duration_ticks: duration,
             remaining_ticks: duration,
             decision_context_key: decision.context_key.clone(),
@@ -142,13 +143,11 @@ mod tests {
     }
 
     #[test]
-    fn break_does_not_fall_back_to_raw_material_potential_energy() {
+    fn break_does_not_start_without_a_structural_bond() {
         let mut o = organism();
-        let a = o.structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }));
-        let b = o.structure.add_unit(StructuralUnit::new("Methane", Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 }));
+        o.structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }));
+        o.structure.add_unit(StructuralUnit::new("Methane", Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 }));
         let decision = ActionCandidate { action: ActionKind::Break, context_key: Some("bond:0".into()) };
         assert!(Simulation::try_start_transformation(&mut o, &mut 1, &decision).is_none());
-        assert_eq!(a, 0);
-        assert_eq!(b, 1);
     }
 }
