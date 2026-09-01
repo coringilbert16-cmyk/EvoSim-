@@ -63,11 +63,7 @@ pub fn execute(
 
     let candidate = *connection_pair_candidates_cached(structure, unit_a, unit_b, catalog, cache)
         .iter()
-        .filter(|c| {
-            c.distance <= COMBINE_CONTACT_TOLERANCE
-                && c.available_a
-                && c.available_b
-        })
+        .filter(|c| c.distance <= COMBINE_CONTACT_TOLERANCE && c.available_a && c.available_b)
         .max_by(|a, b| {
             a.facing
                 .partial_cmp(&b.facing)
