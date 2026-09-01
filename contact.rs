@@ -8,8 +8,9 @@
 use std::collections::HashMap;
 
 use crate::connection_geometry::{
-    facing_compatibility, point_distance, transform_connection_point, WorldConnectionPoint,
+    facing_compatibility, point_distance, transform_connection_point,
 };
+pub use crate::connection_geometry::WorldConnectionPoint;
 use crate::environment::ActiveMaterialField;
 use crate::resources::{BaseResource, ConnectionPoint, ConnectionSites};
 use crate::structure::{OrganismStructure, StructuralUnit};
@@ -26,8 +27,6 @@ pub struct AccessibleFieldMaterial {
     pub field_index: usize,
     pub bonded: bool,
 }
-
-pub use crate::connection_geometry::WorldConnectionPoint;
 
 fn transform_point(point: ConnectionPoint, unit: &StructuralUnit) -> WorldConnectionPoint {
     transform_connection_point(
