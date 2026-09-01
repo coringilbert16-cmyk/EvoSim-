@@ -15,7 +15,6 @@ mod integration_tests {
         let mut organism = Simulation::create_initial_organism();
         organism.store_unbonded_material(Material { parts: vec![("Carbon".into(), 5.0)], bonded: false });
         assert!((organism.stored_unbonded.total_amount() - 5.0).abs() < 1e-9);
-
         organism.store_unbonded_material(Material { parts: vec![("Carbon".into(), 3.0)], bonded: true });
         assert!((organism.stored_unbonded.total_amount() - 5.0).abs() < 1e-9);
         assert!(organism.structure.units.is_empty());
@@ -28,7 +27,6 @@ mod integration_tests {
             "Carbon",
             crate::structure::Placement { x: 500.0, y: 500.0, rotation_radians: 0.0 },
         ));
-
         let before = sim.total_material_in_system();
         for _ in 0..500 { sim.step(); }
         let after = sim.total_material_in_system();
@@ -46,9 +44,9 @@ mod integration_tests {
 
     #[test]
     fn no_resource_cloud_pathway_exists() {
-        let env = Simulation::create_environment_for_test();
-        assert!(!env.field.cells.is_empty());
-        assert!(!env.reservoir.cells.is_empty());
+        let sim = Simulation::new(1, 10.0);
+        assert!(!sim.environment.field.cells.is_empty());
+        assert!(!sim.environment.reservoir.cells.is_empty());
     }
 
     #[test]
@@ -71,14 +69,10 @@ mod integration_tests {
             let p = &sim.organisms[0].occupied_cells[0];
             (p.x, p.y)
         };
-
         sim.environment.field.deposit(
             px,
             py,
-            Material {
-                parts: vec![("Methane".into(), 50.0)],
-                bonded: true,
-            },
+            Material { parts: vec![("Methane".into(), 50.0)], bonded: true },
         );
 
         let mut ever_gained_energy = false;
