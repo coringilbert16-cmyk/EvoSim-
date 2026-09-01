@@ -1,7 +1,7 @@
 use axum::{
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
     extract::State,
-    response::IntoResponse,
+    response::{Html, IntoResponse},
     routing::get,
     Json, Router,
 };
@@ -41,6 +41,10 @@ pub(crate) fn start_tick_loop(
             }
         }
     });
+}
+
+async fn index_handler() -> impl IntoResponse {
+    Html(include_str!("ui/index.html"))
 }
 
 async fn snapshot_handler(State(state): State<AppState>) -> impl IntoResponse {
@@ -85,6 +89,7 @@ pub(crate) async fn run() {
     start_tick_loop(simulation, tx);
 
     let app = Router::new()
+        .route("/", get(index_handler))
         .route("/snapshot", get(snapshot_handler))
         .route("/ws", get(ws_handler))
         .with_state(state)
