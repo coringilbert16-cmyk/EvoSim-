@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
+use crate::decision::DecisionHistory;
 use crate::environment::{ActiveMaterialField, DeepReservoir, Vent};
 use crate::genome::Genome;
 use crate::resources::{BaseResource, Material};
@@ -114,6 +115,7 @@ pub(crate) struct Organism {
     pub(crate) genome: Genome,
     pub(crate) resource_sense: ResourceSense,
     pub(crate) memory: Vec<MemoryPoint>,
+    pub(crate) decision_history: DecisionHistory,
     pub(crate) usable_energy: f64,
     pub(crate) stress: f64,
     pub(crate) stored_unbonded: Material,
