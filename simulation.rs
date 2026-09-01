@@ -175,7 +175,8 @@ impl Simulation {
         ActionEligibility {
             can_move: organism.active_transformation_id.is_none(),
             can_acquire: false,
-            can_combine: false,
+            can_combine: organism.active_transformation_id.is_none()
+                && organism.structure.units.len() >= 2,
             can_break: organism.active_transformation_id.is_none()
                 && !organism.structure.bonds.is_empty(),
             can_expel: false,
@@ -196,6 +197,12 @@ impl Simulation {
                         context_key: Some(format!("bond:{index}")),
                     }),
             );
+        }
+        if organism.structure.units.len() >= 2 {
+            candidates.push(ActionCandidate {
+                action: ActionKind::Combine,
+                context_key: None,
+            });
         }
         candidates.push(ActionCandidate {
             action: ActionKind::Move,
@@ -246,6 +253,7 @@ impl Simulation {
 
         let decision_parameters = self.decision_parameters;
         let (organisms, environment) = (&mut self.organisms, &mut self.environment);
+        let mut compatibility_cache = crate::contact::ConnectionCompatibilityCache::new();
         for organism in organisms {
             let context = DecisionContext {
                 needs: Self::current_needs(organism, decision_parameters),
@@ -270,6 +278,23 @@ impl Simulation {
                         },
                     );
                 }
+                ActionKind::Combine => {
+                    let combined = crate::combine_runtime::try_combine(
+                        organism,
+                        environment,
+                        &mut compatibility_cache,
+                    )
+                    .is_some();
+                    crate::decision_runtime::record_outcome(
+                        &mut organism.decision_history,
+                        &selected,
+                        if combined {
+                            crate::decision::OutcomeKind::Neutral
+                        } else {
+                            crate::decision::OutcomeKind::Harmful
+                        },
+                    );
+                }
                 ActionKind::Break => {
                     if let Some(transformation) = Self::try_start_transformation(
                         organism,
@@ -279,7 +304,7 @@ impl Simulation {
                         self.active_transformations.push(transformation);
                     }
                 }
-                ActionKind::Acquire | ActionKind::Combine | ActionKind::Expel => {
+                ActionKind::Acquire | ActionKind::Expel => {
                     // These actions remain mechanically unavailable until their
                     // physical executors are integrated.
                 }
