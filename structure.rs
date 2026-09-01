@@ -1,4 +1,4 @@
-use crate::resources::{BaseResource, ConnectionSites, ResourceProperties};
+use crate::resources::{BaseResource, ConnectionPoint, ConnectionSites, ResourceProperties};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
@@ -32,6 +32,18 @@ impl StructuralUnit {
             .find(|b| b.name == self.resource_name)
             .map(|b| b.shape.connection_sites())
     }
+}
+
+/// Identity of a discrete connection point belonging to a structural unit.
+///
+/// Connection points are intrinsic to the immutable base-resource geometry,
+/// so a complex structure does not create or store a second set of aggregate
+/// points. The pair `(unit_index, point_index)` remains the authoritative
+/// identity of every discrete connection site.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ConnectionSiteRef {
+    pub unit_index: usize,
+    pub point_index: usize,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
@@ -101,6 +113,104 @@ impl OrganismStructure {
                 })
         })
     }
+
+    /// Return a discrete connection point by its structural identity.
+    ///
+    /// The point is derived from the base resource catalog and is not stored
+    /// separately on the structure. This keeps complex-material geometry
+    /// grounded in the constituent units' immutable physical geometry.
+    pub fn connection_site(
+        &self,
+        site: ConnectionSiteRef,
+        catalog: &[BaseResource],
+    ) -> Option<ConnectionPoint> {
+        let unit = self.units.get(site.unit_index)?;
+        match unit.connection_sites(catalog)? {
+            ConnectionSites::Corners(points) => points.get(site.point_index).copied(),
+            ConnectionSites::Circumference { .. } | ConnectionSites::Undetermined => None,
+        }
+    }
+
+    /// Return every intrinsic discrete connection point that is not occupied
+    /// by a bond. A point remains available regardless of which connected
+    /// component its unit belongs to; physical distance/facing eligibility is
+    /// evaluated separately by the contact/geometry system.
+    pub fn available_connection_sites(&self, catalog: &[BaseResource]) -> Vec<ConnectionSiteRef> {
+        let mut sites = Vec::new();
+        for unit_index in 0..self.units.len() {
+            let Some(ConnectionSites::Corners(points)) = self.units[unit_index].connection_sites(catalog) else {
+                continue;
+            };
+            for point_index in 0..points.len() {
+                if self.connection_count(unit_index, point_index) == 0 {
+                    sites.push(ConnectionSiteRef {
+                        unit_index,
+                        point_index,
+                    });
+                }
+            }
+        }
+        sites
+    }
+
+    /// Derive the connected components of the structural graph from bonds.
+    ///
+    /// Units are graph nodes and bonds are edges. Components are therefore
+    /// not persisted as duplicate state: breaking or forming a bond changes
+    /// component membership automatically on the next query.
+    pub fn connected_components(&self) -> Vec<Vec<usize>> {
+        let mut adjacency = vec![Vec::<usize>::new(); self.units.len()];
+        for bond in &self.bonds {
+            if bond.unit_a >= self.units.len() || bond.unit_b >= self.units.len() {
+                continue;
+            }
+            adjacency[bond.unit_a].push(bond.unit_b);
+            adjacency[bond.unit_b].push(bond.unit_a);
+        }
+
+        let mut visited = vec![false; self.units.len()];
+        let mut components = Vec::new();
+
+        for start in 0..self.units.len() {
+            if visited[start] {
+                continue;
+            }
+
+            let mut stack = vec![start];
+            visited[start] = true;
+            let mut component = Vec::new();
+
+            while let Some(unit) = stack.pop() {
+                component.push(unit);
+                for &neighbor in &adjacency[unit] {
+                    if !visited[neighbor] {
+                        visited[neighbor] = true;
+                        stack.push(neighbor);
+                    }
+                }
+            }
+
+            component.sort_unstable();
+            components.push(component);
+        }
+
+        components
+    }
+
+    /// Return the unoccupied discrete connection sites belonging to a
+    /// particular connected component.
+    pub fn component_connection_sites(
+        &self,
+        component: &[usize],
+        catalog: &[BaseResource],
+    ) -> Vec<ConnectionSiteRef> {
+        let component_set: std::collections::HashSet<usize> = component.iter().copied().collect();
+        self.available_connection_sites(catalog)
+            .into_iter()
+            .filter(|site| component_set.contains(&site.unit_index))
+            .collect()
+    }
+
     pub fn connection_load(&self, unit: usize, point: usize) -> f64 {
         self.bonds
             .iter()
@@ -188,6 +298,81 @@ mod tests {
             other => panic!("expected corners, got {other:?}"),
         }
     }
+
+    #[test]
+    fn connection_site_identity_is_derived_from_unit_and_point_index() {
+        let catalog = crate::resources::default_catalog();
+        let mut s = OrganismStructure::new();
+        let i = unit(&mut s, "Carbon", 0.0, 0.0);
+        let point = s.connection_site(ConnectionSiteRef { unit_index: i, point_index: 0 }, &catalog);
+        assert!(point.is_some());
+        assert_eq!(point.unwrap(), ConnectionPoint { x: 1.0, y: 0.0, direction_radians: 0.0 });
+    }
+
+    #[test]
+    fn available_connection_sites_exclude_occupied_points() {
+        let catalog = crate::resources::default_catalog();
+        let mut s = OrganismStructure::new();
+        let a = unit(&mut s, "Carbon", 0.0, 0.0);
+        let b = unit(&mut s, "Methane", 1.0, 0.0);
+        s.add_bond(bond(a, 0, b, 0, 0.5, 2.0));
+
+        let sites = s.available_connection_sites(&catalog);
+        assert!(!sites.contains(&ConnectionSiteRef { unit_index: a, point_index: 0 }));
+        assert!(!sites.contains(&ConnectionSiteRef { unit_index: b, point_index: 0 }));
+        assert!(sites.contains(&ConnectionSiteRef { unit_index: a, point_index: 1 }));
+        assert!(sites.contains(&ConnectionSiteRef { unit_index: b, point_index: 1 }));
+    }
+
+    #[test]
+    fn connected_components_form_from_bond_graph() {
+        let mut s = OrganismStructure::new();
+        let a = unit(&mut s, "Carbon", 0.0, 0.0);
+        let b = unit(&mut s, "Methane", 1.0, 0.0);
+        let c = unit(&mut s, "Carbon", 2.0, 0.0);
+        let d = unit(&mut s, "Methane", 10.0, 0.0);
+        s.add_bond(bond(a, 0, b, 0, 0.5, 2.0));
+        s.add_bond(bond(b, 1, c, 0, 0.5, 3.0));
+
+        let components = s.connected_components();
+        assert_eq!(components, vec![vec![0, 1, 2], vec![3]]);
+    }
+
+    #[test]
+    fn breaking_a_bond_splits_the_derived_components_without_extra_state() {
+        let mut s = OrganismStructure::new();
+        let a = unit(&mut s, "Carbon", 0.0, 0.0);
+        let b = unit(&mut s, "Methane", 1.0, 0.0);
+        let c = unit(&mut s, "Carbon", 2.0, 0.0);
+        let first = bond(a, 0, b, 0, 0.5, 2.0);
+        let second = bond(b, 1, c, 0, 0.5, 3.0);
+        s.add_bond(first);
+        s.add_bond(second);
+        assert_eq!(s.connected_components(), vec![vec![0, 1, 2]]);
+
+        assert_eq!(s.break_matching_bond(second), Some(second));
+        assert_eq!(s.connected_components(), vec![vec![0, 1], vec![2]]);
+    }
+
+    #[test]
+    fn component_connection_sites_are_only_unoccupied_sites_from_component_units() {
+        let catalog = crate::resources::default_catalog();
+        let mut s = OrganismStructure::new();
+        let a = unit(&mut s, "Carbon", 0.0, 0.0);
+        let b = unit(&mut s, "Methane", 1.0, 0.0);
+        let c = unit(&mut s, "Carbon", 10.0, 0.0);
+        s.add_bond(bond(a, 0, b, 0, 0.5, 2.0));
+
+        let components = s.connected_components();
+        let first_sites = s.component_connection_sites(&components[0], &catalog);
+        let second_sites = s.component_connection_sites(&components[1], &catalog);
+
+        assert!(!first_sites.contains(&ConnectionSiteRef { unit_index: a, point_index: 0 }));
+        assert!(!first_sites.contains(&ConnectionSiteRef { unit_index: b, point_index: 0 }));
+        assert!(first_sites.iter().all(|site| site.unit_index == a || site.unit_index == b));
+        assert!(second_sites.iter().all(|site| site.unit_index == c));
+    }
+
     #[test]
     fn bond_energy_is_separate_from_strength_and_serialized() {
         let original = bond(0, 0, 1, 0, 0.25, 4.5);
