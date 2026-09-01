@@ -100,9 +100,11 @@ impl DecisionHistory {
         context_key: Option<String>,
         outcome: OutcomeKind,
     ) {
-        if let Some(existing) = self.entries.iter_mut().find(|entry| {
-            entry.action == action && entry.context_key == context_key
-        }) {
+        if let Some(existing) = self
+            .entries
+            .iter_mut()
+            .find(|entry| entry.action == action && entry.context_key == context_key)
+        {
             existing.outcome = outcome;
             existing.count = existing.count.saturating_add(1);
             return;
@@ -130,33 +132,20 @@ impl DecisionHistory {
         });
     }
 
-    pub fn outcome(
-        &self,
-        action: ActionKind,
-        context_key: Option<&str>,
-    ) -> Option<OutcomeKind> {
+    pub fn outcome(&self, action: ActionKind, context_key: Option<&str>) -> Option<OutcomeKind> {
         self.entries
             .iter()
-            .find(|entry| {
-                entry.action == action
-                    && entry.context_key.as_deref() == context_key
-            })
+            .find(|entry| entry.action == action && entry.context_key.as_deref() == context_key)
             .map(|entry| entry.outcome)
             .or_else(|| {
                 self.entries
                     .iter()
-                    .find(|entry| {
-                        entry.action == action && entry.context_key.is_none()
-                    })
+                    .find(|entry| entry.action == action && entry.context_key.is_none())
                     .map(|entry| entry.outcome)
             })
     }
 
-    pub fn has_knowledge(
-        &self,
-        action: ActionKind,
-        context_key: Option<&str>,
-    ) -> bool {
+    pub fn has_knowledge(&self, action: ActionKind, context_key: Option<&str>) -> bool {
         self.outcome(action, context_key).is_some()
     }
 }
@@ -315,7 +304,12 @@ mod tests {
             ..CurrentNeeds::default()
         };
         assert_eq!(
-            approve_action(ActionKind::Combine, eligibility, needs, NeedKind::Construction),
+            approve_action(
+                ActionKind::Combine,
+                eligibility,
+                needs,
+                NeedKind::Construction
+            ),
             DecisionResult::Reject
         );
     }

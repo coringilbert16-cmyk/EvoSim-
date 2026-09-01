@@ -6,8 +6,8 @@
 //! physical systems.
 
 use crate::decision::{
-    approve_action_for_current_needs, outcome_is_known, ActionEligibility,
-    ActionKind, CurrentNeeds, DecisionHistory, DecisionResult, OutcomeKind,
+    approve_action_for_current_needs, outcome_is_known, ActionEligibility, ActionKind,
+    CurrentNeeds, DecisionHistory, DecisionResult, OutcomeKind,
 };
 
 /// Context passed from simulation state into the decision boundary.
@@ -59,7 +59,10 @@ pub fn select_action(
             None => 1,
         };
 
-        if best.as_ref().map_or(true, |(best_rank, _)| rank > *best_rank) {
+        if best
+            .as_ref()
+            .map_or(true, |(best_rank, _)| rank > *best_rank)
+        {
             best = Some((rank, candidate.clone()));
         }
     }
@@ -74,11 +77,7 @@ pub fn record_outcome(
     candidate: &ActionCandidate,
     outcome: OutcomeKind,
 ) {
-    history.record(
-        candidate.action,
-        candidate.context_key.clone(),
-        outcome,
-    );
+    history.record(candidate.action, candidate.context_key.clone(), outcome);
 }
 
 /// Returns whether the organism has actually learned an outcome for this
@@ -194,11 +193,7 @@ mod tests {
             context_key: Some("Methane".into()),
         };
         record_outcome(&mut history, &candidate, OutcomeKind::Beneficial);
-        assert!(known_outcome(
-            &history,
-            ActionKind::Break,
-            Some("Methane")
-        ));
+        assert!(known_outcome(&history, ActionKind::Break, Some("Methane")));
     }
 
     #[test]

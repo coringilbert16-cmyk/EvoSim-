@@ -48,10 +48,7 @@ async fn snapshot_handler(State(state): State<AppState>) -> impl IntoResponse {
     Json(simulation.snapshot())
 }
 
-async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
     ws.on_upgrade(|socket| handle_socket(socket, state))
 }
 
@@ -67,9 +64,8 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         }
     });
 
-    let mut receive_task = tokio::spawn(async move {
-        while let Some(Ok(_message)) = receiver.next().await {}
-    });
+    let mut receive_task =
+        tokio::spawn(async move { while let Some(Ok(_message)) = receiver.next().await {} });
 
     tokio::select! {
         _ = (&mut send_task) => receive_task.abort(),

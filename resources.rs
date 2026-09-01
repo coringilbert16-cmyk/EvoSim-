@@ -141,8 +141,7 @@ impl Form {
                 *sides >= 3 && radius.is_finite() && *radius > 0.0
             }
             Form::Polygon { vertices } => {
-                vertices.len() >= 3
-                    && vertices.iter().all(|(x, y)| x.is_finite() && y.is_finite())
+                vertices.len() >= 3 && vertices.iter().all(|(x, y)| x.is_finite() && y.is_finite())
             }
             Form::Fluid { nominal_area } => nominal_area.is_finite() && *nominal_area > 0.0,
         }
@@ -245,7 +244,9 @@ impl ConnectionPoint {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum ConnectionSites {
     Corners(Vec<ConnectionPoint>),
-    Circumference { radius: f64 },
+    Circumference {
+        radius: f64,
+    },
     /// Fluid materials have no locked connection representation yet.
     Undetermined,
 }
@@ -325,11 +326,7 @@ impl ResourceBaselines {
                 .map(|r| r.properties.potential_energy)
                 .sum::<f64>()
                 / count,
-            reactivity: catalog
-                .iter()
-                .map(|r| r.properties.reactivity)
-                .sum::<f64>()
-                / count,
+            reactivity: catalog.iter().map(|r| r.properties.reactivity).sum::<f64>() / count,
             cohesion: catalog.iter().map(|r| r.properties.cohesion).sum::<f64>() / count,
         }
     }
@@ -542,7 +539,10 @@ pub fn default_catalog() -> Vec<BaseResource> {
                 cohesion: 0.95,
             },
             shape: Shape {
-                form: Form::RegularPolygon { sides: 6, radius: 0.438_691 },
+                form: Form::RegularPolygon {
+                    sides: 6,
+                    radius: 0.438_691,
+                },
             },
         },
         // Methane: triangle. Locked geometry assignment. Radius
@@ -557,7 +557,10 @@ pub fn default_catalog() -> Vec<BaseResource> {
                 cohesion: 0.1,
             },
             shape: Shape {
-                form: Form::RegularPolygon { sides: 3, radius: 0.620_403 },
+                form: Form::RegularPolygon {
+                    sides: 3,
+                    radius: 0.620_403,
+                },
             },
         },
         // Hydrogen: the catalog's one and only circular resource
@@ -586,7 +589,10 @@ pub fn default_catalog() -> Vec<BaseResource> {
                 cohesion: 0.4,
             },
             shape: Shape {
-                form: Form::RegularPolygon { sides: 5, radius: 0.458_577 },
+                form: Form::RegularPolygon {
+                    sides: 5,
+                    radius: 0.458_577,
+                },
             },
         },
         // Nitrogen: rectangle, aspect ratio preserved from the
@@ -602,7 +608,10 @@ pub fn default_catalog() -> Vec<BaseResource> {
                 cohesion: 0.7,
             },
             shape: Shape {
-                form: Form::Rectangle { width: 1.511_858, height: 0.330_719 },
+                form: Form::Rectangle {
+                    width: 1.511_858,
+                    height: 0.330_719,
+                },
             },
         },
         // Phosphorus: explicit-vertex L-shape (six vertices) - the
@@ -649,7 +658,9 @@ pub fn default_catalog() -> Vec<BaseResource> {
                 cohesion: 0.5,
             },
             shape: Shape {
-                form: Form::Fluid { nominal_area: NOMINAL_UNIT_AREA },
+                form: Form::Fluid {
+                    nominal_area: NOMINAL_UNIT_AREA,
+                },
             },
         },
     ]
@@ -681,7 +692,13 @@ mod shape_tests {
         assert_eq!(catalog.len(), 7);
 
         let expected_names = [
-            "Carbon", "Methane", "Hydrogen", "Sulfur", "Nitrogen", "Phosphorus", "Water",
+            "Carbon",
+            "Methane",
+            "Hydrogen",
+            "Sulfur",
+            "Nitrogen",
+            "Phosphorus",
+            "Water",
         ];
         for name in expected_names {
             assert!(
@@ -734,7 +751,12 @@ mod shape_tests {
                         .form
                         .polygon_vertices()
                         .expect("Rectangle must resolve to vertices");
-                    assert_eq!(vertices.len(), 4, "{} rectangle must have 4 vertices", resource.name);
+                    assert_eq!(
+                        vertices.len(),
+                        4,
+                        "{} rectangle must have 4 vertices",
+                        resource.name
+                    );
                 }
                 Form::RegularPolygon { sides, .. } => {
                     let vertices = resource
@@ -791,10 +813,22 @@ mod shape_tests {
             "Hydrogen must be the circular resource"
         );
 
-        assert!(matches!(find("Carbon").shape.form, Form::RegularPolygon { sides: 6, .. }));
-        assert!(matches!(find("Methane").shape.form, Form::RegularPolygon { sides: 3, .. }));
-        assert!(matches!(find("Sulfur").shape.form, Form::RegularPolygon { sides: 5, .. }));
-        assert!(matches!(find("Nitrogen").shape.form, Form::Rectangle { .. }));
+        assert!(matches!(
+            find("Carbon").shape.form,
+            Form::RegularPolygon { sides: 6, .. }
+        ));
+        assert!(matches!(
+            find("Methane").shape.form,
+            Form::RegularPolygon { sides: 3, .. }
+        ));
+        assert!(matches!(
+            find("Sulfur").shape.form,
+            Form::RegularPolygon { sides: 5, .. }
+        ));
+        assert!(matches!(
+            find("Nitrogen").shape.form,
+            Form::Rectangle { .. }
+        ));
 
         match &find("Phosphorus").shape.form {
             Form::Polygon { vertices } => {
@@ -860,7 +894,10 @@ mod shape_tests {
             };
 
             let ConnectionSites::Corners(points) = resource.shape.connection_sites() else {
-                panic!("{} is polygonal but returned Circumference sites", resource.name);
+                panic!(
+                    "{} is polygonal but returned Circumference sites",
+                    resource.name
+                );
             };
 
             assert_eq!(points.len(), vertices.len());
@@ -880,9 +917,18 @@ mod shape_tests {
     fn connection_points_are_valid_where_present() {
         for resource in default_catalog() {
             if let ConnectionSites::Corners(points) = resource.shape.connection_sites() {
-                assert!(!points.is_empty(), "{} has a polygonal form but zero connection points", resource.name);
+                assert!(
+                    !points.is_empty(),
+                    "{} has a polygonal form but zero connection points",
+                    resource.name
+                );
                 for cp in &points {
-                    assert!(cp.is_valid(), "{} has an invalid connection point: {:?}", resource.name, cp);
+                    assert!(
+                        cp.is_valid(),
+                        "{} has an invalid connection point: {:?}",
+                        resource.name,
+                        cp
+                    );
                 }
             }
         }
@@ -897,12 +943,19 @@ mod shape_tests {
             .filter(|r| matches!(r.shape.form, Form::Circle { .. }))
             .collect();
 
-        assert!(!circle_resources.is_empty(), "expected at least one circular resource in the catalog");
+        assert!(
+            !circle_resources.is_empty(),
+            "expected at least one circular resource in the catalog"
+        );
 
         for resource in &circle_resources {
             match resource.shape.connection_sites() {
                 ConnectionSites::Circumference { radius } => {
-                    assert!(radius > 0.0, "{} circumference radius must be positive", resource.name);
+                    assert!(
+                        radius > 0.0,
+                        "{} circumference radius must be positive",
+                        resource.name
+                    );
                 }
                 other => {
                     panic!("{} is a Circle but returned {:?}", resource.name, other)
@@ -918,8 +971,15 @@ mod shape_tests {
         // these three fields. If a `strength` (or equivalent) field is
         // ever reintroduced, this stops compiling as a deliberate
         // tripwire - the only strength value belongs to a future Bond.
-        let ConnectionPoint { x: _, y: _, direction_radians: _ } =
-            ConnectionPoint { x: 0.0, y: 0.0, direction_radians: 0.0 };
+        let ConnectionPoint {
+            x: _,
+            y: _,
+            direction_radians: _,
+        } = ConnectionPoint {
+            x: 0.0,
+            y: 0.0,
+            direction_radians: 0.0,
+        };
     }
 
     #[test]
@@ -966,7 +1026,10 @@ mod shape_tests {
             "Water must use Form::Fluid, not a rigid polygon placeholder"
         );
         assert!(water.shape.is_valid());
-        assert_eq!(water.shape.connection_sites(), ConnectionSites::Undetermined);
+        assert_eq!(
+            water.shape.connection_sites(),
+            ConnectionSites::Undetermined
+        );
         assert!(water.shape.form.polygon_vertices().is_none());
     }
 
@@ -988,12 +1051,9 @@ mod shape_tests {
         for i in 0..catalog.len() {
             for j in (i + 1)..catalog.len() {
                 assert_ne!(
-                    catalog[i].shape.form,
-                    catalog[j].shape.form,
+                    catalog[i].shape.form, catalog[j].shape.form,
                     "{} and {} have identical shapes: {:?}",
-                    catalog[i].name,
-                    catalog[j].name,
-                    catalog[i].shape.form
+                    catalog[i].name, catalog[j].name, catalog[i].shape.form
                 );
             }
         }
@@ -1038,15 +1098,27 @@ mod shape_tests {
                     assert_eq!(a, b);
                 }
                 (
-                    Form::Rectangle { width: aw, height: ah },
-                    Form::Rectangle { width: bw, height: bh },
+                    Form::Rectangle {
+                        width: aw,
+                        height: ah,
+                    },
+                    Form::Rectangle {
+                        width: bw,
+                        height: bh,
+                    },
                 ) => {
                     assert_eq!(aw, bw);
                     assert_eq!(ah, bh);
                 }
                 (
-                    Form::RegularPolygon { sides: a_sides, radius: a_radius },
-                    Form::RegularPolygon { sides: b_sides, radius: b_radius },
+                    Form::RegularPolygon {
+                        sides: a_sides,
+                        radius: a_radius,
+                    },
+                    Form::RegularPolygon {
+                        sides: b_sides,
+                        radius: b_radius,
+                    },
                 ) => {
                     assert_eq!(a_sides, b_sides);
                     assert_eq!(a_radius, b_radius);
@@ -1057,7 +1129,10 @@ mod shape_tests {
                 (Form::Fluid { nominal_area: a }, Form::Fluid { nominal_area: b }) => {
                     assert_eq!(a, b);
                 }
-                (a, b) => panic!("{} form variant changed across round-trip: {:?} vs {:?}", resource.name, a, b),
+                (a, b) => panic!(
+                    "{} form variant changed across round-trip: {:?} vs {:?}",
+                    resource.name, a, b
+                ),
             }
 
             // Connection sites are derived from `form`, which was just
@@ -1065,7 +1140,10 @@ mod shape_tests {
             // from the restored form must match sites computed from the
             // original form exactly (they're not independently stored,
             // so there's no separate serialization path to break).
-            assert_eq!(restored.shape.connection_sites(), resource.shape.connection_sites());
+            assert_eq!(
+                restored.shape.connection_sites(),
+                resource.shape.connection_sites()
+            );
         }
     }
 }

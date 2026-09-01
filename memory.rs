@@ -1,17 +1,16 @@
 use crate::state::{
-    Environment, MemoryPoint, Organism, Simulation,
-    MAX_MEMORY_POINTS, MEMORY_DECAY_PER_TICK, MEMORY_MERGE_RADIUS, MEMORY_PRUNE_THRESHOLD,
+    Environment, MemoryPoint, Organism, Simulation, MAX_MEMORY_POINTS, MEMORY_DECAY_PER_TICK,
+    MEMORY_MERGE_RADIUS, MEMORY_PRUNE_THRESHOLD,
 };
 
 impl Simulation {
-    pub(crate) fn update_memory_from_sources(
-        organism: &mut Organism,
-        environment: &Environment,
-    ) {
+    pub(crate) fn update_memory_from_sources(organism: &mut Organism, environment: &Environment) {
         for point in &mut organism.memory {
             point.strength *= MEMORY_DECAY_PER_TICK;
         }
-        organism.memory.retain(|p| p.strength > MEMORY_PRUNE_THRESHOLD);
+        organism
+            .memory
+            .retain(|p| p.strength > MEMORY_PRUNE_THRESHOLD);
 
         let (px, py) = {
             let p = &organism.occupied_cells[0];
@@ -23,7 +22,10 @@ impl Simulation {
         let ranges = crate::resources::property_ranges(&environment.catalog);
 
         let mut strongest_source: Option<(f64, f64, f64)> = None;
-        for cell_index in environment.field.cells_within_radius(px, py, perception_radius) {
+        for cell_index in environment
+            .field
+            .cells_within_radius(px, py, perception_radius)
+        {
             let (cell_x, cell_y) = environment.field.cell_center(cell_index);
             let cell = &environment.field.cells[cell_index];
             for material in [&cell.bonded, &cell.unbonded] {
@@ -33,7 +35,11 @@ impl Simulation {
                 }
                 let properties = material.weighted_properties(&environment.catalog);
                 let (_, _, _, _, _, desirability) = Self::calculate_desirability(
-                    organism, &properties, perceived_amount, &baselines, &ranges,
+                    organism,
+                    &properties,
+                    perceived_amount,
+                    &baselines,
+                    &ranges,
                 );
                 if desirability <= 0.0 {
                     continue;
@@ -47,7 +53,9 @@ impl Simulation {
             }
         }
 
-        let Some((sx, sy, desirability)) = strongest_source else { return; };
+        let Some((sx, sy, desirability)) = strongest_source else {
+            return;
+        };
         let memory_strength = (desirability * organism.genome.memory_strength()).clamp(0.0, 1.0);
         if memory_strength <= 0.0 {
             return;
@@ -75,12 +83,22 @@ impl Simulation {
             }
             None => {
                 if organism.memory.len() < MAX_MEMORY_POINTS {
-                    organism.memory.push(MemoryPoint { x: sx, y: sy, strength: memory_strength });
-                } else if let Some(weakest) = organism.memory.iter_mut().min_by(|a, b| {
-                    a.strength.partial_cmp(&b.strength).unwrap()
-                }) {
+                    organism.memory.push(MemoryPoint {
+                        x: sx,
+                        y: sy,
+                        strength: memory_strength,
+                    });
+                } else if let Some(weakest) = organism
+                    .memory
+                    .iter_mut()
+                    .min_by(|a, b| a.strength.partial_cmp(&b.strength).unwrap())
+                {
                     if memory_strength > weakest.strength {
-                        *weakest = MemoryPoint { x: sx, y: sy, strength: memory_strength };
+                        *weakest = MemoryPoint {
+                            x: sx,
+                            y: sy,
+                            strength: memory_strength,
+                        };
                     }
                 }
             }

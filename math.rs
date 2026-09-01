@@ -73,10 +73,7 @@ pub fn circle_overlap_area(r1: f64, r2: f64, distance: f64) -> f64 {
         .clamp(-1.0, 1.0)
         .acos();
 
-    let term = (-d + r1 + r2)
-        * (d + r1 - r2)
-        * (d - r1 + r2)
-        * (d + r1 + r2);
+    let term = (-d + r1 + r2) * (d + r1 - r2) * (d - r1 + r2) * (d + r1 + r2);
 
     r1_sq * alpha + r2_sq * beta - 0.5 * term.max(0.0).sqrt()
 }

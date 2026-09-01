@@ -69,7 +69,11 @@ mod tests {
     use std::f64::consts::{FRAC_PI_2, PI};
 
     fn cp(x: f64, y: f64, direction_radians: f64) -> ConnectionPoint {
-        ConnectionPoint { x, y, direction_radians }
+        ConnectionPoint {
+            x,
+            y,
+            direction_radians,
+        }
     }
 
     #[test]

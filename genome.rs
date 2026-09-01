@@ -32,7 +32,8 @@ impl Genome {
             .clamp(-1.0, 1.0)
     }
     pub fn reactivity_affinity(&self) -> f64 {
-        self.trait_value("reactivity_affinity", 0.0).clamp(-1.0, 1.0)
+        self.trait_value("reactivity_affinity", 0.0)
+            .clamp(-1.0, 1.0)
     }
     pub fn cohesion_affinity(&self) -> f64 {
         self.trait_value("cohesion_affinity", 0.0).clamp(-1.0, 1.0)

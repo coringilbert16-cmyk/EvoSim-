@@ -1,8 +1,7 @@
 use crate::decision::{ActionKind, OutcomeKind};
 use crate::decision_runtime::ActionCandidate;
 use crate::state::{
-    ActiveTransformation, EnergyLedger, Environment, Organism, Simulation,
-    STRESS_DECAY_PER_TICK,
+    ActiveTransformation, EnergyLedger, Environment, Organism, Simulation, STRESS_DECAY_PER_TICK,
 };
 
 impl Simulation {
@@ -31,7 +30,10 @@ impl Simulation {
             id: *next_id,
             organism_id: organism.id.clone(),
             kind: crate::state::TransformationKind::Break,
-            material: crate::resources::Material { parts: Vec::new(), bonded: true },
+            material: crate::resources::Material {
+                parts: Vec::new(),
+                bonded: true,
+            },
             bond: Some(bond),
             complexity,
             duration_ticks: duration,
@@ -113,12 +115,20 @@ mod tests {
             id: "test".into(),
             occupied_cells: vec![Position { x: 0.0, y: 0.0 }],
             genome: initial_genome(),
-            resource_sense: ResourceSense { sensed_resources: Vec::new(), direction_x: 0.0, direction_y: 0.0, direction_strength: 0.0 },
+            resource_sense: ResourceSense {
+                sensed_resources: Vec::new(),
+                direction_x: 0.0,
+                direction_y: 0.0,
+                direction_strength: 0.0,
+            },
             memory: Vec::new(),
             decision_history: DecisionHistory::default(),
             usable_energy: 0.0,
             stress: 0.0,
-            stored_unbonded: Material { parts: Vec::new(), bonded: false },
+            stored_unbonded: Material {
+                parts: Vec::new(),
+                bonded: false,
+            },
             structure: OrganismStructure::new(),
             development_stage: DevelopmentStage::Juvenile,
             age: 0,
@@ -129,10 +139,34 @@ mod tests {
     #[test]
     fn break_transformation_uses_stored_bond_energy() {
         let mut o = organism();
-        let a = o.structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }));
-        let b = o.structure.add_unit(StructuralUnit::new("Methane", Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 }));
-        o.structure.bonds.push(Bond { unit_a: a, point_a: 0, unit_b: b, point_b: 0, strength: 0.8, bond_energy: 7.25 });
-        let decision = ActionCandidate { action: ActionKind::Break, context_key: Some("bond:0".into()) };
+        let a = o.structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let b = o.structure.add_unit(StructuralUnit::new(
+            "Methane",
+            Placement {
+                x: 1.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        o.structure.bonds.push(Bond {
+            unit_a: a,
+            point_a: 0,
+            unit_b: b,
+            point_b: 0,
+            strength: 0.8,
+            bond_energy: 7.25,
+        });
+        let decision = ActionCandidate {
+            action: ActionKind::Break,
+            context_key: Some("bond:0".into()),
+        };
         let t = Simulation::try_start_transformation(&mut o, &mut 1, &decision).unwrap();
         let mut ledger = EnergyLedger::default();
         let mut environment = Simulation::new(1, 1.0).environment;
@@ -145,9 +179,26 @@ mod tests {
     #[test]
     fn break_does_not_start_without_a_structural_bond() {
         let mut o = organism();
-        o.structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }));
-        o.structure.add_unit(StructuralUnit::new("Methane", Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 }));
-        let decision = ActionCandidate { action: ActionKind::Break, context_key: Some("bond:0".into()) };
+        o.structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        o.structure.add_unit(StructuralUnit::new(
+            "Methane",
+            Placement {
+                x: 1.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let decision = ActionCandidate {
+            action: ActionKind::Break,
+            context_key: Some("bond:0".into()),
+        };
         assert!(Simulation::try_start_transformation(&mut o, &mut 1, &decision).is_none());
     }
 }

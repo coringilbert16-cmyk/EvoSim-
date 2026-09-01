@@ -4,8 +4,8 @@
 //! units and bonds are physical. Placement is supplied by the organism.
 
 use crate::combine::{
-    experimental_combine_work_cost, experimental_interaction, evaluate_bond_strength,
-    evaluate_formation, ExperimentalInteraction,
+    evaluate_bond_strength, evaluate_formation, experimental_combine_work_cost,
+    experimental_interaction, ExperimentalInteraction,
 };
 use crate::contact::{connection_pair_candidates_cached, ConnectionCompatibilityCache};
 use crate::resources::{BaseResource, Material};
@@ -59,23 +59,29 @@ pub fn execute(
         };
     }
 
-    let candidate = *connection_pair_candidates_cached(
-        structure, unit_a, unit_b, catalog, cache,
-    )
-    .iter()
-    .filter(|c| c.available_a && c.available_b)
-    .max_by(|a, b| {
-        a.facing
-            .partial_cmp(&b.facing)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| b.distance.partial_cmp(&a.distance).unwrap_or(std::cmp::Ordering::Equal))
-            .then_with(|| b.point_a.cmp(&a.point_a))
-            .then_with(|| b.point_b.cmp(&a.point_b))
-    })
-    .ok_or(StructuralCombineError::NoGeometricallyEligibleCandidate)?;
+    let candidate = *connection_pair_candidates_cached(structure, unit_a, unit_b, catalog, cache)
+        .iter()
+        .filter(|c| c.available_a && c.available_b)
+        .max_by(|a, b| {
+            a.facing
+                .partial_cmp(&b.facing)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| {
+                    b.distance
+                        .partial_cmp(&a.distance)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .then_with(|| b.point_a.cmp(&a.point_a))
+                .then_with(|| b.point_b.cmp(&a.point_b))
+        })
+        .ok_or(StructuralCombineError::NoGeometricallyEligibleCandidate)?;
 
-    let a = structure.units[unit_a].properties(catalog).ok_or(StructuralCombineError::MissingUnit)?;
-    let b = structure.units[unit_b].properties(catalog).ok_or(StructuralCombineError::MissingUnit)?;
+    let a = structure.units[unit_a]
+        .properties(catalog)
+        .ok_or(StructuralCombineError::MissingUnit)?;
+    let b = structure.units[unit_b]
+        .properties(catalog)
+        .ok_or(StructuralCombineError::MissingUnit)?;
     let interaction = experimental_interaction(*a, *b, candidate, water_field);
     if interaction.direction <= 0.0 || interaction.magnitude <= 1e-12 {
         return Err(StructuralCombineError::UnfavorableInteraction);
@@ -140,15 +146,27 @@ pub fn instantiate_raw_unit(
     placement: Placement,
     catalog: &[BaseResource],
 ) -> Result<usize, &'static str> {
-    if raw.bonded { return Err("raw material must be unbonded"); }
-    if catalog.iter().all(|r| r.name != resource_name) { return Err("resource type is not in the catalog"); }
-    if raw.parts.iter().all(|(n, a)| n != resource_name || *a < 1.0) { return Err("insufficient raw material"); }
+    if raw.bonded {
+        return Err("raw material must be unbonded");
+    }
+    if catalog.iter().all(|r| r.name != resource_name) {
+        return Err("resource type is not in the catalog");
+    }
+    if raw
+        .parts
+        .iter()
+        .all(|(n, a)| n != resource_name || *a < 1.0)
+    {
+        return Err("insufficient raw material");
+    }
 
     let mut remaining = Vec::with_capacity(raw.parts.len());
     for (name, amount) in std::mem::take(&mut raw.parts) {
         if name == resource_name {
             let next = amount - 1.0;
-            if next > 1e-12 { remaining.push((name, next)); }
+            if next > 1e-12 {
+                remaining.push((name, next));
+            }
         } else {
             remaining.push((name, amount));
         }
@@ -167,7 +185,18 @@ mod tests {
         let catalog = default_catalog();
         let mut raw = Material::free_base("Carbon", 3.0);
         let mut structure = OrganismStructure::new();
-        let index = instantiate_raw_unit(&mut structure, &mut raw, "Carbon", Placement { x: 10.0, y: 20.0, rotation_radians: 0.5 }, &catalog).unwrap();
+        let index = instantiate_raw_unit(
+            &mut structure,
+            &mut raw,
+            "Carbon",
+            Placement {
+                x: 10.0,
+                y: 20.0,
+                rotation_radians: 0.5,
+            },
+            &catalog,
+        )
+        .unwrap();
         assert_eq!(index, 0);
         assert_eq!(structure.units[0].placement.x, 10.0);
         assert_eq!(structure.units[0].placement.y, 20.0);
@@ -180,7 +209,17 @@ mod tests {
         let catalog = default_catalog();
         let mut raw = Material::free_base("Carbon", 0.5);
         let mut structure = OrganismStructure::new();
-        let result = instantiate_raw_unit(&mut structure, &mut raw, "Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }, &catalog);
+        let result = instantiate_raw_unit(
+            &mut structure,
+            &mut raw,
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        );
         assert_eq!(result, Err("insufficient raw material"));
         assert!((raw.total_amount() - 0.5).abs() < 1e-12);
         assert!(structure.units.is_empty());
@@ -190,10 +229,20 @@ mod tests {
     fn failed_combine_does_not_mutate_structure() {
         let catalog = default_catalog();
         let mut structure = OrganismStructure::new();
-        let a = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }));
+        let a = structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
         let mut cache = ConnectionCompatibilityCache::new();
         let result = execute(&mut structure, a, a, &catalog, &mut cache, 100.0, 0.0);
-        assert_eq!(result, Err(StructuralCombineError::NoGeometricallyEligibleCandidate));
+        assert_eq!(
+            result,
+            Err(StructuralCombineError::NoGeometricallyEligibleCandidate)
+        );
         assert!(structure.bonds.is_empty());
     }
 }

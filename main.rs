@@ -1,23 +1,23 @@
+mod combine;
+mod combine_runtime;
+mod connection_geometry;
+mod contact;
+mod decision;
+mod decision_runtime;
 mod environment;
 mod genome;
 mod math;
 mod resources;
-mod structure;
-mod connection_geometry;
-mod contact;
-mod combine;
-mod combine_runtime;
 mod structural_combine;
-mod decision;
-mod decision_runtime;
+mod structure;
 
-mod state;
-mod simulation;
-mod perception;
 mod memory;
 mod movement;
-mod transformation;
+mod perception;
 mod server;
+mod simulation;
+mod state;
+mod transformation;
 
 #[cfg(test)]
 mod simulation_tests;

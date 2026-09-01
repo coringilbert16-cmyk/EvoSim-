@@ -3,10 +3,7 @@ use crate::state::{Environment, Organism, Simulation};
 impl Simulation {
     /// Execute the already-selected MOVE action. This function performs only
     /// movement mechanics; action selection happens in decision_runtime.rs.
-    pub(crate) fn update_movement(
-        organism: &mut Organism,
-        environment: &Environment,
-    ) -> bool {
+    pub(crate) fn update_movement(organism: &mut Organism, environment: &Environment) -> bool {
         let memory_strength_trait = organism.genome.memory_strength();
         let movement_efficiency = organism.genome.movement_efficiency();
         let perception_weight = 1.0 - (0.5 + memory_strength_trait * 0.5);
@@ -41,10 +38,10 @@ impl Simulation {
             return false;
         }
 
-        let mut move_x = memory_weight * memory_dir_x
-            + perception_weight * organism.resource_sense.direction_x;
-        let mut move_y = memory_weight * memory_dir_y
-            + perception_weight * organism.resource_sense.direction_y;
+        let mut move_x =
+            memory_weight * memory_dir_x + perception_weight * organism.resource_sense.direction_x;
+        let mut move_y =
+            memory_weight * memory_dir_y + perception_weight * organism.resource_sense.direction_y;
         let magnitude = (move_x * move_x + move_y * move_y).sqrt();
         if magnitude <= f64::EPSILON {
             return false;
