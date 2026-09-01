@@ -135,19 +135,17 @@ pub(crate) fn try_combine(
         return None;
     }
 
-    let surplus = interaction.magnitude - evaluation.threshold;
-    let total_payment = if surplus < 0.0 {
-        work_cost - surplus
-    } else {
-        work_cost
-    };
-    if !total_payment.is_finite() || organism.usable_energy + EPSILON < total_payment {
+    // The actual investment is the energy paid for the interaction. Bond
+    // strength is determined only by the surplus of that investment over the
+    // formation threshold. Do not derive surplus from interaction magnitude.
+    let energy_paid = work_cost.max(evaluation.threshold);
+    let surplus = energy_paid - evaluation.threshold;
+    if !energy_paid.is_finite() || energy_paid < 0.0 || organism.usable_energy + EPSILON < energy_paid {
         return None;
     }
-    organism.usable_energy -= total_payment;
 
-    let bond_strength = crate::combine::experimental_bond_strength(surplus.max(0.0));
-    let bond_energy = surplus.max(0.0);
+    let bond_strength = crate::combine::experimental_bond_strength(surplus);
+    let bond_energy = surplus;
     let bond = crate::structure::Bond {
         unit_a,
         point_a: evaluation.candidate.point_a,
@@ -157,6 +155,7 @@ pub(crate) fn try_combine(
         bond_energy,
     };
     crate::contact::try_add_bond(&mut organism.structure, bond, catalog).ok()?;
+    organism.usable_energy -= energy_paid;
 
     Some(CombineAttempt {
         unit_a,
@@ -164,7 +163,7 @@ pub(crate) fn try_combine(
         point_a: evaluation.candidate.point_a,
         point_b: evaluation.candidate.point_b,
         work_cost,
-        energy_paid: total_payment,
+        energy_paid,
         interaction_direction: interaction.direction,
         interaction_magnitude: interaction.magnitude,
         formation_threshold: evaluation.threshold,
