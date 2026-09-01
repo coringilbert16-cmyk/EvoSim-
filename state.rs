@@ -8,6 +8,7 @@ use crate::decision::{DecisionHistory, DecisionParameters};
 use crate::environment::{ActiveMaterialField, DeepReservoir, Vent};
 use crate::genome::Genome;
 use crate::resources::{BaseResource, Material};
+use crate::structure::Bond;
 
 #[derive(Clone)]
 pub(crate) struct AppState {
@@ -94,7 +95,13 @@ pub(crate) struct ActiveTransformation {
     pub(crate) id: u64,
     pub(crate) organism_id: String,
     pub(crate) kind: TransformationKind,
+    /// Retained for snapshot compatibility. BREAK no longer derives energy
+    /// from this material; its energetic result comes from the stored bond.
     pub(crate) material: Material,
+    /// The exact structural bond being processed. This is the authoritative
+    /// source of BREAK energy.
+    #[serde(default)]
+    pub(crate) bond: Option<Bond>,
     pub(crate) complexity: f64,
     pub(crate) duration_ticks: u64,
     pub(crate) remaining_ticks: u64,
