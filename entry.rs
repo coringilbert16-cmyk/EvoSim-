@@ -3,5 +3,6 @@
 mod combine;
 mod structural_combine;
 mod decision;
+mod decision_runtime;
 
 include!("main.rs");
