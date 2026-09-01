@@ -11,7 +11,7 @@ use crate::environment::{
 use crate::genome::initial_genome;
 use crate::state::{
     DevelopmentStage, EnergyLedger, Environment, Organism, Position, Snapshot,
-    Simulation, ResourceSense, PROCESSING_REACH,
+    Simulation, ResourceSense,
 };
 
 impl Simulation {
@@ -50,50 +50,12 @@ impl Simulation {
             ("Phosphorus", 5_000.0),
             ("Water", 20_000.0),
         ];
-        for (name, amount) in starting_amounts {
-            reservoir.seed_uniform(name, amount);
-        }
+        for (name, amount) in starting_amounts { reservoir.seed_uniform(name, amount); }
 
         let vents = vec![
-            Vent {
-                x: 250.0,
-                y: 250.0,
-                composition: vec![
-                    ("Carbon".into(), 0.10), ("Methane".into(), 0.45),
-                    ("Hydrogen".into(), 0.25), ("Sulfur".into(), 0.10),
-                    ("Nitrogen".into(), 0.05), ("Phosphorus".into(), 0.02),
-                    ("Water".into(), 0.03),
-                ],
-                emission_amount: 100.0,
-                emission_interval: 20,
-                emission_timer: 0,
-            },
-            Vent {
-                x: 750.0,
-                y: 300.0,
-                composition: vec![
-                    ("Carbon".into(), 0.35), ("Methane".into(), 0.10),
-                    ("Hydrogen".into(), 0.15), ("Sulfur".into(), 0.25),
-                    ("Nitrogen".into(), 0.05), ("Phosphorus".into(), 0.05),
-                    ("Water".into(), 0.05),
-                ],
-                emission_amount: 100.0,
-                emission_interval: 30,
-                emission_timer: 0,
-            },
-            Vent {
-                x: 520.0,
-                y: 550.0,
-                composition: vec![
-                    ("Carbon".into(), 0.25), ("Methane".into(), 0.15),
-                    ("Hydrogen".into(), 0.30), ("Sulfur".into(), 0.10),
-                    ("Nitrogen".into(), 0.10), ("Phosphorus".into(), 0.02),
-                    ("Water".into(), 0.08),
-                ],
-                emission_amount: 100.0,
-                emission_interval: 25,
-                emission_timer: 0,
-            },
+            Vent { x: 250.0, y: 250.0, composition: vec![("Carbon".into(), 0.10), ("Methane".into(), 0.45), ("Hydrogen".into(), 0.25), ("Sulfur".into(), 0.10), ("Nitrogen".into(), 0.05), ("Phosphorus".into(), 0.02), ("Water".into(), 0.03)], emission_amount: 100.0, emission_interval: 20, emission_timer: 0 },
+            Vent { x: 750.0, y: 300.0, composition: vec![("Carbon".into(), 0.35), ("Methane".into(), 0.10), ("Hydrogen".into(), 0.15), ("Sulfur".into(), 0.25), ("Nitrogen".into(), 0.05), ("Phosphorus".into(), 0.05), ("Water".into(), 0.05)], emission_amount: 100.0, emission_interval: 30, emission_timer: 0 },
+            Vent { x: 520.0, y: 550.0, composition: vec![("Carbon".into(), 0.25), ("Methane".into(), 0.15), ("Hydrogen".into(), 0.30), ("Sulfur".into(), 0.10), ("Nitrogen".into(), 0.10), ("Phosphorus".into(), 0.02), ("Water".into(), 0.08)], emission_amount: 100.0, emission_interval: 25, emission_timer: 0 },
         ];
 
         Environment { width, height, catalog, field, reservoir, vents }
@@ -104,12 +66,7 @@ impl Simulation {
             id: "1".into(),
             occupied_cells: vec![Position { x: 500.0, y: 500.0 }],
             genome: initial_genome(),
-            resource_sense: ResourceSense {
-                sensed_resources: Vec::new(),
-                direction_x: 0.0,
-                direction_y: 0.0,
-                direction_strength: 0.0,
-            },
+            resource_sense: ResourceSense { sensed_resources: Vec::new(), direction_x: 0.0, direction_y: 0.0, direction_strength: 0.0 },
             memory: Vec::new(),
             decision_history: crate::decision::DecisionHistory::default(),
             usable_energy: 0.0,
@@ -123,91 +80,43 @@ impl Simulation {
     }
 
     pub(crate) fn step_environment(&mut self) {
-        apply_vents(
-            &mut self.environment.field,
-            &mut self.environment.reservoir,
-            &mut self.environment.vents,
-        );
+        apply_vents(&mut self.environment.field, &mut self.environment.reservoir, &mut self.environment.vents);
         self.environment.field.diffuse_step(DEFAULT_DIFFUSION_FRACTION);
         if self.tick % DEFAULT_SETTLING_INTERVAL_TICKS == 0 {
-            apply_settling(
-                &mut self.environment.field,
-                &mut self.environment.reservoir,
-                DEFAULT_SETTLING_FRACTION,
-            );
+            apply_settling(&mut self.environment.field, &mut self.environment.reservoir, DEFAULT_SETTLING_FRACTION);
         }
     }
 
-    fn current_needs(
-        organism: &Organism,
-        parameters: DecisionParameters,
-    ) -> CurrentNeeds {
+    fn current_needs(organism: &Organism, parameters: DecisionParameters) -> CurrentNeeds {
         let raw_material = organism.stored_unbonded.total_amount();
         CurrentNeeds {
             energy: organism.usable_energy < parameters.energy_need_threshold,
             material: raw_material < parameters.raw_material_need_threshold,
-            construction: raw_material >= parameters.construction_material_threshold
-                && organism.structure.units.is_empty(),
+            construction: raw_material >= parameters.construction_material_threshold && organism.structure.units.is_empty(),
             relief: organism.stress >= parameters.stress_relief_threshold,
             exploration: organism.resource_sense.sensed_resources.is_empty(),
         }
     }
 
-    fn action_eligibility(
-        organism: &Organism,
-        environment: &Environment,
-    ) -> ActionEligibility {
-        let can_break = organism.active_transformation_id.is_none()
-            && organism.resource_sense.sensed_resources.iter().any(|resource| {
-                resource.desirability > 0.0
-                    && resource.distance <= PROCESSING_REACH
-                    && resource.bonded
-                    && environment
-                        .field
-                        .cells
-                        .get(resource.field_index)
-                        .is_some_and(|cell| {
-                            cell.bonded.can_break() && cell.bonded.total_amount() > 0.0
-                        })
-            });
-
+    fn action_eligibility(organism: &Organism, _environment: &Environment) -> ActionEligibility {
         ActionEligibility {
             can_move: organism.active_transformation_id.is_none(),
             can_acquire: false,
             can_combine: false,
-            can_break,
+            can_break: organism.active_transformation_id.is_none() && !organism.structure.bonds.is_empty(),
             can_expel: false,
         }
     }
 
     fn decision_candidates(organism: &Organism) -> Vec<ActionCandidate> {
         let mut candidates = Vec::new();
-
-        if let Some(target) = organism
-            .resource_sense
-            .sensed_resources
-            .iter()
-            .filter(|resource| {
-                resource.desirability > 0.0
-                    && resource.distance <= PROCESSING_REACH
-                    && resource.bonded
-            })
-            .max_by(|a, b| {
-                a.desirability
-                    .partial_cmp(&b.desirability)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
-        {
-            candidates.push(ActionCandidate {
+        if !organism.structure.bonds.is_empty() {
+            candidates.extend(organism.structure.bonds.iter().enumerate().map(|(index, _)| ActionCandidate {
                 action: ActionKind::Break,
-                context_key: Some(target.name.clone()),
-            });
+                context_key: Some(format!("bond:{index}")),
+            }));
         }
-
-        candidates.push(ActionCandidate {
-            action: ActionKind::Move,
-            context_key: None,
-        });
+        candidates.push(ActionCandidate { action: ActionKind::Move, context_key: None });
         candidates
     }
 
@@ -218,25 +127,14 @@ impl Simulation {
         let mut still_active = Vec::new();
         let mut completed = Vec::new();
         for mut transformation in self.active_transformations.drain(..) {
-            if transformation.remaining_ticks > 0 {
-                transformation.remaining_ticks -= 1;
-            }
-            if transformation.remaining_ticks == 0 {
-                completed.push(transformation);
-            } else {
-                still_active.push(transformation);
-            }
+            if transformation.remaining_ticks > 0 { transformation.remaining_ticks -= 1; }
+            if transformation.remaining_ticks == 0 { completed.push(transformation); } else { still_active.push(transformation); }
         }
         self.active_transformations = still_active;
 
         for transformation in &completed {
             if let Some(organism) = self.organisms.iter_mut().find(|o| o.id == transformation.organism_id) {
-                Self::resolve_transformation(
-                    transformation,
-                    organism,
-                    &mut self.environment,
-                    &mut self.energy_ledger,
-                );
+                Self::resolve_transformation(transformation, organism, &mut self.environment, &mut self.energy_ledger);
             }
         }
 
@@ -255,67 +153,39 @@ impl Simulation {
                 eligibility: Self::action_eligibility(organism, environment),
             };
             let candidates = Self::decision_candidates(organism);
-            let Some(selected) = select_action(context, &organism.decision_history, &candidates) else {
-                continue;
-            };
+            let Some(selected) = select_action(context, &organism.decision_history, &candidates) else { continue; };
 
             match selected.action {
                 ActionKind::Move => {
                     let moved = Self::update_movement(organism, environment);
-                    crate::decision_runtime::record_outcome(
-                        &mut organism.decision_history,
-                        &selected,
-                        if moved {
-                            crate::decision::OutcomeKind::Neutral
-                        } else {
-                            crate::decision::OutcomeKind::Harmful
-                        },
-                    );
+                    crate::decision_runtime::record_outcome(&mut organism.decision_history, &selected, if moved { crate::decision::OutcomeKind::Neutral } else { crate::decision::OutcomeKind::Harmful });
                 }
                 ActionKind::Break => {
-                    if let Some(transformation) = Self::try_start_transformation(
-                        organism,
-                        &mut environment.field,
-                        &mut self.next_transformation_id,
-                        &selected,
-                    ) {
+                    if let Some(transformation) = Self::try_start_transformation(organism, &mut self.next_transformation_id, &selected) {
                         self.active_transformations.push(transformation);
                     }
                 }
                 ActionKind::Acquire | ActionKind::Combine | ActionKind::Expel => {
                     // These actions remain mechanically unavailable until their
-                    // physical executors are integrated. The decision layer
-                    // therefore never selects them merely because a need exists.
+                    // physical executors are integrated.
                 }
             }
         }
 
-        for organism in &mut self.organisms {
-            Self::apply_energy_capacity(organism);
-        }
-        self.energy_ledger.total_usable_energy_held =
-            self.organisms.iter().map(|o| o.usable_energy).sum();
-
+        for organism in &mut self.organisms { Self::apply_energy_capacity(organism); }
+        self.energy_ledger.total_usable_energy_held = self.organisms.iter().map(|o| o.usable_energy).sum();
         self.snapshot()
     }
 
     pub(crate) fn snapshot(&self) -> Snapshot {
-        Snapshot {
-            tick: self.tick,
-            organisms: self.organisms.clone(),
-            environment: self.environment.clone(),
-            active_transformations: self.active_transformations.clone(),
-            energy_ledger: self.energy_ledger,
-        }
+        Snapshot { tick: self.tick, organisms: self.organisms.clone(), environment: self.environment.clone(), active_transformations: self.active_transformations.clone(), energy_ledger: self.energy_ledger }
     }
 
     #[cfg(test)]
     pub(crate) fn total_material_in_system(&self) -> f64 {
         let mut total = self.environment.field.total_amount();
         total += self.environment.reservoir.total_amount();
-        for transformation in &self.active_transformations {
-            total += transformation.material.total_amount();
-        }
+        for transformation in &self.active_transformations { total += transformation.material.total_amount(); }
         for organism in &self.organisms {
             total += organism.stored_unbonded.total_amount();
             total += organism.structure.units.len() as f64;
