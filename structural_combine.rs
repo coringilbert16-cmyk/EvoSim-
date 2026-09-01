@@ -23,6 +23,7 @@ pub struct StructuralCombineResult {
     pub investment: f64,
     pub surplus: f64,
     pub bond_strength: f64,
+    pub bond_energy: f64,
     pub bond_index: usize,
 }
 
@@ -35,6 +36,7 @@ pub enum StructuralCombineError {
     NonFiniteWorkCost,
     NonFiniteBondStrength,
     BondGeometryRejected,
+    UnfavorableInteraction,
 }
 
 pub fn execute(
@@ -75,6 +77,10 @@ pub fn execute(
     let a = structure.units[unit_a].properties(catalog).ok_or(StructuralCombineError::MissingUnit)?;
     let b = structure.units[unit_b].properties(catalog).ok_or(StructuralCombineError::MissingUnit)?;
     let interaction = experimental_interaction(*a, *b, candidate, water_field);
+    if interaction.direction <= 0.0 || interaction.magnitude <= 1e-12 {
+        return Err(StructuralCombineError::UnfavorableInteraction);
+    }
+
     let work_cost = experimental_combine_work_cost(*a, *b, candidate, water_field);
     if !work_cost.is_finite() {
         return Err(StructuralCombineError::NonFiniteWorkCost);
@@ -91,6 +97,10 @@ pub fn execute(
         return Err(StructuralCombineError::NonFiniteBondStrength);
     }
 
+    // Surplus investment becomes stored bond energy. It is now part of the
+    // structural bond state and is never reconstructed from resource potential
+    // energy during BREAK.
+    let bond_energy = surplus.max(0.0);
     let bond_index = crate::contact::try_add_bond(
         structure,
         Bond {
@@ -99,6 +109,7 @@ pub fn execute(
             unit_b,
             point_b: candidate.point_b,
             strength: bond_strength,
+            bond_energy,
         },
         catalog,
     )
@@ -115,6 +126,7 @@ pub fn execute(
         investment,
         surplus,
         bond_strength,
+        bond_energy,
         bond_index,
     })
 }
@@ -128,23 +140,15 @@ pub fn instantiate_raw_unit(
     placement: Placement,
     catalog: &[BaseResource],
 ) -> Result<usize, &'static str> {
-    if raw.bonded {
-        return Err("raw material must be unbonded");
-    }
-    if catalog.iter().all(|r| r.name != resource_name) {
-        return Err("resource type is not in the catalog");
-    }
-    if raw.parts.iter().all(|(n, a)| n != resource_name || *a < 1.0) {
-        return Err("insufficient raw material");
-    }
+    if raw.bonded { return Err("raw material must be unbonded"); }
+    if catalog.iter().all(|r| r.name != resource_name) { return Err("resource type is not in the catalog"); }
+    if raw.parts.iter().all(|(n, a)| n != resource_name || *a < 1.0) { return Err("insufficient raw material"); }
 
     let mut remaining = Vec::with_capacity(raw.parts.len());
     for (name, amount) in std::mem::take(&mut raw.parts) {
         if name == resource_name {
             let next = amount - 1.0;
-            if next > 1e-12 {
-                remaining.push((name, next));
-            }
+            if next > 1e-12 { remaining.push((name, next)); }
         } else {
             remaining.push((name, amount));
         }
@@ -163,13 +167,7 @@ mod tests {
         let catalog = default_catalog();
         let mut raw = Material::free_base("Carbon", 3.0);
         let mut structure = OrganismStructure::new();
-        let index = instantiate_raw_unit(
-            &mut structure,
-            &mut raw,
-            "Carbon",
-            Placement { x: 10.0, y: 20.0, rotation_radians: 0.5 },
-            &catalog,
-        ).unwrap();
+        let index = instantiate_raw_unit(&mut structure, &mut raw, "Carbon", Placement { x: 10.0, y: 20.0, rotation_radians: 0.5 }, &catalog).unwrap();
         assert_eq!(index, 0);
         assert_eq!(structure.units[0].placement.x, 10.0);
         assert_eq!(structure.units[0].placement.y, 20.0);
@@ -182,13 +180,7 @@ mod tests {
         let catalog = default_catalog();
         let mut raw = Material::free_base("Carbon", 0.5);
         let mut structure = OrganismStructure::new();
-        let result = instantiate_raw_unit(
-            &mut structure,
-            &mut raw,
-            "Carbon",
-            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-            &catalog,
-        );
+        let result = instantiate_raw_unit(&mut structure, &mut raw, "Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }, &catalog);
         assert_eq!(result, Err("insufficient raw material"));
         assert!((raw.total_amount() - 0.5).abs() < 1e-12);
         assert!(structure.units.is_empty());
