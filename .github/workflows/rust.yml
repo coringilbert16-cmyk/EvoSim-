@@ -12,5 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Check source-file sizes
+        run: python scripts/check_source_sizes.py
+      - name: Check formatting
+        run: cargo fmt --all -- --check
       - name: Run Rust tests
         run: cargo test --all-targets
