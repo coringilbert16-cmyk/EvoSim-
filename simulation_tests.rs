@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod integration_tests {
     use crate::resources::Material;
-    use crate::simulation::Simulation;
+    use crate::state::Simulation;
 
     #[test]
     fn fresh_organism_owns_an_empty_structure() {
