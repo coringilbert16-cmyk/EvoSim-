@@ -6,60 +6,11 @@ on:
   pull_request:
     branches: [main]
 
-permissions:
-  contents: write
-
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Apply source compatibility fixes
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          main = Path("main.rs")
-          text = main.read_text()
-          old = ".send(Message::Text(message))"
-          new = ".send(Message::Text(message.into()))"
-          if old not in text:
-              raise SystemExit("expected WebSocket send expression not found")
-          text = text.replace(old, new, 1)
-          main.write_text(text)
-
-          env = Path("environment.rs")
-          text = env.read_text()
-          marker = "    pub fn cell_center(&self, index: usize) -> (f64, f64) {"
-          if marker not in text:
-              raise SystemExit("expected cell_center method not found")
-          if "pub fn cells_within_radius(&self" not in text:
-              method = '''    pub fn cells_within_radius(&self, x: f64, y: f64, radius: f64) -> Vec<usize> {
-        let radius = radius.max(0.0);
-        let radius_sq = radius * radius;
-        (0..self.cells.len())
-            .filter(|&index| {
-                let (cx, cy) = self.cell_center(index);
-                let dx = cx - x;
-                let dy = cy - y;
-                dx * dx + dy * dy <= radius_sq
-            })
-            .collect()
-    }
-
-'''
-              text = text.replace(marker, method + marker, 1)
-              env.write_text(text)
-
-          PY
-      - name: Commit source fixes
-        run: |
-          if ! git diff --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add main.rs environment.rs
-            git commit -m "Fix Phase 2 compile blockers"
-            git push
-          fi
-      - run: cargo test --all-targets
+      - name: Run Rust tests
+        run: cargo test --all-targets
