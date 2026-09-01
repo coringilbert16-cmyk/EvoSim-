@@ -1,4 +1,5 @@
-use crate::decision::{ActionCandidate, ActionKind, OutcomeKind};
+use crate::decision::{ActionKind, OutcomeKind};
+use crate::decision_runtime::ActionCandidate;
 use crate::math::exponential_influence;
 use crate::state::{
     ActiveTransformation, EnergyLedger, Environment, Organism, Simulation,
