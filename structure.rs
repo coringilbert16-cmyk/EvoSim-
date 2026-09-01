@@ -12,7 +12,7 @@ impl StructuralUnit {
     pub fn connection_sites(&self, catalog: &[BaseResource]) -> Option<ConnectionSites> { catalog.iter().find(|b| b.name == self.resource_name).map(|b| b.shape.connection_sites()) }
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 pub struct Bond {
     pub unit_a: usize, pub point_a: usize, pub unit_b: usize, pub point_b: usize,
     pub strength: f64,
@@ -42,6 +42,7 @@ impl OrganismStructure {
     pub fn connection_load(&self, unit: usize, point: usize) -> f64 { self.bonds.iter().filter(|b| b.touches(unit, point)).map(|b| b.strength).sum() }
     pub fn connection_count(&self, unit: usize, point: usize) -> usize { self.bonds.iter().filter(|b| b.touches(unit, point)).count() }
     pub fn break_bond(&mut self, bond_index: usize) -> Option<Bond> { if bond_index < self.bonds.len() { Some(self.bonds.remove(bond_index)) } else { None } }
+    pub fn break_matching_bond(&mut self, target: Bond) -> Option<Bond> { let index = self.bonds.iter().position(|bond| *bond == target)?; self.break_bond(index) }
     pub fn disconnect_point(&mut self, unit: usize, point: usize) -> Vec<Bond> { let mut removed = Vec::new(); let mut i = 0; while i < self.bonds.len() { if self.bonds[i].touches(unit, point) { removed.push(self.bonds.remove(i)); } else { i += 1; } } removed }
     pub fn loaded_points(&self) -> Vec<(usize, usize)> { let mut pairs = Vec::new(); for bond in &self.bonds { for pair in [(bond.unit_a, bond.point_a), (bond.unit_b, bond.point_b)] { if !pairs.contains(&pair) { pairs.push(pair); } } } pairs }
 }
@@ -75,6 +76,9 @@ mod tests {
     }
     #[test] fn break_bond_returns_the_stored_energy_with_the_bond() {
         let mut s = OrganismStructure::new(); let a = unit(&mut s, "Carbon", 0.0, 0.0); let b = unit(&mut s, "Methane", 1.0, 0.0); let i = s.add_bond(bond(a, 0, b, 0, 0.8, 7.25)); let removed = s.break_bond(i).unwrap(); assert_eq!(removed.bond_energy, 7.25); assert!(s.bonds.is_empty()); assert_eq!(s.units.len(), 2);
+    }
+    #[test] fn break_matching_bond_removes_the_exact_structural_bond() {
+        let mut s = OrganismStructure::new(); let a = unit(&mut s, "Carbon", 0.0, 0.0); let b = unit(&mut s, "Methane", 1.0, 0.0); let target = bond(a, 0, b, 0, 0.8, 7.25); s.add_bond(target); let removed = s.break_matching_bond(target).unwrap(); assert_eq!(removed, target); assert!(s.bonds.is_empty());
     }
     #[test] fn formation_threshold_is_symmetric_and_diminishing_with_load() {
         let base = formation_threshold(0.5, 0.5, 0.0, 0.0); let loaded = formation_threshold(0.5, 0.5, 1.0, 0.0); let more = formation_threshold(0.5, 0.5, 4.0, 0.0); let a = formation_threshold(0.9, 0.1, 3.0, 1.0); let b = formation_threshold(0.1, 0.9, 1.0, 3.0);
