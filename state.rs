@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
-use crate::decision::DecisionHistory;
+use crate::decision::{DecisionHistory, DecisionParameters};
 use crate::environment::{ActiveMaterialField, DeepReservoir, Vent};
 use crate::genome::Genome;
 use crate::resources::{BaseResource, Material};
@@ -167,6 +167,7 @@ pub(crate) struct Simulation {
     pub(crate) next_organism_id: u64,
     pub(crate) next_transformation_id: u64,
     pub(crate) rng: ChaCha8Rng,
+    pub(crate) decision_parameters: DecisionParameters,
 }
 
 pub(crate) const DESIRABILITY_AMOUNT_HALF_SATURATION: f64 = 100.0;
