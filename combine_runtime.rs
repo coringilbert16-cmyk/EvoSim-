@@ -140,7 +140,10 @@ pub(crate) fn try_combine(
     // formation threshold. Do not derive surplus from interaction magnitude.
     let energy_paid = work_cost.max(evaluation.threshold);
     let surplus = energy_paid - evaluation.threshold;
-    if !energy_paid.is_finite() || energy_paid < 0.0 || organism.usable_energy + EPSILON < energy_paid {
+    if !energy_paid.is_finite()
+        || energy_paid < 0.0
+        || organism.usable_energy + EPSILON < energy_paid
+    {
         return None;
     }
 
