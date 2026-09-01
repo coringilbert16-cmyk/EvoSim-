@@ -1,6 +1,5 @@
 /// Shared transformation math. Reactivity uses this exponential everywhere
 /// (affinity, combine cost, break yield). Spec §11, locked by design answers.
-
 pub fn complexity(n: f64) -> f64 {
     if n <= 1.0 {
         0.0
