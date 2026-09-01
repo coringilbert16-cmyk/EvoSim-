@@ -1,7 +1,7 @@
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 
-use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds};
+use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
 use crate::decision_runtime::{select_action, ActionCandidate, DecisionContext};
 use crate::environment::{
     apply_settling, apply_vents, ActiveMaterialField, DeepReservoir, Vent,
@@ -13,11 +13,6 @@ use crate::state::{
     DevelopmentStage, EnergyLedger, Environment, Organism, Position, Snapshot,
     Simulation, ResourceSense, PROCESSING_REACH,
 };
-
-const ENERGY_NEED_THRESHOLD: f64 = 1.0;
-const RAW_MATERIAL_NEED_THRESHOLD: f64 = 1.0;
-const STRESS_RELIEF_THRESHOLD: f64 = 1.0;
-const CONSTRUCTION_MATERIAL_THRESHOLD: f64 = 1.0;
 
 impl Simulation {
     pub(crate) fn new(seed: u64, ticks_per_second: f64) -> Self {
@@ -35,6 +30,7 @@ impl Simulation {
             next_organism_id: 2,
             next_transformation_id: 1,
             rng,
+            decision_parameters: DecisionParameters::default(),
         }
     }
 
@@ -142,14 +138,17 @@ impl Simulation {
         }
     }
 
-    fn current_needs(organism: &Organism) -> CurrentNeeds {
+    fn current_needs(
+        organism: &Organism,
+        parameters: DecisionParameters,
+    ) -> CurrentNeeds {
         let raw_material = organism.stored_unbonded.total_amount();
         CurrentNeeds {
-            energy: organism.usable_energy < ENERGY_NEED_THRESHOLD,
-            material: raw_material < RAW_MATERIAL_NEED_THRESHOLD,
-            construction: raw_material >= CONSTRUCTION_MATERIAL_THRESHOLD
+            energy: organism.usable_energy < parameters.energy_need_threshold,
+            material: raw_material < parameters.raw_material_need_threshold,
+            construction: raw_material >= parameters.construction_material_threshold
                 && organism.structure.units.is_empty(),
-            relief: organism.stress >= STRESS_RELIEF_THRESHOLD,
+            relief: organism.stress >= parameters.stress_relief_threshold,
             exploration: organism.resource_sense.sensed_resources.is_empty(),
         }
     }
@@ -248,10 +247,11 @@ impl Simulation {
             Self::update_memory_from_sources(organism, &environment_snapshot);
         }
 
+        let decision_parameters = self.decision_parameters;
         let (organisms, environment) = (&mut self.organisms, &mut self.environment);
         for organism in organisms {
             let context = DecisionContext {
-                needs: Self::current_needs(organism),
+                needs: Self::current_needs(organism, decision_parameters),
                 eligibility: Self::action_eligibility(organism, environment),
             };
             let candidates = Self::decision_candidates(organism);
