@@ -1,6 +1,8 @@
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 
+use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds};
+use crate::decision_runtime::{select_action, ActionCandidate, DecisionContext};
 use crate::environment::{
     apply_settling, apply_vents, ActiveMaterialField, DeepReservoir, Vent,
     DEFAULT_CELL_SIZE, DEFAULT_DIFFUSION_FRACTION, DEFAULT_RESERVOIR_BLOCK_SIZE,
@@ -9,8 +11,13 @@ use crate::environment::{
 use crate::genome::initial_genome;
 use crate::state::{
     DevelopmentStage, EnergyLedger, Environment, Organism, Position, Snapshot,
-    Simulation, ResourceSense,
+    Simulation, ResourceSense, PROCESSING_REACH,
 };
+
+const ENERGY_NEED_THRESHOLD: f64 = 1.0;
+const RAW_MATERIAL_NEED_THRESHOLD: f64 = 1.0;
+const STRESS_RELIEF_THRESHOLD: f64 = 1.0;
+const CONSTRUCTION_MATERIAL_THRESHOLD: f64 = 1.0;
 
 impl Simulation {
     pub(crate) fn new(seed: u64, ticks_per_second: f64) -> Self {
@@ -108,6 +115,7 @@ impl Simulation {
                 direction_strength: 0.0,
             },
             memory: Vec::new(),
+            decision_history: crate::decision::DecisionHistory::default(),
             usable_energy: 0.0,
             stress: 0.0,
             stored_unbonded: crate::resources::Material { parts: Vec::new(), bonded: false },
@@ -132,6 +140,75 @@ impl Simulation {
                 DEFAULT_SETTLING_FRACTION,
             );
         }
+    }
+
+    fn current_needs(organism: &Organism) -> CurrentNeeds {
+        let raw_material = organism.stored_unbonded.total_amount();
+        CurrentNeeds {
+            energy: organism.usable_energy < ENERGY_NEED_THRESHOLD,
+            material: raw_material < RAW_MATERIAL_NEED_THRESHOLD,
+            construction: raw_material >= CONSTRUCTION_MATERIAL_THRESHOLD
+                && organism.structure.units.is_empty(),
+            relief: organism.stress >= STRESS_RELIEF_THRESHOLD,
+            exploration: organism.resource_sense.sensed_resources.is_empty(),
+        }
+    }
+
+    fn action_eligibility(
+        organism: &Organism,
+        environment: &Environment,
+    ) -> ActionEligibility {
+        let can_break = organism.active_transformation_id.is_none()
+            && organism.resource_sense.sensed_resources.iter().any(|resource| {
+                resource.desirability > 0.0
+                    && resource.distance <= PROCESSING_REACH
+                    && resource.bonded
+                    && environment
+                        .field
+                        .cells
+                        .get(resource.field_index)
+                        .is_some_and(|cell| {
+                            cell.bonded.can_break() && cell.bonded.total_amount() > 0.0
+                        })
+            });
+
+        ActionEligibility {
+            can_move: organism.active_transformation_id.is_none(),
+            can_acquire: false,
+            can_combine: false,
+            can_break,
+            can_expel: false,
+        }
+    }
+
+    fn decision_candidates(organism: &Organism) -> Vec<ActionCandidate> {
+        let mut candidates = vec![ActionCandidate {
+            action: ActionKind::Move,
+            context_key: None,
+        }];
+
+        if let Some(target) = organism
+            .resource_sense
+            .sensed_resources
+            .iter()
+            .filter(|resource| {
+                resource.desirability > 0.0
+                    && resource.distance <= PROCESSING_REACH
+                    && resource.bonded
+            })
+            .max_by(|a, b| {
+                a.desirability
+                    .partial_cmp(&b.desirability)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+        {
+            candidates.push(ActionCandidate {
+                action: ActionKind::Break,
+                context_key: Some(target.name.clone()),
+            });
+        }
+
+        candidates
     }
 
     pub(crate) fn step(&mut self) -> Snapshot {
@@ -168,16 +245,47 @@ impl Simulation {
             organism.age += 1;
             Self::update_resource_perception(organism, &environment_snapshot);
             Self::update_memory_from_sources(organism, &environment_snapshot);
-            Self::update_movement(organism, &environment_snapshot);
         }
 
-        for organism in &mut self.organisms {
-            if let Some(transformation) = Self::try_start_transformation(
-                organism,
-                &mut self.environment.field,
-                &mut self.next_transformation_id,
-            ) {
-                self.active_transformations.push(transformation);
+        let (organisms, environment) = (&mut self.organisms, &mut self.environment);
+        for organism in organisms {
+            let context = DecisionContext {
+                needs: Self::current_needs(organism),
+                eligibility: Self::action_eligibility(organism, environment),
+            };
+            let candidates = Self::decision_candidates(organism);
+            let Some(selected) = select_action(context, &organism.decision_history, &candidates) else {
+                continue;
+            };
+
+            match selected.action {
+                ActionKind::Move => {
+                    let moved = Self::update_movement(organism, environment);
+                    crate::decision_runtime::record_outcome(
+                        &mut organism.decision_history,
+                        &selected,
+                        if moved {
+                            crate::decision::OutcomeKind::Neutral
+                        } else {
+                            crate::decision::OutcomeKind::Harmful
+                        },
+                    );
+                }
+                ActionKind::Break => {
+                    if let Some(transformation) = Self::try_start_transformation(
+                        organism,
+                        &mut environment.field,
+                        &mut self.next_transformation_id,
+                        &selected,
+                    ) {
+                        self.active_transformations.push(transformation);
+                    }
+                }
+                ActionKind::Acquire | ActionKind::Combine | ActionKind::Expel => {
+                    // These actions remain mechanically unavailable until their
+                    // physical executors are integrated. The decision layer
+                    // therefore never selects them merely because a need exists.
+                }
             }
         }
 
