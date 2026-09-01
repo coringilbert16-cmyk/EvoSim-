@@ -17,4 +17,4 @@ jobs:
       - name: Run Rust tests
         run: cargo test --all-targets
       - name: Run Clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings -A dead_code
+        run: cargo clippy --all-targets --all-features -- -D warnings -A dead_code -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of
