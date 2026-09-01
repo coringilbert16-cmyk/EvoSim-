@@ -36,12 +36,30 @@
     function render(snapshot) {
       const width = canvas.clientWidth;
       const height = canvas.clientHeight;
-      ctx.clearRect(0, 0, width, height);
-      status.textContent = `EvoSim connected — tick ${snapshot.tick ?? '?'}`;
+      const worldWidth = snapshot.environment?.width || 1;
+      const worldHeight = snapshot.environment?.height || 1;
+      const scaleX = width / worldWidth;
+      const scaleY = height / worldHeight;
+      const scale = Math.min(scaleX, scaleY);
+      const offsetX = (width - worldWidth * scale) / 2;
+      const offsetY = (height - worldHeight * scale) / 2;
 
-      // Checkpoint 2 intentionally keeps rendering minimal. The canvas is the
-      // read-only viewport; organism/resource visualization will be expanded
-      // in later checkpoints once the snapshot shape is finalized.
+      ctx.clearRect(0, 0, width, height);
+      ctx.save();
+      ctx.translate(offsetX, offsetY);
+      ctx.scale(scale, scale);
+
+      for (const organism of snapshot.organisms || []) {
+        const cells = organism.occupied_cells || [];
+        for (const cell of cells) {
+          ctx.beginPath();
+          ctx.arc(cell.x, cell.y, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      ctx.restore();
+      status.textContent = `EvoSim connected — tick ${snapshot.tick ?? '?'}`;
     }
 
     function connect() {
