@@ -37,6 +37,21 @@ pub enum ActionKind {
     Expel,
 }
 
+impl ActionKind {
+    /// The needs that make an action relevant. This is a policy mapping, not
+    /// physics and not a numerical utility score. A hybrid need state can
+    /// therefore make more than one action relevant at the same time.
+    pub fn relevant_needs(self) -> &'static [NeedKind] {
+        match self {
+            ActionKind::Move => &[NeedKind::Exploration, NeedKind::Material],
+            ActionKind::Acquire => &[NeedKind::Material, NeedKind::Energy],
+            ActionKind::Combine => &[NeedKind::Construction, NeedKind::Energy],
+            ActionKind::Break => &[NeedKind::Energy, NeedKind::Material],
+            ActionKind::Expel => &[NeedKind::Relief],
+        }
+    }
+}
+
 /// Why an action is currently relevant. These are decision signals, not
 /// physical quantities and not energy calculations.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -171,6 +186,10 @@ impl CurrentNeeds {
             NeedKind::Exploration => self.exploration,
         }
     }
+
+    pub fn any_for(self, needs: &[NeedKind]) -> bool {
+        needs.iter().copied().any(|need| self.contains(need))
+    }
 }
 
 /// Tunable decision parameters. These are policy parameters, not physics
@@ -229,11 +248,11 @@ pub enum DecisionResult {
     Reject,
 }
 
-/// The decision engine is deliberately small. It does not know the physical
-/// equations. It only gates an action by mechanical eligibility and current
-/// need. History is exposed separately so future action-selection code can
-/// prefer known-positive experiences without pretending that an unseen action
-/// has a known consequence.
+/// Mechanical eligibility is checked first. If the action is mechanically
+/// possible, the hybrid current-needs state decides whether it is relevant.
+/// History is deliberately NOT used as a physics gate: an organism may act
+/// on an unknown action, but the decision layer must not fabricate knowledge
+/// about its outcome.
 pub fn approve_action(
     action: ActionKind,
     eligibility: ActionEligibility,
@@ -245,6 +264,26 @@ pub fn approve_action(
     }
 
     if needs.contains(required_need) {
+        DecisionResult::Approve
+    } else {
+        DecisionResult::Reject
+    }
+}
+
+/// Preferred integration entry point for the full hybrid architecture. It
+/// uses the action's declared relevant needs rather than requiring callers to
+/// duplicate the mapping. This remains a yes/no gate; it does not score or
+/// rank the action and does not inspect physical equations.
+pub fn approve_action_for_current_needs(
+    action: ActionKind,
+    eligibility: ActionEligibility,
+    needs: CurrentNeeds,
+) -> DecisionResult {
+    if !eligibility.permits(action) {
+        return DecisionResult::Reject;
+    }
+
+    if needs.any_for(action.relevant_needs()) {
         DecisionResult::Approve
     } else {
         DecisionResult::Reject
@@ -315,13 +354,51 @@ mod tests {
     }
 
     #[test]
-    fn unseen_action_has_no_fabricated_outcome() {
+    fn hybrid_mapping_approves_action_when_any_relevant_need_is_present() {
+        let eligibility = ActionEligibility {
+            can_combine: true,
+            ..ActionEligibility::default()
+        };
+        let needs = CurrentNeeds {
+            construction: true,
+            ..CurrentNeeds::default()
+        };
+        assert_eq!(
+            approve_action_for_current_needs(ActionKind::Combine, eligibility, needs),
+            DecisionResult::Approve
+        );
+    }
+
+    #[test]
+    fn unknown_history_does_not_invent_an_outcome() {
         let history = DecisionHistory::default();
         assert!(!outcome_is_known(
             &history,
             ActionKind::Combine,
             Some("Carbon+Methane"),
         ));
+    }
+
+    #[test]
+    fn unknown_action_can_still_be_approved_when_needed_and_eligible() {
+        let history = DecisionHistory::default();
+        let eligibility = ActionEligibility {
+            can_combine: true,
+            ..ActionEligibility::default()
+        };
+        let needs = CurrentNeeds {
+            construction: true,
+            ..CurrentNeeds::default()
+        };
+        assert!(!outcome_is_known(
+            &history,
+            ActionKind::Combine,
+            Some("Carbon+Methane"),
+        ));
+        assert_eq!(
+            approve_action_for_current_needs(ActionKind::Combine, eligibility, needs),
+            DecisionResult::Approve
+        );
     }
 
     #[test]
