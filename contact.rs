@@ -1,8 +1,8 @@
 //! Physical contact, accessibility, and structural connection candidates.
 //!
 //! Geometry/topology only. COMBINE owns energetic outcome, formation, and
-//! bond strength. Connection points may carry multiple bonds when geometry
-//! leaves a distinct ray available.
+//! bond strength. A connection point is a finite site: once occupied by a
+//! bond it cannot form another bond.
 
 use std::collections::HashMap;
 
@@ -84,34 +84,11 @@ pub struct ConnectionPairCandidate {
     pub available_b: bool,
 }
 
-fn direction_from_to(a: WorldConnectionPoint, b: WorldConnectionPoint) -> Option<(f64, f64)> {
-    let dx = b.x - a.x;
-    let dy = b.y - a.y;
-    let len = dx.hypot(dy);
-    (len > f64::EPSILON).then_some((dx / len, dy / len))
-}
-
-fn same_ray(a: (f64, f64), b: (f64, f64)) -> bool {
-    let cross = a.0 * b.1 - a.1 * b.0;
-    let dot = a.0 * b.0 + a.1 * b.1;
-    cross.abs() <= 1e-9 && dot >= 1.0 - 1e-9
-}
-
-fn endpoint_world_point(structure: &OrganismStructure, unit: usize, point: usize, catalog: &[BaseResource]) -> Option<WorldConnectionPoint> {
-    let u = structure.units.get(unit)?;
-    let ConnectionSites::Corners(points) = u.connection_sites(catalog)? else { return None; };
-    Some(transform_point(*points.get(point)?, u))
-}
-
-fn connection_point_has_space(structure: &OrganismStructure, unit: usize, point: usize, other_unit: usize, other_point: usize, catalog: &[BaseResource]) -> bool {
-    let Some(start) = endpoint_world_point(structure, unit, point, catalog) else { return false; };
-    let Some(end) = endpoint_world_point(structure, other_unit, other_point, catalog) else { return false; };
-    let Some(proposed) = direction_from_to(start, end) else { return false; };
-    structure.bonds.iter().filter(|b| b.touches(unit, point)).all(|bond| {
-        let (ou, op) = if bond.unit_a == unit && bond.point_a == point { (bond.unit_b, bond.point_b) } else { (bond.unit_a, bond.point_a) };
-        let Some(existing_end) = endpoint_world_point(structure, ou, op, catalog) else { return false; };
-        direction_from_to(start, existing_end).is_some_and(|existing| !same_ray(proposed, existing))
-    })
+/// A connection point is a finite site. Any existing bond occupying the
+/// point makes it unavailable for another bond, regardless of the geometry
+/// of the proposed second connection.
+fn connection_point_has_space(structure: &OrganismStructure, unit: usize, point: usize) -> bool {
+    structure.connection_count(unit, point) == 0
 }
 
 pub fn connection_pair_candidates(structure: &OrganismStructure, unit_a: usize, unit_b: usize, catalog: &[BaseResource]) -> Vec<ConnectionPairCandidate> {
@@ -127,8 +104,8 @@ pub fn connection_pair_candidates(structure: &OrganismStructure, unit_a: usize, 
             out.push(ConnectionPairCandidate {
                 point_a, point_b, distance: distance(wa, wb), facing: facing(wa, wb),
                 load_a: structure.connection_load(unit_a, point_a), load_b: structure.connection_load(unit_b, point_b),
-                available_a: connection_point_has_space(structure, unit_a, point_a, unit_b, point_b, catalog),
-                available_b: connection_point_has_space(structure, unit_b, point_b, unit_a, point_a, catalog),
+                available_a: connection_point_has_space(structure, unit_a, point_a),
+                available_b: connection_point_has_space(structure, unit_b, point_b),
             });
         }
     }
@@ -182,16 +159,16 @@ pub fn connection_pair_candidates_cached(structure: &OrganismStructure, unit_a: 
         Some(ConnectionPairCandidate {
             point_a: ia, point_b: ib, distance: distance(wa, wb), facing: facing(wa, wb),
             load_a: structure.connection_load(unit_a, ia), load_b: structure.connection_load(unit_b, ib),
-            available_a: connection_point_has_space(structure, unit_a, ia, unit_b, ib, catalog),
-            available_b: connection_point_has_space(structure, unit_b, ib, unit_a, ia, catalog),
+            available_a: connection_point_has_space(structure, unit_a, ia),
+            available_b: connection_point_has_space(structure, unit_b, ib),
         })
     }).collect()
 }
 
 pub fn try_add_bond(structure: &mut OrganismStructure, bond: crate::structure::Bond, catalog: &[BaseResource]) -> Result<usize, &'static str> {
     if !structure.is_valid_bond(&bond, catalog) { return Err("invalid bond"); }
-    if !connection_point_has_space(structure, bond.unit_a, bond.point_a, bond.unit_b, bond.point_b, catalog)
-        || !connection_point_has_space(structure, bond.unit_b, bond.point_b, bond.unit_a, bond.point_a, catalog) {
+    if !connection_point_has_space(structure, bond.unit_a, bond.point_a)
+        || !connection_point_has_space(structure, bond.unit_b, bond.point_b) {
         return Err("bond geometry overlaps existing bond");
     }
     Ok(structure.add_bond(bond))
@@ -211,18 +188,18 @@ mod tests {
     }
 
     #[test]
-    fn occupied_point_can_accept_another_bond_when_geometry_leaves_space() {
+    fn occupied_point_cannot_accept_another_bond() {
         let catalog = default_catalog(); let mut s = OrganismStructure::new();
         let a = unit(&mut s, "Carbon", 0.0, 0.0); let b = unit(&mut s, "Carbon", 1.0, 0.0); let c = unit(&mut s, "Carbon", 0.0, 1.0);
         assert!(try_add_bond(&mut s, bond(a, 0, b, 0), &catalog).is_ok());
-        assert!(try_add_bond(&mut s, bond(a, 0, c, 0), &catalog).is_ok());
-        assert_eq!(s.connection_count(a, 0), 2);
+        assert_eq!(try_add_bond(&mut s, bond(a, 0, c, 0), &catalog), Err("bond geometry overlaps existing bond"));
+        assert_eq!(s.connection_count(a, 0), 1);
     }
 
     #[test]
-    fn point_rejects_second_bond_that_uses_same_geometric_ray() {
+    fn point_rejects_second_bond_even_when_geometry_is_different() {
         let catalog = default_catalog(); let mut s = OrganismStructure::new();
-        let a = unit(&mut s, "Carbon", 0.0, 0.0); let b = unit(&mut s, "Carbon", 1.0, 0.0); let c = unit(&mut s, "Carbon", 2.0, 0.0);
+        let a = unit(&mut s, "Carbon", 0.0, 0.0); let b = unit(&mut s, "Carbon", 1.0, 0.0); let c = unit(&mut s, "Carbon", 0.0, 1.0);
         assert!(try_add_bond(&mut s, bond(a, 0, b, 0), &catalog).is_ok());
         assert_eq!(try_add_bond(&mut s, bond(a, 0, c, 0), &catalog), Err("bond geometry overlaps existing bond"));
     }
