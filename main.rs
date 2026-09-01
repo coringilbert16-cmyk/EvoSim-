@@ -6,6 +6,7 @@ mod structure;
 mod connection_geometry;
 mod contact;
 mod combine;
+mod combine_runtime;
 mod structural_combine;
 mod decision;
 mod decision_runtime;
