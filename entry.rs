@@ -2,5 +2,6 @@
 // alongside the existing simulation without duplicating main.rs.
 mod combine;
 mod structural_combine;
+mod decision;
 
 include!("main.rs");
