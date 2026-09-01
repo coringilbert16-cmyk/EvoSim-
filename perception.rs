@@ -1,10 +1,10 @@
 use crate::state::{
-    AffinityResponses, Organism, PropertyDeviations, ResourceObservation, Environment,
+    AffinityResponses, Environment, Organism, PropertyDeviations, ResourceObservation,
     DESIRABILITY_AMOUNT_HALF_SATURATION, DESIRABILITY_MAX,
 };
 
 impl crate::state::Simulation {
-    fn calculate_property_deviations(
+    pub(crate) fn calculate_property_deviations(
         properties: &crate::resources::ResourceProperties,
         baselines: &crate::resources::ResourceBaselines,
         ranges: &crate::resources::ResourceProperties,
@@ -17,20 +17,20 @@ impl crate::state::Simulation {
         }
     }
 
-    fn affinity_response(deviation: f64, affinity: f64) -> f64 {
+    pub(crate) fn affinity_response(deviation: f64, affinity: f64) -> f64 {
         (deviation * affinity * 3.0).tanh()
     }
 
-    fn amount_factor(amount: f64) -> f64 {
+    pub(crate) fn amount_factor(amount: f64) -> f64 {
         let amount = amount.max(0.0);
         amount / (amount + DESIRABILITY_AMOUNT_HALF_SATURATION)
     }
 
-    fn energy_need_factor(usable_energy: f64) -> f64 {
+    pub(crate) fn energy_need_factor(usable_energy: f64) -> f64 {
         1.0 / (1.0 + usable_energy.max(0.0))
     }
 
-    fn calculate_desirability(
+    pub(crate) fn calculate_desirability(
         organism: &Organism,
         properties: &crate::resources::ResourceProperties,
         perceived_amount: f64,
@@ -44,16 +44,11 @@ impl crate::state::Simulation {
             reactivity: Self::affinity_response(deviations.reactivity, organism.genome.reactivity_affinity()),
             cohesion: Self::affinity_response(deviations.cohesion, organism.genome.cohesion_affinity()),
         };
-
         let energy_need = Self::energy_need_factor(organism.usable_energy);
         let energy_response = responses.potential_energy * (1.0 + energy_need);
-        let base_desirability = (
-            responses.mass + energy_response + responses.reactivity + responses.cohesion
-        ) / 4.0;
+        let base_desirability = (responses.mass + energy_response + responses.reactivity + responses.cohesion) / 4.0;
         let amount_factor = Self::amount_factor(perceived_amount);
-        let desirability = (base_desirability * amount_factor)
-            .clamp(-DESIRABILITY_MAX, DESIRABILITY_MAX);
-
+        let desirability = (base_desirability * amount_factor).clamp(-DESIRABILITY_MAX, DESIRABILITY_MAX);
         (deviations, responses, base_desirability, amount_factor, energy_need, desirability)
     }
 
@@ -76,7 +71,6 @@ impl crate::state::Simulation {
 
         let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
         let ranges = crate::resources::property_ranges(&environment.catalog);
-
         for cell_index in environment.field.cells_within_radius(px, py, perception_radius) {
             let (cell_x, cell_y) = environment.field.cell_center(cell_index);
             let dx = cell_x - px;
@@ -88,14 +82,11 @@ impl crate::state::Simulation {
 
             for (bonded, material) in [(true, &cell.bonded), (false, &cell.unbonded)] {
                 let perceived_amount = material.total_amount() * sensory_resolution;
-                if perceived_amount <= 0.0 {
-                    continue;
-                }
+                if perceived_amount <= 0.0 { continue; }
                 let properties = material.weighted_properties(&environment.catalog);
                 let (deviations, responses, base_desirability, amount_factor, energy_need_factor, desirability) =
                     Self::calculate_desirability(organism, &properties, perceived_amount, &baselines, &ranges);
                 let label = material.parts.iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>().join("+");
-
                 organism.resource_sense.sensed_resources.push(ResourceObservation {
                     name: label,
                     properties,
@@ -112,21 +103,15 @@ impl crate::state::Simulation {
                     source_y: cell_y,
                     field_index: cell_index,
                 });
-
                 organism.resource_sense.direction_x += direction_x * desirability;
                 organism.resource_sense.direction_y += direction_y * desirability;
             }
         }
 
-        let magnitude = (
-            organism.resource_sense.direction_x * organism.resource_sense.direction_x
-                + organism.resource_sense.direction_y * organism.resource_sense.direction_y
-        ).sqrt();
+        let magnitude = (organism.resource_sense.direction_x * organism.resource_sense.direction_x
+            + organism.resource_sense.direction_y * organism.resource_sense.direction_y).sqrt();
         organism.resource_sense.direction_strength = magnitude;
-        if magnitude <= f64::EPSILON {
-            return;
-        }
-
+        if magnitude <= f64::EPSILON { return; }
         organism.resource_sense.direction_x /= magnitude;
         organism.resource_sense.direction_y /= magnitude;
         let angle = organism.resource_sense.direction_y.atan2(organism.resource_sense.direction_x);
