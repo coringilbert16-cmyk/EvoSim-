@@ -1,5 +1,15 @@
 # EvoSim Integration Audit & Large-File Truncation Plan
 
+## Current status
+
+**Phase 1 — executable runtime split: COMPLETE.**
+
+The former monolithic `main.rs` has been decomposed into a normal Rust module tree. The binary now uses `main.rs` as its real crate entrypoint; the transitional `entry.rs` + `include!("main.rs")` arrangement has been removed. The split runtime is now organized across `state.rs`, `simulation.rs`, `perception.rs`, `memory.rs`, `movement.rs`, `transformation.rs`, `server.rs`, and `simulation_tests.rs`.
+
+The repository's Rust CI passed `cargo test --all-targets` after the split (workflow run 49).
+
+**Important verification note:** the GitHub file-retrieval tool and raw GitHub view produced a stale/mismatched representation of the old `main.rs` during the audit. The current repository state was therefore verified using the GitHub contents API and the post-change CI run rather than relying on the stale raw-file cache.
+
 ## Objective
 
 Make the repository internally coherent before further feature work, while restructuring large source files so future GitHub/AI file retrieval cannot truncate the architectural context needed for safe edits.
@@ -10,8 +20,15 @@ This is an integration-first audit. No simulation rule is changed merely to make
 
 The current `main` tree contains:
 
-- Rust executable entry: `entry.rs`
-- Large runtime: `main.rs` (~69 KB)
+- Rust executable entry: `main.rs`
+- Runtime state: `state.rs`
+- Simulation orchestration: `simulation.rs`
+- Perception/desirability: `perception.rs`
+- Spatial memory: `memory.rs`
+- Movement: `movement.rs`
+- BREAK transformation lifecycle: `transformation.rs`
+- HTTP/WebSocket/tick server: `server.rs`
+- Simulation integration tests: `simulation_tests.rs`
 - Large environment module: `environment.rs` (~38 KB)
 - Large resource/chemistry module: `resources.rs` (~43 KB)
 - Structural/chemistry support: `combine.rs`, `structural_combine.rs`, `structure.rs`, `contact.rs`, `connection_geometry.rs`
@@ -25,10 +42,10 @@ The current `main` tree contains:
 ## Immediate integration findings
 
 1. **Frontend is incomplete in the repository tree.** `main.tsx` imports `./index.css` and `./App.tsx`, but those files are not present in the current tree. The frontend therefore cannot currently be treated as an integrated build target.
-2. **The decision runtime exists but is not wired into the simulation loop.** `decision_runtime.rs` exposes the bridge, while `main.rs` still performs direct movement/acquisition/BREAK initiation. This is an architectural integration gap, not a reason to delete the decision layer.
-3. **The executable uses `entry.rs` + `include!("main.rs")`.** This works as a transitional compilation arrangement, but it makes `main.rs` a monolithic integration boundary and complicates future module discovery. The final target should have a normal Rust module tree and a small binary entrypoint.
-4. **`connection_geometry.rs` exists but is not declared by the executable module tree.** It is currently effectively orphaned unless another future module imports it. Geometry logic should have one authoritative path and be explicitly wired into the structural subsystem.
-5. **The large files are above the practical safe-review size for repeated AI/GitHub retrieval.** `main.rs`, `environment.rs`, and `resources.rs` must be split by responsibility before more features are added.
+2. **The decision runtime exists but is not wired into the simulation loop.** `decision_runtime.rs` exposes the bridge, while the simulation still performs direct movement and BREAK initiation. This remains an architectural integration gap, not a reason to delete the decision layer.
+3. **The `entry.rs`/`include!("main.rs")` transition has now been removed.** The executable has a normal module tree and `main.rs` is a small startup boundary.
+4. **`connection_geometry.rs` exists but is not declared by the executable module tree.** It remains an integration item for the structural audit.
+5. **`environment.rs` and `resources.rs` remain above the practical safe-review size for repeated AI/GitHub retrieval.** They are the next large-file targets.
 6. **Comments contain historical/spec references that need normalization.** Comments mentioning superseded Master Spec sections, old cloud pathways, or undecided behavior must be replaced with comments describing the current implementation and locked decisions.
 7. **The current BREAK bootstrap is intentionally incomplete.** Fresh simulation material begins unbonded; BREAK requires bonded material; COMBINE is not yet connected to organism acquisition/structure formation. This is a known integration boundary and must remain explicit rather than being papered over with special-case energy creation.
 
@@ -57,22 +74,23 @@ The current `main` tree contains:
 
 ### Phase 1 — Split the executable runtime
 
+**Complete.**
+
 Replace the `entry.rs`/`include!("main.rs")` transition with a normal crate layout while preserving behavior.
 
-Target structure:
+Current structure:
 
-- `src/main.rs` — process startup, router construction, server bind only.
-- `src/app.rs` — application state and HTTP/WebSocket handlers.
-- `src/simulation.rs` — `Simulation`, `Snapshot`, tick orchestration.
-- `src/organism.rs` — organism state and organism-local helpers.
-- `src/perception.rs` — resource sensing/desirability.
-- `src/memory.rs` — spatial memory.
-- `src/acquisition.rs` — physical-contact acquisition.
-- `src/transformation.rs` — BREAK lifecycle and energy ledger.
-- `src/environment_step.rs` — environment tick ordering.
-- `src/config.rs` — simulation constants/configuration.
+- `main.rs` — process startup only.
+- `state.rs` — application/runtime state and serializable simulation data structures.
+- `simulation.rs` — initialization, environment stepping, tick orchestration, snapshots, conservation accounting.
+- `perception.rs` — resource sensing/desirability.
+- `memory.rs` — spatial memory.
+- `movement.rs` — movement decision and movement execution.
+- `transformation.rs` — BREAK initiation/resolution and energy consequences.
+- `server.rs` — HTTP snapshot, WebSocket streaming, tick loop, bind/startup.
+- `simulation_tests.rs` — simulation integration tests.
 
-The exact names may be adjusted after dependency analysis; the rule is one responsibility per module and no circular dependency workaround through `include!`.
+The split contains no `include!` workaround.
 
 ### Phase 2 — Split environment
 
