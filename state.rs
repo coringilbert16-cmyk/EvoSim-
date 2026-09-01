@@ -98,6 +98,7 @@ pub(crate) struct ActiveTransformation {
     pub(crate) complexity: f64,
     pub(crate) duration_ticks: u64,
     pub(crate) remaining_ticks: u64,
+    pub(crate) decision_context_key: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Default)]
