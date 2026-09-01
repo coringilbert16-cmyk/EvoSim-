@@ -4,11 +4,19 @@
 
 **Phase 1 — executable runtime split: COMPLETE.**
 
-The former monolithic `main.rs` has been decomposed into a normal Rust module tree. The binary now uses `main.rs` as its real crate entrypoint; the transitional `entry.rs` + `include!("main.rs")` arrangement has been removed. The split runtime is now organized across `state.rs`, `simulation.rs`, `perception.rs`, `memory.rs`, `movement.rs`, `transformation.rs`, `server.rs`, and `simulation_tests.rs`.
+**Phase 2 — environment split: COMPLETE.**
 
-The repository's Rust CI passed `cargo test --all-targets` after the split (workflow run 49).
+**Phase 3 — resources/chemistry split: COMPLETE.**
 
-**Important verification note:** the GitHub file-retrieval tool and raw GitHub view produced a stale/mismatched representation of the old `main.rs` during the audit. The current repository state was therefore verified using the GitHub contents API and the post-change CI run rather than relying on the stale raw-file cache.
+**Phase 4 — structural integration: COMPLETE.**
+
+**Phase 5 — runtime decision integration: COMPLETE.**
+
+The repository now has a normal Rust module tree and the simulation tick is routed through the decision runtime before an organism executes an available action. Current needs come from organism state through tunable `DecisionParameters`; mechanical eligibility comes from the physical/runtime layer; bounded learned consequence history is carried by each organism; and selected actions invoke the existing MOVE/BREAK physical executors. COMBINE, ACQUIRE, and EXPEL remain mechanically unavailable until their physical executors are genuinely integrated, rather than being selected merely because a need exists.
+
+The decision runtime does not contain chemistry, geometry, or COMBINE/BREAK equations. BREAK carries the selected context through its active transformation and records the actual resolved consequence into decision history. MOVE records its actual physical execution result immediately.
+
+Rust CI passes `cargo test --all-targets` after the Phase 5 integration (workflow run 76).
 
 ## Objective
 
@@ -42,9 +50,9 @@ The current `main` tree contains:
 ## Immediate integration findings
 
 1. **Frontend is incomplete in the repository tree.** `main.tsx` imports `./index.css` and `./App.tsx`, but those files are not present in the current tree. The frontend therefore cannot currently be treated as an integrated build target.
-2. **The decision runtime exists but is not wired into the simulation loop.** `decision_runtime.rs` exposes the bridge, while the simulation still performs direct movement and BREAK initiation. This remains an architectural integration gap, not a reason to delete the decision layer.
+2. **The decision runtime is now wired into the simulation loop.** The Phase 5 gap is closed: current needs, mechanical eligibility, candidate context, and bounded learned history now meet at the decision boundary before execution.
 3. **The `entry.rs`/`include!("main.rs")` transition has now been removed.** The executable has a normal module tree and `main.rs` is a small startup boundary.
-4. **`connection_geometry.rs` exists but is not declared by the executable module tree.** It remains an integration item for the structural audit.
+4. **`connection_geometry.rs` is integrated through the structural dependency path established in Phase 4.** It is no longer an orphaned duplicate geometry mechanism.
 5. **`environment.rs` and `resources.rs` remain above the practical safe-review size for repeated AI/GitHub retrieval.** They are the next large-file targets.
 6. **Comments contain historical/spec references that need normalization.** Comments mentioning superseded Master Spec sections, old cloud pathways, or undecided behavior must be replaced with comments describing the current implementation and locked decisions.
 7. **The current BREAK bootstrap is intentionally incomplete.** Fresh simulation material begins unbonded; BREAK requires bonded material; COMBINE is not yet connected to organism acquisition/structure formation. This is a known integration boundary and must remain explicit rather than being papered over with special-case energy creation.
@@ -94,6 +102,8 @@ The split contains no `include!` workaround.
 
 ### Phase 2 — Split environment
 
+**Complete.**
+
 Break `environment.rs` into:
 
 - field representation and indexing
@@ -106,6 +116,8 @@ Break `environment.rs` into:
 Preserve the Layer 1/Layer 2 authority model and conservation behavior.
 
 ### Phase 3 — Split resources/chemistry
+
+**Complete.**
 
 Break `resources.rs` into:
 
@@ -120,24 +132,35 @@ Keep resource properties immutable and keep derived properties derived rather th
 
 ### Phase 4 — Make structural integration explicit
 
+**Complete.**
+
 Create one authoritative dependency path:
 
 `resource geometry -> contact/compatibility -> formation evaluation -> bond creation -> structural state`
 
-Ensure `connection_geometry.rs` is either explicitly integrated or removed if its functionality is duplicated elsewhere. Do not leave duplicate geometry implementations.
+`connection_geometry.rs` is explicitly integrated through this path rather than remaining an orphaned duplicate implementation.
 
 ### Phase 5 — Runtime decision integration
 
+**Complete.**
+
 Connect `decision_runtime.rs` to organism action selection without moving chemistry/geometry into the decision layer.
 
-The runtime should pass:
+The runtime now passes:
 
-- current needs from organism state
+- current needs from organism state through tunable `DecisionParameters`
 - mechanical eligibility from physical systems
 - candidate action/context
 - bounded decision history
 
-Then the selected action invokes the existing physical executor. Decision code must not reimplement COMBINE/BREAK equations.
+The selected action then invokes the existing physical executor. Decision code does not reimplement COMBINE/BREAK equations.
+
+The runtime records actual physical consequences after execution:
+
+- MOVE records the immediate movement result.
+- BREAK carries its selected context through the transformation and records the resolved energy/heat consequence.
+- Unknown outcomes remain selectable; no predicted outcome is fabricated.
+- Mechanically unavailable actions remain unavailable even when their associated need is active.
 
 ### Phase 6 — Integrate COMBINE without violating emergence rules
 
