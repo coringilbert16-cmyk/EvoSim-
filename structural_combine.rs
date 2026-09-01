@@ -11,6 +11,8 @@ use crate::contact::{connection_pair_candidates_cached, ConnectionCompatibilityC
 use crate::resources::{BaseResource, Material};
 use crate::structure::{Bond, OrganismStructure, Placement, StructuralUnit};
 
+const COMBINE_CONTACT_TOLERANCE: f64 = 1.0;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct StructuralCombineResult {
     pub unit_a: usize,
@@ -61,7 +63,11 @@ pub fn execute(
 
     let candidate = *connection_pair_candidates_cached(structure, unit_a, unit_b, catalog, cache)
         .iter()
-        .filter(|c| c.available_a && c.available_b)
+        .filter(|c| {
+            c.distance <= COMBINE_CONTACT_TOLERANCE
+                && c.available_a
+                && c.available_b
+        })
         .max_by(|a, b| {
             a.facing
                 .partial_cmp(&b.facing)
@@ -239,6 +245,35 @@ mod tests {
         ));
         let mut cache = ConnectionCompatibilityCache::new();
         let result = execute(&mut structure, a, a, &catalog, &mut cache, 100.0, 0.0);
+        assert_eq!(
+            result,
+            Err(StructuralCombineError::NoGeometricallyEligibleCandidate)
+        );
+        assert!(structure.bonds.is_empty());
+    }
+
+    #[test]
+    fn combine_rejects_connection_points_more_than_one_structural_unit_apart() {
+        let catalog = default_catalog();
+        let mut structure = OrganismStructure::new();
+        let a = structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let b = structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 3.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let mut cache = ConnectionCompatibilityCache::new();
+        let result = execute(&mut structure, a, b, &catalog, &mut cache, 100.0, 0.0);
         assert_eq!(
             result,
             Err(StructuralCombineError::NoGeometricallyEligibleCandidate)
