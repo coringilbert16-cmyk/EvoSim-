@@ -38,6 +38,12 @@ pub(crate) struct CombineAttempt {
     pub heat_dissipated: f64,
 }
 
+impl PartialEq for Material {
+    fn eq(&self, other: &Self) -> bool {
+        self.bonded == other.bonded && self.parts == other.parts
+    }
+}
+
 /// Convert exactly one unit of unbonded stored material into one physical
 /// structural unit at the caller-supplied placement.
 ///
