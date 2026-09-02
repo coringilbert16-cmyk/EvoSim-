@@ -56,8 +56,7 @@ impl Simulation {
         };
         let released = removed_bond.bond_energy.max(0.0);
         organism.usable_energy += released;
-        ledger.total_potential_energy_released += released;
-        ledger.total_usable_energy_gained += released;
+        ledger.record_break(released);
         organism.active_transformation_id = None;
         let outcome = if released > 0.0 {
             OutcomeKind::Beneficial
