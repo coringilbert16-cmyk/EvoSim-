@@ -1,8 +1,12 @@
-use crate::state::{ActiveTransformation, EnergyLedger, Environment, Organism, TransformationKind};
+use crate::state::{ActiveTransformation, EnergyLedger, TransformationKind};
 use crate::structure::{Bond, Placement, StructuralUnit};
 use crate::transformation::resolve_transformation;
 
-fn prepare_bonded_pair(sim: &mut crate::state::Simulation, bond_energy: f64, strength: f64) -> Bond {
+fn prepare_bonded_pair(
+    sim: &mut crate::state::Simulation,
+    bond_energy: f64,
+    strength: f64,
+) -> Bond {
     let organism = &mut sim.organisms[0];
     organism.structure.units.clear();
     organism.structure.bonds.clear();
@@ -173,7 +177,6 @@ fn insufficient_break_energy_is_atomic() {
     let mut sim = crate::state::Simulation::new(53, 10.0);
     let bond = prepare_bonded_pair(&mut sim, 0.1, 0.5);
     let transformation = transformation(bond);
-    let energy_before = sim.organisms[0].usable_energy;
     sim.organisms[0].usable_energy = 0.0;
     let ledger_before = sim.energy_ledger;
 
@@ -189,7 +192,6 @@ fn insufficient_break_energy_is_atomic() {
     assert_eq!(organism.usable_energy, 0.0);
     assert_eq!(*ledger, ledger_before);
     assert!(organism.active_transformation_id.is_none());
-    let _ = energy_before;
 }
 
 #[test]
@@ -240,7 +242,10 @@ fn break_preserves_other_bonds_and_all_structural_units() {
 
     assert_eq!(organisms[0].structure.units.len(), 3);
     assert_eq!(organisms[0].structure.bonds, vec![second]);
-    assert_eq!(organisms[0].structure.connected_components(), vec![vec![0], vec![1, 2]]);
+    assert_eq!(
+        organisms[0].structure.connected_components(),
+        vec![vec![0], vec![1, 2]]
+    );
 }
 
 #[test]
@@ -275,5 +280,3 @@ fn break_with_invalid_bond_state_does_not_mutate_structure() {
     assert_eq!(organisms[0].structure.bonds, vec![bond]);
     assert_eq!(*ledger, EnergyLedger::default());
 }
-
-fn _type_use(_: (&Environment, &Organism)) {}
