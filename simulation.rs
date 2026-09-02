@@ -412,11 +412,14 @@ impl Simulation {
                     );
                     let combined = combine_attempt.is_some();
                     if let Some(attempt) = combine_attempt {
-                        self.energy_ledger.total_potential_energy_released +=
-                            attempt.potential_energy_released;
-                        self.energy_ledger.total_usable_energy_gained +=
-                            attempt.usable_energy_gained;
-                        self.energy_ledger.total_heat_dissipated += attempt.heat_dissipated;
+                        self.energy_ledger.record_combine(
+                            attempt.potential_energy_released,
+                            attempt.energy_paid,
+                            attempt.formation_work,
+                            attempt.bond_energy,
+                            attempt.usable_energy_gained,
+                            attempt.heat_dissipated,
+                        );
                     }
                     crate::decision_runtime::record_outcome(
                         &mut organism.decision_history,
