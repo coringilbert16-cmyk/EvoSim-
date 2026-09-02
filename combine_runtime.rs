@@ -143,8 +143,7 @@ pub(crate) fn try_combine(
         })
         .unwrap_or(0.0);
 
-    let interaction =
-        experimental_interaction(props_a, props_b, evaluation.candidate, water_field);
+    let interaction = experimental_interaction(props_a, props_b, evaluation.candidate, water_field);
     if interaction.direction <= 0.0 || interaction.magnitude <= EPSILON {
         return None;
     }
