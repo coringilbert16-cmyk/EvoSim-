@@ -62,7 +62,9 @@ pub(crate) fn instantiate_one_unit(
         .stored_unbonded
         .parts
         .iter()
-        .position(|(name, amount)| name == resource_name && *amount >= MATERIAL_UNIT_AMOUNT - EPSILON)?;
+        .position(|(name, amount)| {
+            name == resource_name && *amount >= MATERIAL_UNIT_AMOUNT - EPSILON
+        })?;
 
     organism.stored_unbonded.parts[index].1 -= MATERIAL_UNIT_AMOUNT;
     organism
@@ -70,10 +72,11 @@ pub(crate) fn instantiate_one_unit(
         .parts
         .retain(|(_, amount)| *amount > EPSILON);
 
-    Some(organism.structure.add_unit(StructuralUnit::new(
-        resource_name,
-        placement,
-    )))
+    Some(
+        organism
+            .structure
+            .add_unit(StructuralUnit::new(resource_name, placement)),
+    )
 }
 
 pub(crate) fn try_combine(
