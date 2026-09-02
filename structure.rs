@@ -51,10 +51,10 @@ pub struct ConnectionSiteRef {
 /// Bond IDs are assigned monotonically when bonds enter the structure and are
 /// never derived from the bond vector index. This keeps an active BREAK target
 /// stable even when unrelated bonds are removed and vector indices shift.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct BondId(pub u64);
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct Bond {
     #[serde(default)]
     pub id: BondId,
