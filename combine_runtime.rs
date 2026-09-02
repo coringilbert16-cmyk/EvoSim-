@@ -192,6 +192,7 @@ pub(crate) fn try_combine(
     }
 
     let bond = crate::structure::Bond {
+        id: crate::structure::BondId(0),
         unit_a,
         point_a: evaluation.candidate.point_a,
         unit_b,
