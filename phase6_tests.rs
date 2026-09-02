@@ -241,4 +241,114 @@ mod conservation_tests {
         assert_eq!(decoded.bonds[0].strength, 0.25);
         assert_eq!(decoded.bonds[0].bond_energy, 3.0);
     }
+
+    #[test]
+    fn maintenance_consumes_usable_energy_independently_of_active_action() {
+        let mut sim = Simulation::new(17, 10.0);
+        let organism = &mut sim.organisms[0];
+        organism.usable_energy = 10.0;
+        organism.structure.units.clear();
+        organism.structure.bonds.clear();
+        let a = organism.structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 500.0,
+                y: 500.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let b = organism.structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 501.0,
+                y: 500.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let bond_id = organism.structure.add_bond(Bond {
+            id: BondId(0),
+            unit_a: a,
+            point_a: 0,
+            unit_b: b,
+            point_b: 0,
+            strength: 0.5,
+            bond_energy: 0.0,
+        });
+        let bond_id = organism.structure.bonds[bond_id].id;
+        organism.active_transformation_id = Some(99);
+        sim.active_transformations.push(ActiveTransformation {
+            id: 99,
+            organism_id: "1".into(),
+            kind: TransformationKind::Break,
+            material: Material::free_base("Carbon", 0.0),
+            bond_id: Some(bond_id),
+            legacy_bond: None,
+            complexity: 1.0,
+            duration_ticks: 100,
+            remaining_ticks: 100,
+            decision_context_key: Some(format!("bond:{}", bond_id.0)),
+        });
+
+        sim.step();
+
+        assert!((sim.organisms[0].usable_energy - 9.98).abs() < 1e-12);
+        assert_eq!(sim.organisms[0].stress, 0.0);
+        assert_eq!(sim.organisms[0].structure.bonds.len(), 1);
+    }
+
+    #[test]
+    fn persistent_maintenance_deficit_can_break_multiple_bonds() {
+        let mut sim = Simulation::new(18, 10.0);
+        let organism = &mut sim.organisms[0];
+        organism.usable_energy = 0.0;
+        organism.structure.units.clear();
+        organism.structure.bonds.clear();
+        for i in 0..4 {
+            organism.structure.add_unit(StructuralUnit::new(
+                "Carbon",
+                Placement {
+                    x: 500.0 + i as f64,
+                    y: 500.0,
+                    rotation_radians: 0.0,
+                },
+            ));
+        }
+        for (a, b) in [(0, 1), (2, 3)] {
+            organism.structure.add_bond(Bond {
+                id: BondId(0),
+                unit_a: a,
+                point_a: 0,
+                unit_b: b,
+                point_b: 0,
+                strength: 0.5,
+                bond_energy: 0.0,
+            });
+        }
+        organism.structure.ensure_bond_ids();
+        let blocking_bond = organism.structure.bonds[0].id;
+        organism.active_transformation_id = Some(77);
+        sim.active_transformations.push(ActiveTransformation {
+            id: 77,
+            organism_id: "1".into(),
+            kind: TransformationKind::Break,
+            material: Material {
+                parts: Vec::new(),
+                bonded: true,
+            },
+            bond_id: Some(blocking_bond),
+            legacy_bond: None,
+            complexity: 1.0,
+            duration_ticks: 25,
+            remaining_ticks: 25,
+            decision_context_key: Some(format!("bond:{}", blocking_bond.0)),
+        });
+
+        for _ in 0..21 {
+            sim.step();
+        }
+
+        assert!(sim.organisms[0].structure.bonds.is_empty());
+        assert!(sim.organisms[0].stress < 1.0);
+        assert!(sim.organisms[0].usable_energy >= 0.0);
+    }
 }
