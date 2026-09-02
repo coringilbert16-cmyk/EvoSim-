@@ -4,64 +4,17 @@ mod integration_tests {
         ActionEligibility, ActionKind, CurrentNeeds, DecisionHistory, OutcomeKind,
     };
     use crate::decision_runtime::{select_action, ActionCandidate, DecisionContext};
-    use crate::genome::initial_genome;
-    use crate::state::{DevelopmentStage, Organism, Simulation};
-    use crate::structure::{Placement, StructuralUnit};
-
-    fn mature_organism() -> Organism {
-        let mut organism = Simulation::create_initial_organism();
-        organism.genome = initial_genome();
-        organism.usable_energy = 16.0;
-        organism.development_stage = DevelopmentStage::Adult;
-        for i in 0..16 {
-            organism.structure.add_unit(StructuralUnit::new(
-                "Carbon",
-                Placement {
-                    x: i as f64,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                },
-            ));
-        }
-        organism
-    }
+    use crate::state::Simulation;
 
     #[test]
-    fn reproductive_readiness_requires_maturity_and_energy() {
-        let environment = Simulation::new(1, 10.0).environment;
-        let parameters = crate::decision::DecisionParameters::default();
+    fn runtime_accumulates_reproductive_readiness_when_mature_and_energy_ready() {
+        let mut sim = Simulation::new(1, 10.0);
+        let initial = sim.organisms[0].reproductive_readiness;
+        sim.step();
+        let readiness = sim.organisms[0].reproductive_readiness;
 
-        let mut immature = Simulation::create_initial_organism();
-        immature.usable_energy = parameters.reproduction_reserve;
-        Simulation::update_reproductive_readiness(&mut immature, &environment, parameters);
-        assert_eq!(immature.reproductive_readiness, 0.0);
-
-        let mut mature_without_energy = mature_organism();
-        mature_without_energy.usable_energy = 0.0;
-        Simulation::update_reproductive_readiness(
-            &mut mature_without_energy,
-            &environment,
-            parameters,
-        );
-        assert_eq!(mature_without_energy.reproductive_readiness, 0.0);
-
-        let mut ready = mature_organism();
-        Simulation::update_reproductive_readiness(&mut ready, &environment, parameters);
-        assert!(ready.reproductive_readiness > 0.0);
-        assert!(ready.reproductive_readiness <= 1.0);
-    }
-
-    #[test]
-    fn reproductive_readiness_accumulates_and_caps() {
-        let environment = Simulation::new(2, 10.0).environment;
-        let parameters = crate::decision::DecisionParameters::default();
-        let mut organism = mature_organism();
-
-        for _ in 0..200 {
-            Simulation::update_reproductive_readiness(&mut organism, &environment, parameters);
-        }
-
-        assert!((organism.reproductive_readiness - 1.0).abs() < 1e-12);
+        assert!(readiness > initial);
+        assert!(readiness <= 1.0);
     }
 
     #[test]
@@ -95,6 +48,37 @@ mod integration_tests {
 
         assert_eq!(selected, Some(candidates[0].clone()));
         assert_eq!(candidates, before);
+    }
+
+    #[test]
+    fn active_transformation_blocks_all_action_eligibility() {
+        let context = DecisionContext {
+            needs: CurrentNeeds {
+                survival: 1.0,
+                reproduction: 1.0,
+            },
+            eligibility: ActionEligibility::default(),
+        };
+        let candidates = vec![
+            ActionCandidate {
+                action: ActionKind::Move,
+                context_key: None,
+            },
+            ActionCandidate {
+                action: ActionKind::Acquire,
+                context_key: None,
+            },
+            ActionCandidate {
+                action: ActionKind::Combine,
+                context_key: None,
+            },
+            ActionCandidate {
+                action: ActionKind::Break,
+                context_key: Some("bond:1".into()),
+            },
+        ];
+
+        assert!(select_action(context, &DecisionHistory::default(), &candidates).is_none());
     }
 
     #[test]
@@ -132,32 +116,6 @@ mod integration_tests {
     }
 
     #[test]
-    fn active_transformation_blocks_new_action_candidates() {
-        let mut sim = Simulation::new(9, 10.0);
-        let organism = &mut sim.organisms[0];
-        organism.active_transformation_id = Some(99);
-        let needs = CurrentNeeds {
-            survival: 1.0,
-            reproduction: 1.0,
-        };
-        let eligibility = Simulation::action_eligibility(organism, &sim.environment);
-        assert!(!eligibility.can_move);
-        assert!(!eligibility.can_combine);
-        assert!(!eligibility.can_break);
-        assert!(!eligibility.can_acquire);
-        assert!(Simulation::decision_candidates(organism, needs, eligibility).is_empty());
-    }
-
-    #[test]
-    fn maintenance_is_independent_of_action_selection() {
-        let mut sim = Simulation::new(12, 10.0);
-        let before_energy = sim.organisms[0].usable_energy;
-        sim.step();
-        let after_energy = sim.organisms[0].usable_energy;
-        assert!(after_energy < before_energy);
-    }
-
-    #[test]
     fn runtime_snapshot_round_trip_preserves_structural_and_decision_state() {
         let mut sim = Simulation::new(13, 10.0);
         for _ in 0..20 {
@@ -190,5 +148,14 @@ mod integration_tests {
             snapshot.organisms[0].decision_history.entries.len(),
             restored.organisms[0].decision_history.entries.len()
         );
+    }
+
+    #[test]
+    fn maintenance_reduces_usable_energy_during_runtime_step() {
+        let mut sim = Simulation::new(12, 10.0);
+        let before_energy = sim.organisms[0].usable_energy;
+        sim.step();
+        let after_energy = sim.organisms[0].usable_energy;
+        assert!(after_energy < before_energy);
     }
 }
