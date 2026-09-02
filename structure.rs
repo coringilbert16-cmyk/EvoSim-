@@ -559,10 +559,7 @@ mod tests {
     fn legacy_zero_bond_ids_are_migrated_without_collisions() {
         let mut s = OrganismStructure {
             units: Vec::new(),
-            bonds: vec![
-                bond(0, 0, 1, 0, 0.5, 1.0),
-                bond(0, 1, 1, 1, 0.5, 2.0),
-            ],
+            bonds: vec![bond(0, 0, 1, 0, 0.5, 1.0), bond(0, 1, 1, 1, 0.5, 2.0)],
             next_bond_id: 1,
         };
         s.ensure_bond_ids();
