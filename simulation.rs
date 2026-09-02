@@ -266,10 +266,11 @@ impl Simulation {
                     .structure
                     .bonds
                     .iter()
-                    .enumerate()
-                    .map(|(index, _)| ActionCandidate {
-                        action: ActionKind::Break,
-                        context_key: Some(format!("bond:{index}")),
+                    .filter_map(|bond| {
+                        (bond.id.0 > 0).then_some(ActionCandidate {
+                            action: ActionKind::Break,
+                            context_key: Some(format!("bond:{}", bond.id.0)),
+                        })
                     }),
             );
         }
