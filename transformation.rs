@@ -45,9 +45,6 @@ fn calculate_break_attempt(
         return None;
     }
 
-    // BREAK work reflects the bond's current state rather than the energy
-    // originally invested to form it. Current material cohesion, connection
-    // loading, and remaining bond strength all contribute to the work needed.
     let state_work = formation_threshold(props_a.cohesion, props_b.cohesion, load_a, load_b);
     if !state_work.is_finite() || state_work < 0.0 {
         return None;
@@ -167,8 +164,6 @@ impl Simulation {
         environment: &mut Environment,
         ledger: &mut EnergyLedger,
     ) {
-        // BondId is authoritative. The legacy copied Bond is used only to
-        // migrate snapshots created before stable bond identity existed.
         let target_bond = transformation
             .bond_id
             .and_then(|id| organism.structure.bond_by_id(id))
@@ -187,9 +182,6 @@ impl Simulation {
             return;
         };
 
-        // Calculate every physical and energetic consequence before touching
-        // the structure. An energy failure therefore cannot partially break a
-        // bond or alter organism energy.
         let Some(attempt) = calculate_break_attempt(organism, environment, target_bond) else {
             organism.active_transformation_id = None;
             return;
@@ -248,4 +240,13 @@ impl Simulation {
         };
         apply_break_attempt(attempt, organism, ledger)
     }
+}
+
+pub(crate) fn apply_stress_break(
+    organism: &mut Organism,
+    environment: &Environment,
+    ledger: &mut EnergyLedger,
+    bond_id: BondId,
+) -> bool {
+    Simulation::apply_stress_break(organism, environment, ledger, bond_id)
 }
