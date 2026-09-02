@@ -100,11 +100,13 @@ pub(crate) struct ActiveTransformation {
 
 #[derive(Serialize, Deserialize, Clone, Copy, Default)]
 pub(crate) struct EnergyLedger {
-    /// Cumulative energy released by completed transformations and COMBINE events.
+    /// Cumulative energy released by completed COMBINE and BREAK transformations.
     pub(crate) total_potential_energy_released: f64,
-    /// Cumulative formation work actually paid by transformations.
+    /// Cumulative work performed by completed COMBINE transformations.
     pub(crate) total_formation_energy_spent: f64,
-    /// Cumulative usable organism energy spent to subsidize formation or break work.
+    /// Cumulative work performed by completed BREAK transformations.
+    pub(crate) total_break_energy_spent: f64,
+    /// Cumulative usable organism energy spent to subsidize transformation work.
     pub(crate) total_usable_energy_spent: f64,
     /// Cumulative energy committed to newly created bonds.
     pub(crate) total_bond_energy_created: f64,
@@ -143,8 +145,8 @@ impl EnergyLedger {
         heat_dissipated: f64,
     ) {
         self.total_potential_energy_released += bond_energy;
+        self.total_break_energy_spent += break_work;
         self.total_usable_energy_spent += usable_energy_spent;
-        self.total_formation_energy_spent += break_work;
         self.total_usable_energy_gained += usable_energy_gained;
         self.total_heat_dissipated += heat_dissipated;
     }
