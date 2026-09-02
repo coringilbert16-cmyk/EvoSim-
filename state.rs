@@ -100,10 +100,44 @@ pub(crate) struct ActiveTransformation {
 
 #[derive(Serialize, Deserialize, Clone, Copy, Default)]
 pub(crate) struct EnergyLedger {
+    /// Cumulative energy released by completed transformations and COMBINE events.
     pub(crate) total_potential_energy_released: f64,
+    /// Cumulative formation work actually paid by transformations.
+    pub(crate) total_formation_energy_spent: f64,
+    /// Cumulative usable organism energy spent to subsidize formation work.
+    pub(crate) total_usable_energy_spent: f64,
+    /// Cumulative energy committed to newly created bonds.
+    pub(crate) total_bond_energy_created: f64,
+    /// Cumulative energy converted into usable organism energy.
     pub(crate) total_usable_energy_gained: f64,
+    /// Cumulative energy dissipated as heat.
     pub(crate) total_heat_dissipated: f64,
+    /// Current, instantaneous usable energy held by all organisms.
     pub(crate) total_usable_energy_held: f64,
+}
+
+impl EnergyLedger {
+    pub(crate) fn record_combine(
+        &mut self,
+        potential_energy_released: f64,
+        energy_paid: f64,
+        formation_work: f64,
+        bond_energy_created: f64,
+        usable_energy_gained: f64,
+        heat_dissipated: f64,
+    ) {
+        self.total_potential_energy_released += potential_energy_released;
+        self.total_formation_energy_spent += formation_work;
+        self.total_usable_energy_spent += energy_paid;
+        self.total_bond_energy_created += bond_energy_created;
+        self.total_usable_energy_gained += usable_energy_gained;
+        self.total_heat_dissipated += heat_dissipated;
+    }
+
+    pub(crate) fn record_break(&mut self, released: f64) {
+        self.total_potential_energy_released += released;
+        self.total_usable_energy_gained += released;
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
