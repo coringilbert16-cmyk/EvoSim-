@@ -56,6 +56,7 @@ pub struct BondId(pub u64);
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 pub struct Bond {
+    #[serde(default)]
     pub id: BondId,
     pub unit_a: usize,
     pub point_a: usize,
@@ -137,6 +138,26 @@ impl OrganismStructure {
         let id = BondId(self.next_bond_id.max(1));
         self.next_bond_id = id.0.saturating_add(1);
         id
+    }
+    /// Repair IDs from snapshots created before stable bond identity existed.
+    /// Zero IDs are legacy markers; duplicate nonzero IDs are also repaired so
+    /// every live bond has exactly one stable identity.
+    pub fn ensure_bond_ids(&mut self) {
+        let mut next = self.next_bond_id.max(1);
+        let mut used = std::collections::HashSet::new();
+        for bond in &mut self.bonds {
+            if bond.id.0 == 0 || !used.insert(bond.id) {
+                while used.contains(&BondId(next)) || next == 0 {
+                    next = next.saturating_add(1).max(1);
+                }
+                bond.id = BondId(next);
+                used.insert(bond.id);
+                next = next.saturating_add(1).max(1);
+            } else if bond.id.0 >= next {
+                next = bond.id.0.saturating_add(1).max(1);
+            }
+        }
+        self.next_bond_id = next;
     }
     pub fn bond_id_at(&self, bond_index: usize) -> Option<BondId> {
         self.bonds.get(bond_index).map(|bond| bond.id)
@@ -533,6 +554,21 @@ mod tests {
         assert_eq!(s.bond_by_id(id).unwrap().id, id);
         assert_eq!(s.bond_by_id(id).unwrap().strength, 0.9);
         assert_eq!(s.bond_by_id(id).unwrap().bond_energy, 7.0);
+    }
+    #[test]
+    fn legacy_zero_bond_ids_are_migrated_without_collisions() {
+        let mut s = OrganismStructure {
+            units: Vec::new(),
+            bonds: vec![
+                bond(0, 0, 1, 0, 0.5, 1.0),
+                bond(0, 1, 1, 1, 0.5, 2.0),
+            ],
+            next_bond_id: 1,
+        };
+        s.ensure_bond_ids();
+        assert!(s.bonds.iter().all(|bond| bond.id.0 > 0));
+        assert_ne!(s.bonds[0].id, s.bonds[1].id);
+        assert_eq!(s.next_bond_id, 3);
     }
     #[test]
     fn formation_threshold_is_symmetric_and_diminishing_with_load() {
