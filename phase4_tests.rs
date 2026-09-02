@@ -1,5 +1,5 @@
 use crate::state::{ActiveTransformation, EnergyLedger, Simulation, TransformationKind};
-use crate::structure::{Bond, Placement, StructuralUnit};
+use crate::structure::{Bond, BondId, Placement, StructuralUnit};
 
 fn prepare_bonded_pair(
     sim: &mut crate::state::Simulation,
@@ -31,6 +31,7 @@ fn prepare_bonded_pair(
         },
     ));
     let bond = Bond {
+        id: BondId(0),
         unit_a: a,
         point_a: 0,
         unit_b: b,
@@ -39,10 +40,10 @@ fn prepare_bonded_pair(
         bond_energy,
     };
     organism.structure.add_bond(bond);
-    bond
+    organism.structure.bonds[0]
 }
 
-fn transformation(bond: Bond) -> ActiveTransformation {
+fn transformation(bond_id: BondId) -> ActiveTransformation {
     ActiveTransformation {
         id: 1,
         organism_id: "1".into(),
@@ -51,11 +52,12 @@ fn transformation(bond: Bond) -> ActiveTransformation {
             parts: Vec::new(),
             bonded: true,
         },
-        bond: Some(bond),
+        bond_id: Some(bond_id),
+        legacy_bond: None,
         complexity: 2.0,
         duration_ticks: 2,
         remaining_ticks: 0,
-        decision_context_key: Some("bond:0".into()),
+        decision_context_key: Some(format!("bond:{}", bond_id.0)),
     }
 }
 
@@ -89,7 +91,7 @@ fn assert_ledgers_equal(a: &EnergyLedger, b: &EnergyLedger) {
 fn break_release_regime_preserves_energy_and_breaks_bond() {
     let mut sim = Simulation::new(41, 10.0);
     let bond = prepare_bonded_pair(&mut sim, 4.0, 0.5);
-    let transformation = transformation(bond);
+    let transformation = transformation(bond.id);
     let energy_before = sim.organisms[0].usable_energy;
 
     let (organisms, environment, ledger) = (
@@ -114,7 +116,7 @@ fn break_release_regime_preserves_energy_and_breaks_bond() {
 fn break_consume_regime_spends_organism_energy_and_preserves_energy() {
     let mut sim = Simulation::new(43, 10.0);
     let bond = prepare_bonded_pair(&mut sim, 0.1, 0.5);
-    let transformation = transformation(bond);
+    let transformation = transformation(bond.id);
     let energy_before = sim.organisms[0].usable_energy;
 
     let (organisms, environment, ledger) = (
@@ -161,6 +163,7 @@ fn break_neutral_regime_has_no_net_usable_energy_change() {
     let strength = 0.5;
     let work = crate::structure::formation_threshold(0.95, 0.95, strength, strength) * strength;
     let bond = Bond {
+        id: BondId(0),
         unit_a: a,
         point_a: 0,
         unit_b: b,
@@ -169,8 +172,9 @@ fn break_neutral_regime_has_no_net_usable_energy_change() {
         bond_energy: work,
     };
     organism.structure.add_bond(bond);
+    let bond_id = organism.structure.bonds[0].id;
     organism.active_transformation_id = Some(1);
-    let transformation = transformation(bond);
+    let transformation = transformation(bond_id);
     let energy_before = organism.usable_energy;
 
     let (organisms, environment, ledger) = (
@@ -192,7 +196,7 @@ fn break_neutral_regime_has_no_net_usable_energy_change() {
 fn insufficient_break_energy_is_atomic() {
     let mut sim = Simulation::new(53, 10.0);
     let bond = prepare_bonded_pair(&mut sim, 0.1, 0.5);
-    let transformation = transformation(bond);
+    let transformation = transformation(bond.id);
     sim.organisms[0].usable_energy = 0.0;
     let ledger_before = sim.energy_ledger;
 
@@ -204,7 +208,8 @@ fn insufficient_break_energy_is_atomic() {
     Simulation::resolve_transformation(&transformation, &mut organisms[0], environment, ledger);
 
     let organism = &organisms[0];
-    assert_eq!(organism.structure.bonds, vec![bond]);
+    assert_eq!(organism.structure.bonds.len(), 1);
+    assert_eq!(organism.structure.bonds[0].id, bond.id);
     assert_eq!(organism.usable_energy, 0.0);
     assert_ledgers_equal(ledger, &ledger_before);
     assert!(organism.active_transformation_id.is_none());
@@ -229,6 +234,7 @@ fn break_preserves_other_bonds_and_all_structural_units() {
         ));
     }
     let first = Bond {
+        id: BondId(0),
         unit_a: 0,
         point_a: 0,
         unit_b: 1,
@@ -237,6 +243,7 @@ fn break_preserves_other_bonds_and_all_structural_units() {
         bond_energy: 4.0,
     };
     let second = Bond {
+        id: BondId(0),
         unit_a: 1,
         point_a: 1,
         unit_b: 2,
@@ -246,9 +253,11 @@ fn break_preserves_other_bonds_and_all_structural_units() {
     };
     organism.structure.add_bond(first);
     organism.structure.add_bond(second);
+    let first_id = organism.structure.bonds[0].id;
+    let second_id = organism.structure.bonds[1].id;
     organism.active_transformation_id = Some(1);
 
-    let transformation = transformation(first);
+    let transformation = transformation(first_id);
     let (organisms, environment, ledger) = (
         &mut sim.organisms,
         &mut sim.environment,
@@ -257,11 +266,64 @@ fn break_preserves_other_bonds_and_all_structural_units() {
     Simulation::resolve_transformation(&transformation, &mut organisms[0], environment, ledger);
 
     assert_eq!(organisms[0].structure.units.len(), 3);
-    assert_eq!(organisms[0].structure.bonds, vec![second]);
+    assert_eq!(organisms[0].structure.bonds.len(), 1);
+    assert_eq!(organisms[0].structure.bonds[0].id, second_id);
     assert_eq!(
         organisms[0].structure.connected_components(),
         vec![vec![0], vec![1, 2]]
     );
+}
+
+#[test]
+fn stale_break_transformation_cannot_break_a_different_bond_after_index_shift() {
+    let mut sim = Simulation::new(67, 10.0);
+    let organism = &mut sim.organisms[0];
+    organism.structure.units.clear();
+    organism.structure.bonds.clear();
+    organism.usable_energy = 10.0;
+    for x in 0..3 {
+        organism.structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 500.0 + x as f64,
+                y: 500.0,
+                rotation_radians: 0.0,
+            },
+        ));
+    }
+    organism.structure.add_bond(Bond {
+        id: BondId(0),
+        unit_a: 0,
+        point_a: 0,
+        unit_b: 1,
+        point_b: 0,
+        strength: 0.5,
+        bond_energy: 4.0,
+    });
+    organism.structure.add_bond(Bond {
+        id: BondId(0),
+        unit_a: 1,
+        point_a: 1,
+        unit_b: 2,
+        point_b: 0,
+        strength: 0.5,
+        bond_energy: 4.0,
+    });
+    let target_id = organism.structure.bonds[1].id;
+    let first_id = organism.structure.bonds[0].id;
+    organism.structure.break_bond_by_id(first_id).unwrap();
+    organism.active_transformation_id = Some(1);
+
+    let transformation = transformation(target_id);
+    let (organisms, environment, ledger) = (
+        &mut sim.organisms,
+        &mut sim.environment,
+        &mut sim.energy_ledger,
+    );
+    Simulation::resolve_transformation(&transformation, &mut organisms[0], environment, ledger);
+
+    assert!(organisms[0].structure.bonds.is_empty());
+    assert!(ledger.total_break_energy_spent > 0.0);
 }
 
 #[test]
@@ -284,7 +346,7 @@ fn break_with_invalid_bond_state_does_not_mutate_structure() {
     let mut bond = prepare_bonded_pair(&mut sim, 1.0, 0.5);
     bond.bond_energy = f64::NAN;
     sim.organisms[0].structure.bonds[0] = bond;
-    let transformation = transformation(bond);
+    let transformation = transformation(bond.id);
 
     let (organisms, environment, ledger) = (
         &mut sim.organisms,
