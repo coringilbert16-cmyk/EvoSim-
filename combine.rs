@@ -229,7 +229,7 @@ pub fn evaluate_candidates(
 mod tests {
     use super::*;
     use crate::resources::default_catalog;
-    use crate::structure::{Bond, Placement, StructuralUnit};
+    use crate::structure::{Bond, BondId, Placement, StructuralUnit};
 
     fn carbon(amount: f64) -> Material {
         Material::free_base("Carbon", amount)
@@ -269,6 +269,7 @@ mod tests {
     }
     fn bond(a: usize, ap: usize, b: usize, bp: usize) -> Bond {
         Bond {
+            id: BondId(0),
             unit_a: a,
             point_a: ap,
             unit_b: b,
