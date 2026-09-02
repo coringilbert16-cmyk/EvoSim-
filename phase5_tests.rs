@@ -1,9 +1,11 @@
 #[cfg(test)]
 mod integration_tests {
-    use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionHistory, OutcomeKind};
+    use crate::decision::{
+        ActionEligibility, ActionKind, CurrentNeeds, DecisionHistory, OutcomeKind,
+    };
     use crate::decision_runtime::{select_action, ActionCandidate, DecisionContext};
     use crate::genome::initial_genome;
-    use crate::state::{DevelopmentStage, Organism, Position, ResourceSense, Simulation};
+    use crate::state::{DevelopmentStage, Organism, Simulation};
     use crate::structure::{Placement, StructuralUnit};
 
     fn mature_organism() -> Organism {
@@ -105,8 +107,10 @@ mod integration_tests {
             second.step();
         }
 
-        let first_json = serde_json::to_string(&first.snapshot()).expect("first snapshot serializes");
-        let second_json = serde_json::to_string(&second.snapshot()).expect("second snapshot serializes");
+        let first_json =
+            serde_json::to_string(&first.snapshot()).expect("first snapshot serializes");
+        let second_json =
+            serde_json::to_string(&second.snapshot()).expect("second snapshot serializes");
         assert_eq!(first_json, second_json);
     }
 
@@ -120,8 +124,10 @@ mod integration_tests {
             second.step();
         }
 
-        let first_json = serde_json::to_string(&first.snapshot()).expect("first snapshot serializes");
-        let second_json = serde_json::to_string(&second.snapshot()).expect("second snapshot serializes");
+        let first_json =
+            serde_json::to_string(&first.snapshot()).expect("first snapshot serializes");
+        let second_json =
+            serde_json::to_string(&second.snapshot()).expect("second snapshot serializes");
         assert_ne!(first_json, second_json);
     }
 
@@ -164,11 +170,25 @@ mod integration_tests {
 
         assert_eq!(snapshot.tick, restored.tick);
         assert_eq!(snapshot.organisms.len(), restored.organisms.len());
-        assert_eq!(snapshot.active_transformations.len(), restored.active_transformations.len());
-        assert_eq!(snapshot.energy_ledger.total_potential_energy_released,
-            restored.energy_ledger.total_potential_energy_released);
-        assert_eq!(snapshot.organisms[0].structure.units.len(), restored.organisms[0].structure.units.len());
-        assert_eq!(snapshot.organisms[0].structure.bonds.len(), restored.organisms[0].structure.bonds.len());
-        assert_eq!(snapshot.organisms[0].decision_history.entries.len(), restored.organisms[0].decision_history.entries.len());
+        assert_eq!(
+            snapshot.active_transformations.len(),
+            restored.active_transformations.len()
+        );
+        assert_eq!(
+            snapshot.energy_ledger.total_potential_energy_released,
+            restored.energy_ledger.total_potential_energy_released
+        );
+        assert_eq!(
+            snapshot.organisms[0].structure.units.len(),
+            restored.organisms[0].structure.units.len()
+        );
+        assert_eq!(
+            snapshot.organisms[0].structure.bonds.len(),
+            restored.organisms[0].structure.bonds.len()
+        );
+        assert_eq!(
+            snapshot.organisms[0].decision_history.entries.len(),
+            restored.organisms[0].decision_history.entries.len()
+        );
     }
 }
