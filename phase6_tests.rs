@@ -3,10 +3,13 @@ mod conservation_tests {
     use crate::environment::{apply_settling, apply_vents, ActiveMaterialField, DeepReservoir};
     use crate::resources::Material;
     use crate::settling::{DEFAULT_SETTLING_FRACTION, DEFAULT_SETTLING_INTERVAL_TICKS};
-    use crate::vents::Vent;
     use crate::state::Simulation;
+    use crate::vents::Vent;
 
-    fn material_totals(field: &ActiveMaterialField, reservoir: &DeepReservoir) -> Vec<(String, f64)> {
+    fn material_totals(
+        field: &ActiveMaterialField,
+        reservoir: &DeepReservoir,
+    ) -> Vec<(String, f64)> {
         let mut totals = field.total_material();
         for (name, amount) in reservoir.total_material() {
             if let Some(existing) = totals.iter_mut().find(|(n, _)| n == &name) {
@@ -37,7 +40,11 @@ mod conservation_tests {
                 .find(|(after_name, _)| after_name == &name)
                 .map(|(_, value)| *value)
                 .unwrap_or(0.0);
-            assert!((amount - actual).abs() < 1e-9, "resource {name} changed by {}", actual - amount);
+            assert!(
+                (amount - actual).abs() < 1e-9,
+                "resource {name} changed by {}",
+                actual - amount
+            );
         }
     }
 
@@ -80,7 +87,11 @@ mod conservation_tests {
                 .find(|(after_name, _)| after_name == &name)
                 .map(|(_, value)| *value)
                 .unwrap_or(0.0);
-            assert!((amount - actual).abs() < 1e-6, "resource {name} changed by {}", actual - amount);
+            assert!(
+                (amount - actual).abs() < 1e-6,
+                "resource {name} changed by {}",
+                actual - amount
+            );
         }
 
         let bonded = field
@@ -91,7 +102,12 @@ mod conservation_tests {
             + reservoir
                 .cells
                 .iter()
-                .map(|cell| cell.bonded_entries.iter().map(|(_, amount)| *amount).sum::<f64>())
+                .map(|cell| {
+                    cell.bonded_entries
+                        .iter()
+                        .map(|(_, amount)| *amount)
+                        .sum::<f64>()
+                })
                 .sum::<f64>();
         let unbonded = field
             .cells
@@ -101,7 +117,12 @@ mod conservation_tests {
             + reservoir
                 .cells
                 .iter()
-                .map(|cell| cell.unbonded_entries.iter().map(|(_, amount)| *amount).sum::<f64>())
+                .map(|cell| {
+                    cell.unbonded_entries
+                        .iter()
+                        .map(|(_, amount)| *amount)
+                        .sum::<f64>()
+                })
                 .sum::<f64>();
         assert!((bonded - 400.0).abs() < 1e-6);
         assert!((unbonded - 700.0).abs() < 1e-6);
@@ -121,10 +142,7 @@ mod conservation_tests {
     #[test]
     fn raw_material_take_and_store_preserve_amount() {
         let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
-        field.deposit_at_index(
-            5,
-            Material::free_base("Carbon", 25.0),
-        );
+        field.deposit_at_index(5, Material::free_base("Carbon", 25.0));
         let taken = field.take_at_index(5, false, 7.5).expect("material exists");
         assert!((taken.total_amount() - 7.5).abs() < 1e-12);
         assert!((field.total_amount() - 17.5).abs() < 1e-12);
