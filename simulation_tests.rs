@@ -273,12 +273,9 @@ mod integration_tests {
         let ledger_after = sim.energy_ledger;
         let released = ledger_after.total_potential_energy_released
             - ledger_before.total_potential_energy_released;
-        let break_work = ledger_after.total_break_energy_spent
-            - ledger_before.total_break_energy_spent;
-        let usable_spent = ledger_after.total_usable_energy_spent
-            - ledger_before.total_usable_energy_spent;
-        let usable_gained = ledger_after.total_usable_energy_gained
-            - ledger_before.total_usable_energy_gained;
+        let break_work = ledger_after.total_break_energy_spent - ledger_before.total_break_energy_spent;
+        let usable_spent = ledger_after.total_usable_energy_spent - ledger_before.total_usable_energy_spent;
+        let usable_gained = ledger_after.total_usable_energy_gained - ledger_before.total_usable_energy_gained;
         let heat = ledger_after.total_heat_dissipated - ledger_before.total_heat_dissipated;
 
         assert!((released - 12.5).abs() < 1e-12);
