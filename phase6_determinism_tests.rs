@@ -29,14 +29,20 @@ mod determinism_tests {
         let left = Simulation::new(12345, 10.0).snapshot();
         let right = Simulation::new(54321, 10.0).snapshot();
 
-        let left_json = serde_json::to_string(&left.environment.reservoir)
-            .expect("reservoir serializes");
-        let right_json = serde_json::to_string(&right.environment.reservoir)
-            .expect("reservoir serializes");
+        let left_json =
+            serde_json::to_string(&left.environment.reservoir).expect("reservoir serializes");
+        let right_json =
+            serde_json::to_string(&right.environment.reservoir).expect("reservoir serializes");
         assert_ne!(left_json, right_json);
 
         assert_eq!(left.organisms.len(), right.organisms.len());
-        assert_eq!(left.organisms[0].structure.units.len(), right.organisms[0].structure.units.len());
-        assert_eq!(left.organisms[0].usable_energy, right.organisms[0].usable_energy);
+        assert_eq!(
+            left.organisms[0].structure.units.len(),
+            right.organisms[0].structure.units.len()
+        );
+        assert_eq!(
+            left.organisms[0].usable_energy,
+            right.organisms[0].usable_energy
+        );
     }
 }
