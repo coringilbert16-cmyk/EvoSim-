@@ -4,7 +4,7 @@ mod integration_tests {
     use crate::decision_runtime::ActionCandidate;
     use crate::resources::Material;
     use crate::state::Simulation;
-    use crate::structure::{Bond, Placement, StructuralUnit};
+    use crate::structure::{Bond, BondId, Placement, StructuralUnit};
 
     #[test]
     fn fresh_organism_owns_an_empty_structure() {
@@ -243,6 +243,7 @@ mod integration_tests {
             },
         ));
         sim.organisms[0].structure.add_bond(Bond {
+            id: BondId(0),
             unit_a: a,
             point_a: 0,
             unit_b: b,
@@ -250,10 +251,12 @@ mod integration_tests {
             strength: 0.8,
             bond_energy: 12.5,
         });
+        let bond_id = sim.organisms[0].structure.bonds[0].id;
+        let context_key = format!("bond:{}", bond_id.0);
         let ledger_before = sim.energy_ledger;
         let decision = ActionCandidate {
             action: ActionKind::Break,
-            context_key: Some("bond:0".into()),
+            context_key: Some(context_key.clone()),
         };
         let transformation = Simulation::try_start_transformation(
             &mut sim.organisms[0],
@@ -291,11 +294,11 @@ mod integration_tests {
 
         assert!(sim.organisms[0]
             .decision_history
-            .has_knowledge(ActionKind::Break, Some("bond:0")));
+            .has_knowledge(ActionKind::Break, Some(&context_key)));
         assert!(matches!(
             sim.organisms[0]
                 .decision_history
-                .outcome(ActionKind::Break, Some("bond:0")),
+                .outcome(ActionKind::Break, Some(&context_key)),
             Some(OutcomeKind::Beneficial | OutcomeKind::Neutral | OutcomeKind::Harmful)
         ));
     }
