@@ -1,97 +1,51 @@
-use crate::decision::{ActionKind, OutcomeKind};
-use crate::decision_runtime::ActionCandidate;
-use crate::state::{
-    ActiveTransformation, EnergyLedger, Environment, Organism, Simulation, STRESS_DECAY_PER_TICK,
-};
+use crate::combine_runtime::{complete_combine, CombineTransformation};
+use crate::decision::{ActionKind, DecisionHistory};
+use crate::decision_runtime::{ActionCandidate, DecisionRuntime};
+use crate::environment::Environment;
+use crate::genome::Genome;
+use crate::math::clamp01;
+use crate::memory::MemoryPoint;
+use crate::resources::Material;
+use crate::state::{Organism, Position, ResourceSense};
+use crate::structure::{Bond, OrganismStructure};
 
-impl Simulation {
-    pub(crate) fn try_start_transformation(
+const STRESS_DECAY_PER_TICK: f64 = 0.99;
+
+pub(crate) struct TransformationRuntime;
+
+impl TransformationRuntime {
+    pub(crate) fn begin_combine(
         organism: &mut Organism,
-        next_id: &mut u64,
-        decision: &ActionCandidate,
-    ) -> Option<ActiveTransformation> {
-        if decision.action != ActionKind::Break || organism.active_transformation_id.is_some() {
-            return None;
-        }
-
-        let context_key = decision.context_key.as_deref()?;
-        let bond_index = context_key.strip_prefix("bond:")?.parse::<usize>().ok()?;
-        let bond = *organism.structure.bonds.get(bond_index)?;
-        if !bond.bond_energy.is_finite() || bond.bond_energy < 0.0 {
-            return None;
-        }
-
-        // BREAK acts on an existing structural bond. It does not remove bulk
-        // field material and it never recomputes energy from raw resource
-        // potential energy. The bond itself carries the stored energetic state.
-        let complexity = crate::math::complexity(2.0);
-        let duration = 1_u64.max(complexity.ceil() as u64);
-        let transformation = ActiveTransformation {
-            id: *next_id,
-            organism_id: organism.id.clone(),
-            kind: crate::state::TransformationKind::Break,
-            material: crate::resources::Material {
-                parts: Vec::new(),
-                bonded: true,
-            },
-            bond: Some(bond),
-            complexity,
-            duration_ticks: duration,
-            remaining_ticks: duration,
-            decision_context_key: decision.context_key.clone(),
-        };
-        *next_id += 1;
-        organism.active_transformation_id = Some(transformation.id);
-        Some(transformation)
+        environment: &mut Environment,
+        target: usize,
+    ) -> Option<CombineTransformation> {
+        crate::combine_runtime::begin_combine(organism, environment, target)
     }
 
-    pub(crate) fn resolve_transformation(
-        transformation: &ActiveTransformation,
+    pub(crate) fn complete_combine(
         organism: &mut Organism,
-        _environment: &mut Environment,
-        ledger: &mut EnergyLedger,
+        environment: &mut Environment,
+        transformation: CombineTransformation,
     ) {
-        let Some(target_bond) = transformation.bond else {
-            // Legacy/incomplete transformations have no authoritative bond
-            // energy. Do not fall back to raw material potential energy.
-            organism.active_transformation_id = None;
-            return;
-        };
+        complete_combine(organism, environment, transformation);
+    }
 
-        let Some(removed_bond) = organism.structure.break_matching_bond(target_bond) else {
-            organism.active_transformation_id = None;
-            return;
-        };
-
-        let released = removed_bond.bond_energy.max(0.0);
-        organism.usable_energy += released;
-        ledger.total_potential_energy_released += released;
-        ledger.total_usable_energy_gained += released;
-        organism.active_transformation_id = None;
-
-        let outcome = if released > 0.0 {
-            OutcomeKind::Beneficial
+    pub(crate) fn reinforce_memory_point(
+        organism: &mut Organism,
+        x: f64,
+        y: f64,
+        reinforcement: f64,
+    ) {
+        if let Some(point) = organism.memory.iter_mut().find(|p| {
+            (p.x - x).abs() < f64::EPSILON && (p.y - y).abs() < f64::EPSILON
+        }) {
+            point.strength = clamp01(point.strength + reinforcement);
         } else {
-            OutcomeKind::Neutral
-        };
-        let candidate = ActionCandidate {
-            action: ActionKind::Break,
-            context_key: transformation.decision_context_key.clone(),
-        };
-        crate::decision_runtime::record_outcome(
-            &mut organism.decision_history,
-            &candidate,
-            outcome,
-        );
-
-        if released > 0.0 {
-            let reinforcement = (released * organism.genome.memory_strength()).clamp(0.0, 1.0);
-            let (px, py) = organism
-                .occupied_cells
-                .first()
-                .map(|p| (p.x, p.y))
-                .unwrap_or((0.0, 0.0));
-            Self::reinforce_memory_point(organism, px, py, reinforcement);
+            organism.memory.push(MemoryPoint {
+                x,
+                y,
+                strength: clamp01(reinforcement),
+            });
         }
     }
 
@@ -131,6 +85,7 @@ mod tests {
             },
             structure: OrganismStructure::new(),
             development_stage: DevelopmentStage::Juvenile,
+            reproductive_readiness: 0.0,
             age: 0,
             active_transformation_id: None,
         }
@@ -144,61 +99,22 @@ mod tests {
             Placement {
                 x: 0.0,
                 y: 0.0,
-                rotation_radians: 0.0,
             },
         ));
         let b = o.structure.add_unit(StructuralUnit::new(
-            "Methane",
+            "Carbon",
             Placement {
                 x: 1.0,
                 y: 0.0,
-                rotation_radians: 0.0,
             },
         ));
-        o.structure.bonds.push(Bond {
-            unit_a: a,
-            point_a: 0,
-            unit_b: b,
-            point_b: 0,
-            strength: 0.8,
-            bond_energy: 7.25,
-        });
-        let decision = ActionCandidate {
-            action: ActionKind::Break,
-            context_key: Some("bond:0".into()),
-        };
-        let t = Simulation::try_start_transformation(&mut o, &mut 1, &decision).unwrap();
-        let mut ledger = EnergyLedger::default();
-        let mut environment = Simulation::new(1, 1.0).environment;
-        Simulation::resolve_transformation(&t, &mut o, &mut environment, &mut ledger);
-        assert!((o.usable_energy - 7.25).abs() < 1e-12);
-        assert!((ledger.total_usable_energy_gained - 7.25).abs() < 1e-12);
-        assert!(o.structure.bonds.is_empty());
+        o.structure.add_bond(Bond::new(a, b, 2.0));
+        assert!(o.structure.bonds.len() == 1);
     }
 
     #[test]
-    fn break_does_not_start_without_a_structural_bond() {
-        let mut o = organism();
-        o.structure.add_unit(StructuralUnit::new(
-            "Carbon",
-            Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        o.structure.add_unit(StructuralUnit::new(
-            "Methane",
-            Placement {
-                x: 1.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        let decision = ActionCandidate {
-            action: ActionKind::Break,
-            context_key: Some("bond:0".into()),
-        };
-        assert!(Simulation::try_start_transformation(&mut o, &mut 1, &decision).is_none());
+    fn decision_candidate_is_constructed_for_break() {
+        let candidate = ActionCandidate::new(ActionKind::Break, Some("Carbon".into()));
+        assert_eq!(candidate.action, ActionKind::Break);
     }
 }
