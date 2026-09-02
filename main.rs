@@ -25,9 +25,9 @@ mod phase4_tests;
 #[cfg(test)]
 mod phase5_tests;
 #[cfg(test)]
-mod phase6_tests;
-#[cfg(test)]
 mod phase6_determinism_tests;
+#[cfg(test)]
+mod phase6_tests;
 #[cfg(test)]
 mod simulation_tests;
 
