@@ -202,9 +202,11 @@ fn simulation_ledger_records_combine_outputs_and_current_holdings() {
         - sim.energy_ledger.total_heat_dissipated;
     let ledger_tolerance = 1e-9 * sim.energy_ledger.total_potential_energy_released.max(1.0);
     assert!(ledger_balance.abs() < ledger_tolerance);
+    let maintenance_cost = 0.01 * 2.0;
     let organism_balance = sim.organisms[0].usable_energy
         - (energy_before + sim.energy_ledger.total_usable_energy_gained
-            - sim.energy_ledger.total_usable_energy_spent);
+            - sim.energy_ledger.total_usable_energy_spent
+            - maintenance_cost);
     assert!(organism_balance.abs() < 1e-9);
     let held_balance = sim.energy_ledger.total_usable_energy_held
         - sim.organisms.iter().map(|o| o.usable_energy).sum::<f64>();
