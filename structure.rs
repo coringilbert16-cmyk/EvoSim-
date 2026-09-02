@@ -46,8 +46,17 @@ pub struct ConnectionSiteRef {
     pub point_index: usize,
 }
 
+/// Stable identity of a structural bond within an organism.
+///
+/// Bond IDs are assigned monotonically when bonds enter the structure and are
+/// never derived from the bond vector index. This keeps an active BREAK target
+/// stable even when unrelated bonds are removed and vector indices shift.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct BondId(pub u64);
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 pub struct Bond {
+    pub id: BondId,
     pub unit_a: usize,
     pub point_a: usize,
     pub unit_b: usize,
@@ -55,6 +64,16 @@ pub struct Bond {
     pub strength: f64,
     #[serde(default)]
     pub bond_energy: f64,
+}
+impl PartialEq for Bond {
+    fn eq(&self, other: &Self) -> bool {
+        self.unit_a == other.unit_a
+            && self.point_a == other.point_a
+            && self.unit_b == other.unit_b
+            && self.point_b == other.point_b
+            && self.strength == other.strength
+            && self.bond_energy == other.bond_energy
+    }
 }
 impl Bond {
     pub fn touches(&self, unit: usize, point: usize) -> bool {
@@ -89,7 +108,14 @@ impl Bond {
 pub struct OrganismStructure {
     pub units: Vec<StructuralUnit>,
     pub bonds: Vec<Bond>,
+    #[serde(default = "default_next_bond_id")]
+    next_bond_id: u64,
 }
+
+fn default_next_bond_id() -> u64 {
+    1
+}
+
 impl OrganismStructure {
     pub fn new() -> Self {
         Self::default()
@@ -98,9 +124,29 @@ impl OrganismStructure {
         self.units.push(unit);
         self.units.len() - 1
     }
-    pub fn add_bond(&mut self, bond: Bond) -> usize {
+    pub fn add_bond(&mut self, mut bond: Bond) -> usize {
+        if bond.id.0 == 0 || self.bonds.iter().any(|existing| existing.id == bond.id) {
+            bond.id = self.allocate_bond_id();
+        } else if bond.id.0 >= self.next_bond_id {
+            self.next_bond_id = bond.id.0.saturating_add(1);
+        }
         self.bonds.push(bond);
         self.bonds.len() - 1
+    }
+    fn allocate_bond_id(&mut self) -> BondId {
+        let id = BondId(self.next_bond_id.max(1));
+        self.next_bond_id = id.0.saturating_add(1);
+        id
+    }
+    pub fn bond_id_at(&self, bond_index: usize) -> Option<BondId> {
+        self.bonds.get(bond_index).map(|bond| bond.id)
+    }
+    pub fn bond_by_id(&self, id: BondId) -> Option<Bond> {
+        self.bonds.iter().find(|bond| bond.id == id).copied()
+    }
+    pub fn break_bond_by_id(&mut self, id: BondId) -> Option<Bond> {
+        let index = self.bonds.iter().position(|bond| bond.id == id)?;
+        self.break_bond(index)
     }
     pub fn is_valid_bond(&self, bond: &Bond, catalog: &[BaseResource]) -> bool {
         bond.is_valid(self.units.len(), |i| {
@@ -280,6 +326,7 @@ mod tests {
     }
     fn bond(a: usize, ap: usize, b: usize, bp: usize, strength: f64, energy: f64) -> Bond {
         Bond {
+            id: BondId(0),
             unit_a: a,
             point_a: ap,
             unit_b: b,
@@ -411,6 +458,7 @@ mod tests {
         let restored: Bond = serde_json::from_str(&json).unwrap();
         assert_eq!(restored.strength, 0.25);
         assert_eq!(restored.bond_energy, 4.5);
+        assert_eq!(restored.id, original.id);
     }
     #[test]
     fn legacy_bond_without_energy_deserializes_to_zero() {
@@ -419,6 +467,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(restored.bond_energy, 0.0);
+        assert_eq!(restored.id, BondId(0));
     }
     #[test]
     fn invalid_bond_energy_is_rejected() {
@@ -456,6 +505,34 @@ mod tests {
         let removed = s.break_matching_bond(target).unwrap();
         assert_eq!(removed, target);
         assert!(s.bonds.is_empty());
+    }
+    #[test]
+    fn bond_ids_are_unique_and_stable_across_vector_removal() {
+        let mut s = OrganismStructure::new();
+        let a = unit(&mut s, "Carbon", 0.0, 0.0);
+        let b = unit(&mut s, "Methane", 1.0, 0.0);
+        let c = unit(&mut s, "Carbon", 2.0, 0.0);
+        s.add_bond(bond(a, 0, b, 0, 0.5, 2.0));
+        s.add_bond(bond(b, 1, c, 0, 0.5, 3.0));
+        let first_id = s.bonds[0].id;
+        let second_id = s.bonds[1].id;
+        assert_ne!(first_id, second_id);
+        assert_eq!(s.break_bond_by_id(first_id).unwrap().id, first_id);
+        assert_eq!(s.bonds[0].id, second_id);
+        assert_eq!(s.bond_by_id(second_id).unwrap().id, second_id);
+    }
+    #[test]
+    fn bond_id_is_not_derived_from_physical_state() {
+        let mut s = OrganismStructure::new();
+        let a = unit(&mut s, "Carbon", 0.0, 0.0);
+        let b = unit(&mut s, "Methane", 1.0, 0.0);
+        let index = s.add_bond(bond(a, 0, b, 0, 0.5, 2.0));
+        let id = s.bonds[index].id;
+        s.bonds[index].strength = 0.9;
+        s.bonds[index].bond_energy = 7.0;
+        assert_eq!(s.bond_by_id(id).unwrap().id, id);
+        assert_eq!(s.bond_by_id(id).unwrap().strength, 0.9);
+        assert_eq!(s.bond_by_id(id).unwrap().bond_energy, 7.0);
     }
     #[test]
     fn formation_threshold_is_symmetric_and_diminishing_with_load() {
