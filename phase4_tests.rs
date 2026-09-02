@@ -1,6 +1,6 @@
 use crate::state::{ActiveTransformation, EnergyLedger, TransformationKind};
 use crate::structure::{Bond, Placement, StructuralUnit};
-use crate::transformation::resolve_transformation;
+use crate::transformation::Simulation;
 
 fn prepare_bonded_pair(
     sim: &mut crate::state::Simulation,
@@ -69,6 +69,17 @@ fn ledger_balance(ledger: &EnergyLedger) -> f64 {
         - ledger.total_heat_dissipated
 }
 
+fn assert_ledgers_equal(a: &EnergyLedger, b: &EnergyLedger) {
+    assert_eq!(a.total_potential_energy_released, b.total_potential_energy_released);
+    assert_eq!(a.total_formation_energy_spent, b.total_formation_energy_spent);
+    assert_eq!(a.total_break_energy_spent, b.total_break_energy_spent);
+    assert_eq!(a.total_usable_energy_spent, b.total_usable_energy_spent);
+    assert_eq!(a.total_bond_energy_created, b.total_bond_energy_created);
+    assert_eq!(a.total_usable_energy_gained, b.total_usable_energy_gained);
+    assert_eq!(a.total_heat_dissipated, b.total_heat_dissipated);
+    assert_eq!(a.total_usable_energy_held, b.total_usable_energy_held);
+}
+
 #[test]
 fn break_release_regime_preserves_energy_and_breaks_bond() {
     let mut sim = crate::state::Simulation::new(41, 10.0);
@@ -81,7 +92,7 @@ fn break_release_regime_preserves_energy_and_breaks_bond() {
         &mut sim.environment,
         &mut sim.energy_ledger,
     );
-    resolve_transformation(&transformation, &mut organisms[0], environment, ledger);
+    Simulation::resolve_transformation(&transformation, &mut organisms[0], environment, ledger);
 
     let organism = &organisms[0];
     assert!(organism.structure.bonds.is_empty());
@@ -106,7 +117,7 @@ fn break_consume_regime_spends_organism_energy_and_preserves_energy() {
         &mut sim.environment,
         &mut sim.energy_ledger,
     );
-    resolve_transformation(&transformation, &mut organisms[0], environment, ledger);
+    Simulation::resolve_transformation(&transformation, &mut organisms[0], environment, ledger);
 
     let organism = &organisms[0];
     assert!(organism.structure.bonds.is_empty());
@@ -162,7 +173,7 @@ fn break_neutral_regime_has_no_net_usable_energy_change() {
         &mut sim.environment,
         &mut sim.energy_ledger,
     );
-    resolve_transformation(&transformation, &mut organisms[0], environment, ledger);
+    Simulation::resolve_transformation(&transformation, &mut organisms[0], environment, ledger);
 
     assert!(organisms[0].structure.bonds.is_empty());
     assert!((organisms[0].usable_energy - energy_before).abs() < 1e-12);
@@ -185,12 +196,12 @@ fn insufficient_break_energy_is_atomic() {
         &mut sim.environment,
         &mut sim.energy_ledger,
     );
-    resolve_transformation(&transformation, &mut organisms[0], environment, ledger);
+    Simulation::resolve_transformation(&transformation, &mut organisms[0], environment, ledger);
 
     let organism = &organisms[0];
     assert_eq!(organism.structure.bonds, vec![bond]);
     assert_eq!(organism.usable_energy, 0.0);
-    assert_eq!(*ledger, ledger_before);
+    assert_ledgers_equal(ledger, &ledger_before);
     assert!(organism.active_transformation_id.is_none());
 }
 
@@ -238,7 +249,7 @@ fn break_preserves_other_bonds_and_all_structural_units() {
         &mut sim.environment,
         &mut sim.energy_ledger,
     );
-    resolve_transformation(&transformation, &mut organisms[0], environment, ledger);
+    Simulation::resolve_transformation(&transformation, &mut organisms[0], environment, ledger);
 
     assert_eq!(organisms[0].structure.units.len(), 3);
     assert_eq!(organisms[0].structure.bonds, vec![second]);
@@ -275,9 +286,9 @@ fn break_with_invalid_bond_state_does_not_mutate_structure() {
         &mut sim.environment,
         &mut sim.energy_ledger,
     );
-    resolve_transformation(&transformation, &mut organisms[0], environment, ledger);
+    Simulation::resolve_transformation(&transformation, &mut organisms[0], environment, ledger);
 
     assert_eq!(organisms[0].structure.bonds.len(), 1);
     assert!(organisms[0].structure.bonds[0].bond_energy.is_nan());
-    assert_eq!(*ledger, EnergyLedger::default());
+    assert_ledgers_equal(ledger, &EnergyLedger::default());
 }
