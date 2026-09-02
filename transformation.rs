@@ -3,7 +3,7 @@ use crate::decision_runtime::ActionCandidate;
 use crate::state::{
     ActiveTransformation, EnergyLedger, Environment, Organism, Simulation, STRESS_DECAY_PER_TICK,
 };
-use crate::structure::{formation_threshold, Bond};
+use crate::structure::{formation_threshold, Bond, BondId};
 
 const EPSILON: f64 = 1e-12;
 const BREAK_SURPLUS_TO_USABLE: f64 = 0.40;
@@ -109,8 +109,9 @@ impl Simulation {
             return None;
         }
         let context_key = decision.context_key.as_deref()?;
-        let bond_index = context_key.strip_prefix("bond:")?.parse::<usize>().ok()?;
-        let bond = *organism.structure.bonds.get(bond_index)?;
+        let bond_id_value = context_key.strip_prefix("bond:")?.parse::<u64>().ok()?;
+        let bond_id = BondId(bond_id_value);
+        let bond = organism.structure.bond_by_id(bond_id)?;
         if !bond.bond_energy.is_finite() || bond.bond_energy < 0.0 {
             return None;
         }
@@ -124,7 +125,8 @@ impl Simulation {
                 parts: Vec::new(),
                 bonded: true,
             },
-            bond: Some(bond),
+            bond_id: Some(bond_id),
+            legacy_bond: None,
             complexity,
             duration_ticks: duration,
             remaining_ticks: duration,
@@ -141,7 +143,17 @@ impl Simulation {
         environment: &mut Environment,
         ledger: &mut EnergyLedger,
     ) {
-        let Some(target_bond) = transformation.bond else {
+        // BondId is authoritative. The legacy copied Bond is used only to
+        // migrate snapshots created before stable bond identity existed.
+        let target_bond = transformation
+            .bond_id
+            .and_then(|id| organism.structure.bond_by_id(id))
+            .or_else(|| {
+                transformation
+                    .legacy_bond
+                    .and_then(|legacy| organism.structure.bonds.iter().find(|bond| **bond == legacy).copied())
+            });
+        let Some(target_bond) = target_bond else {
             organism.active_transformation_id = None;
             return;
         };
@@ -156,7 +168,7 @@ impl Simulation {
 
         if organism
             .structure
-            .break_matching_bond(attempt.bond)
+            .break_bond_by_id(attempt.bond.id)
             .is_none()
         {
             organism.active_transformation_id = None;
