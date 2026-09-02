@@ -11,7 +11,19 @@ impl Simulation {
     pub(crate) fn new(seed: u64, ticks_per_second: f64) -> Self {
         let rng = ChaCha8Rng::seed_from_u64(seed);
         let environment = Self::create_environment();
-        let organism = Self::create_initial_organism();
+        let mut organism = Self::create_initial_organism();
+        organism.store_unbonded_material(crate::resources::Material {
+            parts: vec![
+                ("Carbon".into(), 100.0),
+                ("Methane".into(), 100.0),
+                ("Hydrogen".into(), 100.0),
+                ("Sulfur".into(), 100.0),
+                ("Nitrogen".into(), 100.0),
+                ("Phosphorus".into(), 100.0),
+                ("Water".into(), 100.0),
+            ],
+            bonded: false,
+        });
         Self { tick: 0, ticks_per_second, running: true, organisms: vec![organism], environment, active_transformations: Vec::new(), energy_ledger: EnergyLedger::default(), next_organism_id: 2, next_transformation_id: 1, rng, decision_parameters: DecisionParameters::default() }
     }
 
