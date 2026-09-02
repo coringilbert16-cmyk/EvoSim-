@@ -181,10 +181,10 @@ impl Simulation {
         let survival = (reserve_pressure * (1.0 + organism.stress.max(0.0))).clamp(0.0, 1.0);
 
         let adult_mass = parameters.adult_mass.max(f64::EPSILON);
-        let maturity = (Self::structural_mass(organism, environment) / adult_mass).clamp(0.0, 1.0);
+        let maturity =
+            (Self::structural_mass(organism, environment) / adult_mass).clamp(0.0, 1.0);
         let reproduction_reserve = parameters.reproduction_reserve.max(f64::EPSILON);
-        let energy_readiness =
-            (organism.usable_energy / reproduction_reserve).clamp(0.0, 1.0);
+        let energy_readiness = (organism.usable_energy / reproduction_reserve).clamp(0.0, 1.0);
         let reproduction = organism.reproductive_readiness.clamp(0.0, 1.0);
 
         // Maturity and energy readiness are accumulated into reproductive
@@ -204,10 +204,10 @@ impl Simulation {
         parameters: DecisionParameters,
     ) {
         let adult_mass = parameters.adult_mass.max(f64::EPSILON);
-        let maturity = (Self::structural_mass(organism, environment) / adult_mass).clamp(0.0, 1.0);
+        let maturity =
+            (Self::structural_mass(organism, environment) / adult_mass).clamp(0.0, 1.0);
         let reproduction_reserve = parameters.reproduction_reserve.max(f64::EPSILON);
-        let energy_readiness =
-            (organism.usable_energy / reproduction_reserve).clamp(0.0, 1.0);
+        let energy_readiness = (organism.usable_energy / reproduction_reserve).clamp(0.0, 1.0);
         let accumulation =
             (maturity * energy_readiness * parameters.reproduction_accumulation_rate.max(0.0))
                 .clamp(0.0, 1.0);
