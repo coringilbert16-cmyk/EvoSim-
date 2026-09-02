@@ -1,6 +1,7 @@
 use crate::decision::{ActionKind, OutcomeKind};
 use crate::decision_runtime::ActionCandidate;
-use crate::state::{ActiveTransformation, EnergyLedger, Environment, Organism, Simulation};
+use crate::state::{ActiveTransformation, EnergyLedger, Environment, Organism};
+pub(crate) use crate::state::Simulation;
 use crate::structure::{formation_threshold, Bond, BondId};
 
 const EPSILON: f64 = 1e-12;
@@ -222,10 +223,6 @@ impl Simulation {
         }
     }
 
-    /// Apply a stress-induced structural break through the same BREAK
-    /// calculation, structural mutation, and energy-ledger path as a normal
-    /// BREAK action. Stress damage is a physiological consequence, not a
-    /// decision-history event.
     pub(crate) fn apply_stress_break(
         organism: &mut Organism,
         environment: &Environment,
