@@ -173,11 +173,7 @@ mod tests {
             context_key: Some("Methane".into()),
         };
         record_outcome(&mut history, &candidate, OutcomeKind::Beneficial);
-        assert!(known_outcome(
-            &history,
-            ActionKind::Break,
-            Some("Methane")
-        ));
+        assert!(known_outcome(&history, ActionKind::Break, Some("Methane")));
     }
 
     #[test]
