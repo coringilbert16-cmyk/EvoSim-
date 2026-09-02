@@ -149,9 +149,14 @@ impl Simulation {
             .bond_id
             .and_then(|id| organism.structure.bond_by_id(id))
             .or_else(|| {
-                transformation
-                    .legacy_bond
-                    .and_then(|legacy| organism.structure.bonds.iter().find(|bond| **bond == legacy).copied())
+                transformation.legacy_bond.and_then(|legacy| {
+                    organism
+                        .structure
+                        .bonds
+                        .iter()
+                        .find(|bond| **bond == legacy)
+                        .copied()
+                })
             });
         let Some(target_bond) = target_bond else {
             organism.active_transformation_id = None;
@@ -166,11 +171,12 @@ impl Simulation {
             return;
         };
 
-        if organism
-            .structure
-            .break_bond_by_id(attempt.bond.id)
-            .is_none()
-        {
+        let removed = if attempt.bond.id.0 > 0 {
+            organism.structure.break_bond_by_id(attempt.bond.id)
+        } else {
+            organism.structure.break_matching_bond(attempt.bond)
+        };
+        if removed.is_none() {
             organism.active_transformation_id = None;
             return;
         }
