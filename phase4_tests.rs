@@ -87,7 +87,7 @@ fn assert_ledgers_equal(a: &EnergyLedger, b: &EnergyLedger) {
 
 #[test]
 fn break_release_regime_preserves_energy_and_breaks_bond() {
-    let mut sim = crate::state::Simulation::new(41, 10.0);
+    let mut sim = Simulation::new(41, 10.0);
     let bond = prepare_bonded_pair(&mut sim, 4.0, 0.5);
     let transformation = transformation(bond);
     let energy_before = sim.organisms[0].usable_energy;
@@ -112,7 +112,7 @@ fn break_release_regime_preserves_energy_and_breaks_bond() {
 
 #[test]
 fn break_consume_regime_spends_organism_energy_and_preserves_energy() {
-    let mut sim = crate::state::Simulation::new(43, 10.0);
+    let mut sim = Simulation::new(43, 10.0);
     let bond = prepare_bonded_pair(&mut sim, 0.1, 0.5);
     let transformation = transformation(bond);
     let energy_before = sim.organisms[0].usable_energy;
@@ -136,7 +136,7 @@ fn break_consume_regime_spends_organism_energy_and_preserves_energy() {
 
 #[test]
 fn break_neutral_regime_has_no_net_usable_energy_change() {
-    let mut sim = crate::state::Simulation::new(47, 10.0);
+    let mut sim = Simulation::new(47, 10.0);
     let organism = &mut sim.organisms[0];
     organism.structure.units.clear();
     organism.structure.bonds.clear();
@@ -190,7 +190,7 @@ fn break_neutral_regime_has_no_net_usable_energy_change() {
 
 #[test]
 fn insufficient_break_energy_is_atomic() {
-    let mut sim = crate::state::Simulation::new(53, 10.0);
+    let mut sim = Simulation::new(53, 10.0);
     let bond = prepare_bonded_pair(&mut sim, 0.1, 0.5);
     let transformation = transformation(bond);
     sim.organisms[0].usable_energy = 0.0;
@@ -212,7 +212,7 @@ fn insufficient_break_energy_is_atomic() {
 
 #[test]
 fn break_preserves_other_bonds_and_all_structural_units() {
-    let mut sim = crate::state::Simulation::new(59, 10.0);
+    let mut sim = Simulation::new(59, 10.0);
     let organism = &mut sim.organisms[0];
     organism.structure.units.clear();
     organism.structure.bonds.clear();
@@ -280,7 +280,7 @@ fn break_ledger_accumulates_multiple_events() {
 
 #[test]
 fn break_with_invalid_bond_state_does_not_mutate_structure() {
-    let mut sim = crate::state::Simulation::new(61, 10.0);
+    let mut sim = Simulation::new(61, 10.0);
     let mut bond = prepare_bonded_pair(&mut sim, 1.0, 0.5);
     bond.bond_energy = f64::NAN;
     sim.organisms[0].structure.bonds[0] = bond;
