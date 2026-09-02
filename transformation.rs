@@ -216,27 +216,11 @@ impl Simulation {
                 .first()
                 .map(|p| (p.x, p.y))
                 .unwrap_or((0.0, 0.0));
-            reinforce_memory_point(organism, px, py, reinforcement);
+            Self::reinforce_memory_point(organism, px, py, reinforcement);
         }
     }
 
     pub(crate) fn apply_energy_capacity(organism: &mut Organism) {
         organism.stress *= STRESS_DECAY_PER_TICK;
-    }
-}
-
-pub(crate) fn reinforce_memory_point(organism: &mut Organism, x: f64, y: f64, reinforcement: f64) {
-    if let Some(point) = organism
-        .memory
-        .iter_mut()
-        .find(|p| (p.x - x).abs() < f64::EPSILON && (p.y - y).abs() < f64::EPSILON)
-    {
-        point.strength = (point.strength + reinforcement).clamp(0.0, 1.0);
-    } else {
-        organism.memory.push(crate::state::MemoryPoint {
-            x,
-            y,
-            strength: reinforcement.clamp(0.0, 1.0),
-        });
     }
 }
