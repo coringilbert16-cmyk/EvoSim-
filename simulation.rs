@@ -261,18 +261,12 @@ impl Simulation {
             eligibility.permits(action) && needs.any_for(action.relevant_needs())
         };
         if relevant(ActionKind::Break) {
-            candidates.extend(
-                organism
-                    .structure
-                    .bonds
-                    .iter()
-                    .filter_map(|bond| {
-                        (bond.id.0 > 0).then_some(ActionCandidate {
-                            action: ActionKind::Break,
-                            context_key: Some(format!("bond:{}", bond.id.0)),
-                        })
-                    }),
-            );
+            candidates.extend(organism.structure.bonds.iter().filter_map(|bond| {
+                (bond.id.0 > 0).then_some(ActionCandidate {
+                    action: ActionKind::Break,
+                    context_key: Some(format!("bond:{}", bond.id.0)),
+                })
+            }));
         }
         if relevant(ActionKind::Combine) {
             candidates.push(ActionCandidate {
