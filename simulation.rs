@@ -1,4 +1,4 @@
-use rand::SeedableRng;
+use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
@@ -13,6 +13,12 @@ use crate::state::{
     DevelopmentStage, EnergyLedger, Environment, Organism, Position, ResourceSense, Simulation,
     Snapshot, PROCESSING_RATE, PROCESSING_REACH,
 };
+
+const MAINTENANCE_BASE_RATE: f64 = 0.01;
+const STRESS_DAMAGE_THRESHOLD: f64 = 1.0;
+const STRESS_DAMAGE_COEFFICIENT: f64 = 0.10;
+const STRESS_RECOVERY_COEFFICIENT: f64 = 0.02;
+const STRESS_RELIEF_PER_BREAK: f64 = 1.0;
 
 impl Simulation {
     pub(crate) fn new(seed: u64, ticks_per_second: f64) -> Self {
@@ -192,6 +198,44 @@ impl Simulation {
             .sum()
     }
 
+    fn apply_maintenance(
+        organism: &mut Organism,
+        environment: &Environment,
+        ledger: &mut EnergyLedger,
+        rng: &mut ChaCha8Rng,
+    ) {
+        let structural_mass = Self::structural_mass(organism, environment).max(0.0);
+        let maintenance = MAINTENANCE_BASE_RATE * structural_mass;
+        if !maintenance.is_finite() || maintenance <= 0.0 {
+            organism.stress = (organism.stress - STRESS_RECOVERY_COEFFICIENT).max(0.0);
+            return;
+        }
+
+        let available_energy = organism.usable_energy.max(0.0);
+        if available_energy >= maintenance {
+            organism.usable_energy -= maintenance;
+            organism.stress = (organism.stress - STRESS_RECOVERY_COEFFICIENT).max(0.0);
+        } else {
+            organism.usable_energy = 0.0;
+            let unpaid_fraction = ((maintenance - available_energy) / maintenance).clamp(0.0, 1.0);
+            organism.stress += STRESS_DAMAGE_COEFFICIENT * unpaid_fraction;
+        }
+
+        if organism.stress >= STRESS_DAMAGE_THRESHOLD && !organism.structure.bonds.is_empty() {
+            organism.structure.ensure_bond_ids();
+            let index = rng.gen_range(0..organism.structure.bonds.len());
+            let bond_id = organism.structure.bonds[index].id;
+            if crate::transformation::Simulation::apply_stress_break(
+                organism,
+                environment,
+                ledger,
+                bond_id,
+            ) {
+                organism.stress = (organism.stress - STRESS_RELIEF_PER_BREAK).max(0.0);
+            }
+        }
+    }
+
     fn current_needs(
         organism: &Organism,
         environment: &Environment,
@@ -362,6 +406,12 @@ impl Simulation {
                 &environment_snapshot,
                 decision_parameters,
             );
+            Self::apply_maintenance(
+                organism,
+                &environment_snapshot,
+                &mut self.energy_ledger,
+                &mut self.rng,
+            );
         }
         let (organisms, environment) = (&mut self.organisms, &mut self.environment);
         let mut compatibility_cache = crate::contact::ConnectionCompatibilityCache::new();
@@ -441,9 +491,6 @@ impl Simulation {
                 }
                 ActionKind::Expel => {}
             }
-        }
-        for organism in &mut self.organisms {
-            Self::apply_energy_capacity(organism);
         }
         self.energy_ledger.total_usable_energy_held =
             self.organisms.iter().map(|o| o.usable_energy).sum();
