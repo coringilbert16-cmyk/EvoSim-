@@ -69,8 +69,14 @@ fn ledger_balance(ledger: &EnergyLedger) -> f64 {
 }
 
 fn assert_ledgers_equal(a: &EnergyLedger, b: &EnergyLedger) {
-    assert_eq!(a.total_potential_energy_released, b.total_potential_energy_released);
-    assert_eq!(a.total_formation_energy_spent, b.total_formation_energy_spent);
+    assert_eq!(
+        a.total_potential_energy_released,
+        b.total_potential_energy_released
+    );
+    assert_eq!(
+        a.total_formation_energy_spent,
+        b.total_formation_energy_spent
+    );
     assert_eq!(a.total_break_energy_spent, b.total_break_energy_spent);
     assert_eq!(a.total_usable_energy_spent, b.total_usable_energy_spent);
     assert_eq!(a.total_bond_energy_created, b.total_bond_energy_created);
