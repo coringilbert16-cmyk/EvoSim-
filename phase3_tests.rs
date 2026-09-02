@@ -142,12 +142,7 @@ mod phase3_tests {
         let b = props(10.0, 1.0, 0.5);
         let forward = experimental_interaction(a, b, candidate(1.0, 0.0), 0.0);
         let reverse = experimental_interaction(b, a, candidate(1.0, 0.0), 0.0);
-        let equal = experimental_interaction(
-            a,
-            props(1.0, 1.0, 0.5),
-            candidate(1.0, 0.0),
-            0.0,
-        );
+        let equal = experimental_interaction(a, props(1.0, 1.0, 0.5), candidate(1.0, 0.0), 0.0);
 
         assert_eq!(forward.direction, 1.0);
         assert_eq!(reverse.direction, -1.0);
@@ -159,30 +154,18 @@ mod phase3_tests {
     fn reactivity_and_geometry_modify_interaction_magnitude() {
         let low_reactivity = props(1.0, 0.5, 0.5);
         let high_reactivity = props(10.0, 2.0, 0.5);
-        let high_reactivity_result = experimental_interaction(
-            low_reactivity,
-            high_reactivity,
-            candidate(1.0, 0.0),
-            0.0,
-        );
+        let high_reactivity_result =
+            experimental_interaction(low_reactivity, high_reactivity, candidate(1.0, 0.0), 0.0);
         let low_reactivity_result = experimental_interaction(
             low_reactivity,
             props(10.0, 0.5, 0.5),
             candidate(1.0, 0.0),
             0.0,
         );
-        let distant_result = experimental_interaction(
-            low_reactivity,
-            high_reactivity,
-            candidate(1.0, 1.0),
-            0.0,
-        );
-        let poor_facing_result = experimental_interaction(
-            low_reactivity,
-            high_reactivity,
-            candidate(0.0, 0.0),
-            0.0,
-        );
+        let distant_result =
+            experimental_interaction(low_reactivity, high_reactivity, candidate(1.0, 1.0), 0.0);
+        let poor_facing_result =
+            experimental_interaction(low_reactivity, high_reactivity, candidate(0.0, 0.0), 0.0);
 
         assert!(high_reactivity_result.magnitude > low_reactivity_result.magnitude);
         assert!(high_reactivity_result.magnitude > distant_result.magnitude);
