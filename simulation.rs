@@ -12,9 +12,10 @@ impl Simulation {
         let rng = ChaCha8Rng::seed_from_u64(seed);
         let environment = Self::create_environment();
         let mut organism = Self::create_initial_organism();
+        organism.usable_energy = 25.0;
         organism.store_unbonded_material(crate::resources::Material {
             parts: vec![
-                ("Carbon".into(), 100.0),
+                ("Carbon".into(), 84.0),
                 ("Methane".into(), 100.0),
                 ("Hydrogen".into(), 100.0),
                 ("Sulfur".into(), 100.0),
@@ -24,6 +25,17 @@ impl Simulation {
             ],
             bonded: false,
         });
+        for i in 0..16 {
+            let angle = (i as f64) * std::f64::consts::TAU / 16.0;
+            organism.structure.add_unit(crate::structure::StructuralUnit::new(
+                "Carbon",
+                crate::structure::Placement {
+                    x: 500.0 + angle.cos() * 2.0,
+                    y: 500.0 + angle.sin() * 2.0,
+                    rotation_radians: 0.0,
+                },
+            ));
+        }
         Self { tick: 0, ticks_per_second, running: true, organisms: vec![organism], environment, active_transformations: Vec::new(), energy_ledger: EnergyLedger::default(), next_organism_id: 2, next_transformation_id: 1, rng, decision_parameters: DecisionParameters::default() }
     }
 
