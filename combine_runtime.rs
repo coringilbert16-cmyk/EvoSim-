@@ -6,7 +6,7 @@
 
 use crate::combine::{eligible_candidates, evaluate_formation, experimental_interaction};
 use crate::contact::ConnectionCompatibilityCache;
-use crate::resources::{BaseResource, Material};
+use crate::resources::BaseResource;
 use crate::state::{Environment, Organism};
 use crate::structure::{Placement, StructuralUnit};
 
@@ -38,12 +38,6 @@ pub(crate) struct CombineAttempt {
     pub heat_dissipated: f64,
 }
 
-impl PartialEq for Material {
-    fn eq(&self, other: &Self) -> bool {
-        self.bonded == other.bonded && self.parts == other.parts
-    }
-}
-
 /// Convert exactly one unit of unbonded stored material into one physical
 /// structural unit at the caller-supplied placement.
 ///
@@ -60,6 +54,7 @@ pub(crate) fn instantiate_one_unit(
         || !placement.y.is_finite()
         || !placement.rotation_radians.is_finite()
         || catalog.iter().all(|base| base.name != resource_name)
+        || organism.stored_unbonded.bonded
     {
         return None;
     }
@@ -225,13 +220,4 @@ pub(crate) fn try_combine(
         usable_energy_gained,
         heat_dissipated,
     })
-}
-
-#[allow(dead_code)]
-fn _raw_material_type_check(raw: &Material, catalog: &[BaseResource]) -> bool {
-    !raw.bonded
-        && raw
-            .parts
-            .iter()
-            .all(|(name, amount)| *amount >= 0.0 && catalog.iter().any(|r| r.name == *name))
 }
