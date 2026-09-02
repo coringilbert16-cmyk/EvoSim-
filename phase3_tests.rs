@@ -37,14 +37,18 @@ mod phase3_tests {
         assert!(attempt.potential_energy_released > 0.0);
         assert!(attempt.work_cost >= 0.0);
         assert!(attempt.energy_paid >= 0.0);
-        assert!((attempt.surplus
-            - (attempt.potential_energy_released - attempt.formation_threshold).max(0.0))
-            .abs()
-            < 1e-12);
-        assert!((attempt.bond_energy + attempt.usable_energy_gained + attempt.heat_dissipated
-            - attempt.surplus)
-            .abs()
-            < 1e-9 * attempt.surplus.max(1.0));
+        assert!(
+            (attempt.surplus
+                - (attempt.potential_energy_released - attempt.formation_threshold).max(0.0))
+                .abs()
+                < 1e-12
+        );
+        assert!(
+            (attempt.bond_energy + attempt.usable_energy_gained + attempt.heat_dissipated
+                - attempt.surplus)
+                .abs()
+                < 1e-9 * attempt.surplus.max(1.0)
+        );
         assert_eq!(organism.structure.bonds.len(), 1);
         assert!(catalog.iter().any(|resource| resource.name == "Carbon"));
     }
@@ -79,9 +83,15 @@ mod phase3_tests {
         assert!(sim.energy_ledger.total_potential_energy_released > 0.0);
         assert!(sim.energy_ledger.total_usable_energy_gained > 0.0);
         assert!(sim.energy_ledger.total_heat_dissipated >= 0.0);
-        assert!((sim.energy_ledger.total_usable_energy_held
-            - sim.organisms.iter().map(|o| o.usable_energy).sum::<f64>())
-            .abs()
-            < 1e-12);
+        assert!(
+            (sim.energy_ledger.total_usable_energy_held
+                - sim
+                    .organisms
+                    .iter()
+                    .map(|o| o.usable_energy)
+                    .sum::<f64>())
+                .abs()
+                < 1e-12
+        );
     }
 }
