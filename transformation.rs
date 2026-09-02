@@ -89,12 +89,7 @@ impl Simulation {
     }
 }
 
-pub(crate) fn reinforce_memory_point(
-    organism: &mut Organism,
-    x: f64,
-    y: f64,
-    reinforcement: f64,
-) {
+pub(crate) fn reinforce_memory_point(organism: &mut Organism, x: f64, y: f64, reinforcement: f64) {
     if let Some(point) = organism
         .memory
         .iter_mut()
