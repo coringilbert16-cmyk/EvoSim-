@@ -366,6 +366,10 @@ impl Simulation {
         let (organisms, environment) = (&mut self.organisms, &mut self.environment);
         let mut compatibility_cache = crate::contact::ConnectionCompatibilityCache::new();
         for organism in organisms {
+            // Snapshots predating stable BondId have zero IDs. Normalize once
+            // before generating candidates so legacy structures re-enter the
+            // current decision/runtime path without ambiguous targets.
+            organism.structure.ensure_bond_ids();
             let needs = Self::current_needs(organism, environment, decision_parameters);
             let eligibility = Self::action_eligibility(organism, environment);
             let context = DecisionContext { needs, eligibility };
