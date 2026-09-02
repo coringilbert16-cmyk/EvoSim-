@@ -38,36 +38,41 @@ pub(crate) struct CombineAttempt {
     pub heat_dissipated: f64,
 }
 
+/// Convert exactly one unit of unbonded stored material into one physical
+/// structural unit at the caller-supplied placement.
+///
+/// This is deliberately separate from ACQUIRE: acquisition only transfers raw
+/// material into organism storage. Instantiation is the explicit boundary at
+/// which one unit of that raw inventory becomes physical structure.
 pub(crate) fn instantiate_one_unit(
     organism: &mut Organism,
+    resource_name: &str,
+    placement: Placement,
     catalog: &[BaseResource],
 ) -> Option<usize> {
+    if !placement.x.is_finite()
+        || !placement.y.is_finite()
+        || !placement.rotation_radians.is_finite()
+        || catalog.iter().all(|base| base.name != resource_name)
+    {
+        return None;
+    }
+
     let index = organism
         .stored_unbonded
         .parts
         .iter()
-        .position(|(_, amount)| *amount >= MATERIAL_UNIT_AMOUNT - EPSILON)?;
-    let resource_name = organism.stored_unbonded.parts[index].0.clone();
-    if catalog.iter().all(|base| base.name != resource_name) {
-        return None;
-    }
+        .position(|(name, amount)| name == resource_name && *amount >= MATERIAL_UNIT_AMOUNT - EPSILON)?;
+
     organism.stored_unbonded.parts[index].1 -= MATERIAL_UNIT_AMOUNT;
     organism
         .stored_unbonded
         .parts
         .retain(|(_, amount)| *amount > EPSILON);
-    let (x, y) = organism
-        .occupied_cells
-        .first()
-        .map(|p| (p.x, p.y))
-        .unwrap_or((0.0, 0.0));
+
     Some(organism.structure.add_unit(StructuralUnit::new(
         resource_name,
-        Placement {
-            x,
-            y,
-            rotation_radians: 0.0,
-        },
+        placement,
     )))
 }
 
