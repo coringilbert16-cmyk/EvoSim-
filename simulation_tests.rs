@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod integration_tests {
     use crate::decision::{ActionKind, OutcomeKind};
+    use crate::decision_runtime::ActionCandidate;
     use crate::resources::Material;
     use crate::state::Simulation;
     use crate::structure::{Bond, Placement, StructuralUnit};
@@ -107,6 +108,17 @@ mod integration_tests {
             bond_energy: 12.5,
         });
         let before = sim.organisms[0].usable_energy;
+        let decision = ActionCandidate {
+            action: ActionKind::Break,
+            context_key: Some("bond:0".into()),
+        };
+        let transformation = Simulation::try_start_transformation(
+            &mut sim.organisms[0],
+            &mut sim.next_transformation_id,
+            &decision,
+        )
+        .expect("valid bond should start BREAK transformation");
+        sim.active_transformations.push(transformation);
         for _ in 0..20 {
             sim.step();
             if sim.organisms[0].structure.bonds.is_empty() {
