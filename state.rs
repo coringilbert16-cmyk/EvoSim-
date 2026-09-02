@@ -90,8 +90,14 @@ pub(crate) struct ActiveTransformation {
     pub(crate) kind: TransformationKind,
     /// Retained for snapshot compatibility. BREAK no longer derives energy from this material.
     pub(crate) material: Material,
+    /// Stable BREAK target. The bond is resolved from the organism's live
+    /// structure when the transformation completes.
     #[serde(default)]
-    pub(crate) bond: Option<Bond>,
+    pub(crate) bond_id: Option<crate::structure::BondId>,
+    /// Legacy snapshot field retained only for migration from pre-BondId
+    /// transformations. New transformations never populate it.
+    #[serde(default, rename = "bond")]
+    pub(crate) legacy_bond: Option<Bond>,
     pub(crate) complexity: f64,
     pub(crate) duration_ticks: u64,
     pub(crate) remaining_ticks: u64,
