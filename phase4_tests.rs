@@ -1,6 +1,5 @@
-use crate::state::{ActiveTransformation, EnergyLedger, TransformationKind};
+use crate::state::{ActiveTransformation, EnergyLedger, Simulation, TransformationKind};
 use crate::structure::{Bond, Placement, StructuralUnit};
-use crate::transformation::Simulation;
 
 fn prepare_bonded_pair(
     sim: &mut crate::state::Simulation,
