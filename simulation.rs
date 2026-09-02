@@ -11,14 +11,40 @@ use crate::environment::{
 use crate::genome::initial_genome;
 use crate::state::{
     DevelopmentStage, EnergyLedger, Environment, Organism, Position, ResourceSense, Simulation,
-    Snapshot,
+    Snapshot, PROCESSING_RATE, PROCESSING_REACH,
 };
 
 impl Simulation {
     pub(crate) fn new(seed: u64, ticks_per_second: f64) -> Self {
         let rng = ChaCha8Rng::seed_from_u64(seed);
         let environment = Self::create_environment();
-        let organism = Self::create_initial_organism();
+        let mut organism = Self::create_initial_organism();
+        organism.usable_energy = 25.0;
+        organism.store_unbonded_material(crate::resources::Material {
+            parts: vec![
+                ("Carbon".into(), 84.0),
+                ("Methane".into(), 100.0),
+                ("Hydrogen".into(), 100.0),
+                ("Sulfur".into(), 100.0),
+                ("Nitrogen".into(), 100.0),
+                ("Phosphorus".into(), 100.0),
+                ("Water".into(), 100.0),
+            ],
+            bonded: false,
+        });
+        for i in 0..16 {
+            let angle = (i as f64) * std::f64::consts::TAU / 16.0;
+            organism
+                .structure
+                .add_unit(crate::structure::StructuralUnit::new(
+                    "Carbon",
+                    crate::structure::Placement {
+                        x: 500.0 + angle.cos() * 2.0,
+                        y: 500.0 + angle.sin() * 2.0,
+                        rotation_radians: 0.0,
+                    },
+                ));
+        }
         Self {
             tick: 0,
             ticks_per_second,
@@ -162,15 +188,10 @@ impl Simulation {
             .structure
             .units
             .iter()
-            .filter_map(|unit| {
-                unit.properties(&environment.catalog)
-                    .map(|properties| properties.mass)
-            })
+            .filter_map(|unit| unit.properties(&environment.catalog).map(|p| p.mass))
             .sum()
     }
 
-    /// Derive the two independent continuous need pressures. No pressure is
-    /// forced to be the inverse of the other.
     fn current_needs(
         organism: &Organism,
         environment: &Environment,
@@ -179,21 +200,15 @@ impl Simulation {
         let survival_reserve = parameters.survival_reserve.max(f64::EPSILON);
         let reserve_pressure = (1.0 - organism.usable_energy / survival_reserve).clamp(0.0, 1.0);
         let survival = (reserve_pressure * (1.0 + organism.stress.max(0.0))).clamp(0.0, 1.0);
-
-        let adult_mass = parameters.adult_mass.max(f64::EPSILON);
-        let maturity = (Self::structural_mass(organism, environment) / adult_mass).clamp(0.0, 1.0);
-        let reproduction_reserve = parameters.reproduction_reserve.max(f64::EPSILON);
-        let energy_readiness = (organism.usable_energy / reproduction_reserve).clamp(0.0, 1.0);
-        let reproduction = organism.reproductive_readiness.clamp(0.0, 1.0);
-
-        // Maturity and energy readiness are accumulated into reproductive
-        // readiness separately in update_reproductive_readiness(). Keeping
-        // the pressure itself as the accumulated state prevents mature,
-        // energy-ready organisms from being permanently forced to reproduce.
-        let _ = (maturity, energy_readiness);
+        let _maturity = (Self::structural_mass(organism, environment)
+            / parameters.adult_mass.max(f64::EPSILON))
+        .clamp(0.0, 1.0);
+        let _energy_readiness = (organism.usable_energy
+            / parameters.reproduction_reserve.max(f64::EPSILON))
+        .clamp(0.0, 1.0);
         CurrentNeeds {
             survival,
-            reproduction,
+            reproduction: organism.reproductive_readiness.clamp(0.0, 1.0),
         }
     }
 
@@ -202,10 +217,12 @@ impl Simulation {
         environment: &Environment,
         parameters: DecisionParameters,
     ) {
-        let adult_mass = parameters.adult_mass.max(f64::EPSILON);
-        let maturity = (Self::structural_mass(organism, environment) / adult_mass).clamp(0.0, 1.0);
-        let reproduction_reserve = parameters.reproduction_reserve.max(f64::EPSILON);
-        let energy_readiness = (organism.usable_energy / reproduction_reserve).clamp(0.0, 1.0);
+        let maturity = (Self::structural_mass(organism, environment)
+            / parameters.adult_mass.max(f64::EPSILON))
+        .clamp(0.0, 1.0);
+        let energy_readiness = (organism.usable_energy
+            / parameters.reproduction_reserve.max(f64::EPSILON))
+        .clamp(0.0, 1.0);
         let accumulation =
             (maturity * energy_readiness * parameters.reproduction_accumulation_rate.max(0.0))
                 .clamp(0.0, 1.0);
@@ -213,10 +230,19 @@ impl Simulation {
             (organism.reproductive_readiness + accumulation).clamp(0.0, 1.0);
     }
 
+    fn can_acquire(organism: &Organism) -> bool {
+        organism.active_transformation_id.is_none()
+            && organism
+                .resource_sense
+                .sensed_resources
+                .iter()
+                .any(|r| !r.bonded && r.distance <= PROCESSING_REACH && r.perceived_amount > 0.0)
+    }
+
     fn action_eligibility(organism: &Organism, _environment: &Environment) -> ActionEligibility {
         ActionEligibility {
             can_move: organism.active_transformation_id.is_none(),
-            can_acquire: false,
+            can_acquire: Self::can_acquire(organism),
             can_combine: organism.active_transformation_id.is_none()
                 && organism.structure.units.len() >= 2,
             can_break: organism.active_transformation_id.is_none()
@@ -234,7 +260,6 @@ impl Simulation {
         let relevant = |action: ActionKind| {
             eligibility.permits(action) && needs.any_for(action.relevant_needs())
         };
-
         if relevant(ActionKind::Break) {
             candidates.extend(
                 organism
@@ -254,15 +279,15 @@ impl Simulation {
                 context_key: None,
             });
         }
-        if relevant(ActionKind::Move) {
-            candidates.push(ActionCandidate {
-                action: ActionKind::Move,
-                context_key: None,
-            });
-        }
         if relevant(ActionKind::Acquire) {
             candidates.push(ActionCandidate {
                 action: ActionKind::Acquire,
+                context_key: None,
+            });
+        }
+        if relevant(ActionKind::Move) {
+            candidates.push(ActionCandidate {
+                action: ActionKind::Move,
                 context_key: None,
             });
         }
@@ -275,10 +300,35 @@ impl Simulation {
         candidates
     }
 
+    fn acquire(organism: &mut Organism, environment: &mut Environment) -> bool {
+        let target = organism
+            .resource_sense
+            .sensed_resources
+            .iter()
+            .filter(|r| !r.bonded && r.distance <= PROCESSING_REACH && r.perceived_amount > 0.0)
+            .max_by(|a, b| {
+                a.desirability
+                    .partial_cmp(&b.desirability)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+        let Some(target) = target else { return false };
+        let amount = target.perceived_amount.clamp(0.0, PROCESSING_RATE);
+        let Some(material) = environment
+            .field
+            .take_at_index(target.field_index, false, amount)
+        else {
+            return false;
+        };
+        if material.total_amount() <= 0.0 {
+            return false;
+        }
+        organism.store_unbonded_material(material);
+        true
+    }
+
     pub(crate) fn step(&mut self) -> Snapshot {
         self.tick += 1;
         self.step_environment();
-
         let mut still_active = Vec::new();
         let mut completed = Vec::new();
         for mut transformation in self.active_transformations.drain(..) {
@@ -286,9 +336,9 @@ impl Simulation {
                 transformation.remaining_ticks -= 1;
             }
             if transformation.remaining_ticks == 0 {
-                completed.push(transformation);
+                completed.push(transformation)
             } else {
-                still_active.push(transformation);
+                still_active.push(transformation)
             }
         }
         self.active_transformations = still_active;
@@ -306,7 +356,6 @@ impl Simulation {
                 );
             }
         }
-
         let environment_snapshot = self.environment.clone();
         let decision_parameters = self.decision_parameters;
         for organism in &mut self.organisms {
@@ -319,7 +368,6 @@ impl Simulation {
                 decision_parameters,
             );
         }
-
         let (organisms, environment) = (&mut self.organisms, &mut self.environment);
         let mut compatibility_cache = crate::contact::ConnectionCompatibilityCache::new();
         for organism in organisms {
@@ -331,7 +379,6 @@ impl Simulation {
             else {
                 continue;
             };
-
             match selected.action {
                 ActionKind::Move => {
                     let moved = Self::update_movement(organism, environment);
@@ -339,6 +386,18 @@ impl Simulation {
                         &mut organism.decision_history,
                         &selected,
                         if moved {
+                            crate::decision::OutcomeKind::Neutral
+                        } else {
+                            crate::decision::OutcomeKind::Harmful
+                        },
+                    );
+                }
+                ActionKind::Acquire => {
+                    let acquired = Self::acquire(organism, environment);
+                    crate::decision_runtime::record_outcome(
+                        &mut organism.decision_history,
+                        &selected,
+                        if acquired {
                             crate::decision::OutcomeKind::Neutral
                         } else {
                             crate::decision::OutcomeKind::Harmful
@@ -371,10 +430,9 @@ impl Simulation {
                         self.active_transformations.push(transformation);
                     }
                 }
-                ActionKind::Acquire | ActionKind::Expel => {}
+                ActionKind::Expel => {}
             }
         }
-
         for organism in &mut self.organisms {
             Self::apply_energy_capacity(organism);
         }
@@ -395,14 +453,19 @@ impl Simulation {
 
     #[cfg(test)]
     pub(crate) fn total_material_in_system(&self) -> f64 {
-        let mut total = self.environment.field.total_amount();
-        total += self.environment.reservoir.total_amount();
+        let mut total =
+            self.environment.field.total_amount() + self.environment.reservoir.total_amount();
         for transformation in &self.active_transformations {
             total += transformation.material.total_amount();
         }
         for organism in &self.organisms {
             total += organism.stored_unbonded.total_amount();
-            total += organism.structure.units.len() as f64;
+            total += organism
+                .structure
+                .units
+                .iter()
+                .filter_map(|unit| unit.properties(&self.environment.catalog).map(|p| p.mass))
+                .sum::<f64>();
         }
         total
     }

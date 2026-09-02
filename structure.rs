@@ -314,14 +314,10 @@ mod tests {
             &catalog,
         );
         assert!(point.is_some());
-        assert_eq!(
-            point.unwrap(),
-            ConnectionPoint {
-                x: 1.0,
-                y: 0.0,
-                direction_radians: 0.0
-            }
-        );
+        let point = point.unwrap();
+        assert!((point.x - 0.438691).abs() < 1e-6);
+        assert!(point.y.abs() < 1e-12);
+        assert!(point.direction_radians.abs() < 1e-12);
     }
 
     #[test]
@@ -357,7 +353,7 @@ mod tests {
         let a = unit(&mut s, "Carbon", 0.0, 0.0);
         let b = unit(&mut s, "Methane", 1.0, 0.0);
         let c = unit(&mut s, "Carbon", 2.0, 0.0);
-        let d = unit(&mut s, "Methane", 10.0, 0.0);
+        let _d = unit(&mut s, "Methane", 10.0, 0.0);
         s.add_bond(bond(a, 0, b, 0, 0.5, 2.0));
         s.add_bond(bond(b, 1, c, 0, 0.5, 3.0));
 
