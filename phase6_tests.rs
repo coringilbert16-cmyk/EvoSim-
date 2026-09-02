@@ -5,7 +5,7 @@ mod conservation_tests {
         DEFAULT_SETTLING_FRACTION, DEFAULT_SETTLING_INTERVAL_TICKS,
     };
     use crate::resources::Material;
-    use crate::state::{ActiveTransformation, Snapshot, TransformationKind, Simulation};
+    use crate::state::{ActiveTransformation, Simulation, Snapshot, TransformationKind};
     use crate::structure::{Bond, BondId, Placement, StructuralUnit};
 
     fn material_totals(
@@ -154,17 +154,15 @@ mod conservation_tests {
     fn snapshot_round_trip_preserves_stable_bond_and_transformation_identity() {
         let mut sim = Simulation::new(7, 10.0);
         let organism = &mut sim.organisms[0];
-        organism
-            .structure
-            .add_bond(Bond {
-                id: BondId(41),
-                unit_a: 0,
-                point_a: 0,
-                unit_b: 1,
-                point_b: 0,
-                strength: 0.75,
-                bond_energy: 2.5,
-            });
+        organism.structure.add_bond(Bond {
+            id: BondId(41),
+            unit_a: 0,
+            point_a: 0,
+            unit_b: 1,
+            point_b: 0,
+            strength: 0.75,
+            bond_energy: 2.5,
+        });
         let bond_id = organism.structure.bonds[0].id;
         sim.active_transformations.push(ActiveTransformation {
             id: 9,
@@ -189,7 +187,12 @@ mod conservation_tests {
         assert_eq!(decoded_bond.id, bond_id);
         assert_eq!(decoded_bond.bond_energy, 2.5);
         assert_eq!(decoded.active_transformations[0].bond_id, Some(bond_id));
-        assert_eq!(decoded.active_transformations[0].decision_context_key.as_deref(), Some("bond:41"));
+        assert_eq!(
+            decoded.active_transformations[0]
+                .decision_context_key
+                .as_deref(),
+            Some("bond:41")
+        );
 
         let mut restored_structure = decoded.organisms[0].structure.clone();
         let new_index = restored_structure.add_bond(Bond {
