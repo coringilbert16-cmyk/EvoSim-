@@ -1,1 +1,0 @@
-// Phase 6 integration marker. The canonical executable remains main.rs.

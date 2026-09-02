@@ -8,7 +8,6 @@ mod environment;
 mod genome;
 mod math;
 mod resources;
-mod structural_combine;
 mod structure;
 
 mod memory;
@@ -19,6 +18,16 @@ mod simulation;
 mod state;
 mod transformation;
 
+#[cfg(test)]
+mod phase3_tests;
+#[cfg(test)]
+mod phase4_tests;
+#[cfg(test)]
+mod phase5_tests;
+#[cfg(test)]
+mod phase6_determinism_tests;
+#[cfg(test)]
+mod phase6_tests;
 #[cfg(test)]
 mod simulation_tests;
 

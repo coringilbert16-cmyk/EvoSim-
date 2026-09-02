@@ -1,9 +1,10 @@
 #[cfg(test)]
 mod integration_tests {
     use crate::decision::{ActionKind, OutcomeKind};
+    use crate::decision_runtime::ActionCandidate;
     use crate::resources::Material;
     use crate::state::Simulation;
-    use crate::structure::{Bond, Placement, StructuralUnit};
+    use crate::structure::{Bond, BondId, Placement, StructuralUnit};
 
     #[test]
     fn fresh_organism_owns_an_empty_structure() {
@@ -26,6 +27,149 @@ mod integration_tests {
             bonded: true,
         });
         assert!((organism.stored_unbonded.total_amount() - 5.0).abs() < 1e-9);
+        assert!(organism.structure.units.is_empty());
+    }
+
+    #[test]
+    fn raw_material_instantiation_consumes_exactly_one_unit_and_preserves_placement() {
+        let catalog = crate::resources::default_catalog();
+        let mut organism = Simulation::create_initial_organism();
+        organism.store_unbonded_material(Material::free_base("Carbon", 3.0));
+        let placement = Placement {
+            x: 12.5,
+            y: -4.0,
+            rotation_radians: 0.75,
+        };
+
+        let index = crate::combine_runtime::instantiate_one_unit(
+            &mut organism,
+            "Carbon",
+            placement,
+            &catalog,
+        )
+        .expect("sufficient raw Carbon should instantiate");
+
+        assert_eq!(index, 0);
+        assert!((organism.stored_unbonded.total_amount() - 2.0).abs() < 1e-12);
+        assert_eq!(organism.structure.units.len(), 1);
+        assert_eq!(organism.structure.units[index].resource_name, "Carbon");
+        assert_eq!(organism.structure.units[index].placement, placement);
+    }
+
+    #[test]
+    fn raw_material_instantiation_is_atomic_when_material_is_insufficient() {
+        let catalog = crate::resources::default_catalog();
+        let mut organism = Simulation::create_initial_organism();
+        organism.store_unbonded_material(Material::free_base("Carbon", 0.5));
+        let before = organism.stored_unbonded.clone();
+        let result = crate::combine_runtime::instantiate_one_unit(
+            &mut organism,
+            "Carbon",
+            Placement {
+                x: 1.0,
+                y: 2.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        );
+
+        assert!(result.is_none());
+        assert_eq!(organism.stored_unbonded.parts, before.parts);
+        assert_eq!(organism.stored_unbonded.bonded, before.bonded);
+        assert!(organism.structure.units.is_empty());
+    }
+
+    #[test]
+    fn raw_material_instantiation_rejects_bonded_storage_without_mutation() {
+        let catalog = crate::resources::default_catalog();
+        let mut organism = Simulation::create_initial_organism();
+        organism.stored_unbonded = Material {
+            parts: vec![("Carbon".into(), 2.0)],
+            bonded: true,
+        };
+        let result = crate::combine_runtime::instantiate_one_unit(
+            &mut organism,
+            "Carbon",
+            Placement {
+                x: 1.0,
+                y: 2.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        );
+
+        assert!(result.is_none());
+        assert!((organism.stored_unbonded.total_amount() - 2.0).abs() < 1e-12);
+        assert!(organism.stored_unbonded.bonded);
+        assert!(organism.structure.units.is_empty());
+    }
+
+    #[test]
+    fn raw_material_instantiation_rejects_unknown_resource_without_mutation() {
+        let catalog = crate::resources::default_catalog();
+        let mut organism = Simulation::create_initial_organism();
+        organism.store_unbonded_material(Material::free_base("Carbon", 2.0));
+        let before = organism.stored_unbonded.clone();
+        let result = crate::combine_runtime::instantiate_one_unit(
+            &mut organism,
+            "NotAResource",
+            Placement {
+                x: 1.0,
+                y: 2.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        );
+
+        assert!(result.is_none());
+        assert_eq!(organism.stored_unbonded.parts, before.parts);
+        assert_eq!(organism.stored_unbonded.bonded, before.bonded);
+        assert!(organism.structure.units.is_empty());
+    }
+
+    #[test]
+    fn raw_material_instantiation_rejects_nonfinite_placement_without_mutation() {
+        let catalog = crate::resources::default_catalog();
+        let mut organism = Simulation::create_initial_organism();
+        organism.store_unbonded_material(Material::free_base("Carbon", 2.0));
+        let before = organism.stored_unbonded.clone();
+        let result = crate::combine_runtime::instantiate_one_unit(
+            &mut organism,
+            "Carbon",
+            Placement {
+                x: f64::NAN,
+                y: 2.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        );
+
+        assert!(result.is_none());
+        assert_eq!(organism.stored_unbonded.parts, before.parts);
+        assert_eq!(organism.stored_unbonded.bonded, before.bonded);
+        assert!(organism.structure.units.is_empty());
+    }
+
+    #[test]
+    fn raw_material_instantiation_rejects_nonfinite_rotation_without_mutation() {
+        let catalog = crate::resources::default_catalog();
+        let mut organism = Simulation::create_initial_organism();
+        organism.store_unbonded_material(Material::free_base("Carbon", 2.0));
+        let before = organism.stored_unbonded.clone();
+        let result = crate::combine_runtime::instantiate_one_unit(
+            &mut organism,
+            "Carbon",
+            Placement {
+                x: 1.0,
+                y: 2.0,
+                rotation_radians: f64::INFINITY,
+            },
+            &catalog,
+        );
+
+        assert!(result.is_none());
+        assert_eq!(organism.stored_unbonded.parts, before.parts);
+        assert_eq!(organism.stored_unbonded.bonded, before.bonded);
         assert!(organism.structure.units.is_empty());
     }
 
@@ -99,6 +243,7 @@ mod integration_tests {
             },
         ));
         sim.organisms[0].structure.add_bond(Bond {
+            id: BondId(0),
             unit_a: a,
             point_a: 0,
             unit_b: b,
@@ -106,7 +251,20 @@ mod integration_tests {
             strength: 0.8,
             bond_energy: 12.5,
         });
-        let before = sim.organisms[0].usable_energy;
+        let bond_id = sim.organisms[0].structure.bonds[0].id;
+        let context_key = format!("bond:{}", bond_id.0);
+        let ledger_before = sim.energy_ledger;
+        let decision = ActionCandidate {
+            action: ActionKind::Break,
+            context_key: Some(context_key.clone()),
+        };
+        let transformation = Simulation::try_start_transformation(
+            &mut sim.organisms[0],
+            &mut sim.next_transformation_id,
+            &decision,
+        )
+        .expect("valid bond should start BREAK transformation");
+        sim.active_transformations.push(transformation);
         for _ in 0..20 {
             sim.step();
             if sim.organisms[0].structure.bonds.is_empty() {
@@ -114,14 +272,33 @@ mod integration_tests {
             }
         }
         assert!(sim.organisms[0].structure.bonds.is_empty());
-        assert!((sim.organisms[0].usable_energy - before - 12.5).abs() < 1e-12);
+
+        let ledger_after = sim.energy_ledger;
+        let released = ledger_after.total_potential_energy_released
+            - ledger_before.total_potential_energy_released;
+        let break_work =
+            ledger_after.total_break_energy_spent - ledger_before.total_break_energy_spent;
+        let usable_spent =
+            ledger_after.total_usable_energy_spent - ledger_before.total_usable_energy_spent;
+        let usable_gained =
+            ledger_after.total_usable_energy_gained - ledger_before.total_usable_energy_gained;
+        let heat = ledger_after.total_heat_dissipated - ledger_before.total_heat_dissipated;
+
+        assert!((released - 12.5).abs() < 1e-12);
+        assert!(break_work.is_finite() && break_work >= 0.0);
+        assert!(usable_spent.is_finite() && usable_spent >= 0.0);
+        assert!(usable_gained.is_finite() && usable_gained >= 0.0);
+        assert!(heat.is_finite() && heat >= 0.0);
+        let balance = released + usable_spent - break_work - usable_gained - heat;
+        assert!(balance.abs() < 1e-9 * released.max(break_work).max(1.0));
+
         assert!(sim.organisms[0]
             .decision_history
-            .has_knowledge(ActionKind::Break, Some("bond:0")));
+            .has_knowledge(ActionKind::Break, Some(&context_key)));
         assert!(matches!(
             sim.organisms[0]
                 .decision_history
-                .outcome(ActionKind::Break, Some("bond:0")),
+                .outcome(ActionKind::Break, Some(&context_key)),
             Some(OutcomeKind::Beneficial | OutcomeKind::Neutral | OutcomeKind::Harmful)
         ));
     }

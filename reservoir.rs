@@ -1,6 +1,8 @@
 // Deep reservoir: coarse spatial stock beneath the active material field.
 
 use super::field::{ActiveMaterialField, MATERIAL_EPSILON};
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_RESERVOIR_BLOCK_SIZE: usize = 5;
@@ -128,6 +130,53 @@ impl DeepReservoir {
             cell.add(false, name, per_cell);
         }
     }
+
+    /// Replace the initial uniform unbonded stock with a deterministic,
+    /// seed-dependent spatial distribution while preserving each resource's
+    /// total amount. This is part of initial environment generation only; it
+    /// does not alter the organism or introduce a second resource source.
+    pub fn randomize_unbonded_distribution(&mut self, seed: u64) {
+        if self.cells.is_empty() {
+            return;
+        }
+        let mut rng = ChaCha8Rng::seed_from_u64(seed);
+        let resource_names: Vec<String> = self
+            .cells
+            .iter()
+            .flat_map(|cell| cell.unbonded_entries.iter().map(|(name, _)| name.clone()))
+            .fold(Vec::new(), |mut names, name| {
+                if !names.contains(&name) {
+                    names.push(name);
+                }
+                names
+            });
+
+        for name in resource_names {
+            let total = self
+                .cells
+                .iter()
+                .map(|cell| cell.amount_of(false, &name))
+                .sum::<f64>();
+            if total <= 0.0 {
+                continue;
+            }
+
+            let weights: Vec<f64> = (0..self.cells.len())
+                .map(|_| rng.gen_range(0.25..1.75))
+                .collect();
+            let weight_sum: f64 = weights.iter().sum();
+            if weight_sum <= 0.0 || !weight_sum.is_finite() {
+                continue;
+            }
+
+            for (cell, weight) in self.cells.iter_mut().zip(weights) {
+                cell.unbonded_entries
+                    .retain(|(entry_name, _)| entry_name != &name);
+                cell.add(false, &name, total * weight / weight_sum);
+            }
+        }
+    }
+
     pub fn total_material(&self) -> Vec<(String, f64)> {
         let mut totals: Vec<(String, f64)> = Vec::new();
         for cell in &self.cells {

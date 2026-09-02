@@ -90,8 +90,14 @@ pub(crate) struct ActiveTransformation {
     pub(crate) kind: TransformationKind,
     /// Retained for snapshot compatibility. BREAK no longer derives energy from this material.
     pub(crate) material: Material,
+    /// Stable BREAK target. The bond is resolved from the organism's live
+    /// structure when the transformation completes.
     #[serde(default)]
-    pub(crate) bond: Option<Bond>,
+    pub(crate) bond_id: Option<crate::structure::BondId>,
+    /// Legacy snapshot field retained only for migration from pre-BondId
+    /// transformations. New transformations never populate it.
+    #[serde(default, rename = "bond")]
+    pub(crate) legacy_bond: Option<Bond>,
     pub(crate) complexity: f64,
     pub(crate) duration_ticks: u64,
     pub(crate) remaining_ticks: u64,
@@ -100,10 +106,56 @@ pub(crate) struct ActiveTransformation {
 
 #[derive(Serialize, Deserialize, Clone, Copy, Default)]
 pub(crate) struct EnergyLedger {
+    /// Cumulative energy released by completed COMBINE and BREAK transformations.
     pub(crate) total_potential_energy_released: f64,
+    /// Cumulative work performed by completed COMBINE transformations.
+    pub(crate) total_formation_energy_spent: f64,
+    /// Cumulative work performed by completed BREAK transformations.
+    pub(crate) total_break_energy_spent: f64,
+    /// Cumulative usable organism energy spent to subsidize transformation work.
+    pub(crate) total_usable_energy_spent: f64,
+    /// Cumulative energy committed to newly created bonds.
+    pub(crate) total_bond_energy_created: f64,
+    /// Cumulative energy converted into usable organism energy.
     pub(crate) total_usable_energy_gained: f64,
+    /// Cumulative energy dissipated as heat.
     pub(crate) total_heat_dissipated: f64,
+    /// Current, instantaneous usable energy held by all organisms.
     pub(crate) total_usable_energy_held: f64,
+}
+
+impl EnergyLedger {
+    pub(crate) fn record_combine(
+        &mut self,
+        potential_energy_released: f64,
+        energy_paid: f64,
+        formation_work: f64,
+        bond_energy_created: f64,
+        usable_energy_gained: f64,
+        heat_dissipated: f64,
+    ) {
+        self.total_potential_energy_released += potential_energy_released;
+        self.total_formation_energy_spent += formation_work;
+        self.total_usable_energy_spent += energy_paid;
+        self.total_bond_energy_created += bond_energy_created;
+        self.total_usable_energy_gained += usable_energy_gained;
+        self.total_heat_dissipated += heat_dissipated;
+    }
+
+    pub(crate) fn record_break(
+        &mut self,
+        bond_energy: f64,
+        usable_energy_spent: f64,
+        break_work: f64,
+        usable_energy_gained: f64,
+        heat_dissipated: f64,
+    ) {
+        self.total_potential_energy_released += bond_energy;
+        self.total_break_energy_spent += break_work;
+        self.total_usable_energy_spent += usable_energy_spent;
+        self.total_usable_energy_gained += usable_energy_gained;
+        self.total_heat_dissipated += heat_dissipated;
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]

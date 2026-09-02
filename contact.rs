@@ -350,7 +350,7 @@ pub fn try_add_bond(
 mod tests {
     use super::*;
     use crate::resources::default_catalog;
-    use crate::structure::{Bond, Placement};
+    use crate::structure::{Bond, BondId, Placement};
 
     fn unit(s: &mut OrganismStructure, name: &str, x: f64, y: f64) -> usize {
         s.add_unit(StructuralUnit::new(
@@ -364,6 +364,7 @@ mod tests {
     }
     fn bond(a: usize, ap: usize, b: usize, bp: usize) -> Bond {
         Bond {
+            id: BondId(0),
             unit_a: a,
             point_a: ap,
             unit_b: b,

@@ -1,4 +1,4 @@
-use rand::SeedableRng;
+use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
@@ -11,14 +11,47 @@ use crate::environment::{
 use crate::genome::initial_genome;
 use crate::state::{
     DevelopmentStage, EnergyLedger, Environment, Organism, Position, ResourceSense, Simulation,
-    Snapshot,
+    Snapshot, PROCESSING_RATE, PROCESSING_REACH,
 };
+
+const MAINTENANCE_BASE_RATE: f64 = 0.01;
+const STRESS_DAMAGE_THRESHOLD: f64 = 1.0;
+const STRESS_DAMAGE_COEFFICIENT: f64 = 0.10;
+const STRESS_RECOVERY_COEFFICIENT: f64 = 0.02;
+const STRESS_RELIEF_PER_BREAK: f64 = 1.0;
 
 impl Simulation {
     pub(crate) fn new(seed: u64, ticks_per_second: f64) -> Self {
         let rng = ChaCha8Rng::seed_from_u64(seed);
-        let environment = Self::create_environment();
-        let organism = Self::create_initial_organism();
+        let mut environment = Self::create_environment();
+        environment.reservoir.randomize_unbonded_distribution(seed);
+        let mut organism = Self::create_initial_organism();
+        organism.usable_energy = 25.0;
+        organism.store_unbonded_material(crate::resources::Material {
+            parts: vec![
+                ("Carbon".into(), 84.0),
+                ("Methane".into(), 100.0),
+                ("Hydrogen".into(), 100.0),
+                ("Sulfur".into(), 100.0),
+                ("Nitrogen".into(), 100.0),
+                ("Phosphorus".into(), 100.0),
+                ("Water".into(), 100.0),
+            ],
+            bonded: false,
+        });
+        for i in 0..16 {
+            let angle = (i as f64) * std::f64::consts::TAU / 16.0;
+            organism
+                .structure
+                .add_unit(crate::structure::StructuralUnit::new(
+                    "Carbon",
+                    crate::structure::Placement {
+                        x: 500.0 + angle.cos() * 2.0,
+                        y: 500.0 + angle.sin() * 2.0,
+                        rotation_radians: 0.0,
+                    },
+                ));
+        }
         Self {
             tick: 0,
             ticks_per_second,
@@ -162,15 +195,48 @@ impl Simulation {
             .structure
             .units
             .iter()
-            .filter_map(|unit| {
-                unit.properties(&environment.catalog)
-                    .map(|properties| properties.mass)
-            })
+            .filter_map(|unit| unit.properties(&environment.catalog).map(|p| p.mass))
             .sum()
     }
 
-    /// Derive the two independent continuous need pressures. No pressure is
-    /// forced to be the inverse of the other.
+    fn apply_maintenance(
+        organism: &mut Organism,
+        environment: &Environment,
+        ledger: &mut EnergyLedger,
+        rng: &mut ChaCha8Rng,
+    ) {
+        let structural_mass = Self::structural_mass(organism, environment).max(0.0);
+        let maintenance = MAINTENANCE_BASE_RATE * structural_mass;
+        if !maintenance.is_finite() || maintenance <= 0.0 {
+            organism.stress = (organism.stress - STRESS_RECOVERY_COEFFICIENT).max(0.0);
+            return;
+        }
+
+        let available_energy = organism.usable_energy.max(0.0);
+        if available_energy >= maintenance {
+            organism.usable_energy -= maintenance;
+            organism.stress = (organism.stress - STRESS_RECOVERY_COEFFICIENT).max(0.0);
+        } else {
+            organism.usable_energy = 0.0;
+            let unpaid_fraction = ((maintenance - available_energy) / maintenance).clamp(0.0, 1.0);
+            organism.stress += STRESS_DAMAGE_COEFFICIENT * unpaid_fraction;
+        }
+
+        if organism.stress >= STRESS_DAMAGE_THRESHOLD && !organism.structure.bonds.is_empty() {
+            organism.structure.ensure_bond_ids();
+            let index = rng.gen_range(0..organism.structure.bonds.len());
+            let bond_id = organism.structure.bonds[index].id;
+            if crate::transformation::Simulation::apply_stress_break(
+                organism,
+                environment,
+                ledger,
+                bond_id,
+            ) {
+                organism.stress = (organism.stress - STRESS_RELIEF_PER_BREAK).max(0.0);
+            }
+        }
+    }
+
     fn current_needs(
         organism: &Organism,
         environment: &Environment,
@@ -179,21 +245,15 @@ impl Simulation {
         let survival_reserve = parameters.survival_reserve.max(f64::EPSILON);
         let reserve_pressure = (1.0 - organism.usable_energy / survival_reserve).clamp(0.0, 1.0);
         let survival = (reserve_pressure * (1.0 + organism.stress.max(0.0))).clamp(0.0, 1.0);
-
-        let adult_mass = parameters.adult_mass.max(f64::EPSILON);
-        let maturity = (Self::structural_mass(organism, environment) / adult_mass).clamp(0.0, 1.0);
-        let reproduction_reserve = parameters.reproduction_reserve.max(f64::EPSILON);
-        let energy_readiness = (organism.usable_energy / reproduction_reserve).clamp(0.0, 1.0);
-        let reproduction = organism.reproductive_readiness.clamp(0.0, 1.0);
-
-        // Maturity and energy readiness are accumulated into reproductive
-        // readiness separately in update_reproductive_readiness(). Keeping
-        // the pressure itself as the accumulated state prevents mature,
-        // energy-ready organisms from being permanently forced to reproduce.
-        let _ = (maturity, energy_readiness);
+        let _maturity = (Self::structural_mass(organism, environment)
+            / organism.genome.adult_mass().max(f64::EPSILON))
+        .clamp(0.0, 1.0);
+        let _energy_readiness = (organism.usable_energy
+            / parameters.reproduction_reserve.max(f64::EPSILON))
+        .clamp(0.0, 1.0);
         CurrentNeeds {
             survival,
-            reproduction,
+            reproduction: organism.reproductive_readiness.clamp(0.0, 1.0),
         }
     }
 
@@ -202,10 +262,12 @@ impl Simulation {
         environment: &Environment,
         parameters: DecisionParameters,
     ) {
-        let adult_mass = parameters.adult_mass.max(f64::EPSILON);
-        let maturity = (Self::structural_mass(organism, environment) / adult_mass).clamp(0.0, 1.0);
-        let reproduction_reserve = parameters.reproduction_reserve.max(f64::EPSILON);
-        let energy_readiness = (organism.usable_energy / reproduction_reserve).clamp(0.0, 1.0);
+        let maturity = (Self::structural_mass(organism, environment)
+            / organism.genome.adult_mass().max(f64::EPSILON))
+        .clamp(0.0, 1.0);
+        let energy_readiness = (organism.usable_energy
+            / parameters.reproduction_reserve.max(f64::EPSILON))
+        .clamp(0.0, 1.0);
         let accumulation =
             (maturity * energy_readiness * parameters.reproduction_accumulation_rate.max(0.0))
                 .clamp(0.0, 1.0);
@@ -213,10 +275,19 @@ impl Simulation {
             (organism.reproductive_readiness + accumulation).clamp(0.0, 1.0);
     }
 
+    fn can_acquire(organism: &Organism) -> bool {
+        organism.active_transformation_id.is_none()
+            && organism
+                .resource_sense
+                .sensed_resources
+                .iter()
+                .any(|r| !r.bonded && r.distance <= PROCESSING_REACH && r.perceived_amount > 0.0)
+    }
+
     fn action_eligibility(organism: &Organism, _environment: &Environment) -> ActionEligibility {
         ActionEligibility {
             can_move: organism.active_transformation_id.is_none(),
-            can_acquire: false,
+            can_acquire: Self::can_acquire(organism),
             can_combine: organism.active_transformation_id.is_none()
                 && organism.structure.units.len() >= 2,
             can_break: organism.active_transformation_id.is_none()
@@ -234,19 +305,13 @@ impl Simulation {
         let relevant = |action: ActionKind| {
             eligibility.permits(action) && needs.any_for(action.relevant_needs())
         };
-
         if relevant(ActionKind::Break) {
-            candidates.extend(
-                organism
-                    .structure
-                    .bonds
-                    .iter()
-                    .enumerate()
-                    .map(|(index, _)| ActionCandidate {
-                        action: ActionKind::Break,
-                        context_key: Some(format!("bond:{index}")),
-                    }),
-            );
+            candidates.extend(organism.structure.bonds.iter().filter_map(|bond| {
+                (bond.id.0 > 0).then_some(ActionCandidate {
+                    action: ActionKind::Break,
+                    context_key: Some(format!("bond:{}", bond.id.0)),
+                })
+            }));
         }
         if relevant(ActionKind::Combine) {
             candidates.push(ActionCandidate {
@@ -254,15 +319,15 @@ impl Simulation {
                 context_key: None,
             });
         }
-        if relevant(ActionKind::Move) {
-            candidates.push(ActionCandidate {
-                action: ActionKind::Move,
-                context_key: None,
-            });
-        }
         if relevant(ActionKind::Acquire) {
             candidates.push(ActionCandidate {
                 action: ActionKind::Acquire,
+                context_key: None,
+            });
+        }
+        if relevant(ActionKind::Move) {
+            candidates.push(ActionCandidate {
+                action: ActionKind::Move,
                 context_key: None,
             });
         }
@@ -275,10 +340,35 @@ impl Simulation {
         candidates
     }
 
+    fn acquire(organism: &mut Organism, environment: &mut Environment) -> bool {
+        let target = organism
+            .resource_sense
+            .sensed_resources
+            .iter()
+            .filter(|r| !r.bonded && r.distance <= PROCESSING_REACH && r.perceived_amount > 0.0)
+            .max_by(|a, b| {
+                a.desirability
+                    .partial_cmp(&b.desirability)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+        let Some(target) = target else { return false };
+        let amount = target.perceived_amount.clamp(0.0, PROCESSING_RATE);
+        let Some(material) = environment
+            .field
+            .take_at_index(target.field_index, false, amount)
+        else {
+            return false;
+        };
+        if material.total_amount() <= 0.0 {
+            return false;
+        }
+        organism.store_unbonded_material(material);
+        true
+    }
+
     pub(crate) fn step(&mut self) -> Snapshot {
         self.tick += 1;
         self.step_environment();
-
         let mut still_active = Vec::new();
         let mut completed = Vec::new();
         for mut transformation in self.active_transformations.drain(..) {
@@ -286,9 +376,9 @@ impl Simulation {
                 transformation.remaining_ticks -= 1;
             }
             if transformation.remaining_ticks == 0 {
-                completed.push(transformation);
+                completed.push(transformation)
             } else {
-                still_active.push(transformation);
+                still_active.push(transformation)
             }
         }
         self.active_transformations = still_active;
@@ -306,7 +396,6 @@ impl Simulation {
                 );
             }
         }
-
         let environment_snapshot = self.environment.clone();
         let decision_parameters = self.decision_parameters;
         for organism in &mut self.organisms {
@@ -318,11 +407,20 @@ impl Simulation {
                 &environment_snapshot,
                 decision_parameters,
             );
+            Self::apply_maintenance(
+                organism,
+                &environment_snapshot,
+                &mut self.energy_ledger,
+                &mut self.rng,
+            );
         }
-
         let (organisms, environment) = (&mut self.organisms, &mut self.environment);
         let mut compatibility_cache = crate::contact::ConnectionCompatibilityCache::new();
         for organism in organisms {
+            // Snapshots predating stable BondId have zero IDs. Normalize once
+            // before generating candidates so legacy structures re-enter the
+            // current decision/runtime path without ambiguous targets.
+            organism.structure.ensure_bond_ids();
             let needs = Self::current_needs(organism, environment, decision_parameters);
             let eligibility = Self::action_eligibility(organism, environment);
             let context = DecisionContext { needs, eligibility };
@@ -331,7 +429,6 @@ impl Simulation {
             else {
                 continue;
             };
-
             match selected.action {
                 ActionKind::Move => {
                     let moved = Self::update_movement(organism, environment);
@@ -345,13 +442,35 @@ impl Simulation {
                         },
                     );
                 }
+                ActionKind::Acquire => {
+                    let acquired = Self::acquire(organism, environment);
+                    crate::decision_runtime::record_outcome(
+                        &mut organism.decision_history,
+                        &selected,
+                        if acquired {
+                            crate::decision::OutcomeKind::Neutral
+                        } else {
+                            crate::decision::OutcomeKind::Harmful
+                        },
+                    );
+                }
                 ActionKind::Combine => {
-                    let combined = crate::combine_runtime::try_combine(
+                    let combine_attempt = crate::combine_runtime::try_combine(
                         organism,
                         environment,
                         &mut compatibility_cache,
-                    )
-                    .is_some();
+                    );
+                    let combined = combine_attempt.is_some();
+                    if let Some(attempt) = combine_attempt {
+                        self.energy_ledger.record_combine(
+                            attempt.potential_energy_released,
+                            attempt.energy_paid,
+                            attempt.formation_work,
+                            attempt.bond_energy,
+                            attempt.usable_energy_gained,
+                            attempt.heat_dissipated,
+                        );
+                    }
                     crate::decision_runtime::record_outcome(
                         &mut organism.decision_history,
                         &selected,
@@ -371,12 +490,8 @@ impl Simulation {
                         self.active_transformations.push(transformation);
                     }
                 }
-                ActionKind::Acquire | ActionKind::Expel => {}
+                ActionKind::Expel => {}
             }
-        }
-
-        for organism in &mut self.organisms {
-            Self::apply_energy_capacity(organism);
         }
         self.energy_ledger.total_usable_energy_held =
             self.organisms.iter().map(|o| o.usable_energy).sum();
@@ -395,14 +510,19 @@ impl Simulation {
 
     #[cfg(test)]
     pub(crate) fn total_material_in_system(&self) -> f64 {
-        let mut total = self.environment.field.total_amount();
-        total += self.environment.reservoir.total_amount();
+        let mut total =
+            self.environment.field.total_amount() + self.environment.reservoir.total_amount();
         for transformation in &self.active_transformations {
             total += transformation.material.total_amount();
         }
         for organism in &self.organisms {
             total += organism.stored_unbonded.total_amount();
-            total += organism.structure.units.len() as f64;
+            total += organism
+                .structure
+                .units
+                .iter()
+                .filter_map(|unit| unit.properties(&self.environment.catalog).map(|p| p.mass))
+                .sum::<f64>();
         }
         total
     }

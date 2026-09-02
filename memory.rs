@@ -105,3 +105,81 @@ impl Simulation {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reinforcement_is_bounded_and_replaces_only_weaker_points() {
+        let mut organism = Simulation::create_initial_organism();
+        for i in 0..MAX_MEMORY_POINTS {
+            organism.memory.push(MemoryPoint {
+                x: i as f64 * 100.0,
+                y: 0.0,
+                strength: 0.1 + i as f64 * 0.1,
+            });
+        }
+
+        Simulation::reinforce_memory_point(&mut organism, 999.0, 999.0, 0.9);
+
+        assert_eq!(organism.memory.len(), MAX_MEMORY_POINTS);
+        assert!(organism
+            .memory
+            .iter()
+            .any(|p| { (p.x - 999.0).abs() < f64::EPSILON && (p.y - 999.0).abs() < f64::EPSILON }));
+        assert!(organism
+            .memory
+            .iter()
+            .all(|p| p.strength.is_finite() && (0.0..=1.0).contains(&p.strength)));
+    }
+
+    #[test]
+    fn memory_strength_decays_without_new_sources() {
+        let mut sim = Simulation::new(101, 10.0);
+        sim.organisms[0].memory.push(MemoryPoint {
+            x: 500.0,
+            y: 500.0,
+            strength: 0.5,
+        });
+        let expected = 0.5 * MEMORY_DECAY_PER_TICK;
+        let environment = sim.environment.clone();
+
+        Simulation::update_memory_from_sources(&mut sim.organisms[0], &environment);
+
+        assert_eq!(sim.organisms[0].memory.len(), 1);
+        assert!((sim.organisms[0].memory[0].strength - expected).abs() < 1e-12);
+    }
+
+    #[test]
+    fn weak_memory_points_are_pruned_after_decay() {
+        let mut sim = Simulation::new(103, 10.0);
+        sim.organisms[0].memory.push(MemoryPoint {
+            x: 500.0,
+            y: 500.0,
+            strength: MEMORY_PRUNE_THRESHOLD,
+        });
+        let environment = sim.environment.clone();
+
+        Simulation::update_memory_from_sources(&mut sim.organisms[0], &environment);
+
+        assert!(sim.organisms[0].memory.is_empty());
+    }
+
+    #[test]
+    fn reinforcement_merges_nearby_points_without_exceeding_capacity() {
+        let mut organism = Simulation::create_initial_organism();
+        organism.memory.push(MemoryPoint {
+            x: 100.0,
+            y: 100.0,
+            strength: 0.2,
+        });
+
+        Simulation::reinforce_memory_point(&mut organism, 110.0, 110.0, 0.3);
+
+        assert_eq!(organism.memory.len(), 1);
+        assert!((organism.memory[0].strength - 0.5).abs() < 1e-12);
+        assert!((organism.memory[0].x - 110.0).abs() < f64::EPSILON);
+        assert!((organism.memory[0].y - 110.0).abs() < f64::EPSILON);
+    }
+}

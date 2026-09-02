@@ -8,15 +8,9 @@
 
 **Phase 3 — resources/chemistry split: COMPLETE.**
 
-**Phase 4 — structural integration: COMPLETE.**
+**Phase 4 — structural/energy/decision integration: IN PROGRESS.**
 
-**Phase 5 — runtime decision integration: COMPLETE.**
-
-**Phase 6 — COMBINE integration: IN PROGRESS.**
-
-Phase 6 has begun by adding a dedicated `combine_runtime.rs` boundary. It connects bulk raw material to discrete structural-unit instantiation and routes eligible structural pairs through the existing COMBINE interaction, work, formation-threshold, and bond-strength functions instead of duplicating those equations. The new runtime boundary also performs the organism energy payment required by the current experimental formation model and refuses formation when the interaction direction is unfavorable or the organism cannot pay the required cost.
-
-The remaining Phase 6 work is to connect acquisition and instantiation to the decision runtime, expose mechanically eligible COMBINE candidates, record COMBINE outcomes in decision history, and add end-to-end conservation/formation tests. The energy architecture also needs to remain consistent with the locked rule that bond energy is structural state rather than raw resource potential energy; the current `Bond` representation still exposes only formation strength, so that part must be resolved before Phase 6 is declared complete.
+The current Phase 4 implementation has completed the BREAK energy model, atomic execution, ledger accounting, structural consequences, stable `BondId` identity, deterministic BREAK boundary coverage, and COMBINE → BREAK integration. The remaining work is primarily decision/memory verification, maintenance/stress integration, obsolete-path cleanup, and the final repository-wide integration gate.
 
 ## Objective
 
@@ -37,48 +31,102 @@ This is an integration-first audit. No simulation rule is changed merely to make
 - Waste remains material in Layer 2 and is not automatically deleted or teleported to the reservoir.
 - Physical structure is discrete structural units plus explicit bonds; bulk bonded material must not substitute for real structure.
 - Bond energy is structural state and must not be reconstructed from raw resource potential energy during BREAK.
+- Bond identity is stable and independent of vector position or mutable physical state.
 - Decision history is bounded learned consequence history, not a physics cache and not fabricated prediction.
 - Mechanical eligibility belongs to physical systems; decision logic chooses among mechanically eligible candidates.
+- Maintenance is paid independently of action choice and is based on actual structural mass, not stored material.
+- Maintenance cost is `M_t = M_b × M_structural`.
+- Usable energy after maintenance is `E_{t+1} = max(0, E_t - M_t)`.
+- Unpaid maintenance accumulates unbounded stress according to `S_{t+1} = S_t + k_d × max(0, M_t - E_t) / M_t` when `M_t > 0`.
+- Successful maintenance payment reduces stress by `k_r`, clamped at zero.
+- Approved default stress parameters are `k_d = 0.10`, `k_r = 0.02`, and `S_break = 1.0`.
+- There is no stress cap. `S_break` is the structural-damage threshold, not a maximum.
+- When stress reaches/exceeds `S_break`, accumulated stress causes structural damage by selecting a random existing structural bond for BREAK.
+- Stress-induced structural damage uses the authoritative BREAK path and its normal bond-energy/work/heat accounting; it does not create a second fundamental energy resource.
+- Structural damage does not automatically reset stress to zero. Stress remains above the threshold if sufficient accumulated stress remains, allowing continued damage under persistent maintenance deficit.
 
-## Phase 6 — Integrate COMBINE without violating emergence rules
+## Phase 4 — Structural, energy, decision, memory, and maintenance integration
 
-### Completed in Phase 6
+### Completed
 
-1. Added `combine_runtime.rs` as the runtime boundary between decision execution and COMBINE physics.
-2. Added raw-material-to-structural-unit instantiation without introducing a second bulk bonded representation.
-3. Routed structural-pair evaluation through the existing contact geometry and formation-threshold pipeline.
-4. Reused the existing experimental interaction equation so potential-energy direction, reactivity, water attenuation, facing, and distance remain in one place.
-5. Reused the existing experimental work-cost and capped diminishing-return bond-strength functions.
-6. Added explicit organism energy payment at the runtime boundary rather than creating free energy.
+1. Audited the existing BREAK path and removed dependence on fixed energy rewards.
+2. Established current-state BREAK work and the release/consume/neutral energy regimes.
+3. Made BREAK accounting atomic: physical mutation occurs only after all energy/validity checks succeed.
+4. Kept the energy ledger authoritative for cumulative transformation accounting.
+5. Preserved structural units and unrelated bonds when one bond is broken; connected components remain derived from the bond graph.
+6. Added stable `BondId` identity, monotonic allocation, serialization compatibility, legacy zero-ID migration, and ID-based BREAK resolution.
+7. Updated decision candidates and active transformations to identify BREAK targets by stable `BondId`, not vector index.
+8. Added deterministic BREAK boundary tests for release, consume, neutral, zero-work, epsilon, large finite, and non-finite states.
+9. Added stale-target/index-shift coverage so an active transformation cannot break the wrong bond.
+10. Added COMBINE → stored bond energy → BREAK integration coverage.
+11. Verified the Rust formatter, full Rust tests, and Clippy through CI after the current implementation.
 
-### Remaining in Phase 6
+### Remaining
 
-1. Connect ACQUIRE to actual field-to-organism raw-material transfer.
-2. Connect physical instantiation to the decision/runtime path without inventing a hidden automatic construction loop.
-3. Make COMBINE mechanically eligible only when an actual eligible structural pair exists.
-4. Add COMBINE as a decision candidate with stable material context.
-5. Record actual COMBINE outcomes in bounded decision history.
-6. Resolve the structural bond-energy representation so BREAK consumes/releases stored bond energy rather than raw resource potential energy.
-7. Add integration tests covering raw-material conservation, instantiation, geometry gating, threshold failure, successful bond formation, energy payment, and decision-history outcome recording.
-8. Verify deterministic seeded behavior and full Rust CI before marking Phase 6 complete.
+#### 4J — Decision integration verification
 
-## Later phases
+- Confirm candidate generation remains mechanical eligibility only.
+- Confirm stable `BondId` context survives candidate selection and active transformation.
+- Confirm selection never mutates physical state.
+- Confirm actual outcomes, not predictions, are recorded after execution.
+- Add/retain coverage showing consequence history changes future selection without duplicating chemistry or geometry.
 
-### Phase 7 — Frontend integration
+#### 4K — Memory verification
 
-Restore/verify the actual frontend file tree referenced by `main.tsx`. Establish a minimal build that connects to `/snapshot` and `/ws`.
+- Spatial memory remains bounded, decaying, merged, and pruned.
+- Confirm successful consequences can reinforce spatial memory without bypassing physical execution.
+- Confirm decision history remains bounded and contains actual action consequences rather than predicted outcomes.
+- Do not introduce arbitrary decay or learning mechanics unless the existing architecture requires them.
 
-### Phase 8 — Cross-system invariants
+#### 4L — Maintenance/stress integration
 
-Add integration tests for material conservation, vent transfer, diffusion, settling, acquisition, COMBINE, bond formation, BREAK energy accounting, decision approval, snapshot serialization, WebSocket delivery, and deterministic seeded behavior.
+- Implement maintenance as an independent per-tick physiological cost based on actual structural mass.
+- Charge maintenance regardless of which action is selected or whether an action succeeds.
+- Consume only currently available usable energy; maintenance does not create material or energy.
+- Accumulate unbounded stress when maintenance cannot be fully paid.
+- Recover stress only through successful maintenance payment at the approved recovery rate.
+- At `S_break = 1.0`, route stress-induced structural damage through the authoritative BREAK mechanism and select an existing bond randomly.
+- Preserve normal BREAK energy accounting and structural topology rules for stress-induced damage.
+- Verify persistent maintenance deficit can produce repeated structural damage rather than resetting stress after one break.
+- Add black-box runtime tests proving maintenance is independent of action consequences and that stress can trigger structural BREAK.
 
-### Phase 9 — Comment/spec normalization
+#### 4M — Obsolete-path cleanup
 
-Normalize comments in every touched file so they describe the current architecture rather than historical decisions.
+Search and classify stale paths as KEEP, UPDATE, DELETE, or MIGRATE. In particular inspect:
 
-### Phase 10 — Final integration gate
+- old energy-resource fields or fixed BREAK rewards;
+- bond-index identity and copied-live-bond transformation state;
+- duplicate structural-combine implementations;
+- legacy decision gates that bypass current candidate selection;
+- stale phase markers and status documents;
+- dead modules or declarations;
+- comments describing superseded energy/structure rules;
+- obsolete or conflicting stress constants/decay implementations.
 
-Run formatting, checks, tests, frontend build/typecheck, repository-wide obsolete-path searches, and the large-file/truncation audit.
+Temporary Phase 6 marker files have already been removed. Historical specification documents are retained until their status/use is explicitly classified.
+
+#### 4N — Final integration gate
+
+Run the complete verification surface:
+
+- `cargo fmt --all -- --check`;
+- full Rust tests;
+- Clippy;
+- serialization/snapshot compatibility;
+- material conservation;
+- COMBINE/BREAK energy conservation;
+- structural topology and connection-site invariants;
+- decision integration and bounded history;
+- spatial memory behavior;
+- multi-tick transformation locking;
+- stale transformation handling;
+- deterministic seeded behavior;
+- maintenance/stress accounting;
+- snapshot/WebSocket integration;
+- frontend/build checks;
+- repository-wide obsolete-path search;
+- large-file/truncation audit;
+- documentation/status consistency.
 
 ## Large-file rule going forward
 
