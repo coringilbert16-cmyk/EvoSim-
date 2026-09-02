@@ -65,17 +65,21 @@ mod phase3_tests {
 
         assert!(attempt.potential_energy_released > attempt.formation_work);
         assert_eq!(attempt.energy_paid, 0.0);
-        assert!((attempt.energy_paid + attempt.potential_energy_released
-            - attempt.formation_work
-            - attempt.bond_energy
-            - attempt.usable_energy_gained
-            - attempt.heat_dissipated)
-            .abs()
-            < 1e-9 * attempt.potential_energy_released.max(1.0));
-        assert!((organism.usable_energy
-            - (energy_before + attempt.usable_energy_gained - attempt.energy_paid))
-            .abs()
-            < 1e-12);
+        assert!(
+            (attempt.energy_paid + attempt.potential_energy_released
+                - attempt.formation_work
+                - attempt.bond_energy
+                - attempt.usable_energy_gained
+                - attempt.heat_dissipated)
+                .abs()
+                < 1e-9 * attempt.potential_energy_released.max(1.0)
+        );
+        assert!(
+            (organism.usable_energy
+                - (energy_before + attempt.usable_energy_gained - attempt.energy_paid))
+                .abs()
+                < 1e-12
+        );
         assert_eq!(organism.structure.bonds.len(), 1);
     }
 
@@ -88,13 +92,15 @@ mod phase3_tests {
         ledger.record_combine(release, paid, formation_work, 0.0, 0.0, 0.0);
 
         assert!((release + paid - formation_work).abs() < 1e-12);
-        assert!((ledger.total_potential_energy_released + ledger.total_usable_energy_spent
-            - ledger.total_formation_energy_spent
-            - ledger.total_bond_energy_created
-            - ledger.total_usable_energy_gained
-            - ledger.total_heat_dissipated)
-            .abs()
-            < 1e-12);
+        assert!(
+            (ledger.total_potential_energy_released + ledger.total_usable_energy_spent
+                - ledger.total_formation_energy_spent
+                - ledger.total_bond_energy_created
+                - ledger.total_usable_energy_gained
+                - ledger.total_heat_dissipated)
+                .abs()
+                < 1e-12
+        );
     }
 
     #[test]
@@ -130,13 +136,15 @@ mod phase3_tests {
         assert_eq!(ledger.total_bond_energy_created, 3.0);
         assert_eq!(ledger.total_usable_energy_gained, 2.0);
         assert_eq!(ledger.total_heat_dissipated, 1.0);
-        assert!((ledger.total_potential_energy_released + ledger.total_usable_energy_spent
-            - ledger.total_formation_energy_spent
-            - ledger.total_bond_energy_created
-            - ledger.total_usable_energy_gained
-            - ledger.total_heat_dissipated)
-            .abs()
-            < 1e-12);
+        assert!(
+            (ledger.total_potential_energy_released + ledger.total_usable_energy_spent
+                - ledger.total_formation_energy_spent
+                - ledger.total_bond_energy_created
+                - ledger.total_usable_energy_gained
+                - ledger.total_heat_dissipated)
+                .abs()
+                < 1e-12
+        );
     }
 
     #[test]
@@ -216,23 +224,29 @@ mod phase3_tests {
         assert!(sim.energy_ledger.total_bond_energy_created > 0.0);
         assert!(sim.energy_ledger.total_usable_energy_gained > 0.0);
         assert!(sim.energy_ledger.total_heat_dissipated >= 0.0);
-        assert!((sim.energy_ledger.total_potential_energy_released
-            + sim.energy_ledger.total_usable_energy_spent
-            - sim.energy_ledger.total_formation_energy_spent
-            - sim.energy_ledger.total_bond_energy_created
-            - sim.energy_ledger.total_usable_energy_gained
-            - sim.energy_ledger.total_heat_dissipated)
-            .abs()
-            < 1e-9 * sim.energy_ledger.total_potential_energy_released.max(1.0));
-        assert!((sim.organisms[0].usable_energy
-            - (energy_before + sim.energy_ledger.total_usable_energy_gained
-                - sim.energy_ledger.total_usable_energy_spent))
-            .abs()
-            < 1e-9);
-        assert!((sim.energy_ledger.total_usable_energy_held
-            - sim.organisms.iter().map(|o| o.usable_energy).sum::<f64>())
-            .abs()
-            < 1e-12);
+        assert!(
+            (sim.energy_ledger.total_potential_energy_released
+                + sim.energy_ledger.total_usable_energy_spent
+                - sim.energy_ledger.total_formation_energy_spent
+                - sim.energy_ledger.total_bond_energy_created
+                - sim.energy_ledger.total_usable_energy_gained
+                - sim.energy_ledger.total_heat_dissipated)
+                .abs()
+                < 1e-9 * sim.energy_ledger.total_potential_energy_released.max(1.0)
+        );
+        assert!(
+            (sim.organisms[0].usable_energy
+                - (energy_before + sim.energy_ledger.total_usable_energy_gained
+                    - sim.energy_ledger.total_usable_energy_spent))
+                .abs()
+                < 1e-9
+        );
+        assert!(
+            (sim.energy_ledger.total_usable_energy_held
+                - sim.organisms.iter().map(|o| o.usable_energy).sum::<f64>())
+                .abs()
+                < 1e-12
+        );
     }
 
     #[test]
