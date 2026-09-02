@@ -26,12 +26,11 @@ pub(crate) struct CombineAttempt {
     pub unit_b: usize,
     pub point_a: usize,
     pub point_b: usize,
-    pub work_cost: f64,
+    pub formation_work: f64,
     pub energy_paid: f64,
     pub interaction_direction: f64,
     pub interaction_magnitude: f64,
     pub potential_energy_released: f64,
-    pub formation_threshold: f64,
     pub surplus: f64,
     pub bond_strength: f64,
     pub bond_energy: f64,
@@ -144,7 +143,8 @@ pub(crate) fn try_combine(
         })
         .unwrap_or(0.0);
 
-    let interaction = experimental_interaction(props_a, props_b, evaluation.candidate, water_field);
+    let interaction =
+        experimental_interaction(props_a, props_b, evaluation.candidate, water_field);
     if interaction.direction <= 0.0 || interaction.magnitude <= EPSILON {
         return None;
     }
@@ -165,20 +165,20 @@ pub(crate) fn try_combine(
         return None;
     }
 
-    let formation_threshold = evaluation.threshold;
-    if !formation_threshold.is_finite() || formation_threshold < 0.0 {
+    let formation_work = evaluation.threshold;
+    if !formation_work.is_finite() || formation_work < 0.0 {
         return None;
     }
 
     // If the interaction cannot pay formation work, the organism subsidizes
     // exactly the deficit. The temporary starting energy is therefore a real
     // payment source, not an input to the interaction itself.
-    let deficit = (formation_threshold - potential_energy_released).max(0.0);
-    if organism.usable_energy + EPSILON < deficit {
+    let energy_paid = (formation_work - potential_energy_released).max(0.0);
+    if organism.usable_energy + EPSILON < energy_paid {
         return None;
     }
 
-    let surplus = (potential_energy_released - formation_threshold).max(0.0);
+    let surplus = (potential_energy_released - formation_work).max(0.0);
     let bond_energy = surplus * SURPLUS_TO_BOND;
     let usable_energy_gained = surplus * SURPLUS_TO_USABLE;
     let heat_dissipated = surplus * SURPLUS_TO_HEAT;
@@ -202,7 +202,7 @@ pub(crate) fn try_combine(
     };
     crate::contact::try_add_bond(&mut organism.structure, bond, catalog).ok()?;
 
-    organism.usable_energy -= deficit;
+    organism.usable_energy -= energy_paid;
     organism.usable_energy += usable_energy_gained;
 
     Some(CombineAttempt {
@@ -210,12 +210,11 @@ pub(crate) fn try_combine(
         unit_b,
         point_a: evaluation.candidate.point_a,
         point_b: evaluation.candidate.point_b,
-        work_cost: formation_threshold,
-        energy_paid: deficit,
+        formation_work,
+        energy_paid,
         interaction_direction: interaction.direction,
         interaction_magnitude: interaction.magnitude,
         potential_energy_released,
-        formation_threshold,
         surplus,
         bond_strength,
         bond_energy,
