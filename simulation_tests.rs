@@ -243,7 +243,8 @@ mod integration_tests {
         }
         assert!(sim.organisms[0].structure.bonds.is_empty());
         assert!((sim.organisms[0].usable_energy - before - 12.5).abs() < 1e-12);
-        assert!(sim.organisms[0]
+        assert!(sim
+            .organisms[0]
             .decision_history
             .has_knowledge(ActionKind::Break, Some("bond:0")));
         assert!(matches!(
