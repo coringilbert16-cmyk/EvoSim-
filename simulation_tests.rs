@@ -147,6 +147,28 @@ mod integration_tests {
     }
 
     #[test]
+    fn raw_material_instantiation_rejects_nonfinite_rotation_without_mutation() {
+        let catalog = crate::resources::default_catalog();
+        let mut organism = Simulation::create_initial_organism();
+        organism.store_unbonded_material(Material::free_base("Carbon", 2.0));
+        let before = organism.stored_unbonded.clone();
+        let result = crate::combine_runtime::instantiate_one_unit(
+            &mut organism,
+            "Carbon",
+            Placement {
+                x: 1.0,
+                y: 2.0,
+                rotation_radians: f64::INFINITY,
+            },
+            &catalog,
+        );
+
+        assert!(result.is_none());
+        assert_eq!(organism.stored_unbonded, before);
+        assert!(organism.structure.units.is_empty());
+    }
+
+    #[test]
     fn structural_units_count_toward_total_material_conservation() {
         let mut sim = Simulation::new(1, 10.0);
         sim.organisms[0].structure.add_unit(StructuralUnit::new(
