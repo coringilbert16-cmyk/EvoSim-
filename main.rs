@@ -21,6 +21,8 @@ mod transformation;
 #[cfg(test)]
 mod phase3_tests;
 #[cfg(test)]
+mod phase4_tests;
+#[cfg(test)]
 mod simulation_tests;
 
 #[tokio::main]
