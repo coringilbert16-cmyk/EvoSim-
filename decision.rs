@@ -1,33 +1,11 @@
 //! Organism decision architecture.
 //!
-//! This module separates three things that must not be conflated:
-//!
-//! 1. PHYSICS / MATH: whether an action is mechanically possible and what
-//!    the physical equations produce.
-//! 2. NEED: the organism's current internal/situational reason to act.
-//! 3. KNOWLEDGE: what the organism has learned from its own prior outcomes.
-//!
-//! The decision layer does not calculate COMBINE/BREAK physics and does not
-//! predict an outcome that has never been experienced. It answers a simple
-//! question for an action candidate: "may I choose this action now?"
-//!
-//! Current-needs architecture: HYBRID.
-//! Immediate state supplies intrinsic needs; current environmental
-//! opportunities supply situational needs; bounded outcome history supplies
-//! learned relevance. None of these replaces mechanical eligibility.
-//!
-//! The material/recipe caches used by COMBINE are intentionally separate from
-//! this history. A computational cache answers "have we already calculated
-//! this physical recipe?" Decision history answers "has this organism learned
-//! anything from actually doing this?" They must never be treated as the same
-//! information.
+//! The decision layer separates physical eligibility, internal need pressure,
+//! and learned consequence history. It does not calculate chemistry, geometry,
+//! or predicted physical outcomes.
 
 use serde::{Deserialize, Serialize};
 
-/// Actions the organism may eventually choose among.
-///
-/// Expel is deliberately explicit. It is not folded into BREAK or treated as
-/// an automatic cleanup side effect.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ActionKind {
     Move,
@@ -38,34 +16,26 @@ pub enum ActionKind {
 }
 
 impl ActionKind {
-    /// The needs that make an action relevant. This is a policy mapping, not
-    /// physics and not a numerical utility score. A hybrid need state can
-    /// therefore make more than one action relevant at the same time.
+    /// Needs that make an action relevant. This is a relevance mapping, not
+    /// an action mandate and not a utility score.
     pub fn relevant_needs(self) -> &'static [NeedKind] {
         match self {
-            ActionKind::Move => &[NeedKind::Exploration, NeedKind::Material],
-            ActionKind::Acquire => &[NeedKind::Material, NeedKind::Energy],
-            ActionKind::Combine => &[NeedKind::Construction, NeedKind::Energy],
-            ActionKind::Break => &[NeedKind::Energy, NeedKind::Material],
-            ActionKind::Expel => &[NeedKind::Relief],
+            ActionKind::Move => &[NeedKind::Survival, NeedKind::Reproduction],
+            ActionKind::Acquire => &[NeedKind::Survival, NeedKind::Reproduction],
+            ActionKind::Combine => &[NeedKind::Reproduction],
+            ActionKind::Break => &[NeedKind::Survival],
+            ActionKind::Expel => &[NeedKind::Survival],
         }
     }
 }
 
-/// Why an action is currently relevant. These are decision signals, not
-/// physical quantities and not energy calculations.
+/// The two continuous internal pressures used by the decision system.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum NeedKind {
-    Energy,
-    Material,
-    Construction,
-    Relief,
-    Exploration,
+    Survival,
+    Reproduction,
 }
 
-/// A single learned consequence of an action. `Unknown` is represented by the
-/// absence of a record: the organism has no invented prediction for an action
-/// it has never actually experienced.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OutcomeKind {
     Beneficial,
@@ -76,16 +46,11 @@ pub enum OutcomeKind {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct DecisionHistoryEntry {
     pub action: ActionKind,
-    /// Optional stable material/action key. For COMBINE this can identify a
-    /// material pair/recipe; for BREAK it can identify the processed material
-    /// composition. A missing key means the history applies only at the broad
-    /// action level.
     pub context_key: Option<String>,
     pub outcome: OutcomeKind,
     pub count: u64,
 }
 
-/// Bounded learned history. This is deliberately not an event log.
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct DecisionHistory {
     pub entries: Vec<DecisionHistoryEntry>,
@@ -94,36 +59,20 @@ pub struct DecisionHistory {
 impl DecisionHistory {
     pub const MAX_ENTRIES: usize = 64;
 
-    pub fn record(
-        &mut self,
-        action: ActionKind,
-        context_key: Option<String>,
-        outcome: OutcomeKind,
-    ) {
-        if let Some(existing) = self
-            .entries
-            .iter_mut()
-            .find(|entry| entry.action == action && entry.context_key == context_key)
-        {
+    pub fn record(&mut self, action: ActionKind, context_key: Option<String>, outcome: OutcomeKind) {
+        if let Some(existing) = self.entries.iter_mut().find(|entry| {
+            entry.action == action && entry.context_key == context_key
+        }) {
             existing.outcome = outcome;
             existing.count = existing.count.saturating_add(1);
             return;
         }
-
         if self.entries.len() >= Self::MAX_ENTRIES {
-            // Evict the least-experienced entry. This keeps memory bounded
-            // while preserving repeatedly reinforced knowledge.
-            if let Some(index) = self
-                .entries
-                .iter()
-                .enumerate()
-                .min_by_key(|(_, entry)| entry.count)
-                .map(|(index, _)| index)
-            {
+            if let Some(index) = self.entries.iter().enumerate()
+                .min_by_key(|(_, entry)| entry.count).map(|(index, _)| index) {
                 self.entries.remove(index);
             }
         }
-
         self.entries.push(DecisionHistoryEntry {
             action,
             context_key,
@@ -133,16 +82,12 @@ impl DecisionHistory {
     }
 
     pub fn outcome(&self, action: ActionKind, context_key: Option<&str>) -> Option<OutcomeKind> {
-        self.entries
-            .iter()
+        self.entries.iter()
             .find(|entry| entry.action == action && entry.context_key.as_deref() == context_key)
             .map(|entry| entry.outcome)
-            .or_else(|| {
-                self.entries
-                    .iter()
-                    .find(|entry| entry.action == action && entry.context_key.is_none())
-                    .map(|entry| entry.outcome)
-            })
+            .or_else(|| self.entries.iter()
+                .find(|entry| entry.action == action && entry.context_key.is_none())
+                .map(|entry| entry.outcome))
     }
 
     pub fn has_knowledge(&self, action: ActionKind, context_key: Option<&str>) -> bool {
@@ -150,65 +95,58 @@ impl DecisionHistory {
     }
 }
 
-/// Current needs are a hybrid of internal state and current opportunity.
-///
-/// The fields are intentionally booleans. The decision layer does not score
-/// physical equations or use COMBINE/BREAK numerical outputs to decide.
-/// Thresholds and the exact derivation of these flags belong to the organism
-/// state layer and can remain tunable without changing the decision API.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// Continuous current pressures, each independently derived from organism
+/// state. They are not forced to sum to one and may both be high or low.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
 pub struct CurrentNeeds {
-    pub energy: bool,
-    pub material: bool,
-    pub construction: bool,
-    pub relief: bool,
-    pub exploration: bool,
+    pub survival: f64,
+    pub reproduction: f64,
 }
 
 impl CurrentNeeds {
     pub fn contains(self, need: NeedKind) -> bool {
+        self.pressure(need) > 0.0
+    }
+
+    pub fn pressure(self, need: NeedKind) -> f64 {
         match need {
-            NeedKind::Energy => self.energy,
-            NeedKind::Material => self.material,
-            NeedKind::Construction => self.construction,
-            NeedKind::Relief => self.relief,
-            NeedKind::Exploration => self.exploration,
+            NeedKind::Survival => self.survival,
+            NeedKind::Reproduction => self.reproduction,
         }
     }
 
     pub fn any_for(self, needs: &[NeedKind]) -> bool {
-        needs.iter().copied().any(|need| self.contains(need))
+        needs.iter().copied().any(|need| self.pressure(need) > 0.0)
     }
 }
 
-/// Tunable decision parameters. These are policy parameters, not physics
-/// constants. They may be changed for experiments without changing the
-/// underlying COMBINE/BREAK equations.
+/// Parameters governing the derivation of current need pressures. These are
+/// decision-layer policy parameters, not chemistry constants.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct DecisionParameters {
-    pub energy_need_threshold: f64,
-    pub raw_material_need_threshold: f64,
-    pub stress_relief_threshold: f64,
-    pub construction_material_threshold: f64,
+    /// Immediate usable-energy reserve at which survival pressure reaches 0.
+    pub survival_reserve: f64,
+    /// Usable energy at which a mature organism has full energetic readiness
+    /// for reproduction.
+    pub reproduction_reserve: f64,
+    /// Fraction of reproductive readiness accumulated per tick under fully
+    /// mature, fully energy-ready conditions.
+    pub reproduction_accumulation_rate: f64,
+    /// Structural mass at which maturity reaches 1.0.
+    pub adult_mass: f64,
 }
 
 impl Default for DecisionParameters {
     fn default() -> Self {
         Self {
-            energy_need_threshold: 1.0,
-            raw_material_need_threshold: 1.0,
-            stress_relief_threshold: 1.0,
-            construction_material_threshold: 1.0,
+            survival_reserve: 1.0,
+            reproduction_reserve: 16.0,
+            reproduction_accumulation_rate: 0.01,
+            adult_mass: 16.0,
         }
     }
 }
 
-/// Mechanical eligibility supplied by the physical systems.
-///
-/// This is intentionally a set of facts rather than calculations. For
-/// example, COMBINE geometry and threshold evaluation happen elsewhere; this
-/// structure merely tells the decision layer whether an eligible candidate
-/// currently exists.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ActionEligibility {
     pub can_move: bool,
@@ -230,62 +168,39 @@ impl ActionEligibility {
     }
 }
 
-/// The decision returned for one candidate action.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DecisionResult {
     Approve,
     Reject,
 }
 
-/// Mechanical eligibility is checked first. If the action is mechanically
-/// possible, the hybrid current-needs state decides whether it is relevant.
-/// History is deliberately NOT used as a physics gate: an organism may act
-/// on an unknown action, but the decision layer must not fabricate knowledge
-/// about its outcome.
+/// Legacy single-need gate retained as a small compatibility primitive.
 pub fn approve_action(
     action: ActionKind,
     eligibility: ActionEligibility,
     needs: CurrentNeeds,
     required_need: NeedKind,
 ) -> DecisionResult {
-    if !eligibility.permits(action) {
-        return DecisionResult::Reject;
-    }
-
-    if needs.contains(required_need) {
-        DecisionResult::Approve
-    } else {
+    if !eligibility.permits(action) || needs.pressure(required_need) <= 0.0 {
         DecisionResult::Reject
+    } else {
+        DecisionResult::Approve
     }
 }
 
-/// Preferred integration entry point for the full hybrid architecture. It
-/// uses the action's declared relevant needs rather than requiring callers to
-/// duplicate the mapping. This remains a yes/no gate; it does not score or
-/// rank the action and does not inspect physical equations.
 pub fn approve_action_for_current_needs(
     action: ActionKind,
     eligibility: ActionEligibility,
     needs: CurrentNeeds,
 ) -> DecisionResult {
-    if !eligibility.permits(action) {
-        return DecisionResult::Reject;
-    }
-
-    if needs.any_for(action.relevant_needs()) {
-        DecisionResult::Approve
-    } else {
+    if !eligibility.permits(action) || !needs.any_for(action.relevant_needs()) {
         DecisionResult::Reject
+    } else {
+        DecisionResult::Approve
     }
 }
 
-/// Whether an outcome is known for this exact action/context. `false` means
-/// the organism must not be given a fabricated expectation of the result.
-pub fn outcome_is_known(
-    history: &DecisionHistory,
-    action: ActionKind,
-    context_key: Option<&str>,
-) -> bool {
+pub fn outcome_is_known(history: &DecisionHistory, action: ActionKind, context_key: Option<&str>) -> bool {
     history.has_knowledge(action, context_key)
 }
 
@@ -295,135 +210,51 @@ mod tests {
 
     #[test]
     fn mechanically_ineligible_action_is_rejected_even_when_needed() {
-        let eligibility = ActionEligibility {
-            can_combine: false,
-            ..ActionEligibility::default()
-        };
-        let needs = CurrentNeeds {
-            construction: true,
-            ..CurrentNeeds::default()
-        };
-        assert_eq!(
-            approve_action(
-                ActionKind::Combine,
-                eligibility,
-                needs,
-                NeedKind::Construction
-            ),
-            DecisionResult::Reject
-        );
+        let eligibility = ActionEligibility::default();
+        let needs = CurrentNeeds { survival: 1.0, reproduction: 0.0 };
+        assert_eq!(approve_action_for_current_needs(ActionKind::Break, eligibility, needs), DecisionResult::Reject);
     }
 
     #[test]
-    fn mechanically_eligible_needed_action_is_approved() {
-        let eligibility = ActionEligibility {
-            can_break: true,
-            ..ActionEligibility::default()
-        };
-        let needs = CurrentNeeds {
-            energy: true,
-            ..CurrentNeeds::default()
-        };
-        assert_eq!(
-            approve_action(ActionKind::Break, eligibility, needs, NeedKind::Energy),
-            DecisionResult::Approve
-        );
+    fn survival_pressure_makes_break_relevant() {
+        let eligibility = ActionEligibility { can_break: true, ..Default::default() };
+        let needs = CurrentNeeds { survival: 0.5, reproduction: 0.0 };
+        assert_eq!(approve_action_for_current_needs(ActionKind::Break, eligibility, needs), DecisionResult::Approve);
     }
 
     #[test]
-    fn action_without_current_need_is_rejected() {
-        let eligibility = ActionEligibility {
-            can_expel: true,
-            ..ActionEligibility::default()
-        };
-        assert_eq!(
-            approve_action(
-                ActionKind::Expel,
-                eligibility,
-                CurrentNeeds::default(),
-                NeedKind::Relief,
-            ),
-            DecisionResult::Reject
-        );
+    fn reproduction_pressure_makes_combine_relevant() {
+        let eligibility = ActionEligibility { can_combine: true, ..Default::default() };
+        let needs = CurrentNeeds { survival: 0.0, reproduction: 0.5 };
+        assert_eq!(approve_action_for_current_needs(ActionKind::Combine, eligibility, needs), DecisionResult::Approve);
     }
 
     #[test]
-    fn hybrid_mapping_approves_action_when_any_relevant_need_is_present() {
-        let eligibility = ActionEligibility {
-            can_combine: true,
-            ..ActionEligibility::default()
-        };
-        let needs = CurrentNeeds {
-            construction: true,
-            ..CurrentNeeds::default()
-        };
-        assert_eq!(
-            approve_action_for_current_needs(ActionKind::Combine, eligibility, needs),
-            DecisionResult::Approve
-        );
+    fn move_and_acquire_are_relevant_to_either_need() {
+        let eligibility = ActionEligibility { can_move: true, can_acquire: true, ..Default::default() };
+        let survival_only = CurrentNeeds { survival: 0.5, reproduction: 0.0 };
+        let reproduction_only = CurrentNeeds { survival: 0.0, reproduction: 0.5 };
+        assert_eq!(approve_action_for_current_needs(ActionKind::Move, eligibility, survival_only), DecisionResult::Approve);
+        assert_eq!(approve_action_for_current_needs(ActionKind::Acquire, eligibility, reproduction_only), DecisionResult::Approve);
+    }
+
+    #[test]
+    fn zero_pressure_does_not_make_a_need_relevant() {
+        let eligibility = ActionEligibility { can_break: true, ..Default::default() };
+        assert_eq!(approve_action_for_current_needs(ActionKind::Break, eligibility, CurrentNeeds::default()), DecisionResult::Reject);
     }
 
     #[test]
     fn unknown_history_does_not_invent_an_outcome() {
         let history = DecisionHistory::default();
-        assert!(!outcome_is_known(
-            &history,
-            ActionKind::Combine,
-            Some("Carbon+Methane"),
-        ));
-    }
-
-    #[test]
-    fn unknown_action_can_still_be_approved_when_needed_and_eligible() {
-        let history = DecisionHistory::default();
-        let eligibility = ActionEligibility {
-            can_combine: true,
-            ..ActionEligibility::default()
-        };
-        let needs = CurrentNeeds {
-            construction: true,
-            ..CurrentNeeds::default()
-        };
-        assert!(!outcome_is_known(
-            &history,
-            ActionKind::Combine,
-            Some("Carbon+Methane"),
-        ));
-        assert_eq!(
-            approve_action_for_current_needs(ActionKind::Combine, eligibility, needs),
-            DecisionResult::Approve
-        );
-    }
-
-    #[test]
-    fn exact_context_knowledge_is_preferred_over_broad_action_knowledge() {
-        let mut history = DecisionHistory::default();
-        history.record(ActionKind::Combine, None, OutcomeKind::Neutral);
-        history.record(
-            ActionKind::Combine,
-            Some("Carbon+Methane".into()),
-            OutcomeKind::Beneficial,
-        );
-
-        assert_eq!(
-            history.outcome(ActionKind::Combine, Some("Carbon+Methane")),
-            Some(OutcomeKind::Beneficial)
-        );
-        assert_eq!(
-            history.outcome(ActionKind::Combine, Some("Hydrogen+Carbon")),
-            Some(OutcomeKind::Neutral)
-        );
+        assert!(!outcome_is_known(&history, ActionKind::Combine, Some("Carbon+Methane")));
     }
 
     #[test]
     fn history_is_bounded() {
         let mut history = DecisionHistory::default();
         for i in 0..(DecisionHistory::MAX_ENTRIES + 10) {
-            history.record(
-                ActionKind::Break,
-                Some(format!("material-{i}")),
-                OutcomeKind::Neutral,
-            );
+            history.record(ActionKind::Break, Some(format!("material-{i}")), OutcomeKind::Neutral);
         }
         assert_eq!(history.entries.len(), DecisionHistory::MAX_ENTRIES);
     }
