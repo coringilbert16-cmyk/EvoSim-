@@ -177,14 +177,11 @@ impl Simulation {
         parameters: DecisionParameters,
     ) -> CurrentNeeds {
         let survival_reserve = parameters.survival_reserve.max(f64::EPSILON);
-        let reserve_pressure =
-            (1.0 - organism.usable_energy / survival_reserve).clamp(0.0, 1.0);
-        let survival =
-            (reserve_pressure * (1.0 + organism.stress.max(0.0))).clamp(0.0, 1.0);
+        let reserve_pressure = (1.0 - organism.usable_energy / survival_reserve).clamp(0.0, 1.0);
+        let survival = (reserve_pressure * (1.0 + organism.stress.max(0.0))).clamp(0.0, 1.0);
 
         let adult_mass = parameters.adult_mass.max(f64::EPSILON);
-        let maturity =
-            (Self::structural_mass(organism, environment) / adult_mass).clamp(0.0, 1.0);
+        let maturity = (Self::structural_mass(organism, environment) / adult_mass).clamp(0.0, 1.0);
         let reproduction_reserve = parameters.reproduction_reserve.max(f64::EPSILON);
         let energy_readiness =
             (organism.usable_energy / reproduction_reserve).clamp(0.0, 1.0);
@@ -207,8 +204,7 @@ impl Simulation {
         parameters: DecisionParameters,
     ) {
         let adult_mass = parameters.adult_mass.max(f64::EPSILON);
-        let maturity =
-            (Self::structural_mass(organism, environment) / adult_mass).clamp(0.0, 1.0);
+        let maturity = (Self::structural_mass(organism, environment) / adult_mass).clamp(0.0, 1.0);
         let reproduction_reserve = parameters.reproduction_reserve.max(f64::EPSILON);
         let energy_readiness =
             (organism.usable_energy / reproduction_reserve).clamp(0.0, 1.0);
