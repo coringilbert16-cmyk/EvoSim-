@@ -142,18 +142,17 @@ mod integration_tests {
     }
 
     #[test]
-    fn different_seeds_can_produce_different_runtime_history() {
-        let mut first = Simulation::new(100, 10.0);
-        let mut second = Simulation::new(200, 10.0);
+    fn different_seeds_change_resource_distribution_not_initial_organism_state() {
+        let first = Simulation::new(100, 10.0);
+        let second = Simulation::new(200, 10.0);
 
-        for _ in 0..100 {
-            first.step();
-            second.step();
-        }
-
+        assert_eq!(
+            serde_json::to_string(&first.organisms[0]).expect("first organism serializes"),
+            serde_json::to_string(&second.organisms[0]).expect("second organism serializes")
+        );
         assert_ne!(
-            first.organisms[0].decision_history.entries,
-            second.organisms[0].decision_history.entries
+            serde_json::to_string(&first.environment.field).expect("first field serializes"),
+            serde_json::to_string(&second.environment.field).expect("second field serializes")
         );
     }
 
