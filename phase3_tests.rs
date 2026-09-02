@@ -202,8 +202,7 @@ mod phase3_tests {
             - sim.energy_ledger.total_bond_energy_created
             - sim.energy_ledger.total_usable_energy_gained
             - sim.energy_ledger.total_heat_dissipated;
-        let ledger_tolerance =
-            1e-9 * sim.energy_ledger.total_potential_energy_released.max(1.0);
+        let ledger_tolerance = 1e-9 * sim.energy_ledger.total_potential_energy_released.max(1.0);
         assert!(ledger_balance.abs() < ledger_tolerance);
         let organism_balance = sim.organisms[0].usable_energy
             - (energy_before + sim.energy_ledger.total_usable_energy_gained
