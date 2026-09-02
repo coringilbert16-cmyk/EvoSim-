@@ -31,22 +31,12 @@ mod conservation_tests {
         reservoir.seed_uniform("Carbon", 10_000.0);
         reservoir.seed_uniform("Methane", 5_000.0);
         reservoir.seed_uniform("Water", 20_000.0);
-
         let before = reservoir.total_material();
         reservoir.randomize_unbonded_distribution(12345);
         let after = reservoir.total_material();
-
         for (name, amount) in before {
-            let actual = after
-                .iter()
-                .find(|(after_name, _)| after_name == &name)
-                .map(|(_, value)| *value)
-                .unwrap_or(0.0);
-            assert!(
-                (amount - actual).abs() < 1e-9,
-                "resource {name} changed by {}",
-                actual - amount
-            );
+            let actual = after.iter().find(|(after_name, _)| after_name == &name).map(|(_, value)| *value).unwrap_or(0.0);
+            assert!((amount - actual).abs() < 1e-9, "resource {name} changed by {}", actual - amount);
         }
     }
 
@@ -57,75 +47,25 @@ mod conservation_tests {
         let mut field = field;
         let source = field.index_for_position(50.0, 50.0).unwrap();
         let reservoir_index = reservoir.reservoir_index_for_field_index(&field, source);
-
         reservoir.cells[reservoir_index].add(false, "Carbon", 500.0);
         reservoir.cells[reservoir_index].add(true, "Carbon", 300.0);
         reservoir.cells[reservoir_index].add(false, "Methane", 200.0);
         reservoir.cells[reservoir_index].add(true, "Methane", 100.0);
-
         let before = material_totals(&field, &reservoir);
-        let mut vents = vec![Vent {
-            x: 50.0,
-            y: 50.0,
-            composition: vec![("Carbon".into(), 0.5), ("Methane".into(), 0.5)],
-            emission_amount: 120.0,
-            emission_interval: 0,
-            emission_timer: 0,
-        }];
-
+        let mut vents = vec![Vent { x: 50.0, y: 50.0, composition: vec![("Carbon".into(), 0.5), ("Methane".into(), 0.5)], emission_amount: 120.0, emission_interval: 0, emission_timer: 0 }];
         for tick in 0..200u64 {
             apply_vents(&mut field, &mut reservoir, &mut vents);
             field.diffuse_step(0.1);
-            if tick % DEFAULT_SETTLING_INTERVAL_TICKS == 0 {
-                apply_settling(&mut field, &mut reservoir, DEFAULT_SETTLING_FRACTION);
-            }
+            if tick % DEFAULT_SETTLING_INTERVAL_TICKS == 0 { apply_settling(&mut field, &mut reservoir, DEFAULT_SETTLING_FRACTION); }
         }
-
         let after = material_totals(&field, &reservoir);
         assert_eq!(before.len(), after.len());
         for (name, amount) in before {
-            let actual = after
-                .iter()
-                .find(|(after_name, _)| after_name == &name)
-                .map(|(_, value)| *value)
-                .unwrap_or(0.0);
-            assert!(
-                (amount - actual).abs() < 1e-6,
-                "resource {name} changed by {}",
-                actual - amount
-            );
+            let actual = after.iter().find(|(after_name, _)| after_name == &name).map(|(_, value)| *value).unwrap_or(0.0);
+            assert!((amount - actual).abs() < 1e-6, "resource {name} changed by {}", actual - amount);
         }
-
-        let bonded = field
-            .cells
-            .iter()
-            .map(|cell| cell.bonded.total_amount())
-            .sum::<f64>()
-            + reservoir
-                .cells
-                .iter()
-                .map(|cell| {
-                    cell.bonded_entries
-                        .iter()
-                        .map(|(_, amount)| *amount)
-                        .sum::<f64>()
-                })
-                .sum::<f64>();
-        let unbonded = field
-            .cells
-            .iter()
-            .map(|cell| cell.unbonded.total_amount())
-            .sum::<f64>()
-            + reservoir
-                .cells
-                .iter()
-                .map(|cell| {
-                    cell.unbonded_entries
-                        .iter()
-                        .map(|(_, amount)| *amount)
-                        .sum::<f64>()
-                })
-                .sum::<f64>();
+        let bonded = field.cells.iter().map(|cell| cell.bonded.total_amount()).sum::<f64>() + reservoir.cells.iter().map(|cell| cell.bonded_entries.iter().map(|(_, amount)| *amount).sum::<f64>()).sum::<f64>();
+        let unbonded = field.cells.iter().map(|cell| cell.unbonded.total_amount()).sum::<f64>() + reservoir.cells.iter().map(|cell| cell.unbonded_entries.iter().map(|(_, amount)| *amount).sum::<f64>()).sum::<f64>();
         assert!((bonded - 400.0).abs() < 1e-6);
         assert!((unbonded - 700.0).abs() < 1e-6);
     }
@@ -134,9 +74,7 @@ mod conservation_tests {
     fn simulation_material_conservation_includes_organism_storage_and_structure() {
         let mut sim = Simulation::new(42, 10.0);
         let before = sim.total_material_in_system();
-        for _ in 0..1000 {
-            sim.step();
-        }
+        for _ in 0..1000 { sim.step(); }
         let after = sim.total_material_in_system();
         assert!((before - after).abs() < 1e-3);
     }
@@ -154,88 +92,30 @@ mod conservation_tests {
     fn snapshot_round_trip_preserves_stable_bond_and_transformation_identity() {
         let mut sim = Simulation::new(7, 10.0);
         let organism = &mut sim.organisms[0];
-        organism.structure.add_bond(Bond {
-            id: BondId(41),
-            unit_a: 0,
-            point_a: 0,
-            unit_b: 1,
-            point_b: 0,
-            strength: 0.75,
-            bond_energy: 2.5,
-        });
+        organism.structure.add_bond(Bond { id: BondId(41), unit_a: 0, point_a: 0, unit_b: 1, point_b: 0, strength: 0.75, bond_energy: 2.5 });
         let bond_id = organism.structure.bonds[0].id;
-        sim.active_transformations.push(ActiveTransformation {
-            id: 9,
-            organism_id: "1".into(),
-            kind: TransformationKind::Break,
-            material: Material::free_base("Carbon", 1.0),
-            bond_id: Some(bond_id),
-            legacy_bond: None,
-            complexity: 0.5,
-            duration_ticks: 3,
-            remaining_ticks: 2,
-            decision_context_key: Some("bond:41".into()),
-        });
-
+        sim.active_transformations.push(ActiveTransformation { id: 9, organism_id: "1".into(), kind: TransformationKind::Break, material: Material::free_base("Carbon", 1.0), bond_id: Some(bond_id), legacy_bond: None, complexity: 0.5, duration_ticks: 3, remaining_ticks: 2, decision_context_key: Some("bond:41".into()) });
         let encoded = serde_json::to_string(&sim.snapshot()).expect("snapshot serializes");
         let decoded: Snapshot = serde_json::from_str(&encoded).expect("snapshot deserializes");
-
-        let decoded_bond = decoded.organisms[0]
-            .structure
-            .bond_by_id(bond_id)
-            .expect("bond id survives snapshot round trip");
+        let decoded_bond = decoded.organisms[0].structure.bond_by_id(bond_id).expect("bond id survives snapshot round trip");
         assert_eq!(decoded_bond.id, bond_id);
         assert_eq!(decoded_bond.bond_energy, 2.5);
         assert_eq!(decoded.active_transformations[0].bond_id, Some(bond_id));
-        assert_eq!(
-            decoded.active_transformations[0]
-                .decision_context_key
-                .as_deref(),
-            Some("bond:41")
-        );
-
+        assert_eq!(decoded.active_transformations[0].decision_context_key.as_deref(), Some("bond:41"));
         let mut restored_structure = decoded.organisms[0].structure.clone();
-        let new_index = restored_structure.add_bond(Bond {
-            id: BondId(0),
-            unit_a: 2,
-            point_a: 0,
-            unit_b: 3,
-            point_b: 0,
-            strength: 0.5,
-            bond_energy: 1.0,
-        });
+        let new_index = restored_structure.add_bond(Bond { id: BondId(0), unit_a: 2, point_a: 0, unit_b: 3, point_b: 0, strength: 0.5, bond_energy: 1.0 });
         assert_eq!(restored_structure.bonds[new_index].id, BondId(42));
     }
 
     #[test]
     fn legacy_zero_bond_ids_are_repaired_without_losing_bond_state() {
         let mut structure = crate::structure::OrganismStructure::new();
-        for i in 0..2 {
-            structure.add_unit(StructuralUnit::new(
-                "Carbon",
-                Placement {
-                    x: i as f64,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                },
-            ));
-        }
-        structure.add_bond(Bond {
-            id: BondId(0),
-            unit_a: 0,
-            point_a: 0,
-            unit_b: 1,
-            point_b: 0,
-            strength: 0.25,
-            bond_energy: 3.0,
-        });
-
+        for i in 0..2 { structure.add_unit(StructuralUnit::new("Carbon", Placement { x: i as f64, y: 0.0, rotation_radians: 0.0 })); }
+        structure.add_bond(Bond { id: BondId(0), unit_a: 0, point_a: 0, unit_b: 1, point_b: 0, strength: 0.25, bond_energy: 3.0 });
         let mut value = serde_json::to_value(&structure).expect("structure serializes");
         value["bonds"][0].as_object_mut().unwrap().remove("id");
-        let mut decoded: crate::structure::OrganismStructure =
-            serde_json::from_value(value).expect("legacy structure deserializes");
+        let mut decoded: crate::structure::OrganismStructure = serde_json::from_value(value).expect("legacy structure deserializes");
         assert_eq!(decoded.bonds[0].id, BondId(0));
-
         decoded.ensure_bond_ids();
         assert_ne!(decoded.bonds[0].id, BondId(0));
         assert_eq!(decoded.bonds[0].strength, 0.25);
@@ -249,48 +129,13 @@ mod conservation_tests {
         organism.usable_energy = 10.0;
         organism.structure.units.clear();
         organism.structure.bonds.clear();
-        let a = organism.structure.add_unit(StructuralUnit::new(
-            "Carbon",
-            Placement {
-                x: 500.0,
-                y: 500.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        let b = organism.structure.add_unit(StructuralUnit::new(
-            "Carbon",
-            Placement {
-                x: 501.0,
-                y: 500.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        let bond_id = organism.structure.add_bond(Bond {
-            id: BondId(0),
-            unit_a: a,
-            point_a: 0,
-            unit_b: b,
-            point_b: 0,
-            strength: 0.5,
-            bond_energy: 0.0,
-        });
+        let a = organism.structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 500.0, y: 500.0, rotation_radians: 0.0 }));
+        let b = organism.structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 501.0, y: 500.0, rotation_radians: 0.0 }));
+        let bond_id = organism.structure.add_bond(Bond { id: BondId(0), unit_a: a, point_a: 0, unit_b: b, point_b: 0, strength: 0.5, bond_energy: 0.0 });
         let bond_id = organism.structure.bonds[bond_id].id;
         organism.active_transformation_id = Some(99);
-        sim.active_transformations.push(ActiveTransformation {
-            id: 99,
-            organism_id: "1".into(),
-            kind: TransformationKind::Break,
-            material: Material::free_base("Carbon", 0.0),
-            bond_id: Some(bond_id),
-            legacy_bond: None,
-            complexity: 1.0,
-            duration_ticks: 100,
-            remaining_ticks: 100,
-            decision_context_key: Some(format!("bond:{}", bond_id.0)),
-        });
-
+        sim.active_transformations.push(ActiveTransformation { id: 99, organism_id: "1".into(), kind: TransformationKind::Break, material: Material::free_base("Carbon", 0.0), bond_id: Some(bond_id), legacy_bond: None, complexity: 1.0, duration_ticks: 100, remaining_ticks: 100, decision_context_key: Some(format!("bond:{}", bond_id.0)) });
         sim.step();
-
         assert!((sim.organisms[0].usable_energy - 9.98).abs() < 1e-12);
         assert_eq!(sim.organisms[0].stress, 0.0);
         assert_eq!(sim.organisms[0].structure.bonds.len(), 1);
@@ -303,50 +148,13 @@ mod conservation_tests {
         organism.usable_energy = 0.0;
         organism.structure.units.clear();
         organism.structure.bonds.clear();
-        for i in 0..4 {
-            organism.structure.add_unit(StructuralUnit::new(
-                "Carbon",
-                Placement {
-                    x: 500.0 + i as f64,
-                    y: 500.0,
-                    rotation_radians: 0.0,
-                },
-            ));
-        }
-        for (a, b) in [(0, 1), (2, 3)] {
-            organism.structure.add_bond(Bond {
-                id: BondId(0),
-                unit_a: a,
-                point_a: 0,
-                unit_b: b,
-                point_b: 0,
-                strength: 0.5,
-                bond_energy: 0.0,
-            });
-        }
+        for i in 0..4 { organism.structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 500.0 + i as f64, y: 500.0, rotation_radians: 0.0 })); }
+        for (a, b) in [(0, 1), (2, 3)] { organism.structure.add_bond(Bond { id: BondId(0), unit_a: a, point_a: 0, unit_b: b, point_b: 0, strength: 0.5, bond_energy: 0.0 }); }
         organism.structure.ensure_bond_ids();
         let blocking_bond = organism.structure.bonds[0].id;
         organism.active_transformation_id = Some(77);
-        sim.active_transformations.push(ActiveTransformation {
-            id: 77,
-            organism_id: "1".into(),
-            kind: TransformationKind::Break,
-            material: Material {
-                parts: Vec::new(),
-                bonded: true,
-            },
-            bond_id: Some(blocking_bond),
-            legacy_bond: None,
-            complexity: 1.0,
-            duration_ticks: 25,
-            remaining_ticks: 25,
-            decision_context_key: Some(format!("bond:{}", blocking_bond.0)),
-        });
-
-        for _ in 0..21 {
-            sim.step();
-        }
-
+        sim.active_transformations.push(ActiveTransformation { id: 77, organism_id: "1".into(), kind: TransformationKind::Break, material: Material { parts: Vec::new(), bonded: true }, bond_id: Some(blocking_bond), legacy_bond: None, complexity: 1.0, duration_ticks: 100, remaining_ticks: 100, decision_context_key: Some(format!("bond:{}", blocking_bond.0)) });
+        for _ in 0..25 { sim.step(); }
         assert!(sim.organisms[0].structure.bonds.is_empty());
         assert!(sim.organisms[0].stress < 1.0);
         assert!(sim.organisms[0].usable_energy >= 0.0);
