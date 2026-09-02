@@ -1,13 +1,10 @@
 //! Runtime COMBINE boundary.
 //!
-//! This module bridges organism-owned raw material, structural units, contact,
-//! and the experimental COMBINE equations. Chemistry and geometry remain in
-//! their authoritative modules.
+//! This module bridges organism-owned structural units, contact geometry, and
+//! the experimental COMBINE equations. Chemistry and geometry remain in their
+//! authoritative modules.
 
-use crate::combine::{
-    eligible_candidates, evaluate_formation, experimental_combine_work_cost,
-    experimental_interaction,
-};
+use crate::combine::{eligible_candidates, evaluate_formation, experimental_interaction};
 use crate::contact::ConnectionCompatibilityCache;
 use crate::resources::{BaseResource, Material};
 use crate::state::{Environment, Organism};
@@ -15,6 +12,13 @@ use crate::structure::{Placement, StructuralUnit};
 
 const MATERIAL_UNIT_AMOUNT: f64 = 1.0;
 const EPSILON: f64 = 1e-12;
+
+// Experimental partition of energy left after formation work. These are not
+// chemistry constants; they are the first explicit resolution of the energy
+// ledger and can later become evolvable if that proves useful.
+const SURPLUS_TO_BOND: f64 = 0.50;
+const SURPLUS_TO_USABLE: f64 = 0.40;
+const SURPLUS_TO_HEAT: f64 = 0.10;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct CombineAttempt {
@@ -30,6 +34,8 @@ pub(crate) struct CombineAttempt {
     pub surplus: f64,
     pub bond_strength: f64,
     pub bond_energy: f64,
+    pub usable_energy_gained: f64,
+    pub heat_dissipated: f64,
 }
 
 pub(crate) fn instantiate_one_unit(
@@ -73,6 +79,7 @@ pub(crate) fn try_combine(
     if organism.structure.units.len() < 2 {
         return None;
     }
+
     let catalog = &environment.catalog;
     let mut best: Option<(usize, usize, crate::combine::FormationEvaluation)> = None;
 
@@ -86,6 +93,7 @@ pub(crate) fn try_combine(
                 compatibility_cache,
             )
             .into_iter()
+            .filter(|candidate| candidate.distance <= 1.0)
             .filter_map(|candidate| {
                 let a = organism.structure.units[unit_a].properties(catalog)?;
                 let b = organism.structure.units[unit_b].properties(catalog)?;
@@ -107,6 +115,7 @@ pub(crate) fn try_combine(
     let (unit_a, unit_b, evaluation) = best?;
     let props_a = *organism.structure.units[unit_a].properties(catalog)?;
     let props_b = *organism.structure.units[unit_b].properties(catalog)?;
+
     let water_field = environment
         .field
         .index_for_position(
@@ -125,30 +134,58 @@ pub(crate) fn try_combine(
         })
         .unwrap_or(0.0);
 
-    let interaction = experimental_interaction(props_a, props_b, evaluation.candidate, water_field);
+    let interaction = experimental_interaction(
+        props_a,
+        props_b,
+        evaluation.candidate,
+        water_field,
+    );
     if interaction.direction <= 0.0 || interaction.magnitude <= EPSILON {
         return None;
     }
-    let work_cost =
-        experimental_combine_work_cost(props_a, props_b, evaluation.candidate, water_field);
-    if !work_cost.is_finite() {
+
+    // Potential energy establishes the direction. Reactivity and geometry
+    // modify how much of the participating potential is released into this
+    // interaction. This is deliberately distinct from formation work.
+    let potential_sum = (props_a.potential_energy.max(0.0) + props_b.potential_energy.max(0.0))
+        .max(0.0);
+    let potential_delta = (props_b.potential_energy - props_a.potential_energy).abs();
+    if !potential_sum.is_finite() || !potential_delta.is_finite() || potential_delta <= EPSILON {
+        return None;
+    }
+    let interaction_modifier = interaction.magnitude / potential_delta;
+    let potential_energy_released = potential_sum * interaction_modifier;
+    if !potential_energy_released.is_finite() || potential_energy_released <= EPSILON {
         return None;
     }
 
-    // The actual investment is the energy paid for the interaction. Bond
-    // strength is determined only by the surplus of that investment over the
-    // formation threshold. Do not derive surplus from interaction magnitude.
-    let energy_paid = work_cost.max(evaluation.threshold);
-    let surplus = energy_paid - evaluation.threshold;
-    if !energy_paid.is_finite()
-        || energy_paid < 0.0
-        || organism.usable_energy + EPSILON < energy_paid
-    {
+    let formation_threshold = evaluation.threshold;
+    if !formation_threshold.is_finite() || formation_threshold < 0.0 {
         return None;
     }
 
-    let bond_strength = crate::combine::experimental_bond_strength(surplus);
-    let bond_energy = surplus;
+    // If the interaction cannot pay formation work, the organism subsidizes
+    // exactly the deficit. The temporary starting energy is therefore a real
+    // payment source, not an input to the interaction itself.
+    let deficit = (formation_threshold - potential_energy_released).max(0.0);
+    if organism.usable_energy + EPSILON < deficit {
+        return None;
+    }
+
+    let surplus = (potential_energy_released - formation_threshold).max(0.0);
+    let bond_energy = surplus * SURPLUS_TO_BOND;
+    let usable_energy_gained = surplus * SURPLUS_TO_USABLE;
+    let heat_dissipated = surplus * SURPLUS_TO_HEAT;
+    let partition_total = bond_energy + usable_energy_gained + heat_dissipated;
+    if (partition_total - surplus).abs() > 1e-9 * surplus.max(1.0) {
+        return None;
+    }
+
+    let bond_strength = crate::combine::experimental_bond_strength(bond_energy);
+    if !bond_strength.is_finite() {
+        return None;
+    }
+
     let bond = crate::structure::Bond {
         unit_a,
         point_a: evaluation.candidate.point_a,
@@ -158,21 +195,25 @@ pub(crate) fn try_combine(
         bond_energy,
     };
     crate::contact::try_add_bond(&mut organism.structure, bond, catalog).ok()?;
-    organism.usable_energy -= energy_paid;
+
+    organism.usable_energy -= deficit;
+    organism.usable_energy += usable_energy_gained;
 
     Some(CombineAttempt {
         unit_a,
         unit_b,
         point_a: evaluation.candidate.point_a,
         point_b: evaluation.candidate.point_b,
-        work_cost,
-        energy_paid,
+        work_cost: formation_threshold,
+        energy_paid: deficit,
         interaction_direction: interaction.direction,
         interaction_magnitude: interaction.magnitude,
-        formation_threshold: evaluation.threshold,
+        formation_threshold,
         surplus,
         bond_strength,
         bond_energy,
+        usable_energy_gained,
+        heat_dissipated,
     })
 }
 
