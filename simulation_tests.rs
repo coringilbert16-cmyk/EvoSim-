@@ -250,7 +250,7 @@ mod integration_tests {
             strength: 0.8,
             bond_energy: 12.5,
         });
-        let ledger_before = sim.organisms[0].energy_ledger;
+        let ledger_before = sim.energy_ledger;
         let decision = ActionCandidate {
             action: ActionKind::Break,
             context_key: Some("bond:0".into()),
@@ -270,7 +270,7 @@ mod integration_tests {
         }
         assert!(sim.organisms[0].structure.bonds.is_empty());
 
-        let ledger_after = sim.organisms[0].energy_ledger;
+        let ledger_after = sim.energy_ledger;
         let released =
             ledger_after.total_potential_energy_released - ledger_before.total_potential_energy_released;
         let break_work =
