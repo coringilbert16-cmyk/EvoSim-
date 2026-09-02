@@ -2,10 +2,10 @@
 mod phase3_tests {
     use crate::combine::{experimental_interaction, ExperimentalInteraction};
     use crate::combine_runtime::try_combine;
+    use crate::contact::ConnectionPairCandidate;
     use crate::resources::ResourceProperties;
     use crate::state::Simulation;
     use crate::structure::{Placement, StructuralUnit};
-    use crate::contact::ConnectionPairCandidate;
 
     fn candidate(facing: f64, distance: f64) -> ConnectionPairCandidate {
         ConnectionPairCandidate {
@@ -66,14 +66,16 @@ mod phase3_tests {
         assert!(attempt.potential_energy_released > attempt.formation_work);
         assert_eq!(attempt.energy_paid, 0.0);
         assert!((attempt.energy_paid + attempt.potential_energy_released
-n            - attempt.formation_work
+            - attempt.formation_work
             - attempt.bond_energy
             - attempt.usable_energy_gained
             - attempt.heat_dissipated)
-            .abs() < 1e-9 * attempt.potential_energy_released.max(1.0));
+            .abs()
+            < 1e-9 * attempt.potential_energy_released.max(1.0));
         assert!((organism.usable_energy
             - (energy_before + attempt.usable_energy_gained - attempt.energy_paid))
-            .abs() < 1e-12);
+            .abs()
+            < 1e-12);
         assert_eq!(organism.structure.bonds.len(), 1);
     }
 
@@ -91,7 +93,8 @@ n            - attempt.formation_work
             - ledger.total_bond_energy_created
             - ledger.total_usable_energy_gained
             - ledger.total_heat_dissipated)
-            .abs() < 1e-12);
+            .abs()
+            < 1e-12);
     }
 
     #[test]
@@ -132,7 +135,8 @@ n            - attempt.formation_work
             - ledger.total_bond_energy_created
             - ledger.total_usable_energy_gained
             - ledger.total_heat_dissipated)
-            .abs() < 1e-12);
+            .abs()
+            < 1e-12);
     }
 
     #[test]
@@ -160,8 +164,12 @@ n            - attempt.formation_work
         let high_reactivity = props(10.0, 2.0, 0.5);
         let high_reactivity_result =
             experimental_interaction(low_reactivity, high_reactivity, candidate(1.0, 0.0), 0.0);
-        let low_reactivity_result =
-            experimental_interaction(low_reactivity, props(10.0, 0.5, 0.5), candidate(1.0, 0.0), 0.0);
+        let low_reactivity_result = experimental_interaction(
+            low_reactivity,
+            props(10.0, 0.5, 0.5),
+            candidate(1.0, 0.0),
+            0.0,
+        );
         let distant_result =
             experimental_interaction(low_reactivity, high_reactivity, candidate(1.0, 1.0), 0.0);
         let poor_facing_result =
@@ -219,7 +227,13 @@ n            - attempt.formation_work
     fn adult_mass_is_genomic() {
         let mut sim = Simulation::new(29, 10.0);
         let organism = &mut sim.organisms[0];
-        organism.genome.traits.iter_mut().find(|t| t.name == "adult_mass").unwrap().value = 40.0;
+        organism
+            .genome
+            .traits
+            .iter_mut()
+            .find(|t| t.name == "adult_mass")
+            .unwrap()
+            .value = 40.0;
 
         assert_eq!(organism.genome.adult_mass(), 40.0);
     }
