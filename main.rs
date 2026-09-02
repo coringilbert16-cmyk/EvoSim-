@@ -8,7 +8,6 @@ mod environment;
 mod genome;
 mod math;
 mod resources;
-mod structural_combine;
 mod structure;
 
 mod memory;
