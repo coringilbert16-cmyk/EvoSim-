@@ -132,10 +132,7 @@ impl CurrentNeeds {
     }
 
     pub fn any_for(self, needs: &[NeedKind]) -> bool {
-        needs
-            .iter()
-            .copied()
-            .any(|need| self.pressure(need) > 0.0)
+        needs.iter().copied().any(|need| self.pressure(need) > 0.0)
     }
 }
 
@@ -308,7 +305,11 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            approve_action_for_current_needs(ActionKind::Break, eligibility, CurrentNeeds::default()),
+            approve_action_for_current_needs(
+                ActionKind::Break,
+                eligibility,
+                CurrentNeeds::default()
+            ),
             DecisionResult::Reject
         );
     }
