@@ -74,7 +74,8 @@ mod integration_tests {
         );
 
         assert!(result.is_none());
-        assert_eq!(organism.stored_unbonded, before);
+        assert_eq!(organism.stored_unbonded.parts, before.parts);
+        assert_eq!(organism.stored_unbonded.bonded, before.bonded);
         assert!(organism.structure.units.is_empty());
     }
 
@@ -98,7 +99,8 @@ mod integration_tests {
         );
 
         assert!(result.is_none());
-        assert_eq!(organism.stored_unbonded.total_amount(), 2.0);
+        assert!((organism.stored_unbonded.total_amount() - 2.0).abs() < 1e-12);
+        assert!(organism.stored_unbonded.bonded);
         assert!(organism.structure.units.is_empty());
     }
 
@@ -120,7 +122,8 @@ mod integration_tests {
         );
 
         assert!(result.is_none());
-        assert_eq!(organism.stored_unbonded, before);
+        assert_eq!(organism.stored_unbonded.parts, before.parts);
+        assert_eq!(organism.stored_unbonded.bonded, before.bonded);
         assert!(organism.structure.units.is_empty());
     }
 
@@ -142,7 +145,8 @@ mod integration_tests {
         );
 
         assert!(result.is_none());
-        assert_eq!(organism.stored_unbonded, before);
+        assert_eq!(organism.stored_unbonded.parts, before.parts);
+        assert_eq!(organism.stored_unbonded.bonded, before.bonded);
         assert!(organism.structure.units.is_empty());
     }
 
@@ -164,7 +168,8 @@ mod integration_tests {
         );
 
         assert!(result.is_none());
-        assert_eq!(organism.stored_unbonded, before);
+        assert_eq!(organism.stored_unbonded.parts, before.parts);
+        assert_eq!(organism.stored_unbonded.bonded, before.bonded);
         assert!(organism.structure.units.is_empty());
     }
 
