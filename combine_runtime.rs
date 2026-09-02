@@ -142,14 +142,15 @@ pub(crate) fn try_combine(
 
     // Potential energy establishes the direction. Reactivity and geometry
     // modify how much of the participating potential is released into this
-    // interaction. This is deliberately distinct from formation work.
+    // interaction. The release is capped by the participating potential so
+    // reactivity can change kinetics/magnitude without creating energy.
     let potential_sum =
         (props_a.potential_energy.max(0.0) + props_b.potential_energy.max(0.0)).max(0.0);
     let potential_delta = (props_b.potential_energy - props_a.potential_energy).abs();
     if !potential_sum.is_finite() || !potential_delta.is_finite() || potential_delta <= EPSILON {
         return None;
     }
-    let interaction_modifier = interaction.magnitude / potential_delta;
+    let interaction_modifier = (interaction.magnitude / potential_delta).clamp(0.0, 1.0);
     let potential_energy_released = potential_sum * interaction_modifier;
     if !potential_energy_released.is_finite() || potential_energy_released <= EPSILON {
         return None;
