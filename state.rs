@@ -104,7 +104,7 @@ pub(crate) struct EnergyLedger {
     pub(crate) total_potential_energy_released: f64,
     /// Cumulative formation work actually paid by transformations.
     pub(crate) total_formation_energy_spent: f64,
-    /// Cumulative usable organism energy spent to subsidize formation work.
+    /// Cumulative usable organism energy spent to subsidize formation or break work.
     pub(crate) total_usable_energy_spent: f64,
     /// Cumulative energy committed to newly created bonds.
     pub(crate) total_bond_energy_created: f64,
@@ -134,9 +134,19 @@ impl EnergyLedger {
         self.total_heat_dissipated += heat_dissipated;
     }
 
-    pub(crate) fn record_break(&mut self, released: f64) {
-        self.total_potential_energy_released += released;
-        self.total_usable_energy_gained += released;
+    pub(crate) fn record_break(
+        &mut self,
+        bond_energy: f64,
+        usable_energy_spent: f64,
+        break_work: f64,
+        usable_energy_gained: f64,
+        heat_dissipated: f64,
+    ) {
+        self.total_potential_energy_released += bond_energy;
+        self.total_usable_energy_spent += usable_energy_spent;
+        self.total_formation_energy_spent += break_work;
+        self.total_usable_energy_gained += usable_energy_gained;
+        self.total_heat_dissipated += heat_dissipated;
     }
 }
 
