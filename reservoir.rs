@@ -1,8 +1,8 @@
 // Deep reservoir: coarse spatial stock beneath the active material field.
 
+use super::field::{ActiveMaterialField, MATERIAL_EPSILON};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use super::field::{ActiveMaterialField, MATERIAL_EPSILON};
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_RESERVOIR_BLOCK_SIZE: usize = 5;
@@ -170,7 +170,8 @@ impl DeepReservoir {
             }
 
             for (cell, weight) in self.cells.iter_mut().zip(weights) {
-                cell.unbonded_entries.retain(|(entry_name, _)| entry_name != &name);
+                cell.unbonded_entries
+                    .retain(|(entry_name, _)| entry_name != &name);
                 cell.add(false, &name, total * weight / weight_sum);
             }
         }
