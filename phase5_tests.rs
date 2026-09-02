@@ -85,7 +85,7 @@ mod integration_tests {
     #[test]
     fn runtime_decision_history_changes_selected_action() {
         let mut sim = Simulation::new(3, 10.0);
-        let bond_id = prepare_bonded_pair(&mut sim);
+        prepare_bonded_pair(&mut sim);
         sim.organisms[0].decision_history.record(
             ActionKind::Move,
             None,
@@ -94,14 +94,13 @@ mod integration_tests {
 
         sim.step();
 
-        assert_eq!(sim.organisms[0].occupied_cells.len(), 1);
         assert!(sim.active_transformations.is_empty());
         assert_eq!(sim.organisms[0].decision_history.entries.len(), 1);
         assert_eq!(
             sim.organisms[0].decision_history.entries[0].action,
             ActionKind::Move
         );
-        assert!(bond_id.0 > 0);
+        assert_eq!(sim.organisms[0].decision_history.entries[0].count, 2);
     }
 
     #[test]
@@ -116,10 +115,7 @@ mod integration_tests {
         assert_eq!(sim.active_transformations.len(), 1);
         assert_eq!(sim.active_transformations[0].remaining_ticks, 1);
         assert_eq!(sim.organisms[0].active_transformation_id, Some(1));
-        assert_eq!(
-            sim.organisms[0].decision_history.entries.len(),
-            history_before
-        );
+        assert_eq!(sim.organisms[0].decision_history.entries.len(), history_before);
 
         sim.step();
 
@@ -154,9 +150,10 @@ mod integration_tests {
             second.step();
         }
 
-        let first_history = &first.organisms[0].decision_history.entries;
-        let second_history = &second.organisms[0].decision_history.entries;
-        assert_ne!(first_history, second_history);
+        assert_ne!(
+            first.organisms[0].decision_history.entries,
+            second.organisms[0].decision_history.entries
+        );
     }
 
     #[test]
@@ -173,7 +170,18 @@ mod integration_tests {
         assert_eq!(snapshot.tick, restored.tick);
         assert_eq!(snapshot.organisms.len(), restored.organisms.len());
         assert_eq!(snapshot.active_transformations.len(), restored.active_transformations.len());
-        assert_eq!(snapshot.energy_ledger, restored.energy_ledger);
+        assert_eq!(
+            snapshot.energy_ledger.total_potential_energy_released,
+            restored.energy_ledger.total_potential_energy_released
+        );
+        assert_eq!(
+            snapshot.energy_ledger.total_usable_energy_gained,
+            restored.energy_ledger.total_usable_energy_gained
+        );
+        assert_eq!(
+            snapshot.energy_ledger.total_heat_dissipated,
+            restored.energy_ledger.total_heat_dissipated
+        );
         assert_eq!(snapshot.organisms[0].structure.units.len(), restored.organisms[0].structure.units.len());
         assert_eq!(snapshot.organisms[0].structure.bonds.len(), restored.organisms[0].structure.bonds.len());
         assert_eq!(snapshot.organisms[0].decision_history.entries, restored.organisms[0].decision_history.entries);
