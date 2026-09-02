@@ -35,24 +35,37 @@ pub fn select_action(
 ) -> Option<ActionCandidate> {
     let mut best: Option<(u8, ActionCandidate)> = None;
     for candidate in candidates {
-        if approve(context, candidate.action) != DecisionResult::Approve { continue; }
+        if approve(context, candidate.action) != DecisionResult::Approve {
+            continue;
+        }
         let rank = match history.outcome(candidate.action, candidate.context_key.as_deref()) {
             Some(OutcomeKind::Beneficial) => 2,
             Some(OutcomeKind::Neutral) | Some(OutcomeKind::Harmful) => 0,
             None => 1,
         };
-        if best.as_ref().map_or(true, |(best_rank, _)| rank > *best_rank) {
+        if best
+            .as_ref()
+            .map_or(true, |(best_rank, _)| rank > *best_rank)
+        {
             best = Some((rank, candidate.clone()));
         }
     }
     best.map(|(_, candidate)| candidate)
 }
 
-pub fn record_outcome(history: &mut DecisionHistory, candidate: &ActionCandidate, outcome: OutcomeKind) {
+pub fn record_outcome(
+    history: &mut DecisionHistory,
+    candidate: &ActionCandidate,
+    outcome: OutcomeKind,
+) {
     history.record(candidate.action, candidate.context_key.clone(), outcome);
 }
 
-pub fn known_outcome(history: &DecisionHistory, action: ActionKind, context_key: Option<&str>) -> bool {
+pub fn known_outcome(
+    history: &DecisionHistory,
+    action: ActionKind,
+    context_key: Option<&str>,
+) -> bool {
     outcome_is_known(history, action, context_key)
 }
 
@@ -63,27 +76,49 @@ mod tests {
 
     fn context() -> DecisionContext {
         DecisionContext {
-            needs: CurrentNeeds { survival: 1.0, reproduction: 0.5 },
-            eligibility: ActionEligibility { can_move:true, can_break:true, ..Default::default() },
+            needs: CurrentNeeds {
+                survival: 1.0,
+                reproduction: 0.5,
+            },
+            eligibility: ActionEligibility {
+                can_move: true,
+                can_break: true,
+                ..Default::default()
+            },
         }
     }
 
     #[test]
     fn bridge_approves_needed_mechanically_eligible_action() {
-        assert_eq!(approve(context(), ActionKind::Break), DecisionResult::Approve);
+        assert_eq!(
+            approve(context(), ActionKind::Break),
+            DecisionResult::Approve
+        );
     }
 
     #[test]
     fn bridge_rejects_mechanically_ineligible_action() {
-        let context = DecisionContext { needs:CurrentNeeds { survival:1.0, reproduction:0.0 }, eligibility:Default::default() };
+        let context = DecisionContext {
+            needs: CurrentNeeds {
+                survival: 1.0,
+                reproduction: 0.0,
+            },
+            eligibility: Default::default(),
+        };
         assert_eq!(approve(context, ActionKind::Break), DecisionResult::Reject);
     }
 
     #[test]
     fn unknown_action_can_be_selected_when_needed_and_eligible() {
         let history = DecisionHistory::default();
-        let candidates = vec![ActionCandidate { action:ActionKind::Break, context_key:Some("Methane".into()) }];
-        assert_eq!(select_action(context(), &history, &candidates), Some(candidates[0].clone()));
+        let candidates = vec![ActionCandidate {
+            action: ActionKind::Break,
+            context_key: Some("Methane".into()),
+        }];
+        assert_eq!(
+            select_action(context(), &history, &candidates),
+            Some(candidates[0].clone())
+        );
     }
 
     #[test]
@@ -91,35 +126,70 @@ mod tests {
         let mut history = DecisionHistory::default();
         history.record(ActionKind::Move, None, OutcomeKind::Beneficial);
         let candidates = vec![
-            ActionCandidate { action:ActionKind::Break, context_key:Some("Methane".into()) },
-            ActionCandidate { action:ActionKind::Move, context_key:None },
+            ActionCandidate {
+                action: ActionKind::Break,
+                context_key: Some("Methane".into()),
+            },
+            ActionCandidate {
+                action: ActionKind::Move,
+                context_key: None,
+            },
         ];
-        assert_eq!(select_action(context(), &history, &candidates), Some(candidates[1].clone()));
+        assert_eq!(
+            select_action(context(), &history, &candidates),
+            Some(candidates[1].clone())
+        );
     }
 
     #[test]
     fn harmful_history_does_not_invent_a_better_prediction_for_unknown_action() {
         let mut history = DecisionHistory::default();
-        history.record(ActionKind::Break, Some("Methane".into()), OutcomeKind::Harmful);
+        history.record(
+            ActionKind::Break,
+            Some("Methane".into()),
+            OutcomeKind::Harmful,
+        );
         let candidates = vec![
-            ActionCandidate { action:ActionKind::Break, context_key:Some("Methane".into()) },
-            ActionCandidate { action:ActionKind::Move, context_key:None },
+            ActionCandidate {
+                action: ActionKind::Break,
+                context_key: Some("Methane".into()),
+            },
+            ActionCandidate {
+                action: ActionKind::Move,
+                context_key: None,
+            },
         ];
-        assert_eq!(select_action(context(), &history, &candidates), Some(candidates[1].clone()));
+        assert_eq!(
+            select_action(context(), &history, &candidates),
+            Some(candidates[1].clone())
+        );
     }
 
     #[test]
     fn recorded_outcome_is_available_to_future_decisions() {
         let mut history = DecisionHistory::default();
-        let candidate = ActionCandidate { action:ActionKind::Break, context_key:Some("Methane".into()) };
+        let candidate = ActionCandidate {
+            action: ActionKind::Break,
+            context_key: Some("Methane".into()),
+        };
         record_outcome(&mut history, &candidate, OutcomeKind::Beneficial);
-        assert!(known_outcome(&history, ActionKind::Break, Some("Methane")));
+        assert!(known_outcome(
+            &history,
+            ActionKind::Break,
+            Some("Methane")
+        ));
     }
 
     #[test]
     fn action_need_mapping_is_owned_by_decision_layer() {
-        assert!(ActionKind::Combine.relevant_needs().contains(&NeedKind::Reproduction));
-        assert!(ActionKind::Break.relevant_needs().contains(&NeedKind::Survival));
-        assert!(!ActionKind::Break.relevant_needs().contains(&NeedKind::Reproduction));
+        assert!(ActionKind::Combine
+            .relevant_needs()
+            .contains(&NeedKind::Reproduction));
+        assert!(ActionKind::Break
+            .relevant_needs()
+            .contains(&NeedKind::Survival));
+        assert!(!ActionKind::Break
+            .relevant_needs()
+            .contains(&NeedKind::Reproduction));
     }
 }
