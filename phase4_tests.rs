@@ -277,6 +277,7 @@ fn break_with_invalid_bond_state_does_not_mutate_structure() {
     );
     resolve_transformation(&transformation, &mut organisms[0], environment, ledger);
 
-    assert_eq!(organisms[0].structure.bonds, vec![bond]);
+    assert_eq!(organisms[0].structure.bonds.len(), 1);
+    assert!(organisms[0].structure.bonds[0].bond_energy.is_nan());
     assert_eq!(*ledger, EnergyLedger::default());
 }
