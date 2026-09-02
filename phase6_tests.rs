@@ -1,10 +1,11 @@
 #[cfg(test)]
 mod conservation_tests {
-    use crate::environment::{apply_settling, apply_vents, ActiveMaterialField, DeepReservoir};
+    use crate::environment::{
+        apply_settling, apply_vents, settling::DEFAULT_SETTLING_FRACTION,
+        settling::DEFAULT_SETTLING_INTERVAL_TICKS, vents::Vent, ActiveMaterialField, DeepReservoir,
+    };
     use crate::resources::Material;
-    use crate::settling::{DEFAULT_SETTLING_FRACTION, DEFAULT_SETTLING_INTERVAL_TICKS};
     use crate::state::Simulation;
-    use crate::vents::Vent;
 
     fn material_totals(
         field: &ActiveMaterialField,
