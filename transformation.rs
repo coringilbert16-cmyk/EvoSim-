@@ -1,8 +1,6 @@
 use crate::decision::{ActionKind, OutcomeKind};
 use crate::decision_runtime::ActionCandidate;
-use crate::state::{
-    ActiveTransformation, EnergyLedger, Environment, Organism, Simulation, STRESS_DECAY_PER_TICK,
-};
+use crate::state::{ActiveTransformation, EnergyLedger, Environment, Organism, Simulation};
 use crate::structure::{formation_threshold, Bond, BondId};
 
 const EPSILON: f64 = 1e-12;
@@ -99,6 +97,32 @@ fn calculate_break_attempt(
     })
 }
 
+fn apply_break_attempt(
+    attempt: BreakAttempt,
+    organism: &mut Organism,
+    ledger: &mut EnergyLedger,
+) -> bool {
+    let removed = if attempt.bond.id.0 > 0 {
+        organism.structure.break_bond_by_id(attempt.bond.id)
+    } else {
+        organism.structure.break_matching_bond(attempt.bond)
+    };
+    if removed.is_none() {
+        return false;
+    }
+
+    organism.usable_energy -= attempt.usable_energy_spent;
+    organism.usable_energy += attempt.usable_energy_gained;
+    ledger.record_break(
+        attempt.bond.bond_energy,
+        attempt.usable_energy_spent,
+        attempt.break_work,
+        attempt.usable_energy_gained,
+        attempt.heat_dissipated,
+    );
+    true
+}
+
 impl Simulation {
     pub(crate) fn try_start_transformation(
         organism: &mut Organism,
@@ -171,25 +195,11 @@ impl Simulation {
             return;
         };
 
-        let removed = if attempt.bond.id.0 > 0 {
-            organism.structure.break_bond_by_id(attempt.bond.id)
-        } else {
-            organism.structure.break_matching_bond(attempt.bond)
-        };
-        if removed.is_none() {
+        if !apply_break_attempt(attempt, organism, ledger) {
             organism.active_transformation_id = None;
             return;
         }
 
-        organism.usable_energy -= attempt.usable_energy_spent;
-        organism.usable_energy += attempt.usable_energy_gained;
-        ledger.record_break(
-            attempt.bond.bond_energy,
-            attempt.usable_energy_spent,
-            attempt.break_work,
-            attempt.usable_energy_gained,
-            attempt.heat_dissipated,
-        );
         organism.active_transformation_id = None;
 
         let outcome = if attempt.usable_energy_gained > EPSILON {
@@ -220,7 +230,22 @@ impl Simulation {
         }
     }
 
-    pub(crate) fn apply_energy_capacity(organism: &mut Organism) {
-        organism.stress *= STRESS_DECAY_PER_TICK;
+    /// Apply a stress-induced structural break through the same BREAK
+    /// calculation, structural mutation, and energy-ledger path as a normal
+    /// BREAK action. Stress damage is a physiological consequence, not a
+    /// decision-history event.
+    pub(crate) fn apply_stress_break(
+        organism: &mut Organism,
+        environment: &Environment,
+        ledger: &mut EnergyLedger,
+        bond_id: BondId,
+    ) -> bool {
+        let Some(bond) = organism.structure.bond_by_id(bond_id) else {
+            return false;
+        };
+        let Some(attempt) = calculate_break_attempt(organism, environment, bond) else {
+            return false;
+        };
+        apply_break_attempt(attempt, organism, ledger)
     }
 }
