@@ -95,12 +95,12 @@ pub(crate) fn reinforce_memory_point(organism: &mut Organism, x: f64, y: f64, re
         .iter_mut()
         .find(|p| (p.x - x).abs() < f64::EPSILON && (p.y - y).abs() < f64::EPSILON)
     {
-        point.strength = crate::math::clamp01(point.strength + reinforcement);
+        point.strength = (point.strength + reinforcement).clamp(0.0, 1.0);
     } else {
-        organism.memory.push(crate::memory::MemoryPoint {
+        organism.memory.push(crate::state::MemoryPoint {
             x,
             y,
-            strength: crate::math::clamp01(reinforcement),
+            strength: reinforcement.clamp(0.0, 1.0),
         });
     }
 }
