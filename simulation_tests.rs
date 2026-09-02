@@ -31,6 +31,122 @@ mod integration_tests {
     }
 
     #[test]
+    fn raw_material_instantiation_consumes_exactly_one_unit_and_preserves_placement() {
+        let catalog = crate::resources::default_catalog();
+        let mut organism = Simulation::create_initial_organism();
+        organism.store_unbonded_material(Material::free_base("Carbon", 3.0));
+        let placement = Placement {
+            x: 12.5,
+            y: -4.0,
+            rotation_radians: 0.75,
+        };
+
+        let index = crate::combine_runtime::instantiate_one_unit(
+            &mut organism,
+            "Carbon",
+            placement,
+            &catalog,
+        )
+        .expect("sufficient raw Carbon should instantiate");
+
+        assert_eq!(index, 0);
+        assert!((organism.stored_unbonded.total_amount() - 2.0).abs() < 1e-12);
+        assert_eq!(organism.structure.units.len(), 1);
+        assert_eq!(organism.structure.units[index].resource_name, "Carbon");
+        assert_eq!(organism.structure.units[index].placement, placement);
+    }
+
+    #[test]
+    fn raw_material_instantiation_is_atomic_when_material_is_insufficient() {
+        let catalog = crate::resources::default_catalog();
+        let mut organism = Simulation::create_initial_organism();
+        organism.store_unbonded_material(Material::free_base("Carbon", 0.5));
+        let before = organism.stored_unbonded.clone();
+        let result = crate::combine_runtime::instantiate_one_unit(
+            &mut organism,
+            "Carbon",
+            Placement {
+                x: 1.0,
+                y: 2.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        );
+
+        assert!(result.is_none());
+        assert_eq!(organism.stored_unbonded, before);
+        assert!(organism.structure.units.is_empty());
+    }
+
+    #[test]
+    fn raw_material_instantiation_rejects_bonded_storage_without_mutation() {
+        let catalog = crate::resources::default_catalog();
+        let mut organism = Simulation::create_initial_organism();
+        organism.stored_unbonded = Material {
+            parts: vec![("Carbon".into(), 2.0)],
+            bonded: true,
+        };
+        let result = crate::combine_runtime::instantiate_one_unit(
+            &mut organism,
+            "Carbon",
+            Placement {
+                x: 1.0,
+                y: 2.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        );
+
+        assert!(result.is_none());
+        assert_eq!(organism.stored_unbonded.total_amount(), 2.0);
+        assert!(organism.structure.units.is_empty());
+    }
+
+    #[test]
+    fn raw_material_instantiation_rejects_unknown_resource_without_mutation() {
+        let catalog = crate::resources::default_catalog();
+        let mut organism = Simulation::create_initial_organism();
+        organism.store_unbonded_material(Material::free_base("Carbon", 2.0));
+        let before = organism.stored_unbonded.clone();
+        let result = crate::combine_runtime::instantiate_one_unit(
+            &mut organism,
+            "NotAResource",
+            Placement {
+                x: 1.0,
+                y: 2.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        );
+
+        assert!(result.is_none());
+        assert_eq!(organism.stored_unbonded, before);
+        assert!(organism.structure.units.is_empty());
+    }
+
+    #[test]
+    fn raw_material_instantiation_rejects_nonfinite_placement_without_mutation() {
+        let catalog = crate::resources::default_catalog();
+        let mut organism = Simulation::create_initial_organism();
+        organism.store_unbonded_material(Material::free_base("Carbon", 2.0));
+        let before = organism.stored_unbonded.clone();
+        let result = crate::combine_runtime::instantiate_one_unit(
+            &mut organism,
+            "Carbon",
+            Placement {
+                x: f64::NAN,
+                y: 2.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        );
+
+        assert!(result.is_none());
+        assert_eq!(organism.stored_unbonded, before);
+        assert!(organism.structure.units.is_empty());
+    }
+
+    #[test]
     fn structural_units_count_toward_total_material_conservation() {
         let mut sim = Simulation::new(1, 10.0);
         sim.organisms[0].structure.add_unit(StructuralUnit::new(
