@@ -1,7 +1,7 @@
 use crate::decision::{ActionKind, OutcomeKind};
 use crate::decision_runtime::ActionCandidate;
-use crate::state::{ActiveTransformation, EnergyLedger, Environment, Organism};
 pub(crate) use crate::state::Simulation;
+use crate::state::{ActiveTransformation, EnergyLedger, Environment, Organism};
 use crate::structure::{formation_threshold, Bond, BondId};
 
 const EPSILON: f64 = 1e-12;
