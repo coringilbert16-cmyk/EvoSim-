@@ -23,7 +23,8 @@ const STRESS_RELIEF_PER_BREAK: f64 = 1.0;
 impl Simulation {
     pub(crate) fn new(seed: u64, ticks_per_second: f64) -> Self {
         let rng = ChaCha8Rng::seed_from_u64(seed);
-        let environment = Self::create_environment();
+        let mut environment = Self::create_environment();
+        environment.reservoir.randomize_unbonded_distribution(seed);
         let mut organism = Self::create_initial_organism();
         organism.usable_energy = 25.0;
         organism.store_unbonded_material(crate::resources::Material {
