@@ -250,7 +250,7 @@ mod integration_tests {
             strength: 0.8,
             bond_energy: 12.5,
         });
-        let before = sim.organisms[0].usable_energy;
+        let ledger_before = sim.organisms[0].energy_ledger;
         let decision = ActionCandidate {
             action: ActionKind::Break,
             context_key: Some("bond:0".into()),
@@ -269,7 +269,26 @@ mod integration_tests {
             }
         }
         assert!(sim.organisms[0].structure.bonds.is_empty());
-        assert!((sim.organisms[0].usable_energy - before - 12.5).abs() < 1e-12);
+
+        let ledger_after = sim.organisms[0].energy_ledger;
+        let released =
+            ledger_after.total_potential_energy_released - ledger_before.total_potential_energy_released;
+        let break_work =
+            ledger_after.total_break_energy_spent - ledger_before.total_break_energy_spent;
+        let usable_spent =
+            ledger_after.total_usable_energy_spent - ledger_before.total_usable_energy_spent;
+        let usable_gained =
+            ledger_after.total_usable_energy_gained - ledger_before.total_usable_energy_gained;
+        let heat = ledger_after.total_heat_dissipated - ledger_before.total_heat_dissipated;
+
+        assert!((released - 12.5).abs() < 1e-12);
+        assert!(break_work.is_finite() && break_work >= 0.0);
+        assert!(usable_spent.is_finite() && usable_spent >= 0.0);
+        assert!(usable_gained.is_finite() && usable_gained >= 0.0);
+        assert!(heat.is_finite() && heat >= 0.0);
+        let balance = released + usable_spent - break_work - usable_gained - heat;
+        assert!(balance.abs() < 1e-9 * released.max(break_work).max(1.0));
+
         assert!(sim.organisms[0]
             .decision_history
             .has_knowledge(ActionKind::Break, Some("bond:0")));
