@@ -5,7 +5,8 @@ mod conservation_tests {
         DEFAULT_SETTLING_FRACTION, DEFAULT_SETTLING_INTERVAL_TICKS,
     };
     use crate::resources::Material;
-    use crate::state::Simulation;
+    use crate::state::{ActiveTransformation, Snapshot, TransformationKind, Simulation};
+    use crate::structure::{Bond, BondId, Placement, StructuralUnit};
 
     fn material_totals(
         field: &ActiveMaterialField,
@@ -147,5 +148,94 @@ mod conservation_tests {
         let taken = field.take_at_index(5, false, 7.5).expect("material exists");
         assert!((taken.total_amount() - 7.5).abs() < 1e-12);
         assert!((field.total_amount() - 17.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn snapshot_round_trip_preserves_stable_bond_and_transformation_identity() {
+        let mut sim = Simulation::new(7, 10.0);
+        let organism = &mut sim.organisms[0];
+        organism
+            .structure
+            .add_bond(Bond {
+                id: BondId(41),
+                unit_a: 0,
+                point_a: 0,
+                unit_b: 1,
+                point_b: 0,
+                strength: 0.75,
+                bond_energy: 2.5,
+            });
+        let bond_id = organism.structure.bonds[0].id;
+        sim.active_transformations.push(ActiveTransformation {
+            id: 9,
+            organism_id: "1".into(),
+            kind: TransformationKind::Break,
+            material: Material::free_base("Carbon", 1.0),
+            bond_id: Some(bond_id),
+            legacy_bond: None,
+            complexity: 0.5,
+            duration_ticks: 3,
+            remaining_ticks: 2,
+            decision_context_key: Some("bond:41".into()),
+        });
+
+        let encoded = serde_json::to_string(&sim.snapshot()).expect("snapshot serializes");
+        let decoded: Snapshot = serde_json::from_str(&encoded).expect("snapshot deserializes");
+
+        let decoded_bond = decoded.organisms[0]
+            .structure
+            .bond_by_id(bond_id)
+            .expect("bond id survives snapshot round trip");
+        assert_eq!(decoded_bond.id, bond_id);
+        assert_eq!(decoded_bond.bond_energy, 2.5);
+        assert_eq!(decoded.active_transformations[0].bond_id, Some(bond_id));
+        assert_eq!(decoded.active_transformations[0].decision_context_key.as_deref(), Some("bond:41"));
+
+        let mut restored_structure = decoded.organisms[0].structure.clone();
+        let new_index = restored_structure.add_bond(Bond {
+            id: BondId(0),
+            unit_a: 2,
+            point_a: 0,
+            unit_b: 3,
+            point_b: 0,
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+        assert_eq!(restored_structure.bonds[new_index].id, BondId(42));
+    }
+
+    #[test]
+    fn legacy_zero_bond_ids_are_repaired_without_losing_bond_state() {
+        let mut structure = crate::structure::OrganismStructure::new();
+        for i in 0..2 {
+            structure.add_unit(StructuralUnit::new(
+                "Carbon",
+                Placement {
+                    x: i as f64,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ));
+        }
+        structure.add_bond(Bond {
+            id: BondId(0),
+            unit_a: 0,
+            point_a: 0,
+            unit_b: 1,
+            point_b: 0,
+            strength: 0.25,
+            bond_energy: 3.0,
+        });
+
+        let mut value = serde_json::to_value(&structure).expect("structure serializes");
+        value["bonds"][0].as_object_mut().unwrap().remove("id");
+        let mut decoded: crate::structure::OrganismStructure =
+            serde_json::from_value(value).expect("legacy structure deserializes");
+        assert_eq!(decoded.bonds[0].id, BondId(0));
+
+        decoded.ensure_bond_ids();
+        assert_ne!(decoded.bonds[0].id, BondId(0));
+        assert_eq!(decoded.bonds[0].strength, 0.25);
+        assert_eq!(decoded.bonds[0].bond_energy, 3.0);
     }
 }
