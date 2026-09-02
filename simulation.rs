@@ -201,7 +201,7 @@ impl Simulation {
         let reserve_pressure = (1.0 - organism.usable_energy / survival_reserve).clamp(0.0, 1.0);
         let survival = (reserve_pressure * (1.0 + organism.stress.max(0.0))).clamp(0.0, 1.0);
         let _maturity = (Self::structural_mass(organism, environment)
-            / parameters.adult_mass.max(f64::EPSILON))
+            / organism.genome.adult_mass().max(f64::EPSILON))
         .clamp(0.0, 1.0);
         let _energy_readiness = (organism.usable_energy
             / parameters.reproduction_reserve.max(f64::EPSILON))
@@ -218,7 +218,7 @@ impl Simulation {
         parameters: DecisionParameters,
     ) {
         let maturity = (Self::structural_mass(organism, environment)
-            / parameters.adult_mass.max(f64::EPSILON))
+            / organism.genome.adult_mass().max(f64::EPSILON))
         .clamp(0.0, 1.0);
         let energy_readiness = (organism.usable_energy
             / parameters.reproduction_reserve.max(f64::EPSILON))
@@ -405,12 +405,19 @@ impl Simulation {
                     );
                 }
                 ActionKind::Combine => {
-                    let combined = crate::combine_runtime::try_combine(
+                    let combine_attempt = crate::combine_runtime::try_combine(
                         organism,
                         environment,
                         &mut compatibility_cache,
-                    )
-                    .is_some();
+                    );
+                    let combined = combine_attempt.is_some();
+                    if let Some(attempt) = combine_attempt {
+                        self.energy_ledger.total_potential_energy_released +=
+                            attempt.potential_energy_released;
+                        self.energy_ledger.total_usable_energy_gained +=
+                            attempt.usable_energy_gained;
+                        self.energy_ledger.total_heat_dissipated += attempt.heat_dissipated;
+                    }
                     crate::decision_runtime::record_outcome(
                         &mut organism.decision_history,
                         &selected,
