@@ -37,8 +37,12 @@ fn calculate_break_attempt(
     let unit_b = organism.structure.units.get(bond.unit_b)?;
     let props_a = *unit_a.properties(&environment.catalog)?;
     let props_b = *unit_b.properties(&environment.catalog)?;
-    let load_a = organism.structure.connection_load(bond.unit_a, bond.point_a);
-    let load_b = organism.structure.connection_load(bond.unit_b, bond.point_b);
+    let load_a = organism
+        .structure
+        .connection_load(bond.unit_a, bond.point_a);
+    let load_b = organism
+        .structure
+        .connection_load(bond.unit_b, bond.point_b);
     if !load_a.is_finite() || !load_b.is_finite() {
         return None;
     }
@@ -79,10 +83,8 @@ fn calculate_break_attempt(
         return None;
     }
 
-    let conservation_balance = bond_energy + usable_energy_spent
-        - break_work
-        - usable_energy_gained
-        - heat_dissipated;
+    let conservation_balance =
+        bond_energy + usable_energy_spent - break_work - usable_energy_gained - heat_dissipated;
     let tolerance = 1e-9 * bond_energy.max(break_work).max(1.0);
     if conservation_balance.abs() > tolerance {
         return None;
@@ -152,7 +154,11 @@ impl Simulation {
             return;
         };
 
-        if organism.structure.break_matching_bond(attempt.bond).is_none() {
+        if organism
+            .structure
+            .break_matching_bond(attempt.bond)
+            .is_none()
+        {
             organism.active_transformation_id = None;
             return;
         }
