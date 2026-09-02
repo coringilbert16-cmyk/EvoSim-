@@ -124,9 +124,10 @@ mod tests {
         Simulation::reinforce_memory_point(&mut organism, 999.0, 999.0, 0.9);
 
         assert_eq!(organism.memory.len(), MAX_MEMORY_POINTS);
-        assert!(organism.memory.iter().any(|p| {
-            (p.x - 999.0).abs() < f64::EPSILON && (p.y - 999.0).abs() < f64::EPSILON
-        }));
+        assert!(organism
+            .memory
+            .iter()
+            .any(|p| { (p.x - 999.0).abs() < f64::EPSILON && (p.y - 999.0).abs() < f64::EPSILON }));
         assert!(organism
             .memory
             .iter()
