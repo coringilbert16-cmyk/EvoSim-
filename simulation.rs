@@ -312,7 +312,7 @@ impl Simulation {
                     .unwrap_or(std::cmp::Ordering::Equal)
             });
         let Some(target) = target else { return false };
-        let amount = target.perceived_amount.min(PROCESSING_RATE).max(0.0);
+        let amount = target.perceived_amount.clamp(0.0, PROCESSING_RATE);
         let Some(material) = environment
             .field
             .take_at_index(target.field_index, false, amount)
