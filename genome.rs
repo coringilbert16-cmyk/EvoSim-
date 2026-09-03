@@ -63,6 +63,9 @@ impl Genome {
         self.trait_value("reproductive_investment", 0.5)
             .clamp(0.15, 1.0)
     }
+    pub fn juvenile_mass(&self) -> f64 {
+        self.trait_value("juvenile_mass", 4.0).clamp(1.0, 40.0)
+    }
     pub fn adult_mass(&self) -> f64 {
         self.trait_value("adult_mass", 16.0).clamp(4.0, 80.0)
     }
@@ -104,6 +107,7 @@ pub fn initial_genome() -> Genome {
             trait_def("processing_efficiency", 0.8, 0.05),
             trait_def("movement_efficiency", 0.8, 0.05),
             trait_def("reproductive_investment", 0.5, 0.05),
+            trait_def("juvenile_mass", 4.0, 0.2),
             trait_def("adult_mass", 16.0, 0.4),
         ],
     }
