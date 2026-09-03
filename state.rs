@@ -135,6 +135,28 @@ impl Organism {
         parts.extend(material.parts);
         self.stored_unbonded.parts = crate::resources::merge_parts(&parts);
     }
+
+    /// Derive the organism's macroscopic material state from Floor 0 chemistry.
+    /// This is a view, not an independently stored chemistry state.
+    pub(crate) fn material_projection(
+        &self,
+        catalog: &[BaseResource],
+    ) -> crate::material_projection::CellMaterialProjection {
+        let structural = Material {
+            parts: self
+                .structure
+                .units
+                .iter()
+                .map(|unit| (unit.resource_name.clone(), 1.0))
+                .collect(),
+            bonded: !self.structure.units.is_empty(),
+        };
+        crate::material_projection::CellMaterialProjection::from_materials(
+            &structural,
+            &self.stored_unbonded,
+            catalog,
+        )
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
