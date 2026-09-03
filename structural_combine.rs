@@ -50,7 +50,7 @@ pub(crate) fn required_investment(
     props_b: ResourceProperties,
     evaluation: FormationEvaluation,
     water_field: f64,
-) -> Result<(ExperimentalInteraction, f64, f64, f64), StructuralCombineError> {
+) -> Result<(ExperimentalInteraction, f64, f64), StructuralCombineError> {
     let interaction = experimental_interaction(props_a, props_b, evaluation.candidate, water_field);
     if interaction.direction <= 0.0 || interaction.magnitude <= EPSILON {
         return Err(StructuralCombineError::UnfavorableInteraction);
@@ -66,8 +66,7 @@ pub(crate) fn required_investment(
     if !energy_paid.is_finite() || energy_paid < 0.0 {
         return Err(StructuralCombineError::NonFiniteWorkCost);
     }
-    let surplus = energy_paid - evaluation.threshold;
-    Ok((interaction, work_cost, energy_paid, surplus))
+    Ok((interaction, work_cost, energy_paid))
 }
 
 pub fn execute(
@@ -114,12 +113,13 @@ pub fn execute(
         .properties(catalog)
         .ok_or(StructuralCombineError::MissingUnit)?;
     let formation = evaluate_formation(candidate, a.cohesion, b.cohesion);
-    let (interaction, work_cost, _required, surplus) =
+    let (interaction, work_cost, _required) =
         required_investment(*a, *b, formation, water_field)?;
 
     if investment < formation.threshold.max(work_cost) {
         return Err(StructuralCombineError::InsufficientInvestment);
     }
+    let surplus = investment - formation.threshold;
     let bond_strength = bond_strength(*a, *b);
     if !bond_strength.is_finite() {
         return Err(StructuralCombineError::NonFiniteBondStrength);
