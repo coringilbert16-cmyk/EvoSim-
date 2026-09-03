@@ -5,13 +5,14 @@
 
 use crate::combine::{
     bond_strength, evaluate_formation, experimental_combine_work_cost,
-    experimental_interaction, ExperimentalInteraction,
+    experimental_interaction, ExperimentalInteraction, FormationEvaluation,
 };
 use crate::contact::{connection_pair_candidates_cached, ConnectionCompatibilityCache};
-use crate::resources::{BaseResource, Material};
+use crate::resources::{BaseResource, Material, ResourceProperties};
 use crate::structure::{Bond, OrganismStructure, Placement, StructuralUnit};
 
 const COMBINE_CONTACT_TOLERANCE: f64 = 1.0;
+const EPSILON: f64 = 1e-12;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct StructuralCombineResult {
@@ -39,6 +40,34 @@ pub enum StructuralCombineError {
     NonFiniteBondStrength,
     BondGeometryRejected,
     UnfavorableInteraction,
+}
+
+/// Calculate the exact minimum investment required by the authoritative
+/// COMBINE equations. Runtime and reproductive construction share this
+/// calculation so neither path invents or duplicates an energy-payment rule.
+pub(crate) fn required_investment(
+    props_a: ResourceProperties,
+    props_b: ResourceProperties,
+    evaluation: FormationEvaluation,
+    water_field: f64,
+) -> Result<(ExperimentalInteraction, f64, f64, f64), StructuralCombineError> {
+    let interaction = experimental_interaction(props_a, props_b, evaluation.candidate, water_field);
+    if interaction.direction <= 0.0 || interaction.magnitude <= EPSILON {
+        return Err(StructuralCombineError::UnfavorableInteraction);
+    }
+
+    let work_cost =
+        experimental_combine_work_cost(props_a, props_b, evaluation.candidate, water_field);
+    if !work_cost.is_finite() {
+        return Err(StructuralCombineError::NonFiniteWorkCost);
+    }
+
+    let energy_paid = work_cost.max(evaluation.threshold);
+    if !energy_paid.is_finite() || energy_paid < 0.0 {
+        return Err(StructuralCombineError::NonFiniteWorkCost);
+    }
+    let surplus = energy_paid - evaluation.threshold;
+    Ok((interaction, work_cost, energy_paid, surplus))
 }
 
 pub fn execute(
@@ -84,21 +113,13 @@ pub fn execute(
     let b = structure.units[unit_b]
         .properties(catalog)
         .ok_or(StructuralCombineError::MissingUnit)?;
-    let interaction = experimental_interaction(*a, *b, candidate, water_field);
-    if interaction.direction <= 0.0 || interaction.magnitude <= 1e-12 {
-        return Err(StructuralCombineError::UnfavorableInteraction);
-    }
-
-    let work_cost = experimental_combine_work_cost(*a, *b, candidate, water_field);
-    if !work_cost.is_finite() {
-        return Err(StructuralCombineError::NonFiniteWorkCost);
-    }
-
     let formation = evaluate_formation(candidate, a.cohesion, b.cohesion);
+    let (interaction, work_cost, _required, surplus) =
+        required_investment(*a, *b, formation, water_field)?;
+
     if investment < formation.threshold.max(work_cost) {
         return Err(StructuralCombineError::InsufficientInvestment);
     }
-    let surplus = investment - formation.threshold;
     let bond_strength = bond_strength(*a, *b);
     if !bond_strength.is_finite() {
         return Err(StructuralCombineError::NonFiniteBondStrength);
