@@ -105,19 +105,18 @@ pub(crate) struct ActiveTransformation {
     pub(crate) decision_context_key: Option<String>,
 }
 
-/// Persistent parental state for a reproduction that has been selected but
-/// whose offspring has not yet been born.
+/// Persistent physical state for reproduction after the parent commits actual
+/// unbonded material to an offspring that is still under construction.
 ///
-/// The parent retains its own physical structure. Committed material is
-/// removed from ordinary parent use and is consumed progressively as the
-/// developing offspring is constructed. The developing structure remains
-/// attached to this state until juvenile birth.
+/// The parent retains its own structure. The committed material is the only
+/// reproductive investment represented here; it is not a separate currency.
+/// The developing structure is populated progressively by the construction
+/// lifecycle and remains private to the parent until birth.
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct ReproductiveConstruction {
     pub(crate) committed_material: Material,
     pub(crate) developing_structure: OrganismStructure,
     pub(crate) child_genome: Genome,
-    pub(crate) child_energy: f64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Default)]
