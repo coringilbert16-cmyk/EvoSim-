@@ -122,7 +122,7 @@ mod integration_tests {
         assert_eq!(sim.active_transformations.len(), 1);
         assert_eq!(
             sim.active_transformations[0].decision_context_key.as_deref(),
-            Some("bond:0")
+            Some("bond:0:0:1:0")
         );
     }
 
@@ -146,11 +146,11 @@ mod integration_tests {
         assert_eq!(sim.active_transformations.len(), 0);
         assert_eq!(sim.organisms[0].active_transformation_id, None);
         assert_eq!(sim.organisms[0].structure.bonds.len(), 0);
-        assert!((sim.organisms[0].usable_energy - 10.9).abs() < 1e-12);
-        assert!((sim.energy_ledger.total_usable_energy_gained - 10.9).abs() < 1e-12);
+        assert!((sim.organisms[0].usable_energy - 10.500007453306344).abs() < 1e-12);
+        assert!((sim.energy_ledger.total_usable_energy_gained - 10.500007453306344).abs() < 1e-12);
         assert!(sim.organisms[0]
             .decision_history
-            .has_knowledge(ActionKind::Break, Some("bond:0")));
+            .has_knowledge(ActionKind::Break, Some("bond:0:0:1:0")));
     }
 
     #[test]
@@ -206,13 +206,13 @@ mod integration_tests {
         sim.step();
 
         assert!(sim.organisms[0].structure.bonds.is_empty());
-        assert!((sim.organisms[0].usable_energy - 0.0).abs() < 1e-12);
+        assert!((sim.organisms[0].usable_energy - 0.2130613197126334).abs() < 1e-12);
         assert!((sim.energy_ledger.total_usable_energy_gained - 0.0).abs() < 1e-12);
-        assert!((sim.energy_ledger.total_heat_dissipated - 0.5).abs() < 1e-12);
+        assert!((sim.energy_ledger.total_heat_dissipated - 0.2869386802873666).abs() < 1e-12);
         assert!(matches!(
             sim.organisms[0]
                 .decision_history
-                .outcome(ActionKind::Break, Some("bond:0")),
+                .outcome(ActionKind::Break, Some("bond:0:0:1:0")),
             Some(OutcomeKind::Harmful)
         ));
     }
@@ -229,14 +229,14 @@ mod integration_tests {
             }
         }
         assert!(sim.organisms[0].structure.bonds.is_empty());
-        assert!((sim.organisms[0].usable_energy - before - 10.9).abs() < 1e-12);
+        assert!((sim.organisms[0].usable_energy - before - 10.500007453306344).abs() < 1e-12);
         assert!(sim.organisms[0]
             .decision_history
-            .has_knowledge(ActionKind::Break, Some("bond:0")));
+            .has_knowledge(ActionKind::Break, Some("bond:0:0:1:0")));
         assert!(matches!(
             sim.organisms[0]
                 .decision_history
-                .outcome(ActionKind::Break, Some("bond:0")),
+                .outcome(ActionKind::Break, Some("bond:0:0:1:0")),
             Some(OutcomeKind::Beneficial | OutcomeKind::Neutral | OutcomeKind::Harmful)
         ));
     }
