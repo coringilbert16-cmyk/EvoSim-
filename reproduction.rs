@@ -11,13 +11,11 @@ use rand_chacha::ChaCha8Rng;
 use crate::combine_runtime::try_combine;
 use crate::contact::ConnectionCompatibilityCache;
 use crate::decision::DecisionHistory;
-use crate::genome::Genome;
 use crate::resources::{BaseResource, Material};
 use crate::state::{DevelopmentStage, Environment, Organism, Position, ResourceSense};
 use crate::structure::{Placement, StructuralUnit};
 
 const EPSILON: f64 = 1e-12;
-const MIN_BUD_MATERIAL_UNITS: usize = 2;
 const READINESS_THRESHOLD: f64 = 1.0;
 
 fn take_named_unit(material: &mut Material, name: &str) -> Option<Material> {
@@ -31,7 +29,7 @@ fn take_named_unit(material: &mut Material, name: &str) -> Option<Material> {
 }
 
 fn choose_bud_material(parent: &mut Material, catalog: &[BaseResource]) -> Option<[Material; 2]> {
-    if parent.bonded || parent.total_amount() + EPSILON < MIN_BUD_MATERIAL_UNITS as f64 {
+    if parent.bonded || parent.total_amount() + EPSILON < 2.0 {
         return None;
     }
 
@@ -44,118 +42,26 @@ fn choose_bud_material(parent: &mut Material, catalog: &[BaseResource]) -> Optio
         .parts
         .iter()
         .find(|(name, amount)| {
-            *amount >= 1.0 - EPSILON && *name != first_name && catalog.iter().any(|r| r.name == *name)
+            *amount >= 1.0 - EPSILON
+                && *name != first_name
+                && catalog.iter().any(|r| r.name == *name)
         })
         .map(|(name, _)| name.clone())?;
 
-    let first = take_named_unit(parent, &first_name)?;
-    let second = take_named_unit(parent, &second_name)?;
-    Some([first, second])
+    Some([
+        take_named_unit(parent, &first_name)?,
+        take_named_unit(parent, &second_name)?,
+    ])
 }
 
-fn make_bud(
-    parent: &Organism,
-    materials: [Material; 2],
-    child_id: String,
-    catalog: &[BaseResource],
-    rng: &mut ChaCha8Rng,
-) -> Option<(Organism, f64)> {
-    let origin = parent
-        .occupied_cells
-        .first()
-        .map(|p| Position {
-            x: p.x + 2.0,
-            y: p.y,
-        })
-        .unwrap_or(Position { x: 2.0, y: 0.0 });
-
-    let mut child = Organism {
-        id: child_id,
-        occupied_cells: vec![origin.clone()],
-        genome: parent.genome.clone(),
-        resource_sense: ResourceSense {
-            sensed_resources: Vec::new(),
-            direction_x: 0.0,
-            direction_y: 0.0,
-            direction_strength: 0.0,
-        },
-        memory: Vec::new(),
-        decision_history: DecisionHistory::default(),
-        usable_energy: 0.0,
-        stress: 0.0,
-        stored_unbonded: Material {
-            parts: Vec::new(),
-            bonded: false,
-        },
-        structure: crate::structure::OrganismStructure::new(),
-        development_stage: DevelopmentStage::Juvenile,
-        age: 0,
-        reproductive_readiness: 0.0,
-        active_transformation_id: None,
-    };
-
-    let names = [materials[0].parts[0].0.clone(), materials[1].parts[0].0.clone()];
-    let radii: [f64; 2] = names.map(|name| {
-        catalog
-            .iter()
-            .find(|resource| resource.name == name)
-            .map(|resource| resource.shape.form.bounding_radius())
-            .unwrap_or(0.0)
-    });
-    if radii.iter().any(|radius| !radius.is_finite() || *radius <= 0.0) {
-        return None;
-    }
-
-    child.stored_unbonded = Material {
-        parts: materials
-            .iter()
-            .flat_map(|material| material.parts.iter().cloned())
-            .collect(),
-        bonded: false,
-    };
-
-    let first = crate::combine_runtime::instantiate_one_unit(&mut child, catalog)?;
-    let second = crate::combine_runtime::instantiate_one_unit(&mut child, catalog)?;
-    child.structure.units[first].placement = Placement {
-        x: origin.x,
-        y: origin.y,
-        rotation_radians: 0.0,
-    };
-    child.structure.units[second].placement = Placement {
-        x: origin.x + radii[0] + radii[1],
-        y: origin.y,
-        rotation_radians: 0.0,
-    };
-
-    let mut cache = ConnectionCompatibilityCache::new();
-    let required_energy = parent.usable_energy * parent.genome.reproductive_investment();
-    if !required_energy.is_finite() || required_energy <= EPSILON {
-        return None;
-    }
-    child.usable_energy = required_energy;
-
-    try_combine(&mut child, &Environment {
-        width: 0.0,
-        height: 0.0,
-        catalog: catalog.to_vec(),
-        field: panic_field_placeholder(),
-        reservoir: panic_reservoir_placeholder(),
-        vents: Vec::new(),
-    }, &mut cache)?;
-
-    child.genome.mutate(rng);
-    let energy_transferred = required_energy;
-    Some((child, energy_transferred))
-}
-
-// These constructors are intentionally unreachable: `try_form_bud` supplies
-// the real environment. They keep `make_bud` focused on child construction
-// without introducing a second COMBINE implementation.
-fn panic_field_placeholder() -> crate::environment::ActiveMaterialField {
-    panic!("internal reproduction placeholder must not be called")
-}
-fn panic_reservoir_placeholder() -> crate::environment::DeepReservoir {
-    panic!("internal reproduction placeholder must not be called")
+fn bounding_radius(name: &str, catalog: &[BaseResource]) -> Option<f64> {
+    let radius = catalog
+        .iter()
+        .find(|resource| resource.name == name)?
+        .shape
+        .form
+        .bounding_radius();
+    radius.is_finite().then_some(radius).filter(|r| *r > 0.0)
 }
 
 /// Attempt one physical reproductive bud from a parent that has been selected
@@ -187,7 +93,10 @@ pub(crate) fn try_form_bud(
     let original_material = parent.stored_unbonded.clone();
     let original_energy = parent.usable_energy;
     let original_readiness = parent.reproductive_readiness;
-    let materials = choose_bud_material(&mut parent.stored_unbonded, &environment.catalog)?;
+    let materials = match choose_bud_material(&mut parent.stored_unbonded, &environment.catalog) {
+        Some(materials) => materials,
+        None => return None,
+    };
 
     let origin = parent
         .occupied_cells
@@ -195,18 +104,10 @@ pub(crate) fn try_form_bud(
         .cloned()
         .unwrap_or(Position { x: 0.0, y: 0.0 });
     let names = [materials[0].parts[0].0.clone(), materials[1].parts[0].0.clone()];
-    let radii: [f64; 2] = names.map(|name| {
-        environment
-            .catalog
-            .iter()
-            .find(|resource| resource.name == name)
-            .map(|resource| resource.shape.form.bounding_radius())
-            .unwrap_or(0.0)
-    });
-    if radii.iter().any(|radius| !radius.is_finite() || *radius <= 0.0) {
-        parent.stored_unbonded = original_material;
-        return None;
-    }
+    let radii = [
+        bounding_radius(&names[0], &environment.catalog)?,
+        bounding_radius(&names[1], &environment.catalog)?,
+    ];
 
     let mut child = Organism {
         id: child_id,
@@ -338,7 +239,7 @@ mod tests {
     }
 
     #[test]
-    fn ready_parent_forms_bud_from_real_material_and_mutates_inherited_genome() {
+    fn ready_parent_forms_bud_from_real_material_and_inherits_genome() {
         let environment = Environment {
             width: 1000.0,
             height: 1000.0,
@@ -348,16 +249,17 @@ mod tests {
             vents: Vec::new(),
         };
         let mut parent = parent();
-        let original_genome = parent.genome.clone();
+        let original_trait_count = parent.genome.traits.len();
         let mut rng = ChaCha8Rng::seed_from_u64(7);
         let child = try_form_bud(&mut parent, &environment, "2".into(), &mut rng)
             .expect("ready parent with viable material should form a bud");
 
-        assert_eq!(child.development_stage, DevelopmentStage::Juvenile);
+        assert!(matches!(child.development_stage, DevelopmentStage::Juvenile));
         assert_eq!(child.structure.units.len(), 2);
         assert_eq!(child.structure.bonds.len(), 1);
-        assert_eq!(child.genome.traits.len(), original_genome.traits.len());
+        assert_eq!(child.genome.traits.len(), original_trait_count);
         assert_eq!(parent.stored_unbonded.total_amount(), 0.0);
         assert_eq!(parent.reproductive_readiness, 0.0);
+        assert!(parent.usable_energy < 100.0);
     }
 }
