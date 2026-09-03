@@ -206,7 +206,11 @@ mod integration_tests {
         sim.step();
         sim.step();
         assert!(sim.organisms[0].structure.bonds.is_empty());
-        assert!((sim.organisms[0].usable_energy - 0.2130613197126334).abs() < 1e-12);
+        let actual_usable_energy = sim.organisms[0].usable_energy;
+        assert!(
+            (actual_usable_energy - 0.2130613197126334).abs() < 1e-12,
+            "actual usable energy after BREAK resolution: {actual_usable_energy:.17}"
+        );
         assert!((sim.energy_ledger.total_usable_energy_gained - 0.0).abs() < 1e-12);
         assert!((sim.energy_ledger.total_heat_dissipated - 0.2869386802873666).abs() < 1e-12);
         assert!(matches!(
