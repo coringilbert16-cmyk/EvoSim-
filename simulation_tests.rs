@@ -148,6 +148,10 @@ mod integration_tests {
         assert_eq!(sim.organisms[0].structure.bonds.len(), 0);
         assert!((sim.organisms[0].usable_energy - 10.9).abs() < 1e-12);
         assert!((sim.energy_ledger.total_usable_energy_gained - 10.9).abs() < 1e-12);
+        assert!((sim.energy_ledger.total_bond_energy_released - 12.5).abs() < 1e-12);
+        assert!((sim.energy_ledger.total_work_consumed - 1.6).abs() < 1e-12);
+        assert!((sim.energy_ledger.total_potential_energy_released).abs() < 1e-12);
+        assert!((sim.energy_ledger.total_heat_dissipated).abs() < 1e-12);
         assert!(sim.organisms[0]
             .decision_history
             .has_knowledge(ActionKind::Break, Some("bond:0")));
@@ -208,6 +212,9 @@ mod integration_tests {
         assert!(sim.organisms[0].structure.bonds.is_empty());
         assert!((sim.organisms[0].usable_energy - 0.0).abs() < 1e-12);
         assert!((sim.energy_ledger.total_usable_energy_gained - 0.0).abs() < 1e-12);
+        assert!((sim.energy_ledger.total_bond_energy_released - 0.5).abs() < 1e-12);
+        assert!((sim.energy_ledger.total_work_consumed - 1.0).abs() < 1e-12);
+        assert!((sim.energy_ledger.total_potential_energy_released).abs() < 1e-12);
         assert!((sim.energy_ledger.total_heat_dissipated - 0.5).abs() < 1e-12);
         assert!(matches!(
             sim.organisms[0]
