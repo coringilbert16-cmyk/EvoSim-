@@ -34,6 +34,10 @@ impl Simulation {
                 parts: Vec::new(),
                 bonded: true,
             },
+            // The complete bond is a snapshot of the interaction at decision
+            // time. It is authoritative for BREAK's delayed energy/work
+            // calculation; structural identity is used only to locate the
+            // bond that must be removed at resolution.
             bond: Some(bond),
             complexity,
             duration_ticks: duration,
@@ -90,7 +94,7 @@ impl Simulation {
         // PRIMARY STRATEGY: Use structural identity matching only.
         // The organism is locked during transformation, so the bond structure cannot change.
         // This is the only correct strategy and should always succeed after validation.
-        let Some(removed_bond) = organism.structure.break_matching_bond(target_bond) else {
+        let Some(_removed_bond) = organism.structure.break_matching_bond(target_bond) else {
             eprintln!(
                 "CRITICAL: BREAK resolution failed for organism {}: \
                  bond removal returned None after validation passed. \
@@ -101,12 +105,13 @@ impl Simulation {
             return;
         };
 
-        // BREAK is state-dependent. The bond carries stored interaction energy,
-        // while its current structural strength determines how much work is
-        // required to sever it. The net result may therefore release usable
-        // energy or consume it. No mutable material-energy field is involved.
-        let break_work = break_work_cost(&removed_bond, transformation.complexity);
-        let net_energy = removed_bond.bond_energy - break_work;
+        // BREAK uses the interaction snapshot captured when the transformation
+        // began. The structure is locked for the normal simulation lifecycle,
+        // but keeping the calculation snapshot-based also prevents a later
+        // change to derived/current interaction values from silently changing
+        // the meaning of an already-selected action.
+        let break_work = break_work_cost(&target_bond, transformation.complexity);
+        let net_energy = target_bond.bond_energy - break_work;
         if net_energy >= 0.0 {
             organism.usable_energy += net_energy;
             ledger.total_potential_energy_released += net_energy;
