@@ -56,22 +56,46 @@ impl Simulation {
             return;
         };
 
+        // VALIDATION: Verify bond endpoints still exist and are valid
+        if target_bond.unit_a >= organism.structure.units.len()
+            || target_bond.unit_b >= organism.structure.units.len()
+        {
+            eprintln!(
+                "BREAK resolution failed for organism {}: \
+                 bond endpoints reference invalid units (unit_a={}, unit_b={}, total units={})",
+                organism.id, target_bond.unit_a, target_bond.unit_b, organism.structure.units.len()
+            );
+            organism.active_transformation_id = None;
+            return;
+        }
+
+        // VALIDATION: Verify the bond actually exists in the structure before attempting removal
+        if !organism
+            .structure
+            .bonds
+            .iter()
+            .any(|b| b.has_same_identity(&target_bond))
+        {
+            eprintln!(
+                "BREAK resolution failed for organism {}: \
+                 bond not found in structure. Expected bond with identity: \
+                 unit_a={}, point_a={}, unit_b={}, point_b={}. \
+                 This indicates a locking violation or structural corruption.",
+                organism.id, target_bond.unit_a, target_bond.point_a, target_bond.unit_b, target_bond.point_b
+            );
+            organism.active_transformation_id = None;
+            return;
+        }
+
         // PRIMARY STRATEGY: Use structural identity matching only.
         // The organism is locked during transformation, so the bond structure cannot change.
-        // This is the only correct strategy and should always succeed.
+        // This is the only correct strategy and should always succeed after validation.
         let Some(removed_bond) = organism.structure.break_matching_bond(target_bond) else {
-            // If we get here, something went wrong during the transformation.
-            // The bond should ALWAYS exist because structure is locked and we validated
-            // it at the start of the transformation.
             eprintln!(
                 "CRITICAL: BREAK resolution failed for organism {}: \
-                 bond with identity unit_a={}, point_a={}, unit_b={}, point_b={} not found. \
-                 This indicates a locking violation or structural corruption.",
-                organism.id,
-                target_bond.unit_a,
-                target_bond.point_a,
-                target_bond.unit_b,
-                target_bond.point_b
+                 bond removal returned None after validation passed. \
+                 This indicates an internal consistency error in break_matching_bond().",
+                organism.id
             );
             organism.active_transformation_id = None;
             return;
