@@ -37,9 +37,6 @@ impl Simulation {
                 parts: Vec::new(),
                 bonded: true,
             },
-            // The complete bond is a snapshot of the interaction at decision
-            // time. Structural identity is used only to locate the bond that
-            // must be removed at resolution.
             bond: Some(bond),
             complexity,
             duration_ticks: duration,
@@ -54,7 +51,7 @@ impl Simulation {
     pub(crate) fn resolve_transformation(
         transformation: &ActiveTransformation,
         organism: &mut Organism,
-        _environment: &mut Environment,
+        environment: &mut Environment,
         ledger: &mut EnergyLedger,
     ) {
         let Some(target_bond) = transformation.bond else {
@@ -91,6 +88,30 @@ This indicates a locking violation or structural corruption.",
             return;
         }
 
+        let props_a = match organism.structure.units[target_bond.unit_a].properties(&environment.catalog) {
+            Some(properties) => *properties,
+            None => {
+                eprintln!(
+                    "CRITICAL: BREAK resolution failed for organism {}: unit_a has no resource properties.",
+                    organism.id
+                );
+                organism.active_transformation_id = None;
+                return;
+            }
+        };
+        let props_b = match organism.structure.units[target_bond.unit_b].properties(&environment.catalog) {
+            Some(properties) => *properties,
+            None => {
+                eprintln!(
+                    "CRITICAL: BREAK resolution failed for organism {}: unit_b has no resource properties.",
+                    organism.id
+                );
+                organism.active_transformation_id = None;
+                return;
+            }
+        };
+        let break_work = break_work_cost(props_a, props_b, transformation.complexity);
+
         let Some(_removed_bond) = organism.structure.break_matching_bond(target_bond) else {
             eprintln!(
                 "CRITICAL: BREAK resolution failed for organism {}: \
@@ -102,25 +123,6 @@ This indicates an internal consistency error in break_matching_bond().",
             return;
         };
 
-        let break_work = {
-            let props_a = organism.structure.units[target_bond.unit_a]
-                .properties(&crate::resources::default_catalog())
-                .copied();
-            let props_b = organism.structure.units[target_bond.unit_b]
-                .properties(&crate::resources::default_catalog())
-                .copied();
-            match (props_a, props_b) {
-                (Some(a), Some(b)) => break_work_cost(a, b, transformation.complexity),
-                _ => {
-                    eprintln!(
-                        "CRITICAL: BREAK resolution failed for organism {}: bond endpoints have no resource properties.",
-                        organism.id
-                    );
-                    organism.active_transformation_id = None;
-                    return;
-                }
-            }
-        };
         let net_energy = target_bond.bond_energy - break_work;
         if net_energy >= 0.0 {
             organism.usable_energy += net_energy;
