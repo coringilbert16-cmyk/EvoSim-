@@ -15,6 +15,7 @@ use crate::structure::{Placement, StructuralUnit};
 
 const MATERIAL_UNIT_AMOUNT: f64 = 1.0;
 const EPSILON: f64 = 1e-12;
+const COMBINE_CONTACT_TOLERANCE: f64 = 1.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct CombineAttempt {
@@ -86,6 +87,7 @@ pub(crate) fn try_combine(
                 compatibility_cache,
             )
             .into_iter()
+            .filter(|candidate| candidate.distance <= COMBINE_CONTACT_TOLERANCE)
             .filter_map(|candidate| {
                 let a = organism.structure.units[unit_a].properties(catalog)?;
                 let b = organism.structure.units[unit_b].properties(catalog)?;
