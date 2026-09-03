@@ -1,7 +1,8 @@
 name: Format workspace once
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
 
 permissions:
   contents: write
