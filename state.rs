@@ -8,6 +8,7 @@ use crate::decision::{DecisionHistory, DecisionParameters};
 use crate::environment::{ActiveMaterialField, DeepReservoir, Vent};
 use crate::genome::Genome;
 use crate::resources::{BaseResource, Material};
+use crate::structure::OrganismStructure;
 use crate::structure::Bond;
 
 #[derive(Clone)]
@@ -105,6 +106,21 @@ pub(crate) struct ActiveTransformation {
     pub(crate) decision_context_key: Option<String>,
 }
 
+/// Persistent parental state for a reproduction that has been selected but
+/// whose offspring has not yet been born.
+///
+/// The parent retains its own physical structure. Committed material is
+/// removed from ordinary parent use and is consumed progressively as the
+/// developing offspring is constructed. The developing structure remains
+/// attached to this state until juvenile birth.
+#[derive(Serialize, Deserialize, Clone)]
+pub(crate) struct ReproductiveConstruction {
+    pub(crate) committed_material: Material,
+    pub(crate) developing_structure: OrganismStructure,
+    pub(crate) child_genome: Genome,
+    pub(crate) child_energy: f64,
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, Default)]
 pub(crate) struct EnergyLedger {
     pub(crate) total_potential_energy_released: f64,
@@ -124,13 +140,17 @@ pub(crate) struct Organism {
     pub(crate) usable_energy: f64,
     pub(crate) stress: f64,
     pub(crate) stored_unbonded: Material,
-    pub(crate) structure: crate::structure::OrganismStructure,
+    pub(crate) structure: OrganismStructure,
     pub(crate) development_stage: DevelopmentStage,
     pub(crate) age: u64,
     /// Accumulated reproductive pressure. It grows only from mature, energy-ready state.
     #[serde(default)]
     pub(crate) reproductive_readiness: f64,
     pub(crate) active_transformation_id: Option<u64>,
+    /// Ongoing reproduction, if the parent has committed material to a child
+    /// that is still under construction.
+    #[serde(default)]
+    pub(crate) reproductive_construction: Option<ReproductiveConstruction>,
 }
 
 impl Organism {
