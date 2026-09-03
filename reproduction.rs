@@ -16,30 +16,17 @@ use crate::structure::OrganismStructure;
 
 const CORE_UNIT_COUNT: usize = 6;
 
-/// Derive an organism's spatial anchor from its actual structural geometry.
 fn structural_anchor_position(structure: &OrganismStructure) -> Option<(f64, f64)> {
     if structure.units.is_empty() {
         return None;
     }
 
     let count = structure.units.len() as f64;
-    let x = structure
-        .units
-        .iter()
-        .map(|unit| unit.placement.x)
-        .sum::<f64>()
-        / count;
-    let y = structure
-        .units
-        .iter()
-        .map(|unit| unit.placement.y)
-        .sum::<f64>()
-        / count;
-
+    let x = structure.units.iter().map(|unit| unit.placement.x).sum::<f64>() / count;
+    let y = structure.units.iter().map(|unit| unit.placement.y).sum::<f64>() / count;
     (x.is_finite() && y.is_finite()).then_some((x, y))
 }
 
-/// Return a parent/offspring structural split without mutating the source.
 fn split_structure(
     structure: &OrganismStructure,
     selected_units: &[usize],
@@ -124,10 +111,6 @@ fn split_structure(
     Some((parent, offspring))
 }
 
-/// Sum the stored energy of bonds that must be severed to separate the bud.
-///
-/// A crossing bond does not survive in either resulting structure, so its
-/// stored bond energy is released rather than silently destroyed.
 fn crossing_bond_energy(structure: &OrganismStructure, selected_units: &[usize]) -> f64 {
     let selected: HashSet<usize> = selected_units.iter().copied().collect();
     structure
@@ -150,9 +133,9 @@ fn is_intact_core(structure: &OrganismStructure, units: &[usize]) -> bool {
         .unwrap_or(false)
 }
 
-/// Find connected six-unit subsets that satisfy the actual core-integrity
-/// invariant. This deliberately does not use juvenile mass: juvenile mass is
-/// the offspring's later developmental threshold, not the birth requirement.
+/// Find connected six-unit subsets satisfying the existing core-integrity
+/// invariant. Juvenile mass is intentionally not involved: it is reached by
+/// the offspring after birth through ordinary development.
 fn core_candidates(structure: &OrganismStructure) -> Vec<Vec<usize>> {
     if structure.units.len() < CORE_UNIT_COUNT {
         return Vec::new();
@@ -256,34 +239,26 @@ fn core_candidates(structure: &OrganismStructure) -> Vec<Vec<usize>> {
     candidates.into_iter().collect()
 }
 
-/// Select a six-unit intact core for the offspring while preserving an intact
-/// six-unit core in the parent. The offspring may be below juvenile mass at
-/// birth and must grow after this transfer.
-fn select_bud_units(
-    parent: &Organism,
-    rng: &mut ChaCha8Rng,
-) -> Option<Vec<usize>> {
+fn select_bud_units(parent: &Organism, rng: &mut ChaCha8Rng) -> Option<Vec<usize>> {
     let cores = core_candidates(&parent.structure);
     if cores.len() < 2 {
         return None;
     }
 
-    let mut candidates = Vec::new();
-    for offspring_core in &cores {
-        let offspring_set: HashSet<usize> = offspring_core.iter().copied().collect();
-        if cores.iter().any(|parent_core| {
-            parent_core
-                .iter()
-                .all(|unit| !offspring_set.contains(unit))
-        }) {
-            candidates.push(offspring_core.clone());
-        }
-    }
+    let candidates: Vec<Vec<usize>> = cores
+        .iter()
+        .filter(|offspring_core| {
+            let offspring_set: HashSet<usize> = offspring_core.iter().copied().collect();
+            cores.iter().any(|parent_core| {
+                parent_core.iter().all(|unit| !offspring_set.contains(unit))
+            })
+        })
+        .cloned()
+        .collect();
 
     if candidates.is_empty() {
         return None;
     }
-
     Some(candidates[rng.gen_range(0..candidates.len())].clone())
 }
 
@@ -302,10 +277,6 @@ fn remapped_indices_after_split(
         .collect()
 }
 
-/// Form an Offspring by transferring real parent core structure and a fraction
-/// of the parent's usable energy. The parent is mutated only after the
-/// complete split has been validated, so failed reproduction leaves it
-/// unchanged.
 pub(crate) fn try_form_bud(
     parent: &mut Organism,
     environment: &Environment,
@@ -325,10 +296,11 @@ pub(crate) fn try_form_bud(
     }
 
     let selected_units = select_bud_units(parent, rng)?;
-    let preserved_core = parent_cores.iter().find(|core| {
-        let selected: HashSet<usize> = selected_units.iter().copied().collect();
-        core.iter().all(|unit| !selected.contains(unit))
-    })?.clone();
+    let selected_set: HashSet<usize> = selected_units.iter().copied().collect();
+    let preserved_core = parent_cores
+        .iter()
+        .find(|core| core.iter().all(|unit| !selected_set.contains(unit)))?
+        .clone();
 
     let (remaining_structure, offspring_structure) =
         split_structure(&parent.structure, &selected_units)?;
@@ -344,7 +316,6 @@ pub(crate) fn try_form_bud(
 
     let anchor = structural_anchor_position(&offspring_structure)?;
     let released_bond_energy = crossing_bond_energy(&parent.structure, &selected_units);
-
     let investment = parent.genome.reproductive_investment();
     let available_energy = parent.usable_energy + released_bond_energy;
     let transferred_energy = (available_energy * investment).clamp(0.0, available_energy);
@@ -394,37 +365,12 @@ mod tests {
         for x in 0..4 {
             structure.add_unit(StructuralUnit::new(
                 "Carbon",
-                Placement {
-                    x: x as f64,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                },
+                Placement { x: x as f64, y: 0.0, rotation_radians: 0.0 },
             ));
         }
-        structure.add_bond(Bond {
-            unit_a: 0,
-            point_a: 0,
-            unit_b: 1,
-            point_b: 0,
-            strength: 0.5,
-            bond_energy: 1.0,
-        });
-        structure.add_bond(Bond {
-            unit_a: 1,
-            point_a: 1,
-            unit_b: 2,
-            point_b: 0,
-            strength: 0.5,
-            bond_energy: 1.0,
-        });
-        structure.add_bond(Bond {
-            unit_a: 2,
-            point_a: 1,
-            unit_b: 3,
-            point_b: 0,
-            strength: 0.5,
-            bond_energy: 1.0,
-        });
+        structure.add_bond(Bond { unit_a: 0, point_a: 0, unit_b: 1, point_b: 0, strength: 0.5, bond_energy: 1.0 });
+        structure.add_bond(Bond { unit_a: 1, point_a: 1, unit_b: 2, point_b: 0, strength: 0.5, bond_energy: 1.0 });
+        structure.add_bond(Bond { unit_a: 2, point_a: 1, unit_b: 3, point_b: 0, strength: 0.5, bond_energy: 1.0 });
         structure
     }
 
@@ -435,8 +381,7 @@ mod tests {
             catalog: default_catalog(),
             field: crate::environment::ActiveMaterialField::new(100.0, 100.0, 10.0),
             reservoir: crate::environment::DeepReservoir::new_matching_field(
-                &crate::environment::ActiveMaterialField::new(100.0, 100.0, 10.0),
-                10,
+                &crate::environment::ActiveMaterialField::new(100.0, 100.0, 10.0), 10,
             ),
             vents: Vec::new(),
         }
@@ -448,11 +393,7 @@ mod tests {
             for x in 0..6 {
                 structure.add_unit(StructuralUnit::new(
                     "Carbon",
-                    Placement {
-                        x: x as f64,
-                        y,
-                        rotation_radians: 0.0,
-                    },
+                    Placement { x: x as f64, y, rotation_radians: 0.0 },
                 ));
             }
         }
@@ -468,14 +409,7 @@ mod tests {
                 });
             }
         }
-        structure.add_bond(Bond {
-            unit_a: 0,
-            point_a: 2,
-            unit_b: 6,
-            point_b: 2,
-            strength: 0.5,
-            bond_energy: 1.0,
-        });
+        structure.add_bond(Bond { unit_a: 0, point_a: 2, unit_b: 6, point_b: 2, strength: 0.5, bond_energy: 1.0 });
         structure
     }
 
@@ -489,16 +423,12 @@ mod tests {
                 direction_x: 0.0,
                 direction_y: 0.0,
                 direction_strength: 0.0,
-                sensed_resources: Vec::new(),
             },
             memory: Vec::new(),
             decision_history: crate::decision::DecisionHistory::default(),
             usable_energy: 10.0,
             stress: 0.0,
-            stored_unbonded: crate::resources::Material {
-                parts: Vec::new(),
-                bonded: false,
-            },
+            stored_unbonded: crate::resources::Material { parts: Vec::new(), bonded: false },
             structure: core_structure(),
             development_stage: DevelopmentStage::Adult,
             age: 10,
@@ -523,10 +453,7 @@ mod tests {
 
     #[test]
     fn empty_structure_has_no_anchor() {
-        assert_eq!(
-            structural_anchor_position(&OrganismStructure::new()),
-            None
-        );
+        assert_eq!(structural_anchor_position(&OrganismStructure::new()), None);
     }
 
     #[test]
@@ -546,33 +473,17 @@ mod tests {
         let mut parent = adult_parent();
         let original_mass = parent.structural_mass(&environment.catalog);
         let original_usable_energy = parent.usable_energy;
-        let original_bond_energy: f64 = parent
-            .structure
-            .bonds
-            .iter()
-            .map(|bond| bond.bond_energy)
-            .sum();
+        let original_bond_energy: f64 = parent.structure.bonds.iter().map(|bond| bond.bond_energy).sum();
         let mut rng = ChaCha8Rng::seed_from_u64(11);
 
         let child = try_form_bud(&mut parent, &environment, "child".into(), &mut rng)
             .expect("adult parent should form a bud");
 
-        let combined_mass = parent.structural_mass(&environment.catalog)
-            + child.structural_mass(&environment.catalog);
+        let combined_mass = parent.structural_mass(&environment.catalog) + child.structural_mass(&environment.catalog);
         let combined_energy = parent.usable_energy
             + child.usable_energy
-            + parent
-                .structure
-                .bonds
-                .iter()
-                .map(|bond| bond.bond_energy)
-                .sum::<f64>()
-            + child
-                .structure
-                .bonds
-                .iter()
-                .map(|bond| bond.bond_energy)
-                .sum::<f64>();
+            + parent.structure.bonds.iter().map(|bond| bond.bond_energy).sum::<f64>()
+            + child.structure.bonds.iter().map(|bond| bond.bond_energy).sum::<f64>();
         assert!((combined_mass - original_mass).abs() <= f64::EPSILON);
         assert!((combined_energy - (original_usable_energy + original_bond_energy)).abs() <= f64::EPSILON);
         assert!(matches!(child.development_stage, DevelopmentStage::Offspring));
@@ -592,20 +503,8 @@ mod tests {
         assert_eq!(
             child.occupied_cells[0],
             Position {
-                x: child
-                    .structure
-                    .units
-                    .iter()
-                    .map(|unit| unit.placement.x)
-                    .sum::<f64>()
-                    / child.structure.units.len() as f64,
-                y: child
-                    .structure
-                    .units
-                    .iter()
-                    .map(|unit| unit.placement.y)
-                    .sum::<f64>()
-                    / child.structure.units.len() as f64,
+                x: child.structure.units.iter().map(|unit| unit.placement.x).sum::<f64>() / child.structure.units.len() as f64,
+                y: child.structure.units.iter().map(|unit| unit.placement.y).sum::<f64>() / child.structure.units.len() as f64,
             }
         );
     }
