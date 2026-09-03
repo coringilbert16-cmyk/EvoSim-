@@ -5,7 +5,7 @@
 //! their authoritative modules.
 
 use crate::combine::{
-    eligible_candidates, evaluate_formation, experimental_combine_work_cost,
+    bond_strength, eligible_candidates, evaluate_formation, experimental_combine_work_cost,
     experimental_interaction,
 };
 use crate::contact::ConnectionCompatibilityCache;
@@ -135,9 +135,8 @@ pub(crate) fn try_combine(
         return None;
     }
 
-    // The actual investment is the energy paid for the interaction. Bond
-    // strength is determined only by the surplus of that investment over the
-    // formation threshold. Do not derive surplus from interaction magnitude.
+    // Investment still controls whether formation succeeds. Surplus becomes
+    // stored bond energy; it does not determine intrinsic bond strength.
     let energy_paid = work_cost.max(evaluation.threshold);
     let surplus = energy_paid - evaluation.threshold;
     if !energy_paid.is_finite()
@@ -147,7 +146,7 @@ pub(crate) fn try_combine(
         return None;
     }
 
-    let bond_strength = crate::combine::experimental_bond_strength(surplus);
+    let bond_strength = bond_strength(props_a, props_b);
     let bond_energy = surplus;
     let bond = crate::structure::Bond {
         unit_a,
