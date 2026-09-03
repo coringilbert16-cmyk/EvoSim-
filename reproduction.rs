@@ -67,8 +67,12 @@ fn bounding_radius(name: &str, catalog: &[BaseResource]) -> Option<f64> {
 /// Attempt one physical reproductive bud from a parent that has been selected
 /// for COMBINE and has accumulated full reproductive readiness.
 ///
-/// The caller owns the final population insertion. On failure, the parent is
-/// left unchanged and no child genome mutation is performed.
+/// Bud material and the reproductive energy budget are committed as the
+/// attempt begins. A failed physical construction therefore represents real
+/// biological waste: consumed material and energy are not restored. Offspring
+/// viability is not decided by a fixed structural threshold here; the child
+/// carries the inherited, mutated genome into the ordinary juvenile lifecycle,
+/// where its genetically determined traits govern development and survival.
 pub(crate) fn try_form_bud(
     parent: &mut Organism,
     environment: &Environment,
@@ -90,13 +94,7 @@ pub(crate) fn try_form_bud(
         return None;
     }
 
-    let original_material = parent.stored_unbonded.clone();
-    let original_energy = parent.usable_energy;
-    let original_readiness = parent.reproductive_readiness;
-    let materials = match choose_bud_material(&mut parent.stored_unbonded, &environment.catalog) {
-        Some(materials) => materials,
-        None => return None,
-    };
+    let materials = choose_bud_material(&mut parent.stored_unbonded, &environment.catalog)?;
 
     let origin = parent
         .occupied_cells
@@ -108,6 +106,16 @@ pub(crate) fn try_form_bud(
         bounding_radius(&names[0], &environment.catalog)?,
         bounding_radius(&names[1], &environment.catalog)?,
     ];
+
+    let energy_budget = parent.usable_energy * parent.genome.reproductive_investment();
+    if !energy_budget.is_finite() || energy_budget <= EPSILON {
+        return None;
+    }
+
+    // Investment is spent at the start of the attempt. If construction fails,
+    // this energy is biological waste rather than recoverable reserve.
+    parent.usable_energy -= energy_budget;
+    parent.reproductive_readiness = 0.0;
 
     let mut child = Organism {
         id: child_id,
@@ -124,7 +132,7 @@ pub(crate) fn try_form_bud(
         },
         memory: Vec::new(),
         decision_history: DecisionHistory::default(),
-        usable_energy: 0.0,
+        usable_energy: energy_budget,
         stress: 0.0,
         stored_unbonded: Material {
             parts: materials
@@ -140,20 +148,8 @@ pub(crate) fn try_form_bud(
         active_transformation_id: None,
     };
 
-    let first = match crate::combine_runtime::instantiate_one_unit(&mut child, &environment.catalog) {
-        Some(index) => index,
-        None => {
-            parent.stored_unbonded = original_material;
-            return None;
-        }
-    };
-    let second = match crate::combine_runtime::instantiate_one_unit(&mut child, &environment.catalog) {
-        Some(index) => index,
-        None => {
-            parent.stored_unbonded = original_material;
-            return None;
-        }
-    };
+    let first = crate::combine_runtime::instantiate_one_unit(&mut child, &environment.catalog)?;
+    let second = crate::combine_runtime::instantiate_one_unit(&mut child, &environment.catalog)?;
     child.structure.units[first].placement = Placement {
         x: origin.x + 2.0,
         y: origin.y,
@@ -165,31 +161,11 @@ pub(crate) fn try_form_bud(
         rotation_radians: 0.0,
     };
 
-    let energy_budget = parent.usable_energy * parent.genome.reproductive_investment();
-    if !energy_budget.is_finite() || energy_budget <= EPSILON {
-        parent.stored_unbonded = original_material;
-        return None;
-    }
-    child.usable_energy = energy_budget;
-
     let mut cache = ConnectionCompatibilityCache::new();
     if try_combine(&mut child, environment, &mut cache).is_none() {
-        parent.stored_unbonded = original_material;
-        parent.usable_energy = original_energy;
-        parent.reproductive_readiness = original_readiness;
         return None;
     }
 
-    let energy_used = energy_budget - child.usable_energy;
-    if !energy_used.is_finite() || energy_used < 0.0 || original_energy + EPSILON < energy_used {
-        parent.stored_unbonded = original_material;
-        parent.usable_energy = original_energy;
-        parent.reproductive_readiness = original_readiness;
-        return None;
-    }
-
-    parent.usable_energy -= energy_used;
-    parent.reproductive_readiness = 0.0;
     child.genome.mutate(rng);
     Some(child)
 }
@@ -261,5 +237,26 @@ mod tests {
         assert_eq!(parent.stored_unbonded.total_amount(), 0.0);
         assert_eq!(parent.reproductive_readiness, 0.0);
         assert!(parent.usable_energy < 100.0);
+    }
+
+    #[test]
+    fn failed_bud_attempt_consumes_invested_material_and_energy() {
+        let mut environment = Environment {
+            width: 1000.0,
+            height: 1000.0,
+            catalog: crate::resources::default_catalog(),
+            field: crate::environment::ActiveMaterialField::new(1000.0, 1000.0, 10.0),
+            reservoir: crate::environment::DeepReservoir::new(1000.0, 1000.0, 100.0),
+            vents: Vec::new(),
+        };
+        environment.catalog.retain(|resource| resource.name == "Carbon");
+        let mut parent = parent();
+        let mut rng = ChaCha8Rng::seed_from_u64(7);
+        let original_energy = parent.usable_energy;
+
+        assert!(try_form_bud(&mut parent, &environment, "2".into(), &mut rng).is_none());
+        assert_eq!(parent.stored_unbonded.total_amount(), 0.0);
+        assert!(parent.usable_energy < original_energy);
+        assert_eq!(parent.reproductive_readiness, 0.0);
     }
 }
