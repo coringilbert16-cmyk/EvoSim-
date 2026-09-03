@@ -5,29 +5,17 @@
 //! material pool is used.
 
 use rand_chacha::ChaCha8Rng;
+use std::collections::{HashMap, HashSet};
 
-use crate::decision::DecisionHistory;
-use crate::resources::Material;
-use crate::state::{DevelopmentStage, Environment, Organism, Position, ResourceSense};
+use crate::state::{Environment, Organism};
 use crate::structure::OrganismStructure;
 
-const EPSILON: f64 = 1e-12;
-const READINESS_THRESHOLD: f64 = 1.0;
-
-fn structural_mass(organism: &Organism, environment: &Environment) -> f64 {
-    organism
-        .structure
-        .units
-        .iter()
-        .filter_map(|unit| unit.properties(&environment.catalog).map(|properties| properties.mass))
-        .sum()
-}
-
-/// Return a parent/offspring structural split without mutating the parent.
+/// Return a parent/offspring structural split without mutating the source.
 ///
-/// The selected unit indices form a connected component of the graph induced
-/// by the selected units. The caller can commit the split only after all
-/// validation succeeds, which keeps reproduction failure-atomic.
+/// The selected units must form a connected subgraph and at least one bond
+/// must cross the proposed cut. Every unit belongs to exactly one result, and
+/// only bonds internal to each result are retained. This is deliberately a
+/// pure structural primitive; reproduction policy is layered on top later.
 fn split_structure(
     structure: &OrganismStructure,
     selected_units: &[usize],
@@ -39,13 +27,17 @@ fn split_structure(
     let mut selected = selected_units.to_vec();
     selected.sort_unstable();
     selected.dedup();
-    if selected.len() != selected_units.len() || selected.iter().any(|&i| i >= structure.units.len()) {
+    if selected.len() != selected_units.len()
+        || selected.iter().any(|&index| index >= structure.units.len())
+    {
         return None;
     }
 
-    // A budding region must be one connected physical subgraph.
-    let selected_set: std::collections::HashSet<usize> = selected.iter().copied().collect();
-    let mut visited = std::collections::HashSet::new();
+    let selected_set: HashSet<usize> = selected.iter().copied().collect();
+
+    // The transferred region must be physically connected through existing
+    // bonds; we do not manufacture a connection merely to make a bud.
+    let mut visited = HashSet::new();
     let mut stack = vec![selected[0]];
     while let Some(unit) = stack.pop() {
         if !visited.insert(unit) {
@@ -68,31 +60,32 @@ fn split_structure(
         return None;
     }
 
-    // The selected region must actually bud away from the parent: at least one
-    // bond crosses the proposed cut. Internal bonds stay with their region.
-    let crosses_cut = structure.bonds.iter().any(|bond| {
+    // The cut must actually detach the selected region from the remainder.
+    if !structure.bonds.iter().any(|bond| {
         selected_set.contains(&bond.unit_a) != selected_set.contains(&bond.unit_b)
-    });
-    if !crosses_cut {
+    }) {
         return None;
     }
 
     fn remap_region(
         source: &OrganismStructure,
-        selected: &std::collections::HashSet<usize>,
+        selected: &HashSet<usize>,
         include_selected: bool,
     ) -> Option<OrganismStructure> {
-        let old_indices: Vec<usize> = (0..source.units.len())
+        let indices: Vec<usize> = (0..source.units.len())
             .filter(|index| selected.contains(index) == include_selected)
             .collect();
-        if old_indices.is_empty() {
+        if indices.is_empty() {
             return None;
         }
-        let mut map = std::collections::HashMap::new();
+
+        let mut map = HashMap::new();
         let mut result = OrganismStructure::new();
-        for old_index in &old_indices {
-            map.insert(*old_index, result.add_unit(source.units[*old_index].clone()));
+        for old_index in &indices {
+            let new_index = result.add_unit(source.units[*old_index].clone());
+            map.insert(*old_index, new_index);
         }
+
         for bond in &source.bonds {
             if selected.contains(&bond.unit_a) == include_selected
                 && selected.contains(&bond.unit_b) == include_selected
@@ -106,62 +99,33 @@ fn split_structure(
         Some(result)
     }
 
-    let offspring = remap_region(structure, &selected_set, true)?;
     let parent = remap_region(structure, &selected_set, false)?;
+    let offspring = remap_region(structure, &selected_set, true)?;
     Some((parent, offspring))
 }
 
-/// Attempt one physical reproductive investment from a parent that has full
-/// reproductive readiness.
-///
-/// This first constructs a candidate physical split without changing the
-/// parent. The public reproduction path will commit only after the split and
-/// energy transfer have both been validated.
+/// Reproduction is intentionally not wired to mutation of organism state yet.
+/// The structural primitive above must be validated before the energy and
+/// lifecycle commit path is introduced.
 pub(crate) fn try_form_bud(
-    parent: &mut Organism,
-    environment: &Environment,
-    child_id: String,
-    rng: &mut ChaCha8Rng,
+    _parent: &mut Organism,
+    _environment: &Environment,
+    _child_id: String,
+    _rng: &mut ChaCha8Rng,
 ) -> Option<Organism> {
-    if parent.reproductive_readiness + EPSILON < READINESS_THRESHOLD {
-        return None;
-    }
-
-    if parent.structure.units.len() < 2 {
-        return None;
-    }
-
-    // Step 1 deliberately remains a structural primitive. Reproduction must
-    // choose a real connected substructure rather than clone the whole parent.
-    // The higher-level selection/investment policy is added only after this
-    // primitive has independently established conservation and validity.
-    let _ = (environment, child_id, rng, structural_mass, split_structure);
     None
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genome::initial_genome;
-    use crate::resources::Material;
-    use crate::state::{Environment, Position, ResourceSense};
+    use crate::resources::default_catalog;
     use crate::structure::{Bond, Placement, StructuralUnit};
 
-    fn environment() -> Environment {
-        Environment {
-            width: 1000.0,
-            height: 1000.0,
-            catalog: crate::resources::default_catalog(),
-            field: crate::environment::ActiveMaterialField::new(1000.0, 1000.0, 10.0),
-            reservoir: crate::environment::DeepReservoir::new(1000.0, 1000.0, 100.0),
-            vents: Vec::new(),
-        }
-    }
-
     fn structure() -> OrganismStructure {
-        let mut s = OrganismStructure::new();
+        let mut structure = OrganismStructure::new();
         for x in 0..4 {
-            s.add_unit(StructuralUnit::new(
+            structure.add_unit(StructuralUnit::new(
                 "Carbon",
                 Placement {
                     x: x as f64,
@@ -170,37 +134,86 @@ mod tests {
                 },
             ));
         }
-        s.add_bond(Bond { unit_a: 0, point_a: 0, unit_b: 1, point_b: 0, strength: 0.5, bond_energy: 1.0 });
-        s.add_bond(Bond { unit_a: 1, point_a: 1, unit_b: 2, point_b: 0, strength: 0.5, bond_energy: 1.0 });
-        s.add_bond(Bond { unit_a: 2, point_a: 1, unit_b: 3, point_b: 0, strength: 0.5, bond_energy: 1.0 });
-        s
+        structure.add_bond(Bond {
+            unit_a: 0,
+            point_a: 0,
+            unit_b: 1,
+            point_b: 0,
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+        structure.add_bond(Bond {
+            unit_a: 1,
+            point_a: 1,
+            unit_b: 2,
+            point_b: 0,
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+        structure.add_bond(Bond {
+            unit_a: 2,
+            point_a: 1,
+            unit_b: 3,
+            point_b: 0,
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+        structure
     }
 
     #[test]
-    fn split_transfers_real_units_without_duplication() {
+    fn split_transfers_each_unit_exactly_once() {
         let source = structure();
-        let (parent, offspring) = split_structure(&source, &[2, 3]).expect("valid connected bud");
-        assert_eq!(source.units.len(), parent.units.len() + offspring.units.len());
+        let (parent, offspring) = split_structure(&source, &[2, 3]).expect("valid split");
+
+        assert_eq!(parent.units.len() + offspring.units.len(), source.units.len());
         assert_eq!(parent.units.len(), 2);
         assert_eq!(offspring.units.len(), 2);
         assert_eq!(parent.bonds.len(), 1);
         assert_eq!(offspring.bonds.len(), 1);
+    }
+
+    #[test]
+    fn split_reindexes_internal_bonds() {
+        let source = structure();
+        let (parent, offspring) = split_structure(&source, &[2, 3]).expect("valid split");
+
+        assert!(parent
+            .bonds
+            .iter()
+            .all(|bond| bond.unit_a < parent.units.len() && bond.unit_b < parent.units.len()));
+        assert!(offspring
+            .bonds
+            .iter()
+            .all(|bond| bond.unit_a < offspring.units.len() && bond.unit_b < offspring.units.len()));
         assert_eq!(parent.connected_components(), vec![vec![0, 1]]);
         assert_eq!(offspring.connected_components(), vec![vec![0, 1]]);
     }
 
     #[test]
-    fn split_preserves_internal_bonds_and_removes_cut_bond() {
+    fn split_preserves_unit_properties_and_geometry() {
         let source = structure();
-        let (parent, offspring) = split_structure(&source, &[2, 3]).expect("valid connected bud");
-        assert_eq!(parent.bonds.len(), 1);
-        assert_eq!(offspring.bonds.len(), 1);
-        assert!(parent.bonds.iter().all(|bond| bond.unit_a < 2 && bond.unit_b < 2));
-        assert!(offspring.bonds.iter().all(|bond| bond.unit_a < 2 && bond.unit_b < 2));
+        let (parent, offspring) = split_structure(&source, &[2, 3]).expect("valid split");
+        let catalog = default_catalog();
+
+        let source_mass: f64 = source
+            .units
+            .iter()
+            .map(|unit| unit.properties(&catalog).unwrap().mass)
+            .sum();
+        let result_mass: f64 = parent
+            .units
+            .iter()
+            .chain(offspring.units.iter())
+            .map(|unit| unit.properties(&catalog).unwrap().mass)
+            .sum();
+        assert_eq!(source_mass, result_mass);
+        assert_eq!(offspring.units[0].placement.x, 2.0);
+        assert_eq!(offspring.units[1].placement.x, 3.0);
     }
 
     #[test]
-    fn split_rejects_disconnected_selection_and_leaves_source_unchanged() {
+    fn split_rejects_disconnected_selection_without_mutating_source() {
         let source = structure();
         let before = source.clone();
         assert!(split_structure(&source, &[0, 3]).is_none());
@@ -209,30 +222,11 @@ mod tests {
     }
 
     #[test]
-    fn reproduction_is_not_yet_committed_through_the_public_path() {
-        let environment = environment();
-        let mut parent = Organism {
-            id: "parent".into(),
-            occupied_cells: vec![Position { x: 0.0, y: 0.0 }],
-            genome: initial_genome(),
-            resource_sense: ResourceSense { sensed_resources: Vec::new(), direction_x: 0.0, direction_y: 0.0, direction_strength: 0.0 },
-            memory: Vec::new(),
-            decision_history: DecisionHistory::default(),
-            usable_energy: 100.0,
-            stress: 0.0,
-            stored_unbonded: Material { parts: Vec::new(), bonded: false },
-            structure: structure(),
-            development_stage: DevelopmentStage::Adult,
-            age: 100,
-            reproductive_readiness: 1.0,
-            active_transformation_id: None,
-        };
-        let original = parent.structure.clone();
-        let mut rng = ChaCha8Rng::seed_from_u64(7);
-        assert!(try_form_bud(&mut parent, &environment, "child".into(), &mut rng).is_none());
-        assert_eq!(parent.structure.units.len(), original.units.len());
-        assert_eq!(parent.structure.bonds.len(), original.bonds.len());
-        assert_eq!(parent.usable_energy, 100.0);
-        assert_eq!(parent.reproductive_readiness, 1.0);
+    fn split_rejects_duplicate_or_invalid_indices() {
+        let source = structure();
+        assert!(split_structure(&source, &[1, 1]).is_none());
+        assert!(split_structure(&source, &[1, 99]).is_none());
+        assert!(split_structure(&source, &[]).is_none());
+        assert!(split_structure(&source, &[0, 1, 2, 3]).is_none());
     }
 }
