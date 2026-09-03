@@ -100,8 +100,17 @@ pub(crate) struct ActiveTransformation {
 
 #[derive(Serialize, Deserialize, Clone, Copy, Default)]
 pub(crate) struct EnergyLedger {
+    /// Potential energy made available by Floor 0 chemical interactions.
     pub(crate) total_potential_energy_released: f64,
+    /// Usable chemical potential gained by organisms from explicit release paths.
     pub(crate) total_usable_energy_gained: f64,
+    /// Bond energy released by BREAK. This is a transfer from structural bond state,
+    /// not new potential energy created by the environment.
+    #[serde(default)]
+    pub(crate) total_bond_energy_released: f64,
+    /// Work that could not be recovered and was dissipated as heat.
+    #[serde(default)]
+    pub(crate) total_work_consumed: f64,
     pub(crate) total_heat_dissipated: f64,
     pub(crate) total_usable_energy_held: f64,
 }
