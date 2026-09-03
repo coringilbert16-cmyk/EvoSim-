@@ -214,16 +214,20 @@ mod tests {
         organism
     }
 
-    #[test]
-    fn ready_parent_forms_bud_from_real_material_and_inherits_genome() {
-        let environment = Environment {
+    fn environment() -> Environment {
+        Environment {
             width: 1000.0,
             height: 1000.0,
             catalog: crate::resources::default_catalog(),
             field: crate::environment::ActiveMaterialField::new(1000.0, 1000.0, 10.0),
             reservoir: crate::environment::DeepReservoir::new(1000.0, 1000.0, 100.0),
             vents: Vec::new(),
-        };
+        }
+    }
+
+    #[test]
+    fn ready_parent_forms_bud_from_real_material_and_inherits_genome() {
+        let environment = environment();
         let mut parent = parent();
         let original_trait_count = parent.genome.traits.len();
         let mut rng = ChaCha8Rng::seed_from_u64(7);
@@ -241,18 +245,19 @@ mod tests {
 
     #[test]
     fn failed_bud_attempt_consumes_invested_material_and_energy() {
-        let mut environment = Environment {
-            width: 1000.0,
-            height: 1000.0,
-            catalog: crate::resources::default_catalog(),
-            field: crate::environment::ActiveMaterialField::new(1000.0, 1000.0, 10.0),
-            reservoir: crate::environment::DeepReservoir::new(1000.0, 1000.0, 100.0),
-            vents: Vec::new(),
-        };
-        environment.catalog.retain(|resource| resource.name == "Carbon");
+        let mut environment = environment();
         let mut parent = parent();
-        let mut rng = ChaCha8Rng::seed_from_u64(7);
         let original_energy = parent.usable_energy;
+        // Fluid has no determinate connection sites, so the physical COMBINE
+        // step cannot form a bond after the investment has already been spent.
+        if let Some(resource) = environment
+            .catalog
+            .iter_mut()
+            .find(|resource| resource.name == "Methane")
+        {
+            resource.shape.form = crate::resources::Form::Fluid { nominal_area: 1.0 };
+        }
+        let mut rng = ChaCha8Rng::seed_from_u64(7);
 
         assert!(try_form_bud(&mut parent, &environment, "2".into(), &mut rng).is_none());
         assert_eq!(parent.stored_unbonded.total_amount(), 0.0);
