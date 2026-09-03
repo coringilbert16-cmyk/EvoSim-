@@ -77,7 +77,7 @@ impl Bond {
             || (self.unit_a == other.unit_b
                 && self.point_a == other.point_b
                 && self.unit_b == other.unit_a
-                && self.point_b == other.point_a)
+                && self.point_a == other.point_b)
     }
 
     pub fn is_valid(
@@ -232,11 +232,17 @@ impl OrganismStructure {
             .collect()
     }
 
-    pub fn connection_load(&self, unit: usize, point: usize) -> f64 {
+    /// Derive connection load from the immutable resource properties at each
+    /// bond endpoint. Stored Bond::strength is deliberately not authoritative.
+    pub fn connection_load(&self, unit: usize, point: usize, catalog: &[BaseResource]) -> f64 {
         self.bonds
             .iter()
-            .filter(|b| b.touches(unit, point))
-            .map(|b| b.strength)
+            .filter(|bond| bond.touches(unit, point))
+            .filter_map(|bond| {
+                let props_a = self.units.get(bond.unit_a)?.properties(catalog)?;
+                let props_b = self.units.get(bond.unit_b)?.properties(catalog)?;
+                Some(crate::combine::bond_strength(*props_a, *props_b))
+            })
             .sum()
     }
     pub fn connection_count(&self, unit: usize, point: usize) -> usize {
@@ -464,12 +470,18 @@ mod tests {
     }
 
     #[test]
-    fn connection_load_and_count_track_strength_not_energy() {
+    fn connection_load_and_count_track_intrinsic_strength_not_stored_strength_or_energy() {
+        let catalog = crate::resources::default_catalog();
         let mut s = OrganismStructure::new();
         let a = unit(&mut s, "Carbon", 0.0, 0.0);
         let b = unit(&mut s, "Methane", 1.0, 0.0);
-        s.add_bond(bond(a, 0, b, 0, 0.3, 9.0));
-        assert!((s.connection_load(a, 0) - 0.3).abs() < 1e-12);
+        s.add_bond(bond(a, 0, b, 0, 0.0, 9.0));
+
+        let expected = crate::combine::bond_strength(
+            *s.units[a].properties(&catalog).unwrap(),
+            *s.units[b].properties(&catalog).unwrap(),
+        );
+        assert!((s.connection_load(a, 0, &catalog) - expected).abs() < 1e-12);
         assert_eq!(s.connection_count(a, 0), 1);
     }
 
