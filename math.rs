@@ -17,6 +17,11 @@ pub fn exponential_influence(x: f64) -> f64 {
     }
 }
 
+/// Clamp a value to the unit interval.
+pub fn clamp01(x: f64) -> f64 {
+    x.clamp(0.0, 1.0)
+}
+
 /// Signed version for property deviations.
 pub fn signed_exponential(x: f64) -> f64 {
     let sign = if x < 0.0 {
