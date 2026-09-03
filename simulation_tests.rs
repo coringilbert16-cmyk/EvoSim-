@@ -127,6 +127,32 @@ mod integration_tests {
     }
 
     #[test]
+    fn break_resolution_changes_state_on_expected_tick() {
+        let mut sim = Simulation::new(7, 10.0);
+        add_test_break_bond(&mut sim);
+
+        sim.step();
+        assert_eq!(sim.active_transformations.len(), 1);
+        assert_eq!(sim.active_transformations[0].remaining_ticks, 2);
+        assert_eq!(sim.organisms[0].active_transformation_id, Some(1));
+
+        sim.step();
+        assert_eq!(sim.active_transformations.len(), 1);
+        assert_eq!(sim.active_transformations[0].remaining_ticks, 1);
+        assert_eq!(sim.organisms[0].structure.bonds.len(), 1);
+        assert_eq!(sim.organisms[0].usable_energy, 0.0);
+
+        sim.step();
+        assert_eq!(sim.active_transformations.len(), 0);
+        assert_eq!(sim.organisms[0].active_transformation_id, None);
+        assert_eq!(sim.organisms[0].structure.bonds.len(), 0);
+        assert!((sim.organisms[0].usable_energy - 12.5).abs() < 1e-12);
+        assert!(sim.organisms[0]
+            .decision_history
+            .has_knowledge(ActionKind::Break, Some("bond:0")));
+    }
+
+    #[test]
     fn organism_can_break_a_structural_bond_and_records_outcome() {
         let mut sim = Simulation::new(7, 10.0);
         add_test_break_bond(&mut sim);
