@@ -56,26 +56,23 @@ impl Simulation {
             return;
         };
 
-        // The organism is locked against further structural actions while a
-        // BREAK transformation is active, so the decision's bond index remains
-        // stable for the duration of the transformation. Prefer structural
-        // identity matching, but retain the original decision index as a
-        // deterministic fallback for an otherwise unchanged structure.
-        let removed_bond = organism.structure.break_matching_bond(target_bond).or_else(|| {
-            let bond_index = transformation
-                .decision_context_key
-                .as_deref()
-                .and_then(|key| key.strip_prefix("bond:"))
-                .and_then(|index| index.parse::<usize>().ok())?;
-            let current = *organism.structure.bonds.get(bond_index)?;
-            if current.has_same_identity(&target_bond) {
-                organism.structure.break_bond(bond_index)
-            } else {
-                None
-            }
-        });
-
-        let Some(removed_bond) = removed_bond else {
+        // PRIMARY STRATEGY: Use structural identity matching only.
+        // The organism is locked during transformation, so the bond structure cannot change.
+        // This is the only correct strategy and should always succeed.
+        let Some(removed_bond) = organism.structure.break_matching_bond(target_bond) else {
+            // If we get here, something went wrong during the transformation.
+            // The bond should ALWAYS exist because structure is locked and we validated
+            // it at the start of the transformation.
+            eprintln!(
+                "CRITICAL: BREAK resolution failed for organism {}: \
+                 bond with identity unit_a={}, point_a={}, unit_b={}, point_b={} not found. \
+                 This indicates a locking violation or structural corruption.",
+                organism.id,
+                target_bond.unit_a,
+                target_bond.point_a,
+                target_bond.unit_b,
+                target_bond.point_b
+            );
             organism.active_transformation_id = None;
             return;
         };
