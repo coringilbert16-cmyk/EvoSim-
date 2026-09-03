@@ -1,3 +1,5 @@
+#[allow(dead_code)]
+mod bond_interaction;
 mod combine;
 mod combine_runtime;
 mod connection_geometry;
@@ -9,11 +11,13 @@ mod decision_runtime;
 mod environment;
 mod genome;
 mod math;
+mod material_projection;
 mod membrane_geometry;
 mod resources;
 mod structural_combine;
 mod structural_material;
 mod structure;
+mod interior_geometry;
 
 mod memory;
 mod movement;

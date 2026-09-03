@@ -146,8 +146,15 @@ mod integration_tests {
         assert_eq!(sim.active_transformations.len(), 0);
         assert_eq!(sim.organisms[0].active_transformation_id, None);
         assert_eq!(sim.organisms[0].structure.bonds.len(), 0);
-        assert!((sim.organisms[0].usable_energy - 10.9).abs() < 1e-12);
-        assert!((sim.energy_ledger.total_usable_energy_gained - 10.9).abs() < 1e-12);
+        let expected_strength = crate::combine::experimental_bond_strength(12.5);
+        let expected_work = expected_strength * 2.0;
+        let expected_net = 12.5 - expected_work;
+        assert!((sim.organisms[0].usable_energy - expected_net).abs() < 1e-12);
+        assert!((sim.energy_ledger.total_usable_energy_gained - expected_net).abs() < 1e-12);
+        assert!((sim.energy_ledger.total_bond_energy_released - 12.5).abs() < 1e-12);
+        assert!((sim.energy_ledger.total_work_consumed - expected_work).abs() < 1e-12);
+        assert!((sim.energy_ledger.total_potential_energy_released).abs() < 1e-12);
+        assert!((sim.energy_ledger.total_heat_dissipated).abs() < 1e-12);
         assert!(sim.organisms[0]
             .decision_history
             .has_knowledge(ActionKind::Break, Some("bond:0")));
@@ -205,10 +212,18 @@ mod integration_tests {
         sim.step();
         sim.step();
 
+        let expected_strength = crate::combine::experimental_bond_strength(0.5);
+        let expected_work = expected_strength * 2.0;
+        let expected_net = 0.5 - expected_work;
+        let expected_remaining = (0.5 + expected_net).max(0.0);
+        let expected_heat = (-expected_net).max(0.0);
         assert!(sim.organisms[0].structure.bonds.is_empty());
-        assert!((sim.organisms[0].usable_energy - 0.0).abs() < 1e-12);
+        assert!((sim.organisms[0].usable_energy - expected_remaining).abs() < 1e-12);
         assert!((sim.energy_ledger.total_usable_energy_gained - 0.0).abs() < 1e-12);
-        assert!((sim.energy_ledger.total_heat_dissipated - 0.5).abs() < 1e-12);
+        assert!((sim.energy_ledger.total_bond_energy_released - 0.5).abs() < 1e-12);
+        assert!((sim.energy_ledger.total_work_consumed - expected_work).abs() < 1e-12);
+        assert!((sim.energy_ledger.total_potential_energy_released).abs() < 1e-12);
+        assert!((sim.energy_ledger.total_heat_dissipated - expected_heat).abs() < 1e-12);
         assert!(matches!(
             sim.organisms[0]
                 .decision_history
@@ -228,8 +243,11 @@ mod integration_tests {
                 break;
             }
         }
+        let expected_strength = crate::combine::experimental_bond_strength(12.5);
+        let expected_work = expected_strength * 2.0;
+        let expected_net = 12.5 - expected_work;
         assert!(sim.organisms[0].structure.bonds.is_empty());
-        assert!((sim.organisms[0].usable_energy - before - 10.9).abs() < 1e-12);
+        assert!((sim.organisms[0].usable_energy - before - expected_net).abs() < 1e-12);
         assert!(sim.organisms[0]
             .decision_history
             .has_knowledge(ActionKind::Break, Some("bond:0")));

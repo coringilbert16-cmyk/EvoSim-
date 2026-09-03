@@ -1,3 +1,4 @@
+use crate::bond_interaction::BondInteractionSnapshot;
 use crate::decision::{ActionKind, OutcomeKind};
 use crate::decision_runtime::ActionCandidate;
 use crate::state::{
@@ -16,13 +17,11 @@ impl Simulation {
         let context_key = decision.context_key.as_deref()?;
         let bond_index = context_key.strip_prefix("bond:")?.parse::<usize>().ok()?;
         let bond = *organism.structure.bonds.get(bond_index)?;
-        if !bond.bond_energy.is_finite() || bond.bond_energy < 0.0 {
-            return None;
-        }
+        let interaction_snapshot = BondInteractionSnapshot::from_bond(&bond)?;
         let complexity = crate::math::complexity(2.0);
         let duration = 1_u64.max(complexity.ceil() as u64);
-        let break_work = break_work_cost(&bond, complexity);
-        let required_energy = (break_work - bond.bond_energy).max(0.0);
+        let break_work = interaction_snapshot.interaction.break_work(complexity);
+        let required_energy = (break_work - interaction_snapshot.interaction.bond_energy()).max(0.0);
         if organism.usable_energy + f64::EPSILON < required_energy {
             return None;
         }
@@ -35,9 +34,9 @@ impl Simulation {
                 bonded: true,
             },
             // The complete bond is a snapshot of the interaction at decision
-            // time. It is authoritative for BREAK's delayed energy/work
-            // calculation; structural identity is used only to locate the
-            // bond that must be removed at resolution.
+            // time. Structural identity and interaction state are conceptually
+            // separate even though the serialized compatibility representation
+            // still carries them together in Bond.
             bond: Some(bond),
             complexity,
             duration_ticks: duration,
@@ -59,6 +58,10 @@ impl Simulation {
             organism.active_transformation_id = None;
             return;
         };
+        let Some(interaction_snapshot) = BondInteractionSnapshot::from_bond(&target_bond) else {
+            organism.active_transformation_id = None;
+            return;
+        };
 
         // VALIDATION: Verify bond endpoints still exist and are valid
         if target_bond.unit_a >= organism.structure.units.len()
@@ -73,13 +76,11 @@ impl Simulation {
             return;
         }
 
-        // VALIDATION: Verify the bond actually exists in the structure before attempting removal
-        if !organism
-            .structure
-            .bonds
-            .iter()
-            .any(|b| b.has_same_identity(&target_bond))
-        {
+        // VALIDATION: Verify the stable structural identity still exists.
+        if !organism.structure.bonds.iter().any(|bond| {
+            crate::bond_interaction::BondIdentity::from_bond(bond)
+                .matches(&interaction_snapshot.identity)
+        }) {
             eprintln!(
                 "BREAK resolution failed for organism {}: \
                  bond not found in structure. Expected bond with identity: \
@@ -93,7 +94,6 @@ impl Simulation {
 
         // PRIMARY STRATEGY: Use structural identity matching only.
         // The organism is locked during transformation, so the bond structure cannot change.
-        // This is the only correct strategy and should always succeed after validation.
         let Some(_removed_bond) = organism.structure.break_matching_bond(target_bond) else {
             eprintln!(
                 "CRITICAL: BREAK resolution failed for organism {}: \
@@ -106,15 +106,17 @@ impl Simulation {
         };
 
         // BREAK uses the interaction snapshot captured when the transformation
-        // began. The structure is locked for the normal simulation lifecycle,
-        // but keeping the calculation snapshot-based also prevents a later
-        // change to derived/current interaction values from silently changing
-        // the meaning of an already-selected action.
-        let break_work = break_work_cost(&target_bond, transformation.complexity);
-        let net_energy = target_bond.bond_energy - break_work;
+        // began. The bond's stored energy is the energy invested into that
+        // interaction at formation; resolving BREAK releases that bond energy
+        // and spends work against it. Only the unrecovered remainder is new
+        // usable energy; it is not counted as new Floor 0 potential energy.
+        let break_work = interaction_snapshot.interaction.break_work(transformation.complexity);
+        let bond_energy = interaction_snapshot.interaction.bond_energy();
+        let net_energy = bond_energy - break_work;
+        ledger.total_bond_energy_released += bond_energy;
+        ledger.total_work_consumed += break_work;
         if net_energy >= 0.0 {
             organism.usable_energy += net_energy;
-            ledger.total_potential_energy_released += net_energy;
             ledger.total_usable_energy_gained += net_energy;
         } else {
             let consumed = -net_energy;
@@ -148,17 +150,6 @@ impl Simulation {
     pub(crate) fn apply_energy_capacity(organism: &mut Organism) {
         organism.stress *= STRESS_DECAY_PER_TICK;
     }
-}
-
-/// Experimental BREAK work model.
-///
-/// The locked rule requires current structural state to determine whether BREAK
-/// releases or consumes usable energy. Bond strength is the current structural
-/// resistance and transformation complexity supplies the work scale. The
-/// parameterization is deliberately isolated here so it can be refined without
-/// changing the transformation lifecycle.
-pub(crate) fn break_work_cost(bond: &crate::structure::Bond, complexity: f64) -> f64 {
-    bond.strength.clamp(0.0, 1.0) * complexity.max(0.0)
 }
 
 pub(crate) fn reinforce_memory_point(
