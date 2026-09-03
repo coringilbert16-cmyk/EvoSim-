@@ -1,5 +1,6 @@
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
+use std::collections::HashSet;
 
 use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
 use crate::decision_runtime::{select_action, ActionCandidate, DecisionContext};
@@ -184,7 +185,6 @@ impl Simulation {
         let maturity = (Self::structural_mass(organism, environment) / adult_mass).clamp(0.0, 1.0);
         let reproduction_reserve = parameters.reproduction_reserve.max(f64::EPSILON);
         let energy_readiness = (organism.usable_energy / reproduction_reserve).clamp(0.0, 1.0);
-        let reproduction = organism.reproductive_readiness.clamp(0.0, 1.0);
 
         // Maturity and energy readiness are accumulated into reproductive
         // readiness separately in update_reproductive_readiness(). Keeping
@@ -193,7 +193,7 @@ impl Simulation {
         let _ = (maturity, energy_readiness);
         CurrentNeeds {
             survival,
-            reproduction,
+            reproduction: organism.reproductive_readiness.clamp(0.0, 1.0),
         }
     }
 
@@ -292,7 +292,15 @@ impl Simulation {
             }
         }
         self.active_transformations = still_active;
+
+        // A transformation resolves atomically at the beginning of a tick.
+        // Do not immediately execute a second action for the same organism in
+        // that tick: otherwise newly released energy can cause COMBINE to
+        // recreate the structure we just broke before the resolved state can
+        // exist for a full simulation tick.
+        let mut completed_organisms = HashSet::new();
         for transformation in &completed {
+            completed_organisms.insert(transformation.organism_id.clone());
             if let Some(organism) = self
                 .organisms
                 .iter_mut()
@@ -323,6 +331,9 @@ impl Simulation {
         let (organisms, environment) = (&mut self.organisms, &mut self.environment);
         let mut compatibility_cache = crate::contact::ConnectionCompatibilityCache::new();
         for organism in organisms {
+            if completed_organisms.contains(&organism.id) {
+                continue;
+            }
             let needs = Self::current_needs(organism, environment, decision_parameters);
             let eligibility = Self::action_eligibility(organism, environment);
             let context = DecisionContext { needs, eligibility };
