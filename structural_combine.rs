@@ -168,9 +168,6 @@ pub fn instantiate_raw_unit(
     placement: Placement,
     catalog: &[BaseResource],
 ) -> Result<usize, &'static str> {
-    if raw.bonded {
-        return Err("raw material must be unbonded");
-    }
     if catalog.iter().all(|r| r.name != resource_name) {
         return Err("resource type is not in the catalog");
     }
@@ -224,6 +221,31 @@ mod tests {
         assert_eq!(structure.units[0].placement.y, 20.0);
         assert_eq!(structure.units[0].placement.rotation_radians, 0.5);
         assert!((raw.total_amount() - 2.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn bonded_material_can_be_instantiated_as_a_physical_unit() {
+        let catalog = default_catalog();
+        let mut raw = Material {
+            parts: vec![("Carbon".to_string(), 1.0)],
+            bonded: true,
+        };
+        let mut structure = OrganismStructure::new();
+        let index = instantiate_raw_unit(
+            &mut structure,
+            &mut raw,
+            "Carbon",
+            Placement {
+                x: 4.0,
+                y: 5.0,
+                rotation_radians: 0.25,
+            },
+            &catalog,
+        )
+        .unwrap();
+        assert_eq!(index, 0);
+        assert_eq!(structure.units.len(), 1);
+        assert!(raw.is_empty());
     }
 
     #[test]
