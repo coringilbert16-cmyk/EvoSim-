@@ -10,6 +10,37 @@ use std::collections::{HashMap, HashSet};
 use crate::state::{Environment, Organism};
 use crate::structure::OrganismStructure;
 
+/// Derive an organism's spatial anchor from its actual structural geometry.
+///
+/// Structural-unit placement is the authoritative physical geometry. The
+/// organism position used by sensing/movement is therefore represented by the
+/// centroid of its structural-unit origins rather than by copying the
+/// parent's behavioral position or inventing a fixed reproduction offset.
+///
+/// The helper is pure: it does not mutate the structure and does not create
+/// any additional spatial state.
+fn structural_anchor_position(structure: &OrganismStructure) -> Option<(f64, f64)> {
+    if structure.units.is_empty() {
+        return None;
+    }
+
+    let count = structure.units.len() as f64;
+    let x = structure
+        .units
+        .iter()
+        .map(|unit| unit.placement.x)
+        .sum::<f64>()
+        / count;
+    let y = structure
+        .units
+        .iter()
+        .map(|unit| unit.placement.y)
+        .sum::<f64>()
+        / count;
+
+    (x.is_finite() && y.is_finite()).then_some((x, y))
+}
+
 /// Return a parent/offspring structural split without mutating the source.
 ///
 /// The selected units must form a connected subgraph and at least one bond
@@ -159,6 +190,29 @@ mod tests {
             bond_energy: 1.0,
         });
         structure
+    }
+
+    #[test]
+    fn structural_anchor_is_centroid_of_unit_origins() {
+        let source = structure();
+        assert_eq!(structural_anchor_position(&source), Some((1.5, 0.0)));
+    }
+
+    #[test]
+    fn split_anchor_comes_from_transferred_geometry() {
+        let source = structure();
+        let (parent, offspring) = split_structure(&source, &[2, 3]).expect("valid split");
+
+        assert_eq!(structural_anchor_position(&parent), Some((0.5, 0.0)));
+        assert_eq!(structural_anchor_position(&offspring), Some((2.5, 0.0)));
+    }
+
+    #[test]
+    fn empty_structure_has_no_anchor() {
+        assert_eq!(
+            structural_anchor_position(&OrganismStructure::new()),
+            None
+        );
     }
 
     #[test]
