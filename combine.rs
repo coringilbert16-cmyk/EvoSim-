@@ -100,14 +100,12 @@ pub fn experimental_bond_strength(surplus: f64) -> f64 {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MaterialRecipeKey {
-    bonded: Vec<bool>,
     parts: Vec<(String, u64)>,
 }
 
 impl MaterialRecipeKey {
     pub fn from_material(material: &Material) -> Self {
         Self {
-            bonded: vec![material.bonded],
             parts: material
                 .parts
                 .iter()
@@ -119,9 +117,7 @@ impl MaterialRecipeKey {
 
     pub fn from_inputs(inputs: &[Material]) -> Self {
         let mut parts = Vec::new();
-        let mut bonded = Vec::with_capacity(inputs.len());
         for material in inputs {
-            bonded.push(material.bonded);
             parts.extend(
                 material
                     .parts
@@ -131,8 +127,7 @@ impl MaterialRecipeKey {
             );
         }
         parts.sort_by(|a, b| a.cmp(b));
-        bonded.sort_unstable();
-        Self { bonded, parts }
+        Self { parts }
     }
 }
 
@@ -308,6 +303,22 @@ mod tests {
         );
     }
     #[test]
+    fn bonded_status_does_not_change_recipe_identity() {
+        let unbonded = carbon(1.0);
+        let bonded = Material {
+            parts: unbonded.parts.clone(),
+            bonded: true,
+        };
+        assert_eq!(
+            MaterialRecipeKey::from_material(&unbonded),
+            MaterialRecipeKey::from_material(&bonded)
+        );
+        assert_eq!(
+            MaterialRecipeKey::from_inputs(&[unbonded]),
+            MaterialRecipeKey::from_inputs(&[bonded])
+        );
+    }
+    #[test]
     fn cache_reuses_same_recipe() {
         let mut cache = CombineCache::new();
         let inputs = [carbon(1.0), methane(2.0)];
@@ -315,6 +326,19 @@ mod tests {
         let second = cache.combine(&inputs);
         assert_eq!(first.parts, second.parts);
         assert!(first.bonded);
+        assert_eq!(cache.len(), 1);
+    }
+    #[test]
+    fn cache_does_not_split_identical_material_by_bonded_status() {
+        let mut cache = CombineCache::new();
+        let unbonded = carbon(1.0);
+        let bonded = Material {
+            parts: unbonded.parts.clone(),
+            bonded: true,
+        };
+        let first = cache.combine(&[unbonded]);
+        let second = cache.combine(&[bonded]);
+        assert_eq!(first.parts, second.parts);
         assert_eq!(cache.len(), 1);
     }
     #[test]
