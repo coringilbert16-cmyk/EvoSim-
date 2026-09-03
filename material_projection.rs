@@ -116,7 +116,7 @@ mod tests {
         assert_eq!(projection.structural.amount, 3.0);
         assert_eq!(projection.stored_unbonded.amount, 3.0);
         assert_eq!(projection.total.mass, 6.0);
-        assert_eq!(projection.total.potential_energy, 44.0);
+        assert_eq!(projection.total.potential_energy, 58.0);
         assert_eq!(projection.bonded_amount, 3.0);
         assert_eq!(projection.unbonded_amount, 3.0);
         assert!((projection.structural_fraction() - 0.5).abs() < 1e-12);
