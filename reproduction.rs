@@ -12,7 +12,7 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::resources::{BaseResource, ConnectionSites};
 use crate::state::{DevelopmentStage, Organism, ReproductiveConstruction};
-use crate::structure::{OrganismStructure, Placement, StructuralUnit};
+use crate::structure::{OrganismStructure, Placement};
 
 const CORE_UNIT_COUNT: usize = 6;
 const CORE_MATERIAL_AMOUNT: f64 = CORE_UNIT_COUNT as f64;
@@ -76,22 +76,18 @@ pub(crate) fn advance_construction(
         return false;
     };
 
-    construction
-        .developing_structure
-        .add_unit(StructuralUnit::new(resource_name.clone(), placement));
-
-    if let Some((_, stored_amount)) = construction
-        .committed_material
-        .parts
-        .iter_mut()
-        .find(|(name, _)| *name == resource_name)
+    if crate::structural_combine::instantiate_raw_unit(
+        &mut construction.developing_structure,
+        &mut construction.committed_material,
+        &resource_name,
+        placement,
+        catalog,
+    )
+    .is_err()
     {
-        *stored_amount -= 1.0;
+        return false;
     }
-    construction
-        .committed_material
-        .parts
-        .retain(|(_, amount)| *amount > 1e-12);
+
     true
 }
 
@@ -214,7 +210,7 @@ mod tests {
         assert_eq!(parent.stored_unbonded.total_amount(), 2.0);
         assert_eq!(parent.reproductive_readiness, 0.0);
         let construction = parent.reproductive_construction.as_ref().unwrap();
-        assert_eq!(construction.committed_material.total_amount(), CORE_MATERIAL_AMOUNT);
+        assert_eq!(construction.committed_material.total_amount(), CORE_UNIT_COUNT as f64);
         assert!(!construction.committed_material.bonded);
         assert!(construction.developing_structure.units.is_empty());
     }
