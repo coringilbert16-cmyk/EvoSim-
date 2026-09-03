@@ -120,6 +120,20 @@ fn split_structure(
     Some((parent, offspring))
 }
 
+/// Sum the stored energy of bonds that must be severed to separate the bud.
+///
+/// A crossing bond does not survive in either resulting structure, so its
+/// stored bond energy is released rather than silently destroyed.
+fn crossing_bond_energy(structure: &OrganismStructure, selected_units: &[usize]) -> f64 {
+    let selected: HashSet<usize> = selected_units.iter().copied().collect();
+    structure
+        .bonds
+        .iter()
+        .filter(|bond| selected.contains(&bond.unit_a) != selected.contains(&bond.unit_b))
+        .map(|bond| bond.bond_energy)
+        .sum()
+}
+
 /// Select a connected bud whose structural mass reaches the parent's genetic
 /// juvenile threshold while leaving at least one structural unit behind.
 fn select_bud_units(
@@ -224,15 +238,17 @@ pub(crate) fn try_form_bud(
     let (remaining_structure, offspring_structure) =
         split_structure(&parent.structure, &selected_units)?;
     let anchor = structural_anchor_position(&offspring_structure)?;
+    let released_bond_energy = crossing_bond_energy(&parent.structure, &selected_units);
 
     let investment = parent.genome.reproductive_investment();
-    let transferred_energy = (parent.usable_energy * investment).clamp(0.0, parent.usable_energy);
+    let available_energy = parent.usable_energy + released_bond_energy;
+    let transferred_energy = (available_energy * investment).clamp(0.0, available_energy);
 
     let mut child_genome = parent.genome.clone();
     child_genome.mutate(rng);
 
     parent.structure = remaining_structure;
-    parent.usable_energy -= transferred_energy;
+    parent.usable_energy = available_energy - transferred_energy;
     parent.reproductive_readiness = 0.0;
 
     Some(Organism {
@@ -386,7 +402,13 @@ mod tests {
         let environment = environment();
         let mut parent = adult_parent();
         let original_mass = parent.structural_mass(&environment.catalog);
-        let original_energy = parent.usable_energy;
+        let original_usable_energy = parent.usable_energy;
+        let original_bond_energy: f64 = parent
+            .structure
+            .bonds
+            .iter()
+            .map(|bond| bond.bond_energy)
+            .sum();
         let mut rng = ChaCha8Rng::seed_from_u64(11);
 
         let child = try_form_bud(&mut parent, &environment, "child".into(), &mut rng)
@@ -394,8 +416,22 @@ mod tests {
 
         let combined_mass = parent.structural_mass(&environment.catalog)
             + child.structural_mass(&environment.catalog);
+        let combined_energy = parent.usable_energy
+            + child.usable_energy
+            + parent
+                .structure
+                .bonds
+                .iter()
+                .map(|bond| bond.bond_energy)
+                .sum::<f64>()
+            + child
+                .structure
+                .bonds
+                .iter()
+                .map(|bond| bond.bond_energy)
+                .sum::<f64>();
         assert!((combined_mass - original_mass).abs() <= f64::EPSILON);
-        assert!((parent.usable_energy + child.usable_energy - original_energy).abs() <= f64::EPSILON);
+        assert!((combined_energy - (original_usable_energy + original_bond_energy)).abs() <= f64::EPSILON);
         assert!(matches!(child.development_stage, DevelopmentStage::Offspring));
         assert_eq!(structural_anchor_position(&child.structure), Some((2.5, 0.0)));
         assert_eq!(parent.reproductive_readiness, 0.0);
