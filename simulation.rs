@@ -236,17 +236,17 @@ impl Simulation {
         };
 
         if relevant(ActionKind::Break) {
-            candidates.extend(
-                organism
-                    .structure
-                    .bonds
-                    .iter()
-                    .enumerate()
-                    .map(|(index, _)| ActionCandidate {
-                        action: ActionKind::Break,
-                        context_key: Some(format!("bond:{index}")),
-                    }),
-            );
+            candidates.extend(organism.structure.bonds.iter().map(|bond| {
+                let (left, right) = (
+                    (bond.unit_a, bond.point_a),
+                    (bond.unit_b, bond.point_b),
+                );
+                let (a, b) = if left <= right { (left, right) } else { (right, left) };
+                ActionCandidate {
+                    action: ActionKind::Break,
+                    context_key: Some(format!("bond:{}:{}:{}:{}", a.0, a.1, b.0, b.1)),
+                }
+            }));
         }
         if relevant(ActionKind::Combine) {
             candidates.push(ActionCandidate {
@@ -380,6 +380,16 @@ impl Simulation {
                         &selected,
                     ) {
                         self.active_transformations.push(transformation);
+                    } else {
+                        // The action was selected after passing decision-layer
+                        // eligibility. A mechanical failure to initiate it is
+                        // therefore an observed harmful consequence, not a
+                        // candidate rejection that should be learned from.
+                        crate::decision_runtime::record_outcome(
+                            &mut organism.decision_history,
+                            &selected,
+                            crate::decision::OutcomeKind::Harmful,
+                        );
                     }
                 }
                 ActionKind::Acquire | ActionKind::Expel => {}
