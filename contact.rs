@@ -193,8 +193,8 @@ pub fn connection_pair_candidates(
                 point_b,
                 distance: distance(wa, wb),
                 facing: facing(wa, wb),
-                load_a: structure.connection_load(unit_a, point_a),
-                load_b: structure.connection_load(unit_b, point_b),
+                load_a: structure.connection_load(unit_a, point_a, catalog),
+                load_b: structure.connection_load(unit_b, point_b, catalog),
                 available_a: connection_point_has_space(structure, unit_a, point_a),
                 available_b: connection_point_has_space(structure, unit_b, point_b),
             });
@@ -321,8 +321,8 @@ pub fn connection_pair_candidates_cached(
                 point_b: ib,
                 distance: distance(wa, wb),
                 facing: facing(wa, wb),
-                load_a: structure.connection_load(unit_a, ia),
-                load_b: structure.connection_load(unit_b, ib),
+                load_a: structure.connection_load(unit_a, ia, catalog),
+                load_b: structure.connection_load(unit_b, ib, catalog),
                 available_a: connection_point_has_space(structure, unit_a, ia),
                 available_b: connection_point_has_space(structure, unit_b, ib),
             })
