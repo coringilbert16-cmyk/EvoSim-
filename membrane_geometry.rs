@@ -127,7 +127,7 @@ mod tests {
         let spacing = std::f64::consts::TAU / membrane.minimum_unit_count as f64;
         let center_distance = 2.0 * membrane.ring_radius * (spacing / 2.0).sin();
 
-        assert!(center_distance + 1e-10 >= 2.0 * r);
+        assert!(center_distance <= 2.0 * r + 1e-10);
     }
 
     #[test]
