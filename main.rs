@@ -9,6 +9,7 @@ mod genome;
 mod math;
 mod resources;
 mod structural_combine;
+mod structural_material;
 mod structure;
 
 mod memory;
