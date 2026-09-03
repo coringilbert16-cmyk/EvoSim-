@@ -106,15 +106,17 @@ impl Simulation {
         };
 
         // BREAK uses the interaction snapshot captured when the transformation
-        // began. The structure is locked for the normal simulation lifecycle,
-        // but keeping the calculation snapshot-based also prevents a later
-        // change to derived/current interaction values from silently changing
-        // the meaning of an already-selected action.
+        // began. The bond's stored energy is the energy invested into that
+        // interaction at formation; resolving BREAK releases that bond energy
+        // and spends work against it. Only the unrecovered remainder is new
+        // usable energy; it is not counted as new Floor 0 potential energy.
         let break_work = break_work_cost(&target_bond, transformation.complexity);
-        let net_energy = target_bond.bond_energy - break_work;
+        let bond_energy = target_bond.bond_energy;
+        let net_energy = bond_energy - break_work;
+        ledger.total_bond_energy_released += bond_energy;
+        ledger.total_work_consumed += break_work;
         if net_energy >= 0.0 {
             organism.usable_energy += net_energy;
-            ledger.total_potential_energy_released += net_energy;
             ledger.total_usable_energy_gained += net_energy;
         } else {
             let consumed = -net_energy;
