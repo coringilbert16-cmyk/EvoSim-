@@ -37,13 +37,10 @@ fn need_pressure(action: ActionKind, needs: CurrentNeeds) -> f64 {
         .relevant_needs()
         .iter()
         .map(|need| needs.pressure(*need))
-        .fold(0.0, f64::max)
+        .fold(0.0_f64, |best, pressure| best.max(pressure))
 }
 
-fn history_adjustment(
-    history: &DecisionHistory,
-    candidate: &ActionCandidate,
-) -> f64 {
+fn history_adjustment(history: &DecisionHistory, candidate: &ActionCandidate) -> f64 {
     match history.outcome(candidate.action, candidate.context_key.as_deref()) {
         Some(OutcomeKind::Beneficial) => HISTORY_INFLUENCE,
         Some(OutcomeKind::Harmful) => -HISTORY_INFLUENCE,
@@ -69,8 +66,8 @@ pub fn select_action(
             continue;
         }
 
-        let score = need_pressure(candidate.action, context.needs)
-            + history_adjustment(history, candidate);
+        let score =
+            need_pressure(candidate.action, context.needs) + history_adjustment(history, candidate);
 
         if best
             .as_ref()
