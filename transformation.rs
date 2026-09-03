@@ -46,6 +46,15 @@ impl Simulation {
         _environment: &mut Environment,
         ledger: &mut EnergyLedger,
     ) {
+        eprintln!(
+            "BREAK RESOLVE CALLED: id={} org={} remaining={} target={:?} bonds_before={:?} active={:?}",
+            transformation.id,
+            transformation.organism_id,
+            transformation.remaining_ticks,
+            transformation.bond,
+            organism.structure.bonds,
+            organism.active_transformation_id
+        );
         let Some(target_bond) = transformation.bond else {
             panic!("BREAK resolution invoked with no target bond: context={:?}", transformation.decision_context_key);
         };
