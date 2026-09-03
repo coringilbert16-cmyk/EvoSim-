@@ -1,3 +1,4 @@
+mod bond_interaction;
 mod combine;
 mod combine_runtime;
 mod connection_geometry;
