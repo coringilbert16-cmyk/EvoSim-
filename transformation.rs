@@ -14,8 +14,12 @@ impl Simulation {
             return None;
         }
         let context_key = decision.context_key.as_deref()?;
-        let bond_index = context_key.strip_prefix("bond:")?.parse::<usize>().ok()?;
-        let bond = *organism.structure.bonds.get(bond_index)?;
+        let identity = parse_bond_context_key(context_key)?;
+        let bond = *organism
+            .structure
+            .bonds
+            .iter()
+            .find(|bond| bond_identity(*bond) == identity)?;
         if !bond.bond_energy.is_finite() || bond.bond_energy < 0.0 {
             return None;
         }
@@ -35,9 +39,8 @@ impl Simulation {
                 bonded: true,
             },
             // The complete bond is a snapshot of the interaction at decision
-            // time. It is authoritative for BREAK's delayed energy/work
-            // calculation; structural identity is used only to locate the
-            // bond that must be removed at resolution.
+            // time. Structural identity is used to locate the bond that must
+            // be removed at resolution.
             bond: Some(bond),
             complexity,
             duration_ticks: duration,
@@ -92,8 +95,6 @@ impl Simulation {
         }
 
         // PRIMARY STRATEGY: Use structural identity matching only.
-        // The organism is locked during transformation, so the bond structure cannot change.
-        // This is the only correct strategy and should always succeed after validation.
         let Some(_removed_bond) = organism.structure.break_matching_bond(target_bond) else {
             eprintln!(
                 "CRITICAL: BREAK resolution failed for organism {}: \
@@ -106,10 +107,8 @@ impl Simulation {
         };
 
         // BREAK uses the interaction snapshot captured when the transformation
-        // began. The structure is locked for the normal simulation lifecycle,
-        // but keeping the calculation snapshot-based also prevents a later
-        // change to derived/current interaction values from silently changing
-        // the meaning of an already-selected action.
+        // began. The canonical strength is derived from the bond's formation
+        // surplus; legacy Bond.strength is not authoritative.
         let break_work = break_work_cost(&target_bond, transformation.complexity);
         let net_energy = target_bond.bond_energy - break_work;
         if net_energy >= 0.0 {
@@ -134,15 +133,6 @@ impl Simulation {
             context_key: transformation.decision_context_key.clone(),
         };
         crate::decision_runtime::record_outcome(&mut organism.decision_history, &candidate, outcome);
-        if net_energy > 0.0 {
-            let reinforcement = (net_energy * organism.genome.memory_strength()).clamp(0.0, 1.0);
-            let (px, py) = organism
-                .occupied_cells
-                .first()
-                .map(|p| (p.x, p.y))
-                .unwrap_or((0.0, 0.0));
-            reinforce_memory_point(organism, px, py, reinforcement);
-        }
     }
 
     pub(crate) fn apply_energy_capacity(organism: &mut Organism) {
@@ -150,34 +140,34 @@ impl Simulation {
     }
 }
 
-/// Experimental BREAK work model.
-///
-/// The locked rule requires current structural state to determine whether BREAK
-/// releases or consumes usable energy. Bond strength is the current structural
-/// resistance and transformation complexity supplies the work scale. The
-/// parameterization is deliberately isolated here so it can be refined without
-/// changing the transformation lifecycle.
-pub(crate) fn break_work_cost(bond: &crate::structure::Bond, complexity: f64) -> f64 {
-    bond.strength.clamp(0.0, 1.0) * complexity.max(0.0)
+/// Return a canonical identity tuple for a bond. Endpoint ordering does not
+/// matter, so the same structural bond has one decision-history context key.
+fn bond_identity(bond: crate::structure::Bond) -> (usize, u8, usize, u8) {
+    let left = (bond.unit_a, bond.point_a);
+    let right = (bond.unit_b, bond.point_b);
+    if left <= right {
+        (left.0, left.1, right.0, right.1)
+    } else {
+        (right.0, right.1, left.0, left.1)
+    }
 }
 
-pub(crate) fn reinforce_memory_point(
-    organism: &mut Organism,
-    x: f64,
-    y: f64,
-    reinforcement: f64,
-) {
-    if let Some(point) = organism
-        .memory
-        .iter_mut()
-        .find(|p| (p.x - x).abs() < f64::EPSILON && (p.y - y).abs() < f64::EPSILON)
-    {
-        point.strength = crate::math::clamp01(point.strength + reinforcement);
-    } else {
-        organism.memory.push(crate::state::MemoryPoint {
-            x,
-            y,
-            strength: crate::math::clamp01(reinforcement),
-        });
+fn parse_bond_context_key(key: &str) -> Option<(usize, u8, usize, u8)> {
+    let mut parts = key.strip_prefix("bond:")?.split(':');
+    let unit_a = parts.next()?.parse().ok()?;
+    let point_a = parts.next()?.parse().ok()?;
+    let unit_b = parts.next()?.parse().ok()?;
+    let point_b = parts.next()?.parse().ok()?;
+    if parts.next().is_some() {
+        return None;
     }
+    Some((unit_a, point_a, unit_b, point_b))
+}
+
+/// Experimental BREAK work model.
+///
+/// Bond strength is derived from formation surplus. Bond.strength is retained
+/// for compatibility with serialized legacy state but is not authoritative.
+pub(crate) fn break_work_cost(bond: &crate::structure::Bond, complexity: f64) -> f64 {
+    crate::combine::experimental_bond_strength(bond.bond_energy) * complexity.max(0.0)
 }
