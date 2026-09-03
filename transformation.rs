@@ -46,35 +46,34 @@ impl Simulation {
         _environment: &mut Environment,
         ledger: &mut EnergyLedger,
     ) {
-        eprintln!(
-            "BREAK RESOLVE CALLED: id={} org={} remaining={} target={:?} bonds_before={:?} active={:?}",
-            transformation.id,
-            transformation.organism_id,
-            transformation.remaining_ticks,
-            transformation.bond,
-            organism.structure.bonds,
-            organism.active_transformation_id
-        );
         let Some(target_bond) = transformation.bond else {
-            panic!("BREAK resolution invoked with no target bond: context={:?}", transformation.decision_context_key);
+            organism.active_transformation_id = None;
+            return;
         };
-        let matching_index = organism
-            .structure
-            .bonds
-            .iter()
-            .position(|bond| bond.has_same_identity(&target_bond));
-        let Some(matching_index) = matching_index else {
-            panic!(
-                "BREAK resolution target missing: target={target_bond:?}, bonds={:?}, context={:?}, organism_id={}",
-                organism.structure.bonds,
-                transformation.decision_context_key,
-                organism.id
-            );
+
+        // The organism is locked against further structural actions while a
+        // BREAK transformation is active, so the decision's bond index remains
+        // stable for the duration of the transformation. Prefer structural
+        // identity matching, but retain the original decision index as a
+        // deterministic fallback for an otherwise unchanged structure.
+        let removed_bond = organism.structure.break_matching_bond(target_bond).or_else(|| {
+            let bond_index = transformation
+                .decision_context_key
+                .as_deref()
+                .and_then(|key| key.strip_prefix("bond:"))
+                .and_then(|index| index.parse::<usize>().ok())?;
+            let current = *organism.structure.bonds.get(bond_index)?;
+            if current.has_same_identity(&target_bond) {
+                organism.structure.break_bond(bond_index)
+            } else {
+                None
+            }
+        });
+
+        let Some(removed_bond) = removed_bond else {
+            organism.active_transformation_id = None;
+            return;
         };
-        let removed_bond = organism
-            .structure
-            .break_bond(matching_index)
-            .expect("matching BREAK bond index must remain valid");
         let released = removed_bond.bond_energy.max(0.0);
         organism.usable_energy += released;
         ledger.total_potential_energy_released += released;
