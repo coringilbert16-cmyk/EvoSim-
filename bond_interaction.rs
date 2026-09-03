@@ -34,11 +34,12 @@ impl BondIdentity {
     }
 }
 
-/// Formation-time interaction state captured by a bond.
+/// Formation-time interaction state.
 ///
-/// The surplus is the output of COMBINE's formation mathematics. Strength and
-/// stored bond energy remain derived from that captured interaction outcome;
-/// they are not separate chemical state in this abstraction.
+/// The only persisted chemical quantity needed by the current COMBINE model
+/// is formation surplus. Strength is derived from that surplus every time it
+/// is needed. This makes COMBINE the authority for bond resistance instead of
+/// allowing a second mutable strength value to become authoritative.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 pub(crate) struct BondInteraction {
     pub(crate) formation_surplus: f64,
@@ -65,6 +66,13 @@ impl BondInteraction {
 
     pub(crate) fn break_work(self, complexity: f64) -> f64 {
         self.strength() * complexity.max(0.0)
+    }
+
+    /// Validate the legacy serialized strength against the authoritative
+    /// derived value. The legacy field is retained only for snapshot
+    /// compatibility; it is never used to calculate interaction outcomes.
+    pub(crate) fn legacy_strength_is_consistent(self, bond: &Bond) -> bool {
+        (bond.strength - self.strength()).abs() <= 1e-12
     }
 }
 
@@ -93,7 +101,7 @@ mod tests {
             point_a: 1,
             unit_b: 5,
             point_b: 3,
-            strength: 0.2,
+            strength: crate::combine::experimental_bond_strength(4.0),
             bond_energy: 4.0,
         }
     }
@@ -113,6 +121,17 @@ mod tests {
         let interaction = BondInteraction::from_bond(&b).unwrap();
         assert_eq!(interaction.bond_energy(), 4.0);
         assert_eq!(interaction.strength(), crate::combine::experimental_bond_strength(4.0));
+        assert!(interaction.legacy_strength_is_consistent(&b));
+    }
+
+    #[test]
+    fn stale_legacy_strength_cannot_change_interaction() {
+        let mut b = bond();
+        let interaction = BondInteraction::from_bond(&b).unwrap();
+        let original = interaction.strength();
+        b.strength = 0.0;
+        assert_eq!(BondInteraction::from_bond(&b).unwrap().strength(), original);
+        assert!(!interaction.legacy_strength_is_consistent(&b));
     }
 
     #[test]
