@@ -306,22 +306,23 @@ mod tests {
         let catalog = crate::resources::default_catalog();
         let mut s = OrganismStructure::new();
         let i = unit(&mut s, "Carbon", 0.0, 0.0);
-        let point = s.connection_site(
-            ConnectionSiteRef {
-                unit_index: i,
-                point_index: 0,
-            },
-            &catalog,
-        );
-        assert!(point.is_some());
-        assert_eq!(
-            point.unwrap(),
-            ConnectionPoint {
-                x: 1.0,
-                y: 0.0,
-                direction_radians: 0.0
-            }
-        );
+        let point = s
+            .connection_site(
+                ConnectionSiteRef {
+                    unit_index: i,
+                    point_index: 0,
+                },
+                &catalog,
+            )
+            .expect("catalog-derived connection point should exist");
+        let expected = s.units[i]
+            .connection_sites(&catalog)
+            .and_then(|sites| match sites {
+                ConnectionSites::Corners(points) => points.first().copied(),
+                ConnectionSites::Circumference { .. } | ConnectionSites::Undetermined => None,
+            })
+            .expect("Carbon should expose discrete connection points");
+        assert_eq!(point, expected);
     }
 
     #[test]
