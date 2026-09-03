@@ -121,7 +121,7 @@ impl Simulation {
     }
 
     fn update_reproductive_readiness(organism: &mut Organism, environment: &Environment, parameters: DecisionParameters) {
-        if !matches!(organism.development_stage, DevelopmentStage::Adult) || organism.reproductive_construction.is_some() {
+        if !matches!(organism.development_stage, DevelopmentStage::Adult) {
             return;
         }
         let adult_mass = parameters.adult_mass.max(f64::EPSILON);
@@ -134,11 +134,11 @@ impl Simulation {
 
     fn action_eligibility(organism: &Organism, _environment: &Environment) -> ActionEligibility {
         ActionEligibility {
-            can_move: organism.active_transformation_id.is_none() && organism.reproductive_construction.is_none(),
+            can_move: organism.active_transformation_id.is_none(),
             can_acquire: false,
-            can_combine: organism.active_transformation_id.is_none() && organism.reproductive_construction.is_none()
+            can_combine: organism.active_transformation_id.is_none()
                 && (organism.structure.units.len() >= 2 || organism.stored_unbonded.total_amount() >= 2.0 - f64::EPSILON),
-            can_break: organism.active_transformation_id.is_none() && organism.reproductive_construction.is_none() && !organism.structure.bonds.is_empty(),
+            can_break: organism.active_transformation_id.is_none() && !organism.structure.bonds.is_empty(),
             can_expel: false,
         }
     }
