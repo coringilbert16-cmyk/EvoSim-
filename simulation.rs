@@ -21,9 +21,16 @@ impl Simulation {
         let environment = Self::create_environment();
         let organism = Self::create_initial_organism();
         Self {
-            tick: 0, ticks_per_second, running: true, organisms: vec![organism], environment,
-            active_transformations: Vec::new(), energy_ledger: EnergyLedger::default(),
-            next_organism_id: 2, next_transformation_id: 1, rng,
+            tick: 0,
+            ticks_per_second,
+            running: true,
+            organisms: vec![organism],
+            environment,
+            active_transformations: Vec::new(),
+            energy_ledger: EnergyLedger::default(),
+            next_organism_id: 2,
+            next_transformation_id: 1,
+            rng,
             decision_parameters: DecisionParameters::default(),
         }
     }
@@ -34,8 +41,18 @@ impl Simulation {
         let height = 1000.0;
         let field = ActiveMaterialField::new(width, height, DEFAULT_CELL_SIZE);
         let mut reservoir = DeepReservoir::new_matching_field(&field, DEFAULT_RESERVOIR_BLOCK_SIZE);
-        let starting_amounts: [(&str, f64); 7] = [("Carbon",10_000.0),("Methane",5_000.0),("Hydrogen",5_000.0),("Sulfur",5_000.0),("Nitrogen",5_000.0),("Phosphorus",5_000.0),("Water",20_000.0)];
-        for (name, amount) in starting_amounts { reservoir.seed_uniform(name, amount); }
+        let starting_amounts: [(&str, f64); 7] = [
+            ("Carbon", 10_000.0),
+            ("Methane", 5_000.0),
+            ("Hydrogen", 5_000.0),
+            ("Sulfur", 5_000.0),
+            ("Nitrogen", 5_000.0),
+            ("Phosphorus", 5_000.0),
+            ("Water", 20_000.0),
+        ];
+        for (name, amount) in starting_amounts {
+            reservoir.seed_uniform(name, amount);
+        }
         let vents = vec![
             Vent { x:250.0,y:250.0,composition:vec![("Carbon".into(),0.10),("Methane".into(),0.45),("Hydrogen".into(),0.25),("Sulfur".into(),0.10),("Nitrogen".into(),0.05),("Phosphorus".into(),0.02),("Water".into(),0.03)],emission_amount:100.0,emission_interval:20,emission_timer:0 },
             Vent { x:750.0,y:300.0,composition:vec![("Carbon".into(),0.35),("Methane".into(),0.10),("Hydrogen".into(),0.15),("Sulfur".into(),0.25),("Nitrogen".into(),0.05),("Phosphorus".into(),0.05),("Water".into(),0.05)],emission_amount:100.0,emission_interval:30,emission_timer:0 },
@@ -55,7 +72,7 @@ impl Simulation {
     }
 
     fn structural_mass(organism:&Organism, environment:&Environment)->f64 {
-        organism.structure.units.iter().filter_map(|unit|unit.properties(&environment.catalog).map(|p|p.mass)).sum()
+        organism.material_projection(&environment.catalog).structural.mass
     }
 
     fn current_needs(organism:&Organism, environment:&Environment, parameters:DecisionParameters)->CurrentNeeds {
