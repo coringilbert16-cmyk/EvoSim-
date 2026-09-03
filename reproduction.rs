@@ -69,10 +69,9 @@ fn bounding_radius(name: &str, catalog: &[BaseResource]) -> Option<f64> {
 ///
 /// Bud material and the reproductive energy budget are committed as the
 /// attempt begins. A failed physical construction therefore represents real
-/// biological waste: consumed material and energy are not restored. Offspring
-/// viability is not decided by a fixed structural threshold here; the child
-/// carries the inherited, mutated genome into the ordinary juvenile lifecycle,
-/// where its genetically determined traits govern development and survival.
+/// biological waste: consumed material and energy are not restored. The
+/// resulting organism is an `Offspring`, not yet a juvenile. It carries the
+/// inherited, mutated genome into the pre-birth developmental lifecycle.
 pub(crate) fn try_form_bud(
     parent: &mut Organism,
     environment: &Environment,
@@ -142,7 +141,7 @@ pub(crate) fn try_form_bud(
             bonded: false,
         },
         structure: crate::structure::OrganismStructure::new(),
-        development_stage: DevelopmentStage::Juvenile,
+        development_stage: DevelopmentStage::Offspring,
         age: 0,
         reproductive_readiness: 0.0,
         active_transformation_id: None,
@@ -226,15 +225,15 @@ mod tests {
     }
 
     #[test]
-    fn ready_parent_forms_bud_from_real_material_and_inherits_genome() {
+    fn ready_parent_forms_offspring_from_real_material_and_inherits_genome() {
         let environment = environment();
         let mut parent = parent();
         let original_trait_count = parent.genome.traits.len();
         let mut rng = ChaCha8Rng::seed_from_u64(7);
         let child = try_form_bud(&mut parent, &environment, "2".into(), &mut rng)
-            .expect("ready parent with viable material should form a bud");
+            .expect("ready parent with viable material should form offspring");
 
-        assert!(matches!(child.development_stage, DevelopmentStage::Juvenile));
+        assert!(matches!(child.development_stage, DevelopmentStage::Offspring));
         assert_eq!(child.structure.units.len(), 2);
         assert_eq!(child.structure.bonds.len(), 1);
         assert_eq!(child.genome.traits.len(), original_trait_count);
