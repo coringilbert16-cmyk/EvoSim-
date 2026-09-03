@@ -4,7 +4,7 @@
 //! and the experimental COMBINE equations. Chemistry and geometry remain in
 //! their authoritative modules.
 
-use crate::combine::{bond_strength, eligible_candidates, evaluate_formation};
+use crate::combine::{bond_strength, eligible_candidates};
 use crate::contact::ConnectionCompatibilityCache;
 use crate::resources::{BaseResource, Material};
 use crate::state::{Environment, Organism};
@@ -88,7 +88,11 @@ pub(crate) fn try_combine(
             .filter_map(|candidate| {
                 let a = organism.structure.units[unit_a].properties(catalog)?;
                 let b = organism.structure.units[unit_b].properties(catalog)?;
-                Some(evaluate_formation(candidate, a.cohesion, b.cohesion))
+                Some(crate::combine::evaluate_formation(
+                    candidate,
+                    a.cohesion,
+                    b.cohesion,
+                ))
             }) {
                 if best
                     .as_ref()
@@ -124,7 +128,7 @@ pub(crate) fn try_combine(
         })
         .unwrap_or(0.0);
 
-    let (interaction, work_cost, energy_paid, surplus) =
+    let (interaction, work_cost, energy_paid) =
         crate::structural_combine::required_investment(
             props_a,
             props_b,
@@ -132,6 +136,7 @@ pub(crate) fn try_combine(
             water_field,
         )
         .ok()?;
+    let surplus = energy_paid - evaluation.threshold;
 
     if organism.usable_energy + EPSILON < energy_paid {
         return None;
