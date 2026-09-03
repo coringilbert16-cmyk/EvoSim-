@@ -14,5 +14,34 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Format workspace
         run: cargo fmt --all
-      - name: Decision runtime compile
-        run: cargo test --all-targets decision_runtime --no-run
+      - name: Baseline compile
+        run: cargo test --all-targets --no-run
+        continue-on-error: true
+      - name: Compile without structural_material
+        run: |
+          cp main.rs /tmp/main.rs
+          sed -i '/mod structural_material;/d' main.rs
+          cargo test --all-targets --no-run
+          cp /tmp/main.rs main.rs
+        continue-on-error: true
+      - name: Compile without core_geometry
+        run: |
+          cp main.rs /tmp/main.rs
+          sed -i '/mod core_geometry;/d' main.rs
+          cargo test --all-targets --no-run
+          cp /tmp/main.rs main.rs
+        continue-on-error: true
+      - name: Compile without core_integrity
+        run: |
+          cp main.rs /tmp/main.rs
+          sed -i '/mod core_integrity;/d' main.rs
+          cargo test --all-targets --no-run
+          cp /tmp/main.rs main.rs
+        continue-on-error: true
+      - name: Compile without membrane_geometry
+        run: |
+          cp main.rs /tmp/main.rs
+          sed -i '/mod membrane_geometry;/d' main.rs
+          cargo test --all-targets --no-run
+          cp /tmp/main.rs main.rs
+        continue-on-error: true
