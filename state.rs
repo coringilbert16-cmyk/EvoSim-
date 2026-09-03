@@ -67,7 +67,7 @@ pub(crate) enum DevelopmentStage {
     Juvenile,
     Adult,
 }
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct Position {
     pub(crate) x: f64,
     pub(crate) y: f64,
@@ -141,6 +141,14 @@ impl Organism {
         let mut parts = std::mem::take(&mut self.stored_unbonded.parts);
         parts.extend(material.parts);
         self.stored_unbonded.parts = crate::resources::merge_parts(&parts);
+    }
+
+    pub(crate) fn structural_mass(&self, catalog: &[BaseResource]) -> f64 {
+        self.structure
+            .units
+            .iter()
+            .filter_map(|unit| unit.properties(catalog).map(|properties| properties.mass))
+            .sum()
     }
 }
 
