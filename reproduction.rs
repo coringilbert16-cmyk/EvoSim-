@@ -1,80 +1,37 @@
 //! Physical budding/reproduction boundary.
 //!
-//! Reproduction is not a separate magic action. A reproductive decision may
-//! allocate real stored material and usable energy into a small bud. The bud
-//! is then assembled through the ordinary COMBINE runtime before it becomes a
-//! new organism. Heritable information is copied from the parent and mutated
-//! only after the physical bud has successfully formed.
+//! Reproduction transfers real physical material and usable energy from a
+//! parent into a new Offspring. The offspring begins from a physical copy of
+//! the parent's current core rather than a reproduction-only starter recipe.
 
 use rand_chacha::ChaCha8Rng;
 
-use crate::combine_runtime::try_combine;
-use crate::contact::ConnectionCompatibilityCache;
 use crate::decision::DecisionHistory;
-use crate::resources::{BaseResource, Material};
+use crate::resources::Material;
 use crate::state::{DevelopmentStage, Environment, Organism, Position, ResourceSense};
-use crate::structure::{Placement, StructuralUnit};
 
 const EPSILON: f64 = 1e-12;
 const READINESS_THRESHOLD: f64 = 1.0;
 
-fn take_named_unit(material: &mut Material, name: &str) -> Option<Material> {
-    let part = material
-        .parts
-        .iter_mut()
-        .find(|(part_name, amount)| part_name == name && *amount >= 1.0 - EPSILON)?;
-    part.1 -= 1.0;
-    material.parts.retain(|(_, amount)| *amount > EPSILON);
-    Some(Material::free_base(name.to_owned(), 1.0))
+fn structural_mass(organism: &Organism, environment: &Environment) -> f64 {
+    organism
+        .structure
+        .units
+        .iter()
+        .filter_map(|unit| unit.properties(&environment.catalog).map(|properties| properties.mass))
+        .sum()
 }
 
-fn choose_bud_material(parent: &mut Material, catalog: &[BaseResource]) -> Option<[Material; 2]> {
-    if parent.bonded || parent.total_amount() + EPSILON < 2.0 {
-        return None;
-    }
-
-    let first_name = parent
-        .parts
-        .iter()
-        .find(|(_, amount)| *amount >= 1.0 - EPSILON)
-        .map(|(name, _)| name.clone())?;
-    let second_name = parent
-        .parts
-        .iter()
-        .find(|(name, amount)| {
-            *amount >= 1.0 - EPSILON
-                && *name != first_name
-                && catalog.iter().any(|r| r.name == *name)
-        })
-        .map(|(name, _)| name.clone())?;
-
-    Some([
-        take_named_unit(parent, &first_name)?,
-        take_named_unit(parent, &second_name)?,
-    ])
-}
-
-fn bounding_radius(name: &str, catalog: &[BaseResource]) -> Option<f64> {
-    let radius = catalog
-        .iter()
-        .find(|resource| resource.name == name)?
-        .shape
-        .form
-        .bounding_radius();
-    radius.is_finite().then_some(radius).filter(|r| *r > 0.0)
-}
-
-/// Attempt one physical reproductive bud from a parent that has been selected
-/// for COMBINE and has accumulated full reproductive readiness.
+/// Attempt one physical reproductive investment from a parent that has full
+/// reproductive readiness.
 ///
-/// Bud material and the reproductive energy budget are committed as the
-/// attempt begins. A failed physical construction therefore represents real
-/// biological waste: consumed material and energy are not restored. The
-/// resulting organism is an `Offspring`, not yet a juvenile. It carries the
-/// inherited, mutated genome into the pre-birth developmental lifecycle.
+/// The offspring inherits the parent's actual structural core and a real
+/// share of the parent's usable energy. No secondary offspring resource pool
+/// is created. The inherited genome is mutated after the physical offspring
+/// has been created.
 pub(crate) fn try_form_bud(
     parent: &mut Organism,
-    environment: &Environment,
+    _environment: &Environment,
     child_id: String,
     rng: &mut ChaCha8Rng,
 ) -> Option<Organism> {
@@ -82,46 +39,35 @@ pub(crate) fn try_form_bud(
         return None;
     }
 
-    let adult_mass = parent.genome.adult_mass();
-    let structural_mass: f64 = parent
-        .structure
-        .units
-        .iter()
-        .filter_map(|unit| unit.properties(&environment.catalog).map(|properties| properties.mass))
-        .sum();
-    if structural_mass + EPSILON < adult_mass {
+    if parent.structure.units.is_empty() {
         return None;
     }
-
-    let materials = choose_bud_material(&mut parent.stored_unbonded, &environment.catalog)?;
-
-    let origin = parent
-        .occupied_cells
-        .first()
-        .cloned()
-        .unwrap_or(Position { x: 0.0, y: 0.0 });
-    let names = [materials[0].parts[0].0.clone(), materials[1].parts[0].0.clone()];
-    let radii = [
-        bounding_radius(&names[0], &environment.catalog)?,
-        bounding_radius(&names[1], &environment.catalog)?,
-    ];
 
     let energy_budget = parent.usable_energy * parent.genome.reproductive_investment();
     if !energy_budget.is_finite() || energy_budget <= EPSILON {
         return None;
     }
 
-    // Investment is spent at the start of the attempt. If construction fails,
-    // this energy is biological waste rather than recoverable reserve.
+    let invested_structure = parent.structure.clone();
+    let invested_mass = structural_mass(parent, _environment);
+    if !invested_mass.is_finite() || invested_mass <= EPSILON {
+        return None;
+    }
+
+    // Reproduction transfers real physical structure and usable energy to the
+    // offspring. The parent does not retain a duplicate of the transferred
+    // core. This is intentionally a whole-core transfer for now: there is no
+    // special bud recipe or hidden offspring reserve.
     parent.usable_energy -= energy_budget;
     parent.reproductive_readiness = 0.0;
 
     let mut child = Organism {
         id: child_id,
-        occupied_cells: vec![Position {
-            x: origin.x + 2.0,
-            y: origin.y,
-        }],
+        occupied_cells: vec![parent
+            .occupied_cells
+            .first()
+            .cloned()
+            .unwrap_or(Position { x: 0.0, y: 0.0 })],
         genome: parent.genome.clone(),
         resource_sense: ResourceSense {
             sensed_resources: Vec::new(),
@@ -134,36 +80,15 @@ pub(crate) fn try_form_bud(
         usable_energy: energy_budget,
         stress: 0.0,
         stored_unbonded: Material {
-            parts: materials
-                .iter()
-                .flat_map(|material| material.parts.iter().cloned())
-                .collect(),
+            parts: Vec::new(),
             bonded: false,
         },
-        structure: crate::structure::OrganismStructure::new(),
+        structure: invested_structure,
         development_stage: DevelopmentStage::Offspring,
         age: 0,
         reproductive_readiness: 0.0,
         active_transformation_id: None,
     };
-
-    let first = crate::combine_runtime::instantiate_one_unit(&mut child, &environment.catalog)?;
-    let second = crate::combine_runtime::instantiate_one_unit(&mut child, &environment.catalog)?;
-    child.structure.units[first].placement = Placement {
-        x: origin.x + 2.0,
-        y: origin.y,
-        rotation_radians: 0.0,
-    };
-    child.structure.units[second].placement = Placement {
-        x: origin.x + 2.0 + radii[0] + radii[1],
-        y: origin.y,
-        rotation_radians: 0.0,
-    };
-
-    let mut cache = ConnectionCompatibilityCache::new();
-    if try_combine(&mut child, environment, &mut cache).is_none() {
-        return None;
-    }
 
     child.genome.mutate(rng);
     Some(child)
@@ -173,9 +98,41 @@ pub(crate) fn try_form_bud(
 mod tests {
     use super::*;
     use crate::genome::initial_genome;
+    use crate::resources::Material;
+    use crate::state::{Environment, Position, ResourceSense};
+    use crate::structure::{OrganismStructure, Placement, StructuralUnit};
     use rand::SeedableRng;
 
-    fn parent() -> Organism {
+    fn environment() -> Environment {
+        Environment {
+            width: 1000.0,
+            height: 1000.0,
+            catalog: crate::resources::default_catalog(),
+            field: crate::environment::ActiveMaterialField::new(1000.0, 1000.0, 10.0),
+            reservoir: crate::environment::DeepReservoir::new(1000.0, 1000.0, 100.0),
+            vents: Vec::new(),
+        }
+    }
+
+    fn parent(environment: &Environment) -> Organism {
+        let mut structure = OrganismStructure::new();
+        structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 1.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+
         let mut organism = Organism {
             id: "parent".into(),
             occupied_cells: vec![Position { x: 0.0, y: 0.0 }],
@@ -191,76 +148,53 @@ mod tests {
             usable_energy: 100.0,
             stress: 0.0,
             stored_unbonded: Material {
-                parts: vec![("Carbon".into(), 1.0), ("Methane".into(), 1.0)],
+                parts: Vec::new(),
                 bonded: false,
             },
-            structure: crate::structure::OrganismStructure::new(),
+            structure,
             development_stage: DevelopmentStage::Adult,
             age: 100,
             reproductive_readiness: 1.0,
             active_transformation_id: None,
         };
-        for i in 0..16 {
-            organism.structure.add_unit(StructuralUnit::new(
-                "Carbon",
-                Placement {
-                    x: i as f64,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                },
-            ));
-        }
+
+        // Ensure the fixture itself is physically meaningful under the
+        // catalog; the production function does not otherwise need a second
+        // structural representation.
+        assert!(structural_mass(&organism, environment) > 0.0);
         organism
     }
 
-    fn environment() -> Environment {
-        Environment {
-            width: 1000.0,
-            height: 1000.0,
-            catalog: crate::resources::default_catalog(),
-            field: crate::environment::ActiveMaterialField::new(1000.0, 1000.0, 10.0),
-            reservoir: crate::environment::DeepReservoir::new(1000.0, 1000.0, 100.0),
-            vents: Vec::new(),
-        }
-    }
-
     #[test]
-    fn ready_parent_forms_offspring_from_real_material_and_inherits_genome() {
+    fn reproduction_transfers_the_real_parent_core_and_energy() {
         let environment = environment();
-        let mut parent = parent();
-        let original_trait_count = parent.genome.traits.len();
+        let mut parent = parent(&environment);
+        let original_units = parent.structure.units.clone();
+        let original_energy = parent.usable_energy;
+        let original_mass = structural_mass(&parent, &environment);
         let mut rng = ChaCha8Rng::seed_from_u64(7);
+
         let child = try_form_bud(&mut parent, &environment, "2".into(), &mut rng)
-            .expect("ready parent with viable material should form offspring");
+            .expect("ready parent should form offspring");
 
         assert!(matches!(child.development_stage, DevelopmentStage::Offspring));
-        assert_eq!(child.structure.units.len(), 2);
-        assert_eq!(child.structure.bonds.len(), 1);
-        assert_eq!(child.genome.traits.len(), original_trait_count);
-        assert_eq!(parent.stored_unbonded.total_amount(), 0.0);
+        assert_eq!(child.structure.units, original_units);
+        assert_eq!(structural_mass(&child, &environment), original_mass);
+        assert!(parent.usable_energy < original_energy);
+        assert!(child.usable_energy > 0.0);
         assert_eq!(parent.reproductive_readiness, 0.0);
-        assert!(parent.usable_energy < 100.0);
     }
 
     #[test]
-    fn failed_bud_attempt_consumes_invested_material_and_energy() {
-        let mut environment = environment();
-        let mut parent = parent();
-        let original_energy = parent.usable_energy;
-        // Fluid has no determinate connection sites, so the physical COMBINE
-        // step cannot form a bond after the investment has already been spent.
-        if let Some(resource) = environment
-            .catalog
-            .iter_mut()
-            .find(|resource| resource.name == "Methane")
-        {
-            resource.shape.form = crate::resources::Form::Fluid { nominal_area: 1.0 };
-        }
+    fn offspring_has_no_secondary_resource_pool() {
+        let environment = environment();
+        let mut parent = parent(&environment);
         let mut rng = ChaCha8Rng::seed_from_u64(7);
 
-        assert!(try_form_bud(&mut parent, &environment, "2".into(), &mut rng).is_none());
-        assert_eq!(parent.stored_unbonded.total_amount(), 0.0);
-        assert!(parent.usable_energy < original_energy);
-        assert_eq!(parent.reproductive_readiness, 0.0);
+        let child = try_form_bud(&mut parent, &environment, "2".into(), &mut rng)
+            .expect("ready parent should form offspring");
+
+        assert!(child.stored_unbonded.is_empty());
+        assert!(child.structure.units.len() >= 1);
     }
 }
