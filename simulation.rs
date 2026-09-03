@@ -211,7 +211,8 @@ impl Simulation {
             can_move: organism.active_transformation_id.is_none(),
             can_acquire: false,
             can_combine: organism.active_transformation_id.is_none()
-                && organism.structure.units.len() >= 2,
+                && (organism.structure.units.len() >= 2
+                    || organism.stored_unbonded.total_amount() >= 2.0 - f64::EPSILON),
             can_break: organism.active_transformation_id.is_none()
                 && !organism.structure.bonds.is_empty(),
             can_expel: false,
@@ -316,62 +317,85 @@ impl Simulation {
             );
         }
 
-        let (organisms, environment) = (&mut self.organisms, &mut self.environment);
-        let mut compatibility_cache = crate::contact::ConnectionCompatibilityCache::new();
-        for organism in organisms {
-            if completed_organisms.contains(&organism.id) {
+        let mut reproduction_requests = Vec::new();
+        {
+            let (organisms, environment) = (&mut self.organisms, &mut self.environment);
+            let mut compatibility_cache = crate::contact::ConnectionCompatibilityCache::new();
+            for organism in organisms {
+                if completed_organisms.contains(&organism.id) {
+                    continue;
+                }
+                let needs = Self::current_needs(organism, environment, decision_parameters);
+                let eligibility = Self::action_eligibility(organism, environment);
+                let context = DecisionContext { needs, eligibility };
+                let candidates = Self::decision_candidates(organism, needs, eligibility);
+                let Some(selected) = select_action(context, &organism.decision_history, &candidates)
+                else {
+                    continue;
+                };
+
+                match selected.action {
+                    ActionKind::Move => {
+                        let moved = Self::update_movement(organism, environment);
+                        crate::decision_runtime::record_outcome(
+                            &mut organism.decision_history,
+                            &selected,
+                            if moved {
+                                crate::decision::OutcomeKind::Neutral
+                            } else {
+                                crate::decision::OutcomeKind::Harmful
+                            },
+                        );
+                    }
+                    ActionKind::Combine => {
+                        let combined = crate::combine_runtime::try_combine(
+                            organism,
+                            environment,
+                            &mut compatibility_cache,
+                        )
+                        .is_some();
+                        crate::decision_runtime::record_outcome(
+                            &mut organism.decision_history,
+                            &selected,
+                            if combined {
+                                crate::decision::OutcomeKind::Neutral
+                            } else {
+                                crate::decision::OutcomeKind::Harmful
+                            },
+                        );
+                        if organism.reproductive_readiness >= 1.0 - f64::EPSILON {
+                            reproduction_requests.push(organism.id.clone());
+                        }
+                    }
+                    ActionKind::Break => {
+                        if let Some(transformation) = Self::try_start_transformation(
+                            organism,
+                            &environment.catalog,
+                            &mut self.next_transformation_id,
+                            &selected,
+                        ) {
+                            self.active_transformations.push(transformation);
+                        }
+                    }
+                    ActionKind::Acquire | ActionKind::Expel => {}
+                }
+            }
+        }
+
+        for index in 0..self.organisms.len() {
+            if !reproduction_requests.contains(&self.organisms[index].id) {
                 continue;
             }
-            let needs = Self::current_needs(organism, environment, decision_parameters);
-            let eligibility = Self::action_eligibility(organism, environment);
-            let context = DecisionContext { needs, eligibility };
-            let candidates = Self::decision_candidates(organism, needs, eligibility);
-            let Some(selected) = select_action(context, &organism.decision_history, &candidates)
-            else {
-                continue;
-            };
-
-            match selected.action {
-                ActionKind::Move => {
-                    let moved = Self::update_movement(organism, environment);
-                    crate::decision_runtime::record_outcome(
-                        &mut organism.decision_history,
-                        &selected,
-                        if moved {
-                            crate::decision::OutcomeKind::Neutral
-                        } else {
-                            crate::decision::OutcomeKind::Harmful
-                        },
-                    );
-                }
-                ActionKind::Combine => {
-                    let combined = crate::combine_runtime::try_combine(
-                        organism,
-                        environment,
-                        &mut compatibility_cache,
-                    )
-                    .is_some();
-                    crate::decision_runtime::record_outcome(
-                        &mut organism.decision_history,
-                        &selected,
-                        if combined {
-                            crate::decision::OutcomeKind::Neutral
-                        } else {
-                            crate::decision::OutcomeKind::Harmful
-                        },
-                    );
-                }
-                ActionKind::Break => {
-                    if let Some(transformation) = Self::try_start_transformation(
-                        organism,
-                        &environment.catalog,
-                        &mut self.next_transformation_id,
-                        &selected,
-                    ) {
-                        self.active_transformations.push(transformation);
-                    }
-                }
-                ActionKind::Acquire | ActionKind::Expel => {}
+            let child_id = self.next_organism_id.to_string();
+            let child = crate::reproduction::try_form_bud(
+                &mut self.organisms[index],
+                &self.environment,
+                child_id,
+                &mut self.rng,
+            );
+            if let Some(child) = child {
+                self.next_organism_id += 1;
+                self.organisms.push(child);
             }
         }
 
