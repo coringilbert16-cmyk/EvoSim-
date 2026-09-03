@@ -4,7 +4,7 @@
 //! units and bonds are physical. Placement is supplied by the organism.
 
 use crate::combine::{
-    evaluate_bond_strength, evaluate_formation, experimental_combine_work_cost,
+    bond_strength, evaluate_formation, experimental_combine_work_cost,
     experimental_interaction, ExperimentalInteraction,
 };
 use crate::contact::{connection_pair_candidates_cached, ConnectionCompatibilityCache};
@@ -99,8 +99,7 @@ pub fn execute(
         return Err(StructuralCombineError::InsufficientInvestment);
     }
     let surplus = investment - formation.threshold;
-    let bond_strength = evaluate_bond_strength(formation, investment)
-        .ok_or(StructuralCombineError::InsufficientInvestment)?;
+    let bond_strength = bond_strength(*a, *b);
     if !bond_strength.is_finite() {
         return Err(StructuralCombineError::NonFiniteBondStrength);
     }
