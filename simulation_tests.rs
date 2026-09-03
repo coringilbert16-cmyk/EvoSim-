@@ -79,9 +79,7 @@ mod integration_tests {
         assert!(ever_sensed_something);
     }
 
-    #[test]
-    fn organism_can_break_a_structural_bond_and_records_outcome() {
-        let mut sim = Simulation::new(7, 10.0);
+    fn add_test_break_bond(sim: &mut Simulation) {
         let a = sim.organisms[0].structure.add_unit(StructuralUnit::new(
             "Carbon",
             Placement {
@@ -106,6 +104,32 @@ mod integration_tests {
             strength: 0.8,
             bond_energy: 12.5,
         });
+    }
+
+    #[test]
+    fn break_action_starts_a_transformation_before_resolution() {
+        let mut sim = Simulation::new(7, 10.0);
+        add_test_break_bond(&mut sim);
+
+        assert_eq!(sim.organisms[0].structure.bonds.len(), 1);
+        sim.step();
+
+        assert_eq!(sim.organisms[0].structure.bonds.len(), 1);
+        assert!(
+            sim.organisms[0].active_transformation_id.is_some(),
+            "BREAK should start a transformation before its delayed resolution"
+        );
+        assert_eq!(sim.active_transformations.len(), 1);
+        assert_eq!(
+            sim.active_transformations[0].decision_context_key.as_deref(),
+            Some("bond:0")
+        );
+    }
+
+    #[test]
+    fn organism_can_break_a_structural_bond_and_records_outcome() {
+        let mut sim = Simulation::new(7, 10.0);
+        add_test_break_bond(&mut sim);
         let before = sim.organisms[0].usable_energy;
         for _ in 0..20 {
             sim.step();
