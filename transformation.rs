@@ -19,7 +19,7 @@ impl Simulation {
             .structure
             .bonds
             .iter()
-            .find(|bond| bond_identity(*bond) == identity)?;
+            .find(|bond| bond_identity(bond) == identity)?;
         if !bond.bond_energy.is_finite() || bond.bond_energy < 0.0 {
             return None;
         }
@@ -142,17 +142,17 @@ impl Simulation {
 
 /// Return a canonical identity tuple for a bond. Endpoint ordering does not
 /// matter, so the same structural bond has one decision-history context key.
-fn bond_identity(bond: crate::structure::Bond) -> (usize, u8, usize, u8) {
+fn bond_identity(bond: &crate::structure::Bond) -> ((usize, usize), (usize, usize)) {
     let left = (bond.unit_a, bond.point_a);
     let right = (bond.unit_b, bond.point_b);
     if left <= right {
-        (left.0, left.1, right.0, right.1)
+        (left, right)
     } else {
-        (right.0, right.1, left.0, left.1)
+        (right, left)
     }
 }
 
-fn parse_bond_context_key(key: &str) -> Option<(usize, u8, usize, u8)> {
+fn parse_bond_context_key(key: &str) -> Option<((usize, usize), (usize, usize))> {
     let mut parts = key.strip_prefix("bond:")?.split(':');
     let unit_a = parts.next()?.parse().ok()?;
     let point_a = parts.next()?.parse().ok()?;
@@ -161,7 +161,13 @@ fn parse_bond_context_key(key: &str) -> Option<(usize, u8, usize, u8)> {
     if parts.next().is_some() {
         return None;
     }
-    Some((unit_a, point_a, unit_b, point_b))
+    let left = (unit_a, point_a);
+    let right = (unit_b, point_b);
+    Some(if left <= right {
+        (left, right)
+    } else {
+        (right, left)
+    })
 }
 
 /// Experimental BREAK work model.
