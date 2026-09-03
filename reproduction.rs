@@ -8,7 +8,6 @@
 //! only create a separate organism when the developing structure reaches the
 //! genetically determined juvenile threshold.
 
-use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 
 use crate::state::{DevelopmentStage, Organism, ReproductiveConstruction};
