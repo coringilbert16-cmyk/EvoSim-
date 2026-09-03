@@ -33,11 +33,7 @@ pub fn approve(context: DecisionContext, action: ActionKind) -> DecisionResult {
 }
 
 fn need_pressure(action: ActionKind, needs: CurrentNeeds) -> f64 {
-    action
-        .relevant_needs()
-        .iter()
-        .map(|need| needs.pressure(*need))
-        .fold(0.0_f64, |best, pressure| best.max(pressure))
+    action.relevant_needs().iter().map(|need| needs.pressure(*need)).fold(0.0_f64, |best, pressure| best.max(pressure))
 }
 
 fn history_adjustment(history: &DecisionHistory, candidate: &ActionCandidate) -> f64 {
@@ -48,11 +44,7 @@ fn history_adjustment(history: &DecisionHistory, candidate: &ActionCandidate) ->
     }
 }
 
-pub fn select_action(
-    context: DecisionContext,
-    history: &DecisionHistory,
-    candidates: &[ActionCandidate],
-) -> Option<ActionCandidate> {
+pub fn select_action(context: DecisionContext, history: &DecisionHistory, candidates: &[ActionCandidate]) -> Option<ActionCandidate> {
     let mut best: Option<(f64, ActionCandidate)> = None;
     for candidate in candidates {
         if approve(context, candidate.action) != DecisionResult::Approve { continue; }
@@ -62,10 +54,6 @@ pub fn select_action(
     best.map(|(_, candidate)| candidate)
 }
 
-pub fn record_outcome(history: &mut DecisionHistory, candidate: &ActionCandidate, outcome: OutcomeKind) {
-    history.record(candidate.action, candidate.context_key.clone(), outcome);
-}
+pub fn record_outcome(history: &mut DecisionHistory, candidate: &ActionCandidate, outcome: OutcomeKind) { history.record(candidate.action, candidate.context_key.clone(), outcome); }
 
-pub fn known_outcome(history: &DecisionHistory, action: ActionKind, context_key: Option<&str>) -> bool {
-    outcome_is_known(history, action, context_key)
-}
+pub fn known_outcome(history: &DecisionHistory, action: ActionKind, context_key: Option<&str>) -> bool { outcome_is_known(history, action, context_key) }
