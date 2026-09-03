@@ -1,9 +1,10 @@
-//! COMBINE support: deterministic recipe caching, locked formation threshold,
-//! and explicitly experimental interaction / bond-strength equations.
+//! COMBINE support: deterministic recipe caching, locked formation threshold, and
+//! resource-derived bond strength.
 //!
-//! Potential energy establishes direction; reactivity and geometry modify
-//! magnitude. Formation uses the locked cohesion/load threshold. Surplus maps
-//! to bond strength through capped diminishing returns.
+//! Potential energy establishes interaction direction; reactivity and geometry
+//! modify interaction magnitude. Formation uses the locked cohesion/load
+//! threshold. Intrinsic bond strength is derived only from the immutable
+//! cohesion properties of the two resources.
 
 use std::collections::HashMap;
 
@@ -72,6 +73,20 @@ pub fn experimental_combine_work_cost(
     let complexity_factor = 1.0 + ((a.mass.max(0.0) + b.mass.max(0.0)) * 0.5).sqrt();
     let cohesion_factor = 1.0 + ((a.cohesion.clamp(0.0, 1.0) + b.cohesion.clamp(0.0, 1.0)) * 0.5);
     (0.25 + interaction.magnitude) * complexity_factor * cohesion_factor
+}
+
+/// Derives the intrinsic strength of a formed bond solely from the immutable
+/// cohesion of its two constituent resource types.
+///
+/// Formation conditions such as investment, load, geometry, water, potential
+/// energy, and reactivity do not enter this calculation. Those belong to the
+/// formation interaction process, not to the identity of the resulting bond.
+pub fn bond_strength(a: ResourceProperties, b: ResourceProperties) -> f64 {
+    if !a.cohesion.is_finite() || !b.cohesion.is_finite() {
+        return 0.0;
+    }
+
+    (a.cohesion.clamp(0.0, 1.0) * b.cohesion.clamp(0.0, 1.0)).sqrt()
 }
 
 pub fn experimental_bond_strength(surplus: f64) -> f64 {
@@ -356,6 +371,28 @@ mod tests {
                 .abs()
                 < 1e-12
         );
+    }
+    #[test]
+    fn intrinsic_bond_strength_is_cohesion_only() {
+        let a = props(1.0, 0.1, 0.8);
+        let b = props(10.0, 4.0, 0.2);
+        let altered = ResourceProperties {
+            mass: 100.0,
+            potential_energy: -500.0,
+            reactivity: 0.0,
+            cohesion: 0.2,
+        };
+        let expected = (0.8_f64 * 0.2_f64).sqrt();
+        assert!((bond_strength(a, b) - expected).abs() < 1e-12);
+        assert!((bond_strength(a, b) - bond_strength(a, altered)).abs() < 1e-12);
+        assert!((bond_strength(a, b) - bond_strength(b, a)).abs() < 1e-12);
+    }
+    #[test]
+    fn intrinsic_bond_strength_is_bounded_and_rejects_non_finite_cohesion() {
+        assert!((bond_strength(props(0.0, 0.0, 0.0), props(0.0, 0.0, 1.0))).abs() < 1e-12);
+        assert!((bond_strength(props(0.0, 0.0, 1.0), props(0.0, 0.0, 1.0)) - 1.0).abs() < 1e-12);
+        assert_eq!(bond_strength(props(0.0, 0.0, f64::NAN), props(0.0, 0.0, 1.0)), 0.0);
+        assert_eq!(bond_strength(props(0.0, 0.0, f64::INFINITY), props(0.0, 0.0, 1.0)), 0.0);
     }
     #[test]
     fn bond_strength_has_capped_diminishing_returns() {
