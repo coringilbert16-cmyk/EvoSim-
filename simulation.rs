@@ -170,8 +170,6 @@ impl Simulation {
             .sum()
     }
 
-    /// Derive the two independent continuous need pressures. No pressure is
-    /// forced to be the inverse of the other.
     fn current_needs(
         organism: &Organism,
         environment: &Environment,
@@ -185,11 +183,6 @@ impl Simulation {
         let maturity = (Self::structural_mass(organism, environment) / adult_mass).clamp(0.0, 1.0);
         let reproduction_reserve = parameters.reproduction_reserve.max(f64::EPSILON);
         let energy_readiness = (organism.usable_energy / reproduction_reserve).clamp(0.0, 1.0);
-
-        // Maturity and energy readiness are accumulated into reproductive
-        // readiness separately in update_reproductive_readiness(). Keeping
-        // the pressure itself as the accumulated state prevents mature,
-        // energy-ready organisms from being permanently forced to reproduce.
         let _ = (maturity, energy_readiness);
         CurrentNeeds {
             survival,
@@ -293,11 +286,6 @@ impl Simulation {
         }
         self.active_transformations = still_active;
 
-        // A transformation resolves atomically at the beginning of a tick.
-        // Do not immediately execute a second action for the same organism in
-        // that tick: otherwise newly released energy can cause COMBINE to
-        // recreate the structure we just broke before the resolved state can
-        // exist for a full simulation tick.
         let mut completed_organisms = HashSet::new();
         for transformation in &completed {
             completed_organisms.insert(transformation.organism_id.clone());
@@ -376,6 +364,7 @@ impl Simulation {
                 ActionKind::Break => {
                     if let Some(transformation) = Self::try_start_transformation(
                         organism,
+                        &environment.catalog,
                         &mut self.next_transformation_id,
                         &selected,
                     ) {
