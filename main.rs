@@ -9,6 +9,7 @@ mod decision_runtime;
 mod environment;
 mod genome;
 mod math;
+mod material_projection;
 mod membrane_geometry;
 mod resources;
 mod structural_combine;
