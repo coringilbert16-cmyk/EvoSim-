@@ -50,7 +50,27 @@ impl Simulation {
             organism.active_transformation_id = None;
             return;
         };
-        let Some(removed_bond) = organism.structure.break_matching_bond(target_bond) else {
+
+        // The organism is locked against further structural actions while a
+        // BREAK transformation is active, so the decision's bond index remains
+        // stable for the duration of the transformation. Prefer structural
+        // identity matching, but retain the original decision index as a
+        // deterministic fallback for an otherwise unchanged structure.
+        let removed_bond = organism.structure.break_matching_bond(target_bond).or_else(|| {
+            let bond_index = transformation
+                .decision_context_key
+                .as_deref()
+                .and_then(|key| key.strip_prefix("bond:"))
+                .and_then(|index| index.parse::<usize>().ok())?;
+            let current = *organism.structure.bonds.get(bond_index)?;
+            if current.has_same_identity(&target_bond) {
+                organism.structure.break_bond(bond_index)
+            } else {
+                None
+            }
+        });
+
+        let Some(removed_bond) = removed_bond else {
             organism.active_transformation_id = None;
             return;
         };
