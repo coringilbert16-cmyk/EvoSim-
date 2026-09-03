@@ -1,16 +1,20 @@
 //! Physical budding/reproduction boundary.
 //!
-//! Reproduction transfers an actual connected structural subgraph from the
-//! parent into a new Offspring. No structural cloning or reproduction-only
-//! material pool is used.
+//! Reproduction transfers an actual connected structural core from the parent
+//! into a new Offspring. The core is the parent's required reproductive
+//! investment; juvenile mass is a later developmental threshold reached by
+//! the offspring through continued growth.
 
 use rand::Rng;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::{HashMap, HashSet};
 
+use crate::core_integrity::CoreIntegrity;
 use crate::state::{DevelopmentStage, Environment, Organism, Position, ResourceSense};
 use crate::structure::OrganismStructure;
+
+const CORE_UNIT_COUNT: usize = 6;
 
 /// Derive an organism's spatial anchor from its actual structural geometry.
 fn structural_anchor_position(structure: &OrganismStructure) -> Option<(f64, f64)> {
@@ -134,74 +138,145 @@ fn crossing_bond_energy(structure: &OrganismStructure, selected_units: &[usize])
         .sum()
 }
 
-/// Select a connected bud whose structural mass reaches the parent's genetic
-/// juvenile threshold while leaving at least one structural unit behind.
-fn select_bud_units(
-    parent: &Organism,
-    environment: &Environment,
-    rng: &mut ChaCha8Rng,
-) -> Option<Vec<usize>> {
-    let unit_count = parent.structure.units.len();
-    if unit_count < 2 {
-        return None;
+fn is_intact_core(structure: &OrganismStructure, units: &[usize]) -> bool {
+    if units.len() != CORE_UNIT_COUNT {
+        return false;
+    }
+    let Ok(unit_indices) = <[usize; CORE_UNIT_COUNT]>::try_from(units) else {
+        return false;
+    };
+    CoreIntegrity::new(unit_indices)
+        .map(|core| core.is_intact(structure))
+        .unwrap_or(false)
+}
+
+/// Find connected six-unit subsets that satisfy the actual core-integrity
+/// invariant. This deliberately does not use juvenile mass: juvenile mass is
+/// the offspring's later developmental threshold, not the birth requirement.
+fn core_candidates(structure: &OrganismStructure) -> Vec<Vec<usize>> {
+    if structure.units.len() < CORE_UNIT_COUNT {
+        return Vec::new();
     }
 
-    let target_mass = parent.genome.juvenile_mass();
-    let mut candidates = Vec::new();
-
-    for start in 0..unit_count {
-        let mut selected = Vec::new();
-        let mut selected_set = HashSet::new();
-        let mut frontier = vec![start];
-
-        while let Some(unit) = frontier.pop() {
-            if !selected_set.insert(unit) {
-                continue;
+    fn neighbors(structure: &OrganismStructure, unit: usize) -> Vec<usize> {
+        let mut result = Vec::new();
+        for bond in &structure.bonds {
+            let neighbor = if bond.unit_a == unit {
+                Some(bond.unit_b)
+            } else if bond.unit_b == unit {
+                Some(bond.unit_a)
+            } else {
+                None
+            };
+            if let Some(neighbor) = neighbor {
+                result.push(neighbor);
             }
+        }
+        result.sort_unstable();
+        result.dedup();
+        result
+    }
+
+    fn search(
+        structure: &OrganismStructure,
+        start: usize,
+        selected: &mut Vec<usize>,
+        selected_set: &mut HashSet<usize>,
+        frontier: &mut HashSet<usize>,
+        candidates: &mut HashSet<Vec<usize>>,
+    ) {
+        if selected.len() == CORE_UNIT_COUNT {
+            let mut candidate = selected.clone();
+            candidate.sort_unstable();
+            if is_intact_core(structure, &candidate) {
+                candidates.insert(candidate);
+            }
+            return;
+        }
+
+        let choices: Vec<usize> = frontier
+            .iter()
+            .copied()
+            .filter(|&unit| unit >= start && !selected_set.contains(&unit))
+            .collect();
+
+        for unit in choices {
             selected.push(unit);
-
-            let mass: f64 = selected
-                .iter()
-                .filter_map(|&index| {
-                    parent
-                        .structure
-                        .units[index]
-                        .properties(&environment.catalog)
-                        .map(|properties| properties.mass)
-                })
-                .sum();
-            if mass + f64::EPSILON >= target_mass {
-                break;
+            selected_set.insert(unit);
+            let was_frontier = frontier.remove(&unit);
+            let mut added = Vec::new();
+            for neighbor in neighbors(structure, unit) {
+                if neighbor >= start && !selected_set.contains(&neighbor) && frontier.insert(neighbor) {
+                    added.push(neighbor);
+                }
             }
 
-            for bond in &parent.structure.bonds {
-                let neighbor = if bond.unit_a == unit {
-                    bond.unit_b
-                } else if bond.unit_b == unit {
-                    bond.unit_a
-                } else {
-                    continue;
-                };
-                if !selected_set.contains(&neighbor) {
-                    frontier.push(neighbor);
+            search(structure, start, selected, selected_set, frontier, candidates);
+
+            for neighbor in added {
+                frontier.remove(&neighbor);
+            }
+            if was_frontier {
+                frontier.insert(unit);
+            }
+            selected_set.remove(&unit);
+            selected.pop();
+        }
+    }
+
+    let mut candidates = HashSet::new();
+    for start in 0..structure.units.len() {
+        let mut selected = vec![start];
+        let mut selected_set = HashSet::from([start]);
+        let mut frontier = HashSet::new();
+        for bond in &structure.bonds {
+            let neighbor = if bond.unit_a == start {
+                Some(bond.unit_b)
+            } else if bond.unit_b == start {
+                Some(bond.unit_a)
+            } else {
+                None
+            };
+            if let Some(neighbor) = neighbor {
+                if neighbor >= start {
+                    frontier.insert(neighbor);
                 }
             }
         }
+        search(
+            structure,
+            start,
+            &mut selected,
+            &mut selected_set,
+            &mut frontier,
+            &mut candidates,
+        );
+    }
 
-        if selected.len() < unit_count {
-            let mass: f64 = selected
+    candidates.into_iter().collect()
+}
+
+/// Select a six-unit intact core for the offspring while preserving an intact
+/// six-unit core in the parent. The offspring may be below juvenile mass at
+/// birth and must grow after this transfer.
+fn select_bud_units(
+    parent: &Organism,
+    rng: &mut ChaCha8Rng,
+) -> Option<Vec<usize>> {
+    let cores = core_candidates(&parent.structure);
+    if cores.len() < 2 {
+        return None;
+    }
+
+    let mut candidates = Vec::new();
+    for offspring_core in &cores {
+        let offspring_set: HashSet<usize> = offspring_core.iter().copied().collect();
+        if cores.iter().any(|parent_core| {
+            parent_core
                 .iter()
-                .filter_map(|&index| {
-                    parent
-                        .structure
-                        .units[index]
-                        .properties(&environment.catalog)
-                        .map(|properties| properties.mass)
-                })
-                .sum();
-            if mass + f64::EPSILON >= target_mass {
-                candidates.push((mass - target_mass, selected));
-            }
+                .all(|unit| !offspring_set.contains(unit))
+        }) {
+            candidates.push(offspring_core.clone());
         }
     }
 
@@ -209,18 +284,28 @@ fn select_bud_units(
         return None;
     }
 
-    candidates.sort_by(|a, b| a.0.total_cmp(&b.0));
-    let best_excess = candidates[0].0;
-    let tied: Vec<_> = candidates
-        .into_iter()
-        .take_while(|candidate| (candidate.0 - best_excess).abs() <= 1e-9)
-        .collect();
-    Some(tied[rng.gen_range(0..tied.len())].1.clone())
+    Some(candidates[rng.gen_range(0..candidates.len())].clone())
 }
 
-/// Form an Offspring by transferring real parent structure and a fraction of
-/// the parent's usable energy. The parent is mutated only after the complete
-/// split has been validated, so failed reproduction leaves it unchanged.
+fn remapped_indices_after_split(
+    structure: &OrganismStructure,
+    selected_units: &[usize],
+    preserved_units: &[usize],
+) -> Option<Vec<usize>> {
+    let selected: HashSet<usize> = selected_units.iter().copied().collect();
+    preserved_units
+        .iter()
+        .map(|&unit| {
+            (unit < structure.units.len() && !selected.contains(&unit))
+                .then(|| (0..unit).filter(|index| !selected.contains(index)).count())
+        })
+        .collect()
+}
+
+/// Form an Offspring by transferring real parent core structure and a fraction
+/// of the parent's usable energy. The parent is mutated only after the
+/// complete split has been validated, so failed reproduction leaves it
+/// unchanged.
 pub(crate) fn try_form_bud(
     parent: &mut Organism,
     environment: &Environment,
@@ -234,9 +319,29 @@ pub(crate) fn try_form_bud(
         return None;
     }
 
-    let selected_units = select_bud_units(parent, environment, rng)?;
+    let parent_cores = core_candidates(&parent.structure);
+    if parent_cores.len() < 2 {
+        return None;
+    }
+
+    let selected_units = select_bud_units(parent, rng)?;
+    let preserved_core = parent_cores.iter().find(|core| {
+        let selected: HashSet<usize> = selected_units.iter().copied().collect();
+        core.iter().all(|unit| !selected.contains(unit))
+    })?.clone();
+
     let (remaining_structure, offspring_structure) =
         split_structure(&parent.structure, &selected_units)?;
+
+    if !is_intact_core(&offspring_structure, &(0..CORE_UNIT_COUNT).collect::<Vec<_>>()) {
+        return None;
+    }
+    let remapped_parent_core =
+        remapped_indices_after_split(&parent.structure, &selected_units, &preserved_core)?;
+    if !is_intact_core(&remaining_structure, &remapped_parent_core) {
+        return None;
+    }
+
     let anchor = structural_anchor_position(&offspring_structure)?;
     let released_bond_energy = crossing_bond_energy(&parent.structure, &selected_units);
 
@@ -337,6 +442,43 @@ mod tests {
         }
     }
 
+    fn core_structure() -> OrganismStructure {
+        let mut structure = OrganismStructure::new();
+        for y in [0.0, 3.0] {
+            for x in 0..6 {
+                structure.add_unit(StructuralUnit::new(
+                    "Carbon",
+                    Placement {
+                        x: x as f64,
+                        y,
+                        rotation_radians: 0.0,
+                    },
+                ));
+            }
+        }
+        for offset in [0usize, 6usize] {
+            for i in 0..6 {
+                structure.add_bond(Bond {
+                    unit_a: offset + i,
+                    point_a: 0,
+                    unit_b: offset + (i + 1) % 6,
+                    point_b: 1,
+                    strength: 0.5,
+                    bond_energy: 1.0,
+                });
+            }
+        }
+        structure.add_bond(Bond {
+            unit_a: 0,
+            point_a: 2,
+            unit_b: 6,
+            point_b: 2,
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+        structure
+    }
+
     fn adult_parent() -> Organism {
         Organism {
             id: "parent".into(),
@@ -347,6 +489,7 @@ mod tests {
                 direction_x: 0.0,
                 direction_y: 0.0,
                 direction_strength: 0.0,
+                sensed_resources: Vec::new(),
             },
             memory: Vec::new(),
             decision_history: crate::decision::DecisionHistory::default(),
@@ -356,7 +499,7 @@ mod tests {
                 parts: Vec::new(),
                 bonded: false,
             },
-            structure: structure(),
+            structure: core_structure(),
             development_stage: DevelopmentStage::Adult,
             age: 10,
             reproductive_readiness: 1.0,
@@ -398,7 +541,7 @@ mod tests {
     }
 
     #[test]
-    fn budding_transfers_real_structure_and_energy() {
+    fn budding_transfers_real_core_and_energy_before_juvenile_growth() {
         let environment = environment();
         let mut parent = adult_parent();
         let original_mass = parent.structural_mass(&environment.catalog);
@@ -433,7 +576,7 @@ mod tests {
         assert!((combined_mass - original_mass).abs() <= f64::EPSILON);
         assert!((combined_energy - (original_usable_energy + original_bond_energy)).abs() <= f64::EPSILON);
         assert!(matches!(child.development_stage, DevelopmentStage::Offspring));
-        assert_eq!(structural_anchor_position(&child.structure), Some((2.5, 0.0)));
+        assert!(child.structural_mass(&environment.catalog) < child.genome.juvenile_mass());
         assert_eq!(parent.reproductive_readiness, 0.0);
     }
 
@@ -441,17 +584,37 @@ mod tests {
     fn budding_does_not_copy_parent_anchor() {
         let environment = environment();
         let mut parent = adult_parent();
+        let parent_anchor = parent.occupied_cells[0].clone();
         let mut rng = ChaCha8Rng::seed_from_u64(11);
         let child = try_form_bud(&mut parent, &environment, "child".into(), &mut rng)
             .expect("adult parent should form a bud");
-        assert_eq!(child.occupied_cells, vec![Position { x: 2.5, y: 0.0 }]);
+        assert_ne!(child.occupied_cells[0], parent_anchor);
+        assert_eq!(
+            child.occupied_cells[0],
+            Position {
+                x: child
+                    .structure
+                    .units
+                    .iter()
+                    .map(|unit| unit.placement.x)
+                    .sum::<f64>()
+                    / child.structure.units.len() as f64,
+                y: child
+                    .structure
+                    .units
+                    .iter()
+                    .map(|unit| unit.placement.y)
+                    .sum::<f64>()
+                    / child.structure.units.len() as f64,
+            }
+        );
     }
 
     #[test]
-    fn failed_budding_leaves_parent_unchanged() {
+    fn failed_budding_leaves_parent_unchanged_without_two_cores() {
         let environment = environment();
         let mut parent = adult_parent();
-        parent.genome.traits.iter_mut().find(|trait_def| trait_def.name == "juvenile_mass").unwrap().value = 40.0;
+        parent.structure = structure();
         let original = parent.clone();
         let mut rng = ChaCha8Rng::seed_from_u64(11);
         assert!(try_form_bud(&mut parent, &environment, "child".into(), &mut rng).is_none());
