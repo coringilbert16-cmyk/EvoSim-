@@ -15,6 +15,7 @@ mod resources;
 mod structural_combine;
 mod structural_material;
 mod structure;
+mod interior_geometry;
 
 mod memory;
 mod movement;
