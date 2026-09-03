@@ -61,6 +61,25 @@ impl Bond {
         (self.unit_a == unit && self.point_a == point)
             || (self.unit_b == unit && self.point_b == point)
     }
+
+    /// Compare only the structural endpoints of a bond.
+    ///
+    /// Bond strength and bond energy are interaction state, not structural
+    /// identity. A BREAK transformation may therefore retain a snapshot of
+    /// those values while the underlying bond remains identifiable by its two
+    /// connection sites. Endpoint order is irrelevant because a bond is an
+    /// undirected structural edge.
+    pub fn has_same_identity(&self, other: &Bond) -> bool {
+        (self.unit_a == other.unit_a
+            && self.point_a == other.point_a
+            && self.unit_b == other.unit_b
+            && self.point_b == other.point_b)
+            || (self.unit_a == other.unit_b
+                && self.point_a == other.point_b
+                && self.unit_b == other.unit_a
+                && self.point_b == other.point_a)
+    }
+
     pub fn is_valid(
         &self,
         unit_count: usize,
@@ -230,8 +249,18 @@ impl OrganismStructure {
             None
         }
     }
+
+    /// Remove the bond with the requested structural endpoints.
+    ///
+    /// Do not use full `Bond` equality here: `strength` and `bond_energy` are
+    /// interaction values and may differ from a snapshot captured when a
+    /// multi-tick BREAK transformation began. The endpoints are the stable
+    /// identity of the structural bond.
     pub fn break_matching_bond(&mut self, target: Bond) -> Option<Bond> {
-        let index = self.bonds.iter().position(|bond| *bond == target)?;
+        let index = self
+            .bonds
+            .iter()
+            .position(|bond| bond.has_same_identity(&target))?;
         self.break_bond(index)
     }
     pub fn disconnect_point(&mut self, unit: usize, point: usize) -> Vec<Bond> {
@@ -417,6 +446,7 @@ mod tests {
         assert_eq!(restored.strength, 0.25);
         assert_eq!(restored.bond_energy, 4.5);
     }
+
     #[test]
     fn legacy_bond_without_energy_deserializes_to_zero() {
         let restored: Bond = serde_json::from_str(
@@ -425,12 +455,14 @@ mod tests {
         .unwrap();
         assert_eq!(restored.bond_energy, 0.0);
     }
+
     #[test]
     fn invalid_bond_energy_is_rejected() {
         assert!(bond(0, 0, 1, 0, 0.5, 1.0).is_valid(2, |_| Some(1)));
         assert!(!bond(0, 0, 1, 0, 0.5, -1.0).is_valid(2, |_| Some(1)));
         assert!(!bond(0, 0, 1, 0, 0.5, f64::NAN).is_valid(2, |_| Some(1)));
     }
+
     #[test]
     fn connection_load_and_count_track_strength_not_energy() {
         let mut s = OrganismStructure::new();
@@ -440,6 +472,7 @@ mod tests {
         assert!((s.connection_load(a, 0) - 0.3).abs() < 1e-12);
         assert_eq!(s.connection_count(a, 0), 1);
     }
+
     #[test]
     fn break_bond_returns_the_stored_energy_with_the_bond() {
         let mut s = OrganismStructure::new();
@@ -451,17 +484,21 @@ mod tests {
         assert!(s.bonds.is_empty());
         assert_eq!(s.units.len(), 2);
     }
+
     #[test]
-    fn break_matching_bond_removes_the_exact_structural_bond() {
+    fn break_matching_bond_uses_structural_identity_not_snapshot_values() {
         let mut s = OrganismStructure::new();
         let a = unit(&mut s, "Carbon", 0.0, 0.0);
         let b = unit(&mut s, "Methane", 1.0, 0.0);
-        let target = bond(a, 0, b, 0, 0.8, 7.25);
-        s.add_bond(target);
-        let removed = s.break_matching_bond(target).unwrap();
-        assert_eq!(removed, target);
+        let stored = bond(a, 0, b, 0, 0.7999999999, 7.5);
+        let captured_snapshot = bond(b, 0, a, 0, 0.8, 7.25);
+        s.add_bond(stored);
+
+        let removed = s.break_matching_bond(captured_snapshot).unwrap();
+        assert_eq!(removed, stored);
         assert!(s.bonds.is_empty());
     }
+
     #[test]
     fn formation_threshold_is_symmetric_and_diminishing_with_load() {
         let base = formation_threshold(0.5, 0.5, 0.0, 0.0);
