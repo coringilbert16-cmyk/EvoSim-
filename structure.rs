@@ -88,9 +88,6 @@ impl Bond {
         if self.unit_a >= unit_count || self.unit_b >= unit_count {
             return false;
         }
-        if !self.strength.is_finite() || !(0.0..=1.0).contains(&self.strength) {
-            return false;
-        }
         if !self.bond_energy.is_finite() || self.bond_energy < 0.0 {
             return false;
         }
@@ -122,7 +119,7 @@ impl OrganismStructure {
         self.bonds.len() - 1
     }
     pub fn is_valid_bond(&self, bond: &Bond, catalog: &[BaseResource]) -> bool {
-        bond.is_valid(self.units.len(), |i| {
+        if !bond.is_valid(self.units.len(), |i| {
             self.units
                 .get(i)
                 .and_then(|u| u.connection_sites(catalog))
@@ -130,7 +127,18 @@ impl OrganismStructure {
                     ConnectionSites::Corners(points) => Some(points.len()),
                     ConnectionSites::Circumference { .. } | ConnectionSites::Undetermined => None,
                 })
-        })
+        }) {
+            return false;
+        }
+
+        let Some(props_a) = self.units[bond.unit_a].properties(catalog) else {
+            return false;
+        };
+        let Some(props_b) = self.units[bond.unit_b].properties(catalog) else {
+            return false;
+        };
+        let strength = crate::combine::bond_strength(*props_a, *props_b);
+        strength.is_finite() && (0.0..=1.0).contains(&strength)
     }
 
     /// Return a discrete connection point by its structural identity.
@@ -472,6 +480,16 @@ mod tests {
         assert!(bond(0, 0, 1, 0, 0.5, 1.0).is_valid(2, |_| Some(1)));
         assert!(!bond(0, 0, 1, 0, 0.5, -1.0).is_valid(2, |_| Some(1)));
         assert!(!bond(0, 0, 1, 0, 0.5, f64::NAN).is_valid(2, |_| Some(1)));
+    }
+
+    #[test]
+    fn is_valid_bond_ignores_stored_strength_and_uses_intrinsic_strength() {
+        let catalog = crate::resources::default_catalog();
+        let mut s = OrganismStructure::new();
+        let a = unit(&mut s, "Carbon", 0.0, 0.0);
+        let b = unit(&mut s, "Methane", 1.0, 0.0);
+        let stored_strength = bond(a, 0, b, 0, f64::NAN, 2.0);
+        assert!(s.is_valid_bond(&stored_strength, &catalog));
     }
 
     #[test]
