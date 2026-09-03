@@ -25,7 +25,7 @@ impl Simulation {
         }
         let complexity = crate::math::complexity(2.0);
         let duration = 1_u64.max(complexity.ceil() as u64);
-        let break_work = break_work_cost(&bond, complexity);
+        let break_work = break_work_cost(bond.bond_energy, complexity);
         let required_energy = (break_work - bond.bond_energy).max(0.0);
         if organism.usable_energy + f64::EPSILON < required_energy {
             return None;
@@ -107,9 +107,9 @@ impl Simulation {
         };
 
         // BREAK uses the interaction snapshot captured when the transformation
-        // began. The canonical strength is derived from the bond's formation
-        // surplus; legacy Bond.strength is not authoritative.
-        let break_work = break_work_cost(&target_bond, transformation.complexity);
+        // began. The canonical strength is derived from formation surplus;
+        // legacy Bond.strength is deliberately excluded from this calculation.
+        let break_work = break_work_cost(target_bond.bond_energy, transformation.complexity);
         let net_energy = target_bond.bond_energy - break_work;
         if net_energy >= 0.0 {
             organism.usable_energy += net_energy;
@@ -172,8 +172,9 @@ fn parse_bond_context_key(key: &str) -> Option<((usize, usize), (usize, usize))>
 
 /// Experimental BREAK work model.
 ///
-/// Bond strength is derived from formation surplus. Bond.strength is retained
-/// for compatibility with serialized legacy state but is not authoritative.
-pub(crate) fn break_work_cost(bond: &crate::structure::Bond, complexity: f64) -> f64 {
-    crate::combine::experimental_bond_strength(bond.bond_energy) * complexity.max(0.0)
+/// Formation surplus (`bond_energy`) is the sole source of BREAK strength.
+/// The legacy Bond.strength field is retained for compatibility with
+/// serialized state but is intentionally not part of the work calculation.
+pub(crate) fn break_work_cost(bond_energy: f64, complexity: f64) -> f64 {
+    crate::combine::experimental_bond_strength(bond_energy) * complexity.max(0.0)
 }
