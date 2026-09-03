@@ -540,7 +540,10 @@ mod shape_tests {
         assert!(matches!(find("Methane").shape.form, Form::RegularPolygon { sides: 3, .. }));
         assert!(matches!(find("Sulfur").shape.form, Form::RegularPolygon { sides: 5, .. }));
         assert!(matches!(find("Nitrogen").shape.form, Form::Rectangle { .. }));
-        assert!(matches!(find("Phosphorus").shape.form, Form::Polygon { vertices } if vertices.len() == 6));
+        assert!(matches!(
+            &find("Phosphorus").shape.form,
+            Form::Polygon { vertices } if vertices.len() == 6
+        ));
     }
 
     #[test]
