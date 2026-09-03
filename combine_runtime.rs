@@ -4,10 +4,7 @@
 //! and the experimental COMBINE equations. Chemistry and geometry remain in
 //! their authoritative modules.
 
-use crate::combine::{
-    bond_strength, eligible_candidates, evaluate_formation, experimental_combine_work_cost,
-    experimental_interaction,
-};
+use crate::combine::{bond_strength, eligible_candidates, evaluate_formation};
 use crate::contact::ConnectionCompatibilityCache;
 use crate::resources::{BaseResource, Material};
 use crate::state::{Environment, Organism};
@@ -127,24 +124,16 @@ pub(crate) fn try_combine(
         })
         .unwrap_or(0.0);
 
-    let interaction = experimental_interaction(props_a, props_b, evaluation.candidate, water_field);
-    if interaction.direction <= 0.0 || interaction.magnitude <= EPSILON {
-        return None;
-    }
-    let work_cost =
-        experimental_combine_work_cost(props_a, props_b, evaluation.candidate, water_field);
-    if !work_cost.is_finite() {
-        return None;
-    }
+    let (interaction, work_cost, energy_paid, surplus) =
+        crate::structural_combine::required_investment(
+            props_a,
+            props_b,
+            evaluation,
+            water_field,
+        )
+        .ok()?;
 
-    // Investment still controls whether formation succeeds. Surplus becomes
-    // stored bond energy; it does not determine intrinsic bond strength.
-    let energy_paid = work_cost.max(evaluation.threshold);
-    let surplus = energy_paid - evaluation.threshold;
-    if !energy_paid.is_finite()
-        || energy_paid < 0.0
-        || organism.usable_energy + EPSILON < energy_paid
-    {
+    if organism.usable_energy + EPSILON < energy_paid {
         return None;
     }
 
