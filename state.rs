@@ -55,8 +55,15 @@ pub(crate) struct ResourceSense {
     pub(crate) direction_strength: f64,
 }
 
+/// Biological lifecycle state.
+///
+/// `Offspring` is the pre-birth developmental state created by parental
+/// reproductive investment. It becomes `Juvenile` only after reaching its
+/// genetically determined birth threshold. `Juvenile` later transitions to
+/// `Adult` when its adult-development requirements are satisfied.
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) enum DevelopmentStage {
+    Offspring,
     Juvenile,
     Adult,
 }
