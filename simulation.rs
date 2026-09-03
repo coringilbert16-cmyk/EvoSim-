@@ -222,6 +222,13 @@ impl Simulation {
             }
         }
 
+        let catalog = self.environment.catalog.clone();
+        for organism in &mut self.organisms {
+            if let Some(construction) = organism.reproductive_construction.as_mut() {
+                let _ = crate::reproduction::advance_construction(construction, &catalog);
+            }
+        }
+
         for organism in &mut self.organisms { Self::apply_energy_capacity(organism); }
         self.energy_ledger.total_usable_energy_held = self.organisms.iter().map(|o| o.usable_energy).sum();
         self.snapshot()
