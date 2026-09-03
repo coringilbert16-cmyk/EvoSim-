@@ -20,7 +20,7 @@ impl Simulation {
         let interaction_snapshot = BondInteractionSnapshot::from_bond(&bond)?;
         let complexity = crate::math::complexity(2.0);
         let duration = 1_u64.max(complexity.ceil() as u64);
-        let break_work = break_work_cost(&bond, complexity);
+        let break_work = interaction_snapshot.interaction.break_work(complexity);
         let required_energy = (break_work - interaction_snapshot.interaction.bond_energy()).max(0.0);
         if organism.usable_energy + f64::EPSILON < required_energy {
             return None;
@@ -110,7 +110,7 @@ impl Simulation {
         // interaction at formation; resolving BREAK releases that bond energy
         // and spends work against it. Only the unrecovered remainder is new
         // usable energy; it is not counted as new Floor 0 potential energy.
-        let break_work = break_work_cost(&target_bond, transformation.complexity);
+        let break_work = interaction_snapshot.interaction.break_work(transformation.complexity);
         let bond_energy = interaction_snapshot.interaction.bond_energy();
         let net_energy = bond_energy - break_work;
         ledger.total_bond_energy_released += bond_energy;
@@ -150,15 +150,6 @@ impl Simulation {
     pub(crate) fn apply_energy_capacity(organism: &mut Organism) {
         organism.stress *= STRESS_DECAY_PER_TICK;
     }
-}
-
-/// Experimental BREAK work model.
-///
-/// Bond strength is the structural resistance and transformation complexity
-/// supplies the work scale. The formation interaction snapshot supplies the
-/// separate stored bond energy used by the BREAK energy accounting.
-pub(crate) fn break_work_cost(bond: &crate::structure::Bond, complexity: f64) -> f64 {
-    bond.strength.clamp(0.0, 1.0) * complexity.max(0.0)
 }
 
 pub(crate) fn reinforce_memory_point(
