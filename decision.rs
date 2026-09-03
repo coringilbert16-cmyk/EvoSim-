@@ -47,8 +47,16 @@ pub enum OutcomeKind {
 pub struct DecisionHistoryEntry {
     pub action: ActionKind,
     pub context_key: Option<String>,
+    /// Derived/legacy summary of the recorded outcomes. New records update
+    /// the three counters below and keep this field as a compatibility view.
     pub outcome: OutcomeKind,
     pub count: u64,
+    #[serde(default)]
+    pub beneficial_count: u64,
+    #[serde(default)]
+    pub neutral_count: u64,
+    #[serde(default)]
+    pub harmful_count: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -70,8 +78,19 @@ impl DecisionHistory {
             .iter_mut()
             .find(|entry| entry.action == action && entry.context_key == context_key)
         {
-            existing.outcome = outcome;
             existing.count = existing.count.saturating_add(1);
+            match outcome {
+                OutcomeKind::Beneficial => {
+                    existing.beneficial_count = existing.beneficial_count.saturating_add(1)
+                }
+                OutcomeKind::Neutral => {
+                    existing.neutral_count = existing.neutral_count.saturating_add(1)
+                }
+                OutcomeKind::Harmful => {
+                    existing.harmful_count = existing.harmful_count.saturating_add(1)
+                }
+            }
+            existing.outcome = existing.learned_outcome();
             return;
         }
         if self.entries.len() >= Self::MAX_ENTRIES {
@@ -85,11 +104,19 @@ impl DecisionHistory {
                 self.entries.remove(index);
             }
         }
+        let (beneficial_count, neutral_count, harmful_count) = match outcome {
+            OutcomeKind::Beneficial => (1, 0, 0),
+            OutcomeKind::Neutral => (0, 1, 0),
+            OutcomeKind::Harmful => (0, 0, 1),
+        };
         self.entries.push(DecisionHistoryEntry {
             action,
             context_key,
             outcome,
             count: 1,
+            beneficial_count,
+            neutral_count,
+            harmful_count,
         });
     }
 
@@ -97,17 +124,40 @@ impl DecisionHistory {
         self.entries
             .iter()
             .find(|entry| entry.action == action && entry.context_key.as_deref() == context_key)
-            .map(|entry| entry.outcome)
+            .map(|entry| entry.learned_outcome())
             .or_else(|| {
                 self.entries
                     .iter()
                     .find(|entry| entry.action == action && entry.context_key.is_none())
-                    .map(|entry| entry.outcome)
+                    .map(|entry| entry.learned_outcome())
             })
     }
 
     pub fn has_knowledge(&self, action: ActionKind, context_key: Option<&str>) -> bool {
         self.outcome(action, context_key).is_some()
+    }
+}
+
+impl DecisionHistoryEntry {
+    fn learned_outcome(&self) -> OutcomeKind {
+        let total = self
+            .beneficial_count
+            .saturating_add(self.neutral_count)
+            .saturating_add(self.harmful_count);
+        if total == 0 {
+            return self.outcome;
+        }
+        if self.beneficial_count >= self.neutral_count
+            && self.beneficial_count >= self.harmful_count
+        {
+            OutcomeKind::Beneficial
+        } else if self.harmful_count >= self.neutral_count
+            && self.harmful_count >= self.beneficial_count
+        {
+            OutcomeKind::Harmful
+        } else {
+            OutcomeKind::Neutral
+        }
     }
 }
 
@@ -335,5 +385,21 @@ mod tests {
             );
         }
         assert_eq!(history.entries.len(), DecisionHistory::MAX_ENTRIES);
+    }
+
+    #[test]
+    fn history_accumulates_outcome_distribution() {
+        let mut history = DecisionHistory::default();
+        history.record(ActionKind::Break, Some("bond:a".into()), OutcomeKind::Beneficial);
+        history.record(ActionKind::Break, Some("bond:a".into()), OutcomeKind::Beneficial);
+        history.record(ActionKind::Break, Some("bond:a".into()), OutcomeKind::Harmful);
+
+        let entry = &history.entries[0];
+        assert_eq!(entry.count, 3);
+        assert_eq!(entry.beneficial_count, 2);
+        assert_eq!(entry.neutral_count, 0);
+        assert_eq!(entry.harmful_count, 1);
+        assert_eq!(entry.outcome, OutcomeKind::Beneficial);
+        assert_eq!(history.outcome(ActionKind::Break, Some("bond:a")), Some(OutcomeKind::Beneficial));
     }
 }
