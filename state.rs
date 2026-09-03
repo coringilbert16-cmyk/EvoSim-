@@ -8,8 +8,7 @@ use crate::decision::{DecisionHistory, DecisionParameters};
 use crate::environment::{ActiveMaterialField, DeepReservoir, Vent};
 use crate::genome::Genome;
 use crate::resources::{BaseResource, Material};
-use crate::structure::OrganismStructure;
-use crate::structure::Bond;
+use crate::structure::{Bond, OrganismStructure};
 
 #[derive(Clone)]
 pub(crate) struct AppState {
