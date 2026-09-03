@@ -146,10 +146,75 @@ mod integration_tests {
         assert_eq!(sim.active_transformations.len(), 0);
         assert_eq!(sim.organisms[0].active_transformation_id, None);
         assert_eq!(sim.organisms[0].structure.bonds.len(), 0);
-        assert!((sim.organisms[0].usable_energy - 12.5).abs() < 1e-12);
+        assert!((sim.organisms[0].usable_energy - 10.9).abs() < 1e-12);
+        assert!((sim.energy_ledger.total_usable_energy_gained - 10.9).abs() < 1e-12);
         assert!(sim.organisms[0]
             .decision_history
             .has_knowledge(ActionKind::Break, Some("bond:0")));
+    }
+
+    #[test]
+    fn resolved_transformation_cannot_trigger_a_second_action_in_the_same_tick() {
+        let mut sim = Simulation::new(7, 10.0);
+        add_test_break_bond(&mut sim);
+
+        sim.step();
+        sim.step();
+        sim.step();
+
+        assert_eq!(sim.organisms[0].structure.bonds.len(), 0);
+        assert_eq!(sim.active_transformations.len(), 0);
+        assert_eq!(
+            sim.organisms[0].decision_history.entries.len(),
+            1,
+            "BREAK resolution must not permit a second action during the same tick"
+        );
+        assert_eq!(sim.organisms[0].decision_history.entries[0].action, ActionKind::Break);
+    }
+
+    #[test]
+    fn break_can_consume_usable_energy_when_work_exceeds_bond_energy() {
+        let mut sim = Simulation::new(17, 10.0);
+        let a = sim.organisms[0].structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 500.0,
+                y: 500.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let b = sim.organisms[0].structure.add_unit(StructuralUnit::new(
+            "Hydrogen",
+            Placement {
+                x: 501.0,
+                y: 500.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        sim.organisms[0].structure.add_bond(Bond {
+            unit_a: a,
+            point_a: 0,
+            unit_b: b,
+            point_b: 0,
+            strength: 0.5,
+            bond_energy: 0.5,
+        });
+        sim.organisms[0].usable_energy = 0.5;
+
+        sim.step();
+        sim.step();
+        sim.step();
+
+        assert!(sim.organisms[0].structure.bonds.is_empty());
+        assert!((sim.organisms[0].usable_energy - 0.0).abs() < 1e-12);
+        assert!((sim.energy_ledger.total_usable_energy_gained - 0.0).abs() < 1e-12);
+        assert!((sim.energy_ledger.total_heat_dissipated - 0.5).abs() < 1e-12);
+        assert!(matches!(
+            sim.organisms[0]
+                .decision_history
+                .outcome(ActionKind::Break, Some("bond:0")),
+            Some(OutcomeKind::Harmful)
+        ));
     }
 
     #[test]
@@ -164,7 +229,7 @@ mod integration_tests {
             }
         }
         assert!(sim.organisms[0].structure.bonds.is_empty());
-        assert!((sim.organisms[0].usable_energy - before - 12.5).abs() < 1e-12);
+        assert!((sim.organisms[0].usable_energy - before - 10.9).abs() < 1e-12);
         assert!(sim.organisms[0]
             .decision_history
             .has_knowledge(ActionKind::Break, Some("bond:0")));

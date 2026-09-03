@@ -21,6 +21,11 @@ impl Simulation {
         }
         let complexity = crate::math::complexity(2.0);
         let duration = 1_u64.max(complexity.ceil() as u64);
+        let break_work = break_work_cost(&bond, complexity);
+        let required_energy = (break_work - bond.bond_energy).max(0.0);
+        if organism.usable_energy + f64::EPSILON < required_energy {
+            return None;
+        }
         let transformation = ActiveTransformation {
             id: *next_id,
             organism_id: organism.id.clone(),
@@ -74,13 +79,27 @@ impl Simulation {
             organism.active_transformation_id = None;
             return;
         };
-        let released = removed_bond.bond_energy.max(0.0);
-        organism.usable_energy += released;
-        ledger.total_potential_energy_released += released;
-        ledger.total_usable_energy_gained += released;
+
+        // BREAK is state-dependent. The bond carries stored interaction energy,
+        // while its current structural strength determines how much work is
+        // required to sever it. The net result may therefore release usable
+        // energy or consume it. No mutable material-energy field is involved.
+        let break_work = break_work_cost(&removed_bond, transformation.complexity);
+        let net_energy = removed_bond.bond_energy - break_work;
+        if net_energy >= 0.0 {
+            organism.usable_energy += net_energy;
+            ledger.total_potential_energy_released += net_energy;
+            ledger.total_usable_energy_gained += net_energy;
+        } else {
+            let consumed = -net_energy;
+            organism.usable_energy = (organism.usable_energy - consumed).max(0.0);
+            ledger.total_heat_dissipated += consumed;
+        }
         organism.active_transformation_id = None;
-        let outcome = if released > 0.0 {
+        let outcome = if net_energy > 0.0 {
             OutcomeKind::Beneficial
+        } else if net_energy < 0.0 {
+            OutcomeKind::Harmful
         } else {
             OutcomeKind::Neutral
         };
@@ -89,8 +108,8 @@ impl Simulation {
             context_key: transformation.decision_context_key.clone(),
         };
         crate::decision_runtime::record_outcome(&mut organism.decision_history, &candidate, outcome);
-        if released > 0.0 {
-            let reinforcement = (released * organism.genome.memory_strength()).clamp(0.0, 1.0);
+        if net_energy > 0.0 {
+            let reinforcement = (net_energy * organism.genome.memory_strength()).clamp(0.0, 1.0);
             let (px, py) = organism
                 .occupied_cells
                 .first()
@@ -103,6 +122,17 @@ impl Simulation {
     pub(crate) fn apply_energy_capacity(organism: &mut Organism) {
         organism.stress *= STRESS_DECAY_PER_TICK;
     }
+}
+
+/// Experimental BREAK work model.
+///
+/// The locked rule requires current structural state to determine whether BREAK
+/// releases or consumes usable energy. Bond strength is the current structural
+/// resistance and transformation complexity supplies the work scale. The
+/// parameterization is deliberately isolated here so it can be refined without
+/// changing the transformation lifecycle.
+pub(crate) fn break_work_cost(bond: &crate::structure::Bond, complexity: f64) -> f64 {
+    bond.strength.clamp(0.0, 1.0) * complexity.max(0.0)
 }
 
 pub(crate) fn reinforce_memory_point(
