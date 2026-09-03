@@ -236,7 +236,7 @@ impl OrganismStructure {
         self.bonds
             .iter()
             .filter(|b| b.touches(unit, point))
-            .map(|b| b.strength)
+            .map(|b| crate::combine::experimental_bond_strength(b.bond_energy))
             .sum()
     }
     pub fn connection_count(&self, unit: usize, point: usize) -> usize {
@@ -464,13 +464,20 @@ mod tests {
     }
 
     #[test]
-    fn connection_load_and_count_track_strength_not_energy() {
+    fn connection_load_and_count_track_derived_strength_not_legacy_strength() {
         let mut s = OrganismStructure::new();
         let a = unit(&mut s, "Carbon", 0.0, 0.0);
         let b = unit(&mut s, "Methane", 1.0, 0.0);
-        s.add_bond(bond(a, 0, b, 0, 0.3, 9.0));
-        assert!((s.connection_load(a, 0) - 0.3).abs() < 1e-12);
+        let mut stored = bond(a, 0, b, 0, 0.05, 9.0);
+        stored.strength = 0.05;
+        stored.bond_energy = 1.0;
+        s.add_bond(stored);
+        let expected = crate::combine::experimental_bond_strength(1.0);
+        assert!((s.connection_load(a, 0) - expected).abs() < 1e-12);
         assert_eq!(s.connection_count(a, 0), 1);
+
+        s.bonds[0].strength = 0.95;
+        assert!((s.connection_load(a, 0) - expected).abs() < 1e-12);
     }
 
     #[test]
