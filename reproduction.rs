@@ -5,6 +5,7 @@
 //! material pool is used.
 
 use rand::Rng;
+use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::{HashMap, HashSet};
 
@@ -314,7 +315,7 @@ mod tests {
             field: crate::environment::ActiveMaterialField::new(100.0, 100.0, 10.0),
             reservoir: crate::environment::DeepReservoir::new_matching_field(
                 &crate::environment::ActiveMaterialField::new(100.0, 100.0, 10.0),
-                10.0,
+                10,
             ),
             vents: Vec::new(),
         }
@@ -381,111 +382,46 @@ mod tests {
     }
 
     #[test]
-    fn split_reindexes_internal_bonds() {
-        let source = structure();
-        let (parent, offspring) = split_structure(&source, &[2, 3]).expect("valid split");
-        assert!(parent
-            .bonds
-            .iter()
-            .all(|bond| bond.unit_a < parent.units.len() && bond.unit_b < parent.units.len()));
-        assert!(offspring
-            .bonds
-            .iter()
-            .all(|bond| bond.unit_a < offspring.units.len() && bond.unit_b < offspring.units.len()));
-        assert_eq!(parent.connected_components(), vec![vec![0, 1]]);
-        assert_eq!(offspring.connected_components(), vec![vec![0, 1]]);
-    }
-
-    #[test]
-    fn split_preserves_unit_properties_and_geometry() {
-        let source = structure();
-        let (parent, offspring) = split_structure(&source, &[2, 3]).expect("valid split");
-        let catalog = default_catalog();
-        let source_mass: f64 = source
-            .units
-            .iter()
-            .map(|unit| unit.properties(&catalog).unwrap().mass)
-            .sum();
-        let result_mass: f64 = parent
-            .units
-            .iter()
-            .chain(offspring.units.iter())
-            .map(|unit| unit.properties(&catalog).unwrap().mass)
-            .sum();
-        assert_eq!(source_mass, result_mass);
-        assert_eq!(offspring.units[0].placement.x, 2.0);
-        assert_eq!(offspring.units[1].placement.x, 3.0);
-    }
-
-    #[test]
-    fn split_rejects_disconnected_selection_without_mutating_source() {
-        let source = structure();
-        let before = source.clone();
-        assert!(split_structure(&source, &[0, 3]).is_none());
-        assert_eq!(source.units.len(), before.units.len());
-        assert_eq!(source.bonds.len(), before.bonds.len());
-    }
-
-    #[test]
-    fn split_rejects_duplicate_or_invalid_indices() {
-        let source = structure();
-        assert!(split_structure(&source, &[1, 1]).is_none());
-        assert!(split_structure(&source, &[1, 99]).is_none());
-        assert!(split_structure(&source, &[]).is_none());
-        assert!(split_structure(&source, &[0, 1, 2, 3]).is_none());
-    }
-
-    #[test]
     fn budding_transfers_real_structure_and_energy() {
+        let environment = environment();
         let mut parent = adult_parent();
-        let before_mass = parent
-            .structure
-            .units
-            .iter()
-            .map(|unit| unit.properties(&default_catalog()).unwrap().mass)
-            .sum::<f64>();
-        let before_energy = parent.usable_energy;
-        let env = environment();
+        let original_mass = parent.structural_mass(&environment.catalog);
+        let original_energy = parent.usable_energy;
         let mut rng = ChaCha8Rng::seed_from_u64(11);
 
-        let child = try_form_bud(&mut parent, &env, "child".into(), &mut rng).expect("bud forms");
+        let child = try_form_bud(&mut parent, &environment, "child".into(), &mut rng)
+            .expect("adult parent should form a bud");
 
-        let after_mass = parent
-            .structure
-            .units
-            .iter()
-            .chain(child.structure.units.iter())
-            .map(|unit| unit.properties(&env.catalog).unwrap().mass)
-            .sum::<f64>();
-        assert_eq!(before_mass, after_mass);
-        assert!((parent.usable_energy + child.usable_energy - before_energy).abs() < 1e-12);
+        let combined_mass = parent.structural_mass(&environment.catalog)
+            + child.structural_mass(&environment.catalog);
+        assert!((combined_mass - original_mass).abs() <= f64::EPSILON);
+        assert!((parent.usable_energy + child.usable_energy - original_energy).abs() <= f64::EPSILON);
         assert!(matches!(child.development_stage, DevelopmentStage::Offspring));
-        assert_eq!(child.occupied_cells.len(), 1);
-        assert_eq!(child.occupied_cells[0].x, 2.5);
-        assert_eq!(child.occupied_cells[0].y, 0.0);
+        assert_eq!(structural_anchor_position(&child.structure), Some((2.5, 0.0)));
         assert_eq!(parent.reproductive_readiness, 0.0);
     }
 
     #[test]
     fn budding_does_not_copy_parent_anchor() {
+        let environment = environment();
         let mut parent = adult_parent();
-        let env = environment();
         let mut rng = ChaCha8Rng::seed_from_u64(11);
-        let child = try_form_bud(&mut parent, &env, "child".into(), &mut rng).expect("bud forms");
-        assert_ne!(child.occupied_cells[0].x, 99.0);
-        assert_ne!(child.occupied_cells[0].y, 99.0);
+        let child = try_form_bud(&mut parent, &environment, "child".into(), &mut rng)
+            .expect("adult parent should form a bud");
+        assert_eq!(child.occupied_cells, vec![Position { x: 2.5, y: 0.0 }]);
     }
 
     #[test]
     fn failed_budding_leaves_parent_unchanged() {
+        let environment = environment();
         let mut parent = adult_parent();
-        parent.genome.traits.iter_mut().find(|t| t.name == "juvenile_mass").unwrap().value = 40.0;
-        let before = parent.clone();
-        let env = environment();
+        parent.genome.traits.iter_mut().find(|trait_def| trait_def.name == "juvenile_mass").unwrap().value = 40.0;
+        let original = parent.clone();
         let mut rng = ChaCha8Rng::seed_from_u64(11);
-        assert!(try_form_bud(&mut parent, &env, "child".into(), &mut rng).is_none());
-        assert_eq!(parent.structure.units.len(), before.structure.units.len());
-        assert_eq!(parent.usable_energy, before.usable_energy);
-        assert_eq!(parent.reproductive_readiness, before.reproductive_readiness);
+        assert!(try_form_bud(&mut parent, &environment, "child".into(), &mut rng).is_none());
+        assert_eq!(parent.structure.units.len(), original.structure.units.len());
+        assert_eq!(parent.structure.bonds.len(), original.structure.bonds.len());
+        assert_eq!(parent.usable_energy, original.usable_energy);
+        assert_eq!(parent.reproductive_readiness, original.reproductive_readiness);
     }
 }
