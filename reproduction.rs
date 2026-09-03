@@ -8,7 +8,6 @@
 //! only create a separate organism when the developing structure reaches the
 //! genetically determined juvenile threshold.
 
-use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 
 use crate::state::{DevelopmentStage, Organism, ReproductiveConstruction};
@@ -60,6 +59,7 @@ pub(crate) fn begin_reproduction(parent: &mut Organism, rng: &mut ChaCha8Rng) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::SeedableRng;
     use crate::decision::DecisionHistory;
     use crate::genome::initial_genome;
     use crate::resources::Material;
