@@ -1,3 +1,4 @@
+mod acquisition;
 mod blueprint_consistency;
 mod combine;
 mod combine_runtime;
