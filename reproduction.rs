@@ -5,6 +5,7 @@
 //! small inherited change and is limited to at most five percent of blueprint
 //! elements.
 
+use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 
 use crate::resources::{BaseResource, Material};
@@ -56,7 +57,25 @@ pub(crate) fn advance_construction(construction: &mut ReproductiveConstruction, 
     let Some(material) = take_parts(&mut construction.committed_material, &required_parts) else { return false; };
     if material.total_amount() + f64::EPSILON < element.material.total_amount() { return false; }
     construction.developing_structure.add_unit(StructuralUnit::from_blueprint_indexed(element.material.clone(), element.geometry.clone(), element.placement, next));
-    for connection in blueprint.connections.iter().filter(|connection| connection.element_a < construction.developing_structure.units.len() && connection.element_b < construction.developing_structure.units.len() && !construction.developing_structure.bonds.iter().any(|bond| bond.has_same_identity(&Bond { unit_a: connection.element_a, point_a: connection.point_a, unit_b: connection.element_b, point_b: connection.point_b, strength: 0.0, bond_energy: 0.0 }))) {
+
+    let connections: Vec<_> = blueprint.connections.iter()
+        .filter(|connection| {
+            connection.element_a < construction.developing_structure.units.len()
+                && connection.element_b < construction.developing_structure.units.len()
+                && !construction.developing_structure.bonds.iter().any(|bond| {
+                    bond.has_same_identity(&Bond {
+                        unit_a: connection.element_a,
+                        point_a: connection.point_a,
+                        unit_b: connection.element_b,
+                        point_b: connection.point_b,
+                        strength: 0.0,
+                        bond_energy: 0.0,
+                    })
+                })
+        })
+        .cloned()
+        .collect();
+    for connection in connections {
         let a = construction.developing_structure.units[connection.element_a].properties(catalog);
         let b = construction.developing_structure.units[connection.element_b].properties(catalog);
         let (Some(a), Some(b)) = (a, b) else { return false; };
