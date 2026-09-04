@@ -1,7 +1,9 @@
-//! Structural COMBINE execution boundary.
+//! Structural COMBINE calculation boundary.
 //!
-//! Raw material is bulk/theoretical until instantiated. Only structural
-//! units and bonds are physical. Placement is supplied by the organism.
+//! Raw material is bulk/theoretical until instantiated. Production lifetime
+//! structure is created only through inherited-blueprint lifecycle paths.
+//! The executable structural-combine harness is test-only so this module
+//! cannot be used by runtime code to invent topology outside a blueprint.
 
 use crate::combine::{
     bond_strength, evaluate_formation, experimental_combine_work_cost,
@@ -60,6 +62,13 @@ pub(crate) fn required_investment(
     Ok((interaction, work_cost, energy_paid))
 }
 
+/// Execute the low-level structural-combine mechanics only inside tests.
+///
+/// Production code must not call this because its signature has no inherited
+/// blueprint, and therefore cannot prove that a proposed bond was authored by
+/// the organism's blueprint. Keeping the executable harness test-only makes
+/// that authority boundary explicit instead of relying on callers to behave.
+#[cfg(test)]
 pub fn execute(
     structure: &mut OrganismStructure,
     unit_a: usize,
