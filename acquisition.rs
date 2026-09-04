@@ -39,7 +39,7 @@ pub(crate) fn resolve_field_target(
 mod tests {
     use super::*;
     use crate::environment::ActiveMaterialField;
-    use crate::resources::{default_catalog, Form};
+    use crate::resources::default_catalog;
 
     #[test]
     fn field_target_uses_catalog_geometry_and_cell_center() {
@@ -47,10 +47,17 @@ mod tests {
         let field = ActiveMaterialField::new(100.0, 100.0, 25.0);
         let (shape, placement) =
             resolve_field_target(&catalog, &field, "Carbon", 5).expect("target should resolve");
+        let expected_shape = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .expect("Carbon should exist in the default catalog")
+            .shape
+            .form
+            .clone();
 
         assert_eq!(placement.x, 37.5);
         assert_eq!(placement.y, 37.5);
-        assert!(matches!(shape.form, Form::Circle { .. }));
+        assert_eq!(shape.form, expected_shape);
     }
 
     #[test]
