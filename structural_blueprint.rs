@@ -179,7 +179,7 @@ fn point_in_polygon(x: f64, y: f64, vertices: &[(f64, f64)]) -> bool {
     for i in 0..vertices.len() {
         let (xi, yi) = vertices[i];
         let (xj, yj) = vertices[j];
-        let intersects = ((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+        let intersects = ((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yj) / (yj - yi) + xi);
         if intersects { inside = !inside; }
         j = i;
     }
@@ -242,17 +242,32 @@ mod tests {
 
     #[test]
     fn multiple_connections_can_reference_the_same_region() {
-        let mut a = single_element("Carbon", default_catalog()[0].shape.clone(), 0.0);
-        let mut b = single_element("Methane", default_catalog()[1].shape.clone(), 0.8);
-        let mut c = single_element("Hydrogen", default_catalog()[2].shape.clone(), 0.8);
-        a.geometry.connection_regions.push(ConnectionRegion { point: ConnectionPoint { x: 0.4, y: 0.0, direction_radians: 0.0 } });
-        b.geometry.connection_regions.push(ConnectionRegion { point: ConnectionPoint { x: -0.4, y: 0.0, direction_radians: std::f64::consts::PI } });
-        c.geometry.connection_regions.push(ConnectionRegion { point: ConnectionPoint { x: -0.4, y: 0.0, direction_radians: std::f64::consts::PI } });
-        let blueprint = StructuralBlueprint::new(vec![a, b, c], vec![
-            BlueprintConnection { element_a: 0, point_a: 6, element_b: 1, point_b: 3 },
-            BlueprintConnection { element_a: 0, point_a: 6, element_b: 2, point_b: 3 },
-        ]);
+        let catalog = default_catalog();
+        let mut source = single_element("Carbon", catalog[0].shape.clone(), 0.0);
+        source.geometry.connection_regions.push(ConnectionRegion { point: ConnectionPoint { x: 0.4, y: 0.0, direction_radians: 0.0 } });
+
+        let partner_data = [
+            ("Methane", 0.8, 0.0),
+            ("Hydrogen", 0.8, 0.15),
+            ("Sulfur", 0.8, -0.15),
+            ("Nitrogen", 0.95, 0.0),
+        ];
+
+        let mut elements = vec![source];
+        let mut connections = Vec::new();
+        for (index, (name, x, y)) in partner_data.iter().enumerate() {
+            let mut partner = single_element(name, catalog.iter().find(|r| r.name == *name).unwrap().shape.clone(), *x);
+            partner.placement.y = *y;
+            partner.geometry.connection_regions.push(ConnectionRegion { point: ConnectionPoint { x: -0.4, y: 0.0, direction_radians: std::f64::consts::PI } });
+            let element_index = index + 1;
+            elements.push(partner);
+            connections.push(BlueprintConnection { element_a: 0, point_a: 6, element_b: element_index, point_b: 3 });
+        }
+
+        let blueprint = StructuralBlueprint::new(elements, connections);
         assert!(blueprint.is_valid());
+        assert_eq!(blueprint.connections.len(), 4);
+        assert!(blueprint.connections.iter().all(|connection| connection.element_a == 0 && connection.point_a == 6));
     }
 
     #[test]
