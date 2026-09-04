@@ -201,6 +201,10 @@ impl Simulation {
         }
 
         for organism in &mut self.organisms { Self::apply_energy_capacity(organism); }
+        for organism in &self.organisms {
+            crate::blueprint_consistency::validate_organism(organism, &self.environment.catalog)
+                .unwrap_or_else(|error| panic!("organism {} violated inherited blueprint invariant: {error}", organism.id));
+        }
         self.energy_ledger.total_usable_energy_held = self.organisms.iter().map(|o| o.usable_energy).sum();
         self.snapshot()
     }
