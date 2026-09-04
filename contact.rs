@@ -1,8 +1,8 @@
 //! Physical contact, accessibility, and structural connection candidates.
 //!
 //! Geometry/topology only. COMBINE owns energetic outcome, formation, and
-//! bond strength. A connection point is a finite site: once occupied by a
-//! bond it cannot form another bond.
+//! bond strength. Connection regions have no numerical bond capacity: multiple
+//! bonds may originate from the same region when their physical geometry permits.
 
 use std::collections::HashMap;
 
@@ -158,11 +158,11 @@ pub struct ConnectionPairCandidate {
     pub available_b: bool,
 }
 
-/// A connection point is a finite site. Any existing bond occupying the
-/// point makes it unavailable for another bond, regardless of the geometry
-/// of the proposed second connection.
-fn connection_point_has_space(structure: &OrganismStructure, unit: usize, point: usize) -> bool {
-    structure.connection_count(unit, point) == 0
+/// Connection regions do not have a numerical bond capacity. Availability is
+/// therefore independent of existing bond count; physical contact/facing
+/// checks decide whether a proposed connection is eligible.
+fn connection_point_has_space(_structure: &OrganismStructure, _unit: usize, _point: usize) -> bool {
+    true
 }
 
 pub fn connection_pair_candidates(
@@ -338,10 +338,8 @@ pub fn try_add_bond(
     if !structure.is_valid_bond(&bond, catalog) {
         return Err("invalid bond");
     }
-    if !connection_point_has_space(structure, bond.unit_a, bond.point_a)
-        || !connection_point_has_space(structure, bond.unit_b, bond.point_b)
-    {
-        return Err("bond geometry overlaps existing bond");
+    if structure.bonds.iter().any(|existing| existing.has_same_identity(&bond)) {
+        return Err("duplicate bond");
     }
     Ok(structure.add_bond(bond))
 }
@@ -374,31 +372,24 @@ mod tests {
     }
 
     #[test]
-    fn occupied_point_cannot_accept_another_bond() {
+    fn connection_region_can_accept_multiple_bonds() {
         let catalog = default_catalog();
         let mut s = OrganismStructure::new();
         let a = unit(&mut s, "Carbon", 0.0, 0.0);
         let b = unit(&mut s, "Carbon", 1.0, 0.0);
         let c = unit(&mut s, "Carbon", 0.0, 1.0);
         assert!(try_add_bond(&mut s, bond(a, 0, b, 0), &catalog).is_ok());
-        assert_eq!(
-            try_add_bond(&mut s, bond(a, 0, c, 0), &catalog),
-            Err("bond geometry overlaps existing bond")
-        );
-        assert_eq!(s.connection_count(a, 0), 1);
+        assert!(try_add_bond(&mut s, bond(a, 0, c, 0), &catalog).is_ok());
+        assert_eq!(s.connection_count(a, 0), 2);
     }
 
     #[test]
-    fn point_rejects_second_bond_even_when_geometry_is_different() {
+    fn duplicate_bond_is_still_rejected() {
         let catalog = default_catalog();
         let mut s = OrganismStructure::new();
         let a = unit(&mut s, "Carbon", 0.0, 0.0);
         let b = unit(&mut s, "Carbon", 1.0, 0.0);
-        let c = unit(&mut s, "Carbon", 0.0, 1.0);
         assert!(try_add_bond(&mut s, bond(a, 0, b, 0), &catalog).is_ok());
-        assert_eq!(
-            try_add_bond(&mut s, bond(a, 0, c, 0), &catalog),
-            Err("bond geometry overlaps existing bond")
-        );
+        assert_eq!(try_add_bond(&mut s, bond(a, 0, b, 0), &catalog), Err("duplicate bond"));
     }
 }
