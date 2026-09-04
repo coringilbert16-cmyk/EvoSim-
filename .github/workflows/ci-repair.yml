@@ -1,0 +1,94 @@
+name: CI repair helper
+
+on:
+  push:
+    branches:
+      - implementation/structural-blueprint-v3
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: implementation/structural-blueprint-v3
+          fetch-depth: 0
+
+      - name: Apply compile fixes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace(path, old, new):
+              p = Path(path)
+              s = p.read_text()
+              if old in s:
+                  p.write_text(s.replace(old, new))
+                  print(f"updated {path}")
+              else:
+                  print(f"pattern not present in {path}: {old[:80]!r}")
+
+          replace(
+              "resources.rs",
+              "#[derive(Serialize, Deserialize, Clone, Copy, Debug)]\npub struct ResourceProperties",
+              "#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]\npub struct ResourceProperties",
+          )
+          replace(
+              "resources.rs",
+              "#[derive(Serialize, Deserialize, Clone, Debug)]\npub struct Shape",
+              "#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]\npub struct Shape",
+          )
+          replace(
+              "reproduction.rs",
+              "use rand_chacha::ChaCha8Rng;",
+              "use rand::Rng;\nuse rand_chacha::ChaCha8Rng;",
+          )
+          old_loop = '''    for connection in blueprint.connections.iter().filter(|connection| connection.element_a < construction.developing_structure.units.len() && connection.element_b < construction.developing_structure.units.len() && !construction.developing_structure.bonds.iter().any(|bond| bond.has_same_identity(&Bond { unit_a: connection.element_a, point_a: connection.point_a, unit_b: connection.element_b, point_b: connection.point_b, strength: 0.0, bond_energy: 0.0 }))) {
+        let a = construction.developing_structure.units[connection.element_a].properties(catalog);
+        let b = construction.developing_structure.units[connection.element_b].properties(catalog);
+        let (Some(a), Some(b)) = (a, b) else { return false; };
+        let bond = Bond { unit_a: connection.element_a, point_a: connection.point_a, unit_b: connection.element_b, point_b: connection.point_b, strength: crate::combine::bond_strength(*a, *b), bond_energy: 0.0 };
+        if !construction.developing_structure.is_valid_bond(&bond, catalog) || crate::contact::try_add_bond(&mut construction.developing_structure, bond, catalog).is_err() { return false; }
+    }'''
+          new_loop = '''    let connections: Vec<_> = blueprint.connections.iter()
+        .filter(|connection| {
+            connection.element_a < construction.developing_structure.units.len()
+                && connection.element_b < construction.developing_structure.units.len()
+                && !construction.developing_structure.bonds.iter().any(|bond| {
+                    bond.has_same_identity(&Bond {
+                        unit_a: connection.element_a,
+                        point_a: connection.point_a,
+                        unit_b: connection.element_b,
+                        point_b: connection.point_b,
+                        strength: 0.0,
+                        bond_energy: 0.0,
+                    })
+                })
+        })
+        .cloned()
+        .collect();
+    for connection in connections {
+        let a = construction.developing_structure.units[connection.element_a].properties(catalog);
+        let b = construction.developing_structure.units[connection.element_b].properties(catalog);
+        let (Some(a), Some(b)) = (a, b) else { return false; };
+        let bond = Bond { unit_a: connection.element_a, point_a: connection.point_a, unit_b: connection.element_b, point_b: connection.point_b, strength: crate::combine::bond_strength(*a, *b), bond_energy: 0.0 };
+        if !construction.developing_structure.is_valid_bond(&bond, catalog) || crate::contact::try_add_bond(&mut construction.developing_structure, bond, catalog).is_err() { return false; }
+    }'''
+          replace("reproduction.rs", old_loop, new_loop)
+          replace(
+              "simulation_tests.rs",
+              "Simulation::create_initial_organism()",
+              "Simulation::create_initial_organism(1, &crate::resources::default_catalog())",
+          )
+
+      - name: Commit repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add resources.rs reproduction.rs simulation_tests.rs
+          git diff --cached --quiet || git commit -m "fix: resolve structural blueprint CI compile errors"
+          git push origin implementation/structural-blueprint-v3
