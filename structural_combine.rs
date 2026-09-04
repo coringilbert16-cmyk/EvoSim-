@@ -5,12 +5,15 @@
 //! The executable structural-combine harness is test-only so this module
 //! cannot be used by runtime code to invent topology outside a blueprint.
 
-use crate::combine::{
-    bond_strength, evaluate_formation, experimental_combine_work_cost,
-    experimental_interaction, ExperimentalInteraction, FormationEvaluation,
-};
+use crate::combine::{experimental_combine_work_cost, experimental_interaction, ExperimentalInteraction, FormationEvaluation};
+#[cfg(test)]
+use crate::combine::{bond_strength, evaluate_formation};
+#[cfg(test)]
 use crate::contact::{connection_pair_candidates_cached, ConnectionCompatibilityCache};
-use crate::resources::{BaseResource, ResourceProperties};
+#[cfg(test)]
+use crate::resources::BaseResource;
+use crate::resources::ResourceProperties;
+#[cfg(test)]
 use crate::structure::{Bond, OrganismStructure};
 
 const COMBINE_CONTACT_TOLERANCE: f64 = 1.0;
