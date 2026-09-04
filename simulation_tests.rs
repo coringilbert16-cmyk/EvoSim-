@@ -3,7 +3,7 @@ mod integration_tests {
     use crate::genome::initial_genome_variant;
     use crate::resources::Material;
     use crate::state::Simulation;
-    use crate::structure::{Placement, StructuralUnit};
+    use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 
     #[test]
     fn fresh_organism_has_a_valid_inherited_seed_structure() {
@@ -14,11 +14,7 @@ mod integration_tests {
         assert!(!organism.structure.units.is_empty());
         assert_eq!(organism.structure.units.len(), blueprint.elements.len());
         assert_eq!(organism.structure.bonds.len(), blueprint.connections.len());
-        assert!(organism
-            .structure
-            .units
-            .iter()
-            .all(|unit| unit.blueprint_index.is_some()));
+        assert!(organism.structure.units.iter().all(|unit| unit.blueprint_index.is_some()));
     }
 
     #[test]
@@ -51,20 +47,70 @@ mod integration_tests {
     }
 
     #[test]
+    fn growth_adds_only_the_next_inherited_blueprint_element() {
+        let mut organism = Simulation::create_initial_organism();
+        let blueprint = organism.genome.structural_blueprint.clone();
+        let catalog = crate::resources::default_catalog();
+
+        organism.structure = OrganismStructure::new();
+        let first = &blueprint.elements[0];
+        organism.structure.add_unit(StructuralUnit::from_blueprint_indexed(
+            first.material.clone(),
+            first.geometry.clone(),
+            first.placement,
+            0,
+        ));
+        let second = &blueprint.elements[1];
+        organism.stored_unbonded = Material {
+            parts: second.material.material.parts.clone(),
+            bonded: false,
+        };
+        let before_position = organism.structure.units[0].placement;
+
+        assert!(crate::growth::grow_one_element(&mut organism, &catalog));
+        assert_eq!(organism.structure.units.len(), 2);
+        assert_eq!(organism.structure.units[0].placement, before_position);
+        assert!(organism.structure.units.iter().any(|unit| unit.blueprint_index == Some(1)));
+    }
+
+    #[test]
+    fn growth_cannot_invent_a_non_blueprint_unit() {
+        let mut organism = Simulation::create_initial_organism();
+        let catalog = crate::resources::default_catalog();
+        organism.structure = OrganismStructure::new();
+        organism.structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+        ));
+        organism.stored_unbonded = Material::free_base("Hydrogen", 100.0);
+        let before = organism.structure.units.len();
+
+        assert!(!crate::growth::grow_one_element(&mut organism, &catalog));
+        assert_eq!(organism.structure.units.len(), before);
+    }
+
+    #[test]
+    fn repair_restores_only_a_missing_inherited_bond() {
+        let mut organism = Simulation::create_initial_organism();
+        let catalog = crate::resources::default_catalog();
+        let expected_bonds = organism.genome.structural_blueprint.connections.len();
+        assert!(expected_bonds > 0);
+
+        organism.structure.bonds.clear();
+        assert!(crate::repair::repair_one_element(&mut organism, &catalog));
+        assert_eq!(organism.structure.bonds.len(), expected_bonds);
+        assert!(organism.structure.units.iter().all(|unit| unit.blueprint_index.is_some()));
+    }
+
+    #[test]
     fn structural_units_count_toward_total_material_conservation() {
         let mut sim = Simulation::new(1, 10.0);
         sim.organisms[0].structure.add_unit(StructuralUnit::new(
             "Carbon",
-            Placement {
-                x: 500.0,
-                y: 500.0,
-                rotation_radians: 0.0,
-            },
+            Placement { x: 500.0, y: 500.0, rotation_radians: 0.0 },
         ));
         let before = sim.total_material_in_system();
-        for _ in 0..500 {
-            sim.step();
-        }
+        for _ in 0..500 { sim.step(); }
         let after = sim.total_material_in_system();
         assert!((before - after).abs() < 1e-3);
     }
@@ -73,9 +119,7 @@ mod integration_tests {
     fn fresh_simulation_conserves_total_material_over_many_ticks() {
         let mut sim = Simulation::new(1, 10.0);
         let before = sim.total_material_in_system();
-        for _ in 0..300 {
-            sim.step();
-        }
+        for _ in 0..300 { sim.step(); }
         let after = sim.total_material_in_system();
         assert!((before - after).abs() < 1e-3);
     }
@@ -103,9 +147,7 @@ mod integration_tests {
     #[test]
     fn movement_records_an_actual_physical_outcome() {
         let mut sim = Simulation::new(11, 10.0);
-        for _ in 0..50 {
-            sim.step();
-        }
+        for _ in 0..50 { sim.step(); }
         let entry = sim.organisms[0]
             .decision_history
             .entries
