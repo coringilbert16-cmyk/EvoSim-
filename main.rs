@@ -12,6 +12,7 @@ mod math;
 mod membrane_geometry;
 mod reproduction;
 mod resources;
+mod structural_blueprint;
 mod structural_combine;
 mod structural_material;
 mod structure;
