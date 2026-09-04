@@ -8,7 +8,7 @@ use crate::combine::{
     experimental_interaction, ExperimentalInteraction, FormationEvaluation,
 };
 use crate::contact::{connection_pair_candidates_cached, ConnectionCompatibilityCache};
-use crate::resources::{BaseResource, Material, ResourceProperties};
+use crate::resources::{BaseResource, ResourceProperties};
 use crate::structure::{Bond, OrganismStructure, Placement, StructuralUnit};
 
 const COMBINE_CONTACT_TOLERANCE: f64 = 1.0;
@@ -159,115 +159,10 @@ pub fn execute(
     })
 }
 
-/// Convert exactly one unit of theoretical raw stock into one physical
-/// StructuralUnit. The organism supplies the world placement and rotation.
-pub fn instantiate_raw_unit(
-    structure: &mut OrganismStructure,
-    raw: &mut Material,
-    resource_name: &str,
-    placement: Placement,
-    catalog: &[BaseResource],
-) -> Result<usize, &'static str> {
-    if catalog.iter().all(|r| r.name != resource_name) {
-        return Err("resource type is not in the catalog");
-    }
-    if raw
-        .parts
-        .iter()
-        .all(|(n, a)| n != resource_name || *a < 1.0)
-    {
-        return Err("insufficient raw material");
-    }
-
-    let mut remaining = Vec::with_capacity(raw.parts.len());
-    for (name, amount) in std::mem::take(&mut raw.parts) {
-        if name == resource_name {
-            let next = amount - 1.0;
-            if next > 1e-12 {
-                remaining.push((name, next));
-            }
-        } else {
-            remaining.push((name, amount));
-        }
-    }
-    raw.parts = remaining;
-    Ok(structure.add_unit(StructuralUnit::new(resource_name, placement)))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::resources::default_catalog;
-
-    #[test]
-    fn raw_stock_becomes_physical_unit_at_supplied_position() {
-        let catalog = default_catalog();
-        let mut raw = Material::free_base("Carbon", 3.0);
-        let mut structure = OrganismStructure::new();
-        let index = instantiate_raw_unit(
-            &mut structure,
-            &mut raw,
-            "Carbon",
-            Placement {
-                x: 10.0,
-                y: 20.0,
-                rotation_radians: 0.5,
-            },
-            &catalog,
-        )
-        .unwrap();
-        assert_eq!(index, 0);
-        assert_eq!(structure.units[0].placement.x, 10.0);
-        assert_eq!(structure.units[0].placement.y, 20.0);
-        assert_eq!(structure.units[0].placement.rotation_radians, 0.5);
-        assert!((raw.total_amount() - 2.0).abs() < 1e-12);
-    }
-
-    #[test]
-    fn bonded_material_can_be_instantiated_as_a_physical_unit() {
-        let catalog = default_catalog();
-        let mut raw = Material {
-            parts: vec![("Carbon".to_string(), 1.0)],
-            bonded: true,
-        };
-        let mut structure = OrganismStructure::new();
-        let index = instantiate_raw_unit(
-            &mut structure,
-            &mut raw,
-            "Carbon",
-            Placement {
-                x: 4.0,
-                y: 5.0,
-                rotation_radians: 0.25,
-            },
-            &catalog,
-        )
-        .unwrap();
-        assert_eq!(index, 0);
-        assert_eq!(structure.units.len(), 1);
-        assert!(raw.is_empty());
-    }
-
-    #[test]
-    fn failed_instantiation_does_not_consume_raw_material() {
-        let catalog = default_catalog();
-        let mut raw = Material::free_base("Carbon", 0.5);
-        let mut structure = OrganismStructure::new();
-        let result = instantiate_raw_unit(
-            &mut structure,
-            &mut raw,
-            "Carbon",
-            Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-            &catalog,
-        );
-        assert_eq!(result, Err("insufficient raw material"));
-        assert!((raw.total_amount() - 0.5).abs() < 1e-12);
-        assert!(structure.units.is_empty());
-    }
 
     #[test]
     fn failed_combine_does_not_mutate_structure() {
