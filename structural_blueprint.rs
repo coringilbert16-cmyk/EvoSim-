@@ -6,32 +6,23 @@ use serde::{Deserialize, Serialize};
 /// An inherited description of an organism's physical structure.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct StructuralBlueprint {
-    /// Material-bearing structural elements in the inherited body plan.
     pub elements: Vec<BlueprintElement>,
-    /// Topological connections between those elements.
     pub connections: Vec<BlueprintConnection>,
 }
 
-/// One material-bearing element of an inherited structural blueprint.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct BlueprintElement {
-    /// Complete material composition, including internal chemical bonds.
     pub material: StructuralMaterial,
-    /// Physical geometry occupied by the element in its local coordinates.
-    /// This is inherited along with the material; it is not regenerated from
-    /// a resource-name lookup at runtime.
     pub geometry: BlueprintGeometry,
-    /// Position and orientation relative to the blueprint origin.
     pub placement: Placement,
 }
 
-/// Geometry for a structural element.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct BlueprintGeometry {
     pub constituents: Vec<ConstituentGeometry>,
     pub envelope: Shape,
-    /// Physical boundary regions from which bonds may originate. A region is
-    /// not a finite-capacity site; geometry alone determines coexistence.
+    /// Regions have no numerical bond capacity. Geometry determines whether
+    /// multiple bonds can physically coexist.
     #[serde(default)]
     pub connection_regions: Vec<ConnectionRegion>,
 }
@@ -48,10 +39,6 @@ pub struct ConnectionRegion {
     pub point: ConnectionPoint,
 }
 
-/// A topological connection between two blueprint elements.
-///
-/// Connection-point capacity is deliberately not represented. Multiple bonds
-/// may originate from the same physical region when geometry permits.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BlueprintConnection {
     pub element_a: usize,
@@ -65,8 +52,14 @@ impl StructuralBlueprint {
         Self { elements, connections }
     }
 
+    /// Validate the inherited body plan before it is instantiated. This is
+    /// deliberately generic: no six-unit core, role tags, or finite bond
+    /// capacity are imposed here.
     pub fn is_valid(&self) -> bool {
         if self.elements.is_empty() || !self.elements.iter().all(BlueprintElement::is_valid) {
+            return false;
+        }
+        if self.elements.len() > 1 && self.connections.is_empty() {
             return false;
         }
         self.connections.iter().all(|connection| {
@@ -75,7 +68,32 @@ impl StructuralBlueprint {
                 && connection.element_a != connection.element_b
                 && connection.point_a < self.elements[connection.element_a].geometry.connection_regions.len()
                 && connection.point_b < self.elements[connection.element_b].geometry.connection_regions.len()
-        })
+        }) && self.is_connected()
+    }
+
+    pub fn is_connected(&self) -> bool {
+        if self.elements.is_empty() {
+            return false;
+        }
+        let mut visited = vec![false; self.elements.len()];
+        let mut stack = vec![0usize];
+        visited[0] = true;
+        while let Some(current) = stack.pop() {
+            for connection in &self.connections {
+                let next = if connection.element_a == current {
+                    connection.element_b
+                } else if connection.element_b == current {
+                    connection.element_a
+                } else {
+                    continue;
+                };
+                if next < visited.len() && !visited[next] {
+                    visited[next] = true;
+                    stack.push(next);
+                }
+            }
+        }
+        visited.into_iter().all(|seen| seen)
     }
 
     pub fn total_material_amount(&self) -> f64 {
@@ -111,11 +129,6 @@ impl BlueprintGeometry {
             && self.connection_regions.iter().all(|region| region.point.is_valid())
     }
 
-    /// A minimal geometry for a single base-resource element.
-    ///
-    /// Polygonal base shapes expose their immutable vertices as connection
-    /// regions. Circular/fluid shapes remain without discrete regions until a
-    /// later geometry system supplies continuous boundary regions.
     pub fn single(shape: Shape) -> Self {
         let connection_regions = match shape.connection_sites() {
             crate::resources::ConnectionSites::Corners(points) => points
@@ -166,13 +179,8 @@ mod tests {
     fn placement(x: f64, y: f64) -> Placement {
         Placement { x, y, rotation_radians: 0.0 }
     }
-
     fn single_element(name: &str, shape: Shape, x: f64) -> BlueprintElement {
-        BlueprintElement {
-            material: StructuralMaterial::single(name),
-            geometry: BlueprintGeometry::single(shape),
-            placement: placement(x, 0.0),
-        }
+        BlueprintElement { material: StructuralMaterial::single(name), geometry: BlueprintGeometry::single(shape), placement: placement(x, 0.0) }
     }
 
     #[test]
@@ -195,6 +203,12 @@ mod tests {
     }
 
     #[test]
+    fn disconnected_multi_element_blueprint_is_rejected() {
+        let blueprint = StructuralBlueprint::new(vec![single_element("Carbon", default_catalog()[0].shape.clone(), 0.0), single_element("Methane", default_catalog()[1].shape.clone(), 10.0)], Vec::new());
+        assert!(!blueprint.is_valid());
+    }
+
+    #[test]
     fn invalid_connection_reference_is_rejected() {
         let blueprint = StructuralBlueprint::new(vec![single_element("Carbon", default_catalog()[0].shape.clone(), 0.0)], vec![BlueprintConnection { element_a: 0, point_a: 0, element_b: 1, point_b: 0 }]);
         assert!(!blueprint.is_valid());
@@ -209,11 +223,9 @@ mod tests {
     #[test]
     fn multiple_connections_can_reference_the_same_region() {
         let mut a = single_element("Carbon", default_catalog()[0].shape.clone(), 0.0);
-        let b = single_element("Methane", default_catalog()[1].shape.clone(), 1.0);
-        let c = single_element("Hydrogen", default_catalog()[2].shape.clone(), -1.0);
+        let mut b = single_element("Methane", default_catalog()[1].shape.clone(), 1.0);
+        let mut c = single_element("Hydrogen", default_catalog()[2].shape.clone(), -1.0);
         a.geometry.connection_regions.push(ConnectionRegion { point: ConnectionPoint { x: 0.0, y: 0.4, direction_radians: 0.0 } });
-        let mut b = b;
-        let mut c = c;
         b.geometry.connection_regions.push(ConnectionRegion { point: ConnectionPoint { x: 0.0, y: -0.4, direction_radians: std::f64::consts::PI } });
         c.geometry.connection_regions.push(ConnectionRegion { point: ConnectionPoint { x: 0.0, y: -0.4, direction_radians: std::f64::consts::PI } });
         let blueprint = StructuralBlueprint::new(vec![a, b, c], vec![
