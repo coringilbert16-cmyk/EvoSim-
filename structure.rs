@@ -17,17 +17,11 @@ pub struct StructuralUnit {
     pub material: StructuralMaterial,
     pub geometry: BlueprintGeometry,
     pub placement: Placement,
-    /// Identity link to the inherited blueprint element. This is structural
-    /// identity, not an anatomical role tag; it lets growth/repair restore the
-    /// authored configuration without redesigning it.
     #[serde(default)]
     pub blueprint_index: Option<usize>,
 }
 
 impl StructuralUnit {
-    /// Legacy synthetic construction retained only for in-module unit tests.
-    /// Production/runtime code must construct physical units from an inherited
-    /// blueprint via `from_blueprint_indexed`.
     #[cfg(test)]
     pub fn new(resource_name: impl Into<String>, placement: Placement) -> Self {
         let resource_name = resource_name.into();
@@ -105,7 +99,7 @@ mod tests {
     fn bond(a: usize, ap: usize, b: usize, bp: usize, energy: f64) -> Bond { Bond { unit_a: a, point_a: ap, unit_b: b, point_b: bp, bond_energy: energy } }
     #[test] fn unit_properties_and_geometry_are_derived() { let catalog = default_catalog(); let mut s = OrganismStructure::new(); let i = unit(&mut s, "Carbon", 0.0, 0.0); assert_eq!(s.units[i].properties(&catalog).unwrap().cohesion, 0.95); assert_eq!(s.units[i].geometry.connection_regions.len(), 6); }
     #[test] fn connection_regions_are_not_occupancy_limited() { let catalog = default_catalog(); let mut s = OrganismStructure::new(); let a = unit(&mut s, "Carbon", 0.0, 0.0); let b = unit(&mut s, "Methane", 1.0, 0.0); s.add_bond(bond(a, 0, b, 0, 2.0)); let sites = s.available_connection_sites(&catalog); assert!(sites.contains(&ConnectionSiteRef { unit_index: a, point_index: 0 })); assert!(sites.contains(&ConnectionSiteRef { unit_index: b, point_index: 0 })); }
-    #[test] fn connected_components_form_from_bond_graph() { let mut s = OrganismStructure::new(); let a = unit(&mut s, "Carbon", 0.0, 0.0); let b = unit(&mut s, "Methane", 1.0, 0.0); let c = unit(&mut s, "Carbon", 2.0, 0.0); let d = unit(&mut s, "Methane", 10.0, 0.0); s.add_bond(bond(a, 0, b, 0, 2.0)); s.add_bond(bond(b, 1, c, 0, 3.0)); assert_eq!(s.connected_components(), vec![vec![0, 1, 2], vec![d]]); }
+    #[test] fn connected_components_form_from_bond_graph() { let mut s = OrganismStructure::new(); let a = unit(&mut s, "Carbon", 0.0, 0.0); let b = unit(&mut s, "Methane", 1.0, 0.0); let c = unit(&mut s, "Carbon", 2.0, 0.0); let d = unit(&mut s, "Methane", 10.0, 0.0); s.add_bond(bond(a, 0, b, 0, 2.0)); s.add_bond(bond(b, 1, c, 0, 3.0)); assert_eq!(s.connected_components(), vec![vec![0, 1, 2], vec![3]]); }
     #[test] fn breaking_a_bond_splits_components() { let mut s = OrganismStructure::new(); let a = unit(&mut s, "Carbon", 0.0, 0.0); let b = unit(&mut s, "Methane", 1.0, 0.0); let c = unit(&mut s, "Carbon", 2.0, 0.0); let first = bond(a, 0, b, 0, 2.0); let second = bond(b, 1, c, 0, 3.0); s.add_bond(first); s.add_bond(second); assert_eq!(s.connected_components(), vec![vec![0, 1, 2]]); assert_eq!(s.break_matching_bond(second), Some(second)); assert_eq!(s.connected_components(), vec![vec![0, 1], vec![2]]); }
     #[test] fn bond_energy_roundtrips() { let original = bond(0, 0, 1, 0, 4.5); let restored: Bond = serde_json::from_str(&serde_json::to_string(&original).unwrap()).unwrap(); assert_eq!(restored.bond_energy, 4.5); }
     #[test] fn legacy_bond_without_energy_deserializes_to_zero() { let restored: Bond = serde_json::from_str(r#"{"unit_a":0,"point_a":0,"unit_b":1,"point_b":0}"#).unwrap(); assert_eq!(restored.bond_energy, 0.0); }
