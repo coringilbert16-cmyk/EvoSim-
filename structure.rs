@@ -158,10 +158,9 @@ impl OrganismStructure {
         }
     }
 
-    /// Return every intrinsic discrete connection point that is not occupied
-    /// by a bond. A point remains available regardless of which connected
-    /// component its unit belongs to; physical distance/facing eligibility is
-    /// evaluated separately by the contact/geometry system.
+    /// Return every intrinsic discrete connection point. Connection regions
+    /// have no numerical bond capacity; physical distance/facing eligibility
+    /// is evaluated separately by the contact/geometry system.
     pub fn available_connection_sites(&self, catalog: &[BaseResource]) -> Vec<ConnectionSiteRef> {
         let mut sites = Vec::new();
         for unit_index in 0..self.units.len() {
@@ -171,12 +170,10 @@ impl OrganismStructure {
                 continue;
             };
             for point_index in 0..points.len() {
-                if self.connection_count(unit_index, point_index) == 0 {
-                    sites.push(ConnectionSiteRef {
-                        unit_index,
-                        point_index,
-                    });
-                }
+                sites.push(ConnectionSiteRef {
+                    unit_index,
+                    point_index,
+                });
             }
         }
         sites
@@ -226,8 +223,9 @@ impl OrganismStructure {
         components
     }
 
-    /// Return the unoccupied discrete connection sites belonging to a
-    /// particular connected component.
+    /// Return the discrete connection sites belonging to a particular
+    /// connected component. Sites remain eligible regardless of existing
+    /// bond count; physical geometry determines whether another bond fits.
     pub fn component_connection_sites(
         &self,
         component: &[usize],
@@ -374,7 +372,7 @@ mod tests {
     }
 
     #[test]
-    fn available_connection_sites_exclude_occupied_points() {
+    fn available_connection_sites_include_occupied_points() {
         let catalog = crate::resources::default_catalog();
         let mut s = OrganismStructure::new();
         let a = unit(&mut s, "Carbon", 0.0, 0.0);
@@ -382,11 +380,11 @@ mod tests {
         s.add_bond(bond(a, 0, b, 0, 0.5, 2.0));
 
         let sites = s.available_connection_sites(&catalog);
-        assert!(!sites.contains(&ConnectionSiteRef {
+        assert!(sites.contains(&ConnectionSiteRef {
             unit_index: a,
             point_index: 0
         }));
-        assert!(!sites.contains(&ConnectionSiteRef {
+        assert!(sites.contains(&ConnectionSiteRef {
             unit_index: b,
             point_index: 0
         }));
@@ -431,7 +429,7 @@ mod tests {
     }
 
     #[test]
-    fn component_connection_sites_are_only_unoccupied_sites_from_component_units() {
+    fn component_connection_sites_include_loaded_sites() {
         let catalog = crate::resources::default_catalog();
         let mut s = OrganismStructure::new();
         let a = unit(&mut s, "Carbon", 0.0, 0.0);
@@ -443,17 +441,15 @@ mod tests {
         let first_sites = s.component_connection_sites(&components[0], &catalog);
         let second_sites = s.component_connection_sites(&components[1], &catalog);
 
-        assert!(!first_sites.contains(&ConnectionSiteRef {
+        assert!(first_sites.contains(&ConnectionSiteRef {
             unit_index: a,
             point_index: 0
         }));
-        assert!(!first_sites.contains(&ConnectionSiteRef {
+        assert!(first_sites.contains(&ConnectionSiteRef {
             unit_index: b,
             point_index: 0
         }));
-        assert!(first_sites
-            .iter()
-            .all(|site| site.unit_index == a || site.unit_index == b));
+        assert!(first_sites.iter().all(|site| site.unit_index == a || site.unit_index == b));
         assert!(second_sites.iter().all(|site| site.unit_index == c));
     }
 
