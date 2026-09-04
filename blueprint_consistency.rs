@@ -119,7 +119,7 @@ fn validate_authored_connections(
         let _ = authored;
     }
 
-    for connection in &blueprint.connections {
+    for (connection_index, connection) in blueprint.connections.iter().enumerate() {
         let Some(unit_a) = structure.units.iter().position(|unit| unit.blueprint_index == Some(connection.element_a)) else {
             if require_complete { return Err("complete structure is missing a blueprint connection endpoint".into()); }
             continue;
@@ -128,11 +128,14 @@ fn validate_authored_connections(
             if require_complete { return Err("complete structure is missing a blueprint connection endpoint".into()); }
             continue;
         };
-        let exists = structure.bonds.iter().any(|bond| {
+        let matches = structure.bonds.iter().filter(|bond| {
             (bond.unit_a == unit_a && bond.point_a == connection.point_a && bond.unit_b == unit_b && bond.point_b == connection.point_b)
                 || (bond.unit_a == unit_b && bond.point_a == connection.point_b && bond.unit_b == unit_a && bond.point_b == connection.point_a)
-        });
-        if require_complete && !exists {
+        }).count();
+        if matches > 1 {
+            return Err(format!("blueprint connection {connection_index} is represented by multiple physical bonds"));
+        }
+        if require_complete && matches == 0 {
             return Err("complete structure is missing a blueprint-authored connection".into());
         }
     }
@@ -171,6 +174,16 @@ mod tests {
         let mut structure = instantiate_blueprint(&genome.structural_blueprint, &catalog).unwrap();
         let original = structure.bonds[0];
         structure.bonds[0].point_a = (original.point_a + 1) % structure.units[0].geometry.connection_regions.len();
+        assert!(validate_complete(&structure, &genome.structural_blueprint, &catalog).is_err());
+    }
+
+    #[test]
+    fn complete_structure_rejects_duplicate_physical_bond_for_one_authored_connection() {
+        let catalog = default_catalog();
+        let genome = initial_genome();
+        let mut structure = instantiate_blueprint(&genome.structural_blueprint, &catalog).unwrap();
+        let duplicate = structure.bonds[0];
+        structure.add_bond(duplicate);
         assert!(validate_complete(&structure, &genome.structural_blueprint, &catalog).is_err());
     }
 
