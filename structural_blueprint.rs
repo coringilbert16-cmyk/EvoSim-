@@ -1,7 +1,22 @@
-use crate::resources::{ConnectionPoint, Form, Shape};
+use crate::resources::{ConnectionPoint, Form, ResourceProperties, Shape};
 use crate::structural_material::StructuralMaterial;
 use crate::structure::Placement;
 use serde::{Deserialize, Serialize};
+
+impl PartialEq for Shape {
+    fn eq(&self, other: &Self) -> bool {
+        self.form == other.form
+    }
+}
+
+impl PartialEq for ResourceProperties {
+    fn eq(&self, other: &Self) -> bool {
+        self.mass == other.mass
+            && self.potential_energy == other.potential_energy
+            && self.reactivity == other.reactivity
+            && self.cohesion == other.cohesion
+    }
+}
 
 /// An inherited description of an organism's physical structure.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
