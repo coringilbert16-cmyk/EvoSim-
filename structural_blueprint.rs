@@ -167,7 +167,8 @@ mod tests {
             let mut partner = single_element(name, catalog.iter().find(|r| r.name == *name).unwrap().shape.clone(), *x);
             partner.placement.y = *y;
             let point_b = partner.geometry.connection_regions.len();
-            partner.geometry.connection_regions.push(ConnectionRegion { point: ConnectionPoint { x: -0.4, y: 0.0, direction_radians: std::f64::consts::PI } });
+            let endpoint_x = if *name == "Hydrogen" { -0.35 } else { -0.4 };
+            partner.geometry.connection_regions.push(ConnectionRegion { point: ConnectionPoint { x: endpoint_x, y: 0.0, direction_radians: std::f64::consts::PI } });
             let element_index = index + 1;
             elements.push(partner);
             connections.push(BlueprintConnection { element_a: 0, point_a: 6, element_b: element_index, point_b });
