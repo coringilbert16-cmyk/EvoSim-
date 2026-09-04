@@ -41,9 +41,7 @@ fn repair_missing_bonds(organism: &mut Organism, catalog: &[BaseResource]) -> bo
         let Some(unit_b) = organism.structure.units.iter().position(|unit| unit.blueprint_index == Some(connection.element_b)) else { continue; };
         let bond_exists = organism.structure.bonds.iter().any(|bond| bond.unit_a == unit_a && bond.point_a == connection.point_a && bond.unit_b == unit_b && bond.point_b == connection.point_b || bond.unit_a == unit_b && bond.point_a == connection.point_b && bond.unit_b == unit_a && bond.point_b == connection.point_a);
         if bond_exists { continue; }
-        let Some(a) = organism.structure.units[unit_a].properties(catalog).map(|p| *p) else { return false; };
-        let Some(b) = organism.structure.units[unit_b].properties(catalog).map(|p| *p) else { return false; };
-        let bond = Bond { unit_a, point_a: connection.point_a, unit_b, point_b: connection.point_b, strength: crate::combine::bond_strength(a, b), bond_energy: 0.0 };
+        let bond = Bond { unit_a, point_a: connection.point_a, unit_b, point_b: connection.point_b, bond_energy: 0.0 };
         if !organism.structure.is_valid_bond(&bond, catalog) || crate::contact::try_add_bond(&mut organism.structure, bond, catalog).is_err() { return false; }
     }
     true

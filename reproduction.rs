@@ -22,9 +22,9 @@ pub(crate) fn instantiate_blueprint(blueprint: &StructuralBlueprint, catalog: &[
         structure.add_unit(StructuralUnit::from_blueprint_indexed(element.material.clone(), element.geometry.clone(), element.placement, index));
     }
     for connection in &blueprint.connections {
-        let a = structure.units[connection.element_a].properties(catalog).ok_or_else(|| "blueprint element A has invalid material".to_string())?;
-        let b = structure.units[connection.element_b].properties(catalog).ok_or_else(|| "blueprint element B has invalid material".to_string())?;
-        let bond = Bond { unit_a: connection.element_a, point_a: connection.point_a, unit_b: connection.element_b, point_b: connection.point_b, strength: crate::combine::bond_strength(*a, *b), bond_energy: 0.0 };
+        let _a = structure.units[connection.element_a].properties(catalog).ok_or_else(|| "blueprint element A has invalid material".to_string())?;
+        let _b = structure.units[connection.element_b].properties(catalog).ok_or_else(|| "blueprint element B has invalid material".to_string())?;
+        let bond = Bond { unit_a: connection.element_a, point_a: connection.point_a, unit_b: connection.element_b, point_b: connection.point_b, bond_energy: 0.0 };
         if !structure.is_valid_bond(&bond, catalog) { return Err("blueprint connection does not produce a valid structural bond".into()); }
         crate::contact::try_add_bond(&mut structure, bond, catalog).map_err(|_| "blueprint connection failed physical contact validation".to_string())?;
     }
@@ -68,7 +68,6 @@ pub(crate) fn advance_construction(construction: &mut ReproductiveConstruction, 
                         point_a: connection.point_a,
                         unit_b: connection.element_b,
                         point_b: connection.point_b,
-                        strength: 0.0,
                         bond_energy: 0.0,
                     })
                 })
@@ -76,10 +75,7 @@ pub(crate) fn advance_construction(construction: &mut ReproductiveConstruction, 
         .cloned()
         .collect();
     for connection in connections {
-        let a = construction.developing_structure.units[connection.element_a].properties(catalog);
-        let b = construction.developing_structure.units[connection.element_b].properties(catalog);
-        let (Some(a), Some(b)) = (a, b) else { return false; };
-        let bond = Bond { unit_a: connection.element_a, point_a: connection.point_a, unit_b: connection.element_b, point_b: connection.point_b, strength: crate::combine::bond_strength(*a, *b), bond_energy: 0.0 };
+        let bond = Bond { unit_a: connection.element_a, point_a: connection.point_a, unit_b: connection.element_b, point_b: connection.point_b, bond_energy: 0.0 };
         if !construction.developing_structure.is_valid_bond(&bond, catalog) || crate::contact::try_add_bond(&mut construction.developing_structure, bond, catalog).is_err() { return false; }
     }
     true

@@ -31,9 +31,7 @@ pub(crate) fn grow_one_element(organism: &mut Organism, catalog: &[BaseResource]
     for connection in blueprint.connections.iter().filter(|connection| connection.element_a == next_index || connection.element_b == next_index) {
         let Some(unit_a) = organism.structure.units.iter().position(|unit| unit.blueprint_index == Some(connection.element_a)) else { continue; };
         let Some(unit_b) = organism.structure.units.iter().position(|unit| unit.blueprint_index == Some(connection.element_b)) else { continue; };
-        let Some(a) = organism.structure.units[unit_a].properties(catalog).map(|p| *p) else { organism.structure = original_structure; organism.stored_unbonded = original_material; return false; };
-        let Some(b) = organism.structure.units[unit_b].properties(catalog).map(|p| *p) else { organism.structure = original_structure; organism.stored_unbonded = original_material; return false; };
-        let bond = Bond { unit_a, point_a: connection.point_a, unit_b, point_b: connection.point_b, strength: crate::combine::bond_strength(a, b), bond_energy: 0.0 };
+        let bond = Bond { unit_a, point_a: connection.point_a, unit_b, point_b: connection.point_b, bond_energy: 0.0 };
         if !organism.structure.is_valid_bond(&bond, catalog) || (!organism.structure.bonds.iter().any(|existing| existing.has_same_identity(&bond)) && crate::contact::try_add_bond(&mut organism.structure, bond, catalog).is_err()) {
             organism.structure = original_structure;
             organism.stored_unbonded = original_material;

@@ -218,7 +218,7 @@ mod tests {
         s.add_unit(StructuralUnit::new(name, Placement { x, y, rotation_radians: 0.0 }))
     }
     fn bond(a: usize, ap: usize, b: usize, bp: usize) -> Bond {
-        Bond { unit_a: a, point_a: ap, unit_b: b, point_b: bp, strength: 0.5, bond_energy: 1.0 }
+        Bond { unit_a: a, point_a: ap, unit_b: b, point_b: bp, bond_energy: 1.0 }
     }
 
     #[test]
