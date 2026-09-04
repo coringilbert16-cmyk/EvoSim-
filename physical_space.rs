@@ -1,8 +1,7 @@
 //! Authoritative containment queries for inherited organism physical space.
 //!
 //! This module deliberately does not perform acquisition. It answers only the
-//! geometric question required by acquisition: whether an entire target shape
-//! is enclosed by the organism's inherited physical boundary.
+//! geometric questions required by acquisition.
 
 use crate::resources::{Form, Shape};
 use crate::structural_blueprint::BlueprintPhysicalSpace;
@@ -60,6 +59,20 @@ pub(crate) fn contains_shape(
     }
 }
 
+/// Returns true when a target is eligible for acquisition under the current
+/// physical rule: acquisition is permitted only after the target is fully
+/// enveloped by the organism's inherited boundary.
+///
+/// This is an eligibility query only. It does not remove material, alter the
+/// field, break bonds, or change organism state.
+pub(crate) fn acquisition_is_eligible(
+    physical_space: &BlueprintPhysicalSpace,
+    target: &Shape,
+    placement: Placement,
+) -> bool {
+    contains_shape(physical_space, target, placement)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,5 +106,12 @@ mod tests {
     fn rotation_is_considered_for_rigid_shapes() {
         let target = Shape { form: Form::Rectangle { width: 1.0, height: 0.5 } };
         assert!(contains_shape(&space(1.0), &target, Placement { x: 0.0, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_2 }));
+    }
+
+    #[test]
+    fn acquisition_eligibility_requires_full_enclosure() {
+        let target = Shape { form: Form::Circle { radius: 1.0 } };
+        assert!(acquisition_is_eligible(&space(2.0), &target, Placement { x: 0.5, y: 0.0, rotation_radians: 0.0 }));
+        assert!(!acquisition_is_eligible(&space(1.5), &target, Placement { x: 0.75, y: 0.0, rotation_radians: 0.0 }));
     }
 }
