@@ -5,9 +5,13 @@ mod integration_tests {
     use crate::state::Simulation;
     use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 
+    fn fresh_organism() -> crate::state::Organism {
+        Simulation::create_initial_organism(1, &crate::resources::default_catalog())
+    }
+
     #[test]
     fn fresh_organism_has_a_valid_inherited_seed_structure() {
-        let organism = Simulation::create_initial_organism();
+        let organism = fresh_organism();
         let blueprint = &organism.genome.structural_blueprint;
 
         assert!(blueprint.validate().is_ok());
@@ -29,7 +33,7 @@ mod integration_tests {
 
     #[test]
     fn store_unbonded_material_accepts_only_unbonded_stock() {
-        let mut organism = Simulation::create_initial_organism();
+        let mut organism = fresh_organism();
         let initial_structure_units = organism.structure.units.len();
 
         organism.store_unbonded_material(Material {
@@ -48,7 +52,7 @@ mod integration_tests {
 
     #[test]
     fn growth_adds_only_the_next_inherited_blueprint_element() {
-        let mut organism = Simulation::create_initial_organism();
+        let mut organism = fresh_organism();
         let blueprint = organism.genome.structural_blueprint.clone();
         let catalog = crate::resources::default_catalog();
 
@@ -75,7 +79,7 @@ mod integration_tests {
 
     #[test]
     fn growth_cannot_invent_a_non_blueprint_unit() {
-        let mut organism = Simulation::create_initial_organism();
+        let mut organism = fresh_organism();
         let catalog = crate::resources::default_catalog();
         organism.structure = OrganismStructure::new();
         organism.structure.add_unit(StructuralUnit::new(
@@ -91,7 +95,7 @@ mod integration_tests {
 
     #[test]
     fn repair_restores_only_a_missing_inherited_bond() {
-        let mut organism = Simulation::create_initial_organism();
+        let mut organism = fresh_organism();
         let catalog = crate::resources::default_catalog();
         let expected_bonds = organism.genome.structural_blueprint.connections.len();
         assert!(expected_bonds > 0);
