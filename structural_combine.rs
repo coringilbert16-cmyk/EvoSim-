@@ -162,21 +162,75 @@ pub fn execute(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::resources::default_catalog;
+    use crate::resources::{default_catalog, ConnectionPoint};
     use crate::structure::{Placement, StructuralUnit};
 
-    #[test]
-    fn failed_combine_does_not_mutate_structure() {
-        let catalog = default_catalog();
-        let mut structure = OrganismStructure::new();
-        let a = structure.add_unit(StructuralUnit::new(
-            "Carbon",
+    fn synthetic_unit(structure: &mut OrganismStructure, name: &str, direction_radians: f64) -> usize {
+        let mut unit = StructuralUnit::new(
+            name,
             Placement {
                 x: 0.0,
                 y: 0.0,
                 rotation_radians: 0.0,
             },
-        ));
+        );
+        unit.geometry.connection_regions = vec![crate::structural_blueprint::ConnectionRegion {
+            point: ConnectionPoint {
+                x: 0.0,
+                y: 0.0,
+                direction_radians,
+            },
+        }];
+        structure.add_unit(unit)
+    }
+
+    fn forms_multiple_same_region_bonds(count: usize) {
+        let catalog = default_catalog();
+        let mut structure = OrganismStructure::new();
+        let carbon = synthetic_unit(&mut structure, "Carbon", 0.0);
+        let mut methane_units = Vec::with_capacity(count);
+        for _ in 0..count {
+            methane_units.push(synthetic_unit(&mut structure, "Methane", std::f64::consts::PI));
+        }
+
+        let mut cache = ConnectionCompatibilityCache::new();
+        for methane in methane_units {
+            let result = execute(
+                &mut structure,
+                carbon,
+                methane,
+                &catalog,
+                &mut cache,
+                1_000_000.0,
+                0.0,
+            );
+            assert!(result.is_ok(), "same-region formation failed: {result:?}");
+        }
+
+        assert_eq!(structure.connection_count(carbon, 0), count);
+        assert_eq!(structure.bonds.len(), count);
+    }
+
+    #[test]
+    fn real_formation_path_allows_two_bonds_from_one_region() {
+        forms_multiple_same_region_bonds(2);
+    }
+
+    #[test]
+    fn real_formation_path_allows_three_bonds_from_one_region() {
+        forms_multiple_same_region_bonds(3);
+    }
+
+    #[test]
+    fn real_formation_path_allows_four_bonds_from_one_region() {
+        forms_multiple_same_region_bonds(4);
+    }
+
+    #[test]
+    fn failed_combine_does_not_mutate_structure() {
+        let catalog = default_catalog();
+        let mut structure = OrganismStructure::new();
+        let a = synthetic_unit(&mut structure, "Carbon", 0.0);
         let mut cache = ConnectionCompatibilityCache::new();
         let result = execute(&mut structure, a, a, &catalog, &mut cache, 100.0, 0.0);
         assert_eq!(
@@ -190,22 +244,23 @@ mod tests {
     fn combine_rejects_connection_points_more_than_one_structural_unit_apart() {
         let catalog = default_catalog();
         let mut structure = OrganismStructure::new();
-        let a = structure.add_unit(StructuralUnit::new(
-            "Carbon",
-            Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        let b = structure.add_unit(StructuralUnit::new(
+        let a = synthetic_unit(&mut structure, "Carbon", 0.0);
+        let mut b_unit = StructuralUnit::new(
             "Carbon",
             Placement {
                 x: 3.0,
                 y: 0.0,
                 rotation_radians: 0.0,
             },
-        ));
+        );
+        b_unit.geometry.connection_regions = vec![crate::structural_blueprint::ConnectionRegion {
+            point: ConnectionPoint {
+                x: 0.0,
+                y: 0.0,
+                direction_radians: std::f64::consts::PI,
+            },
+        }];
+        let b = structure.add_unit(b_unit);
         let mut cache = ConnectionCompatibilityCache::new();
         let result = execute(&mut structure, a, b, &catalog, &mut cache, 100.0, 0.0);
         assert_eq!(
