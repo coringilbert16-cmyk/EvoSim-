@@ -96,25 +96,16 @@ pub fn execute(
             a.facing
                 .partial_cmp(&b.facing)
                 .unwrap_or(std::cmp::Ordering::Equal)
-                .then_with(|| {
-                    b.distance
-                        .partial_cmp(&a.distance)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                })
+                .then_with(|| b.distance.partial_cmp(&a.distance).unwrap_or(std::cmp::Ordering::Equal))
                 .then_with(|| b.point_a.cmp(&a.point_a))
                 .then_with(|| b.point_b.cmp(&a.point_b))
         })
         .ok_or(StructuralCombineError::NoGeometricallyEligibleCandidate)?;
 
-    let a = structure.units[unit_a]
-        .properties(catalog)
-        .ok_or(StructuralCombineError::MissingUnit)?;
-    let b = structure.units[unit_b]
-        .properties(catalog)
-        .ok_or(StructuralCombineError::MissingUnit)?;
+    let a = structure.units[unit_a].properties(catalog).ok_or(StructuralCombineError::MissingUnit)?;
+    let b = structure.units[unit_b].properties(catalog).ok_or(StructuralCombineError::MissingUnit)?;
     let formation = evaluate_formation(candidate, a.cohesion, b.cohesion);
-    let (interaction, work_cost, _required) =
-        required_investment(*a, *b, formation, water_field)?;
+    let (interaction, work_cost, _required) = required_investment(*a, *b, formation, water_field)?;
 
     if investment < formation.threshold.max(work_cost) {
         return Err(StructuralCombineError::InsufficientInvestment);
@@ -136,7 +127,6 @@ pub fn execute(
             point_a: candidate.point_a,
             unit_b,
             point_b: candidate.point_b,
-            strength: bond_strength,
             bond_energy,
         },
         catalog,
@@ -166,21 +156,8 @@ mod tests {
     use crate::structure::{Placement, StructuralUnit};
 
     fn synthetic_unit(structure: &mut OrganismStructure, name: &str, direction_radians: f64) -> usize {
-        let mut unit = StructuralUnit::new(
-            name,
-            Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        );
-        unit.geometry.connection_regions = vec![crate::structural_blueprint::ConnectionRegion {
-            point: ConnectionPoint {
-                x: 0.0,
-                y: 0.0,
-                direction_radians,
-            },
-        }];
+        let mut unit = StructuralUnit::new(name, Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 });
+        unit.geometry.connection_regions = vec![crate::structural_blueprint::ConnectionRegion { point: ConnectionPoint { x: 0.0, y: 0.0, direction_radians } }];
         structure.add_unit(unit)
     }
 
@@ -189,42 +166,19 @@ mod tests {
         let mut structure = OrganismStructure::new();
         let carbon = synthetic_unit(&mut structure, "Carbon", 0.0);
         let mut methane_units = Vec::with_capacity(count);
-        for _ in 0..count {
-            methane_units.push(synthetic_unit(&mut structure, "Methane", std::f64::consts::PI));
-        }
-
+        for _ in 0..count { methane_units.push(synthetic_unit(&mut structure, "Methane", std::f64::consts::PI)); }
         let mut cache = ConnectionCompatibilityCache::new();
         for methane in methane_units {
-            let result = execute(
-                &mut structure,
-                carbon,
-                methane,
-                &catalog,
-                &mut cache,
-                1_000_000.0,
-                0.0,
-            );
+            let result = execute(&mut structure, carbon, methane, &catalog, &mut cache, 1_000_000.0, 0.0);
             assert!(result.is_ok(), "same-region formation failed: {result:?}");
         }
-
         assert_eq!(structure.connection_count(carbon, 0), count);
         assert_eq!(structure.bonds.len(), count);
     }
 
-    #[test]
-    fn real_formation_path_allows_two_bonds_from_one_region() {
-        forms_multiple_same_region_bonds(2);
-    }
-
-    #[test]
-    fn real_formation_path_allows_three_bonds_from_one_region() {
-        forms_multiple_same_region_bonds(3);
-    }
-
-    #[test]
-    fn real_formation_path_allows_four_bonds_from_one_region() {
-        forms_multiple_same_region_bonds(4);
-    }
+    #[test] fn real_formation_path_allows_two_bonds_from_one_region() { forms_multiple_same_region_bonds(2); }
+    #[test] fn real_formation_path_allows_three_bonds_from_one_region() { forms_multiple_same_region_bonds(3); }
+    #[test] fn real_formation_path_allows_four_bonds_from_one_region() { forms_multiple_same_region_bonds(4); }
 
     #[test]
     fn failed_combine_does_not_mutate_structure() {
@@ -233,10 +187,8 @@ mod tests {
         let a = synthetic_unit(&mut structure, "Carbon", 0.0);
         let mut cache = ConnectionCompatibilityCache::new();
         let result = execute(&mut structure, a, a, &catalog, &mut cache, 100.0, 0.0);
-        assert_eq!(
-            result,
-            Err(StructuralCombineError::NoGeometricallyEligibleCandidate)
-        );
+        assert_eq!(result, Err(StructuralCombineError::NoGeometricallyEligibleCandidate));
+        assert_eq!(structure.units.len(), 1);
         assert!(structure.bonds.is_empty());
     }
 
@@ -245,28 +197,13 @@ mod tests {
         let catalog = default_catalog();
         let mut structure = OrganismStructure::new();
         let a = synthetic_unit(&mut structure, "Carbon", 0.0);
-        let mut b_unit = StructuralUnit::new(
-            "Carbon",
-            Placement {
-                x: 3.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        );
-        b_unit.geometry.connection_regions = vec![crate::structural_blueprint::ConnectionRegion {
-            point: ConnectionPoint {
-                x: 0.0,
-                y: 0.0,
-                direction_radians: std::f64::consts::PI,
-            },
-        }];
+        let mut b_unit = StructuralUnit::new("Carbon", Placement { x: 3.0, y: 0.0, rotation_radians: 0.0 });
+        b_unit.geometry.connection_regions = vec![crate::structural_blueprint::ConnectionRegion { point: ConnectionPoint { x: 0.0, y: 0.0, direction_radians: std::f64::consts::PI } }];
         let b = structure.add_unit(b_unit);
         let mut cache = ConnectionCompatibilityCache::new();
         let result = execute(&mut structure, a, b, &catalog, &mut cache, 100.0, 0.0);
-        assert_eq!(
-            result,
-            Err(StructuralCombineError::NoGeometricallyEligibleCandidate)
-        );
+        assert_eq!(result, Err(StructuralCombineError::NoGeometricallyEligibleCandidate));
+        assert_eq!(structure.units.len(), 2);
         assert!(structure.bonds.is_empty());
     }
 }
