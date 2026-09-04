@@ -66,8 +66,8 @@ pub fn initial_blueprint(seed_variant: u64) -> StructuralBlueprint {
     let catalog = crate::resources::default_catalog();
     let carbon_shape = catalog.iter().find(|r| r.name == "Carbon").map(|r| r.shape.clone()).unwrap_or(Shape { form: crate::resources::Form::RegularPolygon { sides: 6, radius: 0.438_691 } });
     let water_shape = catalog.iter().find(|r| r.name == "Water").map(|r| r.shape.clone()).unwrap_or(Shape { form: crate::resources::Form::Fluid { nominal_area: crate::resources::NOMINAL_UNIT_AREA } });
-    let carbon_radius = carbon_shape.bounding_radius();
-    let water_radius = water_shape.bounding_radius();
+    let carbon_radius = carbon_shape.form.bounding_radius();
+    let water_radius = water_shape.form.bounding_radius();
     let angle = (seed_variant % 3) as f64 * std::f64::consts::TAU / 3.0;
     let ux = angle.cos();
     let uy = angle.sin();
