@@ -19,7 +19,6 @@ pub struct BlueprintElement {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BlueprintGeometry {
     pub constituents: Vec<ConstituentGeometry>,
-    pub envelope: Shape,
     #[serde(default)]
     pub connection_regions: Vec<ConnectionRegion>,
 }
@@ -140,9 +139,6 @@ impl BlueprintElement {
 
 impl BlueprintGeometry {
     pub fn validate(&self, constituent_count: usize) -> Result<(), String> {
-        if !self.envelope.is_valid() {
-            return Err("envelope geometry is invalid".into());
-        }
         if self.constituents.is_empty() {
             return Err("geometry must contain at least one constituent".into());
         }
@@ -186,14 +182,13 @@ impl BlueprintGeometry {
         Self {
             constituents: vec![ConstituentGeometry {
                 part_index: 0,
-                shape: shape.clone(),
+                shape,
                 placement: Placement {
                     x: 0.0,
                     y: 0.0,
                     rotation_radians: 0.0,
                 },
             }],
-            envelope: shape,
             connection_regions,
         }
     }
