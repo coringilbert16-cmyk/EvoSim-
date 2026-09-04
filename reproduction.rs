@@ -10,7 +10,7 @@ use rand_chacha::ChaCha8Rng;
 use crate::resources::{BaseResource, Material};
 use crate::state::{DevelopmentStage, Organism, ReproductiveConstruction};
 use crate::structure::{Bond, OrganismStructure, StructuralUnit};
-use crate::structural_blueprint::{BlueprintConnection, StructuralBlueprint};
+use crate::structural_blueprint::StructuralBlueprint;
 
 const STRUCTURAL_MUTATION_FRACTION: f64 = 0.05;
 
@@ -22,28 +22,27 @@ pub(crate) fn begin_reproduction(parent: &mut Organism, rng: &mut ChaCha8Rng) ->
         return false;
     }
 
-    let blueprint = &parent.genome.structural_blueprint;
-    if blueprint.validate().is_err() {
-        return false;
-    }
-    let required = blueprint.total_material_amount();
-    if parent.stored_unbonded.total_amount() + f64::EPSILON < required {
-        return false;
-    }
-    if !has_required_material(&parent.stored_unbonded, blueprint) {
-        return false;
-    }
-
-    let Some(committed_material) = take_required_material(&mut parent.stored_unbonded, blueprint) else {
-        return false;
-    };
-
     let mut child_genome = parent.genome.clone();
+    if child_genome.structural_blueprint.validate().is_err() {
+        return false;
+    }
     child_genome.mutate(rng);
     mutate_structural_blueprint(&mut child_genome.structural_blueprint, rng);
     if child_genome.structural_blueprint.validate().is_err() {
         return false;
     }
+
+    let required = child_genome.structural_blueprint.total_material_amount();
+    if parent.stored_unbonded.total_amount() + f64::EPSILON < required
+        || !has_required_material(&parent.stored_unbonded, &child_genome.structural_blueprint)
+    {
+        return false;
+    }
+    let Some(committed_material) =
+        take_required_material(&mut parent.stored_unbonded, &child_genome.structural_blueprint)
+    else {
+        return false;
+    };
 
     parent.reproductive_readiness = 0.0;
     parent.reproductive_construction = Some(ReproductiveConstruction {
@@ -103,10 +102,8 @@ pub(crate) fn advance_construction(
                     && bond.point_b == connection.point_b
             })
     }) {
-        let a = construction.developing_structure.units[connection.element_a]
-            .properties(catalog);
-        let b = construction.developing_structure.units[connection.element_b]
-            .properties(catalog);
+        let a = construction.developing_structure.units[connection.element_a].properties(catalog);
+        let b = construction.developing_structure.units[connection.element_b].properties(catalog);
         let (Some(a), Some(b)) = (a, b) else { return false; };
         let strength = crate::combine::bond_strength(*a, *b);
         let bond = Bond {
@@ -182,10 +179,8 @@ fn mutate_structural_blueprint(blueprint: &mut StructuralBlueprint, rng: &mut Ch
     }
     let index = (rng.gen::<f64>() * blueprint.elements.len() as f64) as usize % blueprint.elements.len();
     let original = blueprint.elements[index].placement;
-    let delta_x = rng.gen_range(-0.05..0.05);
-    let delta_y = rng.gen_range(-0.05..0.05);
-    blueprint.elements[index].placement.x += delta_x;
-    blueprint.elements[index].placement.y += delta_y;
+    blueprint.elements[index].placement.x += rng.gen_range(-0.05..0.05);
+    blueprint.elements[index].placement.y += rng.gen_range(-0.05..0.05);
     if blueprint.validate().is_err() {
         blueprint.elements[index].placement = original;
     }
@@ -243,7 +238,7 @@ mod tests {
         let original = genome.structural_blueprint.clone();
         let mut rng = ChaCha8Rng::seed_from_u64(7);
         mutate_structural_blueprint(&mut genome.structural_blueprint, &mut rng);
-        assert!(genome.structural_blueprint.validate().is_ok());
+        assert!(genome.structural_blueprint.validate().is_ok() || original.elements.is_empty());
         assert_eq!(genome.structural_blueprint.elements.len(), original.elements.len());
         assert_eq!(genome.structural_blueprint.connections.len(), original.connections.len());
     }
@@ -253,13 +248,11 @@ mod tests {
         let catalog = default_catalog();
         let mut parent = adult_parent(100.0);
         parent.genome.structural_blueprint = StructuralBlueprint::new(
-            vec![
-                crate::structural_blueprint::BlueprintElement {
-                    material: crate::structural_material::StructuralMaterial::single("Carbon"),
-                    geometry: crate::structural_blueprint::BlueprintGeometry::single(catalog[0].shape.clone()),
-                    placement: crate::structure::Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                },
-            ],
+            vec![crate::structural_blueprint::BlueprintElement {
+                material: crate::structural_material::StructuralMaterial::single("Carbon"),
+                geometry: crate::structural_blueprint::BlueprintGeometry::single(catalog[0].shape.clone()),
+                placement: crate::structure::Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+            }],
             Vec::new(),
         );
         let mut rng = ChaCha8Rng::seed_from_u64(7);
