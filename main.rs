@@ -3,7 +3,6 @@ mod combine_runtime;
 mod connection_geometry;
 mod contact;
 mod core_geometry;
-mod core_integrity;
 mod decision;
 mod decision_runtime;
 mod environment;
