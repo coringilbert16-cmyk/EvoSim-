@@ -1,42 +1,49 @@
 //! Physical reproduction lifecycle.
 //!
-//! Reproduction does not split or copy the parent's existing structure. Once
-//! an adult has accumulated enough actual unbonded material, the reproductive
-//! decision commits that material to a persistent construction state. The
-//! parent keeps its own structure intact. Later ticks will consume the
-//! committed material through the ordinary structural construction system and
-//! only create a separate organism when the developing structure reaches the
-//! genetically determined juvenile threshold.
+//! Reproduction copies the parent's inherited structural blueprint. The child
+//! does not invent a body plan during construction. Structural mutation is a
+//! small inherited change and is limited to at most five percent of blueprint
+//! elements.
 
 use rand_chacha::ChaCha8Rng;
 
-use crate::resources::{BaseResource, ConnectionSites};
+use crate::resources::{BaseResource, Material};
 use crate::state::{DevelopmentStage, Organism, ReproductiveConstruction};
-use crate::structure::{OrganismStructure, Placement};
+use crate::structure::{Bond, OrganismStructure, StructuralUnit};
+use crate::structural_blueprint::{BlueprintConnection, StructuralBlueprint};
 
-const CORE_UNIT_COUNT: usize = 6;
-const CORE_MATERIAL_AMOUNT: f64 = CORE_UNIT_COUNT as f64;
+const STRUCTURAL_MUTATION_FRACTION: f64 = 0.05;
 
 pub(crate) fn begin_reproduction(parent: &mut Organism, rng: &mut ChaCha8Rng) -> bool {
-    if !matches!(parent.development_stage, DevelopmentStage::Adult) {
-        return false;
-    }
-    if parent.reproductive_readiness < 1.0 - f64::EPSILON {
-        return false;
-    }
-    if parent.reproductive_construction.is_some() {
-        return false;
-    }
-    if parent.stored_unbonded.total_amount() + f64::EPSILON < CORE_MATERIAL_AMOUNT {
+    if !matches!(parent.development_stage, DevelopmentStage::Adult)
+        || parent.reproductive_readiness < 1.0 - f64::EPSILON
+        || parent.reproductive_construction.is_some()
+    {
         return false;
     }
 
-    let Some(committed_material) = parent.stored_unbonded.take(CORE_MATERIAL_AMOUNT) else {
+    let blueprint = &parent.genome.structural_blueprint;
+    if blueprint.validate().is_err() {
+        return false;
+    }
+    let required = blueprint.total_material_amount();
+    if parent.stored_unbonded.total_amount() + f64::EPSILON < required {
+        return false;
+    }
+    if !has_required_material(&parent.stored_unbonded, blueprint) {
+        return false;
+    }
+
+    let Some(committed_material) = take_required_material(&mut parent.stored_unbonded, blueprint) else {
         return false;
     };
 
     let mut child_genome = parent.genome.clone();
     child_genome.mutate(rng);
+    mutate_structural_blueprint(&mut child_genome.structural_blueprint, rng);
+    if child_genome.structural_blueprint.validate().is_err() {
+        return false;
+    }
 
     parent.reproductive_readiness = 0.0;
     parent.reproductive_construction = Some(ReproductiveConstruction {
@@ -47,128 +54,141 @@ pub(crate) fn begin_reproduction(parent: &mut Organism, rng: &mut ChaCha8Rng) ->
     true
 }
 
-/// Advance reproductive construction by exactly one physical structural unit.
-///
-/// Placement is derived from the existing connection-point geometry. The new
-/// unit is positioned so one of its authored connection points exactly meets
-/// an available connection point on the developing structure with opposing
-/// outward normals. Bond formation remains a separate COMBINE step.
+/// Construct the inherited blueprint one element per tick. Existing structure
+/// is never redesigned; construction only creates the child's pre-inherited
+/// body and then materializes its authored bonds.
 pub(crate) fn advance_construction(
     construction: &mut ReproductiveConstruction,
     catalog: &[BaseResource],
 ) -> bool {
-    let Some((resource_name, _)) = construction
-        .committed_material
-        .parts
-        .iter()
-        .find(|(_, amount)| *amount >= 1.0 - f64::EPSILON)
-        .map(|(name, amount)| (name.clone(), *amount))
-    else {
+    let blueprint = &construction.child_genome.structural_blueprint;
+    if blueprint.validate().is_err() {
+        return false;
+    }
+
+    let next = construction.developing_structure.units.len();
+    if next >= blueprint.elements.len() {
+        return false;
+    }
+
+    let element = &blueprint.elements[next];
+    let required_parts = element.material.material.parts.clone();
+    if !has_parts(&construction.committed_material, &required_parts) {
+        return false;
+    }
+
+    let Some(material) = take_parts(&mut construction.committed_material, &required_parts) else {
         return false;
     };
-
-    let Some(placement) = construction_placement(
-        &construction.developing_structure,
-        &resource_name,
-        catalog,
-        &construction.child_genome,
-    ) else {
+    let unit = StructuralUnit::from_blueprint(
+        element.material.clone(),
+        element.geometry.clone(),
+        element.placement,
+    );
+    if material.total_amount() + f64::EPSILON < element.material.total_amount() {
         return false;
-    };
+    }
+    construction.developing_structure.add_unit(unit);
 
-    if crate::structural_combine::instantiate_raw_unit(
-        &mut construction.developing_structure,
-        &mut construction.committed_material,
-        &resource_name,
-        placement,
-        catalog,
-    )
-    .is_err()
-    {
-        return false;
+    // Once both endpoint elements exist, materialize the inherited topology.
+    // Bond energy starts at zero because no new lifetime redesign or synthetic
+    // investment is being invented during birth.
+    for connection in blueprint.connections.iter().filter(|connection| {
+        connection.element_a < construction.developing_structure.units.len()
+            && connection.element_b < construction.developing_structure.units.len()
+            && !construction.developing_structure.bonds.iter().any(|bond| {
+                bond.unit_a == connection.element_a
+                    && bond.point_a == connection.point_a
+                    && bond.unit_b == connection.element_b
+                    && bond.point_b == connection.point_b
+            })
+    }) {
+        let a = construction.developing_structure.units[connection.element_a]
+            .properties(catalog);
+        let b = construction.developing_structure.units[connection.element_b]
+            .properties(catalog);
+        let (Some(a), Some(b)) = (a, b) else { return false; };
+        let strength = crate::combine::bond_strength(*a, *b);
+        let bond = Bond {
+            unit_a: connection.element_a,
+            point_a: connection.point_a,
+            unit_b: connection.element_b,
+            point_b: connection.point_b,
+            strength,
+            bond_energy: 0.0,
+        };
+        if !construction.developing_structure.is_valid_bond(&bond, catalog) {
+            return false;
+        }
+        if crate::contact::try_add_bond(&mut construction.developing_structure, bond, catalog).is_err() {
+            return false;
+        }
     }
 
     true
 }
 
-fn construction_placement(
-    structure: &OrganismStructure,
-    resource_name: &str,
-    catalog: &[BaseResource],
-    genome: &crate::genome::Genome,
-) -> Option<Placement> {
-    if structure.units.is_empty() {
-        return Some(Placement {
-            x: 0.0,
-            y: 0.0,
-            rotation_radians: 0.0,
-        });
-    }
+fn has_required_material(material: &Material, blueprint: &StructuralBlueprint) -> bool {
+    let required: Vec<(String, f64)> = blueprint
+        .elements
+        .iter()
+        .flat_map(|element| element.material.material.parts.iter().cloned())
+        .collect();
+    has_parts(material, &required)
+}
 
-    let new_resource = catalog.iter().find(|base| base.name == resource_name)?;
-    let ConnectionSites::Corners(new_points) = new_resource.shape.connection_sites() else {
+fn has_parts(material: &Material, required: &[(String, f64)]) -> bool {
+    required.iter().all(|(name, amount)| {
+        let available = material
+            .parts
+            .iter()
+            .find(|(candidate, _)| candidate == name)
+            .map(|(_, value)| *value)
+            .unwrap_or(0.0);
+        available + f64::EPSILON >= *amount
+    })
+}
+
+fn take_required_material(material: &mut Material, blueprint: &StructuralBlueprint) -> Option<Material> {
+    let required: Vec<(String, f64)> = blueprint
+        .elements
+        .iter()
+        .flat_map(|element| element.material.material.parts.iter().cloned())
+        .collect();
+    take_parts(material, &required)
+}
+
+fn take_parts(material: &mut Material, required: &[(String, f64)]) -> Option<Material> {
+    if !has_parts(material, required) {
         return None;
-    };
-
-    let compactness = genome.construction_compactness();
-    let branching = genome.construction_branching();
-    let centroid = structure_centroid(structure);
-
-    let mut best: Option<(f64, Placement)> = None;
-    for (unit_index, unit) in structure.units.iter().enumerate() {
-        let ConnectionSites::Corners(existing_points) = unit.connection_sites(catalog)? else {
-            continue;
-        };
-        for (existing_index, &existing_point) in existing_points.iter().enumerate() {
-            if structure.connection_count(unit_index, existing_index) != 0 {
-                continue;
-            }
-
-            let existing_world = crate::contact::world_connection_point(existing_point, unit);
-            let existing_normal_angle = existing_world.normal_y.atan2(existing_world.normal_x);
-
-            for (new_index, &new_point) in new_points.iter().enumerate() {
-                let rotation = existing_normal_angle
-                    + std::f64::consts::PI
-                    - new_point.direction_radians;
-                let (s, c) = rotation.sin_cos();
-                let rotated_x = new_point.x * c - new_point.y * s;
-                let rotated_y = new_point.x * s + new_point.y * c;
-                let placement = Placement {
-                    x: existing_world.x - rotated_x,
-                    y: existing_world.y - rotated_y,
-                    rotation_radians: rotation,
-                };
-
-                let dx = placement.x - centroid.0;
-                let dy = placement.y - centroid.1;
-                let distance_from_centroid = dx.hypot(dy);
-                let radial_angle = dy.atan2(dx);
-                let preferred_angle = (new_index as f64 + branching) * std::f64::consts::FRAC_PI_2;
-                let angular_delta = angular_distance(radial_angle, preferred_angle);
-                let score = distance_from_centroid * (1.0 + compactness)
-                    + angular_delta * (1.0 + branching);
-
-                if best.as_ref().map(|(current, _)| score < *current).unwrap_or(true) {
-                    best = Some((score, placement));
-                }
-            }
-        }
     }
-
-    best.map(|(_, placement)| placement)
+    let mut taken = Vec::new();
+    for (name, amount) in required {
+        let entry = material.parts.iter_mut().find(|(candidate, _)| candidate == name)?;
+        entry.1 -= *amount;
+        taken.push((name.clone(), *amount));
+    }
+    material.parts.retain(|(_, amount)| *amount > 1e-12);
+    Some(Material { parts: crate::resources::merge_parts(&taken), bonded: false })
 }
 
-fn structure_centroid(structure: &OrganismStructure) -> (f64, f64) {
-    let count = structure.units.len() as f64;
-    let x = structure.units.iter().map(|u| u.placement.x).sum::<f64>() / count;
-    let y = structure.units.iter().map(|u| u.placement.y).sum::<f64>() / count;
-    (x, y)
-}
-
-fn angular_distance(a: f64, b: f64) -> f64 {
-    let delta = (a - b).rem_euclid(std::f64::consts::TAU);
-    delta.min(std::f64::consts::TAU - delta)
+/// Mutate at most five percent of blueprint elements. The mutation is local:
+/// it changes one element's authored placement by a small translation while
+/// preserving material identity, geometry, and topology. If that would make
+/// the inherited body plan invalid, the mutation is rejected.
+fn mutate_structural_blueprint(blueprint: &mut StructuralBlueprint, rng: &mut ChaCha8Rng) {
+    if blueprint.elements.is_empty() || rng.gen::<f64>() >= STRUCTURAL_MUTATION_FRACTION {
+        return;
+    }
+    let index = (rng.gen::<f64>() * blueprint.elements.len() as f64) as usize % blueprint.elements.len();
+    let original = blueprint.elements[index].placement;
+    let delta_x = rng.gen_range(-0.05..0.05);
+    let delta_y = rng.gen_range(-0.05..0.05);
+    blueprint.elements[index].placement.x += delta_x;
+    blueprint.elements[index].placement.y += delta_y;
+    if blueprint.validate().is_err() {
+        blueprint.elements[index].placement = original;
+    }
 }
 
 #[cfg(test)]
@@ -177,7 +197,7 @@ mod tests {
     use rand::SeedableRng;
     use crate::decision::DecisionHistory;
     use crate::genome::initial_genome;
-    use crate::resources::Material;
+    use crate::resources::default_catalog;
     use crate::state::{Position, ResourceSense};
 
     fn adult_parent(material_amount: f64) -> Organism {
@@ -201,71 +221,52 @@ mod tests {
     }
 
     #[test]
-    fn reproduction_commits_real_material_without_touching_parent_structure() {
-        let mut parent = adult_parent(CORE_MATERIAL_AMOUNT + 2.0);
+    fn reproduction_requires_an_inherited_blueprint() {
+        let mut parent = adult_parent(100.0);
         let mut rng = ChaCha8Rng::seed_from_u64(7);
-        assert!(begin_reproduction(&mut parent, &mut rng));
-        assert!(parent.structure.units.is_empty());
-        assert!(parent.structure.bonds.is_empty());
-        assert_eq!(parent.stored_unbonded.total_amount(), 2.0);
-        assert_eq!(parent.reproductive_readiness, 0.0);
-        let construction = parent.reproductive_construction.as_ref().unwrap();
-        assert_eq!(construction.committed_material.total_amount(), CORE_UNIT_COUNT as f64);
-        assert!(!construction.committed_material.bonded);
-        assert!(construction.developing_structure.units.is_empty());
+        assert!(!begin_reproduction(&mut parent, &mut rng));
+        assert!(parent.reproductive_construction.is_none());
     }
 
     #[test]
-    fn construction_consumes_one_real_unit_per_step() {
-        let catalog = crate::resources::default_catalog();
-        let mut parent = adult_parent(CORE_MATERIAL_AMOUNT);
+    fn material_helpers_preserve_exact_blueprint_composition() {
+        let mut material = Material::free_base("Carbon", 3.0);
+        let required = vec![("Carbon".into(), 2.0)];
+        let taken = take_parts(&mut material, &required).unwrap();
+        assert_eq!(taken.parts, required);
+        assert_eq!(material.total_amount(), 1.0);
+    }
+
+    #[test]
+    fn structural_mutation_is_small_and_validated() {
+        let mut genome = initial_genome();
+        let original = genome.structural_blueprint.clone();
+        let mut rng = ChaCha8Rng::seed_from_u64(7);
+        mutate_structural_blueprint(&mut genome.structural_blueprint, &mut rng);
+        assert!(genome.structural_blueprint.validate().is_ok());
+        assert_eq!(genome.structural_blueprint.elements.len(), original.elements.len());
+        assert_eq!(genome.structural_blueprint.connections.len(), original.connections.len());
+    }
+
+    #[test]
+    fn construction_uses_blueprint_elements_not_core_constants() {
+        let catalog = default_catalog();
+        let mut parent = adult_parent(100.0);
+        parent.genome.structural_blueprint = StructuralBlueprint::new(
+            vec![
+                crate::structural_blueprint::BlueprintElement {
+                    material: crate::structural_material::StructuralMaterial::single("Carbon"),
+                    geometry: crate::structural_blueprint::BlueprintGeometry::single(catalog[0].shape.clone()),
+                    placement: crate::structure::Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                },
+            ],
+            Vec::new(),
+        );
         let mut rng = ChaCha8Rng::seed_from_u64(7);
         assert!(begin_reproduction(&mut parent, &mut rng));
         let construction = parent.reproductive_construction.as_mut().unwrap();
         assert!(advance_construction(construction, &catalog));
         assert_eq!(construction.developing_structure.units.len(), 1);
-        assert_eq!(construction.committed_material.total_amount(), 5.0);
-        assert_eq!(parent.structure.units.len(), 0);
-        assert!(advance_construction(construction, &catalog));
-        assert_eq!(construction.developing_structure.units.len(), 2);
-        assert_eq!(construction.committed_material.total_amount(), 4.0);
-    }
-
-    #[test]
-    fn construction_places_new_unit_at_real_contact_geometry() {
-        let catalog = crate::resources::default_catalog();
-        let mut parent = adult_parent(CORE_MATERIAL_AMOUNT);
-        let mut rng = ChaCha8Rng::seed_from_u64(7);
-        assert!(begin_reproduction(&mut parent, &mut rng));
-        let construction = parent.reproductive_construction.as_mut().unwrap();
-        assert!(advance_construction(construction, &catalog));
-        assert!(advance_construction(construction, &catalog));
-
-        let candidates = crate::contact::contacting_connection_pair_candidates(
-            &construction.developing_structure,
-            0,
-            1,
-            &catalog,
-            1.0,
-            0.0,
-        );
-        assert!(!candidates.is_empty());
-        assert!(candidates.iter().any(|candidate| candidate.distance <= 1e-12));
-        assert!(candidates.iter().any(|candidate| candidate.facing >= 1.0 - 1e-12));
-    }
-
-    #[test]
-    fn construction_stops_when_no_full_unit_remains() {
-        let catalog = crate::resources::default_catalog();
-        let mut parent = adult_parent(CORE_MATERIAL_AMOUNT);
-        let mut rng = ChaCha8Rng::seed_from_u64(7);
-        assert!(begin_reproduction(&mut parent, &mut rng));
-        let construction = parent.reproductive_construction.as_mut().unwrap();
-        for _ in 0..CORE_UNIT_COUNT {
-            assert!(advance_construction(construction, &catalog));
-        }
-        assert!(!advance_construction(construction, &catalog));
-        assert!(construction.committed_material.is_empty());
-        assert_eq!(construction.developing_structure.units.len(), CORE_UNIT_COUNT);
+        assert_eq!(construction.committed_material.total_amount(), 0.0);
     }
 }
