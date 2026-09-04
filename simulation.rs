@@ -124,13 +124,29 @@ impl Simulation {
         }
     }
 
-    fn decision_candidates(organism: &Organism, needs: CurrentNeeds, eligibility: ActionEligibility) -> Vec<ActionCandidate> {
+    fn has_authorized_acquisition_target(organism: &Organism, environment: &Environment) -> bool {
+        let Some(position) = organism.occupied_cells.first().cloned() else {
+            return false;
+        };
+        organism.resource_sense.sensed_resources.iter().any(|observation| {
+            crate::acquisition::field_target_is_authorized(
+                &organism.genome.structural_blueprint.physical_space,
+                &environment.catalog,
+                &environment.field,
+                &observation.name,
+                observation.field_index,
+                position.clone(),
+            )
+        })
+    }
+
+    fn decision_candidates(organism: &Organism, environment: &Environment, needs: CurrentNeeds, eligibility: ActionEligibility) -> Vec<ActionCandidate> {
         let mut candidates = Vec::new();
         let relevant = |action: ActionKind| eligibility.permits(action) && needs.any_for(action.relevant_needs());
         if relevant(ActionKind::Break) { candidates.extend(organism.structure.bonds.iter().enumerate().map(|(index, _)| ActionCandidate { action: ActionKind::Break, context_key: Some(format!("bond:{index}")) })); }
         if relevant(ActionKind::Combine) { candidates.push(ActionCandidate { action: ActionKind::Combine, context_key: None }); }
         if relevant(ActionKind::Move) { candidates.push(ActionCandidate { action: ActionKind::Move, context_key: None }); }
-        if relevant(ActionKind::Acquire) { candidates.push(ActionCandidate { action: ActionKind::Acquire, context_key: None }); }
+        if relevant(ActionKind::Acquire) && Self::has_authorized_acquisition_target(organism, environment) { candidates.push(ActionCandidate { action: ActionKind::Acquire, context_key: None }); }
         if relevant(ActionKind::Expel) { candidates.push(ActionCandidate { action: ActionKind::Expel, context_key: None }); }
         candidates
     }
@@ -171,7 +187,7 @@ impl Simulation {
                 let needs = Self::current_needs(organism, environment, decision_parameters);
                 let eligibility = Self::action_eligibility(organism, environment);
                 let context = DecisionContext { needs, eligibility };
-                let candidates = Self::decision_candidates(organism, needs, eligibility);
+                let candidates = Self::decision_candidates(organism, environment, needs, eligibility);
                 let Some(selected) = select_action(context, &organism.decision_history, &candidates) else { continue; };
                 match selected.action {
                     ActionKind::Move => {
