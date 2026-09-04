@@ -8,6 +8,7 @@ mod decision;
 mod decision_runtime;
 mod environment;
 mod genome;
+mod growth;
 mod math;
 mod membrane_geometry;
 mod reproduction;
