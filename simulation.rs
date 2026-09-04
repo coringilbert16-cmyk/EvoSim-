@@ -118,8 +118,8 @@ impl Simulation {
         ActionEligibility {
             can_move: organism.active_transformation_id.is_none(),
             can_acquire: false,
-            can_combine: organism.active_transformation_id.is_none() && (organism.structure.units.len() >= 2 || organism.stored_unbonded.total_amount() >= 2.0 - f64::EPSILON),
-            can_break: organism.active_transformation_id.is_none() && !organism.structure.bonds.is_empty(),
+            can_combine: false,
+            can_break: false,
             can_expel: false,
         }
     }
