@@ -52,20 +52,11 @@ pub(crate) fn required_investment(
     water_field: f64,
 ) -> Result<(ExperimentalInteraction, f64, f64), StructuralCombineError> {
     let interaction = experimental_interaction(props_a, props_b, evaluation.candidate, water_field);
-    if interaction.direction <= 0.0 || interaction.magnitude <= EPSILON {
-        return Err(StructuralCombineError::UnfavorableInteraction);
-    }
-
-    let work_cost =
-        experimental_combine_work_cost(props_a, props_b, evaluation.candidate, water_field);
-    if !work_cost.is_finite() {
-        return Err(StructuralCombineError::NonFiniteWorkCost);
-    }
-
+    if interaction.direction <= 0.0 || interaction.magnitude <= EPSILON { return Err(StructuralCombineError::UnfavorableInteraction); }
+    let work_cost = experimental_combine_work_cost(props_a, props_b, evaluation.candidate, water_field);
+    if !work_cost.is_finite() { return Err(StructuralCombineError::NonFiniteWorkCost); }
     let energy_paid = work_cost.max(evaluation.threshold);
-    if !energy_paid.is_finite() || energy_paid < 0.0 {
-        return Err(StructuralCombineError::NonFiniteWorkCost);
-    }
+    if !energy_paid.is_finite() || energy_paid < 0.0 { return Err(StructuralCombineError::NonFiniteWorkCost); }
     Ok((interaction, work_cost, energy_paid))
 }
 
@@ -78,75 +69,26 @@ pub fn execute(
     investment: f64,
     water_field: f64,
 ) -> Result<StructuralCombineResult, StructuralCombineError> {
-    if structure.units.get(unit_a).is_none() || structure.units.get(unit_b).is_none() {
-        return Err(StructuralCombineError::MissingUnit);
-    }
-    if unit_a == unit_b || !investment.is_finite() {
-        return if unit_a == unit_b {
-            Err(StructuralCombineError::NoGeometricallyEligibleCandidate)
-        } else {
-            Err(StructuralCombineError::NonFiniteInvestment)
-        };
-    }
-
-    let candidate = *connection_pair_candidates_cached(structure, unit_a, unit_b, catalog, cache)
-        .iter()
+    if structure.units.get(unit_a).is_none() || structure.units.get(unit_b).is_none() { return Err(StructuralCombineError::MissingUnit); }
+    if unit_a == unit_b || !investment.is_finite() { return if unit_a == unit_b { Err(StructuralCombineError::NoGeometricallyEligibleCandidate) } else { Err(StructuralCombineError::NonFiniteInvestment) }; }
+    let candidate = *connection_pair_candidates_cached(structure, unit_a, unit_b, catalog, cache).iter()
         .filter(|c| c.distance <= COMBINE_CONTACT_TOLERANCE && c.available_a && c.available_b)
-        .max_by(|a, b| {
-            a.facing
-                .partial_cmp(&b.facing)
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then_with(|| b.distance.partial_cmp(&a.distance).unwrap_or(std::cmp::Ordering::Equal))
-                .then_with(|| b.point_a.cmp(&a.point_a))
-                .then_with(|| b.point_b.cmp(&a.point_b))
-        })
+        .max_by(|a, b| a.facing.partial_cmp(&b.facing).unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| b.distance.partial_cmp(&a.distance).unwrap_or(std::cmp::Ordering::Equal))
+            .then_with(|| b.point_a.cmp(&a.point_a)).then_with(|| b.point_b.cmp(&a.point_b)))
         .ok_or(StructuralCombineError::NoGeometricallyEligibleCandidate)?;
-
     let a = structure.units[unit_a].properties(catalog).ok_or(StructuralCombineError::MissingUnit)?;
     let b = structure.units[unit_b].properties(catalog).ok_or(StructuralCombineError::MissingUnit)?;
     let formation = evaluate_formation(candidate, a.cohesion, b.cohesion);
     let (interaction, work_cost, _required) = required_investment(*a, *b, formation, water_field)?;
-
-    if investment < formation.threshold.max(work_cost) {
-        return Err(StructuralCombineError::InsufficientInvestment);
-    }
+    if investment < formation.threshold.max(work_cost) { return Err(StructuralCombineError::InsufficientInvestment); }
     let surplus = investment - formation.threshold;
     let bond_strength = bond_strength(*a, *b);
-    if !bond_strength.is_finite() {
-        return Err(StructuralCombineError::NonFiniteBondStrength);
-    }
-
-    // Surplus investment becomes stored bond energy. It is now part of the
-    // structural bond state and is never reconstructed from resource potential
-    // energy during BREAK.
+    if !bond_strength.is_finite() { return Err(StructuralCombineError::NonFiniteBondStrength); }
     let bond_energy = surplus.max(0.0);
-    let bond_index = crate::contact::try_add_bond(
-        structure,
-        Bond {
-            unit_a,
-            point_a: candidate.point_a,
-            unit_b,
-            point_b: candidate.point_b,
-            bond_energy,
-        },
-        catalog,
-    )
-    .map_err(|_| StructuralCombineError::BondGeometryRejected)?;
-
-    Ok(StructuralCombineResult {
-        unit_a,
-        unit_b,
-        point_a: candidate.point_a,
-        point_b: candidate.point_b,
-        interaction,
-        work_cost,
-        formation_threshold: formation.threshold,
-        investment,
-        surplus,
-        bond_strength,
-        bond_energy,
-        bond_index,
-    })
+    let bond_index = crate::contact::try_add_bond(structure, Bond { unit_a, point_a: candidate.point_a, unit_b, point_b: candidate.point_b, bond_energy }, catalog)
+        .map_err(|_| StructuralCombineError::BondGeometryRejected)?;
+    Ok(StructuralCombineResult { unit_a, unit_b, point_a: candidate.point_a, point_b: candidate.point_b, interaction, work_cost, formation_threshold: formation.threshold, investment, surplus, bond_strength, bond_energy, bond_index })
 }
 
 #[cfg(test)]
@@ -154,56 +96,27 @@ mod tests {
     use super::*;
     use crate::resources::{default_catalog, ConnectionPoint};
     use crate::structure::{Placement, StructuralUnit};
-
     fn synthetic_unit(structure: &mut OrganismStructure, name: &str, direction_radians: f64) -> usize {
         let mut unit = StructuralUnit::new(name, Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 });
         unit.geometry.connection_regions = vec![crate::structural_blueprint::ConnectionRegion { point: ConnectionPoint { x: 0.0, y: 0.0, direction_radians } }];
         structure.add_unit(unit)
     }
-
     fn forms_multiple_same_region_bonds(count: usize) {
-        let catalog = default_catalog();
-        let mut structure = OrganismStructure::new();
-        let carbon = synthetic_unit(&mut structure, "Carbon", 0.0);
-        let mut methane_units = Vec::with_capacity(count);
+        let catalog = default_catalog(); let mut structure = OrganismStructure::new(); let carbon = synthetic_unit(&mut structure, "Carbon", 0.0); let mut methane_units = Vec::with_capacity(count);
         for _ in 0..count { methane_units.push(synthetic_unit(&mut structure, "Methane", std::f64::consts::PI)); }
         let mut cache = ConnectionCompatibilityCache::new();
-        for methane in methane_units {
-            let result = execute(&mut structure, carbon, methane, &catalog, &mut cache, 1_000_000.0, 0.0);
-            assert!(result.is_ok(), "same-region formation failed: {result:?}");
-        }
-        assert_eq!(structure.connection_count(carbon, 0), count);
-        assert_eq!(structure.bonds.len(), count);
+        for methane in methane_units { let result = execute(&mut structure, carbon, methane, &catalog, &mut cache, 1_000_000.0, 0.0); assert!(result.is_ok(), "same-region formation failed: {result:?}"); }
+        assert_eq!(structure.connection_count(carbon, 0), count); assert_eq!(structure.bonds.len(), count);
     }
-
     #[test] fn real_formation_path_allows_two_bonds_from_one_region() { forms_multiple_same_region_bonds(2); }
     #[test] fn real_formation_path_allows_three_bonds_from_one_region() { forms_multiple_same_region_bonds(3); }
     #[test] fn real_formation_path_allows_four_bonds_from_one_region() { forms_multiple_same_region_bonds(4); }
-
-    #[test]
-    fn failed_combine_does_not_mutate_structure() {
-        let catalog = default_catalog();
-        let mut structure = OrganismStructure::new();
-        let a = synthetic_unit(&mut structure, "Carbon", 0.0);
-        let mut cache = ConnectionCompatibilityCache::new();
-        let result = execute(&mut structure, a, a, &catalog, &mut cache, 100.0, 0.0);
-        assert_eq!(result, Err(StructuralCombineError::NoGeometricallyEligibleCandidate));
-        assert_eq!(structure.units.len(), 1);
-        assert!(structure.bonds.is_empty());
+    #[test] fn failed_combine_does_not_mutate_structure() {
+        let catalog = default_catalog(); let mut structure = OrganismStructure::new(); let a = synthetic_unit(&mut structure, "Carbon", 0.0); let mut cache = ConnectionCompatibilityCache::new(); let result = execute(&mut structure, a, a, &catalog, &mut cache, 100.0, 0.0);
+        assert_eq!(result, Err(StructuralCombineError::NoGeometricallyEligibleCandidate)); assert_eq!(structure.units.len(), 1); assert!(structure.bonds.is_empty());
     }
-
-    #[test]
-    fn combine_rejects_connection_points_more_than_one_structural_unit_apart() {
-        let catalog = default_catalog();
-        let mut structure = OrganismStructure::new();
-        let a = synthetic_unit(&mut structure, "Carbon", 0.0);
-        let mut b_unit = StructuralUnit::new("Carbon", Placement { x: 3.0, y: 0.0, rotation_radians: 0.0 });
-        b_unit.geometry.connection_regions = vec![crate::structural_blueprint::ConnectionRegion { point: ConnectionPoint { x: 0.0, y: 0.0, direction_radians: std::f64::consts::PI } }];
-        let b = structure.add_unit(b_unit);
-        let mut cache = ConnectionCompatibilityCache::new();
-        let result = execute(&mut structure, a, b, &catalog, &mut cache, 100.0, 0.0);
-        assert_eq!(result, Err(StructuralCombineError::NoGeometricallyEligibleCandidate));
-        assert_eq!(structure.units.len(), 2);
-        assert!(structure.bonds.is_empty());
+    #[test] fn combine_rejects_connection_points_more_than_one_structural_unit_apart() {
+        let catalog = default_catalog(); let mut structure = OrganismStructure::new(); let a = synthetic_unit(&mut structure, "Carbon", 0.0); let mut b_unit = StructuralUnit::new("Carbon", Placement { x: 3.0, y: 0.0, rotation_radians: 0.0 }); b_unit.geometry.connection_regions = vec![crate::structural_blueprint::ConnectionRegion { point: ConnectionPoint { x: 0.0, y: 0.0, direction_radians: std::f64::consts::PI } }]; let b = structure.add_unit(b_unit); let mut cache = ConnectionCompatibilityCache::new(); let result = execute(&mut structure, a, b, &catalog, &mut cache, 100.0, 0.0);
+        assert_eq!(result, Err(StructuralCombineError::NoGeometricallyEligibleCandidate)); assert_eq!(structure.units.len(), 2); assert!(structure.bonds.is_empty());
     }
 }
