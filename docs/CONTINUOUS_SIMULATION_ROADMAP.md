@@ -1,51 +1,61 @@
-# EvoSim Continuous Simulation Roadmap
+# EvoSim Comprehensive Viable Simulation Roadmap
 
 **Status:** Active implementation guideline  
-**Purpose:** Get EvoSim running continuously as a real, observable simulation while keeping the architecture coherent, clean, testable, and efficient.  
-**This document is not the EvoSim master specification.** It is a practical engineering roadmap for the current development objective.
+**Purpose:** Turn the existing EvoSim codebase into a viable, continuously running artificial-life simulation in which the environment, chemistry/material system, organisms, behavior, transformations, construction, reproduction, inheritance, and evolution operate together coherently over long periods—and make that complete simulation observable through the UI.  
+**This document is not the EvoSim master specification.** It is a practical engineering roadmap for implementing, integrating, testing, and validating the current simulation.  
+**Working rule:** We proceed one focused change at a time. A phase is complete only when behavior is demonstrated and integration is verified.
 
 ---
 
-## 1. Current Goal
+# 1. Current Goal
 
-The immediate goal is simple:
+The goal is **not** merely to make EvoSim run, animate, or display a moving world.
 
-> **Run the actual EvoSim simulation continuously and let the user watch the real simulation evolve in the browser.**
+> **Build a viable working artificial-life simulation in which the modeled environment supplies material, organisms interact with that environment, material transformations create physical organism state, organisms maintain and develop, organisms reproduce, offspring inherit and mutate traits, populations persist and change, and the complete system can continue operating without human intervention for long periods. The UI is a faithful window into that living system.**
 
-The simulation engine, environment, organisms, transformations, reproduction, and material systems should remain the authoritative system. The browser should observe and present that system rather than becoming a second simulation engine.
-
-We are therefore not starting by adding visual effects, new gameplay mechanics, or speculative architecture. We are first creating a reliable path from the simulation core to a continuously updating visible world.
-
-The intended end-to-end architecture is:
+The intended causal loop is:
 
 ```text
-                    ┌─────────────────────┐
-                    │   Rust Simulation   │
-                    │                     │
-                    │ authoritative state │
-                    │ + Simulation::step  │
-                    └──────────┬──────────┘
-                               │
-                               │ snapshot / observation
-                               ▼
-                    ┌─────────────────────┐
-                    │ Observation / API   │
-                    │                     │
-                    │ serialization       │
-                    │ transport           │
-                    └──────────┬──────────┘
-                               │
-                               │ live updates
-                               ▼
-                    ┌─────────────────────┐
-                    │    React Viewer     │
-                    │                     │
-                    │ render only         │
-                    │ inspect / visualize │
-                    └─────────────────────┘
+ENVIRONMENT
+reservoir → vents → active material field → diffusion/redistribution
+                         ↓
+                 material availability
+                         ↓
+                    perception
+                         ↓
+                     decision
+                         ↓
+                organism interaction
+                         ↓
+                COMBINE / BREAK
+                         ↓
+                    structure
+                         ↓
+              energy/material effects
+                         ↓
+             maintenance + development
+                         ↓
+             reproductive readiness
+                         ↓
+                   reproduction
+                         ↓
+              reproductive construction
+                         ↓
+                    offspring
+                         ↓
+              inheritance + mutation
+                         ↓
+                  new generation
+                         └──────────→ cycle
+
+                 authoritative state
+                         ↓
+                   observation API
+                         ↓
+                         UI
 ```
 
-The exact transport may change as implementation is audited. The architectural boundary should not: **simulation state belongs to the Rust engine; presentation belongs to the viewer.**
+The UI is therefore an **observation layer**, not the objective and never a second simulation engine.
 
 ---
 
@@ -53,1000 +63,1131 @@ The exact transport may change as implementation is audited. The architectural b
 
 ## This roadmap is
 
-- An implementation sequence.
-- A checklist for making EvoSim continuously runnable.
-- A guide for deciding what to build now versus later.
-- A set of architectural constraints for the runtime and observation pipeline.
-- A progression of concrete milestones with verification gates.
-- A way to prevent UI work from driving simulation design.
+- An implementation sequence for making the entire simulation viable.
+- A checklist for closing broken causal links.
+- A guide for integrating existing subsystems instead of rewriting them unnecessarily.
+- A set of verification gates.
+- A long-running stability and ecosystem-validation plan.
+- A guide for making the resulting simulation observable.
 
 ## This roadmap is not
 
-- The master simulation specification.
-- A replacement for the resource, organism, material, bond, reproduction, or environment rules.
-- Permission to redesign existing mechanics merely because they are difficult to visualize.
-- A requirement that every subsystem be perfect before the simulator can run.
-- A visual-design specification.
-- A commitment to a particular networking technology before the existing code is audited.
+- The EvoSim master specification.
+- A replacement for established simulation rules.
+- Permission to invent mechanics merely to create visual activity.
+- A UI-first development plan.
+- Permission to tune constants before determining whether code is broken.
+- Permission to keep contradictory legacy authorities because tests happen to pass.
 
-When this roadmap conflicts with an established simulation rule, the simulation rule remains authoritative. This document governs **how we get the existing system running and observable**, not what the simulation is supposed to mean.
-
----
-
-# 3. Guiding Principles
-
-These principles apply throughout the roadmap.
-
-## 3.1 Build the simulation once
-
-There must be one authoritative simulation execution path.
-
-The frontend must not independently calculate:
-
-- organism movement,
-- resource behavior,
-- bond strength,
-- transformation progress,
-- reproduction,
-- environment evolution,
-- energy/material changes,
-- or other simulation outcomes.
-
-The browser displays what the engine says happened.
-
-## 3.2 The viewer must never become the simulation
-
-The UI may request operations such as:
-
-- start,
-- stop,
-- pause,
-- resume,
-- reset,
-- step,
-- change an explicitly supported runtime setting.
-
-Those operations should affect the authoritative simulation runtime. The UI should not implement a parallel approximation of the simulation to make the screen look alive.
-
-## 3.3 Prefer the smallest working path
-
-At each stage, implement the smallest change that establishes the next architectural boundary.
-
-Do not solve future performance problems before the actual runtime path exists.
-
-Do not build sophisticated rendering before live state reaches the browser.
-
-Do not redesign simulation mechanics to create visual activity.
-
-## 3.4 Verify each boundary before moving on
-
-Every major stage must have a verification gate.
-
-A stage is complete when we can demonstrate that its responsibility works, not merely when the code compiles.
-
-## 3.5 Keep simulation time independent from rendering time
-
-The simulation and browser have different jobs.
-
-The simulation should be able to advance according to its configured simulation rate without requiring a browser render for every tick.
-
-The browser should receive observations at a practical update rate rather than necessarily receiving every internal simulation tick.
-
-This separation will become important for performance, but it should be introduced without prematurely complicating the first working implementation.
-
-## 3.6 Make failures observable
-
-When the simulator stops, stalls, produces invalid state, or behaves unexpectedly, we should be able to determine whether the problem is in:
-
-1. simulation execution,
-2. observation/snapshot creation,
-3. serialization,
-4. transport,
-5. frontend state handling,
-6. rendering.
-
-A clean boundary makes this possible.
-
-## 3.7 Do not add mechanics just to make the screen interesting
-
-If the initial organism does not move, reproduce, combine, break, or otherwise create visible activity, that is a simulation behavior question—not a reason to add artificial animation.
-
-The visualizer should reveal the actual system, including periods of inactivity.
+When this roadmap and an established simulation rule conflict, the established simulation rule remains authoritative.
 
 ---
 
-# 4. Current Known Starting Point
+# 3. Definition of a Viable Working Simulation
 
-The Rust simulation already has an important foundation: `Simulation::step()` is the central per-tick execution path and returns a `Snapshot`.
+EvoSim is not viable merely because ticks increase, the server remains alive, unit tests pass, transformations work in isolation, reproduction works in a hand-built test, or the browser receives snapshots.
 
-The current step sequence is broadly:
+A viable system must demonstrate all of the following through the integrated simulation.
 
-1. Advance the simulation tick.
-2. Step the environment.
-3. Advance active transformations.
-4. Resolve completed transformations.
-5. Capture the current environment state for organism processing.
-6. Update organism age and perception-related state.
-7. Evaluate organism decisions.
-8. Execute applicable actions.
-9. Queue reproduction requests.
-10. Begin reproduction.
-11. Advance reproductive construction.
-12. Apply energy-capacity rules.
-13. Update the total usable-energy ledger.
-14. Return a snapshot.
+## 3.1 Continuous operation
 
-This is a strong starting point for an observation boundary.
+The simulation can run for long periods without:
 
-However, the existence of `Simulation::step()` does **not** by itself establish continuous execution. The first implementation task is therefore an audit of the actual runtime/API/frontend path.
+- panic or deadlock;
+- NaN/Infinity contamination;
+- stalled progression;
+- duplicate stepping;
+- runaway memory growth;
+- accumulating stale transformations/objects;
+- progressive performance collapse.
 
-The current environment and material architecture should be treated as existing simulation behavior while this runtime work proceeds. Recent environment changes established a unified deep reservoir and an active-field distinction needed by current material/bond behavior. This roadmap does not reopen those design decisions.
+## 3.2 Environmental continuity
 
----
+The environment continuously provides and redistributes material according to the model. Material must not mysteriously appear, disappear, or become permanently inaccessible.
 
-# 5. Phase 0 — Runtime and Frontend Audit
+## 3.3 Organism viability
 
-**This is the first engineering step. No behavior changes should be made before this audit is complete.**
-
-## Objective
-
-Determine exactly how the current simulation is started, stepped, exposed, and displayed.
-
-## Questions to answer
-
-### Backend
-
-- Where is `Simulation` constructed?
-- Where is `Simulation::step()` called?
-- Is it called by an actual continuous loop?
-- Is there a timer, thread, async task, or other scheduler?
-- What currently controls `ticks_per_second`?
-- What does the existing `running` field actually control?
-- Is there already a start/stop lifecycle?
-- Is simulation state shared between requests/tasks safely?
-- Is there one simulation instance or can multiple instances accidentally exist?
-- Where are errors handled?
-- Does the server remain alive while the simulation advances?
-
-### API / transport
-
-- Is there an HTTP endpoint returning a snapshot?
-- Is there already WebSocket support?
-- Is there SSE or another streaming mechanism?
-- Does an endpoint currently call `step()` directly?
-- Does the frontend polling cause simulation advancement?
-- Is serialization performed from the authoritative snapshot?
-- Can a client disconnect without affecting simulation execution?
-
-### Frontend
-
-- How does React currently obtain simulation state?
-- Is it polling, streaming, or receiving a one-time response?
-- Does the frontend maintain its own simulation state or calculations?
-- What currently renders the world?
-- Is there already a tick counter or status indicator?
-- What happens when the backend stops responding?
-- Can the frontend reconnect?
-
-### Runtime lifecycle
-
-- What happens on startup?
-- What happens on shutdown?
-- What happens on reset?
-- Can the simulation be paused without destroying state?
-- Can it resume from the same state?
-- Can it advance exactly one tick for debugging?
-
-## Deliverable
-
-Produce a short architecture map showing the current path:
+At least some organisms can naturally progress through:
 
 ```text
-startup
-  -> simulation creation
-  -> scheduler / step caller
-  -> snapshot creation
-  -> API / transport
-  -> frontend data reception
-  -> rendering
+birth → juvenile → material interaction → structure/growth
+→ maintenance → adult → reproductive readiness
 ```
 
-For every arrow, identify the actual file/function responsible.
+They must also be able to die through legitimate lifecycle rules.
 
-## Gate
+## 3.4 Transformation viability
 
-Do not implement the continuous runtime until we know whether one already partially exists and exactly where the missing link is.
-
----
-
-# 6. Phase 1 — Establish One Authoritative Continuous Simulation Loop
-
-## Objective
-
-Make the Rust engine capable of advancing continuously without depending on the browser.
-
-## Required behavior
-
-A runtime should conceptually provide:
+Transformations form complete lifecycles:
 
 ```text
-initialize simulation
-        ↓
-start runtime
-        ↓
-advance Simulation::step()
-        ↓
-repeat while running
-        ↓
-stop / pause cleanly
+eligible inputs → decision → begin → progress → resolve
+→ correct material/structure/energy result
 ```
 
-The loop must own simulation progression.
+No transformation may duplicate, destroy, or strand material without an explicit rule.
 
-The browser must not be responsible for calling `step()` once per rendered frame as the fundamental simulation scheduler.
+## 3.5 Reproductive viability
 
-## Design requirements
-
-### One simulation authority
-
-There should be one clearly identifiable simulation instance for a running world.
-
-### Configurable simulation rate
-
-The existing `ticks_per_second` concept should remain meaningful, but the exact scheduling mechanism should be selected after the audit.
-
-### Start/stop semantics
-
-`running` should have a clear purpose. If it represents runtime state, it should participate in actual runtime control. If it is redundant with another state machine, consolidate rather than maintaining multiple authorities.
-
-### Clean shutdown
-
-The runtime should be able to stop without corrupting or partially advancing simulation state.
-
-### No accidental double stepping
-
-The system must make it difficult or impossible for two independent loops to advance the same simulation simultaneously.
-
-## Important non-goals
-
-Do not yet optimize every allocation.
-
-Do not build a complex distributed scheduler.
-
-Do not introduce multiple simulation workers unless the current architecture actually requires them.
-
-## Verification
-
-The backend should be able to:
-
-- start,
-- advance repeatedly,
-- remain alive indefinitely,
-- stop cleanly,
-- resume correctly if supported,
-- and run without a browser connected.
-
-A basic runtime test or controlled executable/test harness should demonstrate repeated advancement.
-
-## Gate
-
-**Milestone 1:** The Rust simulation can run continuously on its own.
-
-At this point, the browser is not required for the simulation to exist.
-
----
-
-# 7. Phase 2 — Define the Observation Boundary
-
-## Objective
-
-Create a clean boundary between simulation state and presentation.
-
-The preferred conceptual pipeline is:
+Reproduction must be reachable through normal simulation behavior:
 
 ```text
-Simulation
-    ↓
-Snapshot
-    ↓
-Observation/API layer
-    ↓
-Serialized snapshot
-    ↓
-Transport
+adult → readiness → request → commitment → construction
+→ offspring → independent organism
 ```
 
-The exact types and transport should follow the existing code wherever practical.
+## 3.6 Evolutionary viability
 
-## Snapshot responsibilities
+Offspring inherit heritable traits, mutation can create valid variation, and traits can affect phenotype and therefore survival/reproduction.
 
-A snapshot should represent information the viewer is allowed to observe.
+## 3.7 Population viability
 
-It should not become a second mutable simulation state.
+Long runs must not settle into an obviously pathological state such as immediate permanent extinction, unbounded population growth, immortal organisms, or reproduction disconnected from resource limits.
 
-If the existing `Snapshot` already serves this role adequately, prefer using it over creating another parallel state model.
+The roadmap does **not** prescribe a target population curve. The model must be allowed to produce its own dynamics.
 
-## Avoid leaking internal implementation unnecessarily
+## 3.8 Conservation and accounting
 
-The viewer does not need every internal field merely because it exists.
+Material and energy accounting must remain coherent.
 
-Observation should expose what is useful for:
+**Locked bond rule:**
 
-- world visualization,
-- organism inspection,
-- runtime status,
-- later scientific instrumentation.
+> **Bond strength is calculated only from the constant mathematical properties of the resources participating in the bond. No age, geometry, organism state, history, stored legacy value, load, or other dynamic input may alter intrinsic bond strength.**
 
-The observation model can expand incrementally.
-
-## Initial observation payload
-
-The first useful payload should be enough to show:
-
-- simulation tick,
-- simulation running/paused state if available,
-- world/environment dimensions,
-- visible environment material information,
-- vents,
-- organisms and their positions,
-- enough organism state to represent size/development where already available.
-
-The first payload does not need every diagnostic or internal implementation detail.
-
-## Gate
-
-A test or manual verification should show that a snapshot can be produced from the real simulation and serialized without changing simulation state.
+Dynamic quantities such as connection load may use bond strength as an input, but may not redefine it.
 
 ---
 
-# 8. Phase 3 — Connect the Live Backend to the React Viewer
+# 4. Core Engineering Principles
 
-## Objective
+## 4.1 One simulation, one authority
 
-Make the browser receive live observations from the actual running simulation.
+There must be one authoritative simulation state and one authoritative progression path. No subsystem may silently maintain a contradictory second authority for fundamental state.
 
-## Desired behavior
+## 4.2 Trace causes, not symptoms
 
-Opening the application should establish a connection to the running backend.
+When behavior fails, trace the complete causal chain and fix the first broken link.
 
-The viewer should then receive updated observations as the simulation advances.
-
-Conceptually:
+For example, if reproduction never occurs, do not immediately lower the reproduction threshold. Trace:
 
 ```text
-Rust runtime
-     │
-     │ continuously advances
-     ▼
-Snapshot generation
-     │
-     │ live observations
-     ▼
-Frontend state
-     │
-     ▼
-React rendering
+environment → perception → decision → material interaction
+→ transformation → structure → maintenance/development
+→ readiness → reproduction
 ```
 
-## Important rule
+## 4.3 Preserve correct mechanics
 
-The browser should not determine whether the simulation advances.
+Existing correct behavior should remain intact. A unit test proves a local contract, not system viability.
 
-A browser refresh, render, dropped frame, or temporary disconnect should not alter the simulation's fundamental progression.
+## 4.4 One source of truth for fundamental quantities
 
-## First UI milestone
+Audit and unify the definitions of:
 
-The first screen does not need to be beautiful.
+- resource properties;
+- material composition;
+- potential energy;
+- reactivity;
+- cohesion;
+- bond strength;
+- transformation work;
+- energy creation/consumption;
+- material ownership;
+- structural state.
 
-It needs to prove that the following are real:
+Legacy fields that contradict authoritative calculations must be removed or made explicitly non-authoritative.
 
-- live tick progression,
-- real organism state,
-- real environment state,
-- real simulation lifecycle.
+## 4.5 Energy remains emergent
 
-A simple world canvas/view with a tick counter is preferable to an elaborate interface built on simulated placeholder data.
+Energy is not to become an unrelated resource that can accumulate without a causal material interaction. Every energy mutation must have an auditable source and cause.
 
-## Reconnection
+## 4.6 No fake life
 
-Once the basic path works, the frontend should handle a lost backend connection gracefully rather than silently displaying stale state as if it were current.
+Do not add scripted movement, scripted reproduction, artificial resource motion, or decorative activity merely to make the UI look alive. Inactivity is a diagnostic result.
 
-## Gate
+## 4.7 UI is observational
 
-**Milestone 2:** Open the browser and watch the actual Rust simulation advance continuously.
+The browser may display and request explicitly supported runtime controls, but it must not calculate chemistry, movement, transformations, reproduction, or evolution independently.
 
-This is the central goal of the first development cycle.
+## 4.8 Every change has a gate
 
----
+For each implementation change:
 
-# 9. Phase 4 — Build the Simplest Useful World View
-
-## Objective
-
-Turn live simulation state into a readable visual world.
-
-## First visual layer
-
-Show only what is necessary to establish spatial reality:
-
-- world bounds,
-- environment field,
-- vents,
-- organisms,
-- organism positions,
-- organism size/shape where available,
-- simulation tick/status.
-
-## Rendering philosophy
-
-Prefer correctness over aesthetics.
-
-The first renderer should answer:
-
-> "Am I looking at the real simulation right now?"
-
-It does not need to answer:
-
-> "Does this look like a finished game?"
-
-## No fake animation
-
-Do not animate organisms independently of their authoritative simulation positions.
-
-Do not interpolate fake resource movement that contradicts snapshots.
-
-Do not create decorative particles representing events that never occurred.
-
-Visual interpolation can be added later if it preserves the meaning of the underlying state.
-
-## Gate
-
-A human observer should be able to watch the world for several minutes and confirm that the displayed state corresponds to simulation state rather than a canned animation.
+1. State the invariant being repaired.
+2. Trace every relevant code path.
+3. Make the smallest coherent change.
+4. Add/update focused tests.
+5. Run tests.
+6. Exercise the integrated path.
+7. Re-audit adjacent lifecycle paths.
+8. Only then proceed.
 
 ---
 
-# 10. Phase 5 — Make Organism State Meaningful and Inspectable
+# 5. Working Method — One Step at a Time
 
-Once the world itself is live, improve what can be understood about organisms.
-
-## Progressive information layers
-
-### Level 1 — Basic identity
-
-- organism identifier,
-- position,
-- age,
-- development stage,
-- size/structure.
-
-### Level 2 — Current activity
-
-Where supported by the existing simulation:
-
-- current action,
-- movement state,
-- active transformation,
-- resource perception,
-- reproductive state.
-
-### Level 3 — Material/structural state
-
-Eventually expose useful information such as:
-
-- structural units,
-- stored material,
-- bonds,
-- transformation state,
-- reproductive construction progress.
-
-### Level 4 — Scientific detail
-
-Later, expose deeper diagnostics without cluttering the primary world view.
-
-## Inspection model
-
-A user should eventually be able to select an organism and answer:
-
-- Where is it?
-- How old is it?
-- What stage is it in?
-- What is it doing?
-- What material/structure does it have?
-- Is it currently transforming material?
-- Is it attempting reproduction?
-
-This is observation, not simulation control.
-
----
-
-# 11. Phase 6 — Make the Environment Legible
-
-The environment is not merely background decoration. It is part of the simulation's causal system.
-
-The viewer should eventually make the major material cycle understandable:
+The implementation sequence is deliberately conservative:
 
 ```text
-Deep reservoir
-      ↓
-    vents
-      ↓
-Active material field
-      ↓
- diffusion / movement
-      ↓
- organisms interact with material
-      ↓
- material transformations
-      ↓
- settling / redistribution
-      ↓
-Deep reservoir
+AUDIT
+  ↓
+TRACE ACTUAL RUNTIME PATH
+  ↓
+IDENTIFY FIRST BROKEN LINK
+  ↓
+STATE INVARIANT
+  ↓
+DESIGN SMALLEST COHERENT FIX
+  ↓
+IMPLEMENT ONE CHANGE
+  ↓
+FOCUSED TESTS
+  ↓
+INTEGRATION TEST
+  ↓
+RUNTIME VERIFICATION
+  ↓
+RE-AUDIT
+  ↓
+NEXT BLOCKER
 ```
 
-The exact visualization should follow the actual simulation implementation.
-
-## Initial environment visualization
-
-Show enough information to distinguish meaningful regions and resource presence.
-
-## Later visualization
-
-Potential additions include:
-
-- resource-density overlays,
-- material type inspection,
-- vent activity,
-- transformation activity,
-- settling activity,
-- spatial gradients.
-
-## Rule
-
-Visualization must remain faithful to the current simulation rules. If a process is not actually modeled, the UI should not imply that it is.
+Do not combine unrelated fixes. Do not advance because the UI looks better. Advance because the simulation is more correct and more viable.
 
 ---
 
-# 12. Phase 7 — Close Remaining Simulation Lifecycle Gaps
+# 6. Phase 0 — Establish the Actual Current Architecture
 
-Once the simulation is continuously visible, use that visibility to discover problems that ordinary unit tests may not reveal.
+**Objective:** Build an accurate map of what exists before changing behavior.
 
-## Questions to investigate
+### Step 0.1 — Trace the runtime
 
-### Organisms
+Identify the exact code for:
 
-- Do organisms actually move when their rules permit movement?
-- Do they encounter usable material?
-- Do they form structures?
-- Do transformations complete?
-- Does BREAK occur when conditions permit?
-- Does reproduction proceed when readiness conditions are met?
+- `Simulation` construction;
+- ownership of the simulation instance;
+- `Simulation::step()`;
+- scheduler/tick loop;
+- RNG ownership;
+- environment ownership;
+- organism ownership;
+- transformation ownership;
+- startup/shutdown/reset;
+- runtime controls.
 
-### Environment
+**Deliverable:** a concrete call-path from startup → tick scheduler → `Simulation::step()` → snapshot/runtime output.
 
-- Does material circulate?
-- Do vents actually affect the active field over time?
-- Does diffusion behave sensibly?
-- Does settling return material to the reservoir as intended?
-- Is material conserved except where a rule explicitly transforms it?
+### Step 0.2 — Inventory subsystems
 
-### Population
+For each subsystem document its state, entry point, outputs, callers, tests, and whether the live tick path actually exercises it:
 
-- Can organisms survive?
-- Can they reproduce?
-- Can populations collapse?
-- Can populations grow without bound?
-- Are births and deaths occurring through real lifecycle rules?
+- environment;
+- active material field;
+- deep reservoir;
+- vents;
+- diffusion;
+- settling;
+- resource properties;
+- materials;
+- bonds and bond strength;
+- connection load;
+- COMBINE;
+- BREAK;
+- movement;
+- perception;
+- decision-making;
+- transformations;
+- energy;
+- maintenance;
+- development/growth;
+- reproduction readiness;
+- reproduction/construction;
+- genetics/mutation;
+- death/removal;
+- snapshots/API;
+- frontend.
 
-### Transformations
+### Step 0.3 — Find dead paths
 
-- Do active transformations get stuck?
-- Are resources/materials duplicated or lost?
-- Are completed transformations resolved exactly once?
-- Does the system remain stable over long runs?
+Search for no-op handlers, permanently false eligibility checks, legacy fields still read, alternate calculations, unreachable functions, state that is written but never consumed, and state consumed without a live writer.
 
-## Critical rule
+### Gate 0
 
-Do not respond to visual inactivity by inventing new mechanics.
+Answer precisely:
 
-First determine whether the existing rules are behaving as designed.
+> **What happens to the environment and initial organism during one real tick, and what exact code path causes every state transition?**
 
----
-
-# 13. Phase 8 — Scientific Observability
-
-After the live world is reliable, build instrumentation that turns the viewer into a scientific tool.
-
-## Core metrics
-
-At minimum, plan for:
-
-- current tick,
-- population,
-- births,
-- deaths,
-- average organism age,
-- average organism size,
-- environment material totals,
-- active transformation count,
-- reproduction activity,
-- action frequencies.
-
-## Material accounting
-
-Where appropriate, expose totals across the relevant system compartments so long-running conservation problems can be detected.
-
-The existing simulation already has a `total_material_in_system()` test-oriented accounting helper. A production observation metric should be designed separately if the test helper's representation is not appropriate for the UI.
-
-## Historical data
-
-Do not send unbounded history to the browser.
-
-The backend can maintain compact statistics or emit periodic aggregates.
-
-The frontend can retain a bounded history for graphs.
-
-## Gate
-
-The user should be able to watch the simulation and also determine whether the system is actually changing in meaningful ways.
+No broad implementation begins until this is known.
 
 ---
 
-# 14. Phase 9 — Performance and Efficiency Pass
+# 7. Phase 1 — Prove the Authoritative Tick Lifecycle
 
-Performance optimization should happen after the real runtime and observation path work.
+**Objective:** Ensure one tick is a coherent integrated lifecycle.
 
-The goal is not maximum theoretical speed. The goal is efficient, predictable simulation with a responsive viewer.
+Audit the current `Simulation::step()` rather than assuming its existence means the system is integrated.
 
-## Areas to measure
+### Step 1.1 — Trace one real tick
+
+For the initial organism record:
+
+- nearby material;
+- perception result;
+- decision result;
+- selected action;
+- action handler;
+- material ownership changes;
+- transformations created/completed;
+- energy changes;
+- structure changes;
+- age/development changes;
+- reproduction state.
+
+### Step 1.2 — Check ordering
+
+Compare actual ordering with the intended causal dependencies:
+
+```text
+clock
+→ environment
+→ active transformations
+→ resolve transformations
+→ perception
+→ organism state/development
+→ decisions
+→ actions
+→ reproduction requests
+→ reproductive construction
+→ maintenance/capacity/accounting
+→ death/removal
+→ invariant checks
+→ snapshot
+```
+
+Do not reorder merely because this list looks cleaner; establish which ordering the actual rules require.
+
+### Step 1.3 — Add runtime invariants
+
+At minimum check:
+
+- monotonic tick;
+- valid numeric state;
+- unique organism IDs;
+- no dead organism acting;
+- transformations resolve once;
+- no duplicated material ownership;
+- reproduction commitments cannot be spent twice;
+- snapshots do not mutate authoritative state.
+
+### Gate 1
+
+A controlled integration run advances multiple ticks with the expected lifecycle and no corruption.
+
+---
+
+# 8. Phase 2 — Unify Material, Chemistry, Bond, and Energy Authority
+
+**Objective:** Establish a trustworthy physical/accounting foundation before diagnosing biological viability.
+
+### Step 2.1 — Audit immutable resource properties
+
+For every resource identify the sole authority for:
+
+- mass;
+- potential energy;
+- reactivity;
+- cohesion;
+- other established immutable properties.
+
+### Step 2.2 — Audit `Material`
+
+Verify that composition and quantity are authoritative and derived properties are calculated from composition rather than stale cached values.
+
+### Step 2.3 — Complete bond-strength migration
+
+Repository-wide search for:
+
+- stored `Bond.strength`;
+- legacy strength fields;
+- constructors accepting external strength;
+- connection-load code reading stored strength;
+- serialization treating strength as authoritative;
+- tests encoding the obsolete authority.
+
+All live bond-strength calculations must use intrinsic resource-property mathematics.
+
+### Step 2.4 — Audit energy
+
+For every energy mutation record:
+
+```text
+source → cause → amount → destination → material consequence
+```
+
+Find and remove/rework legacy independent energy authorities such as obsolete stored `energy_content` behavior.
+
+### Step 2.5 — Audit transformation work
+
+For COMBINE/BREAK verify input ownership, work requirement, progress, completion, output, energy consequence, and conservation.
+
+### Step 2.6 — Add conservation tests
+
+Cover material conservation, energy accounting, intrinsic bond-strength invariance, connection load, and duplicate ownership.
+
+### Gate 2
+
+There is one authoritative chemistry/material/energy model, and no known legacy authority can contradict it.
+
+---
+
+# 9. Phase 3 — Validate the Environment as an Ecological System
+
+**Objective:** Prove the environment can continuously support the rest of the simulation.
+
+### Step 3.1 — Deep reservoir
+
+Verify authoritative quantities, valid values, resource composition, withdrawal, and replenishment behavior.
+
+### Step 3.2 — Vents
+
+Maintain the current rule:
+
+> Reservoir material released by a vent enters the active field regardless of bonding state, and venting does not alter existing active material's bonding state.
+
+Test source depletion, destination deposition, repeated venting, quantity conservation, and spatial placement.
+
+### Step 3.3 — Active material field
+
+Verify material can occupy organism-accessible locations and that bonded/unbonded distinction is used only where active-field mechanics require it.
+
+### Step 3.4 — Diffusion and settling
+
+Trace whether material can move, remain available, leave the active layer, return to the reservoir where modeled, and avoid unexplained accumulation.
+
+### Step 3.5 — Environment-only soak test
+
+Run without organisms and measure total quantities by resource, active/reservoir quantities, vent throughput, settling, diffusion, and numeric validity.
+
+### Gate 3
+
+The environment runs continuously with coherent material accounting and no unexplained creation, loss, runaway accumulation, or permanent depletion.
+
+---
+
+# 10. Phase 4 — Close the Environment → Organism Material Path
+
+**Objective:** Make environmental material biologically reachable.
+
+### Step 4.1 — Trace perception
+
+Verify perception radius, spatial sampling, material visibility, bonding semantics, and correspondence to current environment state.
+
+### Step 4.2 — Trace decisions
+
+For each action determine eligibility, scoring/selection, required inputs, and whether the selected action can execute.
+
+### Step 4.3 — Audit disabled/no-op actions
+
+Explicitly classify current acquisition, expulsion, movement, COMBINE, and BREAK paths as either intentional or lifecycle blockers.
+
+### Step 4.4 — Prove ownership transfer
+
+Demonstrate:
+
+```text
+environment → perception → decision → action → organism-accessible material
+```
+
+This must use the real simulation path, not hand-built test state.
+
+### Gate 4
+
+At least one legitimate material interaction reaches the organism through the live runtime.
+
+---
+
+# 11. Phase 5 — Close the COMBINE Lifecycle
+
+**Objective:** Prove usable material can become organism structure through the real transformation system.
+
+### Step 5.1 — Reachability
+
+Show that normal environmental interaction can create the material state required by COMBINE.
+
+### Step 5.2 — Commitment
+
+Verify material is committed exactly once and cannot remain simultaneously available elsewhere.
+
+### Step 5.3 — Multi-tick progress
+
+Verify work/progress advances correctly and cannot silently stall.
+
+### Step 5.4 — Completion
+
+Verify structural output, bond state, material ownership, energy consequence, and cleanup.
+
+### Step 5.5 — Persistence
+
+Demonstrate:
+
+```text
+environment material → organism → COMBINE → transformation
+→ structural unit → later ticks
+```
+
+### Gate 5
+
+A normally running organism can complete COMBINE and retain the resulting structure correctly.
+
+---
+
+# 12. Phase 6 — Close the BREAK Lifecycle
+
+**Objective:** Prove structure can be broken through the authoritative transformation system.
+
+### Step 6.1 — Target current bond
+
+Confirm the target exists when BREAK begins.
+
+### Step 6.2 — Audit snapshot semantics
+
+Ensure transformation snapshots cannot later overwrite newer authoritative state or remove unrelated state.
+
+### Step 6.3 — Enforce intrinsic bond strength
+
+BREAK must derive strength from current material composition under the locked equation, never from obsolete stored strength.
+
+### Step 6.4 — Completion
+
+Verify work, bond removal, resulting material, energy release, and unrelated-bond preservation.
+
+### Step 6.5 — Repeatability
+
+Demonstrate:
+
+```text
+structure → BREAK → resulting material/energy → continued organism operation
+```
+
+### Gate 6
+
+COMBINE/BREAK form a coherent transformation lifecycle wherever the established rules intend that relationship.
+
+---
+
+# 13. Phase 7 — Close the Organism Lifecycle
+
+**Objective:** Make organisms genuine living entities with birth, development, maintenance, and death.
+
+### Step 7.1 — Birth audit
+
+Verify initial structure, accessible material, energy state where applicable, age, development stage, genome, and reproductive state.
+
+### Step 7.2 — Growth audit
+
+Trace how material interaction changes structural mass, geometry, capacity, and developmental state.
+
+### Step 7.3 — Maintenance audit
+
+Every maintenance cost must have a clear cause and accounting. It must not consume nonexistent resources or bypass material/energy rules.
+
+### Step 7.4 — Death audit
+
+Verify death conditions, timing, transformation cleanup, organism removal, and disposition/return of material where modeled.
+
+### Step 7.5 — Lifecycle tests
+
+Prove both:
+
+```text
+birth → development → maintenance → death
+```
+
+and:
+
+```text
+birth → development → maintenance → reproductive readiness
+```
+
+### Gate 7
+
+Normal organisms can progress through lifecycle states without leaks or impossible transitions.
+
+---
+
+# 14. Phase 8 — Close the Reproduction Lifecycle
+
+**Objective:** Make reproduction naturally reachable and physically real.
+
+### Step 8.1 — Readiness
+
+Trace every readiness prerequisite and prove normal behavior can satisfy it.
+
+### Step 8.2 — Request and commitment
+
+Verify valid requests, correct resource/material commitment, and no double spending.
+
+### Step 8.3 — Construction
+
+Verify multi-tick construction, one physical unit progressing at the intended rate, correct material consumption, and no stranded commitments.
+
+### Step 8.4 — Geometry/contact
+
+Verify offspring units use actual placement/contact geometry rather than arbitrary coordinates.
+
+### Step 8.5 — Activation
+
+At completion verify independent offspring state, valid parent/offspring relationships, independent perception/action, cleanup of construction state, and future lifecycle eligibility.
+
+### Gate 8
+
+A naturally running organism reaches reproduction and produces an independently functioning offspring.
+
+---
+
+# 15. Phase 9 — Close Genetics, Heritability, and Mutation
+
+**Objective:** Make reproduction capable of generating evolution.
+
+### Step 9.1 — Inheritance
+
+Trace parent genome → offspring genome and ensure defaults do not replace inherited values.
+
+### Step 9.2 — Phenotypic expression
+
+For every intended heritable trait demonstrate:
+
+```text
+parent genome → offspring genome → phenotype → behavior/structure
+```
+
+### Step 9.3 — Mutation
+
+Verify intended probability/rule, valid mutation range, parent isolation, offspring inheritance, and genome validity.
+
+### Step 9.4 — Deterministic tests
+
+Use controlled seeds to test both inheritance without mutation and mutation cases.
+
+### Gate 9
+
+Offspring inherit valid traits and mutation can introduce heritable variation without corrupting either generation.
+
+---
+
+# 16. Phase 10 — Demonstrate Actual Evolutionary Opportunity
+
+**Objective:** Prove evolution is causally possible without prescribing its outcome.
+
+### Step 10.1 — Identify selectable traits
+
+List heritable traits that can affect survival, resource acquisition, construction, or reproduction.
+
+### Step 10.2 — Trace causal influence
+
+For each trait prove:
+
+```text
+trait → phenotype/behavior → survival/reproduction → offspring contribution
+```
+
+A genome field that never reaches phenotype is not yet an evolutionary trait.
+
+### Step 10.3 — Multi-generation runs
+
+Demonstrate multiple generations, inherited variation, population turnover, and the possibility of changing trait distributions.
+
+Do not hard-code desired evolutionary outcomes.
+
+### Gate 10
+
+The simulation supports genuine generational turnover and heritable variation capable of affecting reproductive success.
+
+---
+
+# 17. Phase 11 — Population and Ecosystem Viability
+
+**Objective:** Judge the integrated system as an ecosystem.
+
+### Step 11.1 — Establish baseline runs
+
+Run fixed seeds at progressively longer durations and record:
+
+- population;
+- births/deaths;
+- age/development distribution;
+- generations;
+- transformations;
+- material totals;
+- energy totals;
+- environment totals;
+- active transformation count;
+- tick performance.
+
+### Step 11.2 — Classify failure modes
+
+Investigate:
+
+- immediate extinction;
+- zero reproduction;
+- runaway population;
+- immortal organisms;
+- runaway material/energy;
+- resource depletion;
+- transformation backlog;
+- action lock-in;
+- static environment;
+- progressive slowdown.
+
+### Step 11.3 — Trace before tuning
+
+First classify failure as architectural, lifecycle, accounting, ordering, reachability, or parameter-driven. Only tune parameters after correctness is established.
+
+### Step 11.4 — Define stability criteria
+
+A successful baseline demonstrates recurring births/deaths, multiple generations, continuing environmental turnover, bounded quantities where appropriate, and no permanent subsystem stall.
+
+### Gate 11
+
+At least one baseline configuration sustains a functioning environment and population through repeated lifecycles for a substantial run.
+
+---
+
+# 18. Phase 12 — Long-Run Soak Testing
+
+**Objective:** Prove viability persists beyond demonstrations.
+
+### Step 12.1 — Deterministic soak
+
+Run a fixed seed for a large tick count and check invariants periodically.
+
+### Step 12.2 — Multi-seed soak
+
+Run multiple seeds to detect accidental seed-specific success.
+
+### Step 12.3 — Numeric safety
+
+Continuously check NaN, Infinity, forbidden negatives, invalid geometry, invalid genome values, impossible structures, and duplicate IDs.
+
+### Step 12.4 — Memory stability
+
+Monitor organisms, transformations, snapshots, historical statistics, retained references, and logs for growth unrelated to real simulated state.
+
+### Step 12.5 — Performance stability
+
+Measure tick time over the run. A simulation that becomes progressively unusable is not viable.
+
+### Gate 12
+
+Extended runs complete without progressive corruption, memory failure, or unacceptable degradation.
+
+---
+
+# 19. Phase 13 — Build the Observation Boundary
+
+**Objective:** Expose authoritative state cleanly.
+
+Preferred pipeline:
+
+```text
+Simulation → Snapshot → serialization → transport → frontend state → rendering
+```
+
+### Step 13.1 — Audit snapshots
+
+Snapshots must be observational, authoritative, non-mutating, and free of stale duplicate authorities.
+
+### Step 13.2 — Define observation payload
+
+Eventually expose:
+
+**Runtime:** tick, running/paused state, rate, health.  
+**Environment:** dimensions, material distribution, resource types, vents, transformations.  
+**Organisms:** identity, position, age, stage, structure/size, action, transformation, reproductive state, useful material/energy state.  
+**Population:** population, births, deaths, generations, lifecycle/evolution trends.
+
+### Gate 13
+
+A real snapshot can be serialized and transported without changing simulation state.
+
+---
+
+# 20. Phase 14 — Make the UI a Scientific Window
+
+**Objective:** Make the working simulation understandable to a human observer.
+
+### Step 14.1 — World view
+
+Show world bounds, real environment state, vents, real organism positions/size, and simulation tick.
+
+### Step 14.2 — Organism inspection
+
+Allow inspection of age, development, structure, current action, transformation, reproductive state, material/energy state, and useful genome/trait information.
+
+### Step 14.3 — Environment inspection
+
+Show resource distribution, active-field state, vent activity, transformations, and meaningful spatial gradients.
+
+### Step 14.4 — Population/evolution view
+
+Show population, births/deaths, generations, trait distributions, transformation activity, and material trends.
+
+### Step 14.5 — Runtime controls
+
+Expose only real backend operations such as start, pause, resume, reset, step, and explicitly supported configuration.
+
+### Gate 14
+
+The UI faithfully displays and helps diagnose the living simulation without becoming responsible for its progression or logic.
+
+---
+
+# 21. Phase 15 — Integrated Test Architecture
+
+Tests must prove increasingly larger portions of the causal system.
+
+## Level 1 — Unit
+
+Resource equations, material properties, bond strength, transformation work, mutation, geometry.
+
+## Level 2 — Subsystem
+
+Vents, diffusion, settling, transformations, maintenance, construction.
+
+## Level 3 — Lifecycle
+
+```text
+material → organism → COMBINE → structure
+structure → BREAK → material
+birth → development → reproduction → offspring
+offspring → inherited trait → phenotype
+```
+
+## Level 4 — Integrated simulation
+
+Environment + organism; organism + transformation; transformation + structure; structure + maintenance; readiness + reproduction; reproduction + genetics; multiple generations.
+
+## Level 5 — Long-run
+
+Large tick counts, conservation, population dynamics, numeric safety, transformation backlog, memory/performance.
+
+### Critical rule
+
+A test that manually constructs impossible state does not prove the live simulation can reach that state. Maintain live-path integration tests wherever practical.
+
+---
+
+# 22. Phase 16 — Instrumentation and Diagnostics
+
+Instrumentation should observe, not alter, simulation behavior.
+
+Track at minimum:
 
 ### Simulation
 
-- organism iteration,
-- environment diffusion,
-- spatial queries,
-- transformation processing,
-- reproduction processing,
-- material operations,
-- allocations and cloning.
+- tick;
+- tick duration;
+- population;
+- active transformations;
+- errors.
 
-### Snapshot generation
+### Material
 
-The current snapshot path clones substantial simulation state. This is acceptable as an initial correctness-first implementation, but it is an obvious candidate for measurement and later optimization.
+- total material by resource;
+- environment-held material;
+- organism-held material;
+- transformation-held material;
+- structural material.
 
-Potential future approaches include:
+### Energy
 
-- reducing copied state,
-- dedicated observation structures,
-- incremental/delta updates,
-- bounded snapshot frequency,
-- serialization from a read-only observation view.
+- created;
+- consumed;
+- transferred;
+- total usable energy;
+- unexplained changes.
 
-Do not replace working straightforward code with a complex zero-copy system without measurement.
+### Lifecycle
 
-### Transport
+- actions attempted/completed;
+- transformations started/completed;
+- births;
+- deaths;
+- reproductive construction progress.
 
-Measure:
+Temporary diagnostics may be added to answer a specific question, then removed or converted into permanent instrumentation.
 
-- snapshot size,
-- serialization time,
-- update frequency,
-- network traffic,
-- frontend processing time.
+---
 
-### Rendering
+# 23. Phase 17 — Performance and Architecture Cleanup
 
-Measure:
+Optimize only after correctness and viability are demonstrated.
 
-- frame rate,
-- number of rendered objects,
-- unnecessary React updates,
-- canvas/SVG/DOM costs,
-- resource visualization costs.
+Audit:
 
-## Target architecture
+- repeated environment cloning;
+- snapshot creation;
+- spatial queries;
+- transformation allocation;
+- organism traversal;
+- material cloning;
+- serialization frequency;
+- rendering frequency;
+- unbounded history/statistics;
+- lock contention;
+- repeated computation of immutable resource properties.
 
-The simulation may run substantially faster than the browser needs to render.
+Prefer measured improvements that preserve semantics: compact snapshots, bounded histories, spatial indexing where justified, and observation throttling independent of simulation tick rate.
 
-For example:
+### Gate 17
+
+Performance improves without changing simulation behavior.
+
+---
+
+# 24. Phase 18 — Final Acceptance Run
+
+Run from a clean start with no manual intervention.
+
+### A — Startup
+
+Server, simulation, environment, organisms, and runtime initialize correctly.
+
+### B — Continuous ticking
+
+Ticks advance continuously with no duplicate stepping or stalls.
+
+### C — Environment
+
+Vents, active field, diffusion/redistribution, settling/recycling, and conservation operate correctly.
+
+### D — Organisms
+
+Perception, decisions, movement/interaction, and resource use occur through real paths.
+
+### E — Transformations
+
+COMBINE and BREAK start, progress, complete, and produce correct results.
+
+### F — Lifecycle
+
+Growth/development, maintenance, and death operate correctly.
+
+### G — Reproduction
+
+Readiness → request → construction → offspring → independent life.
+
+### H — Evolution
+
+Inheritance → mutation → phenotype → multiple generations.
+
+### I — Long run
+
+Population and environment remain dynamically active without runaway accounting or progressive failure.
+
+### J — Observation
+
+UI reflects authoritative state and disconnect/reconnect does not change simulation semantics.
+
+---
+
+# 25. Milestones
+
+1. **Authoritative runtime** — one reliable simulation progression path.
+2. **Integrated tick lifecycle** — environment, organisms, transformations, reproduction, maintenance, cleanup connected.
+3. **Material/energy authority** — no contradictory physical/accounting authorities.
+4. **Environmental viability** — material continuously circulates through the modeled environment.
+5. **Organism viability** — material interaction, transformation, structure, maintenance, development, death.
+6. **Reproductive viability** — natural reproduction and independent offspring.
+7. **Evolutionary viability** — inheritance, mutation, heritable phenotype.
+8. **Ecosystem viability** — sustainable multi-generation dynamics.
+9. **Observable living simulation** — UI faithfully exposes the system.
+10. **Long-run quality** — extended correctness, stability, diagnostics, and performance.
+
+These milestones are gates, not invitations to batch unrelated changes.
+
+---
+
+# 26. Current High-Priority Audit Targets
+
+## 26.1 The continuous runtime already exists
+
+Do not rebuild a tick loop blindly. The current backend already has a continuous loop around `Simulation::step()`. The immediate question is whether that runtime produces a **viable integrated simulation**.
+
+## 26.2 Action reachability
+
+Current disabled/no-op action paths must be classified against the organism lifecycle. If organisms cannot obtain usable material through a legitimate path, reproduction tuning is premature.
+
+## 26.3 Material/energy authority
+
+Complete the repository-wide migration away from legacy stored values. Intrinsic bond strength remains the sole bond-strength authority. Legacy energy behavior must not reintroduce an independent energy model.
+
+## 26.4 Transformation integration
+
+COMBINE and BREAK must be exercised through normal organism behavior, not merely direct transformation tests.
+
+## 26.5 Reproduction reachability
+
+Reproductive construction has received substantial implementation work. The next question is whether a normal organism can reach it from environment interaction and lifecycle conditions.
+
+## 26.6 Population viability
+
+Once the lifecycle closes, measure long-run behavior rather than assuming it will be stable.
+
+---
+
+# 27. What We Will Not Do
+
+Unless an audit proves it necessary, we will not:
+
+- create a second simulation engine in the frontend;
+- add fake life to make the UI look active;
+- add scripted reproduction to manufacture population activity;
+- tune constants to conceal broken causal links;
+- reintroduce bonded/unbonded partitioning into the unified deep reservoir;
+- reintroduce stored bond strength as an authority;
+- reintroduce an independent stored-energy model;
+- replace correct mechanics merely for visualization convenience;
+- optimize before measuring the bottleneck;
+- declare success because a short demo looks active.
+
+---
+
+# 28. Definition of Done
+
+## Runtime
+
+- [ ] One authoritative simulation instance advances continuously.
+- [ ] Browser is not required for simulation progression.
+- [ ] Runtime lifecycle is coherent.
+- [ ] Long runs remain stable.
+
+## Environment
+
+- [ ] Reservoir works.
+- [ ] Vents work.
+- [ ] Active field works.
+- [ ] Diffusion/redistribution works.
+- [ ] Settling/recycling works where modeled.
+- [ ] Material accounting remains coherent.
+
+## Chemistry/materials
+
+- [ ] Resource properties have one authority.
+- [ ] Material composition has one authority.
+- [ ] Potential energy is derived consistently.
+- [ ] Reactivity/cohesion are consistent.
+- [ ] Bond strength uses only resource-property math.
+- [ ] Legacy stored bond strength is not authoritative.
+- [ ] Transformation work is coherent.
+- [ ] Material conservation is demonstrated.
+- [ ] Energy accounting is demonstrated.
+
+## Organisms
+
+- [ ] Birth state is valid.
+- [ ] Perception reaches real environment state.
+- [ ] Decisions select reachable actions.
+- [ ] Material interaction is possible.
+- [ ] COMBINE works end-to-end.
+- [ ] BREAK works end-to-end.
+- [ ] Structure changes correctly.
+- [ ] Maintenance works.
+- [ ] Development/growth works.
+- [ ] Death/removal works.
+
+## Reproduction
+
+- [ ] Readiness is naturally reachable.
+- [ ] Requests and commitments are correct.
+- [ ] Construction progresses.
+- [ ] Offspring is physically instantiated correctly.
+- [ ] Offspring becomes independent.
+
+## Evolution
+
+- [ ] Genome inheritance works.
+- [ ] Heritable traits affect phenotype.
+- [ ] Mutation works.
+- [ ] Multiple generations occur.
+- [ ] Variation persists through generations.
+
+## Population/ecosystem
+
+- [ ] Births and deaths both occur.
+- [ ] Multiple generations occur.
+- [ ] Population dynamics remain bounded by model constraints.
+- [ ] Environment remains active.
+- [ ] No unexplained material/energy runaway occurs.
+- [ ] Baseline configuration does not immediately and permanently collapse.
+
+## Observation
+
+- [ ] Real simulation state reaches UI.
+- [ ] UI does not simulate outcomes.
+- [ ] Environment is observable.
+- [ ] Organisms are inspectable.
+- [ ] Transformations are inspectable.
+- [ ] Reproduction/population are inspectable.
+- [ ] Long-run trends are observable.
+
+## Quality
+
+- [ ] Unit tests pass.
+- [ ] Integration tests pass.
+- [ ] Lifecycle tests pass.
+- [ ] Long-run tests pass.
+- [ ] Multi-seed tests pass the intended invariants.
+- [ ] Numeric invariants hold.
+- [ ] Performance is acceptable.
+
+---
+
+# 29. Immediate Implementation Protocol
+
+The next implementation task is **not automatically the next numbered phase**. It is the first unresolved blocker found by auditing the current live system.
+
+For each blocker:
+
+1. Audit the actual runtime path.
+2. Identify the first broken causal link.
+3. State the invariant that should hold.
+4. Find every relevant code location.
+5. Choose the smallest coherent fix.
+6. Implement only that fix.
+7. Run focused tests.
+8. Run the relevant integrated path.
+9. Inspect actual runtime behavior when needed.
+10. Record the result.
+11. Re-audit adjacent paths.
+12. Move to the next blocker only after verification.
+
+The repair direction is:
 
 ```text
-Simulation:     high internal tick rate
-                    │
-                    │ sampled observations
-                    ▼
-Viewer:         30–60 visual updates/sec
+simulation authority
+        ↓
+material / chemistry / environment
+        ↓
+organism interaction
+        ↓
+transformations
+        ↓
+structure / maintenance / development
+        ↓
+reproduction
+        ↓
+genetics / evolution
+        ↓
+population viability
+        ↓
+long-run stability
+        ↓
+observation / UI
+        ↓
+optimization
 ```
 
-The actual rates should be determined experimentally.
+The final product is not a continuously animated webpage.
 
----
-
-# 15. Phase 10 — Long-Duration Stability
-
-A simulator is not truly continuously runnable merely because it survives for ten seconds.
-
-## Required tests
-
-Run the simulation for progressively longer periods:
-
-1. seconds,
-2. minutes,
-3. tens of minutes,
-4. hours,
-5. eventually extended unattended runs.
-
-## Monitor for
-
-- runaway numeric values,
-- NaN/infinite values,
-- memory growth,
-- stalled transformations,
-- population explosions,
-- population extinction,
-- material disappearance/creation,
-- simulation clock failures,
-- scheduler drift,
-- deadlocks,
-- stale frontend state,
-- connection failures,
-- corrupted restart state.
-
-## Reproducibility
-
-Where deterministic seeds are supported, verify that a given seed and simulation configuration can reproduce the same behavior when run under the same simulation conditions.
-
-This is particularly important when later concurrency or performance optimizations are introduced.
-
-## Gate
-
-**Milestone 3:** EvoSim can run for extended periods without requiring manual intervention and without silently entering an invalid state.
-
----
-
-# 16. Phase 11 — Rich Presentation Comes Last
-
-Only after the underlying system is continuously runnable, observable, and stable should the project invest heavily in presentation.
-
-Potential features include:
-
-- polished world rendering,
-- organism inspection panels,
-- population graphs,
-- material graphs,
-- environment overlays,
-- genealogy,
-- organism filtering,
-- camera controls,
-- pause/resume/step controls,
-- experiment controls,
-- event timelines,
-- historical views,
-- replay/debugging tools.
-
-These features should consume authoritative observations rather than introducing their own simulation logic.
-
----
-
-# 17. Recommended Implementation Order
-
-The actual implementation sequence should remain deliberately narrow:
-
-```text
-0. Audit current runtime/API/frontend
-        ↓
-1. Establish authoritative continuous Simulation loop
-        ↓
-2. Establish clean Snapshot/observation boundary
-        ↓
-3. Connect backend live state to React
-        ↓
-4. Render the simplest real world
-        ↓
-5. Verify continuous behavior
-        ↓
-6. Improve organism observability
-        ↓
-7. Improve environment observability
-        ↓
-8. Diagnose lifecycle problems exposed by live running
-        ↓
-9. Add scientific instrumentation
-        ↓
-10. Measure and optimize performance
-        ↓
-11. Prove long-duration stability
-        ↓
-12. Build richer presentation
-```
-
-This order is intentional.
-
-The first visible success should happen as early as possible, but every visible layer should sit on the real simulation rather than a temporary mock that later becomes architectural debt.
-
----
-
-# 18. Definition of "Running"
-
-For this roadmap, EvoSim is considered **running continuously** only when all of the following are true:
-
-- The Rust simulation advances without requiring a frontend render.
-- There is one authoritative simulation state.
-- `Simulation::step()` is driven by a real runtime loop.
-- Simulation time advances according to the runtime configuration.
-- The process remains alive while the simulation runs.
-- The simulation can be stopped or paused cleanly where supported.
-- The browser receives observations from the real simulation.
-- The displayed tick/state changes because the simulation changed, not because the frontend fabricated changes.
-- Disconnecting the browser does not fundamentally stop simulation progression unless that is an explicit, deliberate runtime policy.
-- Reconnecting the browser can observe the current simulation state.
-
----
-
-# 19. Definition of "Coherent"
-
-As we implement this roadmap, the system should progressively satisfy these architectural properties:
-
-### Single source of truth
-
-Simulation state has one authoritative owner.
-
-### Clear responsibilities
-
-- Rust core: simulation.
-- Runtime: scheduling/lifecycle.
-- Observation/API: exposing state.
-- React: presentation and user-facing controls.
-
-### No duplicated mechanics
-
-The same simulation rule should not exist independently in backend and frontend.
-
-### Explicit boundaries
-
-A change in rendering should not require changing simulation rules merely to keep the UI alive.
-
-### Testability
-
-The simulation can be tested without the browser.
-
-The observation layer can be tested without relying on visual rendering.
-
-The frontend can be tested against representative observations without becoming the simulation itself.
-
-### Replaceability
-
-The viewer should eventually be replaceable without rewriting the simulation engine.
-
----
-
-# 20. Definition of "Efficient"
-
-Efficiency should mean:
-
-- no unnecessary duplicate simulation work,
-- no unnecessary browser-driven simulation stepping,
-- no uncontrolled snapshot history,
-- no needless serialization frequency,
-- no needless frontend re-renders,
-- no premature complexity,
-- and measured optimization of actual bottlenecks.
-
-A simple architecture that performs well enough is preferable to a sophisticated architecture whose complexity is not justified by measurement.
-
----
-
-# 21. Engineering Discipline for This Roadmap
-
-Development should proceed one focused change at a time.
-
-For each change:
-
-1. Identify the exact responsibility being changed.
-2. Inspect the current implementation.
-3. Make the smallest coherent change.
-4. Run the relevant tests/checks.
-5. Verify the runtime behavior when applicable.
-6. Inspect the resulting architecture for accidental duplication.
-7. Commit the change with a clear message.
-8. Only then move to the next step.
-
-When a test passes, that proves the tested behavior. It does not automatically prove the architecture is correct.
-
-Likewise, a visually active screen does not prove the simulation is correct.
-
-We should repeatedly verify both:
-
-```text
-Does it work?
-    +
-Is it still architecturally correct?
-```
-
----
-
-# 22. What We Should Avoid During This Phase
-
-Do not:
-
-- turn the frontend into a simulation engine;
-- add fake movement or fake resource activity;
-- make simulation rules depend on frame rate;
-- make backend simulation progression depend on browser polling;
-- introduce new mechanics solely because the first world view looks quiet;
-- duplicate state models without a clear ownership reason;
-- optimize snapshot copying before measuring it;
-- introduce concurrency solely for theoretical performance;
-- expose every internal field immediately;
-- redesign established simulation mechanics while solving runtime infrastructure;
-- treat the UI as the authority for simulation truth;
-- let temporary demo code become the permanent runtime architecture.
-
----
-
-# 23. Near-Term Working Checklist
-
-The immediate work should stay focused on this checklist.
-
-## Step A — Audit
-
-- [ ] Find where `Simulation` is instantiated.
-- [ ] Find every caller of `Simulation::step()`.
-- [ ] Find the current server/runtime entrypoint.
-- [ ] Determine whether a continuous scheduler already exists.
-- [ ] Determine what `running` currently means.
-- [ ] Find the existing snapshot/API path.
-- [ ] Find the existing frontend data path.
-- [ ] Document the current end-to-end flow.
-
-## Step B — Runtime
-
-- [ ] Establish one authoritative simulation loop.
-- [ ] Make tick scheduling explicit.
-- [ ] Make lifecycle semantics explicit.
-- [ ] Verify backend-only continuous operation.
-
-## Step C — Observation
-
-- [ ] Reuse or refine `Snapshot` as the observation boundary.
-- [ ] Define the minimum live observation payload.
-- [ ] Serialize without mutating simulation state.
-- [ ] Establish live transport.
-
-## Step D — Viewer
-
-- [ ] Connect React to live observations.
-- [ ] Display live tick.
-- [ ] Display world.
-- [ ] Display real organisms.
-- [ ] Display real environment state.
-- [ ] Confirm updates are coming from the real engine.
-
-## Step E — Stabilize
-
-- [ ] Run continuously for minutes.
-- [ ] Check lifecycle behavior.
-- [ ] Check material/environment behavior.
-- [ ] Check organism activity.
-- [ ] Identify actual lifecycle gaps.
-
-Only after these steps should we broaden the viewer or begin substantial optimization.
-
----
-
-# 24. First Milestone to Target
-
-The first major milestone is deliberately modest:
-
-> **Start EvoSim, leave it running, open the browser, and watch the real simulation advance continuously in front of you.**
-
-The world can be ugly.
-
-The UI can be minimal.
-
-The simulation can still be scientifically primitive.
-
-But the state on screen must be real, continuously generated by the authoritative Rust simulation, and connected through a clean observation boundary.
-
-Once that works, EvoSim stops being primarily a collection of simulation code and becomes a **living system that we can observe, diagnose, and iteratively improve**.
-
-That is the foundation for everything that follows.
+It is a **continuously running artificial-life system whose behavior emerges from the interaction of its modeled rules, with the browser providing a faithful window into that system.**
