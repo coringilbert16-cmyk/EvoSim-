@@ -194,8 +194,7 @@ fn seeding_distributes_total_evenly_and_conserves_it() {
     let (_, mut reservoir) = field_and_reservoir();
     reservoir.seed_uniform("Carbon", 6400.0);
     assert!((reservoir.total_amount() - 6400.0).abs() < 1e-6);
-    assert!((reservoir.cells[0].amount_of(false, "Carbon") - 100.0).abs() < 1e-9);
-    assert_eq!(reservoir.cells[0].amount_of(true, "Carbon"), 0.0);
+    assert!((reservoir.cells[0].amount_of("Carbon") - 100.0).abs() < 1e-9);
 }
 #[test]
 fn vent_draws_only_from_its_own_region_not_a_global_pool() {
@@ -206,8 +205,8 @@ fn vent_draws_only_from_its_own_region_not_a_global_pool() {
         .reservoir_index_for_field_index(&field, field.index_for_position(10.0, 10.0).unwrap());
     let idx_b = reservoir
         .reservoir_index_for_field_index(&field, field.index_for_position(900.0, 900.0).unwrap());
-    reservoir.cells[idx_a].add(false, "Methane", region_a_amount);
-    reservoir.cells[idx_b].add(false, "Methane", region_b_amount);
+    reservoir.cells[idx_a].add("Methane", region_a_amount);
+    reservoir.cells[idx_b].add("Methane", region_b_amount);
     let mut vents = vec![
         Vent {
             x: 10.0,
@@ -227,22 +226,23 @@ fn vent_draws_only_from_its_own_region_not_a_global_pool() {
         },
     ];
     apply_vents(&mut field, &mut reservoir, &mut vents);
-    assert!(reservoir.cells[idx_a].amount_of(false, "Methane") < 1e-9);
+    assert!(reservoir.cells[idx_a].amount_of("Methane") < 1e-9);
     let field_idx_a = field.index_for_position(10.0, 10.0).unwrap();
     assert!((field.cells[field_idx_a].unbonded.total_amount() - region_a_amount).abs() < 1e-9);
     assert_eq!(field.cells[field_idx_a].bonded.total_amount(), 0.0);
     assert!(
-        (reservoir.cells[idx_b].amount_of(false, "Methane") - (region_b_amount - 10.0)).abs()
+        (reservoir.cells[idx_b].amount_of("Methane") - (region_b_amount - 10.0)).abs()
             < 1e-9
     );
 }
 #[test]
-fn vent_draw_is_indiscriminate_across_bonded_and_unbonded_stock() {
+fn vent_draw_is_indiscriminate_across_unified_reservoir_stock() {
     let (mut field, mut reservoir) = field_and_reservoir();
     let field_index = field.index_for_position(500.0, 500.0).unwrap();
     let reservoir_index = reservoir.reservoir_index_for_field_index(&field, field_index);
-    reservoir.cells[reservoir_index].add(true, "Carbon", 20.0);
-    reservoir.cells[reservoir_index].add(false, "Carbon", 80.0);
+    reservoir.cells[reservoir_index].add("Carbon", 20.0);
+    reservoir.cells[reservoir_index].add("Carbon", 80.0);
+    assert!((reservoir.cells[reservoir_index].amount_of("Carbon") - 100.0).abs() < 1e-9);
     let mut vents = vec![Vent {
         x: 500.0,
         y: 500.0,
@@ -252,17 +252,16 @@ fn vent_draw_is_indiscriminate_across_bonded_and_unbonded_stock() {
         emission_timer: 0,
     }];
     apply_vents(&mut field, &mut reservoir, &mut vents);
-    assert!((field.cells[field_index].bonded.total_amount() - 10.0).abs() < 1e-9);
-    assert!((field.cells[field_index].unbonded.total_amount() - 40.0).abs() < 1e-9);
-    assert!((reservoir.cells[reservoir_index].amount_of(true, "Carbon") - 10.0).abs() < 1e-9);
-    assert!((reservoir.cells[reservoir_index].amount_of(false, "Carbon") - 40.0).abs() < 1e-9);
+    assert!(field.cells[field_index].bonded.total_amount() < 1e-9);
+    assert!((field.cells[field_index].unbonded.total_amount() - 50.0).abs() < 1e-9);
+    assert!((reservoir.cells[reservoir_index].amount_of("Carbon") - 50.0).abs() < 1e-9);
 }
 #[test]
-fn vent_does_not_convert_unbonded_material_into_bonded_material() {
+fn vent_releases_unified_reservoir_material_as_unbonded_active_material() {
     let (mut field, mut reservoir) = field_and_reservoir();
     let field_index = field.index_for_position(500.0, 500.0).unwrap();
     let reservoir_index = reservoir.reservoir_index_for_field_index(&field, field_index);
-    reservoir.cells[reservoir_index].add(false, "Carbon", 100.0);
+    reservoir.cells[reservoir_index].add("Carbon", 100.0);
     let mut vents = vec![Vent {
         x: 500.0,
         y: 500.0,
@@ -274,14 +273,14 @@ fn vent_does_not_convert_unbonded_material_into_bonded_material() {
     apply_vents(&mut field, &mut reservoir, &mut vents);
     assert!((field.cells[field_index].unbonded.total_amount() - 30.0).abs() < 1e-9);
     assert!(field.cells[field_index].bonded.total_amount() < 1e-9);
-    assert!((reservoir.cells[reservoir_index].amount_of(false, "Carbon") - 70.0).abs() < 1e-9);
+    assert!((reservoir.cells[reservoir_index].amount_of("Carbon") - 70.0).abs() < 1e-9);
 }
 #[test]
-fn vent_preserves_bonded_material_as_bonded_when_it_is_the_available_stock() {
+fn vent_releases_any_unified_reservoir_stock_as_unbonded_active_material() {
     let (mut field, mut reservoir) = field_and_reservoir();
     let field_index = field.index_for_position(500.0, 500.0).unwrap();
     let reservoir_index = reservoir.reservoir_index_for_field_index(&field, field_index);
-    reservoir.cells[reservoir_index].add(true, "Methane", 50.0);
+    reservoir.cells[reservoir_index].add("Methane", 50.0);
     let mut vents = vec![Vent {
         x: 500.0,
         y: 500.0,
@@ -291,9 +290,9 @@ fn vent_preserves_bonded_material_as_bonded_when_it_is_the_available_stock() {
         emission_timer: 0,
     }];
     apply_vents(&mut field, &mut reservoir, &mut vents);
-    assert!((field.cells[field_index].bonded.total_amount() - 20.0).abs() < 1e-9);
-    assert!(field.cells[field_index].unbonded.total_amount() < 1e-9);
-    assert!((reservoir.cells[reservoir_index].amount_of(true, "Methane") - 30.0).abs() < 1e-9);
+    assert!((field.cells[field_index].unbonded.total_amount() - 20.0).abs() < 1e-9);
+    assert!(field.cells[field_index].bonded.total_amount() < 1e-9);
+    assert!((reservoir.cells[reservoir_index].amount_of("Methane") - 30.0).abs() < 1e-9);
 }
 #[test]
 fn venting_conserves_total_material_reservoir_plus_field() {
@@ -339,7 +338,7 @@ fn settling_drains_both_bonded_and_unbonded_stacks() {
     assert!(reservoir.total_amount() > 0.0);
 }
 #[test]
-fn settling_preserves_bonded_status_in_the_reservoir() {
+fn settling_merges_bonded_and_unbonded_material_into_unified_reservoir() {
     let (mut field, mut reservoir) = field_and_reservoir();
     let field_index = field.index_for_position(500.0, 500.0).unwrap();
     let reservoir_index = reservoir.reservoir_index_for_field_index(&field, field_index);
@@ -350,17 +349,22 @@ fn settling_preserves_bonded_status_in_the_reservoir() {
             bonded: true,
         },
     );
+    field.deposit_at_index(
+        field_index,
+        Material {
+            parts: vec![("Sulfur".into(), 100.0)],
+            bonded: false,
+        },
+    );
     for _ in 0..50 {
         apply_settling(&mut field, &mut reservoir, DEFAULT_SETTLING_FRACTION);
     }
-    assert!(reservoir.cells[reservoir_index].amount_of(true, "Sulfur") > 0.0);
-    assert_eq!(
-        reservoir.cells[reservoir_index].amount_of(false, "Sulfur"),
-        0.0
-    );
+    assert!(reservoir.cells[reservoir_index].amount_of("Sulfur") > 0.0);
+    assert!(field.cells[field_index].bonded.total_amount() < 200.0);
+    assert!(field.cells[field_index].unbonded.total_amount() < 100.0);
 }
 #[test]
-fn settled_bonded_material_can_be_re_released_by_a_vent_still_bonded() {
+fn settled_material_can_be_re_released_by_a_vent_as_unbonded_active_material() {
     let (mut field, mut reservoir) = field_and_reservoir();
     let field_index = field.index_for_position(500.0, 500.0).unwrap();
     let reservoir_index = reservoir.reservoir_index_for_field_index(&field, field_index);
@@ -375,8 +379,8 @@ fn settled_bonded_material_can_be_re_released_by_a_vent_still_bonded() {
         apply_settling(&mut field, &mut reservoir, 0.05);
     }
     assert!(field.cells[field_index].bonded.total_amount() < 1.0);
-    let bonded_in_reservoir = reservoir.cells[reservoir_index].amount_of(true, "Nitrogen");
-    assert!(bonded_in_reservoir > 400.0);
+    let reservoir_before = reservoir.cells[reservoir_index].amount_of("Nitrogen");
+    assert!(reservoir_before > 400.0);
     let mut vents = vec![Vent {
         x: 500.0,
         y: 500.0,
@@ -386,11 +390,11 @@ fn settled_bonded_material_can_be_re_released_by_a_vent_still_bonded() {
         emission_timer: 0,
     }];
     apply_vents(&mut field, &mut reservoir, &mut vents);
-    assert!((field.cells[field_index].bonded.total_amount() - 50.0).abs() < 1e-6);
-    assert_eq!(field.cells[field_index].unbonded.total_amount(), 0.0);
+    assert!((field.cells[field_index].unbonded.total_amount() - 50.0).abs() < 1e-6);
+    assert!(field.cells[field_index].bonded.total_amount() < 1e-9);
     assert!(
-        (reservoir.cells[reservoir_index].amount_of(true, "Nitrogen")
-            - (bonded_in_reservoir - 50.0))
+        (reservoir.cells[reservoir_index].amount_of("Nitrogen")
+            - (reservoir_before - 50.0))
             .abs()
             < 1e-6
     );
