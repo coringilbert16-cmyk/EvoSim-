@@ -3,20 +3,20 @@ use crate::structural_material::StructuralMaterial;
 use crate::structure::Placement;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct StructuralBlueprint {
     pub elements: Vec<BlueprintElement>,
     pub connections: Vec<BlueprintConnection>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BlueprintElement {
     pub material: StructuralMaterial,
     pub geometry: BlueprintGeometry,
     pub placement: Placement,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BlueprintGeometry {
     pub constituents: Vec<ConstituentGeometry>,
     pub envelope: Shape,
@@ -24,14 +24,14 @@ pub struct BlueprintGeometry {
     pub connection_regions: Vec<ConnectionRegion>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ConstituentGeometry {
     pub part_index: usize,
     pub shape: Shape,
     pub placement: Placement,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct ConnectionRegion {
     pub point: ConnectionPoint,
 }
