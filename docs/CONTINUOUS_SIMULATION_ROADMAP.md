@@ -1,232 +1,1114 @@
-# EvoSim Comprehensive Viable Simulation Roadmap
+# EvoSim — Comprehensive Viable Simulation Implementation Plan
 
-**Status:** Active implementation guideline  
-**Purpose:** Turn the existing EvoSim codebase into a viable, continuously running artificial-life simulation in which the environment, chemistry/material system, organisms, behavior, transformations, construction, reproduction, inheritance, and evolution operate together coherently over long periods—and make that complete simulation observable through the UI.  
-**This document is not the EvoSim master specification.** It is a practical engineering roadmap for implementing, integrating, testing, and validating the current simulation.  
-**Working rule:** We proceed one focused change at a time. A phase is complete only when behavior is demonstrated and integration is verified.
-
----
-
-# 1. Current Goal
-
-The goal is **not** merely to make EvoSim run, animate, or display a moving world.
-
-> **Build a viable working artificial-life simulation in which the modeled environment supplies material, organisms interact with that environment, material transformations create physical organism state, organisms maintain and develop, organisms reproduce, offspring inherit and mutate traits, populations persist and change, and the complete system can continue operating without human intervention for long periods. The UI is a faithful window into that living system.**
-
-The intended causal loop is:
-
-```text
-ENVIRONMENT
-reservoir → vents → active material field → diffusion/redistribution
-                         ↓
-                 material availability
-                         ↓
-                    perception
-                         ↓
-                     decision
-                         ↓
-                organism interaction
-                         ↓
-                COMBINE / BREAK
-                         ↓
-                    structure
-                         ↓
-              energy/material effects
-                         ↓
-             maintenance + development
-                         ↓
-             reproductive readiness
-                         ↓
-                   reproduction
-                         ↓
-              reproductive construction
-                         ↓
-                    offspring
-                         ↓
-              inheritance + mutation
-                         ↓
-                  new generation
-                         └──────────→ cycle
-
-                 authoritative state
-                         ↓
-                   observation API
-                         ↓
-                         UI
-```
-
-The UI is therefore an **observation layer**, not the objective and never a second simulation engine.
+**Status:** Active implementation plan  
+**Last revised:** 2026-09-04  
+**Authority:** Engineering roadmap; `Master Spec Sheet V5.md` remains the authoritative simulation specification.  
+**Working method:** Audit first, implement one coherent change at a time, test it, integrate it, then re-audit before proceeding.
 
 ---
 
-# 2. What This Roadmap Is — and Is Not
+## 1. The Goal
 
-## This roadmap is
+The goal is to turn EvoSim into a **viable, continuously running artificial-life simulation** rather than a collection of individually functioning mechanics.
 
-- An implementation sequence for making the entire simulation viable.
-- A checklist for closing broken causal links.
-- A guide for integrating existing subsystems instead of rewriting them unnecessarily.
-- A set of verification gates.
-- A long-running stability and ecosystem-validation plan.
-- A guide for making the resulting simulation observable.
+A successful simulation must be able to sustain the complete causal loop:
 
-## This roadmap is not
+```text
+DEEP ENVIRONMENT
+      ↓
+vents / diffusion / settling
+      ↓
+ACTIVE ECOLOGICAL FIELD
+      ↓
+physical material availability
+      ↓
+organism perception
+      ↓
+organism decision
+      ↓
+physical material interaction
+      ↓
+chemistry / transformations
+      ↓
+physical organism structure
+      ↓
+growth / maintenance / repair
+      ↓
+maturity / reproductive readiness
+      ↓
+reproduction
+      ↓
+structural + genetic inheritance
+      ↓
+new viable organism
+      ↓
+survival / variation / selection
+      └──────────────→ next generation
+```
 
-- The EvoSim master specification.
-- A replacement for established simulation rules.
-- Permission to invent mechanics merely to create visual activity.
-- A UI-first development plan.
-- Permission to tune constants before determining whether code is broken.
-- Permission to keep contradictory legacy authorities because tests happen to pass.
+The simulation must be capable of running this loop repeatedly without scripted life, fake activity, or UI-driven behavior.
 
-When this roadmap and an established simulation rule conflict, the established simulation rule remains authoritative.
+The UI is an **observation layer only**. It displays authoritative simulation state; it does not become a second simulation engine.
+
+### The actual success criterion
+
+We are not finished when:
+
+- the browser animates;
+- ticks advance;
+- unit tests pass;
+- COMBINE works in isolation;
+- BREAK works in isolation;
+- reproduction works from hand-built test state; or
+- organisms merely move around.
+
+We are finished when the **integrated simulation itself** can naturally produce and sustain valid organism lifecycles and population dynamics under the established rules.
 
 ---
 
-# 3. Definition of a Viable Working Simulation
+# 2. Architectural Decisions That Are Locked
 
-EvoSim is not viable merely because ticks increase, the server remains alive, unit tests pass, transformations work in isolation, reproduction works in a hand-built test, or the browser receives snapshots.
+These decisions are not implementation suggestions. They are the current governing rules for the implementation.
 
-A viable system must demonstrate all of the following through the integrated simulation.
+## 2.1 Chemistry is authoritative
 
-## 3.1 Continuous operation
+EvoSim is chemistry/material-first. Fundamental physical properties belong to the resource/material model rather than being invented by organism behavior or UI logic.
 
-The simulation can run for long periods without:
+Base resources are:
 
-- panic or deadlock;
-- NaN/Infinity contamination;
-- stalled progression;
-- duplicate stepping;
-- runaway memory growth;
-- accumulating stale transformations/objects;
-- progressive performance collapse.
+- Carbon
+- Methane
+- Hydrogen
+- Sulfur
+- Nitrogen
+- Phosphorus
+- Water
 
-## 3.2 Environmental continuity
+Resource properties are intrinsic and immutable:
 
-The environment continuously provides and redistributes material according to the model. Material must not mysteriously appear, disappear, or become permanently inaccessible.
-
-## 3.3 Organism viability
-
-At least some organisms can naturally progress through:
-
-```text
-birth → juvenile → material interaction → structure/growth
-→ maintenance → adult → reproductive readiness
-```
-
-They must also be able to die through legitimate lifecycle rules.
-
-## 3.4 Transformation viability
-
-Transformations form complete lifecycles:
-
-```text
-eligible inputs → decision → begin → progress → resolve
-→ correct material/structure/energy result
-```
-
-No transformation may duplicate, destroy, or strand material without an explicit rule.
-
-## 3.5 Reproductive viability
-
-Reproduction must be reachable through normal simulation behavior:
-
-```text
-adult → readiness → request → commitment → construction
-→ offspring → independent organism
-```
-
-## 3.6 Evolutionary viability
-
-Offspring inherit heritable traits, mutation can create valid variation, and traits can affect phenotype and therefore survival/reproduction.
-
-## 3.7 Population viability
-
-Long runs must not settle into an obviously pathological state such as immediate permanent extinction, unbounded population growth, immortal organisms, or reproduction disconnected from resource limits.
-
-The roadmap does **not** prescribe a target population curve. The model must be allowed to produce its own dynamics.
-
-## 3.8 Conservation and accounting
-
-Material and energy accounting must remain coherent.
-
-**Locked bond rule:**
-
-> **Bond strength is calculated only from the constant mathematical properties of the resources participating in the bond. No age, geometry, organism state, history, stored legacy value, load, or other dynamic input may alter intrinsic bond strength.**
-
-Dynamic quantities such as connection load may use bond strength as an input, but may not redefine it.
-
----
-
-# 4. Core Engineering Principles
-
-## 4.1 One simulation, one authority
-
-There must be one authoritative simulation state and one authoritative progression path. No subsystem may silently maintain a contradictory second authority for fundamental state.
-
-## 4.2 Trace causes, not symptoms
-
-When behavior fails, trace the complete causal chain and fix the first broken link.
-
-For example, if reproduction never occurs, do not immediately lower the reproduction threshold. Trace:
-
-```text
-environment → perception → decision → material interaction
-→ transformation → structure → maintenance/development
-→ readiness → reproduction
-```
-
-## 4.3 Preserve correct mechanics
-
-Existing correct behavior should remain intact. A unit test proves a local contract, not system viability.
-
-## 4.4 One source of truth for fundamental quantities
-
-Audit and unify the definitions of:
-
-- resource properties;
-- material composition;
+- mass;
 - potential energy;
 - reactivity;
 - cohesion;
-- bond strength;
-- transformation work;
-- energy creation/consumption;
-- material ownership;
-- structural state.
+- physical form/geometry.
 
-Legacy fields that contradict authoritative calculations must be removed or made explicitly non-authoritative.
+Potential energy is derived from the authoritative resource/material properties. Legacy independent energy fields must not become a second authority.
 
-## 4.5 Energy remains emergent
-
-Energy is not to become an unrelated resource that can accumulate without a causal material interaction. Every energy mutation must have an auditable source and cause.
-
-## 4.6 No fake life
-
-Do not add scripted movement, scripted reproduction, artificial resource motion, or decorative activity merely to make the UI look alive. Inactivity is a diagnostic result.
-
-## 4.7 UI is observational
-
-The browser may display and request explicitly supported runtime controls, but it must not calculate chemistry, movement, transformations, reproduction, or evolution independently.
-
-## 4.8 Every change has a gate
-
-For each implementation change:
-
-1. State the invariant being repaired.
-2. Trace every relevant code path.
-3. Make the smallest coherent change.
-4. Add/update focused tests.
-5. Run tests.
-6. Exercise the integrated path.
-7. Re-audit adjacent lifecycle paths.
-8. Only then proceed.
+Reactivity remains nonlinear/exponential according to the established chemistry model.
 
 ---
 
-# 5. Working Method — One Step at a Time
+## 2.2 Bond strength has exactly one authority
 
-The implementation sequence is deliberately conservative:
+**Locked rule:**
+
+> Bond strength is calculated only from the constant mathematical properties of the resources participating in the bond. No age, geometry, organism state, history, stored legacy value, load, or other dynamic input may alter intrinsic bond strength.
+
+Dynamic quantities such as connection load may use intrinsic bond strength as an input, but they must never redefine it.
+
+Any remaining stored `Bond.strength` field must therefore be treated as non-authoritative or removed when the implementation reaches that cleanup point.
+
+---
+
+## 2.3 Bonded/unbonded is chemical state, not location
+
+Bonded versus unbonded material describes chemical/structural state. It does not mean that a material belongs to a particular anatomical region.
+
+There must be no permanent mappings such as:
+
+```text
+Carbon = core
+Water = interior
+X = membrane
+```
+
+The same resource identity can participate in different physical roles depending on inherited structure and chemistry.
+
+---
+
+## 2.4 Water is ordinary physical material
+
+Water is first-class material.
+
+It can be:
+
+- acquired;
+- stored;
+- transported;
+- distributed through organism material-space;
+- in contact with material and membrane;
+- transferred across material boundaries when physical conditions permit;
+- involved in reactivity through the established chemistry model.
+
+There is no special `organism.water` pool and no magic permeability stat.
+
+Permeability is a **transfer capacity/rate**, not an organism preference.
+
+The currently selected permeability model is:
+
+```text
+W = physically accessible organism water mass
+WT = threshold
+Wmax = full-permeability water level
+Pmax = maximum transfer capacity
+
+P(W) = 0                       when W < WT
+P(W) = linear WT → Wmax       when WT ≤ W < Wmax
+P(W) = Pmax                    when W ≥ Wmax
+```
+
+Water occupies physical volume like other material. Its geometry may conform to available space while preserving volume.
+
+---
+
+# 3. Environment Architecture
+
+The environment has two scales:
+
+```text
+DEEP RESERVOIR
+    ↓ vents
+ACTIVE ECOLOGICAL FIELD
+    ↓ physical interaction
+ORGANISMS
+```
+
+## Deep reservoir
+
+The deep reservoir is unified. It does **not** maintain separate bonded/unbonded inventories.
+
+## Vents
+
+Locked rule:
+
+> Reservoir material released by a vent enters the active field regardless of bonding state. Venting does not alter the existing bonding state of active material.
+
+The implementation must preserve material accounting through venting.
+
+## Active field
+
+The active field may distinguish bonded and unbonded material where ecological mechanics require that distinction, particularly for interactions involving BREAK.
+
+The distinction must not leak backward into the unified deep reservoir.
+
+---
+
+# 4. The Most Important Biological Architecture Change
+
+The organism currently has too much procedural structural authority.
+
+The implementation is being changed from:
+
+```text
+organism behavior
+    ↓
+arbitrary COMBINE / BREAK / placement
+    ↓
+new body shape
+```
+
+to:
+
+```text
+genome
+  ↓
+inherited structural blueprint
+  ↓
+physical construction
+  ↓
+organism body
+```
+
+This is the central architectural change required for the next implementation stage.
+
+---
+
+# 5. Locked Rules for Living Structure
+
+## 5.1 The cell cannot reorganize itself
+
+An organism cannot intentionally redesign its body during its lifetime.
+
+It cannot:
+
+- freeform redesign itself;
+- deliberately change its topology;
+- intentionally break its own structural bonds to redesign itself;
+- move existing structural pieces into a new arrangement;
+- use arbitrary COMBINE to invent a new body plan.
+
+The organism's inherited structure is therefore a constraint on lifetime construction, not a suggestion.
+
+## 5.2 Growth is allowed
+
+A cell can grow.
+
+Growth means adding or replacing physical material **within the inherited structural configuration**.
+
+Growth may:
+
+- add permitted structural material;
+- extend an inherited element/configuration;
+- fill an expected missing portion of the inherited body;
+- increase structural mass toward a genetically determined maximum.
+
+Growth may not invent a new topology or reposition existing material.
+
+The juvenile begins as a seed-sized viable organism, approximately 40% of eventual maximum size as a design target, but **40% is not a universal hard-coded rule**.
+
+## 5.3 Cells cannot grow indefinitely
+
+Maximum structural size is genetically determined.
+
+The implementation must distinguish:
+
+- maturity threshold;
+- juvenile starting size;
+- maximum permitted structural capacity.
+
+The current `adult_mass` trait must not remain the sole authority for maximum body size.
+
+## 5.4 Repair is allowed
+
+Physical damage may break bonds or remove material.
+
+A damaged organism may repair the damage and replace lost material.
+
+Repair must restore the inherited structural configuration. It is not a hidden redesign mechanism.
+
+Repair therefore follows:
+
+```text
+damage
+  ↓
+detect deviation from inherited blueprint
+  ↓
+identify required missing material / relationship
+  ↓
+obtain replacement material
+  ↓
+restore inherited configuration
+```
+
+Repair must not use unrestricted self-directed COMBINE/BREAK as a way to invent new topology.
+
+## 5.5 Reproduction is the source of structural redesign
+
+A genuinely different inherited body plan arises through reproduction.
+
+The child receives a copy of the parent's structural blueprint, with a small structural mutation.
+
+Locked scale rule:
+
+> Structural change per reproduction should be **5% or less**, in the same broad magnitude as the permitted genome change.
+
+Structural mutation must therefore be local/small and produce a valid viable configuration. Radical body redesign from a tiny genetic change is not permitted.
+
+---
+
+# 6. Structural Blueprint — New Authoritative Model
+
+The organism needs an explicit inherited `StructuralBlueprint`.
+
+It is part of the inherited genotype, not a runtime procedural recipe and not merely a set of phenotype traits such as compactness or branching.
+
+At minimum the blueprint must encode:
+
+### A. Structural elements
+
+The physical structural elements that make up the organism, including their material/composition requirements.
+
+### B. Inter-element topology
+
+Which structural elements are connected and the relationship/connection information required to realize those connections.
+
+### C. Relative geometry
+
+Enough geometry to construct the inherited configuration physically without allowing the organism to invent arbitrary placement.
+
+The blueprint must be serializable as part of the genome/organism state.
+
+### Blueprint authority
+
+The blueprint answers:
+
+> **What body is this organism genetically permitted to build and restore?**
+
+The environment and available material answer:
+
+> **What physical material is currently available to build it?**
+
+The growth/repair executor answers:
+
+> **What permitted physical construction can happen next?**
+
+The organism's decision system must not answer these questions by inventing topology.
+
+---
+
+# 7. Structural Material Model
+
+The code already contains a useful `StructuralMaterial` abstraction supporting:
+
+- constituent material identity;
+- composite material;
+- internal bonds;
+- derived mass/properties;
+- validation.
+
+The current `StructuralUnit`, however, stores only a resource name and placement.
+
+This creates two parallel structural representations:
+
+```text
+StructuralMaterial → composite-aware
+StructuralUnit      → resource-name-only
+```
+
+The implementation must converge these into a coherent physical representation.
+
+The intended direction is:
+
+```rust
+StructuralUnit {
+    material: StructuralMaterial,
+    placement: Placement,
+}
+```
+
+The exact Rust representation may differ if the same invariants are preserved, but a structural unit must be able to physically represent composite structural material.
+
+Internal chemical bonds within a `StructuralMaterial` must remain conceptually distinct from organism-level structural bonds between structural elements.
+
+---
+
+# 8. Connection Geometry Rule
+
+Locked rule:
+
+> **Connection points are not limited in number of possible bonds except in regards to geometry.**
+
+A connection region/site does not have a numerical one-bond or finite-bond capacity.
+
+Multiple bonds may originate from the same physical connection region whenever geometry permits them.
+
+Therefore implementation logic such as:
+
+```text
+connection_count == 0
+```
+
+must not be used as a universal bond-capacity rule.
+
+Geometry/contact determines whether a bond can exist.
+
+This applies to:
+
+- contact candidate generation;
+- connection-site availability;
+- COMBINE;
+- reproduction construction;
+- structural validation.
+
+---
+
+# 9. Core and Membrane Geometry
+
+The existing `core_geometry.rs` and `membrane_geometry.rs` contain useful geometry mathematics, but their current six-unit anatomy must not remain the biological authority.
+
+The current six-unit interpretation:
+
+```text
+CM → CH → CS → CM → CH → CS
+```
+
+was a guideline used to communicate an early idea, not a hard architecture.
+
+Likewise, a six-unit core is not required.
+
+The code must therefore transition from:
+
+```text
+hard-coded six-unit anatomy
+```
+
+to:
+
+```text
+inherited structural blueprint
+        ↓
+geometry realization / validation
+```
+
+Existing geometry utilities may be retained where useful, but they must become downstream utilities/checkers rather than defining universal organism anatomy.
+
+---
+
+# 10. Seed Organism Rule
+
+The current initial organism is an empty juvenile. That is not acceptable for the intended architecture.
+
+The seed must be a **completed viable cell**.
+
+However, the seed is not required to use one universal six-unit configuration.
+
+The system needs a source/selection mechanism for **multiple viable seed configurations**, allowing different valid starting body plans from the beginning.
+
+Seed configurations are constrained initial conditions. Once the organism exists, its lifetime structure follows the same no-redesign rules as all other organisms.
+
+The seed must include enough physically realized structure and water/material state to be viable under the established rules.
+
+---
+
+# 11. Reproduction and Structural Inheritance
+
+The current reproduction implementation is based on:
+
+- `CORE_UNIT_COUNT = 6`;
+- `CORE_MATERIAL_AMOUNT = 6`;
+- procedural placement from `construction_compactness` and `construction_branching`.
+
+That is obsolete as the biological authority.
+
+The replacement lifecycle is:
+
+```text
+adult organism
+      ↓
+reproductive readiness
+      ↓
+commit required material/resources
+      ↓
+copy parent genome
+      ↓
+mutate genome
+      ↓
+copy parent structural blueprint
+      ↓
+apply ≤5% valid structural mutation
+      ↓
+construct child from blueprint
+      ↓
+viable juvenile boundary
+      ↓
+insert NEW independent organism
+```
+
+The child's structural configuration must be inherited rather than procedurally invented from compactness/branching traits.
+
+The child must become an actual member of `Simulation.organisms`; construction is not complete until there is a demonstrated birth boundary.
+
+---
+
+# 12. Genome Changes Required
+
+The genome should continue to contain legitimate heritable physiological/behavioral traits such as perception, memory, processing, movement, resource interaction, and reproductive traits where supported by the model.
+
+The following structural-authority traits are obsolete:
+
+- `construction_compactness`;
+- `construction_branching`.
+
+They must not control the child's body topology.
+
+The following concepts must be separated:
+
+```text
+juvenile starting size
+maturity threshold
+maximum structural capacity
+```
+
+`adult_mass` currently acts as a maturity threshold and must not silently become the universal maximum-size authority.
+
+The genome therefore needs an explicit, coherent maximum structural capacity representation.
+
+---
+
+# 13. Lifetime Structural Lifecycle
+
+The target lifecycle is:
+
+```text
+VIABLE SEED / BIRTH
+      ↓
+JUVENILE STRUCTURE
+      ↓
+MATERIAL ACQUISITION
+      ↓
+BLUEPRINT-CONSTRAINED GROWTH
+      ↓
+MATURE STRUCTURE
+      ↓
+MAINTENANCE
+      ↓
+DAMAGE ↔ REPAIR
+      ↓
+REPRODUCTIVE READINESS
+      ↓
+REPRODUCTION
+```
+
+At no point may normal lifetime behavior create an unrestricted body-construction loop.
+
+The organism may express inherited structure more fully through growth, and restore it after damage, but it cannot decide to become a different body plan.
+
+---
+
+# 14. COMBINE and BREAK After the Architecture Change
+
+The chemistry/transformation machinery remains valuable.
+
+The distinction is between **chemical/physical mechanics** and **organism authority**.
+
+## COMBINE
+
+The chemistry engine may continue to calculate whether materials can combine and what that interaction costs/produces.
+
+But the organism may not invoke arbitrary COMBINE to redesign its body.
+
+Organism-level structural construction must be mediated by the inherited blueprint.
+
+## BREAK
+
+The low-level ability to remove a bond remains necessary for physical damage and the established transformation mechanics.
+
+But an organism may not intentionally choose BREAK for redesign.
+
+Physical damage may cause bond failure; repair may subsequently restore the inherited structure.
+
+The existing intrinsic bond-strength calculation and BREAK work model should be preserved unless a later chemistry audit proves a separate defect.
+
+---
+
+# 15. Material Acquisition Must Become Physical
+
+The current live simulation has acquisition disabled (`can_acquire = false`) and the Acquire/Expel dispatch path is effectively a no-op.
+
+This blocks the central environment → organism causal link.
+
+The required path is:
+
+```text
+environment material
+      ↓
+physical proximity / overlap / contact
+      ↓
+perception
+      ↓
+decision
+      ↓
+physical transfer
+      ↓
+organism material-space
+```
+
+Acquisition must not be a distant arbitrary transfer or a hidden resource counter increment.
+
+Water/material movement must use the physical organism-space model rather than magic pools.
+
+---
+
+# 16. Organism Physical Space
+
+The current organism representation lacks a sufficiently explicit model for:
+
+- internal material occupancy;
+- water distribution;
+- inside/outside relation;
+- membrane boundary;
+- interior material-space;
+- physical contact between internal material and boundaries.
+
+This must be addressed as the material-acquisition and permeability implementation proceeds.
+
+The intended conceptual structure is:
+
+```text
+OrganismStructure
+├── inherited structural elements
+├── inter-element structural bonds
+├── outer boundary / membrane geometry
+└── interior physical material-space
+       ├── structural material
+       ├── water
+       └── other stored/active material
+```
+
+Core, interior, and membrane are conceptual physically distinct components under one organism structural umbrella; they are not separate competing organism-level structures.
+
+---
+
+# 17. Required Implementation Changes
+
+The following are the known major code changes required to reach the goal.
+
+### Structural authority
+
+- Introduce inherited `StructuralBlueprint`.
+- Make blueprint part of serialized inherited state.
+- Define structural elements, topology, and relative geometry.
+- Add blueprint validation.
+- Replace six-unit core authority.
+- Remove structural authority from `construction_compactness` / `construction_branching`.
+- Replace procedural reproduction placement with blueprint construction.
+
+### Physical structural representation
+
+- Make `StructuralUnit` material-bearing and composite-capable.
+- Preserve internal bonds within `StructuralMaterial` separately from organism-level bonds.
+- Ensure placement comes from blueprint/growth/repair rules rather than arbitrary organism decisions.
+
+### Geometry/contact
+
+- Remove finite connection-count assumptions.
+- Allow multiple bonds from a connection region where geometry permits.
+- Generalize contact/occupancy logic beyond corner-only assumptions where required.
+- Preserve physical geometry as the constraint on possible bonds.
+
+### Growth
+
+- Implement a blueprint-driven growth executor.
+- Define permitted next construction operations from the inherited blueprint.
+- Enforce genetically determined maximum structural capacity.
+- Ensure growth cannot reposition existing material or invent topology.
+
+### Repair
+
+- Detect structural deviation caused by physical damage.
+- Identify missing blueprint elements/relationships.
+- Obtain replacement material.
+- Restore the inherited configuration.
+- Prevent repair from becoming redesign.
+
+### Reproduction
+
+- Replace `CORE_UNIT_COUNT` / `CORE_MATERIAL_AMOUNT` construction authority.
+- Clone parent blueprint.
+- Apply ≤5% structural mutation.
+- Validate mutated blueprint before construction.
+- Construct a viable juvenile.
+- Insert completed child into the live organism population.
+
+### Initial conditions
+
+- Replace empty initial juvenile with a completed viable seed.
+- Provide multiple valid seed configurations.
+- Ensure seed contains viable physical structure and sufficient water/material state.
+
+### Environment → organism
+
+- Enable real acquisition.
+- Implement physical overlap/contact-based transfer.
+- Implement organism material-space.
+- Implement water distribution and permeability according to the selected linear-after-threshold model.
+
+### Lifecycle
+
+- Separate juvenile starting size, maturity threshold, and maximum size.
+- Establish adult transition.
+- Establish maintenance.
+- Establish legitimate death/removal.
+- Ensure no dead organism can act.
+
+### Chemistry/energy
+
+- Complete repository-wide bond-strength authority audit.
+- Remove/relegate legacy stored bond-strength authority.
+- Audit every energy mutation from material cause to destination.
+- Remove obsolete `energy_content` behavior.
+- Verify COMBINE/BREAK conservation and work accounting.
+
+### Integration
+
+- Add runtime invariants.
+- Add causal integration tests.
+- Add long-run/soak tests.
+- Verify snapshots remain observational only.
+
+---
+
+# 18. Implementation Order
+
+Implementation must proceed in this dependency order. We do **not** skip ahead because a later subsystem looks easier.
+
+```text
+1. STRUCTURAL BLUEPRINT DATA MODEL
+              ↓
+2. STRUCTURAL MATERIAL → PHYSICAL STRUCTURAL UNIT
+              ↓
+3. GENERIC GEOMETRY / CONTACT
+   (including unlimited bond count subject to geometry)
+              ↓
+4. BLUEPRINT VALIDATION
+              ↓
+5. VIABLE SEED ORGANISM CONSTRUCTION
+              ↓
+6. BLUEPRINT-CONSTRAINED GROWTH
+              ↓
+7. BLUEPRINT-CONSTRAINED REPAIR
+              ↓
+8. REPRODUCTION + ≤5% STRUCTURAL MUTATION
+              ↓
+9. COMPLETED CHILD BIRTH / POPULATION INSERTION
+              ↓
+10. PHYSICAL ENVIRONMENT → ORGANISM ACQUISITION
+              ↓
+11. ORGANISM INTERNAL MATERIAL / WATER OCCUPANCY
+              ↓
+12. MATURITY / MAXIMUM-SIZE / MAINTENANCE / DEATH
+              ↓
+13. ENERGY LIFECYCLE AUDIT AND CORRECTION
+              ↓
+14. POPULATION VIABILITY / LONG-RUN VALIDATION
+```
+
+This order exists because each stage depends on the one before it.
+
+For example, reproduction should not be rebuilt before the child body has an authoritative blueprint representation.
+
+---
+
+# 19. Detailed Phase Gates
+
+Every phase has a proof requirement.
+
+## Phase 1 — Structural Blueprint
+
+**Goal:** establish the authoritative inherited body plan.
+
+Must prove:
+
+- blueprint serializes;
+- blueprint describes real structural elements;
+- topology is explicit;
+- relative geometry is explicit;
+- blueprint validation catches invalid structures;
+- no six-unit requirement is embedded.
+
+**Gate:** a valid blueprint can be created, serialized, validated, and inspected without relying on procedural compactness/branching.
+
+---
+
+## Phase 2 — Physical Structural Material
+
+**Goal:** eliminate the split between composite `StructuralMaterial` and resource-name-only `StructuralUnit`.
+
+Must prove:
+
+- composite material can become a physical structural element;
+- material identity and quantity remain authoritative;
+- internal chemistry is preserved;
+- organism-level structural bonds remain distinct.
+
+**Gate:** a blueprint-defined composite element can be physically represented without losing material composition.
+
+---
+
+## Phase 3 — Geometry and Contact
+
+**Goal:** make physical geometry, rather than connection-count bookkeeping, the bond constraint.
+
+Must prove:
+
+- multiple bonds can originate from a connection region where geometry permits;
+- invalid geometric overlaps remain invalid;
+- contact generation is physically meaningful;
+- no universal `connection_count == 0` rule remains.
+
+**Gate:** geometry alone determines whether a candidate connection is physically possible.
+
+---
+
+## Phase 4 — Blueprint Validation
+
+**Goal:** guarantee that inherited body plans are constructible and viable.
+
+Validation must cover:
+
+- valid element references;
+- topology consistency;
+- geometry consistency;
+- material requirements;
+- required connectivity;
+- absence of impossible overlaps;
+- valid seed/juvenile form;
+- valid maximum-growth representation.
+
+**Gate:** invalid blueprints fail before construction rather than corrupting runtime state.
+
+---
+
+## Phase 5 — Seed Construction
+
+**Goal:** start the simulation with a real viable organism.
+
+Must prove:
+
+```text
+seed blueprint
+    ↓
+physical construction
+    ↓
+viable structure
+    ↓
+valid initial material/water state
+    ↓
+juvenile organism
+```
+
+Multiple valid seed configurations must be possible.
+
+**Gate:** the first organism is not an empty placeholder.
+
+---
+
+## Phase 6 — Growth
+
+**Goal:** allow development without self-redesign.
+
+Must prove:
+
+- growth follows blueprint;
+- available material is consumed correctly;
+- existing material is not repositioned;
+- topology is not invented;
+- maximum structural capacity is enforced;
+- growth can progress over multiple ticks.
+
+**Gate:** a juvenile can become a larger expression of the same inherited body plan.
+
+---
+
+## Phase 7 — Repair
+
+**Goal:** recover from physical damage without redesign.
+
+Must prove:
+
+- damage can create a structural deficit;
+- the deficit can be identified;
+- replacement material can be acquired;
+- the inherited configuration can be restored;
+- repair cannot create a new topology.
+
+**Gate:** damage → repair returns the organism toward its inherited structure.
+
+---
+
+## Phase 8 — Reproduction and Structural Mutation
+
+**Goal:** make reproduction the source of inherited structural variation.
+
+Must prove:
+
+- parent blueprint is inherited;
+- structural mutation is ≤5%;
+- mutation is local/small;
+- mutated blueprint remains valid;
+- genome and structure change on compatible scales;
+- no procedural compactness/branching body generation remains.
+
+**Gate:** offspring can differ structurally without arbitrary body-plan jumps.
+
+---
+
+## Phase 9 — Birth
+
+**Goal:** complete the reproduction lifecycle.
+
+Must prove:
+
+```text
+parent
+ → reproductive commitment
+ → child construction
+ → viable juvenile
+ → new organism entry
+```
+
+The completed child must become independently simulated.
+
+**Gate:** reproduction naturally increases organism count when conditions allow it.
+
+---
+
+## Phase 10 — Environment → Organism
+
+**Goal:** close the physical material acquisition loop.
+
+Must prove:
+
+- material can reach organism-accessible space;
+- acquisition requires physical contact/overlap as appropriate;
+- ownership changes are conserved;
+- water participates as ordinary material;
+- transfer capacity follows the selected permeability model.
+
+**Gate:** a normally running organism can obtain real environmental material.
+
+---
+
+## Phase 11 — Internal Material and Water
+
+**Goal:** establish physical organism-space.
+
+Must prove:
+
+- internal material occupies physical space;
+- water can distribute through the organism;
+- inside/outside relation is meaningful;
+- membrane geometry constrains transfer;
+- no magic water pool or magic permeability variable becomes the hidden authority.
+
+**Gate:** internal material movement can be explained by physical state and geometry.
+
+---
+
+## Phase 12 — Full Organism Lifecycle
+
+**Goal:** make organisms genuinely living entities.
+
+Must prove:
+
+```text
+birth → juvenile → growth → mature → maintenance
+→ damage/repair → reproduction or death
+```
+
+Must separately establish:
+
+- maturity;
+- maximum size;
+- maintenance;
+- death/removal;
+- action eligibility for living organisms only.
+
+**Gate:** organisms can naturally live, develop, reproduce, and die.
+
+---
+
+## Phase 13 — Energy Audit
+
+**Goal:** prove energy remains an emergent consequence of material interactions.
+
+For every energy mutation document:
+
+```text
+source material
+ → physical/chemical cause
+ → calculation
+ → destination
+ → resulting material/structural consequence
+```
+
+Must find and resolve any remaining independent energy authority.
+
+**Gate:** no unexplained energy creation, accumulation, or disappearance remains.
+
+---
+
+## Phase 14 — Population and Long-Run Viability
+
+**Goal:** demonstrate the complete artificial-life loop.
+
+Run increasingly long integrated simulations and check for:
+
+- stable ticking;
+- valid numeric state;
+- no runaway memory;
+- no stale transformations;
+- no duplicate ownership;
+- viable birth/death turnover;
+- material conservation;
+- plausible resource limitation;
+- heritable variation;
+- population persistence where the model supports it;
+- evolutionary change where selection pressure exists.
+
+No particular population curve is prescribed.
+
+**Gate:** the system can run for long periods and produce endogenous population dynamics rather than scripted activity.
+
+---
+
+# 20. Legacy Systems to Remove or Demote
+
+The following are known legacy authorities that conflict with the current architecture.
+
+### Must no longer define organism structure
+
+- `CORE_UNIT_COUNT` as universal anatomy;
+- `CORE_MATERIAL_AMOUNT` as universal body construction;
+- `CorePairKind` / `F_SEQUENCE` as universal organism topology;
+- six-unit `CoreIntegrity` assumptions;
+- `construction_compactness` as body-plan authority;
+- `construction_branching` as body-plan authority;
+- arbitrary organism-driven structural COMBINE;
+- organism-driven BREAK for redesign;
+- arbitrary placement of new structural units.
+
+### May remain as utilities if made non-authoritative
+
+- core geometry calculations;
+- membrane geometry calculations;
+- low-level COMBINE mechanics;
+- low-level BREAK mechanics;
+- structural-material chemistry;
+- connection/contact geometry utilities.
+
+The principle is **not** “delete everything old.” The principle is:
+
+> Preserve correct reusable mechanics, but remove obsolete biological authorities.
+
+---
+
+# 21. Testing Strategy
+
+Tests must operate at three levels.
+
+## Unit tests
+
+Verify local mathematical and data-model contracts:
+
+- resource properties;
+- material composition;
+- structural material;
+- bond strength;
+- geometry;
+- blueprint validation;
+- structural mutation limits.
+
+## Integration tests
+
+Verify causal chains:
+
+```text
+environment → organism material
+material → growth
+structure → damage → repair
+parent → reproduction → child
+child → independent organism
+```
+
+## Long-run tests
+
+Verify system behavior over many ticks:
+
+- no corruption;
+- no stale state;
+- no runaway resources;
+- no unexplained energy;
+- population lifecycle works;
+- snapshots remain observational.
+
+A passing unit test never substitutes for an integrated lifecycle test.
+
+---
+
+# 22. Implementation Discipline
+
+Every implementation change follows this sequence:
 
 ```text
 AUDIT
@@ -235,959 +1117,134 @@ TRACE ACTUAL RUNTIME PATH
   ↓
 IDENTIFY FIRST BROKEN LINK
   ↓
-STATE INVARIANT
+STATE THE INVARIANT
   ↓
-DESIGN SMALLEST COHERENT FIX
+DESIGN THE SMALLEST COHERENT CHANGE
   ↓
 IMPLEMENT ONE CHANGE
   ↓
 FOCUSED TESTS
   ↓
-INTEGRATION TEST
+FULL TESTS
   ↓
-RUNTIME VERIFICATION
+INTEGRATED RUNTIME CHECK
   ↓
-RE-AUDIT
+RE-AUDIT ADJACENT PATHS
   ↓
-NEXT BLOCKER
+NEXT CHANGE
 ```
 
-Do not combine unrelated fixes. Do not advance because the UI looks better. Advance because the simulation is more correct and more viable.
+### Rules
+
+1. **One step at a time.**
+2. Do not bundle unrelated fixes.
+3. Do not tune constants to hide an architectural failure.
+4. Do not add fake activity to make the UI look alive.
+5. Do not preserve a contradictory legacy authority merely because existing tests depend on it.
+6. Do not declare a phase complete from unit tests alone.
+7. Re-audit after every structural change because structural state is shared by chemistry, transformations, reproduction, geometry, and serialization.
 
 ---
 
-# 6. Phase 0 — Establish the Actual Current Architecture
+# 23. Current Starting Point
 
-**Objective:** Build an accurate map of what exists before changing behavior.
+The current codebase has useful working foundations:
 
-### Step 0.1 — Trace the runtime
+- environment reservoir/active-field architecture;
+- vent migration rules;
+- resource-property model;
+- composite `StructuralMaterial`;
+- structural bonds and connection-load calculations;
+- multi-tick transformations;
+- corrected intrinsic bond-strength usage in important paths;
+- serialized organism/genome/snapshot state;
+- an existing simulation tick loop.
 
-Identify the exact code for:
+But several causal links remain incomplete or contradictory.
 
-- `Simulation` construction;
-- ownership of the simulation instance;
-- `Simulation::step()`;
-- scheduler/tick loop;
-- RNG ownership;
-- environment ownership;
-- organism ownership;
-- transformation ownership;
-- startup/shutdown/reset;
-- runtime controls.
+The most important current blockers are:
 
-**Deliverable:** a concrete call-path from startup → tick scheduler → `Simulation::step()` → snapshot/runtime output.
+1. no authoritative inherited structural blueprint;
+2. six-unit/procedural construction remains in reproduction and core validation;
+3. `StructuralUnit` is not yet composite-material-bearing;
+4. connection points still have finite-capacity logic;
+5. no blueprint-driven growth lifecycle;
+6. no production repair lifecycle;
+7. organism-controlled structural COMBINE/BREAK can still contradict the no-redesign rule;
+8. initial organism is not a completed viable seed;
+9. reproduction does not yet demonstrably cross the birth boundary into a new live organism;
+10. environmental acquisition is disabled/no-op;
+11. internal physical material/water-space is incomplete;
+12. maturity, maximum size, maintenance, and death are not yet a complete live lifecycle;
+13. energy authority still requires a final repository-wide audit.
 
-### Step 0.2 — Inventory subsystems
-
-For each subsystem document its state, entry point, outputs, callers, tests, and whether the live tick path actually exercises it:
-
-- environment;
-- active material field;
-- deep reservoir;
-- vents;
-- diffusion;
-- settling;
-- resource properties;
-- materials;
-- bonds and bond strength;
-- connection load;
-- COMBINE;
-- BREAK;
-- movement;
-- perception;
-- decision-making;
-- transformations;
-- energy;
-- maintenance;
-- development/growth;
-- reproduction readiness;
-- reproduction/construction;
-- genetics/mutation;
-- death/removal;
-- snapshots/API;
-- frontend.
-
-### Step 0.3 — Find dead paths
-
-Search for no-op handlers, permanently false eligibility checks, legacy fields still read, alternate calculations, unreachable functions, state that is written but never consumed, and state consumed without a live writer.
-
-### Gate 0
-
-Answer precisely:
-
-> **What happens to the environment and initial organism during one real tick, and what exact code path causes every state transition?**
-
-No broad implementation begins until this is known.
+These are implementation blockers, not reasons to redesign the entire simulation.
 
 ---
 
-# 7. Phase 1 — Prove the Authoritative Tick Lifecycle
+# 24. Immediate Next Step
 
-**Objective:** Ensure one tick is a coherent integrated lifecycle.
+**Do not begin by rewriting reproduction, growth, or the core.**
 
-Audit the current `Simulation::step()` rather than assuming its existence means the system is integrated.
+The first implementation step is:
 
-### Step 1.1 — Trace one real tick
+> **Design and implement the authoritative `StructuralBlueprint` data model and its validation contract.**
 
-For the initial organism record:
+Before code is changed, audit the exact existing genome/structure/serialization interfaces that the blueprint must fit into.
 
-- nearby material;
-- perception result;
-- decision result;
-- selected action;
-- action handler;
-- material ownership changes;
-- transformations created/completed;
-- energy changes;
-- structure changes;
-- age/development changes;
-- reproduction state.
+Then implement only that first coherent step, add focused tests, run the full test suite, and re-audit.
 
-### Step 1.2 — Check ordering
+The next step is not authorized merely because the first code compiles. It is authorized when the blueprint has become a demonstrably valid, serializable, inherited structural authority.
 
-Compare actual ordering with the intended causal dependencies:
+---
+
+# 25. Final Architectural Picture
+
+The target EvoSim architecture is:
 
 ```text
-clock
-→ environment
-→ active transformations
-→ resolve transformations
-→ perception
-→ organism state/development
-→ decisions
-→ actions
-→ reproduction requests
-→ reproductive construction
-→ maintenance/capacity/accounting
-→ death/removal
-→ invariant checks
-→ snapshot
+                    GENOME
+                      │
+                      ├───────────────┐
+                      │               │
+                      ↓               ↓
+            STRUCTURAL BLUEPRINT   PHYSIOLOGICAL TRAITS
+                      │               │
+                      │               ├── perception
+                      │               ├── behavior
+                      │               ├── maintenance
+                      │               └── reproduction
+                      ↓
+              BLUEPRINT VALIDATION
+                      ↓
+              PHYSICAL STRUCTURE
+             ┌────────┼─────────┐
+             │        │         │
+          elements  topology  geometry
+             │        │         │
+             └────────┼─────────┘
+                      ↓
+             MATERIAL / CHEMISTRY
+                      ↕
+              ENVIRONMENT FIELD
+                      ↕
+                WATER / TRANSFER
+                      ↓
+                 GROWTH / REPAIR
+                      ↓
+                 LIFE HISTORY
+                      ↓
+                REPRODUCTION
+                      ↓
+          BLUEPRINT COPY + ≤5% MUTATION
+                      ↓
+                 NEXT GENERATION
 ```
 
-Do not reorder merely because this list looks cleaner; establish which ordering the actual rules require.
+The key invariant is:
 
-### Step 1.3 — Add runtime invariants
+> **An organism expresses an inherited body plan; it does not invent one during its lifetime.**
 
-At minimum check:
+Growth and repair change the organism's physical condition without granting it freeform redesign. Reproduction is the mechanism through which structural variation enters the population. Chemistry determines material interactions, geometry determines physical possibility, and the environment determines what material is available.
 
-- monotonic tick;
-- valid numeric state;
-- unique organism IDs;
-- no dead organism acting;
-- transformations resolve once;
-- no duplicated material ownership;
-- reproduction commitments cannot be spent twice;
-- snapshots do not mutate authoritative state.
-
-### Gate 1
-
-A controlled integration run advances multiple ticks with the expected lifecycle and no corruption.
-
----
-
-# 8. Phase 2 — Unify Material, Chemistry, Bond, and Energy Authority
-
-**Objective:** Establish a trustworthy physical/accounting foundation before diagnosing biological viability.
-
-### Step 2.1 — Audit immutable resource properties
-
-For every resource identify the sole authority for:
-
-- mass;
-- potential energy;
-- reactivity;
-- cohesion;
-- other established immutable properties.
-
-### Step 2.2 — Audit `Material`
-
-Verify that composition and quantity are authoritative and derived properties are calculated from composition rather than stale cached values.
-
-### Step 2.3 — Complete bond-strength migration
-
-Repository-wide search for:
-
-- stored `Bond.strength`;
-- legacy strength fields;
-- constructors accepting external strength;
-- connection-load code reading stored strength;
-- serialization treating strength as authoritative;
-- tests encoding the obsolete authority.
-
-All live bond-strength calculations must use intrinsic resource-property mathematics.
-
-### Step 2.4 — Audit energy
-
-For every energy mutation record:
-
-```text
-source → cause → amount → destination → material consequence
-```
-
-Find and remove/rework legacy independent energy authorities such as obsolete stored `energy_content` behavior.
-
-### Step 2.5 — Audit transformation work
-
-For COMBINE/BREAK verify input ownership, work requirement, progress, completion, output, energy consequence, and conservation.
-
-### Step 2.6 — Add conservation tests
-
-Cover material conservation, energy accounting, intrinsic bond-strength invariance, connection load, and duplicate ownership.
-
-### Gate 2
-
-There is one authoritative chemistry/material/energy model, and no known legacy authority can contradict it.
-
----
-
-# 9. Phase 3 — Validate the Environment as an Ecological System
-
-**Objective:** Prove the environment can continuously support the rest of the simulation.
-
-### Step 3.1 — Deep reservoir
-
-Verify authoritative quantities, valid values, resource composition, withdrawal, and replenishment behavior.
-
-### Step 3.2 — Vents
-
-Maintain the current rule:
-
-> Reservoir material released by a vent enters the active field regardless of bonding state, and venting does not alter existing active material's bonding state.
-
-Test source depletion, destination deposition, repeated venting, quantity conservation, and spatial placement.
-
-### Step 3.3 — Active material field
-
-Verify material can occupy organism-accessible locations and that bonded/unbonded distinction is used only where active-field mechanics require it.
-
-### Step 3.4 — Diffusion and settling
-
-Trace whether material can move, remain available, leave the active layer, return to the reservoir where modeled, and avoid unexplained accumulation.
-
-### Step 3.5 — Environment-only soak test
-
-Run without organisms and measure total quantities by resource, active/reservoir quantities, vent throughput, settling, diffusion, and numeric validity.
-
-### Gate 3
-
-The environment runs continuously with coherent material accounting and no unexplained creation, loss, runaway accumulation, or permanent depletion.
-
----
-
-# 10. Phase 4 — Close the Environment → Organism Material Path
-
-**Objective:** Make environmental material biologically reachable.
-
-### Step 4.1 — Trace perception
-
-Verify perception radius, spatial sampling, material visibility, bonding semantics, and correspondence to current environment state.
-
-### Step 4.2 — Trace decisions
-
-For each action determine eligibility, scoring/selection, required inputs, and whether the selected action can execute.
-
-### Step 4.3 — Audit disabled/no-op actions
-
-Explicitly classify current acquisition, expulsion, movement, COMBINE, and BREAK paths as either intentional or lifecycle blockers.
-
-### Step 4.4 — Prove ownership transfer
-
-Demonstrate:
-
-```text
-environment → perception → decision → action → organism-accessible material
-```
-
-This must use the real simulation path, not hand-built test state.
-
-### Gate 4
-
-At least one legitimate material interaction reaches the organism through the live runtime.
-
----
-
-# 11. Phase 5 — Close the COMBINE Lifecycle
-
-**Objective:** Prove usable material can become organism structure through the real transformation system.
-
-### Step 5.1 — Reachability
-
-Show that normal environmental interaction can create the material state required by COMBINE.
-
-### Step 5.2 — Commitment
-
-Verify material is committed exactly once and cannot remain simultaneously available elsewhere.
-
-### Step 5.3 — Multi-tick progress
-
-Verify work/progress advances correctly and cannot silently stall.
-
-### Step 5.4 — Completion
-
-Verify structural output, bond state, material ownership, energy consequence, and cleanup.
-
-### Step 5.5 — Persistence
-
-Demonstrate:
-
-```text
-environment material → organism → COMBINE → transformation
-→ structural unit → later ticks
-```
-
-### Gate 5
-
-A normally running organism can complete COMBINE and retain the resulting structure correctly.
-
----
-
-# 12. Phase 6 — Close the BREAK Lifecycle
-
-**Objective:** Prove structure can be broken through the authoritative transformation system.
-
-### Step 6.1 — Target current bond
-
-Confirm the target exists when BREAK begins.
-
-### Step 6.2 — Audit snapshot semantics
-
-Ensure transformation snapshots cannot later overwrite newer authoritative state or remove unrelated state.
-
-### Step 6.3 — Enforce intrinsic bond strength
-
-BREAK must derive strength from current material composition under the locked equation, never from obsolete stored strength.
-
-### Step 6.4 — Completion
-
-Verify work, bond removal, resulting material, energy release, and unrelated-bond preservation.
-
-### Step 6.5 — Repeatability
-
-Demonstrate:
-
-```text
-structure → BREAK → resulting material/energy → continued organism operation
-```
-
-### Gate 6
-
-COMBINE/BREAK form a coherent transformation lifecycle wherever the established rules intend that relationship.
-
----
-
-# 13. Phase 7 — Close the Organism Lifecycle
-
-**Objective:** Make organisms genuine living entities with birth, development, maintenance, and death.
-
-### Step 7.1 — Birth audit
-
-Verify initial structure, accessible material, energy state where applicable, age, development stage, genome, and reproductive state.
-
-### Step 7.2 — Growth audit
-
-Trace how material interaction changes structural mass, geometry, capacity, and developmental state.
-
-### Step 7.3 — Maintenance audit
-
-Every maintenance cost must have a clear cause and accounting. It must not consume nonexistent resources or bypass material/energy rules.
-
-### Step 7.4 — Death audit
-
-Verify death conditions, timing, transformation cleanup, organism removal, and disposition/return of material where modeled.
-
-### Step 7.5 — Lifecycle tests
-
-Prove both:
-
-```text
-birth → development → maintenance → death
-```
-
-and:
-
-```text
-birth → development → maintenance → reproductive readiness
-```
-
-### Gate 7
-
-Normal organisms can progress through lifecycle states without leaks or impossible transitions.
-
----
-
-# 14. Phase 8 — Close the Reproduction Lifecycle
-
-**Objective:** Make reproduction naturally reachable and physically real.
-
-### Step 8.1 — Readiness
-
-Trace every readiness prerequisite and prove normal behavior can satisfy it.
-
-### Step 8.2 — Request and commitment
-
-Verify valid requests, correct resource/material commitment, and no double spending.
-
-### Step 8.3 — Construction
-
-Verify multi-tick construction, one physical unit progressing at the intended rate, correct material consumption, and no stranded commitments.
-
-### Step 8.4 — Geometry/contact
-
-Verify offspring units use actual placement/contact geometry rather than arbitrary coordinates.
-
-### Step 8.5 — Activation
-
-At completion verify independent offspring state, valid parent/offspring relationships, independent perception/action, cleanup of construction state, and future lifecycle eligibility.
-
-### Gate 8
-
-A naturally running organism reaches reproduction and produces an independently functioning offspring.
-
----
-
-# 15. Phase 9 — Close Genetics, Heritability, and Mutation
-
-**Objective:** Make reproduction capable of generating evolution.
-
-### Step 9.1 — Inheritance
-
-Trace parent genome → offspring genome and ensure defaults do not replace inherited values.
-
-### Step 9.2 — Phenotypic expression
-
-For every intended heritable trait demonstrate:
-
-```text
-parent genome → offspring genome → phenotype → behavior/structure
-```
-
-### Step 9.3 — Mutation
-
-Verify intended probability/rule, valid mutation range, parent isolation, offspring inheritance, and genome validity.
-
-### Step 9.4 — Deterministic tests
-
-Use controlled seeds to test both inheritance without mutation and mutation cases.
-
-### Gate 9
-
-Offspring inherit valid traits and mutation can introduce heritable variation without corrupting either generation.
-
----
-
-# 16. Phase 10 — Demonstrate Actual Evolutionary Opportunity
-
-**Objective:** Prove evolution is causally possible without prescribing its outcome.
-
-### Step 10.1 — Identify selectable traits
-
-List heritable traits that can affect survival, resource acquisition, construction, or reproduction.
-
-### Step 10.2 — Trace causal influence
-
-For each trait prove:
-
-```text
-trait → phenotype/behavior → survival/reproduction → offspring contribution
-```
-
-A genome field that never reaches phenotype is not yet an evolutionary trait.
-
-### Step 10.3 — Multi-generation runs
-
-Demonstrate multiple generations, inherited variation, population turnover, and the possibility of changing trait distributions.
-
-Do not hard-code desired evolutionary outcomes.
-
-### Gate 10
-
-The simulation supports genuine generational turnover and heritable variation capable of affecting reproductive success.
-
----
-
-# 17. Phase 11 — Population and Ecosystem Viability
-
-**Objective:** Judge the integrated system as an ecosystem.
-
-### Step 11.1 — Establish baseline runs
-
-Run fixed seeds at progressively longer durations and record:
-
-- population;
-- births/deaths;
-- age/development distribution;
-- generations;
-- transformations;
-- material totals;
-- energy totals;
-- environment totals;
-- active transformation count;
-- tick performance.
-
-### Step 11.2 — Classify failure modes
-
-Investigate:
-
-- immediate extinction;
-- zero reproduction;
-- runaway population;
-- immortal organisms;
-- runaway material/energy;
-- resource depletion;
-- transformation backlog;
-- action lock-in;
-- static environment;
-- progressive slowdown.
-
-### Step 11.3 — Trace before tuning
-
-First classify failure as architectural, lifecycle, accounting, ordering, reachability, or parameter-driven. Only tune parameters after correctness is established.
-
-### Step 11.4 — Define stability criteria
-
-A successful baseline demonstrates recurring births/deaths, multiple generations, continuing environmental turnover, bounded quantities where appropriate, and no permanent subsystem stall.
-
-### Gate 11
-
-At least one baseline configuration sustains a functioning environment and population through repeated lifecycles for a substantial run.
-
----
-
-# 18. Phase 12 — Long-Run Soak Testing
-
-**Objective:** Prove viability persists beyond demonstrations.
-
-### Step 12.1 — Deterministic soak
-
-Run a fixed seed for a large tick count and check invariants periodically.
-
-### Step 12.2 — Multi-seed soak
-
-Run multiple seeds to detect accidental seed-specific success.
-
-### Step 12.3 — Numeric safety
-
-Continuously check NaN, Infinity, forbidden negatives, invalid geometry, invalid genome values, impossible structures, and duplicate IDs.
-
-### Step 12.4 — Memory stability
-
-Monitor organisms, transformations, snapshots, historical statistics, retained references, and logs for growth unrelated to real simulated state.
-
-### Step 12.5 — Performance stability
-
-Measure tick time over the run. A simulation that becomes progressively unusable is not viable.
-
-### Gate 12
-
-Extended runs complete without progressive corruption, memory failure, or unacceptable degradation.
-
----
-
-# 19. Phase 13 — Build the Observation Boundary
-
-**Objective:** Expose authoritative state cleanly.
-
-Preferred pipeline:
-
-```text
-Simulation → Snapshot → serialization → transport → frontend state → rendering
-```
-
-### Step 13.1 — Audit snapshots
-
-Snapshots must be observational, authoritative, non-mutating, and free of stale duplicate authorities.
-
-### Step 13.2 — Define observation payload
-
-Eventually expose:
-
-**Runtime:** tick, running/paused state, rate, health.  
-**Environment:** dimensions, material distribution, resource types, vents, transformations.  
-**Organisms:** identity, position, age, stage, structure/size, action, transformation, reproductive state, useful material/energy state.  
-**Population:** population, births, deaths, generations, lifecycle/evolution trends.
-
-### Gate 13
-
-A real snapshot can be serialized and transported without changing simulation state.
-
----
-
-# 20. Phase 14 — Make the UI a Scientific Window
-
-**Objective:** Make the working simulation understandable to a human observer.
-
-### Step 14.1 — World view
-
-Show world bounds, real environment state, vents, real organism positions/size, and simulation tick.
-
-### Step 14.2 — Organism inspection
-
-Allow inspection of age, development, structure, current action, transformation, reproductive state, material/energy state, and useful genome/trait information.
-
-### Step 14.3 — Environment inspection
-
-Show resource distribution, active-field state, vent activity, transformations, and meaningful spatial gradients.
-
-### Step 14.4 — Population/evolution view
-
-Show population, births/deaths, generations, trait distributions, transformation activity, and material trends.
-
-### Step 14.5 — Runtime controls
-
-Expose only real backend operations such as start, pause, resume, reset, step, and explicitly supported configuration.
-
-### Gate 14
-
-The UI faithfully displays and helps diagnose the living simulation without becoming responsible for its progression or logic.
-
----
-
-# 21. Phase 15 — Integrated Test Architecture
-
-Tests must prove increasingly larger portions of the causal system.
-
-## Level 1 — Unit
-
-Resource equations, material properties, bond strength, transformation work, mutation, geometry.
-
-## Level 2 — Subsystem
-
-Vents, diffusion, settling, transformations, maintenance, construction.
-
-## Level 3 — Lifecycle
-
-```text
-material → organism → COMBINE → structure
-structure → BREAK → material
-birth → development → reproduction → offspring
-offspring → inherited trait → phenotype
-```
-
-## Level 4 — Integrated simulation
-
-Environment + organism; organism + transformation; transformation + structure; structure + maintenance; readiness + reproduction; reproduction + genetics; multiple generations.
-
-## Level 5 — Long-run
-
-Large tick counts, conservation, population dynamics, numeric safety, transformation backlog, memory/performance.
-
-### Critical rule
-
-A test that manually constructs impossible state does not prove the live simulation can reach that state. Maintain live-path integration tests wherever practical.
-
----
-
-# 22. Phase 16 — Instrumentation and Diagnostics
-
-Instrumentation should observe, not alter, simulation behavior.
-
-Track at minimum:
-
-### Simulation
-
-- tick;
-- tick duration;
-- population;
-- active transformations;
-- errors.
-
-### Material
-
-- total material by resource;
-- environment-held material;
-- organism-held material;
-- transformation-held material;
-- structural material.
-
-### Energy
-
-- created;
-- consumed;
-- transferred;
-- total usable energy;
-- unexplained changes.
-
-### Lifecycle
-
-- actions attempted/completed;
-- transformations started/completed;
-- births;
-- deaths;
-- reproductive construction progress.
-
-Temporary diagnostics may be added to answer a specific question, then removed or converted into permanent instrumentation.
-
----
-
-# 23. Phase 17 — Performance and Architecture Cleanup
-
-Optimize only after correctness and viability are demonstrated.
-
-Audit:
-
-- repeated environment cloning;
-- snapshot creation;
-- spatial queries;
-- transformation allocation;
-- organism traversal;
-- material cloning;
-- serialization frequency;
-- rendering frequency;
-- unbounded history/statistics;
-- lock contention;
-- repeated computation of immutable resource properties.
-
-Prefer measured improvements that preserve semantics: compact snapshots, bounded histories, spatial indexing where justified, and observation throttling independent of simulation tick rate.
-
-### Gate 17
-
-Performance improves without changing simulation behavior.
-
----
-
-# 24. Phase 18 — Final Acceptance Run
-
-Run from a clean start with no manual intervention.
-
-### A — Startup
-
-Server, simulation, environment, organisms, and runtime initialize correctly.
-
-### B — Continuous ticking
-
-Ticks advance continuously with no duplicate stepping or stalls.
-
-### C — Environment
-
-Vents, active field, diffusion/redistribution, settling/recycling, and conservation operate correctly.
-
-### D — Organisms
-
-Perception, decisions, movement/interaction, and resource use occur through real paths.
-
-### E — Transformations
-
-COMBINE and BREAK start, progress, complete, and produce correct results.
-
-### F — Lifecycle
-
-Growth/development, maintenance, and death operate correctly.
-
-### G — Reproduction
-
-Readiness → request → construction → offspring → independent life.
-
-### H — Evolution
-
-Inheritance → mutation → phenotype → multiple generations.
-
-### I — Long run
-
-Population and environment remain dynamically active without runaway accounting or progressive failure.
-
-### J — Observation
-
-UI reflects authoritative state and disconnect/reconnect does not change simulation semantics.
-
----
-
-# 25. Milestones
-
-1. **Authoritative runtime** — one reliable simulation progression path.
-2. **Integrated tick lifecycle** — environment, organisms, transformations, reproduction, maintenance, cleanup connected.
-3. **Material/energy authority** — no contradictory physical/accounting authorities.
-4. **Environmental viability** — material continuously circulates through the modeled environment.
-5. **Organism viability** — material interaction, transformation, structure, maintenance, development, death.
-6. **Reproductive viability** — natural reproduction and independent offspring.
-7. **Evolutionary viability** — inheritance, mutation, heritable phenotype.
-8. **Ecosystem viability** — sustainable multi-generation dynamics.
-9. **Observable living simulation** — UI faithfully exposes the system.
-10. **Long-run quality** — extended correctness, stability, diagnostics, and performance.
-
-These milestones are gates, not invitations to batch unrelated changes.
-
----
-
-# 26. Current High-Priority Audit Targets
-
-## 26.1 The continuous runtime already exists
-
-Do not rebuild a tick loop blindly. The current backend already has a continuous loop around `Simulation::step()`. The immediate question is whether that runtime produces a **viable integrated simulation**.
-
-## 26.2 Action reachability
-
-Current disabled/no-op action paths must be classified against the organism lifecycle. If organisms cannot obtain usable material through a legitimate path, reproduction tuning is premature.
-
-## 26.3 Material/energy authority
-
-Complete the repository-wide migration away from legacy stored values. Intrinsic bond strength remains the sole bond-strength authority. Legacy energy behavior must not reintroduce an independent energy model.
-
-## 26.4 Transformation integration
-
-COMBINE and BREAK must be exercised through normal organism behavior, not merely direct transformation tests.
-
-## 26.5 Reproduction reachability
-
-Reproductive construction has received substantial implementation work. The next question is whether a normal organism can reach it from environment interaction and lifecycle conditions.
-
-## 26.6 Population viability
-
-Once the lifecycle closes, measure long-run behavior rather than assuming it will be stable.
-
----
-
-# 27. What We Will Not Do
-
-Unless an audit proves it necessary, we will not:
-
-- create a second simulation engine in the frontend;
-- add fake life to make the UI look active;
-- add scripted reproduction to manufacture population activity;
-- tune constants to conceal broken causal links;
-- reintroduce bonded/unbonded partitioning into the unified deep reservoir;
-- reintroduce stored bond strength as an authority;
-- reintroduce an independent stored-energy model;
-- replace correct mechanics merely for visualization convenience;
-- optimize before measuring the bottleneck;
-- declare success because a short demo looks active.
-
----
-
-# 28. Definition of Done
-
-## Runtime
-
-- [ ] One authoritative simulation instance advances continuously.
-- [ ] Browser is not required for simulation progression.
-- [ ] Runtime lifecycle is coherent.
-- [ ] Long runs remain stable.
-
-## Environment
-
-- [ ] Reservoir works.
-- [ ] Vents work.
-- [ ] Active field works.
-- [ ] Diffusion/redistribution works.
-- [ ] Settling/recycling works where modeled.
-- [ ] Material accounting remains coherent.
-
-## Chemistry/materials
-
-- [ ] Resource properties have one authority.
-- [ ] Material composition has one authority.
-- [ ] Potential energy is derived consistently.
-- [ ] Reactivity/cohesion are consistent.
-- [ ] Bond strength uses only resource-property math.
-- [ ] Legacy stored bond strength is not authoritative.
-- [ ] Transformation work is coherent.
-- [ ] Material conservation is demonstrated.
-- [ ] Energy accounting is demonstrated.
-
-## Organisms
-
-- [ ] Birth state is valid.
-- [ ] Perception reaches real environment state.
-- [ ] Decisions select reachable actions.
-- [ ] Material interaction is possible.
-- [ ] COMBINE works end-to-end.
-- [ ] BREAK works end-to-end.
-- [ ] Structure changes correctly.
-- [ ] Maintenance works.
-- [ ] Development/growth works.
-- [ ] Death/removal works.
-
-## Reproduction
-
-- [ ] Readiness is naturally reachable.
-- [ ] Requests and commitments are correct.
-- [ ] Construction progresses.
-- [ ] Offspring is physically instantiated correctly.
-- [ ] Offspring becomes independent.
-
-## Evolution
-
-- [ ] Genome inheritance works.
-- [ ] Heritable traits affect phenotype.
-- [ ] Mutation works.
-- [ ] Multiple generations occur.
-- [ ] Variation persists through generations.
-
-## Population/ecosystem
-
-- [ ] Births and deaths both occur.
-- [ ] Multiple generations occur.
-- [ ] Population dynamics remain bounded by model constraints.
-- [ ] Environment remains active.
-- [ ] No unexplained material/energy runaway occurs.
-- [ ] Baseline configuration does not immediately and permanently collapse.
-
-## Observation
-
-- [ ] Real simulation state reaches UI.
-- [ ] UI does not simulate outcomes.
-- [ ] Environment is observable.
-- [ ] Organisms are inspectable.
-- [ ] Transformations are inspectable.
-- [ ] Reproduction/population are inspectable.
-- [ ] Long-run trends are observable.
-
-## Quality
-
-- [ ] Unit tests pass.
-- [ ] Integration tests pass.
-- [ ] Lifecycle tests pass.
-- [ ] Long-run tests pass.
-- [ ] Multi-seed tests pass the intended invariants.
-- [ ] Numeric invariants hold.
-- [ ] Performance is acceptable.
-
----
-
-# 29. Immediate Implementation Protocol
-
-The next implementation task is **not automatically the next numbered phase**. It is the first unresolved blocker found by auditing the current live system.
-
-For each blocker:
-
-1. Audit the actual runtime path.
-2. Identify the first broken causal link.
-3. State the invariant that should hold.
-4. Find every relevant code location.
-5. Choose the smallest coherent fix.
-6. Implement only that fix.
-7. Run focused tests.
-8. Run the relevant integrated path.
-9. Inspect actual runtime behavior when needed.
-10. Record the result.
-11. Re-audit adjacent paths.
-12. Move to the next blocker only after verification.
-
-The repair direction is:
-
-```text
-simulation authority
-        ↓
-material / chemistry / environment
-        ↓
-organism interaction
-        ↓
-transformations
-        ↓
-structure / maintenance / development
-        ↓
-reproduction
-        ↓
-genetics / evolution
-        ↓
-population viability
-        ↓
-long-run stability
-        ↓
-observation / UI
-        ↓
-optimization
-```
-
-The final product is not a continuously animated webpage.
-
-It is a **continuously running artificial-life system whose behavior emerges from the interaction of its modeled rules, with the browser providing a faithful window into that system.**
+That is the path from the current codebase to a continuously running artificial-life simulation.
