@@ -124,20 +124,26 @@ impl Simulation {
         }
     }
 
-    fn has_authorized_acquisition_target(organism: &Organism, environment: &Environment) -> bool {
+    fn authorized_acquisition_targets(organism: &Organism, environment: &Environment) -> Vec<(String, usize)> {
         let Some(position) = organism.occupied_cells.first().cloned() else {
-            return false;
+            return Vec::new();
         };
-        organism.resource_sense.sensed_resources.iter().any(|observation| {
-            crate::acquisition::field_target_is_authorized(
-                &organism.genome.structural_blueprint.physical_space,
-                &environment.catalog,
-                &environment.field,
-                &observation.name,
-                observation.field_index,
-                position.clone(),
-            )
-        })
+        organism
+            .resource_sense
+            .sensed_resources
+            .iter()
+            .filter(|observation| {
+                crate::acquisition::field_target_is_authorized(
+                    &organism.genome.structural_blueprint.physical_space,
+                    &environment.catalog,
+                    &environment.field,
+                    &observation.name,
+                    observation.field_index,
+                    position.clone(),
+                )
+            })
+            .map(|observation| (observation.name.clone(), observation.field_index))
+            .collect()
     }
 
     fn decision_candidates(organism: &Organism, environment: &Environment, needs: CurrentNeeds, eligibility: ActionEligibility) -> Vec<ActionCandidate> {
@@ -146,7 +152,12 @@ impl Simulation {
         if relevant(ActionKind::Break) { candidates.extend(organism.structure.bonds.iter().enumerate().map(|(index, _)| ActionCandidate { action: ActionKind::Break, context_key: Some(format!("bond:{index}")) })); }
         if relevant(ActionKind::Combine) { candidates.push(ActionCandidate { action: ActionKind::Combine, context_key: None }); }
         if relevant(ActionKind::Move) { candidates.push(ActionCandidate { action: ActionKind::Move, context_key: None }); }
-        if relevant(ActionKind::Acquire) && Self::has_authorized_acquisition_target(organism, environment) { candidates.push(ActionCandidate { action: ActionKind::Acquire, context_key: None }); }
+        if relevant(ActionKind::Acquire) {
+            candidates.extend(Self::authorized_acquisition_targets(organism, environment).into_iter().map(|(name, field_index)| ActionCandidate {
+                action: ActionKind::Acquire,
+                context_key: Some(format!("target:{name}:{field_index}")),
+            }));
+        }
         if relevant(ActionKind::Expel) { candidates.push(ActionCandidate { action: ActionKind::Expel, context_key: None }); }
         candidates
     }
