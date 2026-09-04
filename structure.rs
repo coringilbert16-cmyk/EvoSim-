@@ -25,6 +25,10 @@ pub struct StructuralUnit {
 }
 
 impl StructuralUnit {
+    /// Legacy synthetic construction retained only for in-module unit tests.
+    /// Production/runtime code must construct physical units from an inherited
+    /// blueprint via `from_blueprint_indexed`.
+    #[cfg(test)]
     pub fn new(resource_name: impl Into<String>, placement: Placement) -> Self {
         let resource_name = resource_name.into();
         let catalog = crate::resources::default_catalog();
@@ -107,7 +111,7 @@ impl OrganismStructure {
     }
     pub fn connection_count(&self, unit: usize, point: usize) -> usize { self.bonds.iter().filter(|b| b.touches(unit, point)).count() }
     pub fn break_bond(&mut self, bond_index: usize) -> Option<Bond> { if bond_index < self.bonds.len() { Some(self.bonds.remove(bond_index)) } else { None } }
-    pub fn break_matching_bond(&mut self, target: Bond) -> Option<Bond> { let index = self.bonds.iter().position(|bond| bond.has_same_identity(&target))?; self.break_bond(index) }
+    pub fn break_matching_bond(&mut self, target: Bond) -> Option<Bond> { let index = self.bonds.iter().position(|bond| bond.has_same_identity(target))?; self.break_bond(index) }
     pub fn disconnect_point(&mut self, unit: usize, point: usize) -> Vec<Bond> { let mut removed = Vec::new(); let mut i = 0; while i < self.bonds.len() { if self.bonds[i].touches(unit, point) { removed.push(self.bonds.remove(i)); } else { i += 1; } } removed }
     pub fn loaded_points(&self) -> Vec<(usize, usize)> { let mut pairs = Vec::new(); for bond in &self.bonds { for pair in [(bond.unit_a, bond.point_a), (bond.unit_b, bond.point_b)] { if !pairs.contains(&pair) { pairs.push(pair); } } } pairs }
 }
@@ -132,5 +136,5 @@ mod tests {
     #[test] fn connection_load_uses_intrinsic_strength() { let catalog = default_catalog(); let mut s = OrganismStructure::new(); let a = unit(&mut s, "Carbon", 0.0, 0.0); let b = unit(&mut s, "Methane", 1.0, 0.0); s.add_bond(bond(a, 0, b, 0, 0.0, 9.0)); let expected = crate::combine::bond_strength(*s.units[a].properties(&catalog).unwrap(), *s.units[b].properties(&catalog).unwrap()); assert!((s.connection_load(a, 0, &catalog) - expected).abs() < 1e-12); assert_eq!(s.connection_count(a, 0), 1); }
     #[test] fn break_bond_returns_energy() { let mut s = OrganismStructure::new(); let a = unit(&mut s, "Carbon", 0.0, 0.0); let b = unit(&mut s, "Methane", 1.0, 0.0); let i = s.add_bond(bond(a, 0, b, 0, 0.8, 7.25)); assert_eq!(s.break_bond(i).unwrap().bond_energy, 7.25); assert!(s.bonds.is_empty()); }
     #[test] fn break_matching_bond_uses_endpoint_identity() { let mut s = OrganismStructure::new(); let a = unit(&mut s, "Carbon", 0.0, 0.0); let b = unit(&mut s, "Methane", 1.0, 0.0); let stored = bond(a, 0, b, 0, 0.7999999999, 7.5); let snapshot = bond(b, 0, a, 0, 0.8, 7.25); s.add_bond(stored); assert_eq!(s.break_matching_bond(snapshot), Some(stored)); }
-    #[test] fn formation_threshold_is_symmetric_and_increases_with_load() { let base = formation_threshold(0.5, 0.5, 0.0, 0.0); let loaded = formation_threshold(0.5, 0.5, 1.0, 0.0); let more = formation_threshold(0.5, 0.5, 4.0, 0.0); let a = formation_threshold(0.9, 0.1, 3.0, 1.0); let b = formation_threshold(0.1, 0.9, 1.0, 3.0); assert!((base - 0.5).abs() < 1e-12); assert!(loaded > base && more > loaded); assert!((a - b).abs() < 1e-12); }
+    #[test] fn formation_threshold_is_symmetric_and_increases_with_load() { let base = formation_threshold(0.5, 0.5, 0.0, 0.0); let loaded = formation_threshold(0.5, 0.5, 1.0, 0.0); let more = formation_threshold(0.5, 0.5, 4.0, 0.0); let a = formation_threshold(0.9, 0.1, 3.0, 1.0); let b = formation_threshold(0.1, 0.9, 1.0, 3.0); assert!(loaded > base); assert!(more > loaded); assert!((a - b).abs() < 1e-12); }
 }
