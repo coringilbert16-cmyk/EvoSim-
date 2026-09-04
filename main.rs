@@ -14,6 +14,7 @@ mod reproduction;
 mod resources;
 mod structural_blueprint;
 mod structural_combine;
+mod structural_geometry;
 mod structural_material;
 mod structure;
 
