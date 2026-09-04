@@ -1,70 +1,22 @@
-//! Authoritative containment queries for inherited organism physical space.
+//! Transitional containment gate.
 //!
-//! This module deliberately does not perform acquisition. It answers only the
-//! geometric questions required by acquisition.
+//! The organism's physical boundary is no longer defined by blueprint-owned
+//! geometry. Until containment can be derived from the live OrganismStructure,
+//! this module deliberately refuses acquisition eligibility rather than using
+//! the legacy circular boundary as a source of physical truth.
 
-use crate::resources::{Form, Shape};
+use crate::resources::Shape;
 use crate::structural_blueprint::BlueprintPhysicalSpace;
 use crate::structure::Placement;
 
-const EPSILON: f64 = 1e-9;
-
-/// Returns true only when the entire target shape is contained by the
-/// inherited organism boundary.
-///
-/// The current inherited organism boundary is a circle centered at the
-/// organism's local origin. Rigid target shapes are tested by transforming
-/// every vertex into the boundary's coordinate system. Circular and fluid
-/// targets are tested by their radius. No overlap area or proportional
-/// acquisition is involved.
 pub(crate) fn contains_shape(
-    physical_space: &BlueprintPhysicalSpace,
-    target: &Shape,
-    placement: Placement,
+    _physical_space: &BlueprintPhysicalSpace,
+    _target: &Shape,
+    _placement: Placement,
 ) -> bool {
-    let Form::Circle { radius } = physical_space.boundary.form else {
-        return false;
-    };
-    if !radius.is_finite() || radius <= 0.0 || !target.is_valid() {
-        return false;
-    }
-
-    match &target.form {
-        Form::Circle { radius: target_radius } => {
-            let center_distance = (placement.x.powi(2) + placement.y.powi(2)).sqrt();
-            center_distance.is_finite()
-                && target_radius.is_finite()
-                && center_distance + *target_radius <= radius + EPSILON
-        }
-        Form::Fluid { nominal_area } => {
-            let target_radius = (*nominal_area / std::f64::consts::PI).max(0.0).sqrt();
-            let center_distance = (placement.x.powi(2) + placement.y.powi(2)).sqrt();
-            center_distance.is_finite()
-                && target_radius.is_finite()
-                && center_distance + target_radius <= radius + EPSILON
-        }
-        _ => {
-            let Some(vertices) = target.form.polygon_vertices() else {
-                return false;
-            };
-            let (sin, cos) = placement.rotation_radians.sin_cos();
-            vertices.into_iter().all(|(x, y)| {
-                let world_x = placement.x + x * cos - y * sin;
-                let world_y = placement.y + x * sin + y * cos;
-                world_x.is_finite()
-                    && world_y.is_finite()
-                    && world_x.powi(2) + world_y.powi(2) <= radius.powi(2) + EPSILON
-            })
-        }
-    }
+    false
 }
 
-/// Returns true when a target is eligible for acquisition under the current
-/// physical rule: acquisition is permitted only after the target is fully
-/// enveloped by the organism's inherited boundary.
-///
-/// This is an eligibility query only. It does not remove material, alter the
-/// field, break bonds, or change organism state.
 pub(crate) fn acquisition_is_eligible(
     physical_space: &BlueprintPhysicalSpace,
     target: &Shape,
@@ -76,42 +28,36 @@ pub(crate) fn acquisition_is_eligible(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::resources::default_catalog;
+    use crate::resources::{default_catalog, Form, Shape};
 
-    fn space(radius: f64) -> BlueprintPhysicalSpace {
+    fn legacy_space() -> BlueprintPhysicalSpace {
         BlueprintPhysicalSpace {
-            boundary: Shape { form: Form::Circle { radius } },
+            boundary: Shape { form: Form::Circle { radius: 100.0 } },
         }
     }
 
     #[test]
-    fn target_fully_inside_boundary_is_contained() {
-        let target = default_catalog().iter().find(|resource| resource.name == "Carbon").unwrap().shape.clone();
-        assert!(contains_shape(&space(2.0), &target, Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }));
+    fn legacy_boundary_never_authorizes_containment() {
+        let target = default_catalog()
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .unwrap()
+            .shape
+            .clone();
+        assert!(!contains_shape(
+            &legacy_space(),
+            &target,
+            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+        ));
     }
 
     #[test]
-    fn partial_overlap_is_not_containment() {
+    fn acquisition_is_not_authorized_by_legacy_boundary() {
         let target = Shape { form: Form::Circle { radius: 1.0 } };
-        assert!(!contains_shape(&space(1.5), &target, Placement { x: 0.75, y: 0.0, rotation_radians: 0.0 }));
-    }
-
-    #[test]
-    fn boundary_touch_counts_as_full_containment() {
-        let target = Shape { form: Form::Circle { radius: 1.0 } };
-        assert!(contains_shape(&space(2.0), &target, Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 }));
-    }
-
-    #[test]
-    fn rotation_is_considered_for_rigid_shapes() {
-        let target = Shape { form: Form::Rectangle { width: 1.0, height: 0.5 } };
-        assert!(contains_shape(&space(1.0), &target, Placement { x: 0.0, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_2 }));
-    }
-
-    #[test]
-    fn acquisition_eligibility_requires_full_enclosure() {
-        let target = Shape { form: Form::Circle { radius: 1.0 } };
-        assert!(acquisition_is_eligible(&space(2.0), &target, Placement { x: 0.5, y: 0.0, rotation_radians: 0.0 }));
-        assert!(!acquisition_is_eligible(&space(1.5), &target, Placement { x: 0.75, y: 0.0, rotation_radians: 0.0 }));
+        assert!(!acquisition_is_eligible(
+            &legacy_space(),
+            &target,
+            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+        ));
     }
 }
