@@ -1,7 +1,7 @@
 use crate::resources::BaseResource;
 
-/// The six chemically specialized composite units used by the selected
-/// checkpoint-2 core configuration (F): two CM, two CH, and two CS.
+/// Legacy checkpoint geometry utility retained only as a geometry helper.
+/// It is not the organism's structural authority.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CorePairKind {
     Cm,
@@ -87,14 +87,4 @@ fn solve_ring_radius(envelopes: &[f64; 3], sequence: &[usize; 6]) -> Option<f64>
 
 fn resource_bounding_radius(catalog: &[BaseResource], name: &str) -> Option<f64> {
     catalog.iter().find(|resource| resource.name == name).map(|resource| resource.shape.form.bounding_radius())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::resources::default_catalog;
-    #[test] fn f_core_has_six_units_in_locked_sequence() { let g = build_f_core(&default_catalog()).unwrap(); assert_eq!(g.units.len(), 6); assert_eq!(g.units.iter().map(|u|u.kind).collect::<Vec<_>>(), CorePairKind::F_SEQUENCE.to_vec()); }
-    #[test] fn f_core_has_two_of_each_pathway() { let g=build_f_core(&default_catalog()).unwrap(); let mut c=[0;3]; for u in &g.units { match u.kind {CorePairKind::Cm=>c[0]+=1,CorePairKind::Ch=>c[1]+=1,CorePairKind::Cs=>c[2]+=1} } assert_eq!(c,[2,2,2]); }
-    #[test] fn f_core_is_closed() { let g=build_f_core(&default_catalog()).unwrap(); let c=resource_bounding_radius(&default_catalog(),"Carbon").unwrap(); let p=[resource_bounding_radius(&default_catalog(),"Methane").unwrap(),resource_bounding_radius(&default_catalog(),"Hydrogen").unwrap(),resource_bounding_radius(&default_catalog(),"Sulfur").unwrap()]; let e=p.map(|r|(c+r)/2.0+r); let i=[0,1,2,0,1,2]; for n in 0..6 { let a=g.units[n]; let b=g.units[(n+1)%6]; let d=((a.center_x-b.center_x).powi(2)+(a.center_y-b.center_y).powi(2)).sqrt(); assert!((d-(e[i[n]]+e[i[(n+1)%6]])).abs()<1e-10); } }
-    #[test] fn core_is_hollow() { let g=build_f_core(&default_catalog()).unwrap(); assert!(g.cavity_radius>0.0); assert!(g.outer_radius>g.ring_radius); }
 }

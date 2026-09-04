@@ -1,18 +1,23 @@
+mod acquisition;
+mod blueprint_consistency;
 mod combine;
 mod combine_runtime;
 mod connection_geometry;
 mod contact;
 mod core_geometry;
-mod core_integrity;
 mod decision;
 mod decision_runtime;
 mod environment;
 mod genome;
+mod growth;
 mod math;
 mod membrane_geometry;
+mod repair;
 mod reproduction;
 mod resources;
+mod structural_blueprint;
 mod structural_combine;
+mod structural_geometry;
 mod structural_material;
 mod structure;
 
