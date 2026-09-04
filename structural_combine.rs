@@ -9,7 +9,7 @@ use crate::combine::{
 };
 use crate::contact::{connection_pair_candidates_cached, ConnectionCompatibilityCache};
 use crate::resources::{BaseResource, ResourceProperties};
-use crate::structure::{Bond, OrganismStructure, Placement, StructuralUnit};
+use crate::structure::{Bond, OrganismStructure};
 
 const COMBINE_CONTACT_TOLERANCE: f64 = 1.0;
 const EPSILON: f64 = 1e-12;
@@ -163,6 +163,7 @@ pub fn execute(
 mod tests {
     use super::*;
     use crate::resources::default_catalog;
+    use crate::structure::{Placement, StructuralUnit};
 
     #[test]
     fn failed_combine_does_not_mutate_structure() {
