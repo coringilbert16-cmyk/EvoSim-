@@ -163,7 +163,15 @@ mod tests {
         let catalog = default_catalog(); let mut source = single_element("Carbon", catalog[0].shape.clone(), 0.0); source.geometry.connection_regions.push(ConnectionRegion { point: ConnectionPoint { x: 0.4, y: 0.0, direction_radians: 0.0 } });
         let partner_data = [("Methane", 0.8, 0.0), ("Hydrogen", 0.8, 0.15), ("Sulfur", 0.8, -0.15), ("Nitrogen", 0.95, 0.0)];
         let mut elements = vec![source]; let mut connections = Vec::new();
-        for (index, (name, x, y)) in partner_data.iter().enumerate() { let mut partner = single_element(name, catalog.iter().find(|r| r.name == *name).unwrap().shape.clone(), *x); partner.placement.y = *y; partner.geometry.connection_regions.push(ConnectionRegion { point: ConnectionPoint { x: -0.4, y: 0.0, direction_radians: std::f64::consts::PI } }); let element_index = index + 1; elements.push(partner); connections.push(BlueprintConnection { element_a: 0, point_a: 6, element_b: element_index, point_b: 3 }); }
+        for (index, (name, x, y)) in partner_data.iter().enumerate() {
+            let mut partner = single_element(name, catalog.iter().find(|r| r.name == *name).unwrap().shape.clone(), *x);
+            partner.placement.y = *y;
+            let point_b = partner.geometry.connection_regions.len();
+            partner.geometry.connection_regions.push(ConnectionRegion { point: ConnectionPoint { x: -0.4, y: 0.0, direction_radians: std::f64::consts::PI } });
+            let element_index = index + 1;
+            elements.push(partner);
+            connections.push(BlueprintConnection { element_a: 0, point_a: 6, element_b: element_index, point_b });
+        }
         let blueprint = StructuralBlueprint::new(elements, connections); assert!(blueprint.is_valid()); assert_eq!(blueprint.connections.len(), 4); assert!(blueprint.connections.iter().all(|connection| connection.element_a == 0 && connection.point_a == 6));
     }
     #[test]
