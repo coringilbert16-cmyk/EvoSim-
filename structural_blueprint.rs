@@ -26,17 +26,12 @@ pub struct BlueprintElement {
 }
 
 /// Geometry for a structural element.
-///
-/// A composite material may contain multiple constituents, each with its own
-/// local geometry. The envelope is the union-level geometry used for broad
-/// physical contact tests.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct BlueprintGeometry {
     pub constituents: Vec<ConstituentGeometry>,
     pub envelope: Shape,
     /// Physical boundary regions from which bonds may originate. A region is
-    /// not a finite-capacity site; geometry alone determines whether another
-    /// bond can coexist there.
+    /// not a finite-capacity site; geometry alone determines coexistence.
     #[serde(default)]
     pub connection_regions: Vec<ConnectionRegion>,
 }
@@ -70,50 +65,35 @@ impl StructuralBlueprint {
         Self { elements, connections }
     }
 
-    /// Validate identity and numeric geometry without imposing a fixed anatomy.
     pub fn is_valid(&self) -> bool {
-        if self.elements.is_empty() {
-            return false;
-        }
-        if !self.elements.iter().all(BlueprintElement::is_valid) {
+        if self.elements.is_empty() || !self.elements.iter().all(BlueprintElement::is_valid) {
             return false;
         }
         self.connections.iter().all(|connection| {
             connection.element_a < self.elements.len()
                 && connection.element_b < self.elements.len()
                 && connection.element_a != connection.element_b
-                && connection.point_a
-                    < self.elements[connection.element_a].geometry.connection_regions.len()
-                && connection.point_b
-                    < self.elements[connection.element_b].geometry.connection_regions.len()
+                && connection.point_a < self.elements[connection.element_a].geometry.connection_regions.len()
+                && connection.point_b < self.elements[connection.element_b].geometry.connection_regions.len()
         })
     }
 
     pub fn total_material_amount(&self) -> f64 {
-        self.elements
-            .iter()
-            .map(|element| element.material.total_amount())
-            .sum()
+        self.elements.iter().map(|element| element.material.total_amount()).sum()
     }
 
     pub fn structural_mass(&self, catalog: &[crate::resources::BaseResource]) -> f64 {
-        self.elements
-            .iter()
-            .map(|element| element.material.mass(catalog))
-            .sum()
+        self.elements.iter().map(|element| element.material.mass(catalog)).sum()
     }
 }
 
 impl BlueprintElement {
     pub fn is_valid(&self) -> bool {
-        if !self.material.is_valid()
-            || !self.placement.x.is_finite()
-            || !self.placement.y.is_finite()
-            || !self.placement.rotation_radians.is_finite()
-        {
-            return false;
-        }
-        self.geometry.is_valid(self.material.constituents().len())
+        self.material.is_valid()
+            && self.placement.x.is_finite()
+            && self.placement.y.is_finite()
+            && self.placement.rotation_radians.is_finite()
+            && self.geometry.is_valid(self.material.constituents().len())
     }
 }
 
@@ -132,7 +112,19 @@ impl BlueprintGeometry {
     }
 
     /// A minimal geometry for a single base-resource element.
+    ///
+    /// Polygonal base shapes expose their immutable vertices as connection
+    /// regions. Circular/fluid shapes remain without discrete regions until a
+    /// later geometry system supplies continuous boundary regions.
     pub fn single(shape: Shape) -> Self {
+        let connection_regions = match shape.connection_sites() {
+            crate::resources::ConnectionSites::Corners(points) => points
+                .into_iter()
+                .map(|point| ConnectionRegion { point })
+                .collect(),
+            crate::resources::ConnectionSites::Circumference { .. }
+            | crate::resources::ConnectionSites::Undetermined => Vec::new(),
+        };
         Self {
             constituents: vec![ConstituentGeometry {
                 part_index: 0,
@@ -140,16 +132,10 @@ impl BlueprintGeometry {
                 placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
             }],
             envelope: shape,
-            connection_regions: Vec::new(),
+            connection_regions,
         }
     }
 
-    /// Build a geometry envelope for a set of constituent shapes.
-    ///
-    /// The initial implementation uses the maximum constituent bounding
-    /// radius as a conservative circular envelope. Exact polygon/overlap
-    /// geometry remains a later refinement; importantly, the envelope is now
-    /// explicit inherited state rather than an implicit resource-name lookup.
     pub fn from_constituents(constituents: Vec<ConstituentGeometry>) -> Option<Self> {
         if constituents.is_empty() {
             return None;
@@ -191,77 +177,55 @@ mod tests {
 
     #[test]
     fn blueprint_represents_material_topology_and_geometry() {
-        let carbon_shape = default_catalog()[0].shape.clone();
-        let methane_shape = default_catalog()[1].shape.clone();
-        let mut a = single_element("Carbon", carbon_shape, 0.0);
-        let mut b = single_element("Methane", methane_shape, 1.0);
-        a.geometry.connection_regions.push(ConnectionRegion {
-            point: ConnectionPoint { x: 0.0, y: 0.4, direction_radians: 0.0 },
-        });
-        b.geometry.connection_regions.push(ConnectionRegion {
-            point: ConnectionPoint { x: 0.0, y: -0.4, direction_radians: std::f64::consts::PI },
-        });
-        let blueprint = StructuralBlueprint::new(
-            vec![a, b],
-            vec![BlueprintConnection { element_a: 0, point_a: 0, element_b: 1, point_b: 0 }],
-        );
+        let catalog = default_catalog();
+        let mut a = single_element("Carbon", catalog[0].shape.clone(), 0.0);
+        let mut b = single_element("Methane", catalog[1].shape.clone(), 1.0);
+        a.geometry.connection_regions.push(ConnectionRegion { point: ConnectionPoint { x: 0.0, y: 0.4, direction_radians: 0.0 } });
+        b.geometry.connection_regions.push(ConnectionRegion { point: ConnectionPoint { x: 0.0, y: -0.4, direction_radians: std::f64::consts::PI } });
+        let blueprint = StructuralBlueprint::new(vec![a, b], vec![BlueprintConnection { element_a: 0, point_a: 6, element_b: 1, point_b: 3 }]);
         assert!(blueprint.is_valid());
         assert_eq!(blueprint.total_material_amount(), 2.0);
-        assert_eq!(blueprint.structural_mass(&default_catalog()), 2.0);
+        assert_eq!(blueprint.structural_mass(&catalog), 2.0);
     }
 
     #[test]
     fn blueprint_does_not_require_six_elements() {
-        let blueprint = StructuralBlueprint::new(
-            vec![single_element("Carbon", default_catalog()[0].shape.clone(), 0.0)],
-            Vec::new(),
-        );
+        let blueprint = StructuralBlueprint::new(vec![single_element("Carbon", default_catalog()[0].shape.clone(), 0.0)], Vec::new());
         assert!(blueprint.is_valid());
     }
 
     #[test]
     fn invalid_connection_reference_is_rejected() {
-        let blueprint = StructuralBlueprint::new(
-            vec![single_element("Carbon", default_catalog()[0].shape.clone(), 0.0)],
-            vec![BlueprintConnection { element_a: 0, point_a: 0, element_b: 1, point_b: 0 }],
-        );
+        let blueprint = StructuralBlueprint::new(vec![single_element("Carbon", default_catalog()[0].shape.clone(), 0.0)], vec![BlueprintConnection { element_a: 0, point_a: 0, element_b: 1, point_b: 0 }]);
         assert!(!blueprint.is_valid());
     }
 
     #[test]
     fn invalid_connection_region_reference_is_rejected() {
-        let blueprint = StructuralBlueprint::new(
-            vec![single_element("Carbon", default_catalog()[0].shape.clone(), 0.0), single_element("Carbon", default_catalog()[0].shape.clone(), 1.0)],
-            vec![BlueprintConnection { element_a: 0, point_a: 0, element_b: 1, point_b: 0 }],
-        );
+        let blueprint = StructuralBlueprint::new(vec![single_element("Carbon", default_catalog()[0].shape.clone(), 0.0), single_element("Carbon", default_catalog()[0].shape.clone(), 1.0)], vec![BlueprintConnection { element_a: 0, point_a: 99, element_b: 1, point_b: 0 }]);
         assert!(!blueprint.is_valid());
     }
 
     #[test]
     fn multiple_connections_can_reference_the_same_region() {
         let mut a = single_element("Carbon", default_catalog()[0].shape.clone(), 0.0);
-        let mut b = single_element("Methane", default_catalog()[1].shape.clone(), 1.0);
-        let mut c = single_element("Hydrogen", default_catalog()[2].shape.clone(), -1.0);
-        let region = ConnectionRegion { point: ConnectionPoint { x: 0.0, y: 0.4, direction_radians: 0.0 } };
-        a.geometry.connection_regions.push(region);
-        b.geometry.connection_regions.push(region);
-        c.geometry.connection_regions.push(region);
-        let blueprint = StructuralBlueprint::new(
-            vec![a, b, c],
-            vec![
-                BlueprintConnection { element_a: 0, point_a: 0, element_b: 1, point_b: 0 },
-                BlueprintConnection { element_a: 0, point_a: 0, element_b: 2, point_b: 0 },
-            ],
-        );
+        let b = single_element("Methane", default_catalog()[1].shape.clone(), 1.0);
+        let c = single_element("Hydrogen", default_catalog()[2].shape.clone(), -1.0);
+        a.geometry.connection_regions.push(ConnectionRegion { point: ConnectionPoint { x: 0.0, y: 0.4, direction_radians: 0.0 } });
+        let mut b = b;
+        let mut c = c;
+        b.geometry.connection_regions.push(ConnectionRegion { point: ConnectionPoint { x: 0.0, y: -0.4, direction_radians: std::f64::consts::PI } });
+        c.geometry.connection_regions.push(ConnectionRegion { point: ConnectionPoint { x: 0.0, y: -0.4, direction_radians: std::f64::consts::PI } });
+        let blueprint = StructuralBlueprint::new(vec![a, b, c], vec![
+            BlueprintConnection { element_a: 0, point_a: 6, element_b: 1, point_b: 3 },
+            BlueprintConnection { element_a: 0, point_a: 6, element_b: 2, point_b: 1 },
+        ]);
         assert!(blueprint.is_valid());
     }
 
     #[test]
     fn blueprint_round_trip_preserves_identity() {
-        let blueprint = StructuralBlueprint::new(
-            vec![single_element("Carbon", default_catalog()[0].shape.clone(), 2.0)],
-            Vec::new(),
-        );
+        let blueprint = StructuralBlueprint::new(vec![single_element("Carbon", default_catalog()[0].shape.clone(), 0.0)], Vec::new());
         let restored: StructuralBlueprint = serde_json::from_str(&serde_json::to_string(&blueprint).unwrap()).unwrap();
         assert_eq!(restored, blueprint);
     }
