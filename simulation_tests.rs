@@ -3,7 +3,7 @@ mod integration_tests {
     use crate::genome::initial_genome_variant;
     use crate::resources::Material;
     use crate::state::Simulation;
-    use crate::structure::{OrganismStructure, Placement, StructuralUnit};
+    use crate::structure::{OrganismStructure, StructuralUnit};
 
     fn fresh_organism() -> crate::state::Organism {
         Simulation::create_initial_organism(1, &crate::resources::default_catalog())
@@ -82,9 +82,13 @@ mod integration_tests {
         let mut organism = fresh_organism();
         let catalog = crate::resources::default_catalog();
         organism.structure = OrganismStructure::new();
-        organism.structure.add_unit(StructuralUnit::new(
-            "Carbon",
-            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+        let blueprint = organism.genome.structural_blueprint.clone();
+        let first = &blueprint.elements[0];
+        organism.structure.add_unit(StructuralUnit::from_blueprint_indexed(
+            first.material.clone(),
+            first.geometry.clone(),
+            first.placement,
+            0,
         ));
         organism.stored_unbonded = Material::free_base("Hydrogen", 100.0);
         let before = organism.structure.units.len();
@@ -107,12 +111,9 @@ mod integration_tests {
     }
 
     #[test]
-    fn structural_units_count_toward_total_material_conservation() {
+    fn inherited_structural_units_conserve_total_material_over_many_ticks() {
         let mut sim = Simulation::new(1, 10.0);
-        sim.organisms[0].structure.add_unit(StructuralUnit::new(
-            "Carbon",
-            Placement { x: 500.0, y: 500.0, rotation_radians: 0.0 },
-        ));
+        assert!(!sim.organisms[0].structure.units.is_empty());
         let before = sim.total_material_in_system();
         for _ in 0..500 { sim.step(); }
         let after = sim.total_material_in_system();
