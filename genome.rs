@@ -2,6 +2,8 @@ use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 
+use crate::structural_blueprint::StructuralBlueprint;
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TraitDef {
     pub name: String,
@@ -13,6 +15,10 @@ pub struct TraitDef {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Genome {
     pub traits: Vec<TraitDef>,
+    /// The inherited physical body plan. This is genotype-level structure,
+    /// not a procedural construction hint or a description of current state.
+    #[serde(default)]
+    pub structural_blueprint: StructuralBlueprint,
 }
 
 impl Genome {
@@ -118,5 +124,6 @@ pub fn initial_genome() -> Genome {
             trait_def("construction_compactness", 0.5, 0.05),
             trait_def("construction_branching", 0.5, 0.05),
         ],
+        structural_blueprint: StructuralBlueprint::default(),
     }
 }
