@@ -35,7 +35,6 @@ impl StructuralUnit {
         let shape = catalog.iter().find(|resource| resource.name == resource_name).map(|resource| resource.shape.clone()).unwrap_or(crate::resources::Shape { form: crate::resources::Form::Circle { radius: 0.1 } });
         Self { material: StructuralMaterial::single(resource_name), geometry: BlueprintGeometry::single(shape), placement, blueprint_index: None }
     }
-
     pub fn from_blueprint(material: StructuralMaterial, geometry: BlueprintGeometry, placement: Placement) -> Self { Self { material, geometry, placement, blueprint_index: None } }
     pub fn from_blueprint_indexed(material: StructuralMaterial, geometry: BlueprintGeometry, placement: Placement, blueprint_index: usize) -> Self { Self { material, geometry, placement, blueprint_index: Some(blueprint_index) } }
     pub fn properties(&self, catalog: &[crate::resources::BaseResource]) -> Option<UnitProperties> { if !self.material.is_valid() { return None; } Some(UnitProperties(self.material.weighted_properties(catalog))) }
