@@ -30,33 +30,19 @@ pub fn apply_vents(
             continue;
         };
         let reservoir_index = reservoir.reservoir_index_for_field_index(field, field_index);
-        let mut bonded_parts = Vec::new();
-        let mut unbonded_parts = Vec::new();
+        let mut parts = Vec::new();
         for (name, proportion) in &vent.composition {
             let requested = vent.emission_amount * proportion;
-            let (from_bonded, from_unbonded) =
-                reservoir.cells[reservoir_index].take_indiscriminate(name, requested);
-            if from_bonded > MATERIAL_EPSILON {
-                bonded_parts.push((name.clone(), from_bonded));
-            }
-            if from_unbonded > MATERIAL_EPSILON {
-                unbonded_parts.push((name.clone(), from_unbonded));
+            let drawn = reservoir.cells[reservoir_index].take_indiscriminate(name, requested);
+            if drawn > MATERIAL_EPSILON {
+                parts.push((name.clone(), drawn));
             }
         }
-        if !bonded_parts.is_empty() {
+        if !parts.is_empty() {
             field.deposit_at_index(
                 field_index,
                 Material {
-                    parts: bonded_parts,
-                    bonded: true,
-                },
-            );
-        }
-        if !unbonded_parts.is_empty() {
-            field.deposit_at_index(
-                field_index,
-                Material {
-                    parts: unbonded_parts,
+                    parts,
                     bonded: false,
                 },
             );
