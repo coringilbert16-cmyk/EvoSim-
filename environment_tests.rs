@@ -381,6 +381,8 @@ fn settled_material_can_be_re_released_by_a_vent_as_unbonded_active_material() {
     assert!(field.cells[field_index].bonded.total_amount() < 1.0);
     let reservoir_before = reservoir.cells[reservoir_index].amount_of("Nitrogen");
     assert!(reservoir_before > 400.0);
+    let bonded_before = field.cells[field_index].bonded.total_amount();
+    let unbonded_before = field.cells[field_index].unbonded.total_amount();
     let mut vents = vec![Vent {
         x: 500.0,
         y: 500.0,
@@ -390,14 +392,9 @@ fn settled_material_can_be_re_released_by_a_vent_as_unbonded_active_material() {
         emission_timer: 0,
     }];
     apply_vents(&mut field, &mut reservoir, &mut vents);
-    assert!((field.cells[field_index].unbonded.total_amount() - 50.0).abs() < 1e-6);
-    assert!(field.cells[field_index].bonded.total_amount() < 1e-9);
-    assert!(
-        (reservoir.cells[reservoir_index].amount_of("Nitrogen")
-            - (reservoir_before - 50.0))
-            .abs()
-            < 1e-6
-    );
+    assert!((field.cells[field_index].bonded.total_amount() - bonded_before).abs() < 1e-9);
+    assert!((field.cells[field_index].unbonded.total_amount() - (unbonded_before + 50.0)).abs() < 1e-6);
+    assert!((reservoir.cells[reservoir_index].amount_of("Nitrogen") - (reservoir_before - 50.0)).abs() < 1e-6);
 }
 #[test]
 fn settling_conserves_total_material_field_plus_reservoir() {
