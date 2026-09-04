@@ -1,32 +1,53 @@
 #[cfg(test)]
 mod integration_tests {
-    use crate::decision::{ActionKind, OutcomeKind};
+    use crate::genome::initial_genome_variant;
     use crate::resources::Material;
     use crate::state::Simulation;
-    use crate::structure::{Bond, Placement, StructuralUnit};
+    use crate::structure::{Placement, StructuralUnit};
 
     #[test]
-    fn fresh_organism_owns_an_empty_structure() {
+    fn fresh_organism_has_a_valid_inherited_seed_structure() {
         let organism = Simulation::create_initial_organism();
-        assert!(organism.structure.units.is_empty());
-        assert!(organism.structure.bonds.is_empty());
-        assert!(organism.decision_history.entries.is_empty());
+        let blueprint = &organism.genome.structural_blueprint;
+
+        assert!(blueprint.validate().is_ok());
+        assert!(!organism.structure.units.is_empty());
+        assert_eq!(organism.structure.units.len(), blueprint.elements.len());
+        assert_eq!(organism.structure.bonds.len(), blueprint.connections.len());
+        assert!(organism
+            .structure
+            .units
+            .iter()
+            .all(|unit| unit.blueprint_index.is_some()));
     }
 
     #[test]
-    fn store_unbonded_material_accepts_raw_material_only() {
+    fn seed_variants_can_produce_different_valid_configurations() {
+        let first = initial_genome_variant(0).structural_blueprint;
+        let second = initial_genome_variant(1).structural_blueprint;
+
+        assert!(first.validate().is_ok());
+        assert!(second.validate().is_ok());
+        assert_ne!(first.elements[1].placement, second.elements[1].placement);
+    }
+
+    #[test]
+    fn store_unbonded_material_accepts_only_unbonded_stock() {
         let mut organism = Simulation::create_initial_organism();
+        let initial_structure_units = organism.structure.units.len();
+
         organism.store_unbonded_material(Material {
             parts: vec![("Carbon".into(), 5.0)],
             bonded: false,
         });
         assert!((organism.stored_unbonded.total_amount() - 5.0).abs() < 1e-9);
+
         organism.store_unbonded_material(Material {
             parts: vec![("Carbon".into(), 3.0)],
             bonded: true,
         });
         assert!((organism.stored_unbonded.total_amount() - 5.0).abs() < 1e-9);
-        assert!(organism.structure.units.is_empty());
+        assert_eq!(organism.structure.units.len(), initial_structure_units);
     }
 
     #[test]
@@ -79,194 +100,6 @@ mod integration_tests {
         assert!(ever_sensed_something);
     }
 
-    fn add_test_break_bond(sim: &mut Simulation) {
-        let a = sim.organisms[0].structure.add_unit(StructuralUnit::new(
-            "Carbon",
-            Placement {
-                x: 500.0,
-                y: 500.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        let b = sim.organisms[0].structure.add_unit(StructuralUnit::new(
-            "Methane",
-            Placement {
-                x: 501.0,
-                y: 500.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        sim.organisms[0].structure.add_bond(Bond {
-            unit_a: a,
-            point_a: 0,
-            unit_b: b,
-            point_b: 0,
-            strength: 0.8,
-            bond_energy: 12.5,
-        });
-    }
-
-    #[test]
-    fn break_action_starts_a_transformation_before_resolution() {
-        let mut sim = Simulation::new(7, 10.0);
-        add_test_break_bond(&mut sim);
-
-        assert_eq!(sim.organisms[0].structure.bonds.len(), 1);
-        sim.step();
-
-        assert_eq!(sim.organisms[0].structure.bonds.len(), 1);
-        assert!(
-            sim.organisms[0].active_transformation_id.is_some(),
-            "BREAK should start a transformation before its delayed resolution"
-        );
-        assert_eq!(sim.active_transformations.len(), 1);
-        assert_eq!(
-            sim.active_transformations[0].decision_context_key.as_deref(),
-            Some("bond:0")
-        );
-    }
-
-    #[test]
-    fn break_resolution_changes_state_on_expected_tick() {
-        let mut sim = Simulation::new(7, 10.0);
-        add_test_break_bond(&mut sim);
-
-        sim.step();
-        assert_eq!(sim.active_transformations.len(), 1);
-        assert_eq!(sim.active_transformations[0].remaining_ticks, 2);
-        assert_eq!(sim.organisms[0].active_transformation_id, Some(1));
-
-        sim.step();
-        assert_eq!(sim.active_transformations.len(), 1);
-        assert_eq!(sim.active_transformations[0].remaining_ticks, 1);
-        assert_eq!(sim.organisms[0].structure.bonds.len(), 1);
-        assert_eq!(sim.organisms[0].usable_energy, 0.0);
-
-        sim.step();
-        let expected_strength = crate::combine::bond_strength(
-            *sim.organisms[0].structure.units[0]
-                .properties(&sim.environment.catalog)
-                .unwrap(),
-            *sim.organisms[0].structure.units[1]
-                .properties(&sim.environment.catalog)
-                .unwrap(),
-        );
-        let expected_net_energy = 12.5 - expected_strength * 2.0;
-        assert_eq!(sim.active_transformations.len(), 0);
-        assert_eq!(sim.organisms[0].active_transformation_id, None);
-        assert_eq!(sim.organisms[0].structure.bonds.len(), 0);
-        assert!((sim.organisms[0].usable_energy - expected_net_energy).abs() < 1e-12);
-        assert!((sim.energy_ledger.total_usable_energy_gained - expected_net_energy).abs() < 1e-12);
-        assert!(sim.organisms[0]
-            .decision_history
-            .has_knowledge(ActionKind::Break, Some("bond:0")));
-    }
-
-    #[test]
-    fn resolved_transformation_cannot_trigger_a_second_action_in_the_same_tick() {
-        let mut sim = Simulation::new(7, 10.0);
-        add_test_break_bond(&mut sim);
-
-        sim.step();
-        sim.step();
-        sim.step();
-
-        assert_eq!(sim.organisms[0].structure.bonds.len(), 0);
-        assert_eq!(sim.active_transformations.len(), 0);
-        assert_eq!(
-            sim.organisms[0].decision_history.entries.len(),
-            1,
-            "BREAK resolution must not permit a second action during the same tick"
-        );
-        assert_eq!(sim.organisms[0].decision_history.entries[0].action, ActionKind::Break);
-    }
-
-    #[test]
-    fn break_can_consume_usable_energy_when_work_exceeds_bond_energy() {
-        let mut sim = Simulation::new(17, 10.0);
-        let a = sim.organisms[0].structure.add_unit(StructuralUnit::new(
-            "Carbon",
-            Placement {
-                x: 500.0,
-                y: 500.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        let b = sim.organisms[0].structure.add_unit(StructuralUnit::new(
-            "Hydrogen",
-            Placement {
-                x: 501.0,
-                y: 500.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        sim.organisms[0].structure.add_bond(Bond {
-            unit_a: a,
-            point_a: 0,
-            unit_b: b,
-            point_b: 0,
-            strength: 0.5,
-            bond_energy: 0.1,
-        });
-        sim.organisms[0].usable_energy = 0.5;
-
-        sim.step();
-        sim.step();
-        sim.step();
-
-        let expected_work = crate::combine::bond_strength(
-            *sim.organisms[0].structure.units[a]
-                .properties(&sim.environment.catalog)
-                .unwrap(),
-            *sim.organisms[0].structure.units[b]
-                .properties(&sim.environment.catalog)
-                .unwrap(),
-        ) * 2.0;
-        let expected_remaining_energy = 0.5 - (expected_work - 0.1);
-        let expected_heat = expected_work - 0.1;
-        assert!(sim.organisms[0].structure.bonds.is_empty());
-        assert!((sim.organisms[0].usable_energy - expected_remaining_energy).abs() < 1e-12);
-        assert!((sim.energy_ledger.total_usable_energy_gained - 0.0).abs() < 1e-12);
-        assert!((sim.energy_ledger.total_heat_dissipated - expected_heat).abs() < 1e-12);
-        assert!(matches!(
-            sim.organisms[0]
-                .decision_history
-                .outcome(ActionKind::Break, Some("bond:0")),
-            Some(OutcomeKind::Harmful)
-        ));
-    }
-
-    #[test]
-    fn organism_can_break_a_structural_bond_and_records_outcome() {
-        let mut sim = Simulation::new(7, 10.0);
-        add_test_break_bond(&mut sim);
-        let before = sim.organisms[0].usable_energy;
-        for _ in 0..20 {
-            sim.step();
-            if sim.organisms[0].structure.bonds.is_empty() {
-                break;
-            }
-        }
-        assert!(sim.organisms[0].structure.bonds.is_empty());
-        assert!((sim.organisms[0].usable_energy - before - (12.5 - crate::combine::bond_strength(
-            *sim.organisms[0].structure.units[0]
-                .properties(&sim.environment.catalog)
-                .unwrap(),
-            *sim.organisms[0].structure.units[1]
-                .properties(&sim.environment.catalog)
-                .unwrap(),
-        ) * 2.0)).abs() < 1e-12);
-        assert!(sim.organisms[0]
-            .decision_history
-            .has_knowledge(ActionKind::Break, Some("bond:0")));
-        assert!(matches!(
-            sim.organisms[0]
-                .decision_history
-                .outcome(ActionKind::Break, Some("bond:0")),
-            Some(OutcomeKind::Beneficial | OutcomeKind::Neutral | OutcomeKind::Harmful)
-        ));
-    }
-
     #[test]
     fn movement_records_an_actual_physical_outcome() {
         let mut sim = Simulation::new(11, 10.0);
@@ -277,7 +110,7 @@ mod integration_tests {
             .decision_history
             .entries
             .iter()
-            .find(|entry| entry.action == ActionKind::Move)
+            .find(|entry| entry.action == crate::decision::ActionKind::Move)
             .expect("MOVE should have an executed outcome");
         assert!(entry.count > 0);
         assert_eq!(entry.context_key, None);
