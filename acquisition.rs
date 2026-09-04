@@ -4,6 +4,7 @@
 //! geometry of its resource type and the physical location of the field cell.
 //! It does not transfer material or decide whether acquisition is allowed.
 
+use crate::environment::ActiveMaterialField;
 use crate::resources::{BaseResource, Shape};
 use crate::structure::Placement;
 
@@ -15,7 +16,7 @@ use crate::structure::Placement;
 /// organism state, or material amount participates in this resolution.
 pub(crate) fn resolve_field_target(
     catalog: &[BaseResource],
-    field: &crate::field::ActiveMaterialField,
+    field: &ActiveMaterialField,
     resource_name: &str,
     field_index: usize,
 ) -> Option<(Shape, Placement)> {
@@ -37,7 +38,7 @@ pub(crate) fn resolve_field_target(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::field::ActiveMaterialField;
+    use crate::environment::ActiveMaterialField;
     use crate::resources::{default_catalog, Form};
 
     #[test]
