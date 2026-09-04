@@ -221,7 +221,7 @@ impl BlueprintGeometry {
         let radius = constituents
             .iter()
             .map(|c| {
-                let local = c.shape.bounding_radius();
+                let local = c.shape.form.bounding_radius();
                 (c.placement.x * c.placement.x + c.placement.y * c.placement.y).sqrt() + local
             })
             .fold(0.0_f64, f64::max);
