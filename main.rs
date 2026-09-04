@@ -11,6 +11,7 @@ mod genome;
 mod growth;
 mod math;
 mod membrane_geometry;
+mod physical_space;
 mod repair;
 mod reproduction;
 mod resources;
