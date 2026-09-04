@@ -1,3 +1,4 @@
+mod blueprint_consistency;
 mod combine;
 mod combine_runtime;
 mod connection_geometry;
@@ -12,6 +13,7 @@ mod math;
 mod membrane_geometry;
 mod reproduction;
 mod resources;
+mod structural_blueprint;
 mod structural_combine;
 mod structural_material;
 mod structure;
