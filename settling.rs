@@ -23,7 +23,7 @@ pub fn apply_settling(
             if outflow > MATERIAL_EPSILON {
                 if let Some(taken) = field.cells[field_index].bonded.take(outflow) {
                     for (name, amount) in taken.parts {
-                        reservoir.cells[reservoir_index].add(true, &name, amount);
+                        reservoir.cells[reservoir_index].add(&name, amount);
                     }
                 }
             }
@@ -34,7 +34,7 @@ pub fn apply_settling(
             if outflow > MATERIAL_EPSILON {
                 if let Some(taken) = field.cells[field_index].unbonded.take(outflow) {
                     for (name, amount) in taken.parts {
-                        reservoir.cells[reservoir_index].add(false, &name, amount);
+                        reservoir.cells[reservoir_index].add(&name, amount);
                     }
                 }
             }
