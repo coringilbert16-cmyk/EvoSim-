@@ -1,4 +1,4 @@
-//! Physical contact, accessibility, and structural connection candidates.
+//! Physical contact and structural connection candidates.
 //!
 //! Geometry/topology only. COMBINE owns energetic outcome, formation, and
 //! bond strength. A connection point is a finite site: once occupied by a
@@ -10,23 +10,8 @@ pub use crate::connection_geometry::WorldConnectionPoint;
 use crate::connection_geometry::{
     facing_compatibility, point_distance, transform_connection_point,
 };
-use crate::environment::ActiveMaterialField;
-use crate::resources::{BaseResource, ConnectionPoint, ConnectionSites};
+use crate::resources::{ConnectionPoint, ConnectionSites};
 use crate::structure::{OrganismStructure, StructuralUnit};
-
-#[derive(Clone, Copy, Debug)]
-pub struct Envelope {
-    pub x: f64,
-    pub y: f64,
-    pub radius: f64,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct AccessibleFieldMaterial {
-    pub field_index: usize,
-    /// Index of the physical material stack within the field cell.
-    pub material_index: usize,
-}
 
 fn transform_point(point: ConnectionPoint, unit: &StructuralUnit) -> WorldConnectionPoint {
     transform_connection_point(
@@ -42,74 +27,6 @@ fn distance(a: WorldConnectionPoint, b: WorldConnectionPoint) -> f64 {
 }
 fn facing(a: WorldConnectionPoint, b: WorldConnectionPoint) -> f64 {
     facing_compatibility(a, b)
-}
-
-pub fn broad_phase_field_cells(field: &ActiveMaterialField, envelope: Envelope) -> Vec<usize> {
-    field.cells_within_radius(envelope.x, envelope.y, envelope.radius)
-}
-
-pub fn accessible_field_material(
-    field: &ActiveMaterialField,
-    envelope: Envelope,
-) -> Vec<AccessibleFieldMaterial> {
-    broad_phase_field_cells(field, envelope)
-        .into_iter()
-        .flat_map(|field_index| {
-            field.cells[field_index]
-                .materials
-                .iter()
-                .enumerate()
-                .filter(|(_, material)| material.total_amount() > 0.0)
-                .map(move |(material_index, _)| AccessibleFieldMaterial {
-                    field_index,
-                    material_index,
-                })
-        })
-        .collect()
-}
-
-pub fn broad_phase_structural_units(
-    structure: &OrganismStructure,
-    envelope: Envelope,
-    broad_margin: f64,
-) -> Vec<usize> {
-    let cutoff = (envelope.radius + broad_margin.max(0.0)).max(0.0);
-    let cutoff_sq = cutoff * cutoff;
-    structure
-        .units
-        .iter()
-        .enumerate()
-        .filter_map(|(i, u)| {
-            let dx = u.placement.x - envelope.x;
-            let dy = u.placement.y - envelope.y;
-            (dx * dx + dy * dy <= cutoff_sq).then_some(i)
-        })
-        .collect()
-}
-
-pub fn unit_within_envelope(
-    envelope: Envelope,
-    unit: &StructuralUnit,
-    catalog: &[BaseResource],
-) -> bool {
-    let Some(base) = catalog.iter().find(|b| b.name == unit.resource_name) else {
-        return false;
-    };
-    let dx = unit.placement.x - envelope.x;
-    let dy = unit.placement.y - envelope.y;
-    (dx * dx + dy * dy).sqrt() <= envelope.radius.max(0.0) + base.shape.form.bounding_radius()
-}
-
-pub fn candidate_units_in_envelope(
-    structure: &OrganismStructure,
-    envelope: Envelope,
-    catalog: &[BaseResource],
-    broad_margin: f64,
-) -> Vec<usize> {
-    broad_phase_structural_units(structure, envelope, broad_margin)
-        .into_iter()
-        .filter(|&i| unit_within_envelope(envelope, &structure.units[i], catalog))
-        .collect()
 }
 
 pub fn world_connection_point(
@@ -161,7 +78,7 @@ pub fn connection_pair_candidates(
     structure: &OrganismStructure,
     unit_a: usize,
     unit_b: usize,
-    catalog: &[BaseResource],
+    catalog: &[crate::resources::BaseResource],
 ) -> Vec<ConnectionPairCandidate> {
     let Some(a) = structure.units.get(unit_a) else {
         return Vec::new();
@@ -199,7 +116,7 @@ pub fn contacting_connection_pair_candidates(
     structure: &OrganismStructure,
     unit_a: usize,
     unit_b: usize,
-    catalog: &[BaseResource],
+    catalog: &[crate::resources::BaseResource],
     tolerance: f64,
     min_facing: f64,
 ) -> Vec<ConnectionPairCandidate> {
@@ -240,7 +157,7 @@ impl ConnectionCompatibilityCache {
         &mut self,
         a: &str,
         b: &str,
-        catalog: &[BaseResource],
+        catalog: &[crate::resources::BaseResource],
     ) -> Vec<(usize, usize)> {
         let reversed = a > b;
         let key = ConnectionTypeKey::new(a, b);
@@ -255,7 +172,11 @@ impl ConnectionCompatibilityCache {
             pairs.clone()
         }
     }
-    fn build_pairs(a: &str, b: &str, catalog: &[BaseResource]) -> Vec<(usize, usize)> {
+    fn build_pairs(
+        a: &str,
+        b: &str,
+        catalog: &[crate::resources::BaseResource],
+    ) -> Vec<(usize, usize)> {
         let Some(a) = catalog.iter().find(|r| r.name == a) else {
             return Vec::new();
         };
@@ -287,7 +208,7 @@ pub fn connection_pair_candidates_cached(
     structure: &OrganismStructure,
     unit_a: usize,
     unit_b: usize,
-    catalog: &[BaseResource],
+    catalog: &[crate::resources::BaseResource],
     cache: &mut ConnectionCompatibilityCache,
 ) -> Vec<ConnectionPairCandidate> {
     let Some(a) = structure.units.get(unit_a) else {
@@ -325,7 +246,7 @@ pub fn connection_pair_candidates_cached(
 pub fn try_add_bond(
     structure: &mut OrganismStructure,
     bond: crate::structure::Bond,
-    catalog: &[BaseResource],
+    catalog: &[crate::resources::BaseResource],
 ) -> Result<usize, &'static str> {
     if !structure.is_valid_bond(&bond, catalog) {
         return Err("invalid bond");
