@@ -170,23 +170,79 @@ impl ResourceBaselines {
     }
 }
 
-/// A stack of material in the world or in an organism.
+/// One structural connection between two material constituents.
 ///
-/// `bonded == false`: uncombined base stock (a pile of carbon is still
-/// uncombined; it cannot BREAK).
-/// `bonded == true`: result of COMBINE. BREAK is legal iff total units ≥ 2.
+/// The indices refer to entries in `Material::parts`. Structure is therefore
+/// part of the material itself rather than a second, parallel representation.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InternalBond {
+    pub part_a: usize,
+    pub part_b: usize,
+}
+
+impl InternalBond {
+    pub fn is_valid_for(&self, part_count: usize) -> bool {
+        self.part_a < part_count
+            && self.part_b < part_count
+            && self.part_a != self.part_b
+    }
+}
+
+/// A material is defined by its composition and its internal structure.
+///
+/// `parts` preserves constituent identity. Two constituents with the same
+/// resource name remain separate entries when their structural identity must
+/// be preserved; aggregation is an ecological-storage concern, not a change
+/// to the physical identity of the material.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Material {
     pub parts: Vec<(String, f64)>,
-    pub bonded: bool,
+    pub internal_bonds: Vec<InternalBond>,
 }
 
 impl Material {
+    /// Create unstructured base stock. A collection of base-resource units is
+    /// not itself a bonded structure merely because it contains multiple
+    /// units of the same resource.
     pub fn free_base(name: impl Into<String>, amount: f64) -> Self {
         Self {
             parts: vec![(name.into(), amount)],
-            bonded: false,
+            internal_bonds: Vec::new(),
         }
+    }
+
+    /// Validate both halves of the physical material identity: composition
+    /// and structure. This is the authoritative structural validity check.
+    pub fn is_valid(&self) -> bool {
+        if self.parts.is_empty() {
+            return self.internal_bonds.is_empty();
+        }
+
+        if !self.parts.iter().all(|(name, amount)| {
+            !name.is_empty() && amount.is_finite() && *amount > 0.0
+        }) {
+            return false;
+        }
+
+        for (i, bond) in self.internal_bonds.iter().enumerate() {
+            if !bond.is_valid_for(self.parts.len()) {
+                return false;
+            }
+            if self.internal_bonds[..i].iter().any(|previous| {
+                previous == bond
+                    || (previous.part_a == bond.part_b && previous.part_b == bond.part_a)
+            }) {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// A material has physical internal structure exactly when its structure
+    /// contains at least one internal bond. No independent bonding flag exists.
+    pub fn has_internal_structure(&self) -> bool {
+        !self.internal_bonds.is_empty()
     }
 
     /// Potential energy is NOT stored on Material. It is derived on demand
@@ -208,8 +264,10 @@ impl Material {
         self.total_amount() <= 1e-12
     }
 
+    /// BREAK is possible only for material that actually contains internal
+    /// structure and has at least two units to separate.
     pub fn can_break(&self) -> bool {
-        self.bonded && self.total_amount() >= 2.0 - 1e-9
+        self.has_internal_structure() && self.total_amount() >= 2.0 - 1e-9
     }
 
     pub fn mass(&self, catalog: &[BaseResource]) -> f64 {
@@ -275,7 +333,7 @@ impl Material {
         self.parts.retain(|(_, q)| *q > 1e-12);
         Some(Material {
             parts,
-            bonded: self.bonded,
+            internal_bonds: self.internal_bonds.clone(),
         })
     }
 }
@@ -293,15 +351,41 @@ pub fn merge_parts(parts: &[(String, f64)]) -> Vec<(String, f64)> {
     out
 }
 
+/// Combine materials into one physical material while preserving every input
+/// constituent and remapping every existing internal bond. Each additional
+/// input is joined to the first constituent of the preceding input, giving
+/// COMBINE an actual structural result instead of a Boolean bonding state.
 pub fn combine_materials(inputs: &[Material]) -> Material {
     let mut parts = Vec::new();
-    for mat in inputs {
-        parts.extend(mat.parts.iter().cloned());
+    let mut internal_bonds = Vec::new();
+    let mut previous_first = None;
+
+    for material in inputs.iter().filter(|material| !material.is_empty()) {
+        let offset = parts.len();
+        parts.extend(material.parts.iter().cloned());
+
+        for bond in &material.internal_bonds {
+            internal_bonds.push(InternalBond {
+                part_a: bond.part_a + offset,
+                part_b: bond.part_b + offset,
+            });
+        }
+
+        if let Some(previous) = previous_first {
+            internal_bonds.push(InternalBond {
+                part_a: previous,
+                part_b: offset,
+            });
+        }
+        previous_first = Some(offset);
     }
-    Material {
-        parts: merge_parts(&parts),
-        bonded: true,
-    }
+
+    let result = Material {
+        parts,
+        internal_bonds,
+    };
+    debug_assert!(result.is_valid());
+    result
 }
 
 pub fn combine_work_cost(material: &Material, catalog: &[BaseResource], water_field: f64) -> f64 {
