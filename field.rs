@@ -1,5 +1,6 @@
-// Active material field: fixed-resolution 2D grid holding physical material stacks.
+// Active material field: fixed-resolution 2D spatial index for ecological material.
 
+use crate::material_geometry::PhysicalMaterialInstance;
 use crate::resources::{merge_parts, Material};
 use serde::{Deserialize, Serialize};
 
@@ -9,22 +10,36 @@ pub const MATERIAL_EPSILON: f64 = 1e-9;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FieldCell {
-    /// Physical material stacks occupying this ecological cell.
+    /// Ecological bulk stock occupying this spatial-index cell.
     ///
     /// Unstructured base stock may be aggregated into one entry. Structured
     /// material remains a distinct physical object and is not fractionally
     /// split by ecological diffusion.
-    /// Material composition and internal structure remain authoritative.
+    ///
+    /// This bulk representation has no constituent geometry. It therefore
+    /// cannot by itself participate in physical boundary interaction.
     pub materials: Vec<Material>,
+    /// Physical environmental material instances with authoritative spatial
+    /// realization. These are the only field contents eligible for future
+    /// geometry-based contact, permeability, and material transfer.
+    pub physical_materials: Vec<PhysicalMaterialInstance>,
 }
 
 impl FieldCell {
     pub fn empty() -> Self {
-        Self { materials: Vec::new() }
+        Self {
+            materials: Vec::new(),
+            physical_materials: Vec::new(),
+        }
     }
 
     pub fn total_amount(&self) -> f64 {
-        self.materials.iter().map(Material::total_amount).sum()
+        self.materials.iter().map(Material::total_amount).sum::<f64>()
+            + self
+                .physical_materials
+                .iter()
+                .map(|instance| instance.material.total_amount())
+                .sum::<f64>()
     }
 
     pub fn total_material(&self) -> Vec<(String, f64)> {
@@ -38,12 +53,38 @@ impl FieldCell {
                 }
             }
         }
+        for instance in &self.physical_materials {
+            for (name, amount) in &instance.material.parts {
+                if let Some(existing) = totals.iter_mut().find(|(n, _)| n == name) {
+                    existing.1 += amount;
+                } else {
+                    totals.push((name.clone(), *amount));
+                }
+            }
+        }
         totals
+    }
+
+    pub fn deposit_physical_material(&mut self, instance: PhysicalMaterialInstance) -> bool {
+        if instance.material.is_empty() || !instance.material.is_valid() {
+            return false;
+        }
+        self.physical_materials.push(instance);
+        true
+    }
+
+    pub fn take_physical_material(&mut self, material_index: usize) -> Option<PhysicalMaterialInstance> {
+        if material_index >= self.physical_materials.len() {
+            return None;
+        }
+        Some(self.physical_materials.remove(material_index))
     }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ActiveMaterialField {
+    /// Ecological spatial index. It does not define the physical geometry of
+    /// the material stored within it.
     pub cell_size: f64,
     pub width_cells: usize,
     pub height_cells: usize,
@@ -186,6 +227,13 @@ impl ActiveMaterialField {
         }
     }
 
+    pub fn deposit_physical(&mut self, x: f64, y: f64, instance: PhysicalMaterialInstance) -> bool {
+        match self.index_for_position(x, y) {
+            Some(index) => self.cells[index].deposit_physical_material(instance),
+            None => false,
+        }
+    }
+
     pub fn take_at(&mut self, x: f64, y: f64, material_index: usize, amount: f64) -> Option<Material> {
         let index = self.index_for_position(x, y)?;
         self.take_at_index(index, material_index, amount)
@@ -220,68 +268,21 @@ impl ActiveMaterialField {
                 if self.cells[i].materials[material_index].has_internal_structure() {
                     continue;
                 }
-
-                let total = self.cells[i].materials[material_index].total_amount();
-                if total <= MATERIAL_EPSILON {
+                let amount = self.cells[i].materials[material_index].total_amount();
+                let transfer_amount = amount * fraction / neighbor_count as f64;
+                if transfer_amount <= MATERIAL_EPSILON {
                     continue;
                 }
-                let outflow = total * fraction;
-                if outflow > MATERIAL_EPSILON {
-                    if let Some(piece) = self.cells[i].materials[material_index].take(outflow) {
-                        outgoing_cell.push(piece);
-                    }
-                }
-            }
-            self.cells[i].materials.retain(|material| !material.is_empty());
-        }
-
-        for (i, outgoing_cell) in outgoing.iter_mut().enumerate() {
-            let neighbors = self.neighbor_indices(i);
-            for material in outgoing_cell.drain(..) {
-                distribute_evenly(self, material, &neighbors);
-            }
-        }
-    }
-
-    pub fn total_material(&self) -> Vec<(String, f64)> {
-        let mut totals: Vec<(String, f64)> = Vec::new();
-        for cell in &self.cells {
-            for (name, amount) in cell.total_material() {
-                if let Some(existing) = totals.iter_mut().find(|(n, _)| n == &name) {
-                    existing.1 += amount;
-                } else {
-                    totals.push((name, amount));
+                if let Some(taken) = self.cells[i].materials[material_index].take(transfer_amount) {
+                    outgoing_cell.push(taken);
                 }
             }
         }
-        totals
-    }
 
-    pub fn total_amount(&self) -> f64 {
-        self.cells.iter().map(FieldCell::total_amount).sum()
-    }
-}
-
-fn distribute_evenly(field: &mut ActiveMaterialField, mut mat: Material, neighbors: &[usize]) {
-    if neighbors.is_empty() {
-        return;
-    }
-    let share = mat.total_amount() / neighbors.len() as f64;
-    for (k, &neighbor_index) in neighbors.iter().enumerate() {
-        let is_last = k == neighbors.len() - 1;
-        let piece = if is_last {
-            Material {
-                parts: std::mem::take(&mut mat.parts),
-                internal_bonds: std::mem::take(&mut mat.internal_bonds),
+        for (target_index, incoming) in outgoing.into_iter().enumerate() {
+            for material in incoming {
+                self.deposit_at_index(target_index, material);
             }
-        } else {
-            match mat.take(share) {
-                Some(piece) => piece,
-                None => continue,
-            }
-        };
-        if !piece.is_empty() {
-            field.deposit_at_index(neighbor_index, piece);
         }
     }
 }
