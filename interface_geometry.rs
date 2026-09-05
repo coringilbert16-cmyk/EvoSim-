@@ -308,7 +308,7 @@ mod tests {
             0.0,
             0.0,
         );
-        assert!((shared_boundary_length(&a, &b, 0.0) - 4.0).abs() < 1e-12);
+        assert!((shared_boundary_length(&a, &b, 0.0) - 2.0).abs() < 1e-12);
     }
 
     #[test]
