@@ -153,9 +153,6 @@ impl BlueprintConnection {
         if self.element_a == self.element_b {
             return Err("self-connections are not permitted".into());
         }
-        if self.element_a == self.element_b && self.point_a == self.point_b {
-            return Err("connection endpoints must differ".into());
-        }
 
         Ok(())
     }
