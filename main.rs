@@ -17,6 +17,7 @@ mod boundary_contact;
 mod permeability;
 mod reproduction;
 mod resources;
+mod structural_blueprint;
 mod structural_combine;
 mod structure;
 
