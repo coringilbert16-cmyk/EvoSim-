@@ -117,6 +117,9 @@ pub(crate) struct ReproductiveConstruction {
     pub(crate) committed_material: Material,
     pub(crate) developing_structure: OrganismStructure,
     pub(crate) child_genome: Genome,
+    /// Index of the next inherited blueprint element to construct.
+    #[serde(default)]
+    pub(crate) next_blueprint_element: usize,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Default)]
