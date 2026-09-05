@@ -18,30 +18,39 @@ pub fn apply_settling(
 
     for field_index in 0..field.cells.len() {
         let reservoir_index = reservoir.reservoir_index_for_field_index(field, field_index);
-        let material_count = field.cells[field_index].materials.len();
+        let mut retained = Vec::new();
+        let materials = std::mem::take(&mut field.cells[field_index].materials);
 
-        for material_index in 0..material_count {
-            let total = field.cells[field_index].materials[material_index].total_amount();
+        for mut material in materials {
+            // The current deep reservoir is intentionally an aggregate
+            // ecological store. Until Phase 5 gives it material identity,
+            // structured material must remain in the active field rather than
+            // being flattened and losing its physical structure.
+            if material.has_internal_structure() {
+                retained.push(material);
+                continue;
+            }
+
+            let total = material.total_amount();
             if total <= MATERIAL_EPSILON {
                 continue;
             }
             let outflow = total * fraction;
             if outflow <= MATERIAL_EPSILON {
+                retained.push(material);
                 continue;
             }
 
-            if let Some(taken) = field.cells[field_index].materials[material_index].take(outflow) {
-                // The deep reservoir remains an aggregate ecological store in
-                // Phase 2. Material structure is preserved while it is in the
-                // active field; reservoir identity is addressed in Phase 5.
+            if let Some(taken) = material.take(outflow) {
                 for (name, amount) in taken.parts {
                     reservoir.cells[reservoir_index].add(&name, amount);
                 }
             }
+            if !material.is_empty() {
+                retained.push(material);
+            }
         }
 
-        field.cells[field_index]
-            .materials
-            .retain(|material| !material.is_empty());
+        field.cells[field_index].materials = retained;
     }
 }
