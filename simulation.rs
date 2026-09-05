@@ -218,7 +218,11 @@ impl Simulation {
 
         for id in reproduction_requests {
             if let Some(organism) = self.organisms.iter_mut().find(|o| o.id == id) {
-                let _ = crate::reproduction::begin_reproduction(organism, &mut self.rng);
+                let child_id = self.next_organism_id.to_string();
+                let catalog = self.environment.catalog.clone();
+                if crate::reproduction::begin_reproduction(organism, child_id, &mut self.rng, &catalog) {
+                    self.next_organism_id += 1;
+                }
             }
         }
 
