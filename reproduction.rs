@@ -163,46 +163,54 @@ fn has_required_material(available: &Material, required: &Material) -> bool {
         return false;
     }
 
-    required.parts.iter().all(|(name, required_amount)| {
-        let available_amount = available
-            .parts
-            .iter()
-            .filter(|(available_name, _)| available_name == name)
-            .map(|(_, amount)| *amount)
-            .sum::<f64>();
-        available_amount + EPSILON >= *required_amount
-    })
+    crate::resources::merge_parts(&required.parts)
+        .iter()
+        .all(|(name, required_amount)| {
+            let available_amount = available
+                .parts
+                .iter()
+                .filter(|(available_name, amount)| available_name == name && *amount > 0.0)
+                .map(|(_, amount)| *amount)
+                .sum::<f64>();
+            available_amount + EPSILON >= *required_amount
+        })
 }
 
 /// Remove exactly the constituent amounts required by the supplied blueprint
 /// material. Requirements are aggregated by resource type before this point,
-/// so duplicate resource entries in the available stock are handled safely.
-/// No material is consumed unless the complete requirement is available.
+/// and are re-aggregated here for individual blueprint elements so duplicate
+/// constituent entries cannot cause partial consumption. The complete removal
+/// plan is calculated before any stock is mutated.
 fn take_required_material(committed: &mut Material, required: &Material) -> Option<Material> {
     if !has_required_material(committed, required) {
         return None;
     }
 
-    let mut taken_parts = Vec::with_capacity(required.parts.len());
-    for (name, required_amount) in &required.parts {
+    let required_parts = crate::resources::merge_parts(&required.parts);
+    let mut allocations: Vec<(usize, f64)> = Vec::new();
+
+    for (name, required_amount) in &required_parts {
         let mut remaining = *required_amount;
-        for (available_name, available_amount) in &mut committed.parts {
-            if available_name != name || remaining <= EPSILON {
+        for (index, (available_name, available_amount)) in committed.parts.iter().enumerate() {
+            if available_name != name || *available_amount <= 0.0 || remaining <= EPSILON {
                 continue;
             }
-            let taken = remaining.min((*available_amount).max(0.0));
-            *available_amount -= taken;
+            let taken = remaining.min(*available_amount);
+            allocations.push((index, taken));
             remaining -= taken;
         }
         if remaining > EPSILON {
             return None;
         }
-        taken_parts.push((name.clone(), *required_amount));
     }
 
+    for (index, amount) in allocations {
+        committed.parts[index].1 -= amount;
+    }
     committed.parts.retain(|(_, amount)| *amount > EPSILON);
+
     Some(Material {
-        parts: taken_parts,
+        parts: required_parts,
         bonded: false,
     })
 }
@@ -329,6 +337,15 @@ mod tests {
         let required = Material::free_base("Carbon", 1.0);
         assert!(take_required_material(&mut committed, &required).is_none());
         assert_eq!(committed.parts, vec![("Carbon".into(), 0.5), ("Carbon".into(), 0.25)]);
+    }
+
+    #[test]
+    fn duplicate_required_parts_are_aggregated_before_consumption() {
+        let mut committed = Material { parts: vec![("Carbon".into(), 1.5), ("Carbon".into(), 0.5)], bonded: false };
+        let required = Material { parts: vec![("Carbon".into(), 1.0), ("Carbon".into(), 1.0)], bonded: true };
+        let taken = take_required_material(&mut committed, &required).unwrap();
+        assert_eq!(taken.parts, vec![("Carbon".into(), 2.0)]);
+        assert!(committed.is_empty());
     }
 
     #[test]
