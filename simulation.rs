@@ -311,6 +311,7 @@ mod tests {
     #[test]
     fn acquire_candidates_identify_each_target_and_ignore_unreachable_or_structured_material() {
         let mut sim = Simulation::new(2, 10.0);
+        sim.organisms[0].occupied_cells[0] = Position { x: 525.0, y: 500.0 };
         let near_a = sim.environment.field.index_for_position(500.0, 500.0).unwrap();
         let near_b = sim.environment.field.index_for_position(525.0, 500.0).unwrap();
         let far = sim.environment.field.index_for_position(600.0, 500.0).unwrap();
@@ -340,6 +341,7 @@ mod tests {
     #[test]
     fn target_specific_history_can_change_acquire_target_selection() {
         let mut sim = Simulation::new(3, 10.0);
+        sim.organisms[0].occupied_cells[0] = Position { x: 525.0, y: 500.0 };
         let near_a = sim.environment.field.index_for_position(500.0, 500.0).unwrap();
         let near_b = sim.environment.field.index_for_position(525.0, 500.0).unwrap();
         sim.environment.field.deposit_at_index(near_a, Material::free_base("Carbon", 5.0));
