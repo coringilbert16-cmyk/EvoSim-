@@ -1,3 +1,4 @@
+mod cell_connection;
 mod combine;
 mod combine_runtime;
 mod connection_geometry;
@@ -9,10 +10,13 @@ mod decision_runtime;
 mod environment;
 mod genome;
 mod math;
+mod material_transfer;
 mod membrane_geometry;
 mod reproduction;
 mod resources;
+mod structural_blueprint;
 mod structural_combine;
+mod structural_geometry;
 mod structural_material;
 mod structure;
 

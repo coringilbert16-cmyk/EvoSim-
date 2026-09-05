@@ -2,6 +2,11 @@ use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 
+use crate::resources::default_catalog;
+use crate::structural_blueprint::{BlueprintElement, BlueprintGeometry, StructuralBlueprint};
+use crate::structural_material::StructuralMaterial;
+use crate::structure::Placement;
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TraitDef {
     pub name: String,
@@ -13,6 +18,11 @@ pub struct TraitDef {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Genome {
     pub traits: Vec<TraitDef>,
+    /// Inherited structural genotype. The physical organism is still built
+    /// from actual StructuralUnits; this blueprint defines the configuration
+    /// that construction is expected to realize.
+    #[serde(default = "initial_structural_blueprint")]
+    pub structural_blueprint: StructuralBlueprint,
 }
 
 impl Genome {
@@ -99,6 +109,22 @@ fn trait_def(name: &str, value: f64, sigma: f64) -> TraitDef {
     }
 }
 
+fn initial_structural_blueprint() -> StructuralBlueprint {
+    let catalog = default_catalog();
+    StructuralBlueprint::new(
+        vec![BlueprintElement {
+            material: StructuralMaterial::single("Carbon"),
+            geometry: BlueprintGeometry::single(catalog[0].shape.clone()),
+            placement: Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        }],
+        Vec::new(),
+    )
+}
+
 pub fn initial_genome() -> Genome {
     Genome {
         traits: vec![
@@ -118,5 +144,6 @@ pub fn initial_genome() -> Genome {
             trait_def("construction_compactness", 0.5, 0.05),
             trait_def("construction_branching", 0.5, 0.05),
         ],
+        structural_blueprint: initial_structural_blueprint(),
     }
 }
