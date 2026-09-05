@@ -102,7 +102,7 @@ impl crate::state::Simulation {
             let direction_y = if distance > 0.0 { dy / distance } else { 0.0 };
             let cell = &environment.field.cells[cell_index];
 
-            for (bonded, material) in [(true, &cell.bonded), (false, &cell.unbonded)] {
+            for material in &cell.materials {
                 let perceived_amount = material.total_amount() * sensory_resolution;
                 if perceived_amount <= 0.0 {
                     continue;
@@ -134,7 +134,7 @@ impl crate::state::Simulation {
                     .push(ResourceObservation {
                         name: label,
                         properties,
-                        bonded,
+                        bonded: material.has_internal_structure(),
                         perceived_amount,
                         deviations,
                         affinity_responses: responses,
