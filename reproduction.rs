@@ -53,7 +53,7 @@ pub(crate) fn begin_reproduction(parent: &mut Organism, rng: &mut ChaCha8Rng) ->
 /// unit is positioned so one of its authored connection points exactly meets
 /// an available connection point on the developing structure with opposing
 /// outward normals. Bond formation remains a separate COMBINE step.
-pub(crate] fn advance_construction(
+pub(crate) fn advance_construction(
     construction: &mut ReproductiveConstruction,
     catalog: &[BaseResource],
 ) -> bool {
