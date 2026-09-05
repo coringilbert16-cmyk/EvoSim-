@@ -257,7 +257,7 @@ mod tests {
     #[test]
     fn touching_rigid_boundaries_create_an_interface() {
         let body = body_at(0.0, 0.0);
-        let material = material_at("Hydrogen", 1.5, 0.0);
+        let material = material_at("Carbon", 0.877_382, 0.0);
         assert_eq!(
             boundary_contacts(&body, &material, 0.0),
             vec![BoundaryContact {
@@ -270,7 +270,7 @@ mod tests {
     #[test]
     fn intersecting_rigid_boundaries_create_an_interface() {
         let body = body_at(0.0, 0.0);
-        let material = material_at("Hydrogen", 1.0, 0.0);
+        let material = material_at("Carbon", 0.8, 0.0);
         assert_eq!(
             boundary_contacts(&body, &material, 0.0),
             vec![BoundaryContact {
