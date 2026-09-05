@@ -1,7 +1,7 @@
 //! Physical reproduction lifecycle.
 //!
 //! Reproduction does not split or copy the parent's existing structure. Once
-//! an adult has accumulated enough actual unbonded material, the reproductive
+//! an adult has accumulated enough actual free material, the reproductive
 //! decision commits that material to a persistent construction state. The
 //! parent keeps its own structure intact. Later ticks will consume the
 //! committed material through the ordinary structural construction system and
@@ -27,11 +27,11 @@ pub(crate) fn begin_reproduction(parent: &mut Organism, rng: &mut ChaCha8Rng) ->
     if parent.reproductive_construction.is_some() {
         return false;
     }
-    if parent.stored_unbonded.total_amount() + f64::EPSILON < CORE_MATERIAL_AMOUNT {
+    if parent.stored_material.total_amount() + f64::EPSILON < CORE_MATERIAL_AMOUNT {
         return false;
     }
 
-    let Some(committed_material) = parent.stored_unbonded.take(CORE_MATERIAL_AMOUNT) else {
+    let Some(committed_material) = parent.stored_material.take(CORE_MATERIAL_AMOUNT) else {
         return false;
     };
 
@@ -190,7 +190,7 @@ mod tests {
             decision_history: DecisionHistory::default(),
             usable_energy: 10.0,
             stress: 0.0,
-            stored_unbonded: Material::free_base("Carbon", material_amount),
+            stored_material: Material::free_base("Carbon", material_amount),
             structure: OrganismStructure::new(),
             development_stage: DevelopmentStage::Adult,
             age: 10,
@@ -207,7 +207,7 @@ mod tests {
         assert!(begin_reproduction(&mut parent, &mut rng));
         assert!(parent.structure.units.is_empty());
         assert!(parent.structure.bonds.is_empty());
-        assert_eq!(parent.stored_unbonded.total_amount(), 2.0);
+        assert_eq!(parent.stored_material.total_amount(), 2.0);
         assert_eq!(parent.reproductive_readiness, 0.0);
         let construction = parent.reproductive_construction.as_ref().unwrap();
         assert_eq!(construction.committed_material.total_amount(), CORE_UNIT_COUNT as f64);
