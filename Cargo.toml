@@ -5,7 +5,7 @@ edition = "2021"
 
 [[bin]]
 name = "evosim"
-path = "main.rs"
+path = "src/main.rs"
 
 [dependencies]
 axum = { version = "0.8", features = ["ws"] }
