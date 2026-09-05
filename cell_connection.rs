@@ -10,7 +10,7 @@ use crate::structure::{ConnectionSiteRef, OrganismStructure};
 use serde::{Deserialize, Serialize};
 
 /// Identifies one physical connection site on one organism's structural cell.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CellSiteRef {
     pub organism_id: String,
     pub unit_index: usize,
@@ -84,11 +84,11 @@ impl CellConnection {
     }
 
     pub fn endpoint_a(&self) -> CellSiteRef {
-        self.endpoint_a
+        self.endpoint_a.clone()
     }
 
     pub fn endpoint_b(&self) -> CellSiteRef {
-        self.endpoint_b
+        self.endpoint_b.clone()
     }
 
     pub fn connects(&self, a: CellSiteRef, b: CellSiteRef) -> bool {
