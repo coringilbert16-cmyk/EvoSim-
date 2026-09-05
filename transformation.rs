@@ -33,10 +33,7 @@ impl Simulation {
             id: *next_id,
             organism_id: organism.id.clone(),
             kind: crate::state::TransformationKind::Break,
-            material: crate::resources::Material {
-                parts: Vec::new(),
-                bonded: true,
-            },
+            material: crate::resources::Material::free_base("", 0.0),
             bond: Some(bond),
             complexity,
             duration_ticks: duration,
