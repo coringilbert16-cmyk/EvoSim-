@@ -13,8 +13,6 @@ use crate::structure::{Bond, OrganismStructure, StructuralUnit};
 use crate::structural_material::StructuralMaterial;
 
 const EPSILON: f64 = 1e-12;
-const CORE_UNIT_COUNT: usize = 6;
-const CORE_MATERIAL_AMOUNT: f64 = CORE_UNIT_COUNT as f64;
 
 pub(crate) fn begin_reproduction(parent: &mut Organism, rng: &mut ChaCha8Rng) -> bool {
     if !matches!(parent.development_stage, DevelopmentStage::Adult) {
@@ -26,16 +24,29 @@ pub(crate) fn begin_reproduction(parent: &mut Organism, rng: &mut ChaCha8Rng) ->
     if parent.reproductive_construction.is_some() {
         return false;
     }
-    if parent.stored_unbonded.total_amount() + EPSILON < CORE_MATERIAL_AMOUNT {
-        return false;
-    }
-
-    let Some(committed_material) = parent.stored_unbonded.take(CORE_MATERIAL_AMOUNT) else {
-        return false;
-    };
 
     let mut child_genome = parent.genome.clone();
     child_genome.mutate(rng);
+
+    // Only the inherited seed element is committed at reproduction. The rest
+    // of the blueprint remains a developmental target that must be supplied
+    // later by physical material acquisition.
+    let Some(seed_element) = child_genome.structural_blueprint.elements.first() else {
+        return false;
+    };
+    let required_seed = &seed_element.material.material;
+    if parent.stored_unbonded.bonded
+        || parent.stored_unbonded.total_amount() + EPSILON < required_seed.total_amount()
+    {
+        return false;
+    }
+    if !has_required_material(&parent.stored_unbonded, required_seed) {
+        return false;
+    }
+
+    let Some(committed_material) = take_required_material(&mut parent.stored_unbonded, required_seed) else {
+        return false;
+    };
 
     parent.reproductive_readiness = 0.0;
     parent.reproductive_construction = Some(ReproductiveConstruction {
@@ -202,7 +213,7 @@ mod tests {
     use super::*;
     use rand::SeedableRng;
     use crate::decision::DecisionHistory;
-    use crate::genome::initial_genome;
+    use crate::genome::{initial_genome, Genome};
     use crate::state::{Position, ResourceSense};
     use crate::structural_blueprint::{BlueprintElement, BlueprintGeometry, StructuralBlueprint};
     use crate::structure::Placement;
@@ -238,8 +249,8 @@ mod tests {
     }
 
     #[test]
-    fn reproduction_commits_core_without_requiring_complete_blueprint() {
-        let mut parent = adult_parent(CORE_MATERIAL_AMOUNT);
+    fn reproduction_commits_only_the_seed_element() {
+        let mut parent = adult_parent(1.0);
         parent.genome.structural_blueprint = StructuralBlueprint::new(
             vec![
                 blueprint_element("Carbon", 0.0, 0.0),
@@ -251,7 +262,7 @@ mod tests {
         assert!(begin_reproduction(&mut parent, &mut rng));
         assert_eq!(parent.stored_unbonded.total_amount(), 0.0);
         let construction = parent.reproductive_construction.as_ref().unwrap();
-        assert_eq!(construction.committed_material.total_amount(), CORE_MATERIAL_AMOUNT);
+        assert_eq!(construction.committed_material.parts, vec![("Carbon".into(), 1.0)]);
         assert_eq!(construction.next_blueprint_element, 0);
     }
 
