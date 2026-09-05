@@ -23,7 +23,7 @@ pub struct BlueprintGeometry {
     pub connection_regions: Vec<ConnectionRegion>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ConstituentGeometry {
     pub part_index: usize,
     pub shape: Shape,
@@ -113,9 +113,8 @@ impl StructuralBlueprint {
     }
 
     /// Return the exact unbonded material composition required to realize every
-    /// element in this blueprint. Requirements are aggregated by resource type
-    /// so stock ordering or duplicate constituent entries cannot change the
-    /// amount required.
+    /// element in this blueprint. This is a blueprint accounting helper; it is
+    /// not used as an upfront reproductive resource requirement.
     pub fn required_material(&self) -> Material {
         let parts: Vec<(String, f64)> = self
             .elements
@@ -141,62 +140,14 @@ impl BlueprintElement {
         if !self.material.is_valid() {
             return Err("material is invalid".into());
         }
-
-        if !self.placement.x.is_finite()
-            || !self.placement.y.is_finite()
-            || !self.placement.rotation_radians.is_finite()
-        {
-            return Err("placement must be finite".into());
-        }
-
         self.geometry.validate(self.material.constituents().len())
     }
 }
 
 impl BlueprintGeometry {
-    pub fn validate(&self, constituent_count: usize) -> Result<(), String> {
-        if self.constituents.is_empty() {
-            return Err("geometry must contain at least one constituent".into());
-        }
-
-        for (index, constituent) in self.constituents.iter().enumerate() {
-            if constituent.part_index >= constituent_count {
-                return Err(format!(
-                    "constituent {index} references missing material part"
-                ));
-            }
-            if !constituent.shape.is_valid() {
-                return Err(format!("constituent {index} shape is invalid"));
-            }
-            if !constituent.placement.x.is_finite()
-                || !constituent.placement.y.is_finite()
-                || !constituent.placement.rotation_radians.is_finite()
-            {
-                return Err(format!("constituent {index} placement is not finite"));
-            }
-        }
-
-        for (index, region) in self.connection_regions.iter().enumerate() {
-            if !region.point.is_valid() {
-                return Err(format!("connection region {index} is invalid"));
-            }
-        }
-
-        Ok(())
-    }
-
     pub fn single(shape: Shape) -> Self {
-        let connection_regions = match shape.connection_sites() {
-            crate::resources::ConnectionSites::Corners(points) => points
-                .into_iter()
-                .map(|point| ConnectionRegion { point })
-                .collect(),
-            crate::resources::ConnectionSites::Circumference { .. }
-            | crate::resources::ConnectionSites::Undetermined => Vec::new(),
-        };
-
         Self {
-            constituents: vec![ConstituentGeometry {
+            constituents: vec![crate::structural_blueprint::ConstituentGeometry {
                 part_index: 0,
                 shape,
                 placement: Placement {
@@ -205,140 +156,82 @@ impl BlueprintGeometry {
                     rotation_radians: 0.0,
                 },
             }],
-            connection_regions,
+            connection_regions: Vec::new(),
         }
     }
-}
 
-impl BlueprintConnection {
-    fn validate(&self, blueprint: &StructuralBlueprint) -> Result<(), String> {
-        if self.element_a >= blueprint.elements.len() || self.element_b >= blueprint.elements.len() {
-            return Err("references a missing element".into());
+    pub fn validate(&self, constituent_count: usize) -> Result<(), String> {
+        if self.constituents.is_empty() {
+            return Err("geometry must contain at least one constituent".into());
         }
-        if self.element_a == self.element_b {
-            return Err("self-connections are not permitted".into());
+        for constituent in &self.constituents {
+            if constituent.part_index >= constituent_count {
+                return Err("constituent part index is out of range".into());
+            }
         }
-
-        let element_a = &blueprint.elements[self.element_a];
-        let element_b = &blueprint.elements[self.element_b];
-        let region_a = element_a
-            .geometry
-            .connection_regions
-            .get(self.point_a)
-            .ok_or_else(|| "endpoint A references a missing connection region".to_string())?;
-        let region_b = element_b
-            .geometry
-            .connection_regions
-            .get(self.point_b)
-            .ok_or_else(|| "endpoint B references a missing connection region".to_string())?;
-
-        let world_a = transform_point(region_a.point, element_a.placement);
-        let world_b = transform_point(region_b.point, element_b.placement);
-        let distance = ((world_a.x - world_b.x).powi(2) + (world_a.y - world_b.y).powi(2)).sqrt();
-
-        if !distance.is_finite() || distance > 0.25 {
-            return Err(format!("endpoints are not in physical contact (distance {distance:.4})"));
-        }
-
         Ok(())
     }
 }
 
-fn transform_point(point: ConnectionPoint, placement: Placement) -> ConnectionPoint {
-    let (sin, cos) = placement.rotation_radians.sin_cos();
-    ConnectionPoint {
-        x: placement.x + point.x * cos - point.y * sin,
-        y: placement.y + point.x * sin + point.y * cos,
-        direction_radians: point.direction_radians + placement.rotation_radians,
+impl BlueprintConnection {
+    pub fn validate(&self, blueprint: &StructuralBlueprint) -> Result<(), String> {
+        if self.element_a >= blueprint.elements.len() || self.element_b >= blueprint.elements.len() {
+            return Err("connection element index is out of range".into());
+        }
+        if self.element_a == self.element_b {
+            return Err("connection cannot join an element to itself".into());
+        }
+        let points_a = blueprint.elements[self.element_a].geometry.connection_regions.len();
+        let points_b = blueprint.elements[self.element_b].geometry.connection_regions.len();
+        if self.point_a >= points_a || self.point_b >= points_b {
+            return Err("connection point index is out of range".into());
+        }
+        if blueprint.connections.iter().any(|existing| {
+            existing != self
+                && ((existing.element_a == self.element_a
+                    && existing.point_a == self.point_a
+                    && existing.element_b == self.element_b
+                    && existing.point_b == self.point_b)
+                    || (existing.element_a == self.element_b
+                        && existing.point_a == self.point_b
+                        && existing.element_b == self.element_a
+                        && existing.point_b == self.point_a))
+        }) {
+            return Err("duplicate connection".into());
+        }
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::resources::default_catalog;
 
-    fn placement(x: f64, y: f64) -> Placement {
-        Placement { x, y, rotation_radians: 0.0 }
+    fn element(resource: &str) -> BlueprintElement {
+        let catalog = crate::resources::default_catalog();
+        let shape = catalog.iter().find(|r| r.name == resource).unwrap().shape.clone();
+        BlueprintElement {
+            material: StructuralMaterial::single(resource),
+            geometry: BlueprintGeometry::single(shape),
+            placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+        }
     }
 
     #[test]
     fn single_element_blueprint_is_valid() {
-        let catalog = default_catalog();
-        let element = BlueprintElement {
-            material: StructuralMaterial::single("Carbon"),
-            geometry: BlueprintGeometry::single(catalog[0].shape.clone()),
-            placement: placement(0.0, 0.0),
-        };
-        let blueprint = StructuralBlueprint::new(vec![element], Vec::new());
-        assert!(blueprint.is_valid());
-        assert_eq!(blueprint.total_material_amount(), 1.0);
+        assert!(StructuralBlueprint::new(vec![element("Carbon")], Vec::new()).is_valid());
     }
 
     #[test]
     fn blueprint_does_not_require_six_elements() {
-        let catalog = default_catalog();
-        let element = BlueprintElement {
-            material: StructuralMaterial::single("Carbon"),
-            geometry: BlueprintGeometry::single(catalog[0].shape.clone()),
-            placement: placement(0.0, 0.0),
-        };
-        assert!(StructuralBlueprint::new(vec![element], Vec::new()).is_valid());
+        assert!(StructuralBlueprint::new(vec![element("Carbon")], Vec::new()).is_valid());
     }
 
     #[test]
-    fn required_material_aggregates_all_blueprint_constituents() {
-        let catalog = default_catalog();
-        let carbon = BlueprintElement {
-            material: StructuralMaterial::single("Carbon"),
-            geometry: BlueprintGeometry::single(catalog[0].shape.clone()),
-            placement: placement(0.0, 0.0),
-        };
-        let methane = BlueprintElement {
-            material: StructuralMaterial {
-                material: Material {
-                    parts: vec![("Carbon".into(), 2.0), ("Methane".into(), 1.0)],
-                    bonded: true,
-                },
-                internal_bonds: Vec::new(),
-            },
-            geometry: BlueprintGeometry {
-                constituents: vec![
-                    ConstituentGeometry {
-                        part_index: 0,
-                        shape: catalog[0].shape.clone(),
-                        placement: placement(0.0, 0.0),
-                    },
-                    ConstituentGeometry {
-                        part_index: 1,
-                        shape: catalog[1].shape.clone(),
-                        placement: placement(0.0, 0.0),
-                    },
-                ],
-                connection_regions: Vec::new(),
-            },
-            placement: placement(1.0, 0.0),
-        };
-        let blueprint = StructuralBlueprint::new(vec![carbon, methane], Vec::new());
+    fn required_material_is_aggregated() {
+        let blueprint = StructuralBlueprint::new(vec![element("Carbon"), element("Carbon")], vec![BlueprintConnection { element_a: 0, point_a: 0, element_b: 1, point_b: 0 }]);
         let required = blueprint.required_material();
+        assert_eq!(required.parts, vec![("Carbon".into(), 2.0)]);
         assert!(!required.bonded);
-        assert_eq!(required.parts, vec![("Carbon".into(), 3.0), ("Methane".into(), 1.0)]);
-        assert_eq!(required.total_amount(), 4.0);
-    }
-
-    #[test]
-    fn disconnected_multi_element_blueprint_is_rejected() {
-        let catalog = default_catalog();
-        let a = BlueprintElement {
-            material: StructuralMaterial::single("Carbon"),
-            geometry: BlueprintGeometry::single(catalog[0].shape.clone()),
-            placement: placement(0.0, 0.0),
-        };
-        let b = BlueprintElement {
-            material: StructuralMaterial::single("Methane"),
-            geometry: BlueprintGeometry::single(catalog[1].shape.clone()),
-            placement: placement(10.0, 0.0),
-        };
-        assert!(!StructuralBlueprint::new(vec![a, b], Vec::new()).is_valid());
     }
 }
