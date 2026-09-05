@@ -206,7 +206,7 @@ impl ActiveMaterialField {
         let n = self.cells.len();
         let mut outgoing: Vec<Vec<Material>> = (0..n).map(|_| Vec::new()).collect();
 
-        for i in 0..n {
+        for (i, outgoing_cell) in outgoing.iter_mut().enumerate() {
             let neighbor_count = self.neighbor_indices(i).len();
             if neighbor_count == 0 {
                 continue;
@@ -228,16 +228,16 @@ impl ActiveMaterialField {
                 let outflow = total * fraction;
                 if outflow > MATERIAL_EPSILON {
                     if let Some(piece) = self.cells[i].materials[material_index].take(outflow) {
-                        outgoing[i].push(piece);
+                        outgoing_cell.push(piece);
                     }
                 }
             }
             self.cells[i].materials.retain(|material| !material.is_empty());
         }
 
-        for i in 0..n {
+        for (i, outgoing_cell) in outgoing.iter_mut().enumerate() {
             let neighbors = self.neighbor_indices(i);
-            for material in outgoing[i].drain(..) {
+            for material in outgoing_cell.drain(..) {
                 distribute_evenly(self, material, &neighbors);
             }
         }
