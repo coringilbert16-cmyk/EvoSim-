@@ -132,7 +132,7 @@ impl Simulation {
         organism.reproductive_readiness = (organism.reproductive_readiness + accumulation).clamp(0.0, 1.0);
     }
 
-    fn acquisition_targets(organism: &Organism, environment: &Environment) -> Vec<(usize, usize)> {
+    fn acquisition_targets(organism: &Organism, environment: &Environment) -> Vec<usize> {
         let (px, py) = {
             let p = &organism.occupied_cells[0];
             (p.x, p.y)
@@ -146,18 +146,19 @@ impl Simulation {
             if distance > crate::state::PROCESSING_REACH + f64::EPSILON {
                 continue;
             }
-            for (material_index, material) in environment.field.cells[field_index].materials.iter().enumerate() {
-                if material.is_empty() || !material.is_valid() || material.has_internal_structure() {
-                    continue;
-                }
-                targets.push((field_index, material_index));
+            if environment.field.cells[field_index]
+                .materials
+                .iter()
+                .any(|material| !material.is_empty() && material.is_valid() && !material.has_internal_structure())
+            {
+                targets.push(field_index);
             }
         }
         targets
     }
 
-    fn acquisition_context_key(field_index: usize, material_index: usize) -> String {
-        format!("target:{field_index}:{material_index}")
+    fn acquisition_context_key(field_index: usize) -> String {
+        format!("target:{field_index}")
     }
 
     fn action_eligibility(organism: &Organism, environment: &Environment) -> ActionEligibility {
@@ -181,13 +182,49 @@ impl Simulation {
         if relevant(ActionKind::Combine) { candidates.push(ActionCandidate { action: ActionKind::Combine, context_key: None }); }
         if relevant(ActionKind::Move) { candidates.push(ActionCandidate { action: ActionKind::Move, context_key: None }); }
         if relevant(ActionKind::Acquire) {
-            candidates.extend(Self::acquisition_targets(organism, environment).into_iter().map(|(field_index, material_index)| ActionCandidate {
+            candidates.extend(Self::acquisition_targets(organism, environment).into_iter().map(|field_index| ActionCandidate {
                 action: ActionKind::Acquire,
-                context_key: Some(Self::acquisition_context_key(field_index, material_index)),
+                context_key: Some(Self::acquisition_context_key(field_index)),
             }));
         }
         if relevant(ActionKind::Expel) { candidates.push(ActionCandidate { action: ActionKind::Expel, context_key: None }); }
         candidates
+    }
+
+    fn acquire_target(organism: &mut Organism, environment: &mut Environment, field_index: usize) -> bool {
+        let (px, py) = {
+            let p = &organism.occupied_cells[0];
+            (p.x, p.y)
+        };
+        let (target_x, target_y) = environment.field.cell_center(field_index);
+        let dx = target_x - px;
+        let dy = target_y - py;
+        let distance = (dx * dx + dy * dy).sqrt();
+        if distance > crate::state::PROCESSING_REACH + f64::EPSILON {
+            return false;
+        }
+
+        let Some(material_index) = environment.field.cells.get(field_index).and_then(|cell| {
+            cell.materials.iter().position(|material| {
+                !material.is_empty() && material.is_valid() && !material.has_internal_structure()
+            })
+        }) else {
+            return false;
+        };
+
+        let Some(material) = environment.field.take_at_index(
+            field_index,
+            material_index,
+            crate::state::PROCESSING_RATE,
+        ) else {
+            return false;
+        };
+
+        if material.has_internal_structure() || material.is_empty() {
+            return false;
+        }
+        organism.store_material(material);
+        true
     }
 
     pub(crate) fn step(&mut self) -> Snapshot {
@@ -245,7 +282,15 @@ impl Simulation {
                             self.active_transformations.push(transformation);
                         }
                     }
-                    ActionKind::Acquire | ActionKind::Expel => {}
+                    ActionKind::Acquire => {
+                        let success = selected.context_key.as_deref()
+                            .and_then(|key| key.strip_prefix("target:"))
+                            .and_then(|index| index.parse::<usize>().ok())
+                            .map(|field_index| Self::acquire_target(organism, environment, field_index))
+                            .unwrap_or(false);
+                        crate::decision_runtime::record_outcome(&mut organism.decision_history, &selected, if success { crate::decision::OutcomeKind::Neutral } else { crate::decision::OutcomeKind::Harmful });
+                    }
+                    ActionKind::Expel => {}
                 }
             }
         }
@@ -332,10 +377,9 @@ mod tests {
             .collect();
 
         assert_eq!(acquire_contexts.len(), 2);
-        assert!(acquire_contexts.contains(&format!("target:{near_a}:0")));
-        assert!(acquire_contexts.contains(&format!("target:{near_b}:0")));
-        assert!(!acquire_contexts.iter().any(|key| key == &format!("target:{near_b}:1")));
-        assert!(!acquire_contexts.iter().any(|key| key.starts_with(&format!("target:{far}:"))));
+        assert!(acquire_contexts.contains(&format!("target:{near_a}")));
+        assert!(acquire_contexts.contains(&format!("target:{near_b}")));
+        assert!(!acquire_contexts.iter().any(|key| key.starts_with(&format!("target:{far}"))));
     }
 
     #[test]
