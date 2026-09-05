@@ -118,10 +118,9 @@ pub(crate) fn try_combine(
         )
         .map(|index| {
             environment.field.cells[index]
-                .bonded
-                .parts
+                .materials
                 .iter()
-                .chain(environment.field.cells[index].unbonded.parts.iter())
+                .flat_map(|material| material.parts.iter())
                 .filter(|(name, _)| name == "Water")
                 .map(|(_, amount)| *amount)
                 .sum::<f64>()
