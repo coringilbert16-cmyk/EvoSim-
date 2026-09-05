@@ -10,6 +10,7 @@ mod environment;
 mod genome;
 mod math;
 mod membrane_geometry;
+mod organism_geometry;
 mod reproduction;
 mod resources;
 mod structural_combine;
