@@ -1,24 +1,10 @@
 //! Exact two-dimensional interface geometry.
-//!
-//! This module measures *shared boundary*, not volume overlap. Boundary
-//! contact is therefore a prerequisite but is not itself a finite interface:
-//! a point contact has zero interface length. The result is intentionally
-//! independent of material composition and permeability; it is pure geometry.
-//!
-//! Supported rigid forms are the current circle and polygonal forms. Fluids
-//! have no authoritative boundary geometry and therefore produce no finite
-//! interface length.
 
 use crate::material_geometry::PlacedMaterialPart;
 use crate::resources::Form;
 
 const GEOMETRIC_EPSILON: f64 = 1e-12;
 
-/// Exact boundary length of one rigid placed form.
-///
-/// Circles use circumference. Polygonal forms use the sum of their edge
-/// lengths. A fluid has no authoritative spatial boundary yet and returns
-/// zero rather than inventing one from `nominal_area`.
 pub fn boundary_length(part: &PlacedMaterialPart) -> f64 {
     match &part.form {
         Form::Circle { radius } if radius.is_finite() && *radius > 0.0 => {
@@ -31,16 +17,12 @@ pub fn boundary_length(part: &PlacedMaterialPart) -> f64 {
     }
 }
 
-/// Exact length of the boundary shared by two rigid placed forms.
+/// Return the finite one-dimensional boundary shared by two rigid forms.
 ///
-/// This deliberately differs from `placed_forms_overlap`: crossing shapes,
-/// tangent shapes, and containment may have physical contact while sharing
-/// zero boundary length. The returned value is therefore zero unless the two
-/// boundaries coincide along a finite one-dimensional segment (or are the
-/// same circle).
-///
-/// `tolerance` is only a geometric comparison tolerance; it does not create a
-/// physical interface of its own.
+/// Transverse boundary crossings invalidate the pair as a finite interface:
+/// an interpenetrating placement must not acquire an interface merely because
+/// some other polygon edges happen to be collinear. Point contact, tangency,
+/// and containment contribute zero length.
 pub fn shared_boundary_length(
     a: &PlacedMaterialPart,
     b: &PlacedMaterialPart,
@@ -72,31 +54,18 @@ pub fn shared_boundary_length(
 fn world_polygon_vertices(part: &PlacedMaterialPart) -> Option<Vec<(f64, f64)>> {
     let vertices = part.form.polygon_vertices()?;
     let (sin, cos) = part.placement.rotation_radians.sin_cos();
-    Some(
-        vertices
-            .into_iter()
-            .map(|(x, y)| {
-                (
-                    part.placement.x + x * cos - y * sin,
-                    part.placement.y + x * sin + y * cos,
-                )
-            })
-            .collect(),
-    )
+    Some(vertices.into_iter().map(|(x, y)| (
+        part.placement.x + x * cos - y * sin,
+        part.placement.y + x * sin + y * cos,
+    )).collect())
 }
 
 fn polygon_perimeter(vertices: &[(f64, f64)]) -> f64 {
-    if vertices.len() < 2 {
-        return 0.0;
-    }
-    vertices
-        .iter()
-        .enumerate()
-        .map(|(index, &(x1, y1))| {
-            let (x2, y2) = vertices[(index + 1) % vertices.len()];
-            (x2 - x1).hypot(y2 - y1)
-        })
-        .sum()
+    if vertices.len() < 2 { return 0.0; }
+    vertices.iter().enumerate().map(|(i, &(x1, y1))| {
+        let (x2, y2) = vertices[(i + 1) % vertices.len()];
+        (x2 - x1).hypot(y2 - y1)
+    }).sum()
 }
 
 fn polygon_shared_boundary_length(
@@ -104,51 +73,75 @@ fn polygon_shared_boundary_length(
     b: &PlacedMaterialPart,
     tolerance: f64,
 ) -> f64 {
-    let (Some(a_vertices), Some(b_vertices)) = (world_polygon_vertices(a), world_polygon_vertices(b))
-    else {
+    let (Some(a_vertices), Some(b_vertices)) =
+        (world_polygon_vertices(a), world_polygon_vertices(b)) else { return 0.0; };
+
+    if polygons_have_transverse_boundary_crossing(&a_vertices, &b_vertices, tolerance) {
         return 0.0;
-    };
-
-    let mut total = 0.0;
-    for (a_index, &a_start) in a_vertices.iter().enumerate() {
-        let a_end = a_vertices[(a_index + 1) % a_vertices.len()];
-        if segment_length(a_start, a_end) <= GEOMETRIC_EPSILON {
-            continue;
-        }
-
-        for (b_index, &b_start) in b_vertices.iter().enumerate() {
-            let b_end = b_vertices[(b_index + 1) % b_vertices.len()];
-            if segment_length(b_start, b_end) <= GEOMETRIC_EPSILON {
-                continue;
-            }
-
-            total += collinear_segment_overlap_length(
-                a_start,
-                a_end,
-                b_start,
-                b_end,
-                tolerance,
-            );
-        }
     }
 
+    let mut total = 0.0;
+    for (ai, &a_start) in a_vertices.iter().enumerate() {
+        let a_end = a_vertices[(ai + 1) % a_vertices.len()];
+        if segment_length(a_start, a_end) <= GEOMETRIC_EPSILON { continue; }
+        for (bi, &b_start) in b_vertices.iter().enumerate() {
+            let b_end = b_vertices[(bi + 1) % b_vertices.len()];
+            if segment_length(b_start, b_end) <= GEOMETRIC_EPSILON { continue; }
+            total += collinear_segment_overlap_length(a_start, a_end, b_start, b_end, tolerance);
+        }
+    }
     total
+}
+
+fn polygons_have_transverse_boundary_crossing(
+    a: &[(f64, f64)],
+    b: &[(f64, f64)],
+    tolerance: f64,
+) -> bool {
+    for (ai, &a_start) in a.iter().enumerate() {
+        let a_end = a[(ai + 1) % a.len()];
+        if segment_length(a_start, a_end) <= GEOMETRIC_EPSILON { continue; }
+        for (bi, &b_start) in b.iter().enumerate() {
+            let b_end = b[(bi + 1) % b.len()];
+            if segment_length(b_start, b_end) <= GEOMETRIC_EPSILON { continue; }
+            if segments_cross_transversely(a_start, a_end, b_start, b_end, tolerance) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn segments_cross_transversely(
+    a_start: (f64, f64), a_end: (f64, f64),
+    b_start: (f64, f64), b_end: (f64, f64), tolerance: f64,
+) -> bool {
+    let ax = a_end.0 - a_start.0;
+    let ay = a_end.1 - a_start.1;
+    let bx = b_end.0 - b_start.0;
+    let by = b_end.1 - b_start.1;
+    let scale = ax.hypot(ay).max(1.0) * bx.hypot(by).max(1.0);
+    let eps = tolerance.max(GEOMETRIC_EPSILON) * scale;
+    if cross(ax, ay, bx, by).abs() <= eps { return false; }
+
+    let c1 = cross(ax, ay, b_start.0 - a_start.0, b_start.1 - a_start.1);
+    let c2 = cross(ax, ay, b_end.0 - a_start.0, b_end.1 - a_start.1);
+    let c3 = cross(bx, by, a_start.0 - b_start.0, a_start.1 - b_start.1);
+    let c4 = cross(bx, by, a_end.0 - b_start.0, a_end.1 - b_start.1);
+
+    ((c1 > eps && c2 < -eps) || (c1 < -eps && c2 > eps))
+        && ((c3 > eps && c4 < -eps) || (c3 < -eps && c4 > eps))
 }
 
 fn segment_length(a: (f64, f64), b: (f64, f64)) -> f64 {
     (b.0 - a.0).hypot(b.1 - a.1)
 }
 
-fn cross(ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
-    ax * by - ay * bx
-}
+fn cross(ax: f64, ay: f64, bx: f64, by: f64) -> f64 { ax * by - ay * bx }
 
 fn collinear_segment_overlap_length(
-    a_start: (f64, f64),
-    a_end: (f64, f64),
-    b_start: (f64, f64),
-    b_end: (f64, f64),
-    tolerance: f64,
+    a_start: (f64, f64), a_end: (f64, f64),
+    b_start: (f64, f64), b_end: (f64, f64), tolerance: f64,
 ) -> f64 {
     let ax = a_end.0 - a_start.0;
     let ay = a_end.1 - a_start.1;
@@ -156,37 +149,17 @@ fn collinear_segment_overlap_length(
     let by = b_start.1 - a_start.1;
     let cx = b_end.0 - a_start.0;
     let cy = b_end.1 - a_start.1;
-
     let scale = ax.hypot(ay).max(1.0);
-    let collinearity_tolerance = tolerance.max(GEOMETRIC_EPSILON) * scale;
-    if cross(ax, ay, bx, by).abs() > collinearity_tolerance
-        || cross(ax, ay, cx, cy).abs() > collinearity_tolerance
-    {
-        return 0.0;
-    }
-
+    let eps = tolerance.max(GEOMETRIC_EPSILON) * scale;
+    if cross(ax, ay, bx, by).abs() > eps || cross(ax, ay, cx, cy).abs() > eps { return 0.0; }
     let length = ax.hypot(ay);
-    if length <= GEOMETRIC_EPSILON {
-        return 0.0;
-    }
-
-    // Project both B endpoints onto A's unit direction. The overlap of the
-    // resulting one-dimensional intervals is the shared physical edge length.
+    if length <= GEOMETRIC_EPSILON { return 0.0; }
     let ux = ax / length;
     let uy = ay / length;
     let b0 = bx * ux + by * uy;
     let b1 = cx * ux + cy * uy;
-    let b_min = b0.min(b1);
-    let b_max = b0.max(b1);
-    let overlap = (length.min(b_max) - 0.0_f64.max(b_min)).max(0.0);
-
-    // A tolerance may make nearly coincident endpoints compare equal, but it
-    // must never manufacture a positive-length interface from a point.
-    if overlap <= tolerance.max(GEOMETRIC_EPSILON) {
-        0.0
-    } else {
-        overlap
-    }
+    let overlap = (length.min(b0.max(b1)) - 0.0_f64.max(b0.min(b1))).max(0.0);
+    if overlap <= tolerance.max(GEOMETRIC_EPSILON) { 0.0 } else { overlap }
 }
 
 #[cfg(test)]
@@ -196,15 +169,7 @@ mod tests {
     use crate::structure::Placement;
 
     fn part(form: Form, x: f64, y: f64, rotation_radians: f64) -> PlacedMaterialPart {
-        PlacedMaterialPart {
-            part_index: 0,
-            form,
-            placement: Placement {
-                x,
-                y,
-                rotation_radians,
-            },
-        }
+        PlacedMaterialPart { part_index: 0, form, placement: Placement { x, y, rotation_radians } }
     }
 
     #[test]
@@ -215,15 +180,7 @@ mod tests {
 
     #[test]
     fn rectangle_boundary_length_is_exact_perimeter() {
-        let rectangle = part(
-            Form::Rectangle {
-                width: 4.0,
-                height: 2.0,
-            },
-            0.0,
-            0.0,
-            0.0,
-        );
+        let rectangle = part(Form::Rectangle { width: 4.0, height: 2.0 }, 0.0, 0.0, 0.0);
         assert!((boundary_length(&rectangle) - 12.0).abs() < 1e-12);
     }
 
@@ -238,100 +195,42 @@ mod tests {
     fn coincident_circles_share_their_entire_circumference() {
         let a = part(Form::Circle { radius: 2.0 }, 5.0, -3.0, 0.0);
         let b = part(Form::Circle { radius: 2.0 }, 5.0, -3.0, 0.0);
-        let expected = 4.0 * std::f64::consts::PI;
-        assert!((shared_boundary_length(&a, &b, 0.0) - expected).abs() < 1e-12);
+        assert!((shared_boundary_length(&a, &b, 0.0) - 4.0 * std::f64::consts::PI).abs() < 1e-12);
     }
 
     #[test]
     fn crossing_polygons_have_zero_shared_boundary_length() {
-        let a = part(
-            Form::Rectangle {
-                width: 4.0,
-                height: 1.0,
-            },
-            0.0,
-            0.0,
-            0.0,
-        );
-        let b = part(
-            Form::Rectangle {
-                width: 1.0,
-                height: 4.0,
-            },
-            0.0,
-            0.0,
-            0.0,
-        );
+        let a = part(Form::Rectangle { width: 4.0, height: 1.0 }, 0.0, 0.0, 0.0);
+        let b = part(Form::Rectangle { width: 1.0, height: 4.0 }, 0.0, 0.0, 0.0);
+        assert_eq!(shared_boundary_length(&a, &b, 0.0), 0.0);
+    }
+
+    #[test]
+    fn overlapping_polygons_with_crossings_do_not_create_a_false_interface() {
+        let a = part(Form::Rectangle { width: 4.0, height: 1.0 }, 0.0, 0.0, 0.0);
+        let b = part(Form::Rectangle { width: 4.0, height: 1.0 }, 0.5, 0.0, 0.0);
         assert_eq!(shared_boundary_length(&a, &b, 0.0), 0.0);
     }
 
     #[test]
     fn identical_rectangles_share_the_full_perimeter() {
-        let a = part(
-            Form::Rectangle {
-                width: 4.0,
-                height: 2.0,
-            },
-            0.0,
-            0.0,
-            0.0,
-        );
-        let b = part(
-            Form::Rectangle {
-                width: 4.0,
-                height: 2.0,
-            },
-            0.0,
-            0.0,
-            0.0,
-        );
+        let a = part(Form::Rectangle { width: 4.0, height: 2.0 }, 0.0, 0.0, 0.0);
+        let b = part(Form::Rectangle { width: 4.0, height: 2.0 }, 0.0, 0.0, 0.0);
         assert!((shared_boundary_length(&a, &b, 0.0) - 12.0).abs() < 1e-12);
     }
 
     #[test]
     fn partially_shared_collinear_edges_return_exact_overlap() {
-        let a = part(
-            Form::Rectangle {
-                width: 4.0,
-                height: 2.0,
-            },
-            0.0,
-            0.0,
-            0.0,
-        );
-        let b = part(
-            Form::Rectangle {
-                width: 2.0,
-                height: 2.0,
-            },
-            3.0,
-            0.0,
-            0.0,
-        );
+        let a = part(Form::Rectangle { width: 4.0, height: 2.0 }, 0.0, 0.0, 0.0);
+        let b = part(Form::Rectangle { width: 2.0, height: 2.0 }, 3.0, 0.0, 0.0);
         assert!((shared_boundary_length(&a, &b, 0.0) - 2.0).abs() < 1e-12);
     }
 
     #[test]
     fn rotated_identical_polygons_share_the_same_boundary_when_rotation_matches() {
         let angle = std::f64::consts::FRAC_PI_4;
-        let a = part(
-            Form::Rectangle {
-                width: 4.0,
-                height: 2.0,
-            },
-            10.0,
-            20.0,
-            angle,
-        );
-        let b = part(
-            Form::Rectangle {
-                width: 4.0,
-                height: 2.0,
-            },
-            10.0,
-            20.0,
-            angle,
-        );
+        let a = part(Form::Rectangle { width: 4.0, height: 2.0 }, 10.0, 20.0, angle);
+        let b = part(Form::Rectangle { width: 4.0, height: 2.0 }, 10.0, 20.0, angle);
         assert!((shared_boundary_length(&a, &b, 0.0) - 12.0).abs() < 1e-10);
     }
 
