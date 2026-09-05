@@ -218,7 +218,11 @@ impl Simulation {
 
         for id in reproduction_requests {
             if let Some(organism) = self.organisms.iter_mut().find(|o| o.id == id) {
-                let _ = crate::reproduction::begin_reproduction(organism, &mut self.rng);
+                let child_id = self.next_organism_id.to_string();
+                let catalog = self.environment.catalog.clone();
+                if crate::reproduction::begin_reproduction(organism, child_id, &mut self.rng, &catalog) {
+                    self.next_organism_id += 1;
+                }
             }
         }
 
@@ -245,7 +249,7 @@ impl Simulation {
         for organism in &self.organisms {
             total += organism.stored_unbonded.total_amount();
             if let Some(construction) = &organism.reproductive_construction { total += construction.committed_material.total_amount(); }
-            total += organism.structure.units.len() as f64;
+            total += organism.structure.units.iter().map(|unit| unit.material.total_amount()).sum::<f64>();
         }
         total
     }

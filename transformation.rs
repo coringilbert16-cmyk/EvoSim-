@@ -23,7 +23,7 @@ impl Simulation {
         let props_a = organism.structure.units.get(bond.unit_a)?.properties(catalog)?;
         let props_b = organism.structure.units.get(bond.unit_b)?.properties(catalog)?;
         let complexity = crate::math::complexity(2.0);
-        let break_work = break_work_cost(*props_a, *props_b, complexity);
+        let break_work = break_work_cost(props_a, props_b, complexity);
         let required_energy = (break_work - bond.bond_energy).max(0.0);
         if organism.usable_energy + f64::EPSILON < required_energy {
             return None;
@@ -89,7 +89,7 @@ This indicates a locking violation or structural corruption.",
         }
 
         let props_a = match organism.structure.units[target_bond.unit_a].properties(&environment.catalog) {
-            Some(properties) => *properties,
+            Some(properties) => properties,
             None => {
                 eprintln!(
                     "CRITICAL: BREAK resolution failed for organism {}: unit_a has no resource properties.",
@@ -100,7 +100,7 @@ This indicates a locking violation or structural corruption.",
             }
         };
         let props_b = match organism.structure.units[target_bond.unit_b].properties(&environment.catalog) {
-            Some(properties) => *properties,
+            Some(properties) => properties,
             None => {
                 eprintln!(
                     "CRITICAL: BREAK resolution failed for organism {}: unit_b has no resource properties.",

@@ -114,13 +114,13 @@ pub fn execute(
         .ok_or(StructuralCombineError::MissingUnit)?;
     let formation = evaluate_formation(candidate, a.cohesion, b.cohesion);
     let (interaction, work_cost, _required) =
-        required_investment(*a, *b, formation, water_field)?;
+        required_investment(a, b, formation, water_field)?;
 
     if investment < formation.threshold.max(work_cost) {
         return Err(StructuralCombineError::InsufficientInvestment);
     }
     let surplus = investment - formation.threshold;
-    let bond_strength = bond_strength(*a, *b);
+    let bond_strength = bond_strength(a, b);
     if !bond_strength.is_finite() {
         return Err(StructuralCombineError::NonFiniteBondStrength);
     }

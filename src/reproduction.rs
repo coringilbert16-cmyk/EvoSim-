@@ -463,26 +463,31 @@ mod tests {
 
         assert!(!advance_construction(&mut construction, &catalog));
 
-        let mut parent_material = Material::free_base("Methane", 1.0);
-        let sender = CellSiteRef {
-            organism_id: "parent".into(),
-            unit_index: 0,
-            point_index: 0,
-        };
-        let receiver = CellSiteRef {
-            organism_id: "child".into(),
-            unit_index: 0,
-            point_index: 3,
-        };
+        let mut parent = adult_parent(0.0);
+        parent.stored_unbonded = Material::free_base("Methane", 1.0);
+        let mut child = adult_parent(0.0);
+        child.id = "child".into();
+        child.structure.units[0].placement.x = 1.0;
+
         crate::material_transfer::transfer_unbonded_material(
             &connection,
-            sender,
-            receiver,
-            &mut parent_material,
-            &mut construction.committed_material,
+            CellSiteRef {
+                organism_id: "parent".into(),
+                unit_index: 0,
+                point_index: 0,
+            },
+            CellSiteRef {
+                organism_id: "child".into(),
+                unit_index: 0,
+                point_index: 3,
+            },
+            &mut parent,
+            &mut child,
             1.0,
         )
         .expect("connected parent-to-offspring transfer should succeed");
+
+        construction.committed_material = child.stored_unbonded;
 
         assert!(advance_construction(&mut construction, &catalog));
         assert_eq!(construction.next_blueprint_element, 2);

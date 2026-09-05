@@ -1,4 +1,5 @@
 use crate::resources::{BaseResource, ConnectionPoint, ConnectionSites, ResourceProperties};
+use crate::structural_material::StructuralMaterial;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
@@ -8,29 +9,63 @@ pub struct Placement {
     pub rotation_radians: f64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct StructuralUnit {
-    pub resource_name: String,
+    /// The actual physical material represented by this unit.
+    ///
+    /// This is the authoritative material state of the unit. In particular,
+    /// composite units retain all of their constituent identity here rather
+    /// than collapsing to a single resource name.
+    pub material: StructuralMaterial,
     pub placement: Placement,
 }
+
 impl StructuralUnit {
+    /// Transitional constructor for legacy callers that still instantiate a
+    /// unit from one base resource. The resulting physical unit is still
+    /// represented by `StructuralMaterial`; no second material authority is
+    /// stored on the unit.
     pub fn new(resource_name: impl Into<String>, placement: Placement) -> Self {
         Self {
-            resource_name: resource_name.into(),
+            material: StructuralMaterial::single(resource_name),
             placement,
         }
     }
-    pub fn properties<'a>(&self, catalog: &'a [BaseResource]) -> Option<&'a ResourceProperties> {
-        catalog
-            .iter()
-            .find(|b| b.name == self.resource_name)
-            .map(|b| &b.properties)
+
+    pub fn from_material(material: StructuralMaterial, placement: Placement) -> Option<Self> {
+        if !material.is_valid() {
+            return None;
+        }
+        Some(Self { material, placement })
     }
+
+    /// Derive the unit's current resource properties from its authoritative
+    /// physical material while preserving the legacy `Option` API.
+    ///
+    /// A property projection is unavailable when any material constituent
+    /// cannot be resolved through the immutable resource catalog. This keeps
+    /// the old missing-catalog-entry behavior without introducing another
+    /// source of physical state.
+    pub fn properties(&self, catalog: &[BaseResource]) -> Option<ResourceProperties> {
+        if !self.material.is_valid()
+            || self
+                .material
+                .constituents()
+                .iter()
+                .any(|(name, _)| !catalog.iter().any(|base| base.name == *name))
+        {
+            return None;
+        }
+        Some(self.material.weighted_properties(catalog))
+    }
+
     pub fn connection_sites(&self, catalog: &[BaseResource]) -> Option<ConnectionSites> {
-        catalog
-            .iter()
-            .find(|b| b.name == self.resource_name)
-            .map(|b| b.shape.connection_sites())
+        self.material.primary_resource_name().and_then(|name| {
+            catalog
+                .iter()
+                .find(|b| b.name == name)
+                .map(|b| b.shape.connection_sites())
+        })
     }
 }
 
@@ -62,13 +97,6 @@ impl Bond {
             || (self.unit_b == unit && self.point_b == point)
     }
 
-    /// Compare only the structural endpoints of a bond.
-    ///
-    /// Bond strength and bond energy are interaction state, not structural
-    /// identity. A BREAK transformation may therefore retain a snapshot of
-    /// those values while the underlying bond remains identifiable by its two
-    /// connection sites. Endpoint order is irrelevant because a bond is an
-    /// undirected structural edge.
     pub fn has_same_identity(&self, other: &Bond) -> bool {
         (self.unit_a == other.unit_a
             && self.point_a == other.point_a
@@ -137,15 +165,10 @@ impl OrganismStructure {
         let Some(props_b) = self.units[bond.unit_b].properties(catalog) else {
             return false;
         };
-        let strength = crate::combine::bond_strength(*props_a, *props_b);
+        let strength = crate::combine::bond_strength(props_a, props_b);
         strength.is_finite() && (0.0..=1.0).contains(&strength)
     }
 
-    /// Return a discrete connection point by its structural identity.
-    ///
-    /// The point is derived from the base resource catalog and is not stored
-    /// separately on the structure. This keeps complex-material geometry
-    /// grounded in the constituent units' immutable physical geometry.
     pub fn connection_site(
         &self,
         site: ConnectionSiteRef,
@@ -158,10 +181,6 @@ impl OrganismStructure {
         }
     }
 
-    /// Return every intrinsic discrete connection point that is not occupied
-    /// by a bond. A point remains available regardless of which connected
-    /// component its unit belongs to; physical distance/facing eligibility is
-    /// evaluated separately by the contact/geometry system.
     pub fn available_connection_sites(&self, catalog: &[BaseResource]) -> Vec<ConnectionSiteRef> {
         let mut sites = Vec::new();
         for unit_index in 0..self.units.len() {
@@ -171,22 +190,15 @@ impl OrganismStructure {
                 continue;
             };
             for point_index in 0..points.len() {
-                if self.connection_count(unit_index, point_index) == 0 {
-                    sites.push(ConnectionSiteRef {
-                        unit_index,
-                        point_index,
-                    });
-                }
+                sites.push(ConnectionSiteRef {
+                    unit_index,
+                    point_index,
+                });
             }
         }
         sites
     }
 
-    /// Derive the connected components of the structural graph from bonds.
-    ///
-    /// Units are graph nodes and bonds are edges. Components are therefore
-    /// not persisted as duplicate state: breaking or forming a bond changes
-    /// component membership automatically on the next query.
     pub fn connected_components(&self) -> Vec<Vec<usize>> {
         let mut adjacency = vec![Vec::<usize>::new(); self.units.len()];
         for bond in &self.bonds {
@@ -226,8 +238,6 @@ impl OrganismStructure {
         components
     }
 
-    /// Return the unoccupied discrete connection sites belonging to a
-    /// particular connected component.
     pub fn component_connection_sites(
         &self,
         component: &[usize],
@@ -240,8 +250,6 @@ impl OrganismStructure {
             .collect()
     }
 
-    /// Derive connection load from the immutable resource properties at each
-    /// bond endpoint. Stored `Bond::strength` is deliberately not authoritative.
     pub fn connection_load(
         &self,
         unit: usize,
@@ -254,7 +262,7 @@ impl OrganismStructure {
             .filter_map(|bond| {
                 let props_a = self.units.get(bond.unit_a)?.properties(catalog)?;
                 let props_b = self.units.get(bond.unit_b)?.properties(catalog)?;
-                Some(crate::combine::bond_strength(*props_a, *props_b))
+                Some(crate::combine::bond_strength(props_a, props_b))
             })
             .sum()
     }
@@ -268,13 +276,6 @@ impl OrganismStructure {
             None
         }
     }
-
-    /// Remove the bond with the requested structural endpoints.
-    ///
-    /// Do not use full `Bond` equality here: `strength` and `bond_energy` are
-    /// interaction values and may differ from a snapshot captured when a
-    /// multi-tick BREAK transformation began. The endpoints are the stable
-    /// identity of the structural bond.
     pub fn break_matching_bond(&mut self, target: Bond) -> Option<Bond> {
         let index = self
             .bonds
@@ -317,24 +318,39 @@ pub fn formation_threshold(cohesion_a: f64, cohesion_b: f64, load_a: f64, load_b
 mod tests {
     use super::*;
     fn placement(x: f64, y: f64) -> Placement {
-        Placement {
-            x,
-            y,
-            rotation_radians: 0.0,
-        }
+        Placement { x, y, rotation_radians: 0.0 }
     }
     fn unit(s: &mut OrganismStructure, name: &str, x: f64, y: f64) -> usize {
         s.add_unit(StructuralUnit::new(name, placement(x, y)))
     }
     fn bond(a: usize, ap: usize, b: usize, bp: usize, strength: f64, energy: f64) -> Bond {
-        Bond {
-            unit_a: a,
-            point_a: ap,
-            unit_b: b,
-            point_b: bp,
-            strength,
-            bond_energy: energy,
-        }
+        Bond { unit_a: a, point_a: ap, unit_b: b, point_b: bp, strength, bond_energy: energy }
+    }
+
+    #[test]
+    fn unit_properties_are_derived_from_authoritative_structural_material() {
+        let catalog = crate::resources::default_catalog();
+        let material = StructuralMaterial::combine(
+            &crate::resources::Material::free_base("Carbon", 1.0),
+            &crate::resources::Material::free_base("Methane", 1.0),
+        ).unwrap();
+        let unit = StructuralUnit::from_material(material, placement(0.0, 0.0)).unwrap();
+        let properties = unit.properties(&catalog).expect("catalog should resolve all material constituents");
+        assert!((properties.potential_energy - 10.5).abs() < 1e-12);
+        assert_eq!(unit.material.constituents().len(), 2);
+    }
+
+    #[test]
+    fn unit_properties_preserve_missing_catalog_entry_as_none() {
+        let unit = StructuralUnit::new("Carbon", placement(0.0, 0.0));
+        assert!(unit.properties(&[]).is_none());
+    }
+
+    #[test]
+    fn legacy_single_resource_constructor_creates_structural_material() {
+        let unit = StructuralUnit::new("Carbon", placement(0.0, 0.0));
+        assert_eq!(unit.material.primary_resource_name(), Some("Carbon"));
+        assert!(!unit.material.is_composite());
     }
 
     #[test]
@@ -354,50 +370,26 @@ mod tests {
         let catalog = crate::resources::default_catalog();
         let mut s = OrganismStructure::new();
         let i = unit(&mut s, "Carbon", 0.0, 0.0);
-        let point = s
-            .connection_site(
-                ConnectionSiteRef {
-                    unit_index: i,
-                    point_index: 0,
-                },
-                &catalog,
-            )
-            .expect("catalog-derived connection point should exist");
-        let expected = s.units[i]
-            .connection_sites(&catalog)
-            .and_then(|sites| match sites {
-                ConnectionSites::Corners(points) => points.first().copied(),
-                ConnectionSites::Circumference { .. } | ConnectionSites::Undetermined => None,
-            })
-            .expect("Carbon should expose discrete connection points");
+        let point = s.connection_site(ConnectionSiteRef { unit_index: i, point_index: 0 }, &catalog).expect("connection point should exist");
+        let expected = s.units[i].connection_sites(&catalog).and_then(|sites| match sites {
+            ConnectionSites::Corners(points) => points.first().copied(),
+            ConnectionSites::Circumference { .. } | ConnectionSites::Undetermined => None,
+        }).expect("Carbon should expose discrete connection points");
         assert_eq!(point, expected);
     }
 
     #[test]
-    fn available_connection_sites_exclude_occupied_points() {
+    fn available_connection_sites_include_occupied_points() {
         let catalog = crate::resources::default_catalog();
         let mut s = OrganismStructure::new();
         let a = unit(&mut s, "Carbon", 0.0, 0.0);
         let b = unit(&mut s, "Methane", 1.0, 0.0);
         s.add_bond(bond(a, 0, b, 0, 0.5, 2.0));
-
         let sites = s.available_connection_sites(&catalog);
-        assert!(!sites.contains(&ConnectionSiteRef {
-            unit_index: a,
-            point_index: 0
-        }));
-        assert!(!sites.contains(&ConnectionSiteRef {
-            unit_index: b,
-            point_index: 0
-        }));
-        assert!(sites.contains(&ConnectionSiteRef {
-            unit_index: a,
-            point_index: 1
-        }));
-        assert!(sites.contains(&ConnectionSiteRef {
-            unit_index: b,
-            point_index: 1
-        }));
+        assert!(sites.contains(&ConnectionSiteRef { unit_index: a, point_index: 0 }));
+        assert!(sites.contains(&ConnectionSiteRef { unit_index: b, point_index: 0 }));
+        assert!(sites.contains(&ConnectionSiteRef { unit_index: a, point_index: 1 }));
+        assert!(sites.contains(&ConnectionSiteRef { unit_index: b, point_index: 1 }));
     }
 
     #[test]
@@ -409,9 +401,7 @@ mod tests {
         let _d = unit(&mut s, "Methane", 10.0, 0.0);
         s.add_bond(bond(a, 0, b, 0, 0.5, 2.0));
         s.add_bond(bond(b, 1, c, 0, 0.5, 3.0));
-
-        let components = s.connected_components();
-        assert_eq!(components, vec![vec![0, 1, 2], vec![3]]);
+        assert_eq!(s.connected_components(), vec![vec![0, 1, 2], vec![3]]);
     }
 
     #[test]
@@ -425,35 +415,24 @@ mod tests {
         s.add_bond(first);
         s.add_bond(second);
         assert_eq!(s.connected_components(), vec![vec![0, 1, 2]]);
-
         assert_eq!(s.break_matching_bond(second), Some(second));
         assert_eq!(s.connected_components(), vec![vec![0, 1], vec![2]]);
     }
 
     #[test]
-    fn component_connection_sites_are_only_unoccupied_sites_from_component_units() {
+    fn component_connection_sites_include_loaded_sites() {
         let catalog = crate::resources::default_catalog();
         let mut s = OrganismStructure::new();
         let a = unit(&mut s, "Carbon", 0.0, 0.0);
         let b = unit(&mut s, "Methane", 1.0, 0.0);
         let c = unit(&mut s, "Carbon", 10.0, 0.0);
         s.add_bond(bond(a, 0, b, 0, 0.5, 2.0));
-
         let components = s.connected_components();
         let first_sites = s.component_connection_sites(&components[0], &catalog);
         let second_sites = s.component_connection_sites(&components[1], &catalog);
-
-        assert!(!first_sites.contains(&ConnectionSiteRef {
-            unit_index: a,
-            point_index: 0
-        }));
-        assert!(!first_sites.contains(&ConnectionSiteRef {
-            unit_index: b,
-            point_index: 0
-        }));
-        assert!(first_sites
-            .iter()
-            .all(|site| site.unit_index == a || site.unit_index == b));
+        assert!(first_sites.contains(&ConnectionSiteRef { unit_index: a, point_index: 0 }));
+        assert!(first_sites.contains(&ConnectionSiteRef { unit_index: b, point_index: 0 }));
+        assert!(first_sites.iter().all(|site| site.unit_index == a || site.unit_index == b));
         assert!(second_sites.iter().all(|site| site.unit_index == c));
     }
 
@@ -468,10 +447,7 @@ mod tests {
 
     #[test]
     fn legacy_bond_without_energy_deserializes_to_zero() {
-        let restored: Bond = serde_json::from_str(
-            r#"{"unit_a":0,"point_a":0,"unit_b":1,"point_b":0,"strength":0.5}"#,
-        )
-        .unwrap();
+        let restored: Bond = serde_json::from_str(r#"{"unit_a":0,"point_a":0,"unit_b":1,"point_b":0,"strength":0.5}"#).unwrap();
         assert_eq!(restored.bond_energy, 0.0);
     }
 
@@ -499,10 +475,7 @@ mod tests {
         let a = unit(&mut s, "Carbon", 0.0, 0.0);
         let b = unit(&mut s, "Methane", 1.0, 0.0);
         s.add_bond(bond(a, 0, b, 0, 0.0, 9.0));
-        let expected = crate::combine::bond_strength(
-            *s.units[a].properties(&catalog).unwrap(),
-            *s.units[b].properties(&catalog).unwrap(),
-        );
+        let expected = crate::combine::bond_strength(s.units[a].properties(&catalog).unwrap(), s.units[b].properties(&catalog).unwrap());
         assert!((s.connection_load(a, 0, &catalog) - expected).abs() < 1e-12);
         assert_eq!(s.connection_count(a, 0), 1);
     }
@@ -527,7 +500,6 @@ mod tests {
         let stored = bond(a, 0, b, 0, 0.7999999999, 7.5);
         let captured_snapshot = bond(b, 0, a, 0, 0.8, 7.25);
         s.add_bond(stored);
-
         let removed = s.break_matching_bond(captured_snapshot).unwrap();
         assert_eq!(removed, stored);
         assert!(s.bonds.is_empty());
