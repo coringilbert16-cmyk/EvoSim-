@@ -12,6 +12,7 @@ mod interface_geometry;
 mod math;
 mod material_geometry;
 mod membrane_geometry;
+mod organism_boundary;
 mod organism_geometry;
 mod boundary_contact;
 mod permeability;
