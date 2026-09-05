@@ -26,3 +26,5 @@ The repository is intentionally being stabilized before a larger source-tree reo
 ## Development principle
 
 Simulation behavior should be validated through the live lifecycle rather than only through tests that construct convenient artificial state. Changes to core simulation rules should therefore be accompanied by tests that demonstrate reachable behavior where practical.
+
+<!-- CI verification marker. -->
