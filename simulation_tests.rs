@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod integration_tests {
     use crate::decision::{ActionKind, OutcomeKind};
-    use crate::resources::Material;
+    use crate::resources::{InternalBond, Material};
     use crate::state::Simulation;
     use crate::structure::{Bond, Placement, StructuralUnit};
 
@@ -16,15 +16,15 @@ mod integration_tests {
     #[test]
     fn store_unbonded_material_accepts_raw_material_only() {
         let mut organism = Simulation::create_initial_organism();
-        organism.store_unbonded_material(Material {
-            parts: vec![("Carbon".into(), 5.0)],
-            bonded: false,
-        });
+        organism.store_unbonded_material(Material::free_base("Carbon", 5.0));
         assert!((organism.stored_unbonded.total_amount() - 5.0).abs() < 1e-9);
-        organism.store_unbonded_material(Material {
-            parts: vec![("Carbon".into(), 3.0)],
-            bonded: true,
-        });
+
+        let structured = Material {
+            parts: vec![("Carbon".into(), 1.5), ("Hydrogen".into(), 1.5)],
+            internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
+        };
+        assert!(structured.has_internal_structure());
+        organism.store_unbonded_material(structured);
         assert!((organism.stored_unbonded.total_amount() - 5.0).abs() < 1e-9);
         assert!(organism.structure.units.is_empty());
     }
