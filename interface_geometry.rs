@@ -11,7 +11,7 @@ pub fn boundary_length(part: &PlacedMaterialPart) -> f64 {
             std::f64::consts::TAU * radius
         }
         Form::Circle { .. } | Form::Fluid { .. } => 0.0,
-        form => world_polygon_vertices(part)
+        _form => world_polygon_vertices(part)
             .map(|vertices| polygon_perimeter(&vertices))
             .unwrap_or(0.0),
     }
@@ -120,8 +120,8 @@ fn polygons_interpenetrate(
     tolerance: f64,
 ) -> bool {
     polygons_have_transverse_boundary_crossing(a, b, tolerance)
-        || polygon_has_strictly_interior_vertex(a, b, tolerance)
-        || polygon_has_strictly_interior_vertex(b, a, tolerance)
+        || polygon_has_strictly_interior_boundary_point(a, b, tolerance)
+        || polygon_has_strictly_interior_boundary_point(b, a, tolerance)
 }
 
 fn polygons_have_transverse_boundary_crossing(
@@ -147,15 +147,29 @@ fn polygons_have_transverse_boundary_crossing(
     false
 }
 
-fn polygon_has_strictly_interior_vertex(
+/// Detect a boundary segment that passes through the strict interior of the
+/// other polygon. This catches interpenetration even when the overlapping
+/// boundaries are collinear and therefore have no transverse crossing.
+fn polygon_has_strictly_interior_boundary_point(
     subject: &[(f64, f64)],
     container: &[(f64, f64)],
     tolerance: f64,
 ) -> bool {
-    subject
-        .iter()
-        .copied()
-        .any(|point| point_is_strictly_inside_polygon(point, container, tolerance))
+    subject.iter().enumerate().any(|(index, &start)| {
+        let end = subject[(index + 1) % subject.len()];
+        if segment_length(start, end) <= GEOMETRIC_EPSILON {
+            return false;
+        }
+
+        if point_is_strictly_inside_polygon(start, container, tolerance)
+            || point_is_strictly_inside_polygon(end, container, tolerance)
+        {
+            return true;
+        }
+
+        let midpoint = ((start.0 + end.0) * 0.5, (start.1 + end.1) * 0.5);
+        point_is_strictly_inside_polygon(midpoint, container, tolerance)
+    })
 }
 
 fn point_is_strictly_inside_polygon(
