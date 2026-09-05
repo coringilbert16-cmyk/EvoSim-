@@ -8,6 +8,7 @@ mod decision;
 mod decision_runtime;
 mod environment;
 mod genome;
+mod interface_geometry;
 mod math;
 mod material_geometry;
 mod membrane_geometry;
