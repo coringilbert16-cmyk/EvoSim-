@@ -134,7 +134,6 @@ impl crate::state::Simulation {
                     .push(ResourceObservation {
                         name: label,
                         properties,
-                        bonded: material.has_internal_structure(),
                         perceived_amount,
                         deviations,
                         affinity_responses: responses,
