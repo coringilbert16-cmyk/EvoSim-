@@ -224,12 +224,9 @@ mod tests {
     }
 
     #[test]
-    fn bonded_material_can_be_instantiated_as_a_physical_unit() {
+    fn raw_material_can_be_instantiated_as_a_physical_unit() {
         let catalog = default_catalog();
-        let mut raw = Material {
-            parts: vec![("Carbon".to_string(), 1.0)],
-            bonded: true,
-        };
+        let mut raw = Material::free_base("Carbon", 1.0);
         let mut structure = OrganismStructure::new();
         let index = instantiate_raw_unit(
             &mut structure,
@@ -246,6 +243,7 @@ mod tests {
         assert_eq!(index, 0);
         assert_eq!(structure.units.len(), 1);
         assert!(raw.is_empty());
+        assert!(!raw.has_internal_structure());
     }
 
     #[test]
