@@ -246,7 +246,7 @@ fn realize_new_blueprint_connections(
 }
 
 fn has_required_material(available: &Material, required: &Material) -> bool {
-    if available.bonded || required.bonded || required.is_empty() {
+    if available.bonded || required.is_empty() {
         return false;
     }
 
