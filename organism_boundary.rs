@@ -13,7 +13,7 @@
 use crate::interface_geometry::shared_boundary_length;
 use crate::material_geometry::PlacedMaterialPart;
 use crate::organism_geometry::OrganismBodyGeometry;
-use crate::resources::{BaseResource, Form};
+use crate::resources::BaseResource;
 use crate::structure::Placement;
 
 /// A boundary constituent retained as an exposed portion of the realized body.
@@ -101,7 +101,7 @@ pub fn exposed_boundary(
         }
     }
 
-    let total_length = parts.iter().map(|part| part.length).sum();
+    let total_length: f64 = parts.iter().map(|part| part.length).sum();
     if !total_length.is_finite() {
         return None;
     }
@@ -158,8 +158,7 @@ mod tests {
         let catalog = default_catalog();
         let body = body(&[("Carbon", 0.0, 0.0), ("Carbon", 0.877_382, 0.0)]);
         let boundary = exposed_boundary(&body, &catalog, 0.0).unwrap();
-        let single = std::f64::consts::TAU * 0.0;
-        assert!(boundary.total_length > single);
+        assert!(boundary.total_length > 0.0);
     }
 
     #[test]
