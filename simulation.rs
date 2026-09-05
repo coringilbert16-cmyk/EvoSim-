@@ -284,3 +284,77 @@ impl Simulation {
         total
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::decision::{DecisionHistory, OutcomeKind};
+    use crate::resources::{InternalBond, Material};
+
+    #[test]
+    fn acquire_eligibility_requires_reachable_free_material() {
+        let mut sim = Simulation::new(1, 10.0);
+        assert!(!Simulation::action_eligibility(&sim.organisms[0], &sim.environment).can_acquire);
+
+        let reachable = sim.environment.field.index_for_position(500.0, 500.0).unwrap();
+        sim.environment.field.deposit_at_index(reachable, Material::free_base("Carbon", 5.0));
+        assert!(Simulation::action_eligibility(&sim.organisms[0], &sim.environment).can_acquire);
+
+        sim.environment.field.cells[reachable].materials.clear();
+        sim.environment.field.deposit_at_index(reachable, Material {
+            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+            internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
+        });
+        assert!(!Simulation::action_eligibility(&sim.organisms[0], &sim.environment).can_acquire);
+    }
+
+    #[test]
+    fn acquire_candidates_identify_each_target_and_ignore_unreachable_or_structured_material() {
+        let mut sim = Simulation::new(2, 10.0);
+        let near_a = sim.environment.field.index_for_position(500.0, 500.0).unwrap();
+        let near_b = sim.environment.field.index_for_position(525.0, 500.0).unwrap();
+        let far = sim.environment.field.index_for_position(600.0, 500.0).unwrap();
+        sim.environment.field.deposit_at_index(near_a, Material::free_base("Carbon", 5.0));
+        sim.environment.field.deposit_at_index(near_b, Material::free_base("Hydrogen", 5.0));
+        sim.environment.field.deposit_at_index(near_b, Material {
+            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+            internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
+        });
+        sim.environment.field.deposit_at_index(far, Material::free_base("Sulfur", 5.0));
+
+        let needs = CurrentNeeds { survival: 1.0, reproduction: 0.0 };
+        let eligibility = Simulation::action_eligibility(&sim.organisms[0], &sim.environment);
+        let candidates = Simulation::decision_candidates(&sim.organisms[0], &sim.environment, needs, eligibility);
+        let acquire_contexts: Vec<_> = candidates.iter()
+            .filter(|candidate| candidate.action == ActionKind::Acquire)
+            .map(|candidate| candidate.context_key.clone().unwrap())
+            .collect();
+
+        assert_eq!(acquire_contexts.len(), 2);
+        assert!(acquire_contexts.contains(&format!("target:{near_a}:0")));
+        assert!(acquire_contexts.contains(&format!("target:{near_b}:0")));
+        assert!(!acquire_contexts.iter().any(|key| key == &format!("target:{near_b}:1")));
+        assert!(!acquire_contexts.iter().any(|key| key.starts_with(&format!("target:{far}:"))));
+    }
+
+    #[test]
+    fn target_specific_history_can_change_acquire_target_selection() {
+        let mut sim = Simulation::new(3, 10.0);
+        let near_a = sim.environment.field.index_for_position(500.0, 500.0).unwrap();
+        let near_b = sim.environment.field.index_for_position(525.0, 500.0).unwrap();
+        sim.environment.field.deposit_at_index(near_a, Material::free_base("Carbon", 5.0));
+        sim.environment.field.deposit_at_index(near_b, Material::free_base("Hydrogen", 5.0));
+
+        let needs = CurrentNeeds { survival: 1.0, reproduction: 0.0 };
+        let eligibility = Simulation::action_eligibility(&sim.organisms[0], &sim.environment);
+        let candidates = Simulation::decision_candidates(&sim.organisms[0], &sim.environment, needs, eligibility);
+        let acquire_candidates: Vec<_> = candidates.into_iter().filter(|candidate| candidate.action == ActionKind::Acquire).collect();
+        assert_eq!(acquire_candidates.len(), 2);
+
+        let mut history = DecisionHistory::default();
+        history.record(ActionKind::Acquire, acquire_candidates[0].context_key.clone(), OutcomeKind::Harmful);
+        let context = DecisionContext { needs, eligibility };
+        let selected = select_action(context, &history, &acquire_candidates).unwrap();
+        assert_eq!(selected.context_key, acquire_candidates[1].context_key);
+    }
+}
