@@ -342,7 +342,7 @@ mod tests {
     #[test]
     fn duplicate_required_parts_are_aggregated_before_consumption() {
         let mut committed = Material { parts: vec![("Carbon".into(), 1.5), ("Carbon".into(), 0.5)], bonded: false };
-        let required = Material { parts: vec![("Carbon".into(), 1.0), ("Carbon".into(), 1.0)], bonded: true };
+        let required = Material { parts: vec![("Carbon".into(), 1.0), ("Carbon".into(), 1.0)], bonded: false };
         let taken = take_required_material(&mut committed, &required).unwrap();
         assert_eq!(taken.parts, vec![("Carbon".into(), 2.0)]);
         assert!(committed.is_empty());
