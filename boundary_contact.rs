@@ -108,7 +108,9 @@ fn circle_circle_boundary_contact(
     tolerance: f64,
 ) -> bool {
     let distance = (a.placement.x - b.placement.x).hypot(a.placement.y - b.placement.y);
-    (distance - (ar + br)).abs() <= tolerance
+    let sum = ar + br;
+    let difference = (ar - br).abs();
+    distance >= difference - tolerance && distance <= sum + tolerance
 }
 
 fn circle_polygon_boundary_contact(
@@ -266,6 +268,19 @@ mod tests {
     }
 
     #[test]
+    fn intersecting_rigid_boundaries_create_an_interface() {
+        let body = body_at(0.0, 0.0);
+        let material = material_at("Hydrogen", 1.0, 0.0);
+        assert_eq!(
+            boundary_contacts(&body, &material, 0.0),
+            vec![BoundaryContact {
+                organism_unit_index: 0,
+                material_part_index: 0,
+            }]
+        );
+    }
+
+    #[test]
     fn separated_rigid_boundaries_have_no_interface() {
         let body = body_at(0.0, 0.0);
         let material = material_at("Hydrogen", 1000.0, 0.0);
@@ -273,7 +288,7 @@ mod tests {
     }
 
     #[test]
-    fn_contained_rigid_material_is_not_mistaken_for_boundary_contact() {
+    fn contained_rigid_material_is_not_mistaken_for_boundary_contact() {
         let body = body_at(0.0, 0.0);
         let material = material_at("Hydrogen", 0.0, 0.0);
         assert!(boundary_contacts(&body, &material, 0.0).is_empty());
