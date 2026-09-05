@@ -9,10 +9,11 @@ pub const MATERIAL_EPSILON: f64 = 1e-9;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FieldCell {
-    /// Distinct physical material stacks occupying this ecological cell.
+    /// Physical material stacks occupying this ecological cell.
     ///
-    /// Unstructured base stock may be aggregated into one entry, but a
-    /// structured material is never merged with another structured material.
+    /// Unstructured base stock may be aggregated into one entry. Structured
+    /// material remains a distinct physical object and is not fractionally
+    /// split by ecological diffusion.
     /// Material composition and internal structure remain authoritative.
     pub materials: Vec<Material>,
 }
@@ -212,6 +213,14 @@ impl ActiveMaterialField {
             }
             let material_count = self.cells[i].materials.len();
             for material_index in 0..material_count {
+                // Diffusion transfers free ecological stock. A structured
+                // material is a physical object; fractionally splitting it
+                // here would duplicate its internal bond graph into multiple
+                // stacks on every step and cause exponential stack growth.
+                if self.cells[i].materials[material_index].has_internal_structure() {
+                    continue;
+                }
+
                 let total = self.cells[i].materials[material_index].total_amount();
                 if total <= MATERIAL_EPSILON {
                     continue;
