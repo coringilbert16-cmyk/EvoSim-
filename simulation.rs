@@ -132,10 +132,39 @@ impl Simulation {
         organism.reproductive_readiness = (organism.reproductive_readiness + accumulation).clamp(0.0, 1.0);
     }
 
-    fn action_eligibility(organism: &Organism, _environment: &Environment) -> ActionEligibility {
+    fn acquisition_targets(organism: &Organism, environment: &Environment) -> Vec<(usize, usize)> {
+        let (px, py) = {
+            let p = &organism.occupied_cells[0];
+            (p.x, p.y)
+        };
+        let mut targets = Vec::new();
+        for field_index in environment.field.cells_within_radius(px, py, crate::state::PROCESSING_REACH) {
+            let (target_x, target_y) = environment.field.cell_center(field_index);
+            let dx = target_x - px;
+            let dy = target_y - py;
+            let distance = (dx * dx + dy * dy).sqrt();
+            if distance > crate::state::PROCESSING_REACH + f64::EPSILON {
+                continue;
+            }
+            for (material_index, material) in environment.field.cells[field_index].materials.iter().enumerate() {
+                if material.is_empty() || !material.is_valid() || material.has_internal_structure() {
+                    continue;
+                }
+                targets.push((field_index, material_index));
+            }
+        }
+        targets
+    }
+
+    fn acquisition_context_key(field_index: usize, material_index: usize) -> String {
+        format!("target:{field_index}:{material_index}")
+    }
+
+    fn action_eligibility(organism: &Organism, environment: &Environment) -> ActionEligibility {
         ActionEligibility {
             can_move: organism.active_transformation_id.is_none(),
-            can_acquire: false,
+            can_acquire: organism.active_transformation_id.is_none()
+                && !Self::acquisition_targets(organism, environment).is_empty(),
             can_combine: organism.active_transformation_id.is_none()
                 && (organism.structure.units.len() >= 2 || organism.stored_material.total_amount() >= 2.0 - f64::EPSILON),
             can_break: organism.active_transformation_id.is_none() && !organism.structure.bonds.is_empty(),
@@ -143,7 +172,7 @@ impl Simulation {
         }
     }
 
-    fn decision_candidates(organism: &Organism, needs: CurrentNeeds, eligibility: ActionEligibility) -> Vec<ActionCandidate> {
+    fn decision_candidates(organism: &Organism, environment: &Environment, needs: CurrentNeeds, eligibility: ActionEligibility) -> Vec<ActionCandidate> {
         let mut candidates = Vec::new();
         let relevant = |action: ActionKind| eligibility.permits(action) && needs.any_for(action.relevant_needs());
         if relevant(ActionKind::Break) {
@@ -151,7 +180,12 @@ impl Simulation {
         }
         if relevant(ActionKind::Combine) { candidates.push(ActionCandidate { action: ActionKind::Combine, context_key: None }); }
         if relevant(ActionKind::Move) { candidates.push(ActionCandidate { action: ActionKind::Move, context_key: None }); }
-        if relevant(ActionKind::Acquire) { candidates.push(ActionCandidate { action: ActionKind::Acquire, context_key: None }); }
+        if relevant(ActionKind::Acquire) {
+            candidates.extend(Self::acquisition_targets(organism, environment).into_iter().map(|(field_index, material_index)| ActionCandidate {
+                action: ActionKind::Acquire,
+                context_key: Some(Self::acquisition_context_key(field_index, material_index)),
+            }));
+        }
         if relevant(ActionKind::Expel) { candidates.push(ActionCandidate { action: ActionKind::Expel, context_key: None }); }
         candidates
     }
@@ -194,7 +228,7 @@ impl Simulation {
                 let needs = Self::current_needs(organism, environment, decision_parameters);
                 let eligibility = Self::action_eligibility(organism, environment);
                 let context = DecisionContext { needs, eligibility };
-                let candidates = Self::decision_candidates(organism, needs, eligibility);
+                let candidates = Self::decision_candidates(organism, environment, needs, eligibility);
                 let Some(selected) = select_action(context, &organism.decision_history, &candidates) else { continue; };
                 match selected.action {
                     ActionKind::Move => {
