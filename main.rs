@@ -10,6 +10,7 @@ mod decision_runtime;
 mod environment;
 mod genome;
 mod math;
+mod material_transfer;
 mod membrane_geometry;
 mod reproduction;
 mod resources;
