@@ -69,7 +69,7 @@ impl Simulation {
             Vent {
                 x: 520.0,
                 y: 550.0,
-                composition: vec![("Carbon".into(), 0.25),("Methane".into(), 0.15),("Hydrogen".into(), 0.30),("Sulfur".into(), 0.10),("Nitrogen".into(), 0.10),("Phosphorus".into(), 0.02),("Water".into(), 0.08)],
+                composition: vec![("Carbon".into(), 0.25),("Methane".into(), 0.15),("Hydrogen".into(), 0.30),("Sulfur".into(), 0.10),("Nitrogen".into(), 0.10),("Phosphorus".into(), 0.10),("Water".into(), 0.08)],
                 emission_amount: 100.0, emission_interval: 25, emission_timer: 0,
             },
         ];
@@ -245,7 +245,7 @@ impl Simulation {
         for organism in &self.organisms {
             total += organism.stored_unbonded.total_amount();
             if let Some(construction) = &organism.reproductive_construction { total += construction.committed_material.total_amount(); }
-            total += organism.structure.units.len() as f64;
+            total += organism.structure.units.iter().map(|unit| unit.material.total_amount()).sum::<f64>();
         }
         total
     }
