@@ -27,6 +27,7 @@ impl StructuralMaterial {
     }
 
     pub fn constituents(&self) -> &[(String, f64)] { &self.material.parts }
+    pub fn primary_resource_name(&self) -> Option<&str> { self.material.parts.first().map(|(name, _)| name.as_str()) }
     pub fn total_amount(&self) -> f64 { self.material.total_amount() }
     pub fn mass(&self, catalog: &[BaseResource]) -> f64 { self.material.mass(catalog) }
     pub fn weighted_properties(&self, catalog: &[BaseResource]) -> ResourceProperties { self.material.weighted_properties(catalog) }
@@ -44,7 +45,9 @@ mod tests {
     use super::*;
     use crate::resources::default_catalog;
     #[test] fn single_resource_remains_single_constituent() { let m=StructuralMaterial::single("Carbon"); assert!(!m.is_composite()); assert!(m.is_valid()); assert!(m.internal_bonds.is_empty()); }
+    #[test] fn primary_resource_name_is_derived_from_material() { let m=StructuralMaterial::single("Carbon"); assert_eq!(m.primary_resource_name(), Some("Carbon")); }
     #[test] fn composite_preserves_constituent_identity() { let a=Material {parts:vec![("Carbon".into(),1.0)],bonded:true}; let b=Material {parts:vec![("Methane".into(),1.0)],bonded:true}; let m=StructuralMaterial::combine(&a,&b).unwrap(); assert_eq!(m.constituents(), &[("Carbon".into(),1.0),("Methane".into(),1.0)]); assert_eq!(m.internal_bonds,vec![InternalBond{part_a:0,part_b:1}]); assert!(m.is_valid()); }
+    #[test] fn composite_primary_resource_name_is_stable_and_material_derived() { let a=Material {parts:vec![("Carbon".into(),1.0)],bonded:true}; let b=Material {parts:vec![("Methane".into(),1.0)],bonded:true}; let m=StructuralMaterial::combine(&a,&b).unwrap(); assert_eq!(m.primary_resource_name(), Some("Carbon")); }
     #[test] fn cm_ch_cs_are_existing_resource_composites() { for (a,b) in [("Carbon","Methane"),("Carbon","Hydrogen"),("Carbon","Sulfur")] { let x=Material{parts:vec![(a.into(),1.0)],bonded:true}; let y=Material{parts:vec![(b.into(),1.0)],bonded:true}; let m=StructuralMaterial::combine(&x,&y).unwrap(); assert_eq!(m.total_amount(),2.0); assert!(m.is_composite()); } }
     #[test] fn composite_properties_are_derived() { let c=default_catalog(); let a=Material{parts:vec![("Carbon".into(),1.0)],bonded:true}; let b=Material{parts:vec![("Methane".into(),1.0)],bonded:true}; let m=StructuralMaterial::combine(&a,&b).unwrap(); let p=m.weighted_properties(&c); assert!((p.mass-1.0).abs()<1e-12); assert!((p.potential_energy-10.5).abs()<1e-12); assert!((p.reactivity-2.05).abs()<1e-12); assert!((p.cohesion-0.525).abs()<1e-12); }
     #[test] fn unbonded_inputs_are_accepted() { let a=Material::free_base("Carbon",1.0); let b=Material::free_base("Methane",1.0); let m=StructuralMaterial::combine(&a,&b).unwrap(); assert!(m.is_valid()); assert!(m.material.bonded); }
