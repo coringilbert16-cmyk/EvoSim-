@@ -71,7 +71,8 @@ pub fn experimental_combine_work_cost(
 ) -> f64 {
     let interaction = experimental_interaction(a, b, candidate, water_field);
     let complexity_factor = 1.0 + ((a.mass.max(0.0) + b.mass.max(0.0)) * 0.5).sqrt();
-    let cohesion_factor = 1.0 + ((a.cohesion.clamp(0.0, 1.0) + b.cohesion.clamp(0.0, 1.0)) * 0.5);
+    let cohesion_factor =
+        1.0 + ((a.cohesion.clamp(0.0, 1.0) + b.cohesion.clamp(0.0, 1.0)) * 0.5);
     (0.25 + interaction.magnitude) * complexity_factor * cohesion_factor
 }
 
@@ -99,35 +100,57 @@ pub fn experimental_bond_strength(surplus: f64) -> f64 {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct MaterialRecipeKey {
+struct MaterialIdentityKey {
     parts: Vec<(String, u64)>,
+    internal_bonds: Vec<(usize, usize)>,
+}
+
+impl MaterialIdentityKey {
+    fn from_material(material: &Material) -> Self {
+        let parts = material
+            .parts
+            .iter()
+            .filter(|(_, amount)| *amount > EPSILON)
+            .map(|(name, amount)| (name.clone(), amount.to_bits()))
+            .collect();
+
+        let mut internal_bonds = material
+            .internal_bonds
+            .iter()
+            .map(|bond| (bond.part_a.min(bond.part_b), bond.part_a.max(bond.part_b)))
+            .collect::<Vec<_>>();
+        internal_bonds.sort_unstable();
+
+        Self {
+            parts,
+            internal_bonds,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct MaterialRecipeKey {
+    materials: Vec<MaterialIdentityKey>,
 }
 
 impl MaterialRecipeKey {
     pub fn from_material(material: &Material) -> Self {
         Self {
-            parts: material
-                .parts
-                .iter()
-                .filter(|(_, amount)| *amount > EPSILON)
-                .map(|(name, amount)| (name.clone(), amount.to_bits()))
-                .collect(),
+            materials: vec![MaterialIdentityKey::from_material(material)],
         }
     }
 
     pub fn from_inputs(inputs: &[Material]) -> Self {
-        let mut parts = Vec::new();
-        for material in inputs {
-            parts.extend(
-                material
-                    .parts
-                    .iter()
-                    .filter(|(_, amount)| *amount > EPSILON)
-                    .map(|(name, amount)| (name.clone(), amount.to_bits())),
-            );
-        }
-        parts.sort_by(|a, b| a.cmp(b));
-        Self { parts }
+        let mut materials = inputs
+            .iter()
+            .map(MaterialIdentityKey::from_material)
+            .collect::<Vec<_>>();
+        materials.sort_by(|a, b| {
+            a.parts
+                .cmp(&b.parts)
+                .then_with(|| a.internal_bonds.cmp(&b.internal_bonds))
+        });
+        Self { materials }
     }
 }
 
@@ -247,6 +270,15 @@ mod tests {
     fn methane(amount: f64) -> Material {
         Material::free_base("Methane", amount)
     }
+    fn structured_carbon() -> Material {
+        Material {
+            parts: vec![
+                ("Carbon".into(), 1.0),
+                ("Carbon".into(), 1.0),
+            ],
+            internal_bonds: vec![crate::resources::InternalBond { part_a: 0, part_b: 1 }],
+        }
+    }
     fn props(p: f64, r: f64, c: f64) -> ResourceProperties {
         ResourceProperties {
             mass: 1.0,
@@ -303,43 +335,37 @@ mod tests {
         );
     }
     #[test]
-    fn bonded_status_does_not_change_recipe_identity() {
-        let unbonded = carbon(1.0);
-        let bonded = Material {
-            parts: unbonded.parts.clone(),
-            bonded: true,
-        };
-        assert_eq!(
-            MaterialRecipeKey::from_material(&unbonded),
-            MaterialRecipeKey::from_material(&bonded)
+    fn composition_and_structure_define_recipe_identity() {
+        let free = carbon(1.0);
+        let structured = structured_carbon();
+        assert_ne!(
+            MaterialRecipeKey::from_material(&free),
+            MaterialRecipeKey::from_material(&structured)
         );
-        assert_eq!(
-            MaterialRecipeKey::from_inputs(&[unbonded]),
-            MaterialRecipeKey::from_inputs(&[bonded])
+        assert_ne!(
+            MaterialRecipeKey::from_inputs(&[free]),
+            MaterialRecipeKey::from_inputs(&[structured])
         );
     }
     #[test]
-    fn cache_reuses_same_recipe() {
+    fn cache_reuses_same_physical_recipe() {
         let mut cache = CombineCache::new();
         let inputs = [carbon(1.0), methane(2.0)];
         let first = cache.combine(&inputs);
         let second = cache.combine(&inputs);
         assert_eq!(first.parts, second.parts);
-        assert!(first.bonded);
+        assert_eq!(first.internal_bonds, second.internal_bonds);
+        assert!(first.has_internal_structure());
         assert_eq!(cache.len(), 1);
     }
     #[test]
-    fn cache_does_not_split_identical_material_by_bonded_status() {
+    fn cache_does_not_collide_different_structures() {
         let mut cache = CombineCache::new();
-        let unbonded = carbon(1.0);
-        let bonded = Material {
-            parts: unbonded.parts.clone(),
-            bonded: true,
-        };
-        let first = cache.combine(&[unbonded]);
-        let second = cache.combine(&[bonded]);
-        assert_eq!(first.parts, second.parts);
-        assert_eq!(cache.len(), 1);
+        let free = carbon(1.0);
+        let structured = structured_carbon();
+        cache.combine(&[free]);
+        cache.combine(&[structured]);
+        assert_eq!(cache.len(), 2);
     }
     #[test]
     fn potential_energy_sets_direction() {
