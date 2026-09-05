@@ -26,9 +26,6 @@ pub struct AccessibleFieldMaterial {
     pub field_index: usize,
     /// Index of the physical material stack within the field cell.
     pub material_index: usize,
-    /// Derived compatibility status retained temporarily for the Phase 3
-    /// perception migration. It is not stored in the field.
-    pub bonded: bool,
 }
 
 fn transform_point(point: ConnectionPoint, unit: &StructuralUnit) -> WorldConnectionPoint {
@@ -63,10 +60,9 @@ pub fn accessible_field_material(
                 .iter()
                 .enumerate()
                 .filter(|(_, material)| material.total_amount() > 0.0)
-                .map(move |(material_index, material)| AccessibleFieldMaterial {
+                .map(move |(material_index, _)| AccessibleFieldMaterial {
                     field_index,
                     material_index,
-                    bonded: material.has_internal_structure(),
                 })
         })
         .collect()
