@@ -1,6 +1,6 @@
 // Active material field: fixed-resolution 2D grid holding bonded and unbonded material.
 
-use crate::resources::{merge_parts, Material};
+use crate::resources::{combine_materials, merge_parts, Material};
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_CELL_SIZE: f64 = 25.0;
@@ -152,15 +152,21 @@ impl ActiveMaterialField {
             return;
         }
         let cell = &mut self.cells[index];
-        let target = if material.has_internal_structure() {
-            &mut cell.bonded
+        if material.has_internal_structure() {
+            if cell.bonded.is_empty() {
+                cell.bonded = material;
+            } else {
+                let existing = std::mem::replace(
+                    &mut cell.bonded,
+                    Material::free_base("", 0.0),
+                );
+                cell.bonded = combine_materials(&[existing, material]);
+            }
         } else {
-            &mut cell.unbonded
-        };
-        let mut parts = std::mem::take(&mut target.parts);
-        parts.extend(material.parts);
-        target.parts = merge_parts(&parts);
-        target.internal_bonds.extend(material.internal_bonds);
+            let mut parts = std::mem::take(&mut cell.unbonded.parts);
+            parts.extend(material.parts);
+            cell.unbonded.parts = merge_parts(&parts);
+        }
     }
 
     pub fn take_at(&mut self, x: f64, y: f64, bonded: bool, amount: f64) -> Option<Material> {
@@ -168,7 +174,7 @@ impl ActiveMaterialField {
         self.take_at_index(index, bonded, amount)
     }
 
-    pub fn take_at_index(&mut self, bonded: bool, index: usize, amount: f64) -> Option<Material> {
+    pub fn take_at_index(&mut self, index: usize, bonded: bool, amount: f64) -> Option<Material> {
         let cell = &mut self.cells[index];
         let stack = if bonded {
             &mut cell.bonded
