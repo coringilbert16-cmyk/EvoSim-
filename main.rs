@@ -28,8 +28,6 @@ mod transformation;
 
 #[cfg(test)]
 mod simulation_tests;
-#[cfg(test)]
-mod acquire_debug_tests;
 
 #[tokio::main]
 async fn main() {
