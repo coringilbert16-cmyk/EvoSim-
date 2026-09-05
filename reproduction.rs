@@ -54,7 +54,8 @@ pub(crate) fn begin_reproduction(parent: &mut Organism, rng: &mut ChaCha8Rng) ->
 /// material that matches the element's material requirements.
 ///
 /// Once the target elements exist, authored blueprint connections are realized
-/// through the same physical contact and COMBINE mechanics used elsewhere.
+/// through the same physical contact and bond-validation mechanics used
+/// elsewhere.
 pub(crate) fn advance_construction(
     construction: &mut ReproductiveConstruction,
     catalog: &[BaseResource],
@@ -81,18 +82,16 @@ pub(crate) fn advance_construction(
 
     construction.developing_structure.add_unit(unit);
     construction.next_blueprint_element += 1;
-
     realize_new_blueprint_connections(construction, catalog);
     true
 }
 
-/// Realize blueprint connections whose two endpoint elements now exist.
+/// Realize authored connections whose endpoint elements now exist.
 ///
-/// The blueprint supplies inherited topology; it does not bypass physics.
-/// Each requested connection is checked against the actual geometry and then
-/// created through the normal bond-validation path. We do not require a
-/// connection point to be unused: connection regions have no numerical bond
-/// capacity.
+/// The blueprint supplies inherited topology, but it does not bypass physics.
+/// The requested endpoint pair must be physically contacting and facing, and
+/// the resulting bond must pass the same intrinsic validation used elsewhere.
+/// Connection points are not consumed by successful bonds.
 fn realize_new_blueprint_connections(
     construction: &mut ReproductiveConstruction,
     catalog: &[BaseResource],
@@ -102,57 +101,6 @@ fn realize_new_blueprint_connections(
 
     for connection in blueprint.connections.iter().copied() {
         if connection.element_a >= element_count || connection.element_b >= element_count {
-            continue;
-        }
-
-        let bond = Bond {
-            unit_a: connection.element_a,
-            point_a: connection.point_a,
-            unit_b: connection.element_b,
-            point_b: connection.point_b,
-            strength: crate::combine::bond_strength(
-                construction.developing_structure.units[connection.element_a]
-                    .properties(catalog)
-                    .map(|p| p.cohesion)
-                    .map(|c| crate::combine::bond_strength(
-                        crate::resources::ResourceProperties {
-                            mass: 0.0,
-                            potential_energy: 0.0,
-                            reactivity: 0.0,
-                            cohesion: c,
-                        },
-                        crate::resources::ResourceProperties {
-                            mass: 0.0,
-                            potential_energy: 0.0,
-                            reactivity: 0.0,
-                            cohesion: c,
-                        },
-                    ))
-                    .unwrap_or(0.0),
-                construction.developing_structure.units[connection.element_b]
-                    .properties(catalog)
-                    .unwrap_or(crate::resources::ResourceProperties {
-                        mass: 0.0,
-                        potential_energy: 0.0,
-                        reactivity: 0.0,
-                        cohesion: 0.0,
-                    }),
-            ),
-            bond_energy: 0.0,
-        };
-
-        if !bond.is_valid(
-            construction.developing_structure.units.len(),
-            |unit_index| {
-                construction.developing_structure.units.get(unit_index).and_then(|unit| {
-                    unit.connection_sites(catalog).and_then(|sites| match sites {
-                        crate::resources::ConnectionSites::Corners(points) => Some(points.len()),
-                        crate::resources::ConnectionSites::Circumference { .. }
-                        | crate::resources::ConnectionSites::Undetermined => None,
-                    })
-                })
-            },
-        ) {
             continue;
         }
 
@@ -167,7 +115,6 @@ fn realize_new_blueprint_connections(
             continue;
         };
 
-        let intrinsic_strength = crate::combine::bond_strength(props_a, props_b);
         let candidate = crate::contact::connection_pair_candidates(
             &construction.developing_structure,
             connection.element_a,
@@ -191,12 +138,16 @@ fn realize_new_blueprint_connections(
             point_a: candidate.point_a,
             unit_b: connection.element_b,
             point_b: candidate.point_b,
-            strength: intrinsic_strength,
+            strength: crate::combine::bond_strength(props_a, props_b),
             bond_energy: 0.0,
         };
 
         if construction.developing_structure.is_valid_bond(&bond, catalog)
-            && !construction.developing_structure.bonds.iter().any(|existing| existing.has_same_identity(&bond))
+            && !construction
+                .developing_structure
+                .bonds
+                .iter()
+                .any(|existing| existing.has_same_identity(&bond))
         {
             construction.developing_structure.add_bond(bond);
         }
@@ -212,7 +163,7 @@ fn take_required_material(
     committed: &mut Material,
     required: &StructuralMaterial,
 ) -> Option<Material> {
-    if committed.bonded || required.material.bonded == false || required.material.is_empty() {
+    if committed.bonded || !required.material.bonded || required.material.is_empty() {
         return None;
     }
 
@@ -378,7 +329,7 @@ mod tests {
         let catalog = crate::resources::default_catalog();
         let mut genome = initial_genome();
         genome.structural_blueprint = StructuralBlueprint::new(
-            vec![blueprint_element("Carbon", 0.0, 0.0), blueprint_element("Carbon", 0.438_691 * 2.0, 0.0)],
+            vec![blueprint_element("Carbon", 0.0, 0.0), blueprint_element("Carbon", 0.877382, 0.0)],
             vec![BlueprintConnection { element_a: 0, point_a: 0, element_b: 1, point_b: 3 }],
         );
         let mut construction = ReproductiveConstruction {
