@@ -39,8 +39,24 @@ impl StructuralUnit {
         Some(Self { material, placement })
     }
 
-    pub fn properties(&self, catalog: &[BaseResource]) -> ResourceProperties {
-        self.material.weighted_properties(catalog)
+    /// Derive the unit's current resource properties from its authoritative
+    /// physical material while preserving the legacy `Option` API.
+    ///
+    /// A property projection is unavailable when any material constituent
+    /// cannot be resolved through the immutable resource catalog. This keeps
+    /// the old missing-catalog-entry behavior without introducing another
+    /// source of physical state.
+    pub fn properties(&self, catalog: &[BaseResource]) -> Option<ResourceProperties> {
+        if !self.material.is_valid()
+            || self
+                .material
+                .constituents()
+                .iter()
+                .any(|(name, _)| !catalog.iter().any(|base| base.name == *name))
+        {
+            return None;
+        }
+        Some(self.material.weighted_properties(catalog))
     }
 
     pub fn connection_sites(&self, catalog: &[BaseResource]) -> Option<ConnectionSites> {
@@ -143,8 +159,12 @@ impl OrganismStructure {
             return false;
         }
 
-        let props_a = self.units[bond.unit_a].properties(catalog);
-        let props_b = self.units[bond.unit_b].properties(catalog);
+        let Some(props_a) = self.units[bond.unit_a].properties(catalog) else {
+            return false;
+        };
+        let Some(props_b) = self.units[bond.unit_b].properties(catalog) else {
+            return false;
+        };
         let strength = crate::combine::bond_strength(props_a, props_b);
         strength.is_finite() && (0.0..=1.0).contains(&strength)
     }
@@ -240,8 +260,8 @@ impl OrganismStructure {
             .iter()
             .filter(|b| b.touches(unit, point))
             .filter_map(|bond| {
-                let props_a = self.units.get(bond.unit_a)?.properties(catalog);
-                let props_b = self.units.get(bond.unit_b)?.properties(catalog);
+                let props_a = self.units.get(bond.unit_a)?.properties(catalog)?;
+                let props_b = self.units.get(bond.unit_b)?.properties(catalog)?;
                 Some(crate::combine::bond_strength(props_a, props_b))
             })
             .sum()
@@ -315,9 +335,15 @@ mod tests {
             &crate::resources::Material::free_base("Methane", 1.0),
         ).unwrap();
         let unit = StructuralUnit::from_material(material, placement(0.0, 0.0)).unwrap();
-        let properties = unit.properties(&catalog);
+        let properties = unit.properties(&catalog).expect("catalog should resolve all material constituents");
         assert!((properties.potential_energy - 10.5).abs() < 1e-12);
         assert_eq!(unit.material.constituents().len(), 2);
+    }
+
+    #[test]
+    fn unit_properties_preserve_missing_catalog_entry_as_none() {
+        let unit = StructuralUnit::new("Carbon", placement(0.0, 0.0));
+        assert!(unit.properties(&[]).is_none());
     }
 
     #[test]
@@ -332,7 +358,7 @@ mod tests {
         let catalog = crate::resources::default_catalog();
         let mut s = OrganismStructure::new();
         let i = unit(&mut s, "Carbon", 0.0, 0.0);
-        assert_eq!(s.units[i].properties(&catalog).cohesion, 0.95);
+        assert_eq!(s.units[i].properties(&catalog).unwrap().cohesion, 0.95);
         match s.units[i].connection_sites(&catalog).unwrap() {
             ConnectionSites::Corners(p) => assert_eq!(p.len(), 6),
             other => panic!("expected corners, got {other:?}"),
@@ -449,7 +475,7 @@ mod tests {
         let a = unit(&mut s, "Carbon", 0.0, 0.0);
         let b = unit(&mut s, "Methane", 1.0, 0.0);
         s.add_bond(bond(a, 0, b, 0, 0.0, 9.0));
-        let expected = crate::combine::bond_strength(s.units[a].properties(&catalog), s.units[b].properties(&catalog));
+        let expected = crate::combine::bond_strength(s.units[a].properties(&catalog).unwrap(), s.units[b].properties(&catalog).unwrap());
         assert!((s.connection_load(a, 0, &catalog) - expected).abs() < 1e-12);
         assert_eq!(s.connection_count(a, 0), 1);
     }
