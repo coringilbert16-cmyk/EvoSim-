@@ -24,6 +24,10 @@ pub struct Envelope {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AccessibleFieldMaterial {
     pub field_index: usize,
+    /// Index of the physical material stack within the field cell.
+    pub material_index: usize,
+    /// Derived compatibility status retained temporarily for the Phase 3
+    /// perception migration. It is not stored in the field.
     pub bonded: bool,
 }
 
@@ -54,21 +58,16 @@ pub fn accessible_field_material(
     broad_phase_field_cells(field, envelope)
         .into_iter()
         .flat_map(|field_index| {
-            let cell = &field.cells[field_index];
-            let mut found = Vec::with_capacity(2);
-            if cell.bonded.total_amount() > 0.0 {
-                found.push(AccessibleFieldMaterial {
+            field.cells[field_index]
+                .materials
+                .iter()
+                .enumerate()
+                .filter(|(_, material)| material.total_amount() > 0.0)
+                .map(move |(material_index, material)| AccessibleFieldMaterial {
                     field_index,
-                    bonded: true,
-                });
-            }
-            if cell.unbonded.total_amount() > 0.0 {
-                found.push(AccessibleFieldMaterial {
-                    field_index,
-                    bonded: false,
-                });
-            }
-            found
+                    material_index,
+                    bonded: material.has_internal_structure(),
+                })
         })
         .collect()
 }
@@ -158,9 +157,6 @@ pub struct ConnectionPairCandidate {
     pub available_b: bool,
 }
 
-/// A connection point is a finite site. Any existing bond occupying the
-/// point makes it unavailable for another bond, regardless of the geometry
-/// of the proposed second connection.
 fn connection_point_has_space(structure: &OrganismStructure, unit: usize, point: usize) -> bool {
     structure.connection_count(unit, point) == 0
 }
