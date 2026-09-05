@@ -105,7 +105,7 @@ pub(crate) struct ActiveTransformation {
 }
 
 /// Persistent physical state for reproduction after the parent commits actual
-/// unbonded material to an offspring that is still under construction.
+/// free material to an offspring that is still under construction.
 ///
 /// The parent retains its own structure. The committed material is the only
 /// reproductive investment represented here; it is not a separate currency.
@@ -136,7 +136,7 @@ pub(crate) struct Organism {
     pub(crate) decision_history: DecisionHistory,
     pub(crate) usable_energy: f64,
     pub(crate) stress: f64,
-    pub(crate) stored_unbonded: Material,
+    pub(crate) stored_material: Material,
     pub(crate) structure: OrganismStructure,
     pub(crate) development_stage: DevelopmentStage,
     pub(crate) age: u64,
@@ -151,13 +151,17 @@ pub(crate) struct Organism {
 }
 
 impl Organism {
-    pub(crate) fn store_unbonded_material(&mut self, material: Material) {
+    /// Store free material for later structural construction.
+    ///
+    /// Structured material is never flattened into this stockpile; its physical
+    /// structure must remain intact and travel as a Material object instead.
+    pub(crate) fn store_material(&mut self, material: Material) {
         if material.parts.is_empty() || material.has_internal_structure() {
             return;
         }
-        let mut parts = std::mem::take(&mut self.stored_unbonded.parts);
+        let mut parts = std::mem::take(&mut self.stored_material.parts);
         parts.extend(material.parts);
-        self.stored_unbonded.parts = crate::resources::merge_parts(&parts);
+        self.stored_material.parts = crate::resources::merge_parts(&parts);
     }
 
     pub(crate) fn structural_mass(&self, catalog: &[BaseResource]) -> f64 {
