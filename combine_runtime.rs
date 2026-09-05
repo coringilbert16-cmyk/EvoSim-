@@ -173,7 +173,7 @@ pub(crate) fn try_combine(
 
 #[allow(dead_code)]
 fn _raw_material_type_check(raw: &Material, catalog: &[BaseResource]) -> bool {
-    !raw.bonded
+    !raw.has_internal_structure()
         && raw
             .parts
             .iter()
