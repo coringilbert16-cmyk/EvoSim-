@@ -97,7 +97,10 @@ pub fn unit_within_envelope(
     unit: &StructuralUnit,
     catalog: &[BaseResource],
 ) -> bool {
-    let Some(base) = catalog.iter().find(|b| b.name == unit.resource_name) else {
+    let Some(resource_name) = unit.material.primary_resource_name() else {
+        return false;
+    };
+    let Some(base) = catalog.iter().find(|b| b.name == resource_name) else {
         return false;
     };
     let dx = unit.placement.x - envelope.x;
@@ -304,7 +307,13 @@ pub fn connection_pair_candidates_cached(
     let Some(b) = structure.units.get(unit_b) else {
         return Vec::new();
     };
-    let pairs = cache.pairs_for_owned(&a.resource_name, &b.resource_name, catalog);
+    let Some(a_name) = a.material.primary_resource_name() else {
+        return Vec::new();
+    };
+    let Some(b_name) = b.material.primary_resource_name() else {
+        return Vec::new();
+    };
+    let pairs = cache.pairs_for_owned(a_name, b_name, catalog);
     let Some(ConnectionSites::Corners(pa)) = a.connection_sites(catalog) else {
         return Vec::new();
     };
