@@ -108,8 +108,8 @@ pub(crate) fn try_combine(
     }
 
     let (unit_a, unit_b, evaluation) = best?;
-    let props_a = *organism.structure.units[unit_a].properties(catalog)?;
-    let props_b = *organism.structure.units[unit_b].properties(catalog)?;
+    let props_a = organism.structure.units[unit_a].properties(catalog)?;
+    let props_b = organism.structure.units[unit_b].properties(catalog)?;
     let water_field = environment
         .field
         .index_for_position(
