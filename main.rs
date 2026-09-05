@@ -13,6 +13,7 @@ mod material_geometry;
 mod membrane_geometry;
 mod organism_geometry;
 mod boundary_contact;
+mod permeability;
 mod reproduction;
 mod resources;
 mod structural_combine;
