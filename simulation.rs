@@ -86,7 +86,7 @@ impl Simulation {
             decision_history: crate::decision::DecisionHistory::default(),
             usable_energy: 0.0,
             stress: 0.0,
-            stored_unbonded: crate::resources::Material { parts: Vec::new(), internal_bonds: Vec::new() },
+            stored_material: crate::resources::Material { parts: Vec::new(), internal_bonds: Vec::new() },
             structure: crate::structure::OrganismStructure::new(),
             development_stage: DevelopmentStage::Juvenile,
             age: 0,
@@ -137,7 +137,7 @@ impl Simulation {
             can_move: organism.active_transformation_id.is_none(),
             can_acquire: false,
             can_combine: organism.active_transformation_id.is_none()
-                && (organism.structure.units.len() >= 2 || organism.stored_unbonded.total_amount() >= 2.0 - f64::EPSILON),
+                && (organism.structure.units.len() >= 2 || organism.stored_material.total_amount() >= 2.0 - f64::EPSILON),
             can_break: organism.active_transformation_id.is_none() && !organism.structure.bonds.is_empty(),
             can_expel: false,
         }
@@ -243,7 +243,7 @@ impl Simulation {
         let mut total = self.environment.field.total_amount() + self.environment.reservoir.total_amount();
         for transformation in &self.active_transformations { total += transformation.material.total_amount(); }
         for organism in &self.organisms {
-            total += organism.stored_unbonded.total_amount();
+            total += organism.stored_material.total_amount();
             if let Some(construction) = &organism.reproductive_construction { total += construction.committed_material.total_amount(); }
             total += organism.structure.units.len() as f64;
         }
