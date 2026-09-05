@@ -51,11 +51,29 @@ impl Simulation {
 
         const STEP_DISTANCE: f64 = 5.0;
         let step = STEP_DISTANCE * movement_efficiency;
-        let cell = &mut organism.occupied_cells[0];
-        let old_x = cell.x;
-        let old_y = cell.y;
-        cell.x = (cell.x + move_x * step).clamp(0.0, environment.width);
-        cell.y = (cell.y + move_y * step).clamp(0.0, environment.height);
-        (cell.x - old_x).abs() > f64::EPSILON || (cell.y - old_y).abs() > f64::EPSILON
+        let (old_x, old_y, new_x, new_y) = {
+            let cell = &mut organism.occupied_cells[0];
+            let old_x = cell.x;
+            let old_y = cell.y;
+            cell.x = (cell.x + move_x * step).clamp(0.0, environment.width);
+            cell.y = (cell.y + move_y * step).clamp(0.0, environment.height);
+            (old_x, old_y, cell.x, cell.y)
+        };
+
+        let delta_x = new_x - old_x;
+        let delta_y = new_y - old_y;
+        if delta_x.abs() <= f64::EPSILON && delta_y.abs() <= f64::EPSILON {
+            return false;
+        }
+
+        // Structural-unit placements are world-space physical geometry. When
+        // the organism moves, its body must translate with its locomotion
+        // anchor; otherwise the derived physical body would remain behind.
+        for unit in &mut organism.structure.units {
+            unit.placement.x += delta_x;
+            unit.placement.y += delta_y;
+        }
+
+        true
     }
 }
