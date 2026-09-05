@@ -16,14 +16,8 @@ pub struct FieldCell {
 impl FieldCell {
     pub fn empty() -> Self {
         Self {
-            bonded: Material {
-                parts: Vec::new(),
-                bonded: true,
-            },
-            unbonded: Material {
-                parts: Vec::new(),
-                bonded: false,
-            },
+            bonded: Material::free_base("", 0.0),
+            unbonded: Material::free_base("", 0.0),
         }
     }
 
@@ -158,7 +152,7 @@ impl ActiveMaterialField {
             return;
         }
         let cell = &mut self.cells[index];
-        let target = if material.bonded {
+        let target = if material.has_internal_structure() {
             &mut cell.bonded
         } else {
             &mut cell.unbonded
@@ -166,6 +160,7 @@ impl ActiveMaterialField {
         let mut parts = std::mem::take(&mut target.parts);
         parts.extend(material.parts);
         target.parts = merge_parts(&parts);
+        target.internal_bonds.extend(material.internal_bonds);
     }
 
     pub fn take_at(&mut self, x: f64, y: f64, bonded: bool, amount: f64) -> Option<Material> {
@@ -173,7 +168,7 @@ impl ActiveMaterialField {
         self.take_at_index(index, bonded, amount)
     }
 
-    pub fn take_at_index(&mut self, index: usize, bonded: bool, amount: f64) -> Option<Material> {
+    pub fn take_at_index(&mut self, bonded: bool, index: usize, amount: f64) -> Option<Material> {
         let cell = &mut self.cells[index];
         let stack = if bonded {
             &mut cell.bonded
@@ -251,7 +246,7 @@ fn distribute_evenly(field: &mut ActiveMaterialField, mut mat: Material, neighbo
         let piece = if is_last {
             Material {
                 parts: std::mem::take(&mut mat.parts),
-                bonded: mat.bonded,
+                internal_bonds: std::mem::take(&mut mat.internal_bonds),
             }
         } else {
             match mat.take(share) {
