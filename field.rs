@@ -1,6 +1,6 @@
-// Active material field: fixed-resolution 2D grid holding bonded and unbonded material.
+// Active material field: fixed-resolution 2D grid holding physical material stacks.
 
-use crate::resources::{combine_materials, merge_parts, Material};
+use crate::resources::{merge_parts, Material};
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_CELL_SIZE: f64 = 25.0;
@@ -9,20 +9,35 @@ pub const MATERIAL_EPSILON: f64 = 1e-9;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FieldCell {
-    pub bonded: Material,
-    pub unbonded: Material,
+    /// Distinct physical material stacks occupying this ecological cell.
+    ///
+    /// Unstructured base stock may be aggregated into one entry, but a
+    /// structured material is never merged with another structured material.
+    /// Material composition and internal structure remain authoritative.
+    pub materials: Vec<Material>,
 }
 
 impl FieldCell {
     pub fn empty() -> Self {
-        Self {
-            bonded: Material::free_base("", 0.0),
-            unbonded: Material::free_base("", 0.0),
-        }
+        Self { materials: Vec::new() }
     }
 
     pub fn total_amount(&self) -> f64 {
-        self.bonded.total_amount() + self.unbonded.total_amount()
+        self.materials.iter().map(Material::total_amount).sum()
+    }
+
+    pub fn total_material(&self) -> Vec<(String, f64)> {
+        let mut totals = Vec::new();
+        for material in &self.materials {
+            for (name, amount) in &material.parts {
+                if let Some(existing) = totals.iter_mut().find(|(n, _)| n == name) {
+                    existing.1 += amount;
+                } else {
+                    totals.push((name.clone(), *amount));
+                }
+            }
+        }
+        totals
     }
 }
 
@@ -148,40 +163,38 @@ impl ActiveMaterialField {
     }
 
     pub fn deposit_at_index(&mut self, index: usize, material: Material) {
-        if material.parts.is_empty() {
+        if material.is_empty() || !material.is_valid() {
             return;
         }
         let cell = &mut self.cells[index];
         if material.has_internal_structure() {
-            if cell.bonded.is_empty() {
-                cell.bonded = material;
-            } else {
-                let existing = std::mem::replace(
-                    &mut cell.bonded,
-                    Material::free_base("", 0.0),
-                );
-                cell.bonded = combine_materials(&[existing, material]);
-            }
-        } else {
-            let mut parts = std::mem::take(&mut cell.unbonded.parts);
+            cell.materials.push(material);
+            return;
+        }
+
+        if let Some(existing) = cell
+            .materials
+            .iter_mut()
+            .find(|existing| !existing.has_internal_structure())
+        {
+            let mut parts = std::mem::take(&mut existing.parts);
             parts.extend(material.parts);
-            cell.unbonded.parts = merge_parts(&parts);
+            existing.parts = merge_parts(&parts);
+        } else {
+            cell.materials.push(material);
         }
     }
 
-    pub fn take_at(&mut self, x: f64, y: f64, bonded: bool, amount: f64) -> Option<Material> {
+    pub fn take_at(&mut self, x: f64, y: f64, material_index: usize, amount: f64) -> Option<Material> {
         let index = self.index_for_position(x, y)?;
-        self.take_at_index(index, bonded, amount)
+        self.take_at_index(index, material_index, amount)
     }
 
-    pub fn take_at_index(&mut self, index: usize, bonded: bool, amount: f64) -> Option<Material> {
-        let cell = &mut self.cells[index];
-        let stack = if bonded {
-            &mut cell.bonded
-        } else {
-            &mut cell.unbonded
-        };
-        stack.take(amount)
+    pub fn take_at_index(&mut self, index: usize, material_index: usize, amount: f64) -> Option<Material> {
+        let material = self.cells.get_mut(index)?.materials.get_mut(material_index)?;
+        let taken = material.take(amount);
+        self.cells[index].materials.retain(|material| !material.is_empty());
+        taken
     }
 
     pub fn diffuse_step(&mut self, fraction: f64) {
@@ -190,35 +203,33 @@ impl ActiveMaterialField {
             return;
         }
         let n = self.cells.len();
-        let mut outgoing_bonded: Vec<Option<Material>> = vec![None; n];
-        let mut outgoing_unbonded: Vec<Option<Material>> = vec![None; n];
+        let mut outgoing: Vec<Vec<Material>> = (0..n).map(|_| Vec::new()).collect();
+
         for i in 0..n {
             let neighbor_count = self.neighbor_indices(i).len();
             if neighbor_count == 0 {
                 continue;
             }
-            let bonded_total = self.cells[i].bonded.total_amount();
-            if bonded_total > MATERIAL_EPSILON {
-                let outflow = bonded_total * fraction;
+            let material_count = self.cells[i].materials.len();
+            for material_index in 0..material_count {
+                let total = self.cells[i].materials[material_index].total_amount();
+                if total <= MATERIAL_EPSILON {
+                    continue;
+                }
+                let outflow = total * fraction;
                 if outflow > MATERIAL_EPSILON {
-                    outgoing_bonded[i] = self.cells[i].bonded.take(outflow);
+                    if let Some(piece) = self.cells[i].materials[material_index].take(outflow) {
+                        outgoing[i].push(piece);
+                    }
                 }
             }
-            let unbonded_total = self.cells[i].unbonded.total_amount();
-            if unbonded_total > MATERIAL_EPSILON {
-                let outflow = unbonded_total * fraction;
-                if outflow > MATERIAL_EPSILON {
-                    outgoing_unbonded[i] = self.cells[i].unbonded.take(outflow);
-                }
-            }
+            self.cells[i].materials.retain(|material| !material.is_empty());
         }
+
         for i in 0..n {
             let neighbors = self.neighbor_indices(i);
-            if let Some(mat) = outgoing_bonded[i].take() {
-                distribute_evenly(self, mat, &neighbors);
-            }
-            if let Some(mat) = outgoing_unbonded[i].take() {
-                distribute_evenly(self, mat, &neighbors);
+            for material in outgoing[i].drain(..) {
+                distribute_evenly(self, material, &neighbors);
             }
         }
     }
@@ -226,11 +237,11 @@ impl ActiveMaterialField {
     pub fn total_material(&self) -> Vec<(String, f64)> {
         let mut totals: Vec<(String, f64)> = Vec::new();
         for cell in &self.cells {
-            for (name, amount) in cell.bonded.parts.iter().chain(cell.unbonded.parts.iter()) {
-                if let Some(existing) = totals.iter_mut().find(|(n, _)| n == name) {
+            for (name, amount) in cell.total_material() {
+                if let Some(existing) = totals.iter_mut().find(|(n, _)| n == &name) {
                     existing.1 += amount;
                 } else {
-                    totals.push((name.clone(), *amount));
+                    totals.push((name, amount));
                 }
             }
         }
@@ -260,7 +271,7 @@ fn distribute_evenly(field: &mut ActiveMaterialField, mut mat: Material, neighbo
                 None => continue,
             }
         };
-        if !piece.parts.is_empty() {
+        if !piece.is_empty() {
             field.deposit_at_index(neighbor_index, piece);
         }
     }
