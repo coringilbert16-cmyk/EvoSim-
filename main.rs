@@ -1,3 +1,4 @@
+mod cell_connection;
 mod combine;
 mod combine_runtime;
 mod connection_geometry;
