@@ -25,6 +25,29 @@ pub struct MaterialGeometry {
     pub max_y: f64,
 }
 
+/// A physical environmental instance: authoritative material identity plus
+/// the spatial realization of its constituents.
+///
+/// This is intentionally distinct from ecological bulk stock. Bulk stock can
+/// be aggregated in a field cell without inventing arbitrary constituent
+/// positions; a physical instance cannot exist without explicit geometry.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PhysicalMaterialInstance {
+    pub material: Material,
+    pub geometry: MaterialGeometry,
+}
+
+impl PhysicalMaterialInstance {
+    pub fn new(
+        material: Material,
+        placements: &[Placement],
+        catalog: &[BaseResource],
+    ) -> Option<Self> {
+        let geometry = MaterialGeometry::new(&material, placements, catalog)?;
+        Some(Self { material, geometry })
+    }
+}
+
 impl MaterialGeometry {
     /// Build physical geometry for a material instance from its constituent
     /// placements and the immutable resource catalog.
@@ -110,6 +133,22 @@ mod tests {
         assert_eq!(geometry.parts[0].part_index, 0);
         assert_eq!(geometry.parts[0].placement, placements[0]);
         assert!(geometry.bounding_box_contains(12.0, 8.0));
+    }
+
+    #[test]
+    fn physical_instance_keeps_material_and_geometry_together() {
+        let catalog = default_catalog();
+        let material = Material::free_base("Carbon", 1.0);
+        let placements = [Placement {
+            x: 4.0,
+            y: 6.0,
+            rotation_radians: 0.0,
+        }];
+
+        let instance = PhysicalMaterialInstance::new(material.clone(), &placements, &catalog)
+            .unwrap();
+        assert_eq!(instance.material, material);
+        assert_eq!(instance.geometry.parts[0].placement, placements[0]);
     }
 
     #[test]
