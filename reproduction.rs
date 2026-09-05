@@ -181,13 +181,10 @@ fn take_required_material(
 
     let mut taken_parts = Vec::with_capacity(required.material.parts.len());
     for (name, required_amount) in &required.material.parts {
-        let Some((_, available_amount)) = committed
+        let (_, available_amount) = committed
             .parts
             .iter_mut()
-            .find(|(available_name, _)| available_name == name)
-        else {
-            return None;
-        };
+            .find(|(available_name, _)| available_name == name)?;
         *available_amount -= *required_amount;
         taken_parts.push((name.clone(), *required_amount));
     }
