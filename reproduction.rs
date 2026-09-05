@@ -2,35 +2,44 @@
 //!
 //! Reproduction commits a small physical seed from the parent. The inherited
 //! structural blueprint is a developmental target, not an upfront material
-//! bill. Development proceeds only when the construction state actually has
-//! the material needed for the next blueprint element.
+//! bill. The seed immediately becomes a physical offspring attachment; later
+//! construction can proceed only when additional material is supplied through
+//! that physical relationship.
 
 use rand_chacha::ChaCha8Rng;
 
-use crate::resources::{BaseResource, Material};
-use crate::state::{DevelopmentStage, Organism, ReproductiveConstruction};
+use crate::cell_connection::{CellConnection, CellSiteRef};
+use crate::resources::{BaseResource, ConnectionSites, Material};
+use crate::state::{DevelopmentStage, Organism, Position, ReproductiveConstruction};
 use crate::structure::{Bond, OrganismStructure, StructuralUnit};
 use crate::structural_material::StructuralMaterial;
 
 const EPSILON: f64 = 1e-12;
+const CONNECTION_TOLERANCE: f64 = 0.25;
+const MIN_CONNECTION_FACING: f64 = 0.0;
 
-pub(crate) fn begin_reproduction(parent: &mut Organism, rng: &mut ChaCha8Rng) -> bool {
+/// Begin reproduction by committing only the inherited seed element and
+/// attaching that seed physically to the parent. The attachment is a real
+/// cross-organism cell connection; it does not itself transfer material.
+pub(crate) fn begin_reproduction(
+    parent: &mut Organism,
+    child_id: String,
+    rng: &mut ChaCha8Rng,
+    catalog: &[BaseResource],
+) -> bool {
     if !matches!(parent.development_stage, DevelopmentStage::Adult) {
         return false;
     }
     if parent.reproductive_readiness < 1.0 - EPSILON {
         return false;
     }
-    if parent.reproductive_construction.is_some() {
+    if parent.reproductive_construction.is_some() || parent.structure.units.is_empty() {
         return false;
     }
 
     let mut child_genome = parent.genome.clone();
     child_genome.mutate(rng);
 
-    // Only the inherited seed element is committed at reproduction. The rest
-    // of the blueprint remains a developmental target that must be supplied
-    // later by physical material acquisition.
     let Some(seed_element) = child_genome.structural_blueprint.elements.first() else {
         return false;
     };
@@ -44,18 +53,101 @@ pub(crate) fn begin_reproduction(parent: &mut Organism, rng: &mut ChaCha8Rng) ->
         return false;
     }
 
-    let Some(committed_material) = take_required_material(&mut parent.stored_unbonded, required_seed) else {
+    // Validate the physical attachment before mutating the parent's store.
+    let seed_unit = StructuralUnit::from_material(
+        StructuralMaterial {
+            material: required_seed.clone(),
+            internal_bonds: seed_element.material.internal_bonds.clone(),
+        },
+        seed_element.placement,
+    )?;
+    let mut seed_structure = OrganismStructure::new();
+    seed_structure.add_unit(seed_unit);
+    let Some((developing_structure, connection, world_offset)) = attach_seed_to_parent(
+        parent,
+        &seed_structure,
+        &child_id,
+        catalog,
+    ) else {
         return false;
     };
 
+    let Some(committed_material) = take_required_material(&mut parent.stored_unbonded, required_seed) else {
+        return false;
+    };
+    debug_assert_eq!(committed_material.total_amount(), required_seed.total_amount());
+
     parent.reproductive_readiness = 0.0;
     parent.reproductive_construction = Some(ReproductiveConstruction {
-        committed_material,
-        developing_structure: OrganismStructure::new(),
+        child_id,
+        connection,
+        committed_material: Material {
+            parts: Vec::new(),
+            bonded: false,
+        },
+        developing_structure,
         child_genome,
-        next_blueprint_element: 0,
+        world_offset,
+        next_blueprint_element: 1,
     });
     true
+}
+
+fn attach_seed_to_parent(
+    parent: &Organism,
+    seed_structure: &OrganismStructure,
+    child_id: &str,
+    catalog: &[BaseResource],
+) -> Option<(OrganismStructure, CellConnection, Position)> {
+    let child_unit = seed_structure.units.first()?;
+    let ConnectionSites::Corners(child_points) = child_unit.connection_sites(catalog)? else {
+        return None;
+    };
+
+    for (parent_unit_index, parent_unit) in parent.structure.units.iter().enumerate() {
+        let ConnectionSites::Corners(parent_points) = parent_unit.connection_sites(catalog) else {
+            continue;
+        };
+        for (parent_point_index, parent_point) in parent_points.iter().enumerate() {
+            let parent_world = crate::contact::world_connection_point(*parent_point, parent_unit);
+            for (child_point_index, child_point) in child_points.iter().enumerate() {
+                let child_world = crate::contact::world_connection_point(*child_point, child_unit);
+                let offset = Position {
+                    x: parent_world.x - child_world.x,
+                    y: parent_world.y - child_world.y,
+                };
+                let mut candidate_structure = seed_structure.clone();
+                for unit in &mut candidate_structure.units {
+                    unit.placement.x += offset.x;
+                    unit.placement.y += offset.y;
+                }
+
+                let parent_site = CellSiteRef {
+                    organism_id: parent.id.clone(),
+                    unit_index: parent_unit_index,
+                    point_index: parent_point_index,
+                };
+                let child_site = CellSiteRef {
+                    organism_id: child_id.to_string(),
+                    unit_index: 0,
+                    point_index: child_point_index,
+                };
+                let Ok(connection) = CellConnection::try_establish(
+                    parent_site,
+                    child_site,
+                    &parent.structure,
+                    &candidate_structure,
+                    catalog,
+                    CONNECTION_TOLERANCE,
+                    MIN_CONNECTION_FACING,
+                ) else {
+                    continue;
+                };
+                return Some((candidate_structure, connection, offset));
+            }
+        }
+    }
+    None
 }
 
 /// Advance construction by one inherited blueprint element when the required
@@ -77,11 +169,16 @@ pub(crate) fn advance_construction(
         return false;
     };
 
+    let placement = crate::structure::Placement {
+        x: element.placement.x + construction.world_offset.x,
+        y: element.placement.y + construction.world_offset.y,
+        rotation_radians: element.placement.rotation_radians,
+    };
     let unit_material = StructuralMaterial {
         material,
         internal_bonds: element.material.internal_bonds.clone(),
     };
-    let Some(unit) = StructuralUnit::from_material(unit_material, element.placement) else {
+    let Some(unit) = StructuralUnit::from_material(unit_material, placement) else {
         return false;
     };
 
@@ -91,9 +188,6 @@ pub(crate) fn advance_construction(
     true
 }
 
-/// Realize authored connections whose endpoint elements now exist.
-/// The blueprint supplies inherited topology, but physical contact and bond
-/// validation remain authoritative.
 fn realize_new_blueprint_connections(
     construction: &mut ReproductiveConstruction,
     catalog: &[BaseResource],
@@ -214,14 +308,16 @@ mod tests {
     use rand::SeedableRng;
     use crate::decision::DecisionHistory;
     use crate::genome::{initial_genome, Genome};
-    use crate::state::{Position, ResourceSense};
+    use crate::state::ResourceSense;
     use crate::structural_blueprint::{BlueprintElement, BlueprintGeometry, StructuralBlueprint};
     use crate::structure::Placement;
 
     fn adult_parent(material_amount: f64) -> Organism {
+        let mut structure = OrganismStructure::new();
+        structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }));
         Organism {
             id: "parent".into(),
-            occupied_cells: vec![Position { x: 50.0, y: 50.0 }],
+            occupied_cells: vec![Position { x: 0.0, y: 0.0 }],
             genome: initial_genome(),
             resource_sense: ResourceSense { sensed_resources: Vec::new(), direction_x: 0.0, direction_y: 0.0, direction_strength: 0.0 },
             memory: Vec::new(),
@@ -229,7 +325,7 @@ mod tests {
             usable_energy: 10.0,
             stress: 0.0,
             stored_unbonded: Material::free_base("Carbon", material_amount),
-            structure: OrganismStructure::new(),
+            structure,
             development_stage: DevelopmentStage::Adult,
             age: 10,
             reproductive_readiness: 1.0,
@@ -248,22 +344,39 @@ mod tests {
         }
     }
 
+    fn test_connection() -> CellConnection {
+        let catalog = crate::resources::default_catalog();
+        let parent = adult_parent(0.0);
+        let mut child = OrganismStructure::new();
+        child.add_unit(StructuralUnit::new("Carbon", Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 }));
+        CellConnection::try_establish(
+            CellSiteRef { organism_id: "parent".into(), unit_index: 0, point_index: 0 },
+            CellSiteRef { organism_id: "child".into(), unit_index: 0, point_index: 3 },
+            &parent.structure,
+            &child,
+            &catalog,
+            CONNECTION_TOLERANCE,
+            MIN_CONNECTION_FACING,
+        ).expect("test endpoints should be in physical contact")
+    }
+
     #[test]
-    fn reproduction_commits_only_the_seed_element() {
+    fn reproduction_commits_seed_and_establishes_physical_connection() {
         let mut parent = adult_parent(1.0);
         parent.genome.structural_blueprint = StructuralBlueprint::new(
-            vec![
-                blueprint_element("Carbon", 0.0, 0.0),
-                blueprint_element("Methane", 1.0, 0.0),
-            ],
+            vec![blueprint_element("Carbon", 0.0, 0.0), blueprint_element("Methane", 1.0, 0.0)],
             Vec::new(),
         );
         let mut rng = ChaCha8Rng::seed_from_u64(7);
-        assert!(begin_reproduction(&mut parent, &mut rng));
+        let catalog = crate::resources::default_catalog();
+        assert!(begin_reproduction(&mut parent, "child".into(), &mut rng, &catalog));
         assert_eq!(parent.stored_unbonded.total_amount(), 0.0);
         let construction = parent.reproductive_construction.as_ref().unwrap();
-        assert_eq!(construction.committed_material.parts, vec![("Carbon".into(), 1.0)]);
-        assert_eq!(construction.next_blueprint_element, 0);
+        assert_eq!(construction.child_id, "child");
+        assert!(construction.committed_material.is_empty());
+        assert_eq!(construction.developing_structure.units.len(), 1);
+        assert_eq!(construction.next_blueprint_element, 1);
+        assert!(construction.connection.crosses_organism_boundary());
     }
 
     #[test]
@@ -272,25 +385,30 @@ mod tests {
         let genome = Genome {
             traits: initial_genome().traits,
             structural_blueprint: StructuralBlueprint::new(
-                vec![
-                    blueprint_element("Carbon", 3.0, 4.0),
-                    blueprint_element("Methane", 8.0, 9.0),
-                ],
+                vec![blueprint_element("Carbon", 0.0, 0.0), blueprint_element("Methane", 8.0, 9.0)],
                 Vec::new(),
             ),
         };
+        let world_offset = Position { x: 1.0, y: 2.0 };
         let mut construction = ReproductiveConstruction {
-            committed_material: Material::free_base("Carbon", 1.0),
-            developing_structure: OrganismStructure::new(),
+            child_id: "child".into(),
+            connection: test_connection(),
+            committed_material: Material::free_base("Methane", 1.0),
+            developing_structure: {
+                let mut s = OrganismStructure::new();
+                s.add_unit(StructuralUnit::new("Carbon", Placement { x: world_offset.x, y: world_offset.y, rotation_radians: 0.0 }));
+                s
+            },
             child_genome: genome,
-            next_blueprint_element: 0,
+            world_offset,
+            next_blueprint_element: 1,
         };
         assert!(advance_construction(&mut construction, &catalog));
-        assert_eq!(construction.next_blueprint_element, 1);
-        assert_eq!(construction.developing_structure.units.len(), 1);
-        assert_eq!(construction.developing_structure.units[0].placement.x, 3.0);
+        assert_eq!(construction.next_blueprint_element, 2);
+        assert_eq!(construction.developing_structure.units.len(), 2);
+        assert_eq!(construction.developing_structure.units[1].placement.x, 9.0);
+        assert_eq!(construction.developing_structure.units[1].placement.y, 11.0);
         assert!(!advance_construction(&mut construction, &catalog));
-        assert_eq!(construction.next_blueprint_element, 1);
     }
 
     #[test]
@@ -304,12 +422,18 @@ mod tests {
             ),
         };
         let mut construction = ReproductiveConstruction {
-            committed_material: Material::free_base("Carbon", 1.0),
-            developing_structure: OrganismStructure::new(),
+            child_id: "child".into(),
+            connection: test_connection(),
+            committed_material: Material { parts: Vec::new(), bonded: false },
+            developing_structure: {
+                let mut s = OrganismStructure::new();
+                s.add_unit(StructuralUnit::new("Carbon", Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 }));
+                s
+            },
             child_genome: genome,
-            next_blueprint_element: 0,
+            world_offset: Position { x: 1.0, y: 0.0 },
+            next_blueprint_element: 1,
         };
-        assert!(advance_construction(&mut construction, &catalog));
         assert!(!advance_construction(&mut construction, &catalog));
         construction.committed_material = Material::free_base("Methane", 1.0);
         assert!(advance_construction(&mut construction, &catalog));
