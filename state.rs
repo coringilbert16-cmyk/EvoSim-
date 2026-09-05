@@ -68,7 +68,7 @@ pub(crate) enum DevelopmentStage {
     Juvenile,
     Adult,
 }
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 pub(crate) struct Position {
     pub(crate) x: f64,
     pub(crate) y: f64,
