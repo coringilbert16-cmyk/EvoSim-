@@ -7,6 +7,15 @@
 use crate::resources::{BaseResource, Shape};
 use crate::structure::{OrganismStructure, Placement};
 
+// Shape's geometry is immutable and its Form already has value equality. Keep
+// the equality implementation local to the derived-geometry layer so the
+// resource model does not need another trait solely for these tests/records.
+impl PartialEq for Shape {
+    fn eq(&self, other: &Self) -> bool {
+        self.form == other.form
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct PlacedStructuralShape {
     pub unit_index: usize,
@@ -23,7 +32,8 @@ pub(crate) fn placed_structural_shapes(
         .iter()
         .enumerate()
         .filter_map(|(unit_index, unit)| {
-            let resource = catalog.iter().find(|resource| resource.name == unit.resource_name)?;
+            let resource_name = unit.material.primary_resource_name()?;
+            let resource = catalog.iter().find(|resource| resource.name == resource_name)?;
             Some(PlacedStructuralShape {
                 unit_index,
                 shape: resource.shape.clone(),
