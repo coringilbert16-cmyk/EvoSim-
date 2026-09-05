@@ -144,10 +144,10 @@ mod integration_tests {
 
         sim.step();
         let expected_strength = crate::combine::bond_strength(
-            *sim.organisms[0].structure.units[0]
+            sim.organisms[0].structure.units[0]
                 .properties(&sim.environment.catalog)
                 .unwrap(),
-            *sim.organisms[0].structure.units[1]
+            sim.organisms[0].structure.units[1]
                 .properties(&sim.environment.catalog)
                 .unwrap(),
         );
@@ -215,10 +215,10 @@ mod integration_tests {
         sim.step();
 
         let expected_work = crate::combine::bond_strength(
-            *sim.organisms[0].structure.units[a]
+            sim.organisms[0].structure.units[a]
                 .properties(&sim.environment.catalog)
                 .unwrap(),
-            *sim.organisms[0].structure.units[b]
+            sim.organisms[0].structure.units[b]
                 .properties(&sim.environment.catalog)
                 .unwrap(),
         ) * 2.0;
@@ -249,10 +249,10 @@ mod integration_tests {
         }
         assert!(sim.organisms[0].structure.bonds.is_empty());
         assert!((sim.organisms[0].usable_energy - before - (12.5 - crate::combine::bond_strength(
-            *sim.organisms[0].structure.units[0]
+            sim.organisms[0].structure.units[0]
                 .properties(&sim.environment.catalog)
                 .unwrap(),
-            *sim.organisms[0].structure.units[1]
+            sim.organisms[0].structure.units[1]
                 .properties(&sim.environment.catalog)
                 .unwrap(),
         ) * 2.0)).abs() < 1e-12);
