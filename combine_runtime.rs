@@ -1,6 +1,6 @@
 //! Runtime COMBINE boundary.
 //!
-//! This module bridges organism-owned raw material, structural units, contact,
+//! This module bridges organism-owned free material, structural units, contact,
 //! and the experimental COMBINE equations. Chemistry and geometry remain in
 //! their authoritative modules.
 
@@ -35,17 +35,17 @@ pub(crate) fn instantiate_one_unit(
     catalog: &[BaseResource],
 ) -> Option<usize> {
     let index = organism
-        .stored_unbonded
+        .stored_material
         .parts
         .iter()
         .position(|(_, amount)| *amount >= MATERIAL_UNIT_AMOUNT - EPSILON)?;
-    let resource_name = organism.stored_unbonded.parts[index].0.clone();
+    let resource_name = organism.stored_material.parts[index].0.clone();
     if catalog.iter().all(|base| base.name != resource_name) {
         return None;
     }
-    organism.stored_unbonded.parts[index].1 -= MATERIAL_UNIT_AMOUNT;
+    organism.stored_material.parts[index].1 -= MATERIAL_UNIT_AMOUNT;
     organism
-        .stored_unbonded
+        .stored_material
         .parts
         .retain(|(_, amount)| *amount > EPSILON);
     let (x, y) = organism
