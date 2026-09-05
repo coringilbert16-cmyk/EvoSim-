@@ -43,7 +43,7 @@ pub fn apply_vents(
                 field_index,
                 Material {
                     parts,
-                    bonded: false,
+                    internal_bonds: Vec::new(),
                 },
             );
         }
