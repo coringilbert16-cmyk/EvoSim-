@@ -34,7 +34,6 @@ pub(crate) struct AffinityResponses {
 pub(crate) struct ResourceObservation {
     pub(crate) name: String,
     pub(crate) properties: crate::resources::ResourceProperties,
-    pub(crate) bonded: bool,
     pub(crate) perceived_amount: f64,
     pub(crate) deviations: PropertyDeviations,
     pub(crate) affinity_responses: AffinityResponses,
