@@ -18,9 +18,6 @@ const EPSILON: f64 = 1e-12;
 const CONNECTION_TOLERANCE: f64 = 0.25;
 const MIN_CONNECTION_FACING: f64 = 0.0;
 
-/// Begin reproduction by committing only the inherited seed element and
-/// attaching that seed physically to the parent. The attachment is a real
-/// cross-organism cell connection; it does not itself transfer material.
 pub(crate) fn begin_reproduction(
     parent: &mut Organism,
     child_id: String,
@@ -53,16 +50,18 @@ pub(crate) fn begin_reproduction(
         return false;
     }
 
-    // Validate the physical attachment before mutating the parent's store.
-    let seed_unit = StructuralUnit::from_material(
+    let Some(seed_unit) = StructuralUnit::from_material(
         StructuralMaterial {
             material: required_seed.clone(),
             internal_bonds: seed_element.material.internal_bonds.clone(),
         },
         seed_element.placement,
-    )?;
+    ) else {
+        return false;
+    };
     let mut seed_structure = OrganismStructure::new();
     seed_structure.add_unit(seed_unit);
+
     let Some((developing_structure, connection, world_offset)) = attach_seed_to_parent(
         parent,
         &seed_structure,
@@ -150,9 +149,6 @@ fn attach_seed_to_parent(
     None
 }
 
-/// Advance construction by one inherited blueprint element when the required
-/// physical material is actually available. Lack of material is a normal
-/// developmental pause, not a failed reproduction attempt.
 pub(crate) fn advance_construction(
     construction: &mut ReproductiveConstruction,
     catalog: &[BaseResource],
