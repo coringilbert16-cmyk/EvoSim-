@@ -203,7 +203,7 @@ fn take_required_material(committed: &mut Material, required: &Material) -> Opti
     committed.parts.retain(|(_, amount)| *amount > EPSILON);
     Some(Material {
         parts: taken_parts,
-        bonded: true,
+        bonded: false,
     })
 }
 
