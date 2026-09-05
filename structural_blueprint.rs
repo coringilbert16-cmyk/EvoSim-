@@ -1,4 +1,4 @@
-use crate::resources::{ConnectionPoint, Shape};
+use crate::resources::{merge_parts, ConnectionPoint, Material, Shape};
 use crate::structural_material::StructuralMaterial;
 use crate::structure::Placement;
 use serde::{Deserialize, Serialize};
@@ -23,7 +23,7 @@ pub struct BlueprintGeometry {
     pub connection_regions: Vec<ConnectionRegion>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct ConstituentGeometry {
     pub part_index: usize,
     pub shape: Shape,
@@ -110,6 +110,22 @@ impl StructuralBlueprint {
             .iter()
             .map(|element| element.material.total_amount())
             .sum()
+    }
+
+    /// Return the exact unbonded material composition required to realize every
+    /// element in this blueprint. Requirements are aggregated by resource type
+    /// so stock ordering or duplicate constituent entries cannot change the
+    /// amount required.
+    pub fn required_material(&self) -> Material {
+        let parts: Vec<(String, f64)> = self
+            .elements
+            .iter()
+            .flat_map(|element| element.material.constituents().iter().cloned())
+            .collect();
+        Material {
+            parts: merge_parts(&parts),
+            bonded: false,
+        }
     }
 
     pub fn structural_mass(&self, catalog: &[crate::resources::BaseResource]) -> f64 {
@@ -268,6 +284,46 @@ mod tests {
             placement: placement(0.0, 0.0),
         };
         assert!(StructuralBlueprint::new(vec![element], Vec::new()).is_valid());
+    }
+
+    #[test]
+    fn required_material_aggregates_all_blueprint_constituents() {
+        let catalog = default_catalog();
+        let carbon = BlueprintElement {
+            material: StructuralMaterial::single("Carbon"),
+            geometry: BlueprintGeometry::single(catalog[0].shape.clone()),
+            placement: placement(0.0, 0.0),
+        };
+        let methane = BlueprintElement {
+            material: StructuralMaterial {
+                material: Material {
+                    parts: vec![("Carbon".into(), 2.0), ("Methane".into(), 1.0)],
+                    bonded: true,
+                },
+                internal_bonds: Vec::new(),
+            },
+            geometry: BlueprintGeometry {
+                constituents: vec![
+                    ConstituentGeometry {
+                        part_index: 0,
+                        shape: catalog[0].shape.clone(),
+                        placement: placement(0.0, 0.0),
+                    },
+                    ConstituentGeometry {
+                        part_index: 1,
+                        shape: catalog[1].shape.clone(),
+                        placement: placement(0.0, 0.0),
+                    },
+                ],
+                connection_regions: Vec::new(),
+            },
+            placement: placement(1.0, 0.0),
+        };
+        let blueprint = StructuralBlueprint::new(vec![carbon, methane], Vec::new());
+        let required = blueprint.required_material();
+        assert!(!required.bonded);
+        assert_eq!(required.parts, vec![("Carbon".into(), 3.0), ("Methane".into(), 1.0)]);
+        assert_eq!(required.total_amount(), 4.0);
     }
 
     #[test]
