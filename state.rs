@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
+use crate::cell_connection::CellConnection;
 use crate::decision::{DecisionHistory, DecisionParameters};
 use crate::environment::{ActiveMaterialField, DeepReservoir, Vent};
 use crate::genome::Genome;
@@ -105,18 +106,20 @@ pub(crate) struct ActiveTransformation {
     pub(crate) decision_context_key: Option<String>,
 }
 
-/// Persistent physical state for reproduction after the parent commits actual
-/// unbonded material to an offspring that is still under construction.
-///
-/// The parent retains its own structure. The committed material is the only
-/// reproductive investment represented here; it is not a separate currency.
-/// The developing structure is populated progressively by the construction
-/// lifecycle and remains private to the parent until birth.
+/// Persistent physical state for reproduction after the parent commits a seed
+/// to an offspring. The offspring's seed is immediately placed into physical
+/// contact with the parent and the resulting connection is the boundary through
+/// which later material transfer can occur.
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct ReproductiveConstruction {
+    pub(crate) child_id: String,
+    pub(crate) connection: CellConnection,
     pub(crate) committed_material: Material,
     pub(crate) developing_structure: OrganismStructure,
     pub(crate) child_genome: Genome,
+    /// World-space translation applied to inherited blueprint placements.
+    #[serde(default)]
+    pub(crate) world_offset: Position,
     /// Index of the next inherited blueprint element to construct.
     #[serde(default)]
     pub(crate) next_blueprint_element: usize,
@@ -148,7 +151,7 @@ pub(crate) struct Organism {
     #[serde(default)]
     pub(crate) reproductive_readiness: f64,
     pub(crate) active_transformation_id: Option<u64>,
-    /// Ongoing reproduction, if the parent has committed material to a child
+    /// Ongoing reproduction, if the parent has committed a seed to an offspring
     /// that is still under construction.
     #[serde(default)]
     pub(crate) reproductive_construction: Option<ReproductiveConstruction>,
