@@ -53,7 +53,7 @@ pub(crate) fn begin_reproduction(parent: &mut Organism, rng: &mut ChaCha8Rng) ->
 /// unit is positioned so one of its authored connection points exactly meets
 /// an available connection point on the developing structure with opposing
 /// outward normals. Bond formation remains a separate COMBINE step.
-pub(crate) fn advance_construction(
+pub(crate] fn advance_construction(
     construction: &mut ReproductiveConstruction,
     catalog: &[BaseResource],
 ) -> bool {
@@ -211,7 +211,7 @@ mod tests {
         assert_eq!(parent.reproductive_readiness, 0.0);
         let construction = parent.reproductive_construction.as_ref().unwrap();
         assert_eq!(construction.committed_material.total_amount(), CORE_UNIT_COUNT as f64);
-        assert!(!construction.committed_material.bonded);
+        assert!(!construction.committed_material.has_internal_structure());
         assert!(construction.developing_structure.units.is_empty());
     }
 
