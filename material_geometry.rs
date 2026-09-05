@@ -365,8 +365,8 @@ mod tests {
         );
         let b = part(
             Form::Rectangle { width: 4.0, height: 1.0 },
-            2.0,
-            2.0,
+            3.0,
+            3.0,
             0.0,
         );
         assert!(!placed_forms_overlap(&a, &b, 0.0));
