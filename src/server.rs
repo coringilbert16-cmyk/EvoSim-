@@ -44,7 +44,7 @@ pub(crate) fn start_tick_loop(
 }
 
 async fn index_handler() -> impl IntoResponse {
-    Html(include_str!("ui/index.html"))
+    Html(include_str!("../ui/index.html"))
 }
 
 async fn snapshot_handler(State(state): State<AppState>) -> impl IntoResponse {
