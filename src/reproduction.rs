@@ -128,7 +128,7 @@ fn attach_seed_to_parent(
                     point_index: child_point_index,
                 };
 
-                if let Some(connection) = CellConnection::try_establish(
+                let Ok(connection) = CellConnection::try_establish(
                     parent_site,
                     child_site,
                     &parent.structure,
@@ -136,9 +136,11 @@ fn attach_seed_to_parent(
                     catalog,
                     CONNECTION_TOLERANCE,
                     MIN_CONNECTION_FACING,
-                ) {
-                    return Some((candidate_structure, connection, offset));
-                }
+                ) else {
+                    continue;
+                };
+
+                return Some((candidate_structure, connection, offset));
             }
         }
     }
@@ -146,93 +148,155 @@ fn attach_seed_to_parent(
     None
 }
 
-fn has_required_material(available: &Material, required: &Material) -> bool {
-    if available.bonded || required.is_empty() {
-        return false;
-    }
-    for (resource, amount) in &required.parts {
-        let available_amount = available
-            .parts
-            .iter()
-            .filter(|(name, _)| name == resource)
-            .map(|(_, value)| *value)
-            .sum::<f64>();
-        if available_amount + EPSILON < *amount {
-            return false;
-        }
-    }
-    true
-}
-
-fn take_required_material(available: &mut Material, required: &Material) -> Option<Material> {
-    if available.bonded || required.is_empty() || !has_required_material(available, required) {
-        return None;
-    }
-
-    let mut taken_parts = Vec::new();
-    for (resource, required_amount) in &required.parts {
-        let mut remaining = *required_amount;
-        for (name, amount) in &mut available.parts {
-            if name == resource && remaining > EPSILON {
-                let taken = amount.min(remaining);
-                *amount -= taken;
-                remaining -= taken;
-                if taken > EPSILON {
-                    taken_parts.push((name.clone(), taken));
-                }
-            }
-        }
-    }
-    available.parts.retain(|(_, amount)| *amount > EPSILON);
-    Some(Material {
-        parts: taken_parts,
-        bonded: false,
-    })
-}
-
-fn advance_construction(
+pub(crate) fn advance_construction(
     construction: &mut ReproductiveConstruction,
     catalog: &[BaseResource],
 ) -> bool {
-    let Some(element) = construction
-        .child_genome
-        .structural_blueprint
-        .elements
-        .get(construction.next_blueprint_element)
-    else {
-        return true;
-    };
-
-    if !has_required_material(&construction.committed_material, &element.material.material) {
-        return false;
-    }
-
-    let Some(unit) = StructuralUnit::from_material(
-        StructuralMaterial {
-            material: element.material.material.clone(),
-            internal_bonds: element.material.internal_bonds.clone(),
-        },
-        Placement {
-            x: construction.world_offset.x + element.placement.x,
-            y: construction.world_offset.y + element.placement.y,
-            rotation_radians: element.placement.rotation_radians,
-        },
-    ) else {
+    let blueprint = &construction.child_genome.structural_blueprint;
+    let Some(element) = blueprint.elements.get(construction.next_blueprint_element) else {
         return false;
     };
 
-    let Some(_material) = take_required_material(
+    let Some(material) = take_required_material(
         &mut construction.committed_material,
         &element.material.material,
     ) else {
         return false;
     };
 
+    let placement = crate::structure::Placement {
+        x: element.placement.x + construction.world_offset.x,
+        y: element.placement.y + construction.world_offset.y,
+        rotation_radians: element.placement.rotation_radians,
+    };
+    let unit_material = StructuralMaterial {
+        material,
+        internal_bonds: element.material.internal_bonds.clone(),
+    };
+    let Some(unit) = StructuralUnit::from_material(unit_material, placement) else {
+        return false;
+    };
+
     construction.developing_structure.add_unit(unit);
     construction.next_blueprint_element += 1;
-    let _ = catalog;
-    construction.next_blueprint_element
-        >= construction.child_genome.structural_blueprint.elements.len()
+    realize_new_blueprint_connections(construction, catalog);
+    true
+}
+
+fn realize_new_blueprint_connections(
+    construction: &mut ReproductiveConstruction,
+    catalog: &[BaseResource],
+) {
+    let blueprint = &construction.child_genome.structural_blueprint;
+    let element_count = construction.developing_structure.units.len();
+
+    for connection in blueprint.connections.iter().copied() {
+        if connection.element_a >= element_count || connection.element_b >= element_count {
+            continue;
+        }
+
+        let Some(props_a) = construction.developing_structure.units[connection.element_a]
+            .properties(catalog)
+        else {
+            continue;
+        };
+        let Some(props_b) = construction.developing_structure.units[connection.element_b]
+            .properties(catalog)
+        else {
+            continue;
+        };
+
+        let candidate = crate::contact::connection_pair_candidates(
+            &construction.developing_structure,
+            connection.element_a,
+            connection.element_b,
+            catalog,
+        )
+        .into_iter()
+        .find(|candidate| {
+            candidate.point_a == connection.point_a
+                && candidate.point_b == connection.point_b
+                && candidate.distance <= 1.0
+                && candidate.facing > 0.0
+        });
+
+        let Some(candidate) = candidate else {
+            continue;
+        };
+
+        let bond = Bond {
+            unit_a: connection.element_a,
+            point_a: candidate.point_a,
+            unit_b: connection.element_b,
+            point_b: candidate.point_b,
+            strength: crate::combine::bond_strength(props_a, props_b),
+            bond_energy: 0.0,
+        };
+
+        if construction.developing_structure.is_valid_bond(&bond, catalog)
+            && !construction
+                .developing_structure
+                .bonds
+                .iter()
+                .any(|existing| existing.has_same_identity(&bond))
+        {
+            construction.developing_structure.add_bond(bond);
+        }
+    }
+}
+
+fn has_required_material(available: &Material, required: &Material) -> bool {
+    if available.bonded || required.is_empty() {
+        return false;
+    }
+
+    crate::resources::merge_parts(&required.parts)
+        .iter()
+        .all(|(name, required_amount)| {
+            let available_amount = available
+                .parts
+                .iter()
+                .filter(|(available_name, amount)| {
+                    available_name == name && *amount > 0.0
+                })
+                .map(|(_, amount)| *amount)
+                .sum::<f64>();
+            available_amount + EPSILON >= *required_amount
+        })
+}
+
+fn take_required_material(committed: &mut Material, required: &Material) -> Option<Material> {
+    if !has_required_material(committed, required) {
+        return None;
+    }
+
+    let required_parts = crate::resources::merge_parts(&required.parts);
+    let mut allocations: Vec<(usize, f64)> = Vec::new();
+
+    for (name, required_amount) in &required_parts {
+        let mut remaining = *required_amount;
+        for (index, (available_name, available_amount)) in committed.parts.iter().enumerate() {
+            if available_name != name || *available_amount <= 0.0 || remaining <= EPSILON {
+                continue;
+            }
+            let taken = remaining.min(*available_amount);
+            allocations.push((index, taken));
+            remaining -= taken;
+        }
+        if remaining > EPSILON {
+            return None;
+        }
+    }
+
+    for (index, amount) in allocations {
+        committed.parts[index].1 -= amount;
+    }
+    committed.parts.retain(|(_, amount)| *amount > EPSILON);
+
+    Some(Material {
+        parts: required_parts,
+        bonded: false,
+    })
 }
 
 #[cfg(test)]
@@ -453,8 +517,8 @@ mod tests {
                 structure.add_unit(StructuralUnit::new(
                     "Carbon",
                     Placement {
-                        x: 1.0,
-                        y: 2.0,
+                        x: world_offset.x,
+                        y: world_offset.y,
                         rotation_radians: 0.0,
                     },
                 ));
@@ -466,48 +530,24 @@ mod tests {
         };
 
         assert!(advance_construction(&mut construction, &catalog));
-        let placement = construction.developing_structure.units[1].placement;
-        assert!((placement.x - 9.0).abs() < 1e-9);
-        assert!((placement.y - 11.0).abs() < 1e-9);
+        assert_eq!(construction.next_blueprint_element, 2);
+        assert_eq!(construction.developing_structure.units.len(), 2);
+        assert_eq!(construction.developing_structure.units[1].placement.x, 9.0);
+        assert_eq!(construction.developing_structure.units[1].placement.y, 11.0);
+        assert!(!advance_construction(&mut construction, &catalog));
     }
 
     #[test]
-    fn insufficient_material_does_not_advance_construction() {
-        let catalog = crate::resources::default_catalog();
-        let genome = Genome {
-            traits: initial_genome().traits,
-            structural_blueprint: StructuralBlueprint::new(
-                vec![
-                    blueprint_element("Carbon", 0.0, 0.0),
-                    blueprint_element("Methane", 1.0, 0.0),
-                ],
-                Vec::new(),
-            ),
+    fn insufficient_material_is_atomic() {
+        let mut committed = Material {
+            parts: vec![("Carbon".into(), 0.5), ("Carbon".into(), 0.25)],
+            bonded: false,
         };
-        let mut construction = ReproductiveConstruction {
-            child_id: "child".into(),
-            connection: test_connection(),
-            committed_material: Material::free_base("Methane", 0.5),
-            developing_structure: {
-                let mut structure = OrganismStructure::new();
-                structure.add_unit(StructuralUnit::new(
-                    "Carbon",
-                    Placement {
-                        x: 1.0,
-                        y: 0.0,
-                        rotation_radians: 0.0,
-                    },
-                ));
-                structure
-            },
-            child_genome: genome,
-            world_offset: Position { x: 1.0, y: 0.0 },
-            next_blueprint_element: 1,
-        };
-
-        assert!(!advance_construction(&mut construction, &catalog));
-        assert_eq!(construction.next_blueprint_element, 1);
-        assert_eq!(construction.developing_structure.units.len(), 1);
-        assert_eq!(construction.committed_material.total_amount(), 0.5);
+        let required = Material::free_base("Carbon", 1.0);
+        assert!(take_required_material(&mut committed, &required).is_none());
+        assert_eq!(
+            committed.parts,
+            vec![("Carbon".into(), 0.5), ("Carbon".into(), 0.25)]
+        );
     }
 }
