@@ -178,3 +178,29 @@ pub(crate) struct Environment {
     pub(crate) field: ActiveMaterialField,
     pub(crate) reservoir: DeepReservoir,
     pub(crate) vents: Vec<Vent>,
+}
+#[derive(Serialize, Deserialize, Clone)]
+pub(crate) struct Snapshot {
+    pub(crate) tick: u64,
+    pub(crate) organisms: Vec<Organism>,
+    pub(crate) environment: Environment,
+    pub(crate) active_transformations: Vec<ActiveTransformation>,
+    pub(crate) energy_ledger: EnergyLedger,
+}
+pub(crate) struct Simulation {
+    pub(crate) tick: u64,
+    pub(crate) ticks_per_second: f64,
+    pub(crate) running: bool,
+    pub(crate) organisms: Vec<Organism>,
+    pub(crate) environment: Environment,
+    pub(crate) active_transformations: Vec<ActiveTransformation>,
+    pub(crate) energy_ledger: EnergyLedger,
+    pub(crate) next_organism_id: u64,
+    pub(crate) next_transformation_id: u64,
+    pub(crate) rng: ChaCha8Rng,
+    pub(crate) decision_parameters: DecisionParameters,
+}
+
+pub(crate) const DESIRABILITY_AMOUNT_HALF_SATURATION: f64 = 100.0;
+pub(crate) const DESIRABILITY_MAX: f64 = 1.0;
+pub(crate) const STRESS_DECAY_PER_TICK: f64 = 0.98;
