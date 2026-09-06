@@ -1,6 +1,7 @@
 // Settling returns active-field material to the matching deep-reservoir region.
 
 use super::field::{ActiveMaterialField, MATERIAL_EPSILON};
+use super::material_transfer::take_whole_unstructured;
 use super::reservoir::DeepReservoir;
 
 pub const DEFAULT_SETTLING_FRACTION: f64 = 0.01;
@@ -35,13 +36,13 @@ pub fn apply_settling(
             if total <= MATERIAL_EPSILON {
                 continue;
             }
-            let outflow = total * fraction;
-            if outflow <= MATERIAL_EPSILON {
+            let outflow = (total * fraction).floor() as usize;
+            if outflow == 0 {
                 retained.push(material);
                 continue;
             }
 
-            if let Some(taken) = material.take(outflow) {
+            if let Some(taken) = take_whole_unstructured(&mut material, outflow) {
                 for (name, amount) in taken.parts {
                     reservoir.cells[reservoir_index].add(&name, amount);
                 }
