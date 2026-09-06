@@ -7,6 +7,7 @@ use tokio::sync::broadcast;
 use crate::decision::{DecisionHistory, DecisionParameters};
 use crate::environment::{ActiveMaterialField, DeepReservoir, Vent};
 use crate::genome::Genome;
+use crate::material_storage::MaterialStorage;
 use crate::resources::{BaseResource, Material};
 use crate::structure::{Bond, OrganismStructure};
 
@@ -17,19 +18,9 @@ pub(crate) struct AppState {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub(crate) struct PropertyDeviations {
-    pub(crate) mass: f64,
-    pub(crate) potential_energy: f64,
-    pub(crate) reactivity: f64,
-    pub(crate) cohesion: f64,
-}
+pub(crate) struct PropertyDeviations { pub(crate) mass: f64, pub(crate) potential_energy: f64, pub(crate) reactivity: f64, pub(crate) cohesion: f64 }
 #[derive(Serialize, Deserialize, Clone)]
-pub(crate) struct AffinityResponses {
-    pub(crate) mass: f64,
-    pub(crate) potential_energy: f64,
-    pub(crate) reactivity: f64,
-    pub(crate) cohesion: f64,
-}
+pub(crate) struct AffinityResponses { pub(crate) mass: f64, pub(crate) potential_energy: f64, pub(crate) reactivity: f64, pub(crate) cohesion: f64 }
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct ResourceObservation {
     pub(crate) name: String,
@@ -54,41 +45,22 @@ pub(crate) struct ResourceSense {
     pub(crate) direction_strength: f64,
 }
 
-/// Biological lifecycle state.
-///
-/// `Offspring` is the pre-birth developmental state created by parental
-/// reproductive investment. It becomes `Juvenile` only after reaching its
-/// genetically determined birth threshold. `Juvenile` later transitions to
-/// `Adult` when its adult-development requirements are satisfied.
 #[derive(Serialize, Deserialize, Clone)]
-pub(crate) enum DevelopmentStage {
-    Offspring,
-    Juvenile,
-    Adult,
-}
+pub(crate) enum DevelopmentStage { Offspring, Juvenile, Adult }
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub(crate) struct Position {
-    pub(crate) x: f64,
-    pub(crate) y: f64,
-}
+pub(crate) struct Position { pub(crate) x: f64, pub(crate) y: f64 }
 
 pub(crate) const MAX_MEMORY_POINTS: usize = 5;
 pub(crate) const MEMORY_DECAY_PER_TICK: f64 = 0.995;
 pub(crate) const MEMORY_MERGE_RADIUS: f64 = 40.0;
 pub(crate) const MEMORY_PRUNE_THRESHOLD: f64 = 0.01;
-#[derive(Serialize, Deserialize, Clone)]
-pub(crate) struct MemoryPoint {
-    pub(crate) x: f64,
-    pub(crate) y: f64,
-    pub(crate) strength: f64,
-}
 
-pub(crate) const PROCESSING_REACH: f64 = 20.0;
-pub(crate) const PROCESSING_RATE: f64 = 4.0;
+/// Independent processing capacities. Neither is an acquisition amount.
+pub(crate) const COMBINE_PROCESSING_RATE: usize = 1;
+pub(crate) const BREAK_PROCESSING_RATE: usize = 1;
+
 #[derive(Serialize, Deserialize, Clone, Copy)]
-pub(crate) enum TransformationKind {
-    Break,
-}
+pub(crate) enum TransformationKind { Break }
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct ActiveTransformation {
     pub(crate) id: u64,
@@ -96,24 +68,18 @@ pub(crate) struct ActiveTransformation {
     pub(crate) kind: TransformationKind,
     /// Retained for snapshot compatibility. BREAK no longer derives energy from this material.
     pub(crate) material: Material,
-    #[serde(default)]
-    pub(crate) bond: Option<Bond>,
+    #[serde(default)] pub(crate) bond: Option<Bond>,
     pub(crate) complexity: f64,
     pub(crate) duration_ticks: u64,
     pub(crate) remaining_ticks: u64,
     pub(crate) decision_context_key: Option<String>,
 }
 
-/// Persistent physical state for reproduction after the parent commits actual
-/// free material to an offspring that is still under construction.
-///
-/// The parent retains its own structure. The committed material is the only
-/// reproductive investment represented here; it is not a separate currency.
-/// The developing structure is populated progressively by the construction
-/// lifecycle and remains private to the parent until birth.
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct ReproductiveConstruction {
-    pub(crate) committed_material: Material,
+    /// Committed inventory remains independent material objects until consumed
+    /// by construction. Commitment itself performs no COMBINE.
+    pub(crate) committed_material: MaterialStorage,
     pub(crate) developing_structure: OrganismStructure,
     pub(crate) child_genome: Genome,
 }
@@ -136,40 +102,23 @@ pub(crate) struct Organism {
     pub(crate) decision_history: DecisionHistory,
     pub(crate) usable_energy: f64,
     pub(crate) stress: f64,
-    pub(crate) stored_material: Material,
+    /// Acquired material inventory. Storage itself never transforms material.
+    pub(crate) stored_material: MaterialStorage,
     pub(crate) structure: OrganismStructure,
     pub(crate) development_stage: DevelopmentStage,
     pub(crate) age: u64,
-    /// Accumulated reproductive pressure. It grows only from mature, energy-ready state.
-    #[serde(default)]
-    pub(crate) reproductive_readiness: f64,
+    #[serde(default)] pub(crate) reproductive_readiness: f64,
     pub(crate) active_transformation_id: Option<u64>,
-    /// Ongoing reproduction, if the parent has committed material to a child
-    /// that is still under construction.
-    #[serde(default)]
-    pub(crate) reproductive_construction: Option<ReproductiveConstruction>,
+    #[serde(default)] pub(crate) reproductive_construction: Option<ReproductiveConstruction>,
 }
 
 impl Organism {
-    /// Store free material for later structural construction.
-    ///
-    /// Structured material is never flattened into this stockpile; its physical
-    /// structure must remain intact and travel as a Material object instead.
-    pub(crate) fn store_material(&mut self, material: Material) {
-        if material.parts.is_empty() || material.has_internal_structure() {
-            return;
-        }
-        let mut parts = std::mem::take(&mut self.stored_material.parts);
-        parts.extend(material.parts);
-        self.stored_material.parts = crate::resources::merge_parts(&parts);
+    pub(crate) fn store_material(&mut self, material: Material) -> bool {
+        self.stored_material.store(material)
     }
 
     pub(crate) fn structural_mass(&self, catalog: &[BaseResource]) -> f64 {
-        self.structure
-            .units
-            .iter()
-            .filter_map(|unit| unit.properties(catalog).map(|properties| properties.mass))
-            .sum()
+        self.structure.units.iter().filter_map(|unit| unit.properties(catalog).map(|properties| properties.mass)).sum()
     }
 }
 
