@@ -90,8 +90,7 @@ fn segments_intersect(
         return true;
     }
 
-    tolerance > 0.0
-        && point_segment_distance(a.0, a.1, c.0, c.1, d.0, d.1) <= tolerance
+    tolerance > 0.0 && point_segment_distance(a.0, a.1, c.0, c.1, d.0, d.1) <= tolerance
         || tolerance > 0.0
             && point_segment_distance(b.0, b.1, c.0, c.1, d.0, d.1) <= tolerance
         || tolerance > 0.0
@@ -124,14 +123,8 @@ fn circle_polygon_boundary_contact(
     };
     vertices.iter().enumerate().any(|(i, &a)| {
         let b = vertices[(i + 1) % vertices.len()];
-        (point_segment_distance(
-            circle.placement.x,
-            circle.placement.y,
-            a.0,
-            a.1,
-            b.0,
-            b.1,
-        ) - radius)
+        (point_segment_distance(circle.placement.x, circle.placement.y, a.0, a.1, b.0, b.1)
+            - radius)
             .abs()
             <= tolerance
     })
