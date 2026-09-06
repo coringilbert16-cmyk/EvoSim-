@@ -15,6 +15,8 @@ use crate::state::{
     Snapshot,
 };
 
+const ADULTHOOD_GROWTH_FRACTION: f64 = 0.90;
+
 impl Simulation {
     pub(crate) fn new(seed: u64, ticks_per_second: f64) -> Self {
         let rng = ChaCha8Rng::seed_from_u64(seed);
@@ -75,17 +77,23 @@ impl Simulation {
     }
 
     pub(crate) fn create_initial_organism() -> Organism {
+        let genome = initial_genome();
+        let catalog = crate::resources::default_catalog();
+        let structure = genome
+            .structural_blueprint
+            .realize(&catalog)
+            .expect("initial structural blueprint must be realizable");
         Organism {
             id: "1".into(),
             occupied_cells: vec![Position { x: 500.0, y: 500.0 }],
-            genome: initial_genome(),
+            genome,
             resource_sense: ResourceSense { sensed_resources: Vec::new(), direction_x: 0.0, direction_y: 0.0, direction_strength: 0.0 },
             memory: Vec::new(),
             decision_history: crate::decision::DecisionHistory::default(),
             usable_energy: 0.0,
             stress: 0.0,
             stored_material: crate::material_storage::MaterialStorage::default(),
-            structure: crate::structure::OrganismStructure::new(),
+            structure,
             development_stage: DevelopmentStage::Juvenile,
             age: 0,
             reproductive_readiness: 0.0,
@@ -106,22 +114,46 @@ impl Simulation {
         organism.structure.units.iter().filter_map(|unit| unit.properties(&environment.catalog).map(|properties| properties.mass)).sum()
     }
 
+    fn mature_structural_mass(organism: &Organism, environment: &Environment) -> f64 {
+        organism.genome.structural_blueprint.structural_mass(&environment.catalog)
+    }
+
+    fn growth_fraction(organism: &Organism, environment: &Environment) -> f64 {
+        let mature_mass = Self::mature_structural_mass(organism, environment);
+        if !mature_mass.is_finite() || mature_mass <= 0.0 { return 0.0; }
+        (Self::structural_mass(organism, environment) / mature_mass).max(0.0)
+    }
+
+    /// Development is one-way. Once Adult is reached, structural loss can
+    /// never return the organism to Juvenile.
+    fn update_development_stage(organism: &mut Organism, environment: &Environment) {
+        match organism.development_stage {
+            DevelopmentStage::Offspring => {
+                if organism.reproductive_construction.is_none() {
+                    organism.development_stage = DevelopmentStage::Juvenile;
+                }
+            }
+            DevelopmentStage::Juvenile => {
+                if Self::growth_fraction(organism, environment) >= ADULTHOOD_GROWTH_FRACTION {
+                    organism.development_stage = DevelopmentStage::Adult;
+                }
+            }
+            DevelopmentStage::Adult => {}
+        }
+    }
+
     fn current_needs(organism: &Organism, environment: &Environment, parameters: DecisionParameters) -> CurrentNeeds {
         let survival_reserve = parameters.survival_reserve.max(f64::EPSILON);
         let reserve_pressure = (1.0 - organism.usable_energy / survival_reserve).clamp(0.0, 1.0);
         let survival = (reserve_pressure * (1.0 + organism.stress.max(0.0))).clamp(0.0, 1.0);
-        let adult_mass = parameters.adult_mass.max(f64::EPSILON);
-        let maturity = (Self::structural_mass(organism, environment) / adult_mass).clamp(0.0, 1.0);
-        let reproduction_reserve = parameters.reproduction_reserve.max(f64::EPSILON);
-        let energy_readiness = (organism.usable_energy / reproduction_reserve).clamp(0.0, 1.0);
-        let _ = (maturity, energy_readiness);
+        let _ = environment;
         CurrentNeeds { survival, reproduction: organism.reproductive_readiness.clamp(0.0, 1.0) }
     }
 
     fn update_reproductive_readiness(organism: &mut Organism, environment: &Environment, parameters: DecisionParameters) {
         if !matches!(organism.development_stage, DevelopmentStage::Adult) { return; }
-        let adult_mass = parameters.adult_mass.max(f64::EPSILON);
-        let maturity = (Self::structural_mass(organism, environment) / adult_mass).clamp(0.0, 1.0);
+        let mature_mass = Self::mature_structural_mass(organism, environment).max(f64::EPSILON);
+        let maturity = (Self::structural_mass(organism, environment) / mature_mass).clamp(0.0, 1.0);
         let reproduction_reserve = parameters.reproduction_reserve.max(f64::EPSILON);
         let energy_readiness = (organism.usable_energy / reproduction_reserve).clamp(0.0, 1.0);
         let accumulation = (maturity * energy_readiness * parameters.reproduction_accumulation_rate.max(0.0)).clamp(0.0, 1.0);
@@ -203,6 +235,7 @@ impl Simulation {
         let decision_parameters = self.decision_parameters;
         for organism in &mut self.organisms {
             organism.age += 1;
+            Self::update_development_stage(organism, &environment_snapshot);
             Self::update_resource_perception(organism, &environment_snapshot);
             Self::update_memory_from_sources(organism, &environment_snapshot);
             Self::update_reproductive_readiness(organism, &environment_snapshot, decision_parameters);
