@@ -10,6 +10,8 @@ use crate::environment::{
     DEFAULT_SETTLING_INTERVAL_TICKS,
 };
 use crate::genome::initial_genome;
+use crate::physical_environment::PhysicalEnvironment;
+use crate::genome::initial_genome;
 use crate::state::{
     DevelopmentStage, EnergyLedger, Environment, Organism, Position, ResourceSense, Simulation,
     Snapshot,
@@ -73,7 +75,7 @@ impl Simulation {
                 emission_amount: 100.0, emission_interval: 25, emission_timer: 0,
             },
         ];
-        Environment { width, height, catalog, field, reservoir, vents }
+        Environment { width, height, catalog, field, reservoir, vents, physical: PhysicalEnvironment::new() }
     }
 
     pub(crate) fn create_initial_organism() -> Organism {
