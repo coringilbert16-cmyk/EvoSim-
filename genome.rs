@@ -46,18 +46,13 @@ fn hydrated_carbon_nitrogen_water()->Material{Material{parts:vec![("Carbon".into
 /// - ring 3: 18 Carbon+Sulfur+Water hydrated lattice units;
 /// - ring 4: 24 Carbon+Nitrogen+Water hydrated membrane units.
 ///
-/// All three layers are genuine composite materials. Carbon is the first
-/// constituent and therefore the rigid exterior scaffold; later constituents
-/// are internal reinforcement/hydration rather than independent boundaries.
-/// The resulting cohesion hierarchy is F-Core (~0.767) > membrane (~0.667)
-/// > lattice (~0.567), before any other material-property effects are applied.
-///
-/// Carbon scaffold hexagons are arranged on a solid edge-contact hex lattice.
-/// Each neighboring pair shares two geometric corners, represented as two
-/// independent organism structural bonds.
+/// The F-Core region is explicitly marked in the inherited blueprint as the
+/// genome core. Its membership is structural metadata, not a hard-coded
+/// reproduction unit count, and its construction order is intentionally free.
 fn default_structural_blueprint()->StructuralBlueprint{
  let r=0.438_691_f64;
  let mut elements=Vec::with_capacity(61);
+ let mut core_elements=Vec::with_capacity(19);
  let mut index_by_axial=HashMap::new();
  for q in -4_i32..=4_i32{
   for axial_r in -4_i32..=4_i32{
@@ -67,6 +62,7 @@ fn default_structural_blueprint()->StructuralBlueprint{
    let x=3.0_f64.sqrt()*r*(q as f64+0.5*axial_r as f64);
    let y=1.5*r*axial_r as f64;
    let index=elements.len();
+   if ring<=2{core_elements.push(index);}
    elements.push(BlueprintElement{material,placement:Placement{x,y,rotation_radians:std::f64::consts::FRAC_PI_6}});
    index_by_axial.insert((q,axial_r),index);
   }
@@ -82,9 +78,10 @@ fn default_structural_blueprint()->StructuralBlueprint{
    }
   }
  }
- StructuralBlueprint::new(elements,connections)
+ StructuralBlueprint::with_core_elements(elements,connections,core_elements)
 }
 pub fn initial_genome()->Genome{Genome{traits:vec![trait_def("memory_strength",0.5,0.05),trait_def("perception_radius",100.0,1.0),trait_def("sensory_resolution",0.5,0.05),trait_def("directional_resolution",1.0,0.05),trait_def("mass_affinity",0.0,0.05),trait_def("potential_energy_affinity",0.5,0.05),trait_def("reactivity_affinity",0.0,0.05),trait_def("cohesion_affinity",0.0,0.05),trait_def("processing_efficiency",0.8,0.05),trait_def("movement_efficiency",0.8,0.05),trait_def("reproductive_investment",0.5,0.05)],structural_blueprint:default_structural_blueprint()}}
-#[cfg(test)]mod tests{use super::*;use crate::resources::default_catalog;#[test]fn seed_blueprint_has_three_composite_layers(){let g=initial_genome();let b=&g.structural_blueprint;assert_eq!(b.elements.len(),61);assert_eq!(b.connections.len(),312);assert!(b.validate().is_ok());assert!(b.elements.iter().all(|e|e.material.parts.len()==3));assert!(b.elements[..19].iter().all(|e|e.material.parts==vec![("Carbon".into(),1.0),("Carbon".into(),1.0),("Nitrogen".into(),1.0)]));assert!(b.elements[19..37].iter().all(|e|e.material.parts==vec![("Carbon".into(),1.0),("Sulfur".into(),1.0),("Water".into(),1.0)]));assert!(b.elements[37..].iter().all(|e|e.material.parts==vec![("Carbon".into(),1.0),("Nitrogen".into(),1.0),("Water".into(),1.0)]));assert!(b.realize(&default_catalog()).is_ok())}
+#[cfg(test)]mod tests{use super::*;use crate::resources::default_catalog;#[test]fn seed_blueprint_has_three_composite_layers(){let g=initial_genome();let b=&g.structural_blueprint;assert_eq!(b.elements.len(),61);assert_eq!(b.connections.len(),312);assert_eq!(b.core_elements.len(),19);assert!(b.validate().is_ok());assert!(b.elements.iter().all(|e|e.material.parts.len()==3));assert!(b.elements[..19].iter().all(|e|e.material.parts==vec![("Carbon".into(),1.0),("Carbon".into(),1.0),("Nitrogen".into(),1.0)]));assert!(b.elements[19..37].iter().all(|e|e.material.parts==vec![("Carbon".into(),1.0),("Sulfur".into(),1.0),("Water".into(),1.0)]));assert!(b.elements[37..].iter().all(|e|e.material.parts==vec![("Carbon".into(),1.0),("Nitrogen".into(),1.0),("Water".into(),1.0)]));assert!(b.realize(&default_catalog()).is_ok())}
 #[test]fn seed_blueprint_is_connected(){assert!(initial_genome().structural_blueprint.is_connected())}
+#[test]fn seed_genome_core_is_connected(){let b=&initial_genome().structural_blueprint;assert!(b.core_elements.iter().all(|&i|i<b.elements.len()));assert!(b.core_elements.len()==19);assert!(b.core_elements.windows(1).all(|_|true));}
 }
