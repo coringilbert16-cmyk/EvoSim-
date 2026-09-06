@@ -109,7 +109,11 @@ impl ActiveMaterialField {
     pub fn take_for_acquisition(&mut self, index: usize) -> Option<Material> {
         let cell = self.cells.get_mut(index)?;
         let material_index = cell.materials.iter().position(|material| !material.is_empty() && material.is_valid())?;
-        if cell.materials[material_index].has_internal_structure() { return Some(cell.materials.swap_remove(material_index)); }
+        if cell.materials[material_index].has_internal_structure() {
+            let discrete = cell.materials[material_index].parts.iter().all(|(_, amount)| amount.is_finite() && *amount > 0.0 && amount.fract().abs() <= MATERIAL_EPSILON);
+            if !discrete { return None; }
+            return Some(cell.materials.swap_remove(material_index));
+        }
         let part_index = cell.materials[material_index].parts.iter().position(|(_, amount)| amount.is_finite() && *amount >= 1.0 && amount.fract().abs() <= MATERIAL_EPSILON)?;
         let name = cell.materials[material_index].parts[part_index].0.clone();
         cell.materials[material_index].parts[part_index].1 -= 1.0;
@@ -153,9 +157,8 @@ fn distribute_evenly(field: &mut ActiveMaterialField, mut mat: Material, neighbo
     let base_share = total / neighbors.len(); let remainder = total % neighbors.len();
     for (k, &neighbor_index) in neighbors.iter().enumerate() {
         let count = base_share + usize::from(k < remainder); if count == 0 { continue; }
-        let piece = if count == mat.total_amount() as usize {
-            Material { parts: std::mem::take(&mut mat.parts), internal_bonds: std::mem::take(&mut mat.internal_bonds) }
-        } else { match mat.take(count as f64) { Some(piece) => piece, None => continue } };
+        let piece = if count == mat.total_amount() as usize { Material { parts: std::mem::take(&mut mat.parts), internal_bonds: std::mem::take(&mut mat.internal_bonds) } }
+        else { match mat.take(count as f64) { Some(piece) => piece, None => continue } };
         if !piece.is_empty() { field.deposit_at_index(neighbor_index, piece); }
     }
 }
