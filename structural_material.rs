@@ -22,9 +22,11 @@ impl StructuralMaterial{
  pub fn is_valid(&self)->bool{self.material.is_valid()&&!self.material.is_empty()}
  pub fn resolves_in_catalog(&self,catalog:&[BaseResource])->bool{self.material.parts.iter().all(|(name,_)|catalog.iter().any(|base|base.name==*name))}
 
- /// For a structured hydrated material, the first constituent is the rigid
- /// exterior scaffold. Fluid constituents such as Water contribute chemistry
- /// and permeability but deliberately do not invent an external boundary.
+ /// The first constituent is the rigid exterior scaffold for a structured
+ /// composite. Later constituents are internal reinforcement, hydration, or
+ /// other chemistry and do not invent a second external boundary. This gives
+ /// composite materials deterministic geometry while keeping composition and
+ /// internal bonding authoritative in Material.
  fn external_geometry_resource<'a>(&self,catalog:&'a [BaseResource])->Option<&'a BaseResource>{
   let (name,amount)=self.material.parts.first()?;
   if (*amount-1.0).abs()>f64::EPSILON{return None}
@@ -32,8 +34,7 @@ impl StructuralMaterial{
   if matches!(resource.shape.form,Form::Fluid{..}){return None}
   for (other_name,other_amount) in self.material.parts.iter().skip(1){
    if (*other_amount-1.0).abs()>f64::EPSILON{return None}
-   let other=catalog.iter().find(|base|base.name==*other_name)?;
-   if !matches!(other.shape.form,Form::Fluid{..}){return None}
+   if catalog.iter().find(|base|base.name==*other_name).is_none(){return None}
   }
   Some(resource)
  }
@@ -65,6 +66,6 @@ mod tests{
  #[test]fn free_unit_is_valid_structural_material(){let s=StructuralMaterial::from_material(Material::free_base("Carbon",1.0)).unwrap();assert!(!s.is_composite());assert!(s.resolves_in_catalog(&default_catalog()))}
  #[test]fn free_aggregate_cannot_become_one_structural_unit(){assert!(StructuralMaterial::from_material(Material::free_base("Carbon",2.0)).is_none())}
  #[test]fn hydrated_composite_uses_rigid_scaffold_geometry(){let m=hydrated(vec![("Carbon".into(),1.0),("Water".into(),1.0)],vec![InternalBond{part_a:0,part_b:1}]);let s=StructuralMaterial::from_material(m).unwrap();let c=default_catalog();assert!(matches!(s.shape(&c).unwrap().form,Form::RegularPolygon{sides:6,..}));assert!(matches!(s.connection_sites(&c).unwrap(),ConnectionSites::Corners(_)))}
- #[test]fn hydrated_composite_with_multiple_rigid_scaffolds_refuses_ambiguous_geometry(){let m=hydrated(vec![("Carbon".into(),1.0),("Nitrogen".into(),1.0),("Water".into(),1.0)],vec![InternalBond{part_a:0,part_b:1},InternalBond{part_a:1,part_b:2}]);let s=StructuralMaterial::from_material(m).unwrap();let c=default_catalog();assert!(s.shape(&c).is_none())}
+ #[test]fn hydrated_composite_can_have_internal_rigid_reinforcement(){let m=hydrated(vec![("Carbon".into(),1.0),("Nitrogen".into(),1.0),("Water".into(),1.0)],vec![InternalBond{part_a:0,part_b:1},InternalBond{part_a:1,part_b:2}]);let s=StructuralMaterial::from_material(m).unwrap();let c=default_catalog();assert!(matches!(s.shape(&c).unwrap().form,Form::RegularPolygon{sides:6,..}))}
  #[test]fn serialization_round_trip_preserves_material_identity(){let m=hydrated(vec![("Carbon".into(),1.0),("Hydrogen".into(),1.0)],vec![InternalBond{part_a:0,part_b:1}]);let s=StructuralMaterial::from_material(m).unwrap();let r:StructuralMaterial=serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();assert_eq!(r,s)}
 }
