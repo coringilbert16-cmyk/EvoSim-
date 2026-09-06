@@ -8,9 +8,9 @@
 use rand_chacha::ChaCha8Rng;
 
 use crate::material_storage::MaterialStorage;
-use crate::resources::{BaseResource, ConnectionSites};
+use crate::resources::{BaseResource, Material};
 use crate::state::{DevelopmentStage, Organism, ReproductiveConstruction};
-use crate::structure::{OrganismStructure, Placement};
+use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 
 const CORE_UNIT_COUNT: usize = 6;
 const CORE_MATERIAL_AMOUNT: f64 = CORE_UNIT_COUNT as f64;
@@ -40,36 +40,30 @@ pub(crate) fn advance_construction(
     construction: &mut ReproductiveConstruction,
     catalog: &[BaseResource],
 ) -> bool {
-    let Some(resource_name) = construction
-        .committed_material
-        .materials
-        .iter()
-        .find(|material| !material.has_internal_structure() && material.parts.len() == 1)
-        .and_then(|material| material.parts.first())
-        .map(|(name, _)| name.clone())
-    else { return false; };
+    let Some(material) = construction.committed_material.peek_one_unstructured() else { return false; };
 
     let Some(placement) = construction_placement(
         &construction.developing_structure,
-        &resource_name,
+        &material,
         catalog,
         &construction.child_genome,
     ) else { return false; };
 
-    if construction.committed_material.take_one_unstructured_named(&resource_name).is_none() {
-        return false;
-    }
+    let Some(material) = construction.committed_material.take_one_unstructured() else { return false; };
+    debug_assert_eq!(material, construction_material_for_placement(&material, catalog));
 
-    construction.developing_structure.add_unit(crate::structure::StructuralUnit::new(
-        resource_name,
-        placement,
-    ));
+    let Some(unit) = StructuralUnit::from_material(material, placement) else { return false; };
+    construction.developing_structure.add_unit(unit);
     true
+}
+
+fn construction_material_for_placement(material: &Material, _catalog: &[BaseResource]) -> Material {
+    material.clone()
 }
 
 fn construction_placement(
     structure: &OrganismStructure,
-    resource_name: &str,
+    material: &Material,
     catalog: &[BaseResource],
     genome: &crate::genome::Genome,
 ) -> Option<Placement> {
@@ -77,8 +71,13 @@ fn construction_placement(
         return Some(Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 });
     }
 
-    let new_resource = catalog.iter().find(|base| base.name == resource_name)?;
-    let ConnectionSites::Corners(new_points) = new_resource.shape.connection_sites() else { return None; };
+    let new_unit = StructuralUnit::from_material(
+        material.clone(),
+        Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+    )?;
+    let new_points = match new_unit.connection_sites(catalog)? {
+        crate::resources::ConnectionSites::Corners(points) => points,
+    };
 
     let compactness = genome.construction_compactness();
     let branching = genome.construction_branching();
@@ -86,7 +85,7 @@ fn construction_placement(
 
     let mut best: Option<(f64, Placement)> = None;
     for (unit_index, unit) in structure.units.iter().enumerate() {
-        let ConnectionSites::Corners(existing_points) = unit.connection_sites(catalog)? else { continue; };
+        let crate::resources::ConnectionSites::Corners(existing_points) = unit.connection_sites(catalog)? else { continue; };
         for (existing_index, &existing_point) in existing_points.iter().enumerate() {
             if structure.connection_count(unit_index, existing_index) != 0 { continue; }
             let existing_world = crate::contact::world_connection_point(existing_point, unit);
