@@ -17,6 +17,7 @@ mod organism_geometry;
 mod boundary_contact;
 mod physical_environment;
 mod physical_interface;
+mod physical_realization;
 mod permeability;
 mod reproduction;
 mod resources;
