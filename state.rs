@@ -55,7 +55,6 @@ pub(crate) const MEMORY_DECAY_PER_TICK: f64 = 0.995;
 pub(crate) const MEMORY_MERGE_RADIUS: f64 = 40.0;
 pub(crate) const MEMORY_PRUNE_THRESHOLD: f64 = 0.01;
 
-/// Independent processing capacities. Neither is an acquisition amount.
 pub(crate) const COMBINE_PROCESSING_RATE: usize = 1;
 pub(crate) const BREAK_PROCESSING_RATE: usize = 1;
 
@@ -66,7 +65,6 @@ pub(crate) struct ActiveTransformation {
     pub(crate) id: u64,
     pub(crate) organism_id: String,
     pub(crate) kind: TransformationKind,
-    /// Retained for snapshot compatibility. BREAK no longer derives energy from this material.
     pub(crate) material: Material,
     #[serde(default)] pub(crate) bond: Option<Bond>,
     pub(crate) complexity: f64,
@@ -77,8 +75,6 @@ pub(crate) struct ActiveTransformation {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct ReproductiveConstruction {
-    /// Committed inventory remains independent material objects until consumed
-    /// by construction. Commitment itself performs no COMBINE.
     pub(crate) committed_material: MaterialStorage,
     pub(crate) developing_structure: OrganismStructure,
     pub(crate) child_genome: Genome,
@@ -102,6 +98,8 @@ pub(crate) struct Organism {
     pub(crate) decision_history: DecisionHistory,
     pub(crate) usable_energy: f64,
     pub(crate) stress: f64,
+    /// Current tolerance for accumulated transaction stress. Damage lowers it.
+    #[serde(default = "default_stress_threshold")] pub(crate) stress_threshold: f64,
     /// Acquired material inventory. Storage itself never transforms material.
     pub(crate) stored_material: MaterialStorage,
     pub(crate) structure: OrganismStructure,
@@ -112,6 +110,13 @@ pub(crate) struct Organism {
     #[serde(default)] pub(crate) reproductive_construction: Option<ReproductiveConstruction>,
 }
 
+pub(crate) const STRESS_DECAY_PER_TICK: f64 = 0.98;
+pub(crate) const INITIAL_STRESS_THRESHOLD: f64 = 100.0;
+pub(crate) const STRESS_THRESHOLD_DECAY: f64 = 0.90;
+pub(crate) const MIN_STRESS_THRESHOLD: f64 = 5.0;
+
+fn default_stress_threshold() -> f64 { INITIAL_STRESS_THRESHOLD }
+
 impl Organism {
     pub(crate) fn store_material(&mut self, material: Material) -> bool {
         self.stored_material.store(material)
@@ -119,6 +124,41 @@ impl Organism {
 
     pub(crate) fn structural_mass(&self, catalog: &[BaseResource]) -> f64 {
         self.structure.units.iter().filter_map(|unit| unit.properties(catalog).map(|properties| properties.mass)).sum()
+    }
+
+    /// Transaction heat is the physical work performed by the organism.
+    pub(crate) fn add_transaction_stress(&mut self, heat: f64) {
+        if heat.is_finite() && heat > 0.0 {
+            self.stress += heat;
+        }
+    }
+
+    /// Apply accumulated stress damage. Each overload breaks the weakest
+    /// remaining bond and permanently lowers future tolerance. Once no bond
+    /// remains, another overload is a terminal failure signal.
+    pub(crate) fn apply_stress_damage(&mut self) -> bool {
+        if !self.stress.is_finite() || !self.stress_threshold.is_finite() {
+            return true;
+        }
+        let mut damaged = false;
+        while self.stress >= self.stress_threshold.max(MIN_STRESS_THRESHOLD) {
+            let threshold = self.stress_threshold.max(MIN_STRESS_THRESHOLD);
+            self.stress -= threshold;
+            self.stress_threshold = (threshold * STRESS_THRESHOLD_DECAY).max(MIN_STRESS_THRESHOLD);
+            if self.structure.bonds.is_empty() {
+                return true;
+            }
+            let weakest = self.structure.bonds.iter().enumerate()
+                .min_by(|(_, a), (_, b)| a.strength.partial_cmp(&b.strength).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|(i, _)| i)
+                .unwrap_or(0);
+            self.structure.break_bond(weakest);
+            damaged = true;
+            if self.stress_threshold <= MIN_STRESS_THRESHOLD && damaged && self.stress >= self.stress_threshold {
+                if self.structure.bonds.is_empty() { return true; }
+            }
+        }
+        false
     }
 }
 
@@ -155,4 +195,3 @@ pub(crate) struct Simulation {
 
 pub(crate) const DESIRABILITY_AMOUNT_HALF_SATURATION: f64 = 100.0;
 pub(crate) const DESIRABILITY_MAX: f64 = 1.0;
-pub(crate) const STRESS_DECAY_PER_TICK: f64 = 0.98;
