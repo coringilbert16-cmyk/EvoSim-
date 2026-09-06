@@ -113,7 +113,7 @@ pub(crate)fn advance_construction(stored_material:&mut MaterialStorage,construct
 
 pub(crate)fn finish_reproduction(parent:&mut Organism,child_id:String)->Option<Organism>{
     let construction=parent.reproductive_construction.take()?;
-    if construction.realized_elements.len()!=construction.target_elements.len()||!construction.committed_material.is_empty()==false{parent.reproductive_construction=Some(construction);return None}
+    if construction.realized_elements.len()!=construction.target_elements.len()||!construction.committed_material.is_empty(){parent.reproductive_construction=Some(construction);return None}
     let position=match parent.occupied_cells.first().cloned(){Some(p)=>p,None=>{parent.reproductive_construction=Some(construction);return None}};
     Some(Organism{id:child_id,occupied_cells:vec![position],genome:construction.child_genome,resource_sense:ResourceSense{sensed_resources:Vec::new(),direction_x:0.0,direction_y:0.0,direction_strength:0.0},memory:Vec::new(),decision_history:crate::decision::DecisionHistory::default(),usable_energy:0.0,stress:0.0,stress_threshold:crate::state::INITIAL_STRESS_THRESHOLD,stored_material:MaterialStorage::default(),structure:construction.developing_structure,development_stage:DevelopmentStage::Juvenile,age:0,reproductive_readiness:0.0,active_transformation_id:None,reproductive_construction:None})
 }
