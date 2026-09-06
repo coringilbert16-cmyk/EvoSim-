@@ -67,7 +67,10 @@ pub(crate) fn take_whole_unstructured(material: &mut Material, requested: usize)
     }
 
     material.parts.retain(|(_, amount)| *amount > 1e-12);
-    Some(Material::free_base_parts(taken_parts))
+    Some(Material {
+        parts: taken_parts,
+        internal_bonds: Vec::new(),
+    })
 }
 
 #[cfg(test)]
@@ -84,9 +87,10 @@ mod tests {
     }
 
     #[test]
-    fn refuses_fractional_stock() {
+    fn transfers_whole_units_from_fractional_aggregate() {
         let mut material = Material::free_base("Carbon", 3.5);
-        assert!(take_whole_unstructured(&mut material, 1).is_some());
+        let taken = take_whole_unstructured(&mut material, 1).unwrap();
+        assert_eq!(taken.total_amount(), 1.0);
         assert_eq!(material.total_amount(), 2.5);
     }
 
