@@ -1,0 +1,102 @@
+use crate::resources::Material;
+
+/// Extract whole unstructured units from an ecological aggregate.
+///
+/// This is deliberately separate from `Material::take`: the latter is a
+/// legacy aggregate operation that can represent fractional material and must
+/// not be used for organism-facing physical transfer. Structured material is
+/// never fractionally extracted here.
+pub(crate) fn take_whole_unstructured(material: &mut Material, requested: usize) -> Option<Material> {
+    if requested == 0 || material.has_internal_structure() || material.is_empty() {
+        return None;
+    }
+
+    let available = material.total_amount();
+    if !available.is_finite() || available < requested as f64 {
+        return None;
+    }
+
+    let whole_available = available.floor() as usize;
+    if whole_available < requested {
+        return None;
+    }
+
+    let total = available;
+    let target = requested as f64;
+    let mut taken_parts = Vec::new();
+    let mut remaining = requested;
+
+    // Preserve aggregate composition as closely as possible while moving only
+    // whole units. Because the environment may still use aggregate f64 stock,
+    // the final remainder is allocated by largest fractional remainder.
+    let mut allocations: Vec<(usize, f64, usize)> = Vec::with_capacity(material.parts.len());
+    for (index, (_, amount)) in material.parts.iter().enumerate() {
+        if *amount <= 0.0 {
+            allocations.push((index, 0.0, 0));
+            continue;
+        }
+        let ideal = (*amount / total) * target;
+        let base = ideal.floor() as usize;
+        allocations.push((index, ideal - base as f64, base));
+        remaining = remaining.saturating_sub(base);
+    }
+
+    allocations.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    for (index, _, base) in &mut allocations {
+        if remaining == 0 {
+            break;
+        }
+        if *base < material.parts[*index].1.floor() as usize {
+            *base += 1;
+            remaining -= 1;
+        }
+    }
+
+    if remaining != 0 {
+        return None;
+    }
+
+    allocations.sort_by_key(|(index, _, _)| *index);
+    for (index, _, count) in allocations {
+        if count == 0 {
+            continue;
+        }
+        let amount = count as f64;
+        material.parts[index].1 -= amount;
+        taken_parts.push((material.parts[index].0.clone(), amount));
+    }
+
+    material.parts.retain(|(_, amount)| *amount > 1e-12);
+    Some(Material::free_base_parts(taken_parts))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::take_whole_unstructured;
+    use crate::resources::{InternalBond, Material};
+
+    #[test]
+    fn takes_only_whole_units() {
+        let mut material = Material::free_base("Carbon", 10.0);
+        let taken = take_whole_unstructured(&mut material, 3).unwrap();
+        assert_eq!(taken.total_amount(), 3.0);
+        assert_eq!(material.total_amount(), 7.0);
+    }
+
+    #[test]
+    fn refuses_fractional_stock() {
+        let mut material = Material::free_base("Carbon", 3.5);
+        assert!(take_whole_unstructured(&mut material, 1).is_some());
+        assert_eq!(material.total_amount(), 2.5);
+    }
+
+    #[test]
+    fn refuses_structured_material() {
+        let mut material = Material {
+            parts: vec![("Carbon".to_string(), 1.0), ("Nitrogen".to_string(), 1.0)],
+            internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
+        };
+        assert!(take_whole_unstructured(&mut material, 1).is_none());
+        assert_eq!(material.total_amount(), 2.0);
+    }
+}
