@@ -7,6 +7,7 @@ use tokio::sync::broadcast;
 use crate::decision::{DecisionHistory, DecisionParameters};
 use crate::environment::{ActiveMaterialField, DeepReservoir, Vent};
 use crate::genome::Genome;
+use crate::physical_environment::PhysicalEnvironment;
 use crate::resources::{BaseResource, Material};
 use crate::structure::{Bond, OrganismStructure};
 
@@ -55,11 +56,6 @@ pub(crate) struct ResourceSense {
 }
 
 /// Biological lifecycle state.
-///
-/// `Offspring` is the pre-birth developmental state created by parental
-/// reproductive investment. It becomes `Juvenile` only after reaching its
-/// genetically determined birth threshold. `Juvenile` later transitions to
-/// `Adult` when its adult-development requirements are satisfied.
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) enum DevelopmentStage {
     Offspring,
@@ -76,12 +72,6 @@ pub(crate) const MAX_MEMORY_POINTS: usize = 5;
 pub(crate) const MEMORY_DECAY_PER_TICK: f64 = 0.995;
 pub(crate) const MEMORY_MERGE_RADIUS: f64 = 40.0;
 pub(crate) const MEMORY_PRUNE_THRESHOLD: f64 = 0.01;
-#[derive(Serialize, Deserialize, Clone)]
-pub(crate) struct MemoryPoint {
-    pub(crate) x: f64,
-    pub(crate) y: f64,
-    pub(crate) strength: f64,
-}
 
 pub(crate) const PROCESSING_REACH: f64 = 20.0;
 pub(crate) const PROCESSING_RATE: f64 = 4.0;
@@ -94,7 +84,6 @@ pub(crate) struct ActiveTransformation {
     pub(crate) id: u64,
     pub(crate) organism_id: String,
     pub(crate) kind: TransformationKind,
-    /// Retained for snapshot compatibility. BREAK no longer derives energy from this material.
     pub(crate) material: Material,
     #[serde(default)]
     pub(crate) bond: Option<Bond>,
@@ -104,13 +93,6 @@ pub(crate) struct ActiveTransformation {
     pub(crate) decision_context_key: Option<String>,
 }
 
-/// Persistent physical state for reproduction after the parent commits actual
-/// free material to an offspring that is still under construction.
-///
-/// The parent retains its own structure. The committed material is the only
-/// reproductive investment represented here; it is not a separate currency.
-/// The developing structure is populated progressively by the construction
-/// lifecycle and remains private to the parent until birth.
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct ReproductiveConstruction {
     pub(crate) committed_material: Material,
@@ -140,21 +122,14 @@ pub(crate) struct Organism {
     pub(crate) structure: OrganismStructure,
     pub(crate) development_stage: DevelopmentStage,
     pub(crate) age: u64,
-    /// Accumulated reproductive pressure. It grows only from mature, energy-ready state.
     #[serde(default)]
     pub(crate) reproductive_readiness: f64,
     pub(crate) active_transformation_id: Option<u64>,
-    /// Ongoing reproduction, if the parent has committed material to a child
-    /// that is still under construction.
     #[serde(default)]
     pub(crate) reproductive_construction: Option<ReproductiveConstruction>,
 }
 
 impl Organism {
-    /// Store free material for later structural construction.
-    ///
-    /// Structured material is never flattened into this stockpile; its physical
-    /// structure must remain intact and travel as a Material object instead.
     pub(crate) fn store_material(&mut self, material: Material) {
         if material.parts.is_empty() || material.has_internal_structure() {
             return;
@@ -181,6 +156,7 @@ pub(crate) struct Environment {
     pub(crate) field: ActiveMaterialField,
     pub(crate) reservoir: DeepReservoir,
     pub(crate) vents: Vec<Vent>,
+    pub(crate) physical: PhysicalEnvironment,
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct Snapshot {
