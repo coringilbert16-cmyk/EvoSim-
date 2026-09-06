@@ -190,7 +190,7 @@ pub(crate) fn try_combine_stored_unit(
                         .ok()?;
                     if best
                         .as_ref()
-                        .map(|current| energy_paid < current.5)
+                        .map(|current| energy_paid < current.6)
                         .unwrap_or(true)
                     {
                         best = Some((
@@ -280,6 +280,15 @@ pub(crate) fn try_combine(
     environment: &Environment,
     compatibility_cache: &mut ConnectionCompatibilityCache,
 ) -> Option<CombineAttempt> {
+    // COMBINE first gives stored free material a path into physical structure.
+    // If no stored unit can be bonded, fall back to bonding two units that are
+    // already part of the physical structure.
+    if organism.structure.units.len() >= 1 && !organism.stored_material.is_empty() {
+        if let Some(attempt) = try_combine_stored_unit(organism, environment, compatibility_cache) {
+            return Some(attempt);
+        }
+    }
+
     if organism.structure.units.len() < 2 {
         return None;
     }
@@ -377,7 +386,7 @@ mod tests {
 
     #[test]
     fn stored_unit_is_not_lost_when_validation_fails() {
-        let mut organism = Organism::default();
+        let mut organism = crate::simulation::Simulation::create_initial_organism();
         organism
             .stored_material
             .store(Material::free_base("NotInCatalog", 1.0));
@@ -389,35 +398,30 @@ mod tests {
 
     #[test]
     fn stored_free_material_can_become_a_bonded_structural_unit() {
-        let catalog = default_catalog();
-        let mut organism = Organism::default();
-        organism.occupied_cells.push(Position { x: 0.0, y: 0.0 });
+        let mut simulation = crate::simulation::Simulation::new(1, 1.0);
+        let mut organism = crate::simulation::Simulation::create_initial_organism();
+        organism.occupied_cells.push(Position { x: 500.0, y: 500.0 });
         organism.usable_energy = 1_000.0;
-        organism
-            .structure
-            .add_unit(StructuralUnit::new(
-                "Carbon",
-                Placement {
-                    x: 0.0,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                },
-            ));
+        organism.structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 500.0,
+                y: 500.0,
+                rotation_radians: 0.0,
+            },
+        ));
         organism
             .stored_material
             .store(Material::free_base("Carbon", 1.0));
 
-        let environment = Environment {
-            catalog,
-            ..Default::default()
-        };
         let mut cache = ConnectionCompatibilityCache::new();
-        let result = try_combine_stored_unit(&mut organism, &environment, &mut cache);
+        let result = try_combine_stored_unit(&mut organism, &simulation.environment, &mut cache);
 
         assert!(result.is_some());
         assert_eq!(organism.structure.units.len(), 2);
         assert_eq!(organism.structure.bonds.len(), 1);
         assert_eq!(organism.stored_material.count_unstructured(), 0);
         assert!(organism.structure.bonds[0].bond_energy >= 0.0);
+        simulation.organisms.clear();
     }
 }
