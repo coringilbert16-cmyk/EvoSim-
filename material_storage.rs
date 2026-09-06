@@ -21,7 +21,9 @@ pub(crate) struct MaterialStorage {
 }
 
 impl MaterialStorage {
-    pub(crate) fn is_empty(&self) -> bool { self.materials.is_empty() }
+    pub(crate) fn is_empty(&self) -> bool {
+        self.materials.is_empty()
+    }
 
     pub(crate) fn total_amount(&self) -> f64 {
         self.materials.iter().map(Material::total_amount).sum()
@@ -60,9 +62,10 @@ impl MaterialStorage {
     /// Remove one independent unstructured material object. This is inventory
     /// allocation only; no internal material bond is opened.
     pub(crate) fn take_one_unstructured(&mut self) -> Option<Material> {
-        let index = self.materials.iter().position(|material| {
-            !material.has_internal_structure() && !material.is_empty()
-        })?;
+        let index = self
+            .materials
+            .iter()
+            .position(|material| !material.has_internal_structure() && !material.is_empty())?;
         Some(self.materials.swap_remove(index))
     }
 
@@ -82,7 +85,9 @@ impl MaterialStorage {
     /// Remove exactly `count` independent unstructured material objects.
     /// This is allocation, not COMBINE.
     pub(crate) fn take_unstructured(&mut self, count: usize) -> Option<Vec<Material>> {
-        if self.count_unstructured() < count { return None; }
+        if self.count_unstructured() < count {
+            return None;
+        }
         let mut out = Vec::with_capacity(count);
         let mut i = 0;
         while i < self.materials.len() && out.len() < count {
@@ -96,11 +101,17 @@ impl MaterialStorage {
     }
 
     pub(crate) fn count_unstructured(&self) -> usize {
-        self.materials.iter().filter(|material| !material.has_internal_structure() && !material.is_empty()).count()
+        self.materials
+            .iter()
+            .filter(|material| !material.has_internal_structure() && !material.is_empty())
+            .count()
     }
 
     pub(crate) fn count_structured(&self) -> usize {
-        self.materials.iter().filter(|material| material.has_internal_structure() && !material.is_empty()).count()
+        self.materials
+            .iter()
+            .filter(|material| material.has_internal_structure() && !material.is_empty())
+            .count()
     }
 }
 
@@ -121,7 +132,13 @@ mod tests {
     #[test]
     fn structured_material_is_stored_intact() {
         let mut storage = MaterialStorage::default();
-        let compound = Material { parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)], internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }] };
+        let compound = Material {
+            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+            internal_bonds: vec![InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
+        };
         assert!(storage.store(compound.clone()));
         assert_eq!(storage.materials, vec![compound]);
         assert_eq!(storage.count_structured(), 1);
@@ -138,7 +155,13 @@ mod tests {
     #[test]
     fn storage_never_opens_a_compound() {
         let mut storage = MaterialStorage::default();
-        let compound = Material { parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)], internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }] };
+        let compound = Material {
+            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+            internal_bonds: vec![InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
+        };
         assert!(storage.store(compound.clone()));
         assert!(storage.take_unstructured(1).is_none());
         assert_eq!(storage.materials, vec![compound]);
