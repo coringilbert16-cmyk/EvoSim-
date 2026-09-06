@@ -240,21 +240,16 @@ mod integration_tests {
             }
         }
         assert!(sim.organisms[0].structure.bonds.is_empty());
-        assert!(
-            (sim.organisms[0].usable_energy
-                - before
-                - (12.5
-                    - crate::combine::bond_strength(
-                        *sim.organisms[0].structure.units[0]
-                            .properties(&sim.environment.catalog)
-                            .unwrap(),
-                        *sim.organisms[0].structure.units[1]
-                            .properties(&sim.environment.catalog)
-                            .unwrap(),
-                    ) * 2.0))
-                .abs()
-                < 1e-12
-        );
+        let expected_change = 12.5
+            - crate::combine::bond_strength(
+                *sim.organisms[0].structure.units[0]
+                    .properties(&sim.environment.catalog)
+                    .unwrap(),
+                *sim.organisms[0].structure.units[1]
+                    .properties(&sim.environment.catalog)
+                    .unwrap(),
+            ) * 2.0;
+        assert!((sim.organisms[0].usable_energy - before - expected_change).abs() < 1e-12);
         assert!(sim.organisms[0]
             .decision_history
             .has_knowledge(ActionKind::Break, Some("bond:0")));
