@@ -10,11 +10,6 @@ use crate::state::Environment;
 use crate::structure::Placement;
 
 impl Environment {
-    /// Realize part of a bulk field material as a persistent physical object.
-    ///
-    /// Validation is performed against a clone before the field is changed.
-    /// Therefore invalid geometry, invalid catalog references, or mismatched
-    /// placements leave the source stock untouched and create no object.
     pub(crate) fn realize_field_material(
         &mut self,
         cell_index: usize,
@@ -34,8 +29,6 @@ impl Environment {
             .take(amount)
             .ok_or_else(|| "source material cannot provide the requested amount".to_string())?;
 
-        // Constructing the instance first is the commit precondition. No
-        // source material has been removed yet.
         let instance = PhysicalMaterialInstance::new(candidate, placements, &self.catalog)
             .ok_or_else(|| "material cannot be physically realized".to_string())?;
 
@@ -44,10 +37,7 @@ impl Environment {
             .take_at_index(cell_index, material_index, amount)
             .ok_or_else(|| "source material changed during realization".to_string())?;
 
-        // The validated candidate and the actual withdrawal must be identical
-        // because both use Material::take with the same source and amount.
         debug_assert_eq!(realized, instance.material);
-
         self.physical.materials.push(instance);
         Ok(self.physical.materials.len() - 1)
     }
@@ -58,6 +48,7 @@ mod tests {
     use super::*;
     use crate::environment::ActiveMaterialField;
     use crate::resources::{default_catalog, Material};
+    use crate::reservoir::{DeepReservoir, DEFAULT_RESERVOIR_BLOCK_SIZE};
     use crate::state::Environment;
 
     fn placement(x: f64, y: f64) -> Placement {
@@ -69,12 +60,14 @@ mod tests {
     }
 
     fn environment() -> Environment {
+        let field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+        let reservoir = DeepReservoir::new_matching_field(&field, DEFAULT_RESERVOIR_BLOCK_SIZE);
         Environment {
             width: 100.0,
             height: 100.0,
             catalog: default_catalog(),
-            field: ActiveMaterialField::new(100.0, 100.0, 25.0),
-            reservoir: Default::default(),
+            field,
+            reservoir,
             vents: Vec::new(),
             physical: Default::default(),
         }
