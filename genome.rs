@@ -50,21 +50,26 @@ fn hydrated_carbon_nitrogen_water()->Material{Material{parts:vec![("Carbon".into
 /// genome core. Its membership is structural metadata, not a hard-coded
 /// reproduction unit count, and its construction order is intentionally free.
 fn default_structural_blueprint()->StructuralBlueprint{
- let r=0.438_691_f64;
+ let r=0.458_577_f64;
  let mut elements=Vec::with_capacity(61);
  let mut core_elements=Vec::with_capacity(19);
  let mut index_by_axial=HashMap::new();
- for q in -4_i32..=4_i32{
-  for axial_r in -4_i32..=4_i32{
-   let ring=q.abs().max(axial_r.abs()).max((q+axial_r).abs());
-   if ring>4{continue}
-   let material=match ring{0..=2=>f_core_carbon_nitrogen(),3=>hydrated_carbon_sulfur(),4=>hydrated_carbon_nitrogen_water(),_=>unreachable!()};
-   let x=3.0_f64.sqrt()*r*(q as f64+0.5*axial_r as f64);
-   let y=1.5*r*axial_r as f64;
-   let index=elements.len();
-   if ring<=2{core_elements.push(index);}
-   elements.push(BlueprintElement{material,placement:Placement{x,y,rotation_radians:std::f64::consts::FRAC_PI_6}});
-   index_by_axial.insert((q,axial_r),index);
+ // Emit the lattice by ring so the serialized blueprint has the documented
+ // core/lattice/membrane layering. This ordering is descriptive only; no
+ // construction algorithm may treat it as a required build sequence.
+ for ring in 0_i32..=4 {
+  for q in -4_i32..=4_i32{
+   for axial_r in -4_i32..=4_i32{
+    let current=q.abs().max(axial_r.abs()).max((q+axial_r).abs());
+    if current!=ring{continue}
+    let material=match ring{0..=2=>f_core_carbon_nitrogen(),3=>hydrated_carbon_sulfur(),4=>hydrated_carbon_nitrogen_water(),_=>unreachable!()};
+    let x=3.0_f64.sqrt()*r*(q as f64+0.5*axial_r as f64);
+    let y=1.5*r*axial_r as f64;
+    let index=elements.len();
+    if ring<=2{core_elements.push(index);}
+    elements.push(BlueprintElement{material,placement:Placement{x,y,rotation_radians:std::f64::consts::FRAC_PI_6}});
+    index_by_axial.insert((q,axial_r),index);
+   }
   }
  }
  let mut connections=Vec::with_capacity(312);
