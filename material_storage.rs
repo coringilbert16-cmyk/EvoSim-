@@ -1,10 +1,9 @@
 //! Organism material inventory.
 //!
 //! A `Material` is one coherent material object: its composition and internal
-//! bonds belong together. `MaterialStorage` is therefore deliberately a
-//! collection of independent `Material` objects rather than another Material.
-//!
-//! Storage does not combine, break, or otherwise transform its contents.
+//! bonds belong together. `MaterialStorage` is a collection of independent
+//! material objects. Storage itself never combines, breaks, or otherwise
+//! transforms its contents.
 
 use serde::{Deserialize, Serialize};
 
@@ -14,11 +13,10 @@ const MATERIAL_EPSILON: f64 = 1e-12;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub(crate) struct MaterialStorage {
-    /// Independent acquired material objects.
+    /// Independent material objects held by the organism.
     ///
-    /// Unstructured material enters storage as one object per constituent unit.
-    /// Structured material is stored as one intact object and is never
-    /// flattened here.
+    /// Unstructured field stock is expanded into one-unit objects when it
+    /// enters storage. Structured material is stored as one intact object.
     pub(crate) materials: Vec<Material>,
 }
 
@@ -29,16 +27,32 @@ impl MaterialStorage {
         self.materials.iter().map(Material::total_amount).sum()
     }
 
+    fn is_discrete(material: &Material) -> bool {
+        material.parts.iter().all(|(_, amount)| {
+            amount.is_finite() && *amount > 0.0 && amount.fract().abs() <= MATERIAL_EPSILON
+        })
+    }
+
+    /// Store material without changing its physical identity.
+    ///
+    /// Free field stock may be an aggregate count, so it is expanded into
+    /// discrete one-unit material objects. A structured material is transferred
+    /// as exactly one intact object; its internal bonds are never touched.
     pub(crate) fn store(&mut self, material: Material) -> bool {
-        if material.parts.is_empty() || !material.is_valid() { return false; }
+        if material.parts.is_empty() || !material.is_valid() || !Self::is_discrete(&material) {
+            return false;
+        }
+
         if material.has_internal_structure() {
             self.materials.push(material);
             return true;
         }
+
         for (name, amount) in material.parts {
-            if amount <= 0.0 || !amount.is_finite() || (amount.fract()).abs() > MATERIAL_EPSILON { return false; }
             let count = amount.round() as u64;
-            for _ in 0..count { self.materials.push(Material::free_base(name.clone(), 1.0)); }
+            for _ in 0..count {
+                self.materials.push(Material::free_base(name.clone(), 1.0));
+            }
         }
         true
     }
@@ -46,7 +60,9 @@ impl MaterialStorage {
     /// Remove one independent unstructured material object. This is inventory
     /// allocation only; no internal material bond is opened.
     pub(crate) fn take_one_unstructured(&mut self) -> Option<Material> {
-        let index = self.materials.iter().position(|material| !material.has_internal_structure() && !material.is_empty())?;
+        let index = self.materials.iter().position(|material| {
+            !material.has_internal_structure() && !material.is_empty()
+        })?;
         Some(self.materials.swap_remove(index))
     }
 
@@ -126,5 +142,13 @@ mod tests {
         assert!(storage.store(compound.clone()));
         assert!(storage.take_unstructured(1).is_none());
         assert_eq!(storage.materials, vec![compound]);
+    }
+
+    #[test]
+    fn fractional_material_is_rejected_at_storage_boundary() {
+        let mut storage = MaterialStorage::default();
+        let fractional = Material::free_base("Carbon", 1.5);
+        assert!(!storage.store(fractional));
+        assert!(storage.is_empty());
     }
 }
