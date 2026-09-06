@@ -46,9 +46,8 @@ impl Environment {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::environment::ActiveMaterialField;
+    use crate::environment::{ActiveMaterialField, DeepReservoir, DEFAULT_RESERVOIR_BLOCK_SIZE};
     use crate::resources::{default_catalog, Material};
-    use crate::reservoir::{DeepReservoir, DEFAULT_RESERVOIR_BLOCK_SIZE};
     use crate::state::Environment;
 
     fn placement(x: f64, y: f64) -> Placement {
