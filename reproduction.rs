@@ -2,14 +2,12 @@
 //!
 //! Reproduction does not split or copy the parent's existing structure. Once
 //! an adult has accumulated enough actual free material, the reproductive
-//! decision commits that material to a persistent construction state. The
-//! parent keeps its own structure intact. Later ticks will consume the
-//! committed material through the ordinary structural construction system and
-//! only create a separate organism when the developing structure reaches the
-//! genetically determined juvenile threshold.
+//! decision commits discrete material objects to a persistent construction
+//! inventory. Construction consumes those objects one at a time.
 
 use rand_chacha::ChaCha8Rng;
 
+use crate::material_storage::MaterialStorage;
 use crate::resources::{BaseResource, ConnectionSites};
 use crate::state::{DevelopmentStage, Organism, ReproductiveConstruction};
 use crate::structure::{OrganismStructure, Placement};
@@ -18,22 +16,13 @@ const CORE_UNIT_COUNT: usize = 6;
 const CORE_MATERIAL_AMOUNT: f64 = CORE_UNIT_COUNT as f64;
 
 pub(crate) fn begin_reproduction(parent: &mut Organism, rng: &mut ChaCha8Rng) -> bool {
-    if !matches!(parent.development_stage, DevelopmentStage::Adult) {
-        return false;
-    }
-    if parent.reproductive_readiness < 1.0 - f64::EPSILON {
-        return false;
-    }
-    if parent.reproductive_construction.is_some() {
-        return false;
-    }
-    if parent.stored_material.total_amount() + f64::EPSILON < CORE_MATERIAL_AMOUNT {
-        return false;
-    }
+    if !matches!(parent.development_stage, DevelopmentStage::Adult) { return false; }
+    if parent.reproductive_readiness < 1.0 - f64::EPSILON { return false; }
+    if parent.reproductive_construction.is_some() { return false; }
+    if parent.stored_material.count_unstructured() < CORE_UNIT_COUNT { return false; }
 
-    let Some(committed_material) = parent.stored_material.take(CORE_MATERIAL_AMOUNT) else {
-        return false;
-    };
+    let Some(materials) = parent.stored_material.take_unstructured(CORE_UNIT_COUNT) else { return false; };
+    let committed_material = MaterialStorage { materials };
 
     let mut child_genome = parent.genome.clone();
     child_genome.mutate(rng);
@@ -47,47 +36,34 @@ pub(crate) fn begin_reproduction(parent: &mut Organism, rng: &mut ChaCha8Rng) ->
     true
 }
 
-/// Advance reproductive construction by exactly one physical structural unit.
-///
-/// Placement is derived from the existing connection-point geometry. The new
-/// unit is positioned so one of its authored connection points exactly meets
-/// an available connection point on the developing structure with opposing
-/// outward normals. Bond formation remains a separate COMBINE step.
 pub(crate) fn advance_construction(
     construction: &mut ReproductiveConstruction,
     catalog: &[BaseResource],
 ) -> bool {
-    let Some((resource_name, _)) = construction
+    let Some(resource_name) = construction
         .committed_material
-        .parts
+        .materials
         .iter()
-        .find(|(_, amount)| *amount >= 1.0 - f64::EPSILON)
-        .map(|(name, amount)| (name.clone(), *amount))
-    else {
-        return false;
-    };
+        .find(|material| !material.has_internal_structure() && material.parts.len() == 1)
+        .and_then(|material| material.parts.first())
+        .map(|(name, _)| name.clone())
+    else { return false; };
 
     let Some(placement) = construction_placement(
         &construction.developing_structure,
         &resource_name,
         catalog,
         &construction.child_genome,
-    ) else {
-        return false;
-    };
+    ) else { return false; };
 
-    if crate::structural_combine::instantiate_raw_unit(
-        &mut construction.developing_structure,
-        &mut construction.committed_material,
-        &resource_name,
-        placement,
-        catalog,
-    )
-    .is_err()
-    {
+    if construction.committed_material.take_one_unstructured_named(&resource_name).is_none() {
         return false;
     }
 
+    construction.developing_structure.add_unit(crate::structure::StructuralUnit::new(
+        resource_name,
+        placement,
+    ));
     true
 }
 
@@ -98,17 +74,11 @@ fn construction_placement(
     genome: &crate::genome::Genome,
 ) -> Option<Placement> {
     if structure.units.is_empty() {
-        return Some(Placement {
-            x: 0.0,
-            y: 0.0,
-            rotation_radians: 0.0,
-        });
+        return Some(Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 });
     }
 
     let new_resource = catalog.iter().find(|base| base.name == resource_name)?;
-    let ConnectionSites::Corners(new_points) = new_resource.shape.connection_sites() else {
-        return None;
-    };
+    let ConnectionSites::Corners(new_points) = new_resource.shape.connection_sites() else { return None; };
 
     let compactness = genome.construction_compactness();
     let branching = genome.construction_branching();
@@ -116,21 +86,14 @@ fn construction_placement(
 
     let mut best: Option<(f64, Placement)> = None;
     for (unit_index, unit) in structure.units.iter().enumerate() {
-        let ConnectionSites::Corners(existing_points) = unit.connection_sites(catalog)? else {
-            continue;
-        };
+        let ConnectionSites::Corners(existing_points) = unit.connection_sites(catalog)? else { continue; };
         for (existing_index, &existing_point) in existing_points.iter().enumerate() {
-            if structure.connection_count(unit_index, existing_index) != 0 {
-                continue;
-            }
-
+            if structure.connection_count(unit_index, existing_index) != 0 { continue; }
             let existing_world = crate::contact::world_connection_point(existing_point, unit);
             let existing_normal_angle = existing_world.normal_y.atan2(existing_world.normal_x);
 
             for (new_index, &new_point) in new_points.iter().enumerate() {
-                let rotation = existing_normal_angle
-                    + std::f64::consts::PI
-                    - new_point.direction_radians;
+                let rotation = existing_normal_angle + std::f64::consts::PI - new_point.direction_radians;
                 let (s, c) = rotation.sin_cos();
                 let rotated_x = new_point.x * c - new_point.y * s;
                 let rotated_y = new_point.x * s + new_point.y * c;
@@ -139,7 +102,6 @@ fn construction_placement(
                     y: existing_world.y - rotated_y,
                     rotation_radians: rotation,
                 };
-
                 let dx = placement.x - centroid.0;
                 let dy = placement.y - centroid.1;
                 let distance_from_centroid = dx.hypot(dy);
@@ -148,14 +110,12 @@ fn construction_placement(
                 let angular_delta = angular_distance(radial_angle, preferred_angle);
                 let score = distance_from_centroid * (1.0 + compactness)
                     + angular_delta * (1.0 + branching);
-
                 if best.as_ref().map(|(current, _)| score < *current).unwrap_or(true) {
                     best = Some((score, placement));
                 }
             }
         }
     }
-
     best.map(|(_, placement)| placement)
 }
 
@@ -181,6 +141,8 @@ mod tests {
     use crate::state::{Position, ResourceSense};
 
     fn adult_parent(material_amount: f64) -> Organism {
+        let mut storage = MaterialStorage::default();
+        storage.store(Material::free_base("Carbon", material_amount));
         Organism {
             id: "parent".into(),
             occupied_cells: vec![Position { x: 50.0, y: 50.0 }],
@@ -190,7 +152,7 @@ mod tests {
             decision_history: DecisionHistory::default(),
             usable_energy: 10.0,
             stress: 0.0,
-            stored_material: Material::free_base("Carbon", material_amount),
+            stored_material: storage,
             structure: OrganismStructure::new(),
             development_stage: DevelopmentStage::Adult,
             age: 10,
@@ -201,7 +163,7 @@ mod tests {
     }
 
     #[test]
-    fn reproduction_commits_real_material_without_touching_parent_structure() {
+    fn reproduction_commits_real_discrete_material_without_touching_parent_structure() {
         let mut parent = adult_parent(CORE_MATERIAL_AMOUNT + 2.0);
         let mut rng = ChaCha8Rng::seed_from_u64(7);
         assert!(begin_reproduction(&mut parent, &mut rng));
@@ -211,7 +173,7 @@ mod tests {
         assert_eq!(parent.reproductive_readiness, 0.0);
         let construction = parent.reproductive_construction.as_ref().unwrap();
         assert_eq!(construction.committed_material.total_amount(), CORE_UNIT_COUNT as f64);
-        assert!(!construction.committed_material.has_internal_structure());
+        assert!(!construction.committed_material.materials[0].has_internal_structure());
         assert!(construction.developing_structure.units.is_empty());
     }
 
@@ -225,7 +187,6 @@ mod tests {
         assert!(advance_construction(construction, &catalog));
         assert_eq!(construction.developing_structure.units.len(), 1);
         assert_eq!(construction.committed_material.total_amount(), 5.0);
-        assert_eq!(parent.structure.units.len(), 0);
         assert!(advance_construction(construction, &catalog));
         assert_eq!(construction.developing_structure.units.len(), 2);
         assert_eq!(construction.committed_material.total_amount(), 4.0);
@@ -240,15 +201,7 @@ mod tests {
         let construction = parent.reproductive_construction.as_mut().unwrap();
         assert!(advance_construction(construction, &catalog));
         assert!(advance_construction(construction, &catalog));
-
-        let candidates = crate::contact::contacting_connection_pair_candidates(
-            &construction.developing_structure,
-            0,
-            1,
-            &catalog,
-            1.0,
-            0.0,
-        );
+        let candidates = crate::contact::contacting_connection_pair_candidates(&construction.developing_structure, 0, 1, &catalog, 1.0, 0.0);
         assert!(!candidates.is_empty());
         assert!(candidates.iter().any(|candidate| candidate.distance <= 1e-12));
         assert!(candidates.iter().any(|candidate| candidate.facing >= 1.0 - 1e-12));
@@ -261,9 +214,7 @@ mod tests {
         let mut rng = ChaCha8Rng::seed_from_u64(7);
         assert!(begin_reproduction(&mut parent, &mut rng));
         let construction = parent.reproductive_construction.as_mut().unwrap();
-        for _ in 0..CORE_UNIT_COUNT {
-            assert!(advance_construction(construction, &catalog));
-        }
+        for _ in 0..CORE_UNIT_COUNT { assert!(advance_construction(construction, &catalog)); }
         assert!(!advance_construction(construction, &catalog));
         assert!(construction.committed_material.is_empty());
         assert_eq!(construction.developing_structure.units.len(), CORE_UNIT_COUNT);
