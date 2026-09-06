@@ -2,6 +2,8 @@
 
 ## Current status
 
+This document is the **current integration-status source of truth**. Phase-completion files such as `PHASE6_COMPLETE.md` are historical records and must not be used as the current project-status authority.
+
 **Phase 1 — executable runtime split: COMPLETE.**
 
 **Phase 2 — environment split: COMPLETE.**
@@ -12,11 +14,19 @@
 
 **Phase 5 — runtime decision integration: COMPLETE.**
 
-**Phase 6 — COMBINE integration: IN PROGRESS.**
+**Phase 6 — COMBINE integration: HISTORICAL COMPLETION RECORDED; CURRENT INTEGRATION CONTINUES.**
 
-Phase 6 has begun by adding a dedicated `combine_runtime.rs` boundary. It connects bulk raw material to discrete structural-unit instantiation and routes eligible structural pairs through the existing COMBINE interaction, work, formation-threshold, and bond-strength functions instead of duplicating those equations. The new runtime boundary also performs the organism energy payment required by the current experimental formation model and refuses formation when the interaction direction is unfavorable or the organism cannot pay the required cost.
+Substantial work after the original Phase 6 completion changed the physical material, structure, geometry, boundary, and interface architecture. Therefore the old Phase 6 checklist is retained below as historical context, while the current code and the integration audits determine present implementation status.
 
-The remaining Phase 6 work is to connect acquisition and instantiation to the decision runtime, expose mechanically eligible COMBINE candidates, record COMBINE outcomes in decision history, and add end-to-end conservation/formation tests. The energy architecture also needs to remain consistent with the locked rule that bond energy is structural state rather than raw resource potential energy; the current `Bond` representation still exposes only formation strength, so that part must be resolved before Phase 6 is declared complete.
+### Current architectural priorities
+
+1. Finish **Material → Organism Structure** authority so organism structural units are represented by actual `Material` composition + internal structure rather than a parallel resource-name representation.
+2. Connect **environment → organism** through real physical acquisition.
+3. Make **development/growth** consume and transform physical organism material.
+4. Complete **reproduction → new organism → juvenile → adult** lifecycle integration.
+5. Close the **evolution/selection** loop once viable offspring and lifecycle selection are real.
+
+These priorities are architectural integration work, not a request to revive historical Phase 6 design decisions.
 
 ## Objective
 
@@ -40,9 +50,11 @@ This is an integration-first audit. No simulation rule is changed merely to make
 - Decision history is bounded learned consequence history, not a physics cache and not fabricated prediction.
 - Mechanical eligibility belongs to physical systems; decision logic chooses among mechanically eligible candidates.
 
-## Phase 6 — Integrate COMBINE without violating emergence rules
+## Historical Phase 6 implementation record
 
-### Completed in Phase 6
+The following records what the original Phase 6 work established. It is preserved for historical context and is **not** the current project-status checklist.
+
+### Recorded Phase 6 work
 
 1. Added `combine_runtime.rs` as the runtime boundary between decision execution and COMBINE physics.
 2. Added raw-material-to-structural-unit instantiation without introducing a second bulk bonded representation.
@@ -51,7 +63,9 @@ This is an integration-first audit. No simulation rule is changed merely to make
 5. Reused the existing experimental work-cost and capped diminishing-return bond-strength functions.
 6. Added explicit organism energy payment at the runtime boundary rather than creating free energy.
 
-### Remaining in Phase 6
+### Historical Phase 6 remaining-work list
+
+This list belonged to the earlier phase state and is retained only to preserve the historical reasoning trail. Subsequent architecture work superseded parts of it.
 
 1. Connect ACQUIRE to actual field-to-organism raw-material transfer.
 2. Connect physical instantiation to the decision/runtime path without inventing a hidden automatic construction loop.
@@ -62,7 +76,7 @@ This is an integration-first audit. No simulation rule is changed merely to make
 7. Add integration tests covering raw-material conservation, instantiation, geometry gating, threshold failure, successful bond formation, energy payment, and decision-history outcome recording.
 8. Verify deterministic seeded behavior and full Rust CI before marking Phase 6 complete.
 
-## Later phases
+## Later integration phases
 
 ### Phase 7 — Frontend integration
 
