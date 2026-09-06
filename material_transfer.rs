@@ -1,6 +1,6 @@
 use crate::resources::Material;
 
-/// Extract whole unstructured units from an ecological aggregate.
+/// Extract up to `requested` whole unstructured units from an ecological aggregate.
 ///
 /// This is deliberately separate from `Material::take`: the latter is a
 /// legacy aggregate operation that can represent fractional material and must
@@ -12,19 +12,20 @@ pub(crate) fn take_whole_unstructured(material: &mut Material, requested: usize)
     }
 
     let available = material.total_amount();
-    if !available.is_finite() || available < requested as f64 {
+    if !available.is_finite() || available < 1.0 {
         return None;
     }
 
     let whole_available = available.floor() as usize;
-    if whole_available < requested {
+    let target_units = requested.min(whole_available);
+    if target_units == 0 {
         return None;
     }
 
     let total = available;
-    let target = requested as f64;
+    let target = target_units as f64;
     let mut taken_parts = Vec::new();
-    let mut remaining = requested;
+    let mut remaining = target_units;
 
     // Preserve aggregate composition as closely as possible while moving only
     // whole units. Because the environment may still use aggregate f64 stock,
@@ -84,6 +85,14 @@ mod tests {
         let taken = take_whole_unstructured(&mut material, 3).unwrap();
         assert_eq!(taken.total_amount(), 3.0);
         assert_eq!(material.total_amount(), 7.0);
+    }
+
+    #[test]
+    fn takes_only_available_whole_units_when_request_exceeds_stock() {
+        let mut material = Material::free_base("Carbon", 3.5);
+        let taken = take_whole_unstructured(&mut material, 5).unwrap();
+        assert_eq!(taken.total_amount(), 3.0);
+        assert_eq!(material.total_amount(), 0.5);
     }
 
     #[test]
