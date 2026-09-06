@@ -221,6 +221,16 @@ pub(crate) fn try_combine_stored_unit(
         return None;
     }
 
+    // Resolve the live properties before inventory is consumed so every later
+    // mutation is infallible under the planning assumptions.
+    let props_a = *organism.structure.units[unit_a].properties(&environment.catalog)?;
+    let props_b = *environment
+        .catalog
+        .iter()
+        .find(|base| base.name == resource_name)
+        .map(|base| &base.properties)?;
+    let bond_strength = bond_strength(props_a, props_b);
+
     // Recreate the exact candidate on the live structure after all planning
     // and energy checks have succeeded. No inventory is consumed before this.
     let material = organism
@@ -230,11 +240,6 @@ pub(crate) fn try_combine_stored_unit(
         resource_name,
         placement,
     ));
-    let bond_strength = {
-        let props_a = organism.structure.units[unit_a].properties(&environment.catalog)?;
-        let props_b = organism.structure.units[unit_b].properties(&environment.catalog)?;
-        bond_strength(*props_a, *props_b)
-    };
     let bond_energy = (energy_paid - evaluation.threshold).max(0.0);
     let bond = crate::structure::Bond {
         unit_a,
@@ -398,9 +403,9 @@ mod tests {
 
     #[test]
     fn stored_free_material_can_become_a_bonded_structural_unit() {
-        let mut simulation = crate::simulation::Simulation::new(1, 1.0);
+        let simulation = crate::simulation::Simulation::new(1, 1.0);
         let mut organism = crate::simulation::Simulation::create_initial_organism();
-        organism.occupied_cells.push(Position { x: 500.0, y: 500.0 });
+        organism.occupied_cells = vec![Position { x: 500.0, y: 500.0 }];
         organism.usable_energy = 1_000.0;
         organism.structure.add_unit(StructuralUnit::new(
             "Carbon",
@@ -412,7 +417,7 @@ mod tests {
         ));
         organism
             .stored_material
-            .store(Material::free_base("Carbon", 1.0));
+            .store(Material::free_base("Methane", 1.0));
 
         let mut cache = ConnectionCompatibilityCache::new();
         let result = try_combine_stored_unit(&mut organism, &simulation.environment, &mut cache);
@@ -422,6 +427,5 @@ mod tests {
         assert_eq!(organism.structure.bonds.len(), 1);
         assert_eq!(organism.stored_material.count_unstructured(), 0);
         assert!(organism.structure.bonds[0].bond_energy >= 0.0);
-        simulation.organisms.clear();
     }
 }
