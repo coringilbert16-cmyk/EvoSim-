@@ -251,18 +251,36 @@ impl Simulation {
             }
         }
 
+        let catalog = self.environment.catalog.clone();
         for id in reproduction_requests {
             if let Some(organism) = self.organisms.iter_mut().find(|o| o.id == id) {
-                let _ = crate::reproduction::begin_reproduction(organism, &mut self.rng);
+                let _ = crate::reproduction::begin_reproduction(organism, &mut self.rng, &catalog);
             }
         }
 
-        let catalog = self.environment.catalog.clone();
+        let mut offspring = Vec::new();
+        let mut next_organism_id = self.next_organism_id;
         for organism in &mut self.organisms {
-            if let Some(construction) = organism.reproductive_construction.as_mut() {
-                let _ = crate::reproduction::advance_construction(construction, &catalog);
+            if organism.reproductive_construction.is_some() {
+                if let Some(construction) = organism.reproductive_construction.as_mut() {
+                    let _ = crate::reproduction::advance_construction(construction, &catalog);
+                }
+                if organism
+                    .reproductive_construction
+                    .as_ref()
+                    .map(|construction| construction.committed_material.is_empty())
+                    .unwrap_or(false)
+                {
+                    let child_id = next_organism_id.to_string();
+                    if let Some(child) = crate::reproduction::finish_reproduction(organism, child_id) {
+                        next_organism_id += 1;
+                        offspring.push(child);
+                    }
+                }
             }
         }
+        self.next_organism_id = next_organism_id;
+        self.organisms.extend(offspring);
 
         for organism in &mut self.organisms { Self::apply_energy_capacity(organism); }
         self.energy_ledger.total_usable_energy_held = self.organisms.iter().map(|o| o.usable_energy).sum();
