@@ -16,6 +16,7 @@ use crate::structure::{Bond, OrganismStructure};
 #[derive(Serialize,Deserialize,Clone)]pub(crate)struct ResourceSense{pub(crate)sensed_resources:Vec<ResourceObservation>,pub(crate)direction_x:f64,pub(crate)direction_y:f64,pub(crate)direction_strength:f64}
 #[derive(Serialize,Deserialize,Clone)]pub(crate)enum DevelopmentStage{Offspring,Juvenile,Adult}
 #[derive(Serialize,Deserialize,Clone,Debug,PartialEq)]pub(crate)struct Position{pub(crate)x:f64,pub(crate)y:f64}
+#[derive(Serialize,Deserialize,Clone,Debug,PartialEq)]pub(crate)struct MemoryPoint{pub(crate)x:f64,pub(crate)y:f64,pub(crate)strength:f64}
 pub(crate)const MAX_MEMORY_POINTS:usize=5;pub(crate)const MEMORY_DECAY_PER_TICK:f64=0.995;pub(crate)const MEMORY_MERGE_RADIUS:f64=40.0;pub(crate)const MEMORY_PRUNE_THRESHOLD:f64=0.01;pub(crate)const COMBINE_PROCESSING_RATE:usize=1;pub(crate)const BREAK_PROCESSING_RATE:usize=1;
 #[derive(Serialize,Deserialize,Clone,Copy)]pub(crate)enum TransformationKind{Break}
 #[derive(Serialize,Deserialize,Clone)]pub(crate)struct ActiveTransformation{pub(crate)id:u64,pub(crate)organism_id:String,pub(crate)kind:TransformationKind,pub(crate)material:Material,#[serde(default)]pub(crate)bond:Option<Bond>,pub(crate)complexity:f64,pub(crate)duration_ticks:u64,pub(crate)remaining_ticks:u64,pub(crate)decision_context_key:Option<String>}
