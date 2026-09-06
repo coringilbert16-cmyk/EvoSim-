@@ -1,9 +1,32 @@
+use crate::resources::Material;
 use crate::state::{
     AffinityResponses, Environment, Organism, PropertyDeviations, ResourceObservation,
     DESIRABILITY_AMOUNT_HALF_SATURATION, DESIRABILITY_MAX,
 };
 
+/// Below this amount, an unstructured ecological stock is perceived as
+/// individual whole units rather than as a continuous quantity. This changes
+/// perception only; the field remains aggregate and storage remains discrete.
+pub(crate) const DISCRETE_PERCEPTION_THRESHOLD: f64 = 5.0;
+
 impl crate::state::Simulation {
+    pub(crate) fn perceived_amount(material: &Material, sensory_resolution: f64) -> f64 {
+        let amount = material.total_amount().max(0.0);
+        if material.has_internal_structure() {
+            // A compound is one physical object. Its internal atom count does
+            // not turn it into several separately perceptible field objects.
+            return (amount * sensory_resolution).max(0.0);
+        }
+        if amount < DISCRETE_PERCEPTION_THRESHOLD {
+            // Small free stocks are represented by whole available units to
+            // the organism. Sensory resolution still controls whether those
+            // units are perceptible, but never creates fractional units.
+            let visible_units = amount.floor();
+            return (visible_units * sensory_resolution.max(0.0)).floor();
+        }
+        amount * sensory_resolution
+    }
+
     pub(crate) fn calculate_property_deviations(
         properties: &crate::resources::ResourceProperties,
         baselines: &crate::resources::ResourceBaselines,
@@ -103,7 +126,7 @@ impl crate::state::Simulation {
             let cell = &environment.field.cells[cell_index];
 
             for material in &cell.materials {
-                let perceived_amount = material.total_amount() * sensory_resolution;
+                let perceived_amount = Self::perceived_amount(material, sensory_resolution);
                 if perceived_amount <= 0.0 {
                     continue;
                 }
