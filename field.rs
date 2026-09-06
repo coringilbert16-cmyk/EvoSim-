@@ -1,5 +1,6 @@
 // Active material field: fixed-resolution 2D grid holding ecological material stock.
 
+use crate::material_transfer::take_whole_unstructured;
 use crate::resources::{merge_parts, Material};
 use serde::{Deserialize, Serialize};
 
@@ -200,11 +201,16 @@ impl ActiveMaterialField {
         amount: f64,
     ) -> Option<Material> {
         let material = self.cells.get_mut(index)?.materials.get_mut(material_index)?;
-        let taken = material.take(amount);
+        let requested = if amount.is_finite() && amount >= 1.0 {
+            amount.floor() as usize
+        } else {
+            return None;
+        };
+        let taken = take_whole_unstructured(material, requested)?;
         self.cells[index]
             .materials
             .retain(|material| !material.is_empty());
-        taken
+        Some(taken)
     }
 
     /// ACQUIRE transfer: one discrete base unit or one entire structured
@@ -265,9 +271,12 @@ impl ActiveMaterialField {
                 if total <= MATERIAL_EPSILON {
                     continue;
                 }
-                let outflow = (total * fraction).floor();
-                if outflow >= 1.0 {
-                    if let Some(piece) = self.cells[i].materials[material_index].take(outflow) {
+                let outflow = (total * fraction).floor() as usize;
+                if outflow >= 1 {
+                    if let Some(piece) = take_whole_unstructured(
+                        &mut self.cells[i].materials[material_index],
+                        outflow,
+                    ) {
                         outgoing_cell.push(piece);
                     }
                 }
@@ -321,7 +330,7 @@ fn distribute_evenly(field: &mut ActiveMaterialField, mut mat: Material, neighbo
                 internal_bonds: std::mem::take(&mut mat.internal_bonds),
             }
         } else {
-            match mat.take(count as f64) {
+            match take_whole_unstructured(&mut mat, count) {
                 Some(piece) => piece,
                 None => continue,
             }
