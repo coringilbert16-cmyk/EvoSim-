@@ -12,16 +12,15 @@ use crate::resources::{BaseResource, Material};
 use crate::state::{DevelopmentStage, Organism, ReproductiveConstruction};
 use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 
-const CORE_UNIT_COUNT: usize = 6;
-const CORE_MATERIAL_AMOUNT: f64 = CORE_UNIT_COUNT as f64;
+const REPRODUCTION_COMMITTED_UNITS: usize = 6;
 
 pub(crate) fn begin_reproduction(parent: &mut Organism, rng: &mut ChaCha8Rng) -> bool {
     if !matches!(parent.development_stage, DevelopmentStage::Adult) { return false; }
     if parent.reproductive_readiness < 1.0 - f64::EPSILON { return false; }
     if parent.reproductive_construction.is_some() { return false; }
-    if parent.stored_material.count_unstructured() < CORE_UNIT_COUNT { return false; }
+    if parent.stored_material.count_unstructured() < REPRODUCTION_COMMITTED_UNITS { return false; }
 
-    let Some(materials) = parent.stored_material.take_unstructured(CORE_UNIT_COUNT) else { return false; };
+    let Some(materials) = parent.stored_material.take_unstructured(REPRODUCTION_COMMITTED_UNITS) else { return false; };
     let committed_material = MaterialStorage { materials };
 
     let mut child_genome = parent.genome.clone();
@@ -50,15 +49,9 @@ pub(crate) fn advance_construction(
     ) else { return false; };
 
     let Some(material) = construction.committed_material.take_one_unstructured() else { return false; };
-    debug_assert_eq!(material, construction_material_for_placement(&material, catalog));
-
     let Some(unit) = StructuralUnit::from_material(material, placement) else { return false; };
     construction.developing_structure.add_unit(unit);
     true
-}
-
-fn construction_material_for_placement(material: &Material, _catalog: &[BaseResource]) -> Material {
-    material.clone()
 }
 
 fn construction_placement(
@@ -163,7 +156,7 @@ mod tests {
 
     #[test]
     fn reproduction_commits_real_discrete_material_without_touching_parent_structure() {
-        let mut parent = adult_parent(CORE_MATERIAL_AMOUNT + 2.0);
+        let mut parent = adult_parent(REPRODUCTION_COMMITTED_UNITS as f64 + 2.0);
         let mut rng = ChaCha8Rng::seed_from_u64(7);
         assert!(begin_reproduction(&mut parent, &mut rng));
         assert!(parent.structure.units.is_empty());
@@ -171,7 +164,7 @@ mod tests {
         assert_eq!(parent.stored_material.total_amount(), 2.0);
         assert_eq!(parent.reproductive_readiness, 0.0);
         let construction = parent.reproductive_construction.as_ref().unwrap();
-        assert_eq!(construction.committed_material.total_amount(), CORE_UNIT_COUNT as f64);
+        assert_eq!(construction.committed_material.total_amount(), REPRODUCTION_COMMITTED_UNITS as f64);
         assert!(!construction.committed_material.materials[0].has_internal_structure());
         assert!(construction.developing_structure.units.is_empty());
     }
@@ -179,7 +172,7 @@ mod tests {
     #[test]
     fn construction_consumes_one_real_unit_per_step() {
         let catalog = crate::resources::default_catalog();
-        let mut parent = adult_parent(CORE_MATERIAL_AMOUNT);
+        let mut parent = adult_parent(REPRODUCTION_COMMITTED_UNITS as f64);
         let mut rng = ChaCha8Rng::seed_from_u64(7);
         assert!(begin_reproduction(&mut parent, &mut rng));
         let construction = parent.reproductive_construction.as_mut().unwrap();
@@ -194,7 +187,7 @@ mod tests {
     #[test]
     fn construction_places_new_unit_at_real_contact_geometry() {
         let catalog = crate::resources::default_catalog();
-        let mut parent = adult_parent(CORE_MATERIAL_AMOUNT);
+        let mut parent = adult_parent(REPRODUCTION_COMMITTED_UNITS as f64);
         let mut rng = ChaCha8Rng::seed_from_u64(7);
         assert!(begin_reproduction(&mut parent, &mut rng));
         let construction = parent.reproductive_construction.as_mut().unwrap();
@@ -209,13 +202,13 @@ mod tests {
     #[test]
     fn construction_stops_when_no_full_unit_remains() {
         let catalog = crate::resources::default_catalog();
-        let mut parent = adult_parent(CORE_MATERIAL_AMOUNT);
+        let mut parent = adult_parent(REPRODUCTION_COMMITTED_UNITS as f64);
         let mut rng = ChaCha8Rng::seed_from_u64(7);
         assert!(begin_reproduction(&mut parent, &mut rng));
         let construction = parent.reproductive_construction.as_mut().unwrap();
-        for _ in 0..CORE_UNIT_COUNT { assert!(advance_construction(construction, &catalog)); }
+        for _ in 0..REPRODUCTION_COMMITTED_UNITS { assert!(advance_construction(construction, &catalog)); }
         assert!(!advance_construction(construction, &catalog));
         assert!(construction.committed_material.is_empty());
-        assert_eq!(construction.developing_structure.units.len(), CORE_UNIT_COUNT);
+        assert_eq!(construction.developing_structure.units.len(), REPRODUCTION_COMMITTED_UNITS);
     }
 }
