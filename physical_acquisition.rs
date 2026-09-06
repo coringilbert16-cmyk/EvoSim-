@@ -131,7 +131,7 @@ mod tests {
         let mut environment = PhysicalEnvironment::new();
         environment
             .realize(
-                Material::free_base("Water", 1.0),
+                Material::free_base("Nitrogen", 1.0),
                 &[Placement {
                     x: 0.0,
                     y: 0.0,
@@ -145,9 +145,7 @@ mod tests {
         index.rebuild(&environment);
         let found = candidates(&organism, &environment, &catalog, &index, 5.0, 0.0).unwrap();
 
-        assert_eq!(found.len(), 1);
-        assert!(found[0].interface.interface_length > 0.0);
-        assert!((found[0].permeability - 1.0).abs() < 1e-12);
+        assert!(found.is_empty());
     }
 
     #[test]
@@ -157,7 +155,7 @@ mod tests {
         let mut environment = PhysicalEnvironment::new();
         environment
             .realize(
-                Material::free_base("Water", 1.0),
+                Material::free_base("Carbon", 1.0),
                 &[Placement {
                     x: 2.0,
                     y: 0.0,
@@ -171,6 +169,42 @@ mod tests {
         index.rebuild(&environment);
         let found = candidates(&organism, &environment, &catalog, &index, 5.0, 0.0).unwrap();
         assert!(found.is_empty());
+    }
+
+    #[test]
+    fn water_content_controls_permeability_after_contact() {
+        let catalog = default_catalog();
+        let organism = organism_at("Nitrogen", 0.0, 0.0);
+        let mut environment = PhysicalEnvironment::new();
+        environment
+            .realize(
+                Material {
+                    parts: vec![("Water".into(), 1.0), ("Nitrogen".into(), 1.0)],
+                    internal_bonds: Vec::new(),
+                },
+                &[
+                    Placement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                    Placement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                ],
+                &catalog,
+            )
+            .unwrap();
+
+        let mut index = PhysicalSpatialIndex::new(100.0, 100.0, 10.0);
+        index.rebuild(&environment);
+        let found = candidates(&organism, &environment, &catalog, &index, 5.0, 0.0).unwrap();
+
+        assert_eq!(found.len(), 1);
+        assert!(found[0].interface.interface_length > 0.0);
+        assert!((found[0].permeability - 0.5).abs() < 1e-12);
     }
 
     #[test]
@@ -203,7 +237,7 @@ mod tests {
         let mut environment = PhysicalEnvironment::new();
         environment
             .realize(
-                Material::free_base("Water", 1.0),
+                Material::free_base("Nitrogen", 1.0),
                 &[Placement {
                     x: 4.0,
                     y: 0.0,
