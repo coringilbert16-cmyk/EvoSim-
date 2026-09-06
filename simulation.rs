@@ -143,12 +143,14 @@ impl Simulation {
     fn acquisition_context_key(field_index: usize) -> String { format!("target:{field_index}") }
 
     fn action_eligibility(organism: &Organism, environment: &Environment) -> ActionEligibility {
+        let can_build_from_storage = organism.structure.units.len() >= 1
+            && organism.stored_material.count_unstructured() > 0;
+        let can_join_existing_structure = organism.structure.units.len() >= 2;
         ActionEligibility {
             can_move: organism.active_transformation_id.is_none(),
             can_acquire: organism.active_transformation_id.is_none() && !Self::acquisition_targets(organism, environment).is_empty(),
-            // Storage-to-structure COMBINE is not yet implemented; do not claim
-            // storage inventory is a COMBINE capability until that path exists.
-            can_combine: organism.active_transformation_id.is_none() && organism.structure.units.len() >= 2,
+            can_combine: organism.active_transformation_id.is_none()
+                && (can_build_from_storage || can_join_existing_structure),
             can_break: organism.active_transformation_id.is_none() && !organism.structure.bonds.is_empty(),
             can_expel: false,
         }
@@ -223,7 +225,11 @@ impl Simulation {
                         crate::decision_runtime::record_outcome(&mut organism.decision_history, &selected, if moved { crate::decision::OutcomeKind::Neutral } else { crate::decision::OutcomeKind::Harmful });
                     }
                     ActionKind::Combine => {
-                        let combined = crate::combine_runtime::try_combine(organism, environment, &mut compatibility_cache).is_some();
+                        let combined = if organism.structure.units.len() >= 1 && organism.stored_material.count_unstructured() > 0 {
+                            crate::combine_runtime::try_combine_stored_unit(organism, environment, &mut compatibility_cache).is_some()
+                        } else {
+                            crate::combine_runtime::try_combine(organism, environment, &mut compatibility_cache).is_some()
+                        };
                         crate::decision_runtime::record_outcome(&mut organism.decision_history, &selected, if combined { crate::decision::OutcomeKind::Neutral } else { crate::decision::OutcomeKind::Harmful });
                         if organism.reproductive_readiness >= 1.0 - f64::EPSILON { reproduction_requests.push(organism.id.clone()); }
                     }
