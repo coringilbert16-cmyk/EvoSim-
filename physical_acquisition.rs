@@ -12,10 +12,10 @@
 //! determine how much material can cross an interface.
 
 use crate::organism_geometry::OrganismBodyGeometry;
+use crate::permeability::permeability;
 use crate::physical_environment::PhysicalEnvironment;
 use crate::physical_interface::{physical_interface, PhysicalInterface};
 use crate::physical_spatial_index::PhysicalSpatialIndex;
-use crate::permeability::permeability;
 use crate::resources::BaseResource;
 use crate::state::Organism;
 
@@ -46,10 +46,11 @@ pub fn candidates(
 
     let body = OrganismBodyGeometry::from_structure(&organism.structure, catalog)?;
     let anchor = organism.occupied_cells.first()?;
-    let candidates = spatial_index.candidate_indices(anchor.x, anchor.y, broad_phase_radius);
+    let candidate_indices =
+        spatial_index.candidate_indices(anchor.x, anchor.y, broad_phase_radius);
     let mut out = Vec::new();
 
-    for object_index in candidates {
+    for object_index in candidate_indices {
         let Some(material) = environment.get(object_index) else {
             continue;
         };
@@ -85,9 +86,8 @@ pub fn candidates(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::physical_environment::PhysicalEnvironment;
     use crate::resources::{default_catalog, Material};
-    use crate::state::{DevelopmentStage, EnergyLedger, Organism, Position, ResourceSense};
+    use crate::state::{DevelopmentStage, Organism, Position, ResourceSense};
     use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 
     fn organism_at(name: &str, x: f64, y: f64) -> Organism {
