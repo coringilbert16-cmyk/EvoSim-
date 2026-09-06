@@ -29,7 +29,7 @@ impl Simulation {
             let (cell_x, cell_y) = environment.field.cell_center(cell_index);
             let cell = &environment.field.cells[cell_index];
             for material in &cell.materials {
-                let perceived_amount = material.total_amount() * sensory_resolution;
+                let perceived_amount = Self::perceived_amount(material, sensory_resolution);
                 if perceived_amount <= 0.0 {
                     continue;
                 }
