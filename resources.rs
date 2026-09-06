@@ -445,9 +445,9 @@ pub fn default_catalog() -> Vec<BaseResource> {
             name: "Carbon".into(),
             properties: ResourceProperties {
                 mass: 1.0,
-                potential_energy: 1.0,
-                reactivity: 0.1,
-                cohesion: 0.95,
+                potential_energy: 3.0,
+                reactivity: 0.5,
+                cohesion: 0.8,
             },
             shape: Shape {
                 form: Form::RegularPolygon {
@@ -460,9 +460,9 @@ pub fn default_catalog() -> Vec<BaseResource> {
             name: "Methane".into(),
             properties: ResourceProperties {
                 mass: 1.0,
-                potential_energy: 20.0,
-                reactivity: 4.0,
-                cohesion: 0.1,
+                potential_energy: 6.0,
+                reactivity: 3.0,
+                cohesion: 0.2,
             },
             shape: Shape {
                 form: Form::RegularPolygon {
@@ -475,9 +475,9 @@ pub fn default_catalog() -> Vec<BaseResource> {
             name: "Hydrogen".into(),
             properties: ResourceProperties {
                 mass: 1.0,
-                potential_energy: 12.0,
-                reactivity: 3.0,
-                cohesion: 0.05,
+                potential_energy: 5.0,
+                reactivity: 2.5,
+                cohesion: 0.3,
             },
             shape: Shape {
                 form: Form::Circle { radius: 0.398_942 },
@@ -487,7 +487,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
             name: "Sulfur".into(),
             properties: ResourceProperties {
                 mass: 1.0,
-                potential_energy: 8.0,
+                potential_energy: 4.0,
                 reactivity: 2.0,
                 cohesion: 0.4,
             },
@@ -502,8 +502,8 @@ pub fn default_catalog() -> Vec<BaseResource> {
             name: "Nitrogen".into(),
             properties: ResourceProperties {
                 mass: 1.0,
-                potential_energy: 0.5,
-                reactivity: 0.2,
+                potential_energy: 1.0,
+                reactivity: 1.0,
                 cohesion: 0.7,
             },
             shape: Shape {
@@ -517,8 +517,8 @@ pub fn default_catalog() -> Vec<BaseResource> {
             name: "Phosphorus".into(),
             properties: ResourceProperties {
                 mass: 1.0,
-                potential_energy: 0.8,
-                reactivity: 0.3,
+                potential_energy: 2.0,
+                reactivity: 1.5,
                 cohesion: 0.6,
             },
             shape: Shape {
