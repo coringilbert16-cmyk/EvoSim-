@@ -148,8 +148,6 @@ pub struct DecisionParameters {
     /// Fraction of reproductive readiness accumulated per tick under fully
     /// mature, fully energy-ready conditions.
     pub reproduction_accumulation_rate: f64,
-    /// Structural mass at which maturity reaches 1.0.
-    pub adult_mass: f64,
 }
 
 impl Default for DecisionParameters {
@@ -158,7 +156,6 @@ impl Default for DecisionParameters {
             survival_reserve: 1.0,
             reproduction_reserve: 16.0,
             reproduction_accumulation_rate: 0.01,
-            adult_mass: 16.0,
         }
     }
 }
