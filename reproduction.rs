@@ -60,7 +60,7 @@ fn add_blueprint_element(structure:&mut OrganismStructure,realized:&[usize],blue
         let other_blueprint_index=if connection.element_a==blueprint_index{Some(connection.element_b)}else if connection.element_b==blueprint_index{Some(connection.element_a)}else{None};
         let Some(other_blueprint_index)=other_blueprint_index else{continue};
         let Some(other_structure_index)=realized.iter().position(|&index|index==other_blueprint_index)else{continue};
-        let(new_point,other_point) = if connection.element_a==blueprint_index{(connection.point_a,connection.point_b)}else{(connection.point_b,connection.point_a)};
+        let(new_point,other_point)=if connection.element_a==blueprint_index{(connection.point_a,connection.point_b)}else{(connection.point_b,connection.point_a)};
         let a=candidate.connection_site(crate::structure::ConnectionSiteRef{unit_index:new_index,point_index:new_point},catalog)?;
         let b=candidate.connection_site(crate::structure::ConnectionSiteRef{unit_index:other_structure_index,point_index:other_point},catalog)?;
         if !crate::contact::connection_points_contact(a,&candidate.units[new_index],b,&candidate.units[other_structure_index],1e-9,1.0-1e-9){return None}
@@ -99,22 +99,21 @@ pub(crate)fn begin_reproduction(parent:&mut Organism,rng:&mut ChaCha8Rng,catalog
     true
 }
 
-pub(crate)fn advance_construction(parent:&mut Organism,construction:&mut ReproductiveConstruction,catalog:&[BaseResource])->bool{
-    if construction.realized_elements.len()>=construction.target_elements.len(){return false}
-    let Some(&blueprint_index)=construction.target_elements.get(construction.realized_elements.len())else{return false};
+pub(crate)fn advance_construction(stored_material:&mut MaterialStorage,construction:&mut ReproductiveConstruction,catalog:&[BaseResource])->Option<f64>{
+    if construction.realized_elements.len()>=construction.target_elements.len(){return None}
+    let Some(&blueprint_index)=construction.target_elements.get(construction.realized_elements.len())else{return None};
     let target=&construction.child_genome.structural_blueprint.elements[blueprint_index].material;
-    let mut remaining=parent.stored_material.clone();
-    let Some(material)=assemble_blueprint_material(&mut remaining,target)else{return false};
-    let Some((_,stress))=add_blueprint_element(&mut construction.developing_structure,&construction.realized_elements,blueprint_index,material,&construction.child_genome.structural_blueprint,catalog)else{return false};
-    parent.stored_material=remaining;
+    let mut remaining=stored_material.clone();
+    let Some(material)=assemble_blueprint_material(&mut remaining,target)else{return None};
+    let Some((_,stress))=add_blueprint_element(&mut construction.developing_structure,&construction.realized_elements,blueprint_index,material,&construction.child_genome.structural_blueprint,catalog)else{return None};
+    *stored_material=remaining;
     construction.realized_elements.push(blueprint_index);
-    parent.add_transaction_stress(stress);
-    true
+    Some(stress)
 }
 
 pub(crate)fn finish_reproduction(parent:&mut Organism,child_id:String)->Option<Organism>{
     let construction=parent.reproductive_construction.take()?;
-    if construction.realized_elements.len()!=construction.target_elements.len()||construction.committed_material.is_empty()==false{parent.reproductive_construction=Some(construction);return None}
+    if construction.realized_elements.len()!=construction.target_elements.len()||!construction.committed_material.is_empty()==false{parent.reproductive_construction=Some(construction);return None}
     let position=match parent.occupied_cells.first().cloned(){Some(p)=>p,None=>{parent.reproductive_construction=Some(construction);return None}};
     Some(Organism{id:child_id,occupied_cells:vec![position],genome:construction.child_genome,resource_sense:ResourceSense{sensed_resources:Vec::new(),direction_x:0.0,direction_y:0.0,direction_strength:0.0},memory:Vec::new(),decision_history:crate::decision::DecisionHistory::default(),usable_energy:0.0,stress:0.0,stress_threshold:crate::state::INITIAL_STRESS_THRESHOLD,stored_material:MaterialStorage::default(),structure:construction.developing_structure,development_stage:DevelopmentStage::Juvenile,age:0,reproductive_readiness:0.0,active_transformation_id:None,reproductive_construction:None})
 }
