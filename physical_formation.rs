@@ -72,12 +72,6 @@ impl PhysicalFormationRule {
     }
 }
 
-/// Run quantity-driven physical formation over every ecological field cell.
-///
-/// Each successful realization removes exactly the realized amount from bulk
-/// stock and creates exactly that amount as one persistent physical instance.
-/// Cell-center placement is the spatial realization rule for this first
-/// environmental formation layer; it is not used as contact authority.
 pub(crate) fn apply_physical_formation(
     environment: &mut Environment,
     rules: &[PhysicalFormationRule],
@@ -93,19 +87,22 @@ pub(crate) fn apply_physical_formation(
                 }
                 let amount = rule.amount_to_realize(material.total_amount());
                 if amount > 0.0 {
-                    proposals.push((cell_index, material_index, amount, Placement {
-                        x,
-                        y,
-                        rotation_radians: 0.0,
-                    }));
+                    proposals.push((
+                        cell_index,
+                        material_index,
+                        amount,
+                        Placement {
+                            x,
+                            y,
+                            rotation_radians: 0.0,
+                        },
+                    ));
                 }
             }
         }
     }
 
     let mut realized = 0;
-    // Material indices can shift when a source becomes empty, so process in
-    // reverse cell/material order after proposals have been collected.
     proposals.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| b.1.cmp(&a.1)));
     for (cell_index, material_index, amount, placement) in proposals {
         if environment
@@ -124,15 +121,18 @@ mod tests {
     use crate::environment::ActiveMaterialField;
     use crate::physical_environment::PhysicalEnvironment;
     use crate::resources::default_catalog;
+    use crate::reservoir::{DeepReservoir, DEFAULT_RESERVOIR_BLOCK_SIZE};
     use crate::state::Environment;
 
     fn environment() -> Environment {
+        let field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+        let reservoir = DeepReservoir::new_matching_field(&field, DEFAULT_RESERVOIR_BLOCK_SIZE);
         Environment {
             width: 100.0,
             height: 100.0,
             catalog: default_catalog(),
-            field: ActiveMaterialField::new(100.0, 100.0, 25.0),
-            reservoir: Default::default(),
+            field,
+            reservoir,
             vents: Vec::new(),
             physical: PhysicalEnvironment::new(),
         }
