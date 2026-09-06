@@ -7,6 +7,7 @@ use tokio::sync::broadcast;
 use crate::decision::{DecisionHistory, DecisionParameters};
 use crate::environment::{ActiveMaterialField, DeepReservoir, Vent};
 use crate::genome::Genome;
+use crate::physical_environment::PhysicalEnvironment;
 use crate::resources::{BaseResource, Material};
 use crate::structure::{Bond, OrganismStructure};
 
@@ -181,6 +182,10 @@ pub(crate) struct Environment {
     pub(crate) field: ActiveMaterialField,
     pub(crate) reservoir: DeepReservoir,
     pub(crate) vents: Vec<Vent>,
+    /// Explicitly realized physical environmental objects. This is separate
+    /// from the field's aggregated ecological stock.
+    #[serde(default)]
+    pub(crate) physical: PhysicalEnvironment,
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct Snapshot {
