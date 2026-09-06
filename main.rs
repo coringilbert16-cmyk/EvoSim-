@@ -24,7 +24,6 @@ mod resources;
 mod structural_blueprint;
 mod structural_combine;
 mod structural_material;
-#[path = "structure_materialized.rs"]
 mod structure;
 
 mod memory;
