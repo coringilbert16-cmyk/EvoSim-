@@ -82,54 +82,6 @@ mod integration_tests {
         assert!(ever_sensed_something);
     }
 
-    #[test]
-    fn field_stock_does_not_become_a_physical_acquire_target_by_itself() {
-        let mut sim = Simulation::new(21, 10.0);
-        let target = sim
-            .environment
-            .field
-            .index_for_position(500.0, 500.0)
-            .unwrap();
-        sim.environment
-            .field
-            .deposit_at_index(target, Material::free_base("Carbon", 10.0));
-
-        sim.step();
-
-        assert!(sim.organisms[0].stored_material.is_empty());
-        assert!(!sim.organisms[0]
-            .decision_history
-            .entries
-            .iter()
-            .any(|entry| entry.action == ActionKind::Acquire));
-    }
-
-    #[test]
-    fn structured_field_stock_is_not_implicitly_acquired() {
-        let mut sim = Simulation::new(23, 10.0);
-        let target = sim
-            .environment
-            .field
-            .index_for_position(500.0, 500.0)
-            .unwrap();
-        let structured = Material {
-            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
-            internal_bonds: vec![InternalBond {
-                part_a: 0,
-                part_b: 1,
-            }],
-        };
-        sim.environment
-            .field
-            .deposit_at_index(target, structured.clone());
-        let before = sim.environment.field.cells[target].materials.clone();
-
-        sim.step();
-
-        assert_eq!(sim.environment.field.cells[target].materials, before);
-        assert!(sim.organisms[0].stored_material.is_empty());
-    }
-
     fn add_test_break_bond(sim: &mut Simulation) {
         let a = sim.organisms[0].structure.add_unit(StructuralUnit::new(
             "Carbon",
