@@ -11,7 +11,6 @@ use crate::environment::{
 };
 use crate::genome::initial_genome;
 use crate::physical_environment::PhysicalEnvironment;
-use crate::genome::initial_genome;
 use crate::state::{
     DevelopmentStage, EnergyLedger, Environment, Organism, Position, ResourceSense, Simulation,
     Snapshot,
@@ -322,6 +321,7 @@ impl Simulation {
     #[cfg(test)]
     pub(crate) fn total_material_in_system(&self) -> f64 {
         let mut total = self.environment.field.total_amount() + self.environment.reservoir.total_amount();
+        total += self.environment.physical.total_material_amount();
         for transformation in &self.active_transformations { total += transformation.material.total_amount(); }
         for organism in &self.organisms {
             total += organism.stored_material.total_amount();
