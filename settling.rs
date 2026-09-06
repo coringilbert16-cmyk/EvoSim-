@@ -1,7 +1,7 @@
 // Settling returns active-field material to the matching deep-reservoir region.
 
 use super::field::{ActiveMaterialField, MATERIAL_EPSILON};
-use super::material_transfer::take_whole_unstructured;
+use crate::material_transfer::take_whole_unstructured;
 use super::reservoir::DeepReservoir;
 
 pub const DEFAULT_SETTLING_FRACTION: f64 = 0.01;
