@@ -22,7 +22,8 @@ pub struct PhysicalFormationRule {
 
 impl PhysicalFormationRule {
     pub fn new(resource_name: impl Into<String>, minimum_amount: f64, fraction_to_realize: f64) -> Option<Self> {
-        if resource_name.into().is_empty()
+        let resource_name = resource_name.into();
+        if resource_name.is_empty()
             || !minimum_amount.is_finite()
             || minimum_amount <= 0.0
             || !fraction_to_realize.is_finite()
@@ -32,7 +33,7 @@ impl PhysicalFormationRule {
             return None;
         }
         Some(Self {
-            resource_name: resource_name.into(),
+            resource_name,
             minimum_amount,
             fraction_to_realize,
         })
@@ -91,14 +92,13 @@ pub(crate) fn apply_physical_formation(
                     continue;
                 }
                 let amount = rule.amount_to_realize(material.total_amount());
-                if amount >= rule.minimum_amount {
+                if amount > 0.0 {
                     proposals.push((cell_index, material_index, amount, Placement {
                         x,
                         y,
                         rotation_radians: 0.0,
                     }));
                 }
-                break;
             }
         }
     }
