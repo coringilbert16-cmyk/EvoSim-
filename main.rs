@@ -11,6 +11,7 @@ mod genome;
 mod interface_geometry;
 mod math;
 mod material_geometry;
+mod material_storage;
 mod membrane_geometry;
 mod organism_boundary;
 mod organism_geometry;
