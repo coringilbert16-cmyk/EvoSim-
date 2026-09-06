@@ -26,22 +26,35 @@ impl Genome{
  pub fn mutate(&mut self,rng:&mut ChaCha8Rng){for t in &mut self.traits{if rng.gen::<f64>()<t.mutation_probability.clamp(1e-6,0.25){let delta=rng.gen_range(-1.0..1.0)*t.mutation_sigma.max(0.0);t.value+=delta;}if rng.gen::<f64>()<0.001{t.mutation_probability=(t.mutation_probability*rng.gen_range(0.5..1.5)).clamp(1e-6,0.1);}}}
 }
 fn trait_def(name:&str,value:f64,sigma:f64)->TraitDef{TraitDef{name:name.into(),value,mutation_probability:0.001,mutation_sigma:sigma}}
-fn hydrated_carbon_water()->Material{Material{parts:vec![("Carbon".into(),1.0),("Water".into(),1.0)],internal_bonds:vec![InternalBond{part_a:0,part_b:1}]}}
+
+/// Carbon-rich composite F-Core: two Carbon constituents provide a strong
+/// scaffold/reinforcement pair while Nitrogen keeps it below pure-Carbon
+/// cohesion. The first Carbon constituent remains the external scaffold.
+fn f_core_carbon_nitrogen()->Material{Material{parts:vec![("Carbon".into(),1.0),("Carbon".into(),1.0),("Nitrogen".into(),1.0)],internal_bonds:vec![InternalBond{part_a:0,part_b:1},InternalBond{part_a:1,part_b:2}]}}
+
+/// Hydrated lattice: Carbon supplies the rigid external scaffold, while
+/// Sulfur and Water make the composite substantially softer and permeable.
+fn hydrated_carbon_sulfur()->Material{Material{parts:vec![("Carbon".into(),1.0),("Sulfur".into(),1.0),("Water".into(),1.0)],internal_bonds:vec![InternalBond{part_a:0,part_b:1},InternalBond{part_a:1,part_b:2}]}}
+
+/// Hydrated membrane: Carbon scaffold plus Nitrogen reinforcement and Water.
+/// Its composition is firmer than the sulfur-rich lattice while retaining
+/// hydration/permeability.
 fn hydrated_carbon_nitrogen_water()->Material{Material{parts:vec![("Carbon".into(),1.0),("Nitrogen".into(),1.0),("Water".into(),1.0)],internal_bonds:vec![InternalBond{part_a:0,part_b:1},InternalBond{part_a:1,part_b:2}]}}
 
 /// Seed body plan:
-/// - rings 0..2: 19-unit Carbon F-Core, deliberately larger than the old
-///   six-unit minimum while retaining a strong but not maximally rigid core;
-/// - ring 3: 18-unit Carbon+Water hydrated lattice, mechanically softer and
-///   permeable through its composition;
-/// - ring 4: 24-unit Carbon+Nitrogen+Water hydrated membrane, a firmer outer
-///   layer than the lattice while retaining substantial water content.
+/// - rings 0..2: 19 Carbon+Carbon+Nitrogen composite F-Core units;
+/// - ring 3: 18 Carbon+Sulfur+Water hydrated lattice units;
+/// - ring 4: 24 Carbon+Nitrogen+Water hydrated membrane units.
 ///
-/// All three layers share the same rigid Carbon hexagonal scaffold geometry.
-/// Adjacent cells share full hexagonal edges, represented by two structural
-/// bonds at the shared corners. This makes the F-Core genuinely solid rather
-/// than a sparse corner-connected frame, while retaining discrete bond sites
-/// for later structural damage and pressure failure.
+/// All three layers are genuine composite materials. Carbon is the first
+/// constituent and therefore the rigid exterior scaffold; later constituents
+/// are internal reinforcement/hydration rather than independent boundaries.
+/// The resulting cohesion hierarchy is F-Core (~0.767) > membrane (~0.667)
+/// > lattice (~0.567), before any other material-property effects are applied.
+///
+/// Carbon scaffold hexagons are arranged on a solid edge-contact hex lattice.
+/// Each neighboring pair shares two geometric corners, represented as two
+/// independent organism structural bonds.
 fn default_structural_blueprint()->StructuralBlueprint{
  let r=0.438_691_f64;
  let mut elements=Vec::with_capacity(61);
@@ -50,7 +63,7 @@ fn default_structural_blueprint()->StructuralBlueprint{
   for axial_r in -4_i32..=4_i32{
    let ring=q.abs().max(axial_r.abs()).max((q+axial_r).abs());
    if ring>4{continue}
-   let material=match ring{0..=2=>Material::free_base("Carbon",1.0),3=>hydrated_carbon_water(),4=>hydrated_carbon_nitrogen_water(),_=>unreachable!()};
+   let material=match ring{0..=2=>f_core_carbon_nitrogen(),3=>hydrated_carbon_sulfur(),4=>hydrated_carbon_nitrogen_water(),_=>unreachable!()};
    let x=3.0_f64.sqrt()*r*(q as f64+0.5*axial_r as f64);
    let y=1.5*r*axial_r as f64;
    let index=elements.len();
@@ -72,4 +85,6 @@ fn default_structural_blueprint()->StructuralBlueprint{
  StructuralBlueprint::new(elements,connections)
 }
 pub fn initial_genome()->Genome{Genome{traits:vec![trait_def("memory_strength",0.5,0.05),trait_def("perception_radius",100.0,1.0),trait_def("sensory_resolution",0.5,0.05),trait_def("directional_resolution",1.0,0.05),trait_def("mass_affinity",0.0,0.05),trait_def("potential_energy_affinity",0.5,0.05),trait_def("reactivity_affinity",0.0,0.05),trait_def("cohesion_affinity",0.0,0.05),trait_def("processing_efficiency",0.8,0.05),trait_def("movement_efficiency",0.8,0.05),trait_def("reproductive_investment",0.5,0.05)],structural_blueprint:default_structural_blueprint()}}
-#[cfg(test)]mod tests{use super::*;use crate::resources::default_catalog;#[test]fn seed_blueprint_has_strong_core_hydrated_lattice_and_hydrated_membrane(){let g=initial_genome();let b=&g.structural_blueprint;assert_eq!(b.elements.len(),61);assert_eq!(b.connections.len(),312);assert!(b.validate().is_ok());assert_eq!(b.elements[0].material.parts[0].0,"Carbon");let hydrated=b.elements.iter().filter(|e|e.material.parts.iter().any(|(n,_)|n=="Water")).count();assert_eq!(hydrated,42);assert!(b.realize(&default_catalog()).is_ok())}#[test]fn seed_blueprint_is_connected(){assert!(initial_genome().structural_blueprint.is_connected())}#[test]fn seed_layers_have_expected_compositions(){let b=initial_genome().structural_blueprint;assert_eq!(b.elements.iter().filter(|e|e.material.parts.len()==1).count(),19);assert_eq!(b.elements.iter().filter(|e|e.material.parts.len()==2).count(),18);assert_eq!(b.elements.iter().filter(|e|e.material.parts.len()==3).count(),24)}}
+#[cfg(test)]mod tests{use super::*;use crate::resources::default_catalog;#[test]fn seed_blueprint_has_three_composite_layers(){let g=initial_genome();let b=&g.structural_blueprint;assert_eq!(b.elements.len(),61);assert_eq!(b.connections.len(),312);assert!(b.validate().is_ok());assert!(b.elements.iter().all(|e|e.material.parts.len()==3));assert!(b.elements[..19].iter().all(|e|e.material.parts==vec![("Carbon".into(),1.0),("Carbon".into(),1.0),("Nitrogen".into(),1.0)]));assert!(b.elements[19..37].iter().all(|e|e.material.parts==vec![("Carbon".into(),1.0),("Sulfur".into(),1.0),("Water".into(),1.0)]));assert!(b.elements[37..].iter().all(|e|e.material.parts==vec![("Carbon".into(),1.0),("Nitrogen".into(),1.0),("Water".into(),1.0)]));assert!(b.realize(&default_catalog()).is_ok())}
+#[test]fn seed_blueprint_is_connected(){assert!(initial_genome().structural_blueprint.is_connected())}
+}
