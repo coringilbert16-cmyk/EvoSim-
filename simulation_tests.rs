@@ -267,8 +267,7 @@ mod integration_tests {
         for _ in 0..50 {
             sim.step();
         }
-        let entry = sim
-            .organisms[0]
+        let entry = sim.organisms[0]
             .decision_history
             .entries
             .iter()
