@@ -21,7 +21,11 @@ pub struct PhysicalFormationRule {
 }
 
 impl PhysicalFormationRule {
-    pub fn new(resource_name: impl Into<String>, minimum_amount: f64, fraction_to_realize: f64) -> Option<Self> {
+    pub fn new(
+        resource_name: impl Into<String>,
+        minimum_amount: f64,
+        fraction_to_realize: f64,
+    ) -> Option<Self> {
         let resource_name = resource_name.into();
         if resource_name.is_empty()
             || !minimum_amount.is_finite()
@@ -61,7 +65,10 @@ impl PhysicalFormationRule {
         if name != &self.resource_name || *amount < self.minimum_amount {
             return false;
         }
-        let Some(resource) = catalog.iter().find(|resource| resource.name == self.resource_name) else {
+        let Some(resource) = catalog
+            .iter()
+            .find(|resource| resource.name == self.resource_name)
+        else {
             return false;
         };
         resource.shape.is_valid() && !matches!(resource.shape.form, Form::Fluid { .. })
@@ -118,10 +125,9 @@ pub(crate) fn apply_physical_formation(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::environment::ActiveMaterialField;
+    use crate::environment::{ActiveMaterialField, DeepReservoir, DEFAULT_RESERVOIR_BLOCK_SIZE};
     use crate::physical_environment::PhysicalEnvironment;
     use crate::resources::default_catalog;
-    use crate::reservoir::{DeepReservoir, DEFAULT_RESERVOIR_BLOCK_SIZE};
     use crate::state::Environment;
 
     fn environment() -> Environment {
@@ -142,27 +148,42 @@ mod tests {
     fn formation_requires_threshold_and_uses_fraction_of_available_quantity() {
         let rule = PhysicalFormationRule::new("Carbon", 10.0, 0.25).unwrap();
         assert!((rule.amount_to_realize(40.0) - 10.0).abs() < 1e-12);
-        assert!(!rule.eligible(&Material::free_base("Carbon", 9.0), &default_catalog()));
-        assert!(rule.eligible(&Material::free_base("Carbon", 40.0), &default_catalog()));
+        assert!(!rule.eligible(
+            &Material::free_base("Carbon", 9.0),
+            &default_catalog()
+        ));
+        assert!(rule.eligible(
+            &Material::free_base("Carbon", 40.0),
+            &default_catalog()
+        ));
     }
 
     #[test]
     fn formation_creates_physical_object_and_preserves_total_material() {
         let mut environment = environment();
-        environment.field.deposit_at_index(0, Material::free_base("Carbon", 20.0));
+        environment
+            .field
+            .deposit_at_index(0, Material::free_base("Carbon", 20.0));
         let rule = PhysicalFormationRule::new("Carbon", 10.0, 0.25).unwrap();
-        let before = environment.field.total_amount() + environment.physical.total_material_amount();
+        let before =
+            environment.field.total_amount() + environment.physical.total_material_amount();
 
         assert_eq!(apply_physical_formation(&mut environment, &[rule]), 1);
         assert!((environment.field.total_amount() - 15.0).abs() < 1e-12);
         assert!((environment.physical.total_material_amount() - 5.0).abs() < 1e-12);
-        assert!((environment.field.total_amount() + environment.physical.total_material_amount() - before).abs() < 1e-12);
+        assert!((environment.field.total_amount()
+            + environment.physical.total_material_amount()
+            - before)
+            .abs()
+            < 1e-12);
     }
 
     #[test]
     fn formation_does_not_realize_fluid_material() {
         let mut environment = environment();
-        environment.field.deposit_at_index(0, Material::free_base("Water", 20.0));
+        environment
+            .field
+            .deposit_at_index(0, Material::free_base("Water", 20.0));
         let rule = PhysicalFormationRule::new("Water", 1.0, 0.5).unwrap();
         assert_eq!(apply_physical_formation(&mut environment, &[rule]), 0);
         assert!(environment.physical.is_empty());
@@ -174,7 +195,10 @@ mod tests {
         let mut environment = environment();
         let material = Material {
             parts: vec![("Carbon".into(), 5.0), ("Hydrogen".into(), 5.0)],
-            internal_bonds: vec![crate::resources::InternalBond { part_a: 0, part_b: 1 }],
+            internal_bonds: vec![crate::resources::InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
         };
         environment.field.deposit_at_index(0, material.clone());
         let rule = PhysicalFormationRule::new("Carbon", 1.0, 0.5).unwrap();
