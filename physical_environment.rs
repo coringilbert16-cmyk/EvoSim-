@@ -7,8 +7,9 @@
 use crate::material_geometry::PhysicalMaterialInstance;
 use crate::resources::{BaseResource, Material};
 use crate::structure::Placement;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct PhysicalEnvironment {
     pub materials: Vec<PhysicalMaterialInstance>,
 }
