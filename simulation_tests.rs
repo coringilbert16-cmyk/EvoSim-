@@ -2,7 +2,7 @@
 mod integration_tests {
     use crate::decision::{ActionKind, OutcomeKind};
     use crate::resources::{InternalBond, Material};
-    use crate::state::{Position, Simulation, PROCESSING_RATE};
+    use crate::state::{Position, Simulation};
     use crate::structure::{Bond, Placement, StructuralUnit};
 
     #[test]
@@ -83,7 +83,7 @@ mod integration_tests {
     }
 
     #[test]
-    fn acquire_transfers_at_processing_rate_and_conserves_material() {
+    fn field_stock_does_not_become_a_physical_acquire_target_by_itself() {
         let mut sim = Simulation::new(21, 10.0);
         let target = sim
             .environment
@@ -93,35 +93,9 @@ mod integration_tests {
         sim.environment
             .field
             .deposit_at_index(target, Material::free_base("Carbon", 10.0));
-        sim.organisms[0]
-            .decision_history
-            .record(ActionKind::Move, None, OutcomeKind::Harmful);
-
-        let before = sim.total_material_in_system();
-        sim.step();
-        let after = sim.total_material_in_system();
-
-        assert!((after - before).abs() < 1e-3);
-        assert!((sim.organisms[0].stored_material.total_amount() - PROCESSING_RATE).abs() < 1e-9);
-    }
-
-    #[test]
-    fn acquire_cannot_reach_distant_material() {
-        let mut sim = Simulation::new(22, 10.0);
-        let target = sim
-            .environment
-            .field
-            .index_for_position(600.0, 500.0)
-            .unwrap();
-        sim.environment
-            .field
-            .deposit_at_index(target, Material::free_base("Carbon", 10.0));
 
         sim.step();
 
-        // Free ecological stock is allowed to diffuse between field cells.
-        // This test therefore checks the actual acquisition invariant rather
-        // than incorrectly requiring a distant cell to remain unchanged.
         assert!(sim.organisms[0].stored_material.is_empty());
         assert!(!sim.organisms[0]
             .decision_history
@@ -131,7 +105,7 @@ mod integration_tests {
     }
 
     #[test]
-    fn acquire_preserves_structured_material_in_field() {
+    fn structured_field_stock_is_not_implicitly_acquired() {
         let mut sim = Simulation::new(23, 10.0);
         let target = sim
             .environment
@@ -154,56 +128,6 @@ mod integration_tests {
 
         assert_eq!(sim.environment.field.cells[target].materials, before);
         assert!(sim.organisms[0].stored_material.is_empty());
-    }
-
-    #[test]
-    fn acquire_selects_the_specific_target_and_records_that_outcome() {
-        let mut sim = Simulation::new(24, 10.0);
-        sim.organisms[0].occupied_cells[0] = Position { x: 500.0, y: 500.0 };
-        let target_a = sim
-            .environment
-            .field
-            .index_for_position(500.0, 500.0)
-            .unwrap();
-        let target_b = sim
-            .environment
-            .field
-            .index_for_position(475.0, 500.0)
-            .unwrap();
-        sim.environment
-            .field
-            .deposit_at_index(target_a, Material::free_base("Carbon", 5.0));
-        sim.environment
-            .field
-            .deposit_at_index(target_b, Material::free_base("Hydrogen", 5.0));
-        let target_b_key = format!("target:{target_b}");
-        sim.organisms[0]
-            .decision_history
-            .record(ActionKind::Move, None, OutcomeKind::Harmful);
-        sim.organisms[0].decision_history.record(
-            ActionKind::Acquire,
-            Some(format!("target:{target_a}")),
-            OutcomeKind::Harmful,
-        );
-
-        sim.step();
-
-        assert!(matches!(
-            sim.organisms[0]
-                .decision_history
-                .outcome(ActionKind::Acquire, Some(&target_b_key)),
-            Some(OutcomeKind::Neutral)
-        ));
-        assert!(sim.organisms[0]
-            .stored_material
-            .parts
-            .iter()
-            .any(|(name, amount)| name == "Hydrogen" && *amount > 3.9));
-        assert!(sim.organisms[0]
-            .stored_material
-            .parts
-            .iter()
-            .all(|(name, _)| name != "Carbon"));
     }
 
     fn add_test_break_bond(sim: &mut Simulation) {
@@ -396,7 +320,8 @@ mod integration_tests {
         for _ in 0..50 {
             sim.step();
         }
-        let entry = sim.organisms[0]
+        let entry = sim
+            .organisms[0]
             .decision_history
             .entries
             .iter()
