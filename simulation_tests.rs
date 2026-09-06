@@ -2,7 +2,7 @@
 mod integration_tests {
     use crate::decision::{ActionKind, OutcomeKind};
     use crate::resources::{InternalBond, Material};
-    use crate::state::{Position, Simulation};
+    use crate::state::Simulation;
     use crate::structure::{Bond, Placement, StructuralUnit};
 
     #[test]
@@ -267,7 +267,8 @@ mod integration_tests {
         for _ in 0..50 {
             sim.step();
         }
-        let entry = sim.organisms[0]
+        let entry = sim
+            .organisms[0]
             .decision_history
             .entries
             .iter()
