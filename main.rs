@@ -16,6 +16,7 @@ mod membrane_geometry;
 mod organism_boundary;
 mod organism_geometry;
 mod permeability;
+mod physical_acquisition;
 mod physical_environment;
 mod physical_formation;
 mod physical_interface;
