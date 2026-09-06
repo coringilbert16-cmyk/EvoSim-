@@ -38,7 +38,7 @@ impl MaterialStorage {
     /// Store material without changing its physical identity.
     ///
     /// Free field stock may be an aggregate count, so it is expanded into
-    /// discrete one-unit material objects. A structured material is transferred
+    /// discrete one-unit material objects. A structured material is stored
     /// as exactly one intact object; its internal bonds are never touched.
     pub(crate) fn store(&mut self, material: Material) -> bool {
         if material.parts.is_empty() || !material.is_valid() || !Self::is_discrete(&material) {
@@ -57,6 +57,15 @@ impl MaterialStorage {
             }
         }
         true
+    }
+
+    /// Return a copy of one independent unstructured material object without
+    /// removing it. This is a planning/validation operation, not a transfer.
+    pub(crate) fn peek_one_unstructured(&self) -> Option<Material> {
+        self.materials
+            .iter()
+            .find(|material| !material.has_internal_structure() && !material.is_empty())
+            .cloned()
     }
 
     /// Remove one independent unstructured material object. This is inventory
@@ -127,6 +136,15 @@ mod tests {
         assert_eq!(storage.materials.len(), 3);
         assert_eq!(storage.count_unstructured(), 3);
         assert_eq!(storage.total_amount(), 3.0);
+    }
+
+    #[test]
+    fn peek_does_not_consume_free_material() {
+        let mut storage = MaterialStorage::default();
+        assert!(storage.store(Material::free_base("Carbon", 1.0)));
+        let peeked = storage.peek_one_unstructured().expect("stored unit");
+        assert_eq!(peeked, Material::free_base("Carbon", 1.0));
+        assert_eq!(storage.count_unstructured(), 1);
     }
 
     #[test]
