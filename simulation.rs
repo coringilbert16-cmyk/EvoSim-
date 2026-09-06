@@ -225,11 +225,11 @@ impl Simulation {
                         crate::decision_runtime::record_outcome(&mut organism.decision_history, &selected, if moved { crate::decision::OutcomeKind::Neutral } else { crate::decision::OutcomeKind::Harmful });
                     }
                     ActionKind::Combine => {
-                        let combined = if organism.structure.units.len() >= 1 && organism.stored_material.count_unstructured() > 0 {
-                            crate::combine_runtime::try_combine_stored_unit(organism, environment, &mut compatibility_cache).is_some()
-                        } else {
-                            crate::combine_runtime::try_combine(organism, environment, &mut compatibility_cache).is_some()
-                        };
+                        let combined = crate::combine_runtime::try_combine(
+                            organism,
+                            environment,
+                            &mut compatibility_cache,
+                        ).is_some();
                         crate::decision_runtime::record_outcome(&mut organism.decision_history, &selected, if combined { crate::decision::OutcomeKind::Neutral } else { crate::decision::OutcomeKind::Harmful });
                         if organism.reproductive_readiness >= 1.0 - f64::EPSILON { reproduction_requests.push(organism.id.clone()); }
                     }
