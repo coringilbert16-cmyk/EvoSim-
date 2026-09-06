@@ -2,6 +2,10 @@ use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 
+use crate::resources::Material;
+use crate::structural_blueprint::{BlueprintElement, StructuralBlueprint};
+use crate::structure::Placement;
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TraitDef {
     pub name: String,
@@ -13,6 +17,8 @@ pub struct TraitDef {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Genome {
     pub traits: Vec<TraitDef>,
+    #[serde(default = "default_structural_blueprint")]
+    pub structural_blueprint: StructuralBlueprint,
 }
 
 impl Genome {
@@ -32,8 +38,7 @@ impl Genome {
             .clamp(-1.0, 1.0)
     }
     pub fn reactivity_affinity(&self) -> f64 {
-        self.trait_value("reactivity_affinity", 0.0)
-            .clamp(-1.0, 1.0)
+        self.trait_value("reactivity_affinity", 0.0).clamp(-1.0, 1.0)
     }
     pub fn cohesion_affinity(&self) -> f64 {
         self.trait_value("cohesion_affinity", 0.0).clamp(-1.0, 1.0)
@@ -48,32 +53,22 @@ impl Genome {
         self.trait_value("sensory_resolution", 0.5).clamp(0.0, 1.0)
     }
     pub fn directional_resolution(&self) -> f64 {
-        self.trait_value("directional_resolution", 1.0)
-            .clamp(0.0, 1.0)
+        self.trait_value("directional_resolution", 1.0).clamp(0.0, 1.0)
     }
     pub fn processing_efficiency(&self) -> f64 {
-        self.trait_value("processing_efficiency", 0.8)
-            .clamp(0.05, 1.0)
+        self.trait_value("processing_efficiency", 0.8).clamp(0.05, 1.0)
     }
     pub fn movement_efficiency(&self) -> f64 {
-        self.trait_value("movement_efficiency", 0.8)
-            .clamp(0.05, 1.0)
+        self.trait_value("movement_efficiency", 0.8).clamp(0.05, 1.0)
     }
     pub fn reproductive_investment(&self) -> f64 {
-        self.trait_value("reproductive_investment", 0.5)
-            .clamp(0.15, 1.0)
+        self.trait_value("reproductive_investment", 0.5).clamp(0.15, 1.0)
     }
     pub fn juvenile_mass(&self) -> f64 {
         self.trait_value("juvenile_mass", 4.0).clamp(1.0, 40.0)
     }
     pub fn adult_mass(&self) -> f64 {
         self.trait_value("adult_mass", 16.0).clamp(4.0, 80.0)
-    }
-    pub fn construction_compactness(&self) -> f64 {
-        self.trait_value("construction_compactness", 0.5).clamp(0.0, 1.0)
-    }
-    pub fn construction_branching(&self) -> f64 {
-        self.trait_value("construction_branching", 0.5).clamp(0.0, 1.0)
     }
 
     pub fn mutate(&mut self, rng: &mut ChaCha8Rng) {
@@ -99,6 +94,20 @@ fn trait_def(name: &str, value: f64, sigma: f64) -> TraitDef {
     }
 }
 
+fn default_structural_blueprint() -> StructuralBlueprint {
+    StructuralBlueprint::new(
+        vec![BlueprintElement {
+            material: Material::free_base("Carbon", 1.0),
+            placement: Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        }],
+        Vec::new(),
+    )
+}
+
 pub fn initial_genome() -> Genome {
     Genome {
         traits: vec![
@@ -115,8 +124,7 @@ pub fn initial_genome() -> Genome {
             trait_def("reproductive_investment", 0.5, 0.05),
             trait_def("juvenile_mass", 4.0, 0.2),
             trait_def("adult_mass", 16.0, 0.4),
-            trait_def("construction_compactness", 0.5, 0.05),
-            trait_def("construction_branching", 0.5, 0.05),
         ],
+        structural_blueprint: default_structural_blueprint(),
     }
 }
