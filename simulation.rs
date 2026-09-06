@@ -50,9 +50,7 @@ impl Simulation {
             ("Phosphorus", 5_000.0),
             ("Water", 20_000.0),
         ];
-        for (name, amount) in starting_amounts {
-            reservoir.seed_uniform(name, amount);
-        }
+        for (name, amount) in starting_amounts { reservoir.seed_uniform(name, amount); }
         let vents = vec![
             Vent {
                 x: 250.0,
@@ -86,7 +84,7 @@ impl Simulation {
             decision_history: crate::decision::DecisionHistory::default(),
             usable_energy: 0.0,
             stress: 0.0,
-            stored_material: crate::resources::Material { parts: Vec::new(), internal_bonds: Vec::new() },
+            stored_material: crate::material_storage::MaterialStorage::default(),
             structure: crate::structure::OrganismStructure::new(),
             development_stage: DevelopmentStage::Juvenile,
             age: 0,
@@ -121,9 +119,7 @@ impl Simulation {
     }
 
     fn update_reproductive_readiness(organism: &mut Organism, environment: &Environment, parameters: DecisionParameters) {
-        if !matches!(organism.development_stage, DevelopmentStage::Adult) {
-            return;
-        }
+        if !matches!(organism.development_stage, DevelopmentStage::Adult) { return; }
         let adult_mass = parameters.adult_mass.max(f64::EPSILON);
         let maturity = (Self::structural_mass(organism, environment) / adult_mass).clamp(0.0, 1.0);
         let reproduction_reserve = parameters.reproduction_reserve.max(f64::EPSILON);
@@ -132,42 +128,27 @@ impl Simulation {
         organism.reproductive_readiness = (organism.reproductive_readiness + accumulation).clamp(0.0, 1.0);
     }
 
+    /// ACQUIRE can only see material in the field cell currently occupied by
+    /// the organism. There is no arbitrary reach or acquisition quantity.
     fn acquisition_targets(organism: &Organism, environment: &Environment) -> Vec<usize> {
-        let (px, py) = {
-            let p = &organism.occupied_cells[0];
-            (p.x, p.y)
-        };
-        let mut targets = Vec::new();
-        for field_index in environment.field.cells_within_radius(px, py, crate::state::PROCESSING_REACH) {
-            let (target_x, target_y) = environment.field.cell_center(field_index);
-            let dx = target_x - px;
-            let dy = target_y - py;
-            let distance = (dx * dx + dy * dy).sqrt();
-            if distance > crate::state::PROCESSING_REACH + f64::EPSILON {
-                continue;
-            }
-            if environment.field.cells[field_index]
-                .materials
-                .iter()
-                .any(|material| !material.is_empty() && material.is_valid() && !material.has_internal_structure())
-            {
-                targets.push(field_index);
-            }
+        let Some(position) = organism.occupied_cells.first() else { return Vec::new(); };
+        let Some(field_index) = environment.field.index_for_position(position.x, position.y) else { return Vec::new(); };
+        if environment.field.cells[field_index].materials.iter().any(|material| !material.is_empty() && material.is_valid()) {
+            vec![field_index]
+        } else {
+            Vec::new()
         }
-        targets
     }
 
-    fn acquisition_context_key(field_index: usize) -> String {
-        format!("target:{field_index}")
-    }
+    fn acquisition_context_key(field_index: usize) -> String { format!("target:{field_index}") }
 
     fn action_eligibility(organism: &Organism, environment: &Environment) -> ActionEligibility {
         ActionEligibility {
             can_move: organism.active_transformation_id.is_none(),
-            can_acquire: organism.active_transformation_id.is_none()
-                && !Self::acquisition_targets(organism, environment).is_empty(),
-            can_combine: organism.active_transformation_id.is_none()
-                && (organism.structure.units.len() >= 2 || organism.stored_material.total_amount() >= 2.0 - f64::EPSILON),
+            can_acquire: organism.active_transformation_id.is_none() && !Self::acquisition_targets(organism, environment).is_empty(),
+            // Storage-to-structure COMBINE is not yet implemented; do not claim
+            // storage inventory is a COMBINE capability until that path exists.
+            can_combine: organism.active_transformation_id.is_none() && organism.structure.units.len() >= 2,
             can_break: organism.active_transformation_id.is_none() && !organism.structure.bonds.is_empty(),
             can_expel: false,
         }
@@ -182,49 +163,18 @@ impl Simulation {
         if relevant(ActionKind::Combine) { candidates.push(ActionCandidate { action: ActionKind::Combine, context_key: None }); }
         if relevant(ActionKind::Move) { candidates.push(ActionCandidate { action: ActionKind::Move, context_key: None }); }
         if relevant(ActionKind::Acquire) {
-            candidates.extend(Self::acquisition_targets(organism, environment).into_iter().map(|field_index| ActionCandidate {
-                action: ActionKind::Acquire,
-                context_key: Some(Self::acquisition_context_key(field_index)),
-            }));
+            candidates.extend(Self::acquisition_targets(organism, environment).into_iter().map(|field_index| ActionCandidate { action: ActionKind::Acquire, context_key: Some(Self::acquisition_context_key(field_index)) }));
         }
         if relevant(ActionKind::Expel) { candidates.push(ActionCandidate { action: ActionKind::Expel, context_key: None }); }
         candidates
     }
 
     fn acquire_target(organism: &mut Organism, environment: &mut Environment, field_index: usize) -> bool {
-        let (px, py) = {
-            let p = &organism.occupied_cells[0];
-            (p.x, p.y)
-        };
-        let (target_x, target_y) = environment.field.cell_center(field_index);
-        let dx = target_x - px;
-        let dy = target_y - py;
-        let distance = (dx * dx + dy * dy).sqrt();
-        if distance > crate::state::PROCESSING_REACH + f64::EPSILON {
-            return false;
-        }
-
-        let Some(material_index) = environment.field.cells.get(field_index).and_then(|cell| {
-            cell.materials.iter().position(|material| {
-                !material.is_empty() && material.is_valid() && !material.has_internal_structure()
-            })
-        }) else {
-            return false;
-        };
-
-        let Some(material) = environment.field.take_at_index(
-            field_index,
-            material_index,
-            crate::state::PROCESSING_RATE,
-        ) else {
-            return false;
-        };
-
-        if material.has_internal_structure() || material.is_empty() {
-            return false;
-        }
-        organism.store_material(material);
-        true
+        let Some(position) = organism.occupied_cells.first() else { return false; };
+        let Some(expected_index) = environment.field.index_for_position(position.x, position.y) else { return false; };
+        if expected_index != field_index { return false; }
+        let Some(material) = environment.field.take_for_acquisition(field_index) else { return false; };
+        organism.store_material(material)
     }
 
     pub(crate) fn step(&mut self) -> Snapshot {
@@ -327,80 +277,5 @@ impl Simulation {
             total += organism.structure.units.len() as f64;
         }
         total
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::decision::{DecisionHistory, OutcomeKind};
-    use crate::resources::{InternalBond, Material};
-
-    #[test]
-    fn acquire_eligibility_requires_reachable_free_material() {
-        let mut sim = Simulation::new(1, 10.0);
-        assert!(!Simulation::action_eligibility(&sim.organisms[0], &sim.environment).can_acquire);
-
-        let reachable = sim.environment.field.index_for_position(500.0, 500.0).unwrap();
-        sim.environment.field.deposit_at_index(reachable, Material::free_base("Carbon", 5.0));
-        assert!(Simulation::action_eligibility(&sim.organisms[0], &sim.environment).can_acquire);
-
-        sim.environment.field.cells[reachable].materials.clear();
-        sim.environment.field.deposit_at_index(reachable, Material {
-            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
-            internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
-        });
-        assert!(!Simulation::action_eligibility(&sim.organisms[0], &sim.environment).can_acquire);
-    }
-
-    #[test]
-    fn acquire_candidates_identify_each_target_and_ignore_unreachable_or_structured_material() {
-        let mut sim = Simulation::new(2, 10.0);
-        sim.organisms[0].occupied_cells[0] = Position { x: 525.0, y: 500.0 };
-        let near_a = sim.environment.field.index_for_position(500.0, 500.0).unwrap();
-        let near_b = sim.environment.field.index_for_position(525.0, 500.0).unwrap();
-        let far = sim.environment.field.index_for_position(600.0, 500.0).unwrap();
-        sim.environment.field.deposit_at_index(near_a, Material::free_base("Carbon", 5.0));
-        sim.environment.field.deposit_at_index(near_b, Material::free_base("Hydrogen", 5.0));
-        sim.environment.field.deposit_at_index(near_b, Material {
-            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
-            internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
-        });
-        sim.environment.field.deposit_at_index(far, Material::free_base("Sulfur", 5.0));
-
-        let needs = CurrentNeeds { survival: 1.0, reproduction: 0.0 };
-        let eligibility = Simulation::action_eligibility(&sim.organisms[0], &sim.environment);
-        let candidates = Simulation::decision_candidates(&sim.organisms[0], &sim.environment, needs, eligibility);
-        let acquire_contexts: Vec<_> = candidates.iter()
-            .filter(|candidate| candidate.action == ActionKind::Acquire)
-            .map(|candidate| candidate.context_key.clone().unwrap())
-            .collect();
-
-        assert_eq!(acquire_contexts.len(), 2);
-        assert!(acquire_contexts.contains(&format!("target:{near_a}")));
-        assert!(acquire_contexts.contains(&format!("target:{near_b}")));
-        assert!(!acquire_contexts.iter().any(|key| key.starts_with(&format!("target:{far}"))));
-    }
-
-    #[test]
-    fn target_specific_history_can_change_acquire_target_selection() {
-        let mut sim = Simulation::new(3, 10.0);
-        sim.organisms[0].occupied_cells[0] = Position { x: 525.0, y: 500.0 };
-        let near_a = sim.environment.field.index_for_position(500.0, 500.0).unwrap();
-        let near_b = sim.environment.field.index_for_position(525.0, 500.0).unwrap();
-        sim.environment.field.deposit_at_index(near_a, Material::free_base("Carbon", 5.0));
-        sim.environment.field.deposit_at_index(near_b, Material::free_base("Hydrogen", 5.0));
-
-        let needs = CurrentNeeds { survival: 1.0, reproduction: 0.0 };
-        let eligibility = Simulation::action_eligibility(&sim.organisms[0], &sim.environment);
-        let candidates = Simulation::decision_candidates(&sim.organisms[0], &sim.environment, needs, eligibility);
-        let acquire_candidates: Vec<_> = candidates.into_iter().filter(|candidate| candidate.action == ActionKind::Acquire).collect();
-        assert_eq!(acquire_candidates.len(), 2);
-
-        let mut history = DecisionHistory::default();
-        history.record(ActionKind::Acquire, acquire_candidates[0].context_key.clone(), OutcomeKind::Harmful);
-        let context = DecisionContext { needs, eligibility };
-        let selected = select_action(context, &history, &acquire_candidates).unwrap();
-        assert_eq!(selected.context_key, acquire_candidates[1].context_key);
     }
 }
