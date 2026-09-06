@@ -6,29 +6,12 @@ on:
   pull_request:
     branches: [main]
 
-permissions:
-  contents: write
-
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Format workspace
-        run: cargo fmt --all
-      - name: Commit formatting
-        if: github.event_name == 'push' && github.ref_name == 'integration/physical-interface-reconciled' && github.event.head_commit.message != 'Format Rust workspace'
-        run: |
-          if git diff --quiet; then
-            echo "Workspace already formatted."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- '*.rs'
-          git commit -m "Format Rust workspace"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Run Rust tests
