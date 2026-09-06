@@ -12,6 +12,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Format source
+        run: cargo fmt --all
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Check source file sizes
