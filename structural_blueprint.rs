@@ -34,7 +34,7 @@ impl StructuralBlueprint{
    let pb=s.units[c.element_b].properties(catalog).ok_or_else(||"missing catalog properties for second connection endpoint".to_string())?;
    let strength=crate::combine::bond_strength(pa,pb);
    if !strength.is_finite()||!(0.0..=1.0).contains(&strength){return Err("connection produced invalid intrinsic bond strength".into())}
-   s.add_bond(crate::structure::Bond{unit_a:c.element_a,point_a:c.point_a,unit_b:c.element_b,point_b:c.point_b,strength,bond_energy:0.0})
+   s.add_bond(crate::structure::Bond{unit_a:c.element_a,point_a:c.point_a,unit_b:c.element_b,point_b:c.point_b,strength,bond_energy:0.0});
   }
   Ok(s)
  }
