@@ -1,19 +1,81 @@
 //! Inherited structural blueprint.
-use crate::resources::{BaseResource, Material};
+use crate::resources::{BaseResource, InternalBond, Material};
 use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 use serde::{Deserialize, Serialize};
-#[derive(Serialize,Deserialize,Clone,Debug,PartialEq)]pub struct StructuralBlueprint{pub elements:Vec<BlueprintElement>,pub connections:Vec<BlueprintConnection>}
-#[derive(Serialize,Deserialize,Clone,Debug,PartialEq)]pub struct BlueprintElement{pub material:Material,pub placement:Placement}
-#[derive(Serialize,Deserialize,Clone,Copy,Debug,PartialEq,Eq)]pub struct BlueprintConnection{pub element_a:usize,pub point_a:usize,pub element_b:usize,pub point_b:usize}
+
+#[derive(Serialize,Deserialize,Clone,Debug,PartialEq)]
+pub struct StructuralBlueprint{pub elements:Vec<BlueprintElement>,pub connections:Vec<BlueprintConnection>}
+#[derive(Serialize,Deserialize,Clone,Debug,PartialEq)]
+pub struct BlueprintElement{pub material:Material,pub placement:Placement}
+#[derive(Serialize,Deserialize,Clone,Copy,Debug,PartialEq,Eq)]
+pub struct BlueprintConnection{pub element_a:usize,pub point_a:usize,pub element_b:usize,pub point_b:usize}
+
 impl StructuralBlueprint{
  pub fn new(elements:Vec<BlueprintElement>,connections:Vec<BlueprintConnection>)->Self{Self{elements,connections}}
  pub fn is_valid(&self)->bool{self.validate().is_ok()}
- pub fn validate(&self)->Result<(),String>{if self.elements.is_empty(){return Err("blueprint must contain at least one element".into())}for(i,e)in self.elements.iter().enumerate(){e.validate().map_err(|x|format!("element {i}: {x}"))?}for(i,c)in self.connections.iter().enumerate(){c.validate(self).map_err(|x|format!("connection {i}: {x}"))?}if self.elements.len()>1&&!self.is_connected(){return Err("multi-element blueprint must be connected".into())}Ok(())}
- pub fn realize(&self,catalog:&[BaseResource])->Result<OrganismStructure,String>{self.validate()?;let mut s=OrganismStructure::new();for e in &self.elements{let(name,amount)=e.material.parts.first().cloned().ok_or_else(||"blueprint element has no material constituent".to_string())?;if(amount-1.0).abs()>f64::EPSILON{return Err("blueprint structural-unit material must have amount 1.0".into())}s.add_unit(StructuralUnit::from_material(e.material.clone(),e.placement).ok_or_else(||"invalid blueprint structural material".to_string())?);if name.is_empty(){return Err("blueprint element has empty resource name".into())}}
-  for c in &self.connections{let a=s.connection_site(crate::structure::ConnectionSiteRef{unit_index:c.element_a,point_index:c.point_a},catalog).ok_or_else(||format!("connection {c:?} references an invalid first site"))?;let b=s.connection_site(crate::structure::ConnectionSiteRef{unit_index:c.element_b,point_index:c.point_b},catalog).ok_or_else(||format!("connection {c:?} references an invalid second site"))?;if !crate::contact::connection_points_contact(a,&s.units[c.element_a],b,&s.units[c.element_b],1e-9,1.0-1e-9){return Err(format!("connection {c:?} does not realize as physical contact"))}let pa=s.units[c.element_a].properties(catalog).ok_or_else(||"missing catalog properties for first connection endpoint".to_string())?;let pb=s.units[c.element_b].properties(catalog).ok_or_else(||"missing catalog properties for second connection endpoint".to_string())?;let strength=crate::combine::bond_strength(pa,pb);if !strength.is_finite()||(0.0..=1.0).contains(&strength)==false{return Err("connection produced invalid intrinsic bond strength".into())}s.add_bond(crate::structure::Bond{unit_a:c.element_a,point_a:c.point_a,unit_b:c.element_b,point_b:c.point_b,strength,bond_energy:0.0})}Ok(s)}
+ pub fn validate(&self)->Result<(),String>{
+  if self.elements.is_empty(){return Err("blueprint must contain at least one element".into())}
+  for(i,e)in self.elements.iter().enumerate(){e.validate().map_err(|x|format!("element {i}: {x}"))?}
+  for(i,c)in self.connections.iter().enumerate(){c.validate(self).map_err(|x|format!("connection {i}: {x}"))?}
+  if self.elements.len()>1&&!self.is_connected(){return Err("multi-element blueprint must be connected".into())}
+  Ok(())
+ }
+ pub fn realize(&self,catalog:&[BaseResource])->Result<OrganismStructure,String>{
+  self.validate()?;
+  let mut s=OrganismStructure::new();
+  for e in &self.elements{
+   s.add_unit(StructuralUnit::from_material(e.material.clone(),e.placement).ok_or_else(||"invalid blueprint structural material".to_string())?);
+  }
+  for c in &self.connections{
+   let a=s.connection_site(crate::structure::ConnectionSiteRef{unit_index:c.element_a,point_index:c.point_a},catalog).ok_or_else(||format!("connection {c:?} references an invalid first site"))?;
+   let b=s.connection_site(crate::structure::ConnectionSiteRef{unit_index:c.element_b,point_index:c.point_b},catalog).ok_or_else(||format!("connection {c:?} references an invalid second site"))?;
+   if !crate::contact::connection_points_contact(a,&s.units[c.element_a],b,&s.units[c.element_b],1e-9,1.0-1e-9){return Err(format!("connection {c:?} does not realize as physical contact"))}
+   let pa=s.units[c.element_a].properties(catalog).ok_or_else(||"missing catalog properties for first connection endpoint".to_string())?;
+   let pb=s.units[c.element_b].properties(catalog).ok_or_else(||"missing catalog properties for second connection endpoint".to_string())?;
+   let strength=crate::combine::bond_strength(pa,pb);
+   if !strength.is_finite()||!(0.0..=1.0).contains(&strength){return Err("connection produced invalid intrinsic bond strength".into())}
+   s.add_bond(crate::structure::Bond{unit_a:c.element_a,point_a:c.point_a,unit_b:c.element_b,point_b:c.point_b,strength,bond_energy:0.0})
+  }
+  Ok(s)
+ }
  pub fn is_connected(&self)->bool{if self.elements.is_empty(){return false}let mut v=vec![false;self.elements.len()];let mut stack=vec![0usize];v[0]=true;while let Some(cur)=stack.pop(){for c in &self.connections{let next=if c.element_a==cur{c.element_b}else if c.element_b==cur{c.element_a}else{continue};if next<v.len()&&!v[next]{v[next]=true;stack.push(next)}}}v.into_iter().all(|x|x)}
  pub fn total_material_amount(&self)->f64{self.elements.iter().map(|e|e.material.total_amount()).sum()}
  pub fn structural_mass(&self,catalog:&[BaseResource])->f64{self.elements.iter().map(|e|e.material.mass(catalog)).sum()}
 }
-impl BlueprintElement{pub fn validate(&self)->Result<(),String>{if !self.material.is_valid(){return Err("material is invalid".into())}if self.material.parts.len()!=1||self.material.has_internal_structure(){return Err("structural-unit material must contain exactly one unstructured constituent".into())}let(_,a)=&self.material.parts[0];if !a.is_finite()||*a<=0.0{return Err("structural-unit material amount must be positive and finite".into())}if !self.placement.x.is_finite()||!self.placement.y.is_finite()||!self.placement.rotation_radians.is_finite(){return Err("placement must be finite".into())}Ok(())}}
+
+impl BlueprintElement{
+ pub fn validate(&self)->Result<(),String>{
+  if !self.material.is_valid(){return Err("material is invalid".into())}
+  if !self.placement.x.is_finite()||!self.placement.y.is_finite()||!self.placement.rotation_radians.is_finite(){return Err("placement must be finite".into())}
+  if self.material.parts.iter().any(|(_,amount)|(*amount-1.0).abs()>f64::EPSILON){return Err("each blueprint constituent must represent exactly one material unit".into())}
+  if self.material.parts.len()==1&&!self.material.has_internal_structure(){return Ok(())}
+  if !self.material.has_internal_structure(){return Err("multi-constituent structural material must have internal bonds".into())}
+  if !material_structure_is_connected(&self.material){return Err("internal structural material must be connected".into())}
+  Ok(())
+ }
+}
+
+fn material_structure_is_connected(material:&Material)->bool{
+ if material.parts.len()<=1{return true}
+ let mut visited=vec![false;material.parts.len()];
+ let mut stack=vec![0usize];
+ visited[0]=true;
+ while let Some(cur)=stack.pop(){
+  for InternalBond{part_a,part_b} in &material.internal_bonds{
+   let next=if *part_a==cur{*part_b}else if *part_b==cur{*part_a}else{continue};
+   if !visited[next]{visited[next]=true;stack.push(next)}
+  }
+ }
+ visited.into_iter().all(|x|x)
+}
+
 impl BlueprintConnection{fn validate(&self,b:&StructuralBlueprint)->Result<(),String>{if self.element_a>=b.elements.len()||self.element_b>=b.elements.len(){return Err("references a missing element".into())}if self.element_a==self.element_b{return Err("self-connections are not permitted".into())}Ok(())}}
+
+#[cfg(test)]
+mod tests{
+ use super::*;
+ use crate::resources::default_catalog;
+ fn hydrated_carbon_water()->Material{Material{parts:vec![("Carbon".into(),1.0),("Water".into(),1.0)],internal_bonds:vec![InternalBond{part_a:0,part_b:1}]}}
+ #[test]fn structured_hydrated_element_is_valid(){let b=StructuralBlueprint::new(vec![BlueprintElement{material:hydrated_carbon_water(),placement:Placement{x:0.0,y:0.0,rotation_radians:0.0}}],Vec::new());assert!(b.validate().is_ok());assert_eq!(b.realize(&default_catalog()).unwrap().units.len(),1)}
+ #[test]fn disconnected_internal_composite_is_rejected(){let m=Material{parts:vec![("Carbon".into(),1.0),("Water".into(),1.0),("Nitrogen".into(),1.0)],internal_bonds:vec![InternalBond{part_a:0,part_b:1}]};let b=StructuralBlueprint::new(vec![BlueprintElement{material:m,placement:Placement{x:0.0,y:0.0,rotation_radians:0.0}}],Vec::new());assert!(!b.is_valid())}
+}
