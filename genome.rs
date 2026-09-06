@@ -50,7 +50,7 @@ fn hydrated_carbon_nitrogen_water()->Material{Material{parts:vec![("Carbon".into
 /// genome core. Its membership is structural metadata, not a hard-coded
 /// reproduction unit count, and its construction order is intentionally free.
 fn default_structural_blueprint()->StructuralBlueprint{
- let r=0.458_577_f64;
+ let r=0.438_691_f64;
  let mut elements=Vec::with_capacity(61);
  let mut core_elements=Vec::with_capacity(19);
  let mut index_by_axial=HashMap::new();
