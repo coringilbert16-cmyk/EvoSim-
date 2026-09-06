@@ -20,8 +20,16 @@ impl Simulation {
         if !bond.bond_energy.is_finite() || bond.bond_energy < 0.0 {
             return None;
         }
-        let props_a = organism.structure.units.get(bond.unit_a)?.properties(catalog)?;
-        let props_b = organism.structure.units.get(bond.unit_b)?.properties(catalog)?;
+        let props_a = organism
+            .structure
+            .units
+            .get(bond.unit_a)?
+            .properties(catalog)?;
+        let props_b = organism
+            .structure
+            .units
+            .get(bond.unit_b)?
+            .properties(catalog)?;
         let complexity = crate::math::complexity(2.0);
         let break_work = break_work_cost(*props_a, *props_b, complexity);
         let required_energy = (break_work - bond.bond_energy).max(0.0);
@@ -62,7 +70,10 @@ impl Simulation {
             eprintln!(
                 "BREAK resolution failed for organism {}: \
 bond endpoints reference invalid units (unit_a={}, unit_b={}, total units={})",
-                organism.id, target_bond.unit_a, target_bond.unit_b, organism.structure.units.len()
+                organism.id,
+                target_bond.unit_a,
+                target_bond.unit_b,
+                organism.structure.units.len()
             );
             organism.active_transformation_id = None;
             return;
@@ -79,13 +90,19 @@ bond endpoints reference invalid units (unit_a={}, unit_b={}, total units={})",
 bond not found in structure. Expected bond with identity: \
 unit_a={}, point_a={}, unit_b={}, point_b={}. \
 This indicates a locking violation or structural corruption.",
-                organism.id, target_bond.unit_a, target_bond.point_a, target_bond.unit_b, target_bond.point_b
+                organism.id,
+                target_bond.unit_a,
+                target_bond.point_a,
+                target_bond.unit_b,
+                target_bond.point_b
             );
             organism.active_transformation_id = None;
             return;
         }
 
-        let props_a = match organism.structure.units[target_bond.unit_a].properties(&environment.catalog) {
+        let props_a = match organism.structure.units[target_bond.unit_a]
+            .properties(&environment.catalog)
+        {
             Some(properties) => *properties,
             None => {
                 eprintln!(
@@ -96,7 +113,9 @@ This indicates a locking violation or structural corruption.",
                 return;
             }
         };
-        let props_b = match organism.structure.units[target_bond.unit_b].properties(&environment.catalog) {
+        let props_b = match organism.structure.units[target_bond.unit_b]
+            .properties(&environment.catalog)
+        {
             Some(properties) => *properties,
             None => {
                 eprintln!(
@@ -142,7 +161,11 @@ This indicates an internal consistency error in break_matching_bond().",
             action: ActionKind::Break,
             context_key: transformation.decision_context_key.clone(),
         };
-        crate::decision_runtime::record_outcome(&mut organism.decision_history, &candidate, outcome);
+        crate::decision_runtime::record_outcome(
+            &mut organism.decision_history,
+            &candidate,
+            outcome,
+        );
         if net_energy > 0.0 {
             let reinforcement = (net_energy * organism.genome.memory_strength()).clamp(0.0, 1.0);
             let (px, py) = organism
@@ -170,12 +193,7 @@ pub(crate) fn break_work_cost(
     crate::combine::bond_strength(a, b) * complexity.max(0.0)
 }
 
-pub(crate) fn reinforce_memory_point(
-    organism: &mut Organism,
-    x: f64,
-    y: f64,
-    reinforcement: f64,
-) {
+pub(crate) fn reinforce_memory_point(organism: &mut Organism, x: f64, y: f64, reinforcement: f64) {
     if let Some(point) = organism
         .memory
         .iter_mut()

@@ -182,9 +182,7 @@ pub struct InternalBond {
 
 impl InternalBond {
     pub fn is_valid_for(&self, part_count: usize) -> bool {
-        self.part_a < part_count
-            && self.part_b < part_count
-            && self.part_a != self.part_b
+        self.part_a < part_count && self.part_b < part_count && self.part_a != self.part_b
     }
 }
 
@@ -218,9 +216,11 @@ impl Material {
             return self.internal_bonds.is_empty();
         }
 
-        if !self.parts.iter().all(|(name, amount)| {
-            !name.is_empty() && amount.is_finite() && *amount > 0.0
-        }) {
+        if !self
+            .parts
+            .iter()
+            .all(|(name, amount)| !name.is_empty() && amount.is_finite() && *amount > 0.0)
+        {
             return false;
         }
 
@@ -606,10 +606,16 @@ mod shape_tests {
                     assert_eq!(resource.shape.form.polygon_vertices().unwrap().len(), 4);
                 }
                 Form::RegularPolygon { sides, .. } => {
-                    assert_eq!(resource.shape.form.polygon_vertices().unwrap().len(), *sides as usize);
+                    assert_eq!(
+                        resource.shape.form.polygon_vertices().unwrap().len(),
+                        *sides as usize
+                    );
                 }
                 Form::Polygon { vertices } => {
-                    assert_eq!(resource.shape.form.polygon_vertices().unwrap().len(), vertices.len());
+                    assert_eq!(
+                        resource.shape.form.polygon_vertices().unwrap().len(),
+                        vertices.len()
+                    );
                 }
             }
         }
@@ -620,10 +626,22 @@ mod shape_tests {
         let catalog = default_catalog();
         let find = |name: &str| catalog.iter().find(|r| r.name == name).unwrap();
         assert!(matches!(find("Hydrogen").shape.form, Form::Circle { .. }));
-        assert!(matches!(find("Carbon").shape.form, Form::RegularPolygon { sides: 6, .. }));
-        assert!(matches!(find("Methane").shape.form, Form::RegularPolygon { sides: 3, .. }));
-        assert!(matches!(find("Sulfur").shape.form, Form::RegularPolygon { sides: 5, .. }));
-        assert!(matches!(find("Nitrogen").shape.form, Form::Rectangle { .. }));
+        assert!(matches!(
+            find("Carbon").shape.form,
+            Form::RegularPolygon { sides: 6, .. }
+        ));
+        assert!(matches!(
+            find("Methane").shape.form,
+            Form::RegularPolygon { sides: 3, .. }
+        ));
+        assert!(matches!(
+            find("Sulfur").shape.form,
+            Form::RegularPolygon { sides: 5, .. }
+        ));
+        assert!(matches!(
+            find("Nitrogen").shape.form,
+            Form::Rectangle { .. }
+        ));
         assert!(matches!(
             &find("Phosphorus").shape.form,
             Form::Polygon { vertices } if vertices.len() == 6
@@ -649,8 +667,12 @@ mod shape_tests {
     #[test]
     fn polygon_connection_points_correspond_to_actual_vertices() {
         for resource in default_catalog() {
-            let Some(vertices) = resource.shape.form.polygon_vertices() else { continue };
-            let ConnectionSites::Corners(points) = resource.shape.connection_sites() else { panic!("not corners") };
+            let Some(vertices) = resource.shape.form.polygon_vertices() else {
+                continue;
+            };
+            let ConnectionSites::Corners(points) = resource.shape.connection_sites() else {
+                panic!("not corners")
+            };
             assert_eq!(points.len(), vertices.len());
             for (point, vertex) in points.iter().zip(vertices.iter()) {
                 assert_eq!((point.x, point.y), *vertex);
@@ -662,23 +684,38 @@ mod shape_tests {
     fn connection_points_are_valid_where_present() {
         for resource in default_catalog() {
             if let ConnectionSites::Corners(points) = resource.shape.connection_sites() {
-                for cp in points { assert!(cp.is_valid()); }
+                for cp in points {
+                    assert!(cp.is_valid());
+                }
             }
         }
     }
 
     #[test]
     fn circle_has_no_finite_connection_point_list() {
-        let circle_resources: Vec<_> = default_catalog().into_iter().filter(|r| matches!(r.shape.form, Form::Circle { .. })).collect();
+        let circle_resources: Vec<_> = default_catalog()
+            .into_iter()
+            .filter(|r| matches!(r.shape.form, Form::Circle { .. }))
+            .collect();
         assert_eq!(circle_resources.len(), 1);
         for resource in circle_resources {
-            assert!(matches!(resource.shape.connection_sites(), ConnectionSites::Circumference { radius } if radius > 0.0));
+            assert!(
+                matches!(resource.shape.connection_sites(), ConnectionSites::Circumference { radius } if radius > 0.0)
+            );
         }
     }
 
     #[test]
     fn connection_point_has_no_independent_strength_field() {
-        let ConnectionPoint { x: _, y: _, direction_radians: _ } = ConnectionPoint { x: 0.0, y: 0.0, direction_radians: 0.0 };
+        let ConnectionPoint {
+            x: _,
+            y: _,
+            direction_radians: _,
+        } = ConnectionPoint {
+            x: 0.0,
+            y: 0.0,
+            direction_radians: 0.0,
+        };
     }
 
     #[test]
@@ -705,15 +742,27 @@ mod shape_tests {
 
     #[test]
     fn water_is_a_fluid_with_undetermined_connection_sites() {
-        let water = default_catalog().into_iter().find(|r| r.name == "Water").unwrap();
+        let water = default_catalog()
+            .into_iter()
+            .find(|r| r.name == "Water")
+            .unwrap();
         assert!(matches!(water.shape.form, Form::Fluid { .. }));
-        assert_eq!(water.shape.connection_sites(), ConnectionSites::Undetermined);
+        assert_eq!(
+            water.shape.connection_sites(),
+            ConnectionSites::Undetermined
+        );
     }
 
     #[test]
     fn every_resource_has_a_unique_shape() {
         let catalog = default_catalog();
-        assert_eq!(catalog.iter().filter(|r| matches!(r.shape.form, Form::Circle { .. })).count(), 1);
+        assert_eq!(
+            catalog
+                .iter()
+                .filter(|r| matches!(r.shape.form, Form::Circle { .. }))
+                .count(),
+            1
+        );
         for i in 0..catalog.len() {
             for j in (i + 1)..catalog.len() {
                 assert_ne!(catalog[i].shape.form, catalog[j].shape.form);
@@ -724,8 +773,12 @@ mod shape_tests {
     #[test]
     fn shape_vocabulary_is_actually_exercised() {
         let catalog = default_catalog();
-        assert!(catalog.iter().any(|r| matches!(r.shape.form, Form::Polygon { .. })));
-        assert!(catalog.iter().any(|r| matches!(r.shape.form, Form::RegularPolygon { sides, .. } if sides != 6)));
+        assert!(catalog
+            .iter()
+            .any(|r| matches!(r.shape.form, Form::Polygon { .. })));
+        assert!(catalog
+            .iter()
+            .any(|r| matches!(r.shape.form, Form::RegularPolygon { sides, .. } if sides != 6)));
     }
 
     #[test]
@@ -735,7 +788,10 @@ mod shape_tests {
             let restored: BaseResource = serde_json::from_str(&json).unwrap();
             assert_eq!(restored.name, resource.name);
             assert_eq!(restored.shape.form, resource.shape.form);
-            assert_eq!(restored.shape.connection_sites(), resource.shape.connection_sites());
+            assert_eq!(
+                restored.shape.connection_sites(),
+                resource.shape.connection_sites()
+            );
         }
     }
 }

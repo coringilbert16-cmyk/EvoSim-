@@ -4,8 +4,8 @@
 //! units and bonds are physical. Placement is supplied by the organism.
 
 use crate::combine::{
-    bond_strength, evaluate_formation, experimental_combine_work_cost,
-    experimental_interaction, ExperimentalInteraction, FormationEvaluation,
+    bond_strength, evaluate_formation, experimental_combine_work_cost, experimental_interaction,
+    ExperimentalInteraction, FormationEvaluation,
 };
 use crate::contact::{connection_pair_candidates_cached, ConnectionCompatibilityCache};
 use crate::resources::{BaseResource, Material, ResourceProperties};
@@ -113,8 +113,7 @@ pub fn execute(
         .properties(catalog)
         .ok_or(StructuralCombineError::MissingUnit)?;
     let formation = evaluate_formation(candidate, a.cohesion, b.cohesion);
-    let (interaction, work_cost, _required) =
-        required_investment(*a, *b, formation, water_field)?;
+    let (interaction, work_cost, _required) = required_investment(*a, *b, formation, water_field)?;
 
     if investment < formation.threshold.max(work_cost) {
         return Err(StructuralCombineError::InsufficientInvestment);

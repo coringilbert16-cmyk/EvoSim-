@@ -31,10 +31,7 @@ impl OrganismBodyGeometry {
     ///
     /// A missing catalog resource or invalid geometry invalidates the whole
     /// derived body rather than silently substituting a generic radius.
-    pub fn from_structure(
-        structure: &OrganismStructure,
-        catalog: &[BaseResource],
-    ) -> Option<Self> {
+    pub fn from_structure(structure: &OrganismStructure, catalog: &[BaseResource]) -> Option<Self> {
         if structure.units.is_empty() {
             return None;
         }
@@ -46,7 +43,9 @@ impl OrganismBodyGeometry {
         let mut max_y = f64::NEG_INFINITY;
 
         for (unit_index, unit) in structure.units.iter().enumerate() {
-            let resource = catalog.iter().find(|resource| resource.name == unit.resource_name)?;
+            let resource = catalog
+                .iter()
+                .find(|resource| resource.name == unit.resource_name)?;
             if !resource.shape.is_valid()
                 || !unit.placement.x.is_finite()
                 || !unit.placement.y.is_finite()
@@ -104,11 +103,19 @@ mod tests {
         let mut structure = OrganismStructure::new();
         structure.add_unit(StructuralUnit::new(
             "Carbon",
-            Placement { x: 10.0, y: 20.0, rotation_radians: 0.0 },
+            Placement {
+                x: 10.0,
+                y: 20.0,
+                rotation_radians: 0.0,
+            },
         ));
         structure.add_unit(StructuralUnit::new(
             "Hydrogen",
-            Placement { x: 30.0, y: 20.0, rotation_radians: 0.0 },
+            Placement {
+                x: 30.0,
+                y: 20.0,
+                rotation_radians: 0.0,
+            },
         ));
 
         let body = OrganismBodyGeometry::from_structure(&structure, &catalog).unwrap();
@@ -124,14 +131,22 @@ mod tests {
         let mut one = OrganismStructure::new();
         one.add_unit(StructuralUnit::new(
             "Carbon",
-            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
         ));
         let first = OrganismBodyGeometry::from_structure(&one, &catalog).unwrap();
 
         let mut two = one.clone();
         two.add_unit(StructuralUnit::new(
             "Carbon",
-            Placement { x: 100.0, y: 0.0, rotation_radians: 0.0 },
+            Placement {
+                x: 100.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
         ));
         let second = OrganismBodyGeometry::from_structure(&two, &catalog).unwrap();
 
@@ -141,7 +156,8 @@ mod tests {
 
     #[test]
     fn empty_structure_has_no_physical_body() {
-        let body = OrganismBodyGeometry::from_structure(&OrganismStructure::new(), &default_catalog());
+        let body =
+            OrganismBodyGeometry::from_structure(&OrganismStructure::new(), &default_catalog());
         assert!(body.is_none());
     }
 
@@ -152,7 +168,11 @@ mod tests {
         let mut structure = OrganismStructure::new();
         structure.add_unit(StructuralUnit::new(
             catalog[0].name.clone(),
-            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
         ));
         assert!(OrganismBodyGeometry::from_structure(&structure, &catalog).is_none());
     }

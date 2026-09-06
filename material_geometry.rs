@@ -71,7 +71,9 @@ impl MaterialGeometry {
         for (part_index, ((resource_name, _), placement)) in
             material.parts.iter().zip(placements.iter()).enumerate()
         {
-            let resource = catalog.iter().find(|resource| resource.name == *resource_name)?;
+            let resource = catalog
+                .iter()
+                .find(|resource| resource.name == *resource_name)?;
             if !resource.shape.is_valid()
                 || !placement.x.is_finite()
                 || !placement.y.is_finite()
@@ -107,9 +109,16 @@ impl MaterialGeometry {
     }
 }
 
-pub fn placed_forms_overlap(a: &PlacedMaterialPart, b: &PlacedMaterialPart, tolerance: f64) -> bool {
-    if !tolerance.is_finite() || !a.placement.x.is_finite() || !a.placement.y.is_finite()
-        || !b.placement.x.is_finite() || !b.placement.y.is_finite()
+pub fn placed_forms_overlap(
+    a: &PlacedMaterialPart,
+    b: &PlacedMaterialPart,
+    tolerance: f64,
+) -> bool {
+    if !tolerance.is_finite()
+        || !a.placement.x.is_finite()
+        || !a.placement.y.is_finite()
+        || !b.placement.x.is_finite()
+        || !b.placement.y.is_finite()
     {
         return false;
     }
@@ -124,8 +133,12 @@ pub fn placed_forms_overlap(a: &PlacedMaterialPart, b: &PlacedMaterialPart, tole
         (Form::Circle { radius: ar }, Form::Circle { radius: br }) => {
             center_distance <= ar + br + tolerance
         }
-        (Form::Circle { radius }, polygon) => circle_polygon_overlap(a, *radius, b, polygon, tolerance),
-        (polygon, Form::Circle { radius }) => circle_polygon_overlap(b, *radius, a, polygon, tolerance),
+        (Form::Circle { radius }, polygon) => {
+            circle_polygon_overlap(a, *radius, b, polygon, tolerance)
+        }
+        (polygon, Form::Circle { radius }) => {
+            circle_polygon_overlap(b, *radius, a, polygon, tolerance)
+        }
         (Form::Fluid { .. }, _) | (_, Form::Fluid { .. }) => false,
         _ => polygons_overlap(a, b, tolerance),
     }
@@ -147,13 +160,10 @@ fn circle_polygon_overlap(
     }
 
     let expanded_radius = radius + tolerance;
-    vertices
-        .iter()
-        .enumerate()
-        .any(|(index, &start)| {
-            let end = vertices[(index + 1) % vertices.len()];
-            point_segment_distance(center, start, end) <= expanded_radius
-        })
+    vertices.iter().enumerate().any(|(index, &start)| {
+        let end = vertices[(index + 1) % vertices.len()];
+        point_segment_distance(center, start, end) <= expanded_radius
+    })
 }
 
 fn polygons_overlap(a: &PlacedMaterialPart, b: &PlacedMaterialPart, tolerance: f64) -> bool {
@@ -179,29 +189,40 @@ fn polygons_overlap(a: &PlacedMaterialPart, b: &PlacedMaterialPart, tolerance: f
 fn world_polygon_vertices(form: &Form, placement: Placement) -> Option<Vec<(f64, f64)>> {
     let vertices = form.polygon_vertices()?;
     let (sin, cos) = placement.rotation_radians.sin_cos();
-    Some(vertices.into_iter().map(|(x, y)| {
-        (
-            placement.x + x * cos - y * sin,
-            placement.y + x * sin + y * cos,
-        )
-    }).collect())
+    Some(
+        vertices
+            .into_iter()
+            .map(|(x, y)| {
+                (
+                    placement.x + x * cos - y * sin,
+                    placement.y + x * sin + y * cos,
+                )
+            })
+            .collect(),
+    )
 }
 
 fn polygon_axes(vertices: &[(f64, f64)]) -> Vec<(f64, f64)> {
-    vertices.iter().enumerate().map(|(index, &(x1, y1))| {
-        let (x2, y2) = vertices[(index + 1) % vertices.len()];
-        let edge_x = x2 - x1;
-        let edge_y = y2 - y1;
-        let length = edge_x.hypot(edge_y);
-        (-edge_y / length, edge_x / length)
-    }).collect()
+    vertices
+        .iter()
+        .enumerate()
+        .map(|(index, &(x1, y1))| {
+            let (x2, y2) = vertices[(index + 1) % vertices.len()];
+            let edge_x = x2 - x1;
+            let edge_y = y2 - y1;
+            let length = edge_x.hypot(edge_y);
+            (-edge_y / length, edge_x / length)
+        })
+        .collect()
 }
 
 fn project_polygon(vertices: &[(f64, f64)], axis_x: f64, axis_y: f64) -> (f64, f64) {
-    vertices.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(min, max), &(x, y)| {
-        let projection = x * axis_x + y * axis_y;
-        (min.min(projection), max.max(projection))
-    })
+    vertices
+        .iter()
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(min, max), &(x, y)| {
+            let projection = x * axis_x + y * axis_y;
+            (min.min(projection), max.max(projection))
+        })
 }
 
 fn point_in_polygon(point: (f64, f64), vertices: &[(f64, f64)]) -> bool {
@@ -210,8 +231,7 @@ fn point_in_polygon(point: (f64, f64), vertices: &[(f64, f64)]) -> bool {
     for index in 0..vertices.len() {
         let (x1, y1) = vertices[index];
         let (x2, y2) = vertices[(index + 1) % vertices.len()];
-        let intersects = (y1 > py) != (y2 > py)
-            && px < (x2 - x1) * (py - y1) / (y2 - y1) + x1;
+        let intersects = (y1 > py) != (y2 > py) && px < (x2 - x1) * (py - y1) / (y2 - y1) + x1;
         if intersects {
             inside = !inside;
         }
@@ -242,7 +262,11 @@ mod tests {
         PlacedMaterialPart {
             part_index: 0,
             form,
-            placement: Placement { x, y, rotation_radians },
+            placement: Placement {
+                x,
+                y,
+                rotation_radians,
+            },
         }
     }
 
@@ -250,7 +274,11 @@ mod tests {
     fn geometry_preserves_material_part_identity_and_placement() {
         let catalog = default_catalog();
         let material = Material::free_base("Carbon", 1.0);
-        let placements = [Placement { x: 12.0, y: 8.0, rotation_radians: 0.25 }];
+        let placements = [Placement {
+            x: 12.0,
+            y: 8.0,
+            rotation_radians: 0.25,
+        }];
         let geometry = MaterialGeometry::new(&material, &placements, &catalog).unwrap();
         assert_eq!(geometry.parts.len(), 1);
         assert_eq!(geometry.parts[0].part_index, 0);
@@ -262,8 +290,13 @@ mod tests {
     fn physical_instance_keeps_material_and_geometry_together() {
         let catalog = default_catalog();
         let material = Material::free_base("Carbon", 1.0);
-        let placements = [Placement { x: 4.0, y: 6.0, rotation_radians: 0.0 }];
-        let instance = PhysicalMaterialInstance::new(material.clone(), &placements, &catalog).unwrap();
+        let placements = [Placement {
+            x: 4.0,
+            y: 6.0,
+            rotation_radians: 0.0,
+        }];
+        let instance =
+            PhysicalMaterialInstance::new(material.clone(), &placements, &catalog).unwrap();
         assert_eq!(instance.material, material);
         assert_eq!(instance.geometry.parts[0].placement, placements[0]);
     }
@@ -273,9 +306,16 @@ mod tests {
         let catalog = default_catalog();
         let material = Material {
             parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
-            internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
+            internal_bonds: vec![InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
         };
-        let placements = [Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }];
+        let placements = [Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        }];
         assert!(MaterialGeometry::new(&material, &placements, &catalog).is_none());
     }
 
@@ -283,7 +323,11 @@ mod tests {
     fn invalid_geometry_is_rejected() {
         let catalog = default_catalog();
         let material = Material::free_base("Carbon", 1.0);
-        let placements = [Placement { x: f64::NAN, y: 0.0, rotation_radians: 0.0 }];
+        let placements = [Placement {
+            x: f64::NAN,
+            y: 0.0,
+            rotation_radians: 0.0,
+        }];
         assert!(MaterialGeometry::new(&material, &placements, &catalog).is_none());
     }
 
@@ -303,28 +347,75 @@ mod tests {
 
     #[test]
     fn rotated_polygons_use_actual_shape_not_bounding_radius() {
-        let a = part(Form::Rectangle { width: 4.0, height: 1.0 }, 0.0, 0.0, std::f64::consts::FRAC_PI_2);
-        let b = part(Form::Rectangle { width: 4.0, height: 1.0 }, 3.0, 3.0, 0.0);
+        let a = part(
+            Form::Rectangle {
+                width: 4.0,
+                height: 1.0,
+            },
+            0.0,
+            0.0,
+            std::f64::consts::FRAC_PI_2,
+        );
+        let b = part(
+            Form::Rectangle {
+                width: 4.0,
+                height: 1.0,
+            },
+            3.0,
+            3.0,
+            0.0,
+        );
         assert!(!placed_forms_overlap(&a, &b, 0.0));
     }
 
     #[test]
     fn polygon_contact_is_detected_when_edges_cross() {
-        let a = part(Form::Rectangle { width: 4.0, height: 1.0 }, 0.0, 0.0, 0.0);
-        let b = part(Form::Rectangle { width: 1.0, height: 4.0 }, 0.0, 0.0, 0.0);
+        let a = part(
+            Form::Rectangle {
+                width: 4.0,
+                height: 1.0,
+            },
+            0.0,
+            0.0,
+            0.0,
+        );
+        let b = part(
+            Form::Rectangle {
+                width: 1.0,
+                height: 4.0,
+            },
+            0.0,
+            0.0,
+            0.0,
+        );
         assert!(placed_forms_overlap(&a, &b, 0.0));
     }
 
     #[test]
     fn circle_polygon_contact_is_detected_at_the_boundary() {
         let circle = part(Form::Circle { radius: 1.0 }, 2.0, 0.0, 0.0);
-        let square = part(Form::Rectangle { width: 2.0, height: 2.0 }, 0.0, 0.0, 0.0);
+        let square = part(
+            Form::Rectangle {
+                width: 2.0,
+                height: 2.0,
+            },
+            0.0,
+            0.0,
+            0.0,
+        );
         assert!(placed_forms_overlap(&circle, &square, 0.0));
     }
 
     #[test]
     fn fluid_has_no_invented_spatial_boundary() {
-        let fluid = part(Form::Fluid { nominal_area: 100.0 }, 0.0, 0.0, 0.0);
+        let fluid = part(
+            Form::Fluid {
+                nominal_area: 100.0,
+            },
+            0.0,
+            0.0,
+            0.0,
+        );
         let circle = part(Form::Circle { radius: 10.0 }, 0.0, 0.0, 0.0);
         assert!(!placed_forms_overlap(&fluid, &circle, 0.0));
     }

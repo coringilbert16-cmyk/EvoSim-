@@ -38,9 +38,9 @@ pub fn shared_boundary_length(
             if !ar.is_finite() || !br.is_finite() || *ar <= 0.0 || *br <= 0.0 {
                 return 0.0;
             }
-            let centers_coincident =
-                (a.placement.x - b.placement.x).hypot(a.placement.y - b.placement.y)
-                    <= tolerance.max(GEOMETRIC_EPSILON);
+            let centers_coincident = (a.placement.x - b.placement.x)
+                .hypot(a.placement.y - b.placement.y)
+                <= tolerance.max(GEOMETRIC_EPSILON);
             if centers_coincident && (ar - br).abs() <= tolerance.max(GEOMETRIC_EPSILON) {
                 return std::f64::consts::TAU * ar;
             }
@@ -114,11 +114,7 @@ fn polygon_shared_boundary_length(
     total
 }
 
-fn polygons_interpenetrate(
-    a: &[(f64, f64)],
-    b: &[(f64, f64)],
-    tolerance: f64,
-) -> bool {
+fn polygons_interpenetrate(a: &[(f64, f64)], b: &[(f64, f64)], tolerance: f64) -> bool {
     polygons_have_transverse_boundary_crossing(a, b, tolerance)
         || polygon_has_strictly_interior_boundary_point(a, b, tolerance)
         || polygon_has_strictly_interior_boundary_point(b, a, tolerance)
@@ -203,19 +199,15 @@ fn point_is_strictly_inside_polygon(
     inside
 }
 
-fn point_to_segment_distance(
-    point: (f64, f64),
-    start: (f64, f64),
-    end: (f64, f64),
-) -> f64 {
+fn point_to_segment_distance(point: (f64, f64), start: (f64, f64), end: (f64, f64)) -> f64 {
     let dx = end.0 - start.0;
     let dy = end.1 - start.1;
     let length_squared = dx * dx + dy * dy;
     if length_squared <= GEOMETRIC_EPSILON * GEOMETRIC_EPSILON {
         return (point.0 - start.0).hypot(point.1 - start.1);
     }
-    let t = (((point.0 - start.0) * dx + (point.1 - start.1) * dy) / length_squared)
-        .clamp(0.0, 1.0);
+    let t =
+        (((point.0 - start.0) * dx + (point.1 - start.1) * dy) / length_squared).clamp(0.0, 1.0);
     let projection = (start.0 + t * dx, start.1 + t * dy);
     (point.0 - projection.0).hypot(point.1 - projection.1)
 }
@@ -314,7 +306,15 @@ mod tests {
 
     #[test]
     fn rectangle_boundary_length_is_exact_perimeter() {
-        let rectangle = part(Form::Rectangle { width: 4.0, height: 2.0 }, 0.0, 0.0, 0.0);
+        let rectangle = part(
+            Form::Rectangle {
+                width: 4.0,
+                height: 2.0,
+            },
+            0.0,
+            0.0,
+            0.0,
+        );
         assert!((boundary_length(&rectangle) - 12.0).abs() < 1e-12);
     }
 
@@ -334,50 +334,153 @@ mod tests {
 
     #[test]
     fn crossing_polygons_have_zero_shared_boundary_length() {
-        let a = part(Form::Rectangle { width: 4.0, height: 1.0 }, 0.0, 0.0, 0.0);
-        let b = part(Form::Rectangle { width: 1.0, height: 4.0 }, 0.0, 0.0, 0.0);
+        let a = part(
+            Form::Rectangle {
+                width: 4.0,
+                height: 1.0,
+            },
+            0.0,
+            0.0,
+            0.0,
+        );
+        let b = part(
+            Form::Rectangle {
+                width: 1.0,
+                height: 4.0,
+            },
+            0.0,
+            0.0,
+            0.0,
+        );
         assert_eq!(shared_boundary_length(&a, &b, 0.0), 0.0);
     }
 
     #[test]
     fn overlapping_polygons_with_crossings_do_not_create_a_false_interface() {
-        let a = part(Form::Rectangle { width: 4.0, height: 1.0 }, 0.0, 0.0, 0.0);
-        let b = part(Form::Rectangle { width: 4.0, height: 1.0 }, 0.5, 0.0, 0.0);
+        let a = part(
+            Form::Rectangle {
+                width: 4.0,
+                height: 1.0,
+            },
+            0.0,
+            0.0,
+            0.0,
+        );
+        let b = part(
+            Form::Rectangle {
+                width: 4.0,
+                height: 1.0,
+            },
+            0.5,
+            0.0,
+            0.0,
+        );
         assert_eq!(shared_boundary_length(&a, &b, 0.0), 0.0);
     }
 
     #[test]
     fn contained_polygon_has_no_shared_boundary_length() {
-        let outer = part(Form::Rectangle { width: 6.0, height: 4.0 }, 0.0, 0.0, 0.0);
-        let inner = part(Form::Rectangle { width: 2.0, height: 1.0 }, 0.0, 0.0, 0.0);
+        let outer = part(
+            Form::Rectangle {
+                width: 6.0,
+                height: 4.0,
+            },
+            0.0,
+            0.0,
+            0.0,
+        );
+        let inner = part(
+            Form::Rectangle {
+                width: 2.0,
+                height: 1.0,
+            },
+            0.0,
+            0.0,
+            0.0,
+        );
         assert_eq!(shared_boundary_length(&outer, &inner, 0.0), 0.0);
     }
 
     #[test]
     fn identical_rectangles_share_the_full_perimeter() {
-        let a = part(Form::Rectangle { width: 4.0, height: 2.0 }, 0.0, 0.0, 0.0);
-        let b = part(Form::Rectangle { width: 4.0, height: 2.0 }, 0.0, 0.0, 0.0);
+        let a = part(
+            Form::Rectangle {
+                width: 4.0,
+                height: 2.0,
+            },
+            0.0,
+            0.0,
+            0.0,
+        );
+        let b = part(
+            Form::Rectangle {
+                width: 4.0,
+                height: 2.0,
+            },
+            0.0,
+            0.0,
+            0.0,
+        );
         assert!((shared_boundary_length(&a, &b, 0.0) - 12.0).abs() < 1e-12);
     }
 
     #[test]
     fn partially_shared_collinear_edges_return_exact_overlap() {
-        let a = part(Form::Rectangle { width: 4.0, height: 2.0 }, 0.0, 0.0, 0.0);
-        let b = part(Form::Rectangle { width: 2.0, height: 2.0 }, 3.0, 0.0, 0.0);
+        let a = part(
+            Form::Rectangle {
+                width: 4.0,
+                height: 2.0,
+            },
+            0.0,
+            0.0,
+            0.0,
+        );
+        let b = part(
+            Form::Rectangle {
+                width: 2.0,
+                height: 2.0,
+            },
+            3.0,
+            0.0,
+            0.0,
+        );
         assert!((shared_boundary_length(&a, &b, 0.0) - 2.0).abs() < 1e-12);
     }
 
     #[test]
     fn rotated_identical_polygons_share_the_same_boundary_when_rotation_matches() {
         let angle = std::f64::consts::FRAC_PI_4;
-        let a = part(Form::Rectangle { width: 4.0, height: 2.0 }, 10.0, 20.0, angle);
-        let b = part(Form::Rectangle { width: 4.0, height: 2.0 }, 10.0, 20.0, angle);
+        let a = part(
+            Form::Rectangle {
+                width: 4.0,
+                height: 2.0,
+            },
+            10.0,
+            20.0,
+            angle,
+        );
+        let b = part(
+            Form::Rectangle {
+                width: 4.0,
+                height: 2.0,
+            },
+            10.0,
+            20.0,
+            angle,
+        );
         assert!((shared_boundary_length(&a, &b, 0.0) - 12.0).abs() < 1e-10);
     }
 
     #[test]
     fn fluid_has_no_boundary_length_without_authoritative_geometry() {
-        let fluid = part(Form::Fluid { nominal_area: 100.0 }, 0.0, 0.0, 0.0);
+        let fluid = part(
+            Form::Fluid {
+                nominal_area: 100.0,
+            },
+            0.0,
+            0.0,
+            0.0,
+        );
         assert_eq!(boundary_length(&fluid), 0.0);
         assert_eq!(shared_boundary_length(&fluid, &fluid, 0.0), 0.0);
     }

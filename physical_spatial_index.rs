@@ -66,10 +66,18 @@ impl PhysicalSpatialIndex {
     }
 
     pub fn insert_instance(&mut self, object_index: usize, instance: &PhysicalMaterialInstance) {
-        let Some((min_col, max_col)) = self.index_bounds(instance.geometry.min_x, instance.geometry.max_x, self.width_cells) else {
+        let Some((min_col, max_col)) = self.index_bounds(
+            instance.geometry.min_x,
+            instance.geometry.max_x,
+            self.width_cells,
+        ) else {
             return;
         };
-        let Some((min_row, max_row)) = self.index_bounds(instance.geometry.min_y, instance.geometry.max_y, self.height_cells) else {
+        let Some((min_row, max_row)) = self.index_bounds(
+            instance.geometry.min_y,
+            instance.geometry.max_y,
+            self.height_cells,
+        ) else {
             return;
         };
         for row in min_row..=max_row {
@@ -83,10 +91,12 @@ impl PhysicalSpatialIndex {
         if !x.is_finite() || !y.is_finite() || !radius.is_finite() || radius < 0.0 {
             return Vec::new();
         }
-        let Some((min_col, max_col)) = self.index_bounds(x - radius, x + radius, self.width_cells) else {
+        let Some((min_col, max_col)) = self.index_bounds(x - radius, x + radius, self.width_cells)
+        else {
             return Vec::new();
         };
-        let Some((min_row, max_row)) = self.index_bounds(y - radius, y + radius, self.height_cells) else {
+        let Some((min_row, max_row)) = self.index_bounds(y - radius, y + radius, self.height_cells)
+        else {
             return Vec::new();
         };
         let mut out = Vec::new();
@@ -104,10 +114,18 @@ impl PhysicalSpatialIndex {
         &self,
         instance: &PhysicalMaterialInstance,
     ) -> Vec<usize> {
-        let Some((min_col, max_col)) = self.index_bounds(instance.geometry.min_x, instance.geometry.max_x, self.width_cells) else {
+        let Some((min_col, max_col)) = self.index_bounds(
+            instance.geometry.min_x,
+            instance.geometry.max_x,
+            self.width_cells,
+        ) else {
             return Vec::new();
         };
-        let Some((min_row, max_row)) = self.index_bounds(instance.geometry.min_y, instance.geometry.max_y, self.height_cells) else {
+        let Some((min_row, max_row)) = self.index_bounds(
+            instance.geometry.min_y,
+            instance.geometry.max_y,
+            self.height_cells,
+        ) else {
             return Vec::new();
         };
         let mut out = Vec::new();
@@ -134,7 +152,11 @@ mod tests {
     use crate::structure::Placement;
 
     fn placement(x: f64, y: f64) -> Placement {
-        Placement { x, y, rotation_radians: 0.0 }
+        Placement {
+            x,
+            y,
+            rotation_radians: 0.0,
+        }
     }
 
     #[test]
@@ -142,10 +164,18 @@ mod tests {
         let catalog = default_catalog();
         let mut environment = PhysicalEnvironment::new();
         environment
-            .realize(Material::free_base("Carbon", 1.0), &[placement(10.0, 10.0)], &catalog)
+            .realize(
+                Material::free_base("Carbon", 1.0),
+                &[placement(10.0, 10.0)],
+                &catalog,
+            )
             .unwrap();
         environment
-            .realize(Material::free_base("Carbon", 1.0), &[placement(90.0, 90.0)], &catalog)
+            .realize(
+                Material::free_base("Carbon", 1.0),
+                &[placement(90.0, 90.0)],
+                &catalog,
+            )
             .unwrap();
 
         let mut index = PhysicalSpatialIndex::new(100.0, 100.0, 25.0);
@@ -160,7 +190,11 @@ mod tests {
         let catalog = default_catalog();
         let mut environment = PhysicalEnvironment::new();
         environment
-            .realize(Material::free_base("Carbon", 1.0), &[placement(24.0, 24.0)], &catalog)
+            .realize(
+                Material::free_base("Carbon", 1.0),
+                &[placement(24.0, 24.0)],
+                &catalog,
+            )
             .unwrap();
 
         let mut index = PhysicalSpatialIndex::new(100.0, 100.0, 25.0);

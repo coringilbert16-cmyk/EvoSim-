@@ -128,9 +128,8 @@ fn construction_placement(
             let existing_normal_angle = existing_world.normal_y.atan2(existing_world.normal_x);
 
             for (new_index, &new_point) in new_points.iter().enumerate() {
-                let rotation = existing_normal_angle
-                    + std::f64::consts::PI
-                    - new_point.direction_radians;
+                let rotation =
+                    existing_normal_angle + std::f64::consts::PI - new_point.direction_radians;
                 let (s, c) = rotation.sin_cos();
                 let rotated_x = new_point.x * c - new_point.y * s;
                 let rotated_y = new_point.x * s + new_point.y * c;
@@ -149,7 +148,11 @@ fn construction_placement(
                 let score = distance_from_centroid * (1.0 + compactness)
                     + angular_delta * (1.0 + branching);
 
-                if best.as_ref().map(|(current, _)| score < *current).unwrap_or(true) {
+                if best
+                    .as_ref()
+                    .map(|(current, _)| score < *current)
+                    .unwrap_or(true)
+                {
                     best = Some((score, placement));
                 }
             }
@@ -174,18 +177,23 @@ fn angular_distance(a: f64, b: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::SeedableRng;
     use crate::decision::DecisionHistory;
     use crate::genome::initial_genome;
     use crate::resources::Material;
     use crate::state::{Position, ResourceSense};
+    use rand::SeedableRng;
 
     fn adult_parent(material_amount: f64) -> Organism {
         Organism {
             id: "parent".into(),
             occupied_cells: vec![Position { x: 50.0, y: 50.0 }],
             genome: initial_genome(),
-            resource_sense: ResourceSense { sensed_resources: Vec::new(), direction_x: 0.0, direction_y: 0.0, direction_strength: 0.0 },
+            resource_sense: ResourceSense {
+                sensed_resources: Vec::new(),
+                direction_x: 0.0,
+                direction_y: 0.0,
+                direction_strength: 0.0,
+            },
             memory: Vec::new(),
             decision_history: DecisionHistory::default(),
             usable_energy: 10.0,
@@ -210,7 +218,10 @@ mod tests {
         assert_eq!(parent.stored_material.total_amount(), 2.0);
         assert_eq!(parent.reproductive_readiness, 0.0);
         let construction = parent.reproductive_construction.as_ref().unwrap();
-        assert_eq!(construction.committed_material.total_amount(), CORE_UNIT_COUNT as f64);
+        assert_eq!(
+            construction.committed_material.total_amount(),
+            CORE_UNIT_COUNT as f64
+        );
         assert!(!construction.committed_material.has_internal_structure());
         assert!(construction.developing_structure.units.is_empty());
     }
@@ -250,8 +261,12 @@ mod tests {
             0.0,
         );
         assert!(!candidates.is_empty());
-        assert!(candidates.iter().any(|candidate| candidate.distance <= 1e-12));
-        assert!(candidates.iter().any(|candidate| candidate.facing >= 1.0 - 1e-12));
+        assert!(candidates
+            .iter()
+            .any(|candidate| candidate.distance <= 1e-12));
+        assert!(candidates
+            .iter()
+            .any(|candidate| candidate.facing >= 1.0 - 1e-12));
     }
 
     #[test]
@@ -266,6 +281,9 @@ mod tests {
         }
         assert!(!advance_construction(construction, &catalog));
         assert!(construction.committed_material.is_empty());
-        assert_eq!(construction.developing_structure.units.len(), CORE_UNIT_COUNT);
+        assert_eq!(
+            construction.developing_structure.units.len(),
+            CORE_UNIT_COUNT
+        );
     }
 }

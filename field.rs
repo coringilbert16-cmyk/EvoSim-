@@ -20,7 +20,9 @@ pub struct FieldCell {
 
 impl FieldCell {
     pub fn empty() -> Self {
-        Self { materials: Vec::new() }
+        Self {
+            materials: Vec::new(),
+        }
     }
 
     pub fn total_amount(&self) -> f64 {
@@ -186,15 +188,32 @@ impl ActiveMaterialField {
         }
     }
 
-    pub fn take_at(&mut self, x: f64, y: f64, material_index: usize, amount: f64) -> Option<Material> {
+    pub fn take_at(
+        &mut self,
+        x: f64,
+        y: f64,
+        material_index: usize,
+        amount: f64,
+    ) -> Option<Material> {
         let index = self.index_for_position(x, y)?;
         self.take_at_index(index, material_index, amount)
     }
 
-    pub fn take_at_index(&mut self, index: usize, material_index: usize, amount: f64) -> Option<Material> {
-        let material = self.cells.get_mut(index)?.materials.get_mut(material_index)?;
+    pub fn take_at_index(
+        &mut self,
+        index: usize,
+        material_index: usize,
+        amount: f64,
+    ) -> Option<Material> {
+        let material = self
+            .cells
+            .get_mut(index)?
+            .materials
+            .get_mut(material_index)?;
         let taken = material.take(amount);
-        self.cells[index].materials.retain(|material| !material.is_empty());
+        self.cells[index]
+            .materials
+            .retain(|material| !material.is_empty());
         taken
     }
 
@@ -232,7 +251,9 @@ impl ActiveMaterialField {
                     }
                 }
             }
-            self.cells[i].materials.retain(|material| !material.is_empty());
+            self.cells[i]
+                .materials
+                .retain(|material| !material.is_empty());
         }
 
         for (i, outgoing_cell) in outgoing.iter_mut().enumerate() {

@@ -148,14 +148,8 @@ mod tests {
     fn formation_requires_threshold_and_uses_fraction_of_available_quantity() {
         let rule = PhysicalFormationRule::new("Carbon", 10.0, 0.25).unwrap();
         assert!((rule.amount_to_realize(40.0) - 10.0).abs() < 1e-12);
-        assert!(!rule.eligible(
-            &Material::free_base("Carbon", 9.0),
-            &default_catalog()
-        ));
-        assert!(rule.eligible(
-            &Material::free_base("Carbon", 40.0),
-            &default_catalog()
-        ));
+        assert!(!rule.eligible(&Material::free_base("Carbon", 9.0), &default_catalog()));
+        assert!(rule.eligible(&Material::free_base("Carbon", 40.0), &default_catalog()));
     }
 
     #[test]
@@ -171,11 +165,12 @@ mod tests {
         assert_eq!(apply_physical_formation(&mut environment, &[rule]), 1);
         assert!((environment.field.total_amount() - 15.0).abs() < 1e-12);
         assert!((environment.physical.total_material_amount() - 5.0).abs() < 1e-12);
-        assert!((environment.field.total_amount()
-            + environment.physical.total_material_amount()
-            - before)
-            .abs()
-            < 1e-12);
+        assert!(
+            (environment.field.total_amount() + environment.physical.total_material_amount()
+                - before)
+                .abs()
+                < 1e-12
+        );
     }
 
     #[test]

@@ -70,10 +70,12 @@ impl Genome {
         self.trait_value("adult_mass", 16.0).clamp(4.0, 80.0)
     }
     pub fn construction_compactness(&self) -> f64 {
-        self.trait_value("construction_compactness", 0.5).clamp(0.0, 1.0)
+        self.trait_value("construction_compactness", 0.5)
+            .clamp(0.0, 1.0)
     }
     pub fn construction_branching(&self) -> f64 {
-        self.trait_value("construction_branching", 0.5).clamp(0.0, 1.0)
+        self.trait_value("construction_branching", 0.5)
+            .clamp(0.0, 1.0)
     }
 
     pub fn mutate(&mut self, rng: &mut ChaCha8Rng) {

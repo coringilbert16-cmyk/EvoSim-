@@ -41,7 +41,10 @@ pub struct BlueprintConnection {
 
 impl StructuralBlueprint {
     pub fn new(elements: Vec<BlueprintElement>, connections: Vec<BlueprintConnection>) -> Self {
-        Self { elements, connections }
+        Self {
+            elements,
+            connections,
+        }
     }
 
     pub fn is_valid(&self) -> bool {
@@ -53,10 +56,14 @@ impl StructuralBlueprint {
             return Err("blueprint must contain at least one element".into());
         }
         for (index, element) in self.elements.iter().enumerate() {
-            element.validate().map_err(|error| format!("element {index}: {error}"))?;
+            element
+                .validate()
+                .map_err(|error| format!("element {index}: {error}"))?;
         }
         for (index, connection) in self.connections.iter().enumerate() {
-            connection.validate(self).map_err(|error| format!("connection {index}: {error}"))?;
+            connection
+                .validate(self)
+                .map_err(|error| format!("connection {index}: {error}"))?;
         }
         if self.elements.len() > 1 && !self.is_connected() {
             return Err("multi-element blueprint must be connected".into());
@@ -98,7 +105,9 @@ impl StructuralBlueprint {
                     },
                     catalog,
                 )
-                .ok_or_else(|| format!("connection {connection:?} references an invalid first site"))?;
+                .ok_or_else(|| {
+                    format!("connection {connection:?} references an invalid first site")
+                })?;
             let site_b = structure
                 .connection_site(
                     crate::structure::ConnectionSiteRef {
@@ -107,18 +116,29 @@ impl StructuralBlueprint {
                     },
                     catalog,
                 )
-                .ok_or_else(|| format!("connection {connection:?} references an invalid second site"))?;
+                .ok_or_else(|| {
+                    format!("connection {connection:?} references an invalid second site")
+                })?;
 
-            if !crate::contact::connection_points_contact(site_a, unit_a, site_b, unit_b, 1e-9, 1.0 - 1e-9) {
-                return Err(format!("connection {connection:?} does not realize as physical contact"));
+            if !crate::contact::connection_points_contact(
+                site_a,
+                unit_a,
+                site_b,
+                unit_b,
+                1e-9,
+                1.0 - 1e-9,
+            ) {
+                return Err(format!(
+                    "connection {connection:?} does not realize as physical contact"
+                ));
             }
 
-            let props_a = unit_a
-                .properties(catalog)
-                .ok_or_else(|| "missing catalog properties for first connection endpoint".to_string())?;
-            let props_b = unit_b
-                .properties(catalog)
-                .ok_or_else(|| "missing catalog properties for second connection endpoint".to_string())?;
+            let props_a = unit_a.properties(catalog).ok_or_else(|| {
+                "missing catalog properties for first connection endpoint".to_string()
+            })?;
+            let props_b = unit_b.properties(catalog).ok_or_else(|| {
+                "missing catalog properties for second connection endpoint".to_string()
+            })?;
             let strength = crate::combine::bond_strength(*props_a, *props_b);
             if !strength.is_finite() || !(0.0..=1.0).contains(&strength) {
                 return Err("connection produced invalid intrinsic bond strength".into());
@@ -138,7 +158,9 @@ impl StructuralBlueprint {
     }
 
     pub fn is_connected(&self) -> bool {
-        if self.elements.is_empty() { return false; }
+        if self.elements.is_empty() {
+            return false;
+        }
         let mut visited = vec![false; self.elements.len()];
         let mut stack = vec![0usize];
         visited[0] = true;
@@ -161,11 +183,17 @@ impl StructuralBlueprint {
     }
 
     pub fn total_material_amount(&self) -> f64 {
-        self.elements.iter().map(|element| element.material.total_amount()).sum()
+        self.elements
+            .iter()
+            .map(|element| element.material.total_amount())
+            .sum()
     }
 
     pub fn structural_mass(&self, catalog: &[BaseResource]) -> f64 {
-        self.elements.iter().map(|element| element.material.mass(catalog)).sum()
+        self.elements
+            .iter()
+            .map(|element| element.material.mass(catalog))
+            .sum()
     }
 }
 
@@ -175,7 +203,9 @@ impl BlueprintElement {
             return Err("material is invalid".into());
         }
         if self.material.parts.len() != 1 || self.material.has_internal_structure() {
-            return Err("structural-unit material must contain exactly one unstructured constituent".into());
+            return Err(
+                "structural-unit material must contain exactly one unstructured constituent".into(),
+            );
         }
         let (_, amount) = &self.material.parts[0];
         if !amount.is_finite() || *amount <= 0.0 {
@@ -193,7 +223,8 @@ impl BlueprintElement {
 
 impl BlueprintConnection {
     fn validate(&self, blueprint: &StructuralBlueprint) -> Result<(), String> {
-        if self.element_a >= blueprint.elements.len() || self.element_b >= blueprint.elements.len() {
+        if self.element_a >= blueprint.elements.len() || self.element_b >= blueprint.elements.len()
+        {
             return Err("references a missing element".into());
         }
         if self.element_a == self.element_b {
@@ -208,11 +239,18 @@ mod tests {
     use super::*;
 
     fn placement(x: f64, y: f64) -> Placement {
-        Placement { x, y, rotation_radians: 0.0 }
+        Placement {
+            x,
+            y,
+            rotation_radians: 0.0,
+        }
     }
 
     fn element(name: &str, x: f64, y: f64) -> BlueprintElement {
-        BlueprintElement { material: Material::free_base(name, 1.0), placement: placement(x, y) }
+        BlueprintElement {
+            material: Material::free_base(name, 1.0),
+            placement: placement(x, y),
+        }
     }
 
     #[test]
@@ -243,7 +281,12 @@ mod tests {
     fn connected_multi_element_blueprint_is_valid() {
         let blueprint = StructuralBlueprint::new(
             vec![element("Carbon", 0.0, 0.0), element("Methane", 1.0, 0.0)],
-            vec![BlueprintConnection { element_a: 0, point_a: 0, element_b: 1, point_b: 0 }],
+            vec![BlueprintConnection {
+                element_a: 0,
+                point_a: 0,
+                element_b: 1,
+                point_b: 0,
+            }],
         );
         assert!(blueprint.is_valid());
     }
@@ -252,7 +295,12 @@ mod tests {
     fn invalid_connection_endpoint_is_rejected() {
         let blueprint = StructuralBlueprint::new(
             vec![element("Carbon", 0.0, 0.0)],
-            vec![BlueprintConnection { element_a: 0, point_a: 0, element_b: 1, point_b: 0 }],
+            vec![BlueprintConnection {
+                element_a: 0,
+                point_a: 0,
+                element_b: 1,
+                point_b: 0,
+            }],
         );
         assert!(!blueprint.is_valid());
     }
@@ -261,10 +309,20 @@ mod tests {
     fn realization_creates_runtime_structure_from_blueprint() {
         let catalog = crate::resources::default_catalog();
         let blueprint = StructuralBlueprint::new(
-            vec![element("Carbon", 0.0, 0.0), element("Carbon", 0.877382, 0.0)],
-            vec![BlueprintConnection { element_a: 0, point_a: 0, element_b: 1, point_b: 3 }],
+            vec![
+                element("Carbon", 0.0, 0.0),
+                element("Carbon", 0.877382, 0.0),
+            ],
+            vec![BlueprintConnection {
+                element_a: 0,
+                point_a: 0,
+                element_b: 1,
+                point_b: 3,
+            }],
         );
-        let structure = blueprint.realize(&catalog).expect("blueprint should realize");
+        let structure = blueprint
+            .realize(&catalog)
+            .expect("blueprint should realize");
         assert_eq!(structure.units.len(), 2);
         assert_eq!(structure.bonds.len(), 1);
         assert_eq!(structure.units[0].placement, placement(0.0, 0.0));
@@ -277,7 +335,12 @@ mod tests {
         let catalog = crate::resources::default_catalog();
         let blueprint = StructuralBlueprint::new(
             vec![element("Carbon", 0.0, 0.0), element("Carbon", 10.0, 0.0)],
-            vec![BlueprintConnection { element_a: 0, point_a: 0, element_b: 1, point_b: 3 }],
+            vec![BlueprintConnection {
+                element_a: 0,
+                point_a: 0,
+                element_b: 1,
+                point_b: 3,
+            }],
         );
         assert!(blueprint.realize(&catalog).is_err());
     }

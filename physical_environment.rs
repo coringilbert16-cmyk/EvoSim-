@@ -86,13 +86,20 @@ mod tests {
         let catalog = default_catalog();
         let mut environment = PhysicalEnvironment::new();
         let index = environment
-            .realize(Material::free_base("Carbon", 5.0), &[placement(10.0, 20.0)], &catalog)
+            .realize(
+                Material::free_base("Carbon", 5.0),
+                &[placement(10.0, 20.0)],
+                &catalog,
+            )
             .unwrap();
 
         assert_eq!(index, 0);
         assert_eq!(environment.len(), 1);
         assert_eq!(environment.get(0).unwrap().material.total_amount(), 5.0);
-        assert_eq!(environment.get(0).unwrap().geometry.parts[0].placement, placement(10.0, 20.0));
+        assert_eq!(
+            environment.get(0).unwrap().geometry.parts[0].placement,
+            placement(10.0, 20.0)
+        );
     }
 
     #[test]
@@ -124,10 +131,18 @@ mod tests {
         let catalog = default_catalog();
         let mut environment = PhysicalEnvironment::new();
         environment
-            .realize(Material::free_base("Carbon", 1.0), &[placement(0.0, 0.0)], &catalog)
+            .realize(
+                Material::free_base("Carbon", 1.0),
+                &[placement(0.0, 0.0)],
+                &catalog,
+            )
             .unwrap();
         environment
-            .realize(Material::free_base("Carbon", 1.0), &[placement(100.0, 0.0)], &catalog)
+            .realize(
+                Material::free_base("Carbon", 1.0),
+                &[placement(100.0, 0.0)],
+                &catalog,
+            )
             .unwrap();
 
         assert_eq!(environment.len(), 2);
@@ -142,7 +157,11 @@ mod tests {
         let catalog = default_catalog();
         let mut environment = PhysicalEnvironment::new();
         environment
-            .realize(Material::free_base("Carbon", 2.0), &[placement(0.0, 0.0)], &catalog)
+            .realize(
+                Material::free_base("Carbon", 2.0),
+                &[placement(0.0, 0.0)],
+                &catalog,
+            )
             .unwrap();
 
         let removed = environment.remove(0).unwrap();

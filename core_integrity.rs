@@ -24,7 +24,11 @@ impl CoreIntegrity {
     /// least two bonds to other core units. Extra bonds to the future membrane
     /// are allowed.
     pub fn is_intact(&self, structure: &OrganismStructure) -> bool {
-        if self.unit_indices.iter().any(|&index| index >= structure.units.len()) {
+        if self
+            .unit_indices
+            .iter()
+            .any(|&index| index >= structure.units.len())
+        {
             return false;
         }
 
@@ -56,9 +60,9 @@ impl CoreIntegrity {
         }
 
         let components = structure.connected_components();
-        components.iter().any(|component| {
-            core.iter().all(|unit| component.contains(unit))
-        })
+        components
+            .iter()
+            .any(|component| core.iter().all(|unit| component.contains(unit)))
     }
 }
 

@@ -91,12 +91,9 @@ fn segments_intersect(
     }
 
     tolerance > 0.0 && point_segment_distance(a.0, a.1, c.0, c.1, d.0, d.1) <= tolerance
-        || tolerance > 0.0
-            && point_segment_distance(b.0, b.1, c.0, c.1, d.0, d.1) <= tolerance
-        || tolerance > 0.0
-            && point_segment_distance(c.0, c.1, a.0, a.1, b.0, b.1) <= tolerance
-        || tolerance > 0.0
-            && point_segment_distance(d.0, d.1, a.0, a.1, b.0, b.1) <= tolerance
+        || tolerance > 0.0 && point_segment_distance(b.0, b.1, c.0, c.1, d.0, d.1) <= tolerance
+        || tolerance > 0.0 && point_segment_distance(c.0, c.1, a.0, a.1, b.0, b.1) <= tolerance
+        || tolerance > 0.0 && point_segment_distance(d.0, d.1, a.0, a.1, b.0, b.1) <= tolerance
 }
 
 fn circle_circle_boundary_contact(

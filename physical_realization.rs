@@ -79,7 +79,8 @@ mod tests {
             .field
             .deposit_at_index(0, Material::free_base("Carbon", 10.0));
 
-        let before = environment.field.total_amount() + environment.physical.total_material_amount();
+        let before =
+            environment.field.total_amount() + environment.physical.total_material_amount();
         let index = environment
             .realize_field_material(0, 0, 4.0, &[placement(10.0, 10.0)])
             .unwrap();
@@ -98,12 +99,7 @@ mod tests {
             .field
             .deposit_at_index(0, Material::free_base("Carbon", 10.0));
 
-        let result = environment.realize_field_material(
-            0,
-            0,
-            4.0,
-            &[placement(f64::NAN, 10.0)],
-        );
+        let result = environment.realize_field_material(0, 0, 4.0, &[placement(f64::NAN, 10.0)]);
 
         assert!(result.is_err());
         assert!((environment.field.total_amount() - 10.0).abs() < 1e-12);

@@ -106,7 +106,10 @@ pub fn exposed_boundary(
         return None;
     }
 
-    Some(ExposedBoundary { parts, total_length })
+    Some(ExposedBoundary {
+        parts,
+        total_length,
+    })
 }
 
 #[cfg(test)]

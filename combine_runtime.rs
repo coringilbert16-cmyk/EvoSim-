@@ -89,9 +89,7 @@ pub(crate) fn try_combine(
                 let a = organism.structure.units[unit_a].properties(catalog)?;
                 let b = organism.structure.units[unit_b].properties(catalog)?;
                 Some(crate::combine::evaluate_formation(
-                    candidate,
-                    a.cohesion,
-                    b.cohesion,
+                    candidate, a.cohesion, b.cohesion,
                 ))
             }) {
                 if best
@@ -128,13 +126,8 @@ pub(crate) fn try_combine(
         .unwrap_or(0.0);
 
     let (interaction, work_cost, energy_paid) =
-        crate::structural_combine::required_investment(
-            props_a,
-            props_b,
-            evaluation,
-            water_field,
-        )
-        .ok()?;
+        crate::structural_combine::required_investment(props_a, props_b, evaluation, water_field)
+            .ok()?;
     let surplus = energy_paid - evaluation.threshold;
 
     if organism.usable_energy + EPSILON < energy_paid {

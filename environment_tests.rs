@@ -9,8 +9,14 @@ fn make_raw(name: &str, amount: f64) -> Material {
 
 fn make_structured(amount: f64) -> Material {
     Material {
-        parts: vec![("Carbon".into(), amount / 2.0), ("Hydrogen".into(), amount / 2.0)],
-        internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
+        parts: vec![
+            ("Carbon".into(), amount / 2.0),
+            ("Hydrogen".into(), amount / 2.0),
+        ],
+        internal_bonds: vec![InternalBond {
+            part_a: 0,
+            part_b: 1,
+        }],
     }
 }
 
@@ -47,9 +53,21 @@ fn deposit_preserves_distinct_structures_and_aggregates_raw_stock() {
     field.deposit(500.0, 500.0, make_raw("Carbon", 7.0));
     let cell = &field.cells[field.index_for_position(500.0, 500.0).unwrap()];
     assert_eq!(cell.materials.len(), 3);
-    assert_eq!(cell.materials.iter().filter(|m| m.has_internal_structure()).count(), 2);
+    assert_eq!(
+        cell.materials
+            .iter()
+            .filter(|m| m.has_internal_structure())
+            .count(),
+        2
+    );
     assert!((cell.total_amount() - 30.0).abs() < 1e-9);
-    assert_eq!(cell.materials.iter().filter(|m| !m.has_internal_structure()).count(), 1);
+    assert_eq!(
+        cell.materials
+            .iter()
+            .filter(|m| !m.has_internal_structure())
+            .count(),
+        1
+    );
 }
 
 #[test]
@@ -58,7 +76,9 @@ fn take_removes_up_to_available_amount_from_selected_material() {
     field.deposit(50.0, 50.0, make_raw("Carbon", 4.0));
     let taken = field.take_at(50.0, 50.0, 0, 100.0).unwrap();
     assert!((taken.total_amount() - 4.0).abs() < 1e-9);
-    assert!(field.cells[field.index_for_position(50.0, 50.0).unwrap()].materials.is_empty());
+    assert!(field.cells[field.index_for_position(50.0, 50.0).unwrap()]
+        .materials
+        .is_empty());
 }
 
 #[test]
@@ -157,7 +177,14 @@ fn repeated_diffusion_eventually_spreads_material_across_the_field() {
     for _ in 0..500 {
         field.diffuse_step(0.1);
     }
-    assert!(field.cells.iter().filter(|c| c.total_amount() > 1e-6).count() > 1);
+    assert!(
+        field
+            .cells
+            .iter()
+            .filter(|c| c.total_amount() > 1e-6)
+            .count()
+            > 1
+    );
 }
 
 fn field_and_reservoir() -> (ActiveMaterialField, DeepReservoir) {
@@ -187,13 +214,29 @@ fn vent_draws_only_from_its_own_region_not_a_global_pool() {
     let (mut field, mut reservoir) = field_and_reservoir();
     let region_a_amount = 50.0;
     let region_b_amount = 999.0;
-    let idx_a = reservoir.reservoir_index_for_field_index(&field, field.index_for_position(10.0, 10.0).unwrap());
-    let idx_b = reservoir.reservoir_index_for_field_index(&field, field.index_for_position(900.0, 900.0).unwrap());
+    let idx_a = reservoir
+        .reservoir_index_for_field_index(&field, field.index_for_position(10.0, 10.0).unwrap());
+    let idx_b = reservoir
+        .reservoir_index_for_field_index(&field, field.index_for_position(900.0, 900.0).unwrap());
     reservoir.cells[idx_a].add("Methane", region_a_amount);
     reservoir.cells[idx_b].add("Methane", region_b_amount);
     let mut vents = vec![
-        Vent { x: 10.0, y: 10.0, composition: vec![("Methane".into(), 1.0)], emission_amount: 200.0, emission_interval: 0, emission_timer: 0 },
-        Vent { x: 900.0, y: 900.0, composition: vec![("Methane".into(), 1.0)], emission_amount: 10.0, emission_interval: 0, emission_timer: 0 },
+        Vent {
+            x: 10.0,
+            y: 10.0,
+            composition: vec![("Methane".into(), 1.0)],
+            emission_amount: 200.0,
+            emission_interval: 0,
+            emission_timer: 0,
+        },
+        Vent {
+            x: 900.0,
+            y: 900.0,
+            composition: vec![("Methane".into(), 1.0)],
+            emission_amount: 10.0,
+            emission_interval: 0,
+            emission_timer: 0,
+        },
     ];
     apply_vents(&mut field, &mut reservoir, &mut vents);
     assert!(reservoir.cells[idx_a].amount_of("Methane") < 1e-9);
@@ -210,7 +253,14 @@ fn vent_draw_is_indiscriminate_across_unified_reservoir_stock() {
     reservoir.cells[reservoir_index].add("Carbon", 20.0);
     reservoir.cells[reservoir_index].add("Carbon", 80.0);
     assert!((reservoir.cells[reservoir_index].amount_of("Carbon") - 100.0).abs() < 1e-9);
-    let mut vents = vec![Vent { x: 500.0, y: 500.0, composition: vec![("Carbon".into(), 1.0)], emission_amount: 50.0, emission_interval: 0, emission_timer: 0 }];
+    let mut vents = vec![Vent {
+        x: 500.0,
+        y: 500.0,
+        composition: vec![("Carbon".into(), 1.0)],
+        emission_amount: 50.0,
+        emission_interval: 0,
+        emission_timer: 0,
+    }];
     apply_vents(&mut field, &mut reservoir, &mut vents);
     assert!((field.cells[field_index].total_amount() - 50.0).abs() < 1e-9);
     assert!((reservoir.cells[reservoir_index].amount_of("Carbon") - 50.0).abs() < 1e-9);
@@ -222,7 +272,14 @@ fn vent_releases_reservoir_stock_as_raw_active_material() {
     let field_index = field.index_for_position(500.0, 500.0).unwrap();
     let reservoir_index = reservoir.reservoir_index_for_field_index(&field, field_index);
     reservoir.cells[reservoir_index].add("Carbon", 100.0);
-    let mut vents = vec![Vent { x: 500.0, y: 500.0, composition: vec![("Carbon".into(), 1.0)], emission_amount: 30.0, emission_interval: 0, emission_timer: 0 }];
+    let mut vents = vec![Vent {
+        x: 500.0,
+        y: 500.0,
+        composition: vec![("Carbon".into(), 1.0)],
+        emission_amount: 30.0,
+        emission_interval: 0,
+        emission_timer: 0,
+    }];
     apply_vents(&mut field, &mut reservoir, &mut vents);
     assert!((field.cells[field_index].total_amount() - 30.0).abs() < 1e-9);
     assert!(!field.cells[field_index].materials[0].has_internal_structure());
@@ -235,7 +292,14 @@ fn vent_releases_any_unified_reservoir_stock_as_raw_active_material() {
     let field_index = field.index_for_position(500.0, 500.0).unwrap();
     let reservoir_index = reservoir.reservoir_index_for_field_index(&field, field_index);
     reservoir.cells[reservoir_index].add("Methane", 50.0);
-    let mut vents = vec![Vent { x: 500.0, y: 500.0, composition: vec![("Methane".into(), 1.0)], emission_amount: 20.0, emission_interval: 0, emission_timer: 0 }];
+    let mut vents = vec![Vent {
+        x: 500.0,
+        y: 500.0,
+        composition: vec![("Methane".into(), 1.0)],
+        emission_amount: 20.0,
+        emission_interval: 0,
+        emission_timer: 0,
+    }];
     apply_vents(&mut field, &mut reservoir, &mut vents);
     assert!((field.cells[field_index].total_amount() - 20.0).abs() < 1e-9);
     assert!(!field.cells[field_index].materials[0].has_internal_structure());
@@ -246,7 +310,14 @@ fn vent_releases_any_unified_reservoir_stock_as_raw_active_material() {
 fn venting_conserves_total_material_reservoir_plus_field() {
     let (mut field, mut reservoir) = field_and_reservoir();
     reservoir.seed_uniform("Carbon", 5000.0);
-    let mut vents = vec![Vent { x: 250.0, y: 250.0, composition: vec![("Carbon".into(), 1.0)], emission_amount: 30.0, emission_interval: 2, emission_timer: 0 }];
+    let mut vents = vec![Vent {
+        x: 250.0,
+        y: 250.0,
+        composition: vec![("Carbon".into(), 1.0)],
+        emission_amount: 30.0,
+        emission_interval: 2,
+        emission_timer: 0,
+    }];
     let before = reservoir.total_amount() + field.total_amount();
     for _ in 0..50 {
         apply_vents(&mut field, &mut reservoir, &mut vents);
@@ -301,8 +372,22 @@ fn full_environment_loop_conserves_material_over_many_ticks() {
     reservoir.seed_uniform("Methane", 10_000.0);
     reservoir.seed_uniform("Water", 15_000.0);
     let mut vents = vec![
-        Vent { x: 250.0, y: 250.0, composition: vec![("Carbon".into(), 0.5), ("Methane".into(), 0.5)], emission_amount: 40.0, emission_interval: 5, emission_timer: 0 },
-        Vent { x: 750.0, y: 750.0, composition: vec![("Water".into(), 1.0)], emission_amount: 20.0, emission_interval: 8, emission_timer: 0 },
+        Vent {
+            x: 250.0,
+            y: 250.0,
+            composition: vec![("Carbon".into(), 0.5), ("Methane".into(), 0.5)],
+            emission_amount: 40.0,
+            emission_interval: 5,
+            emission_timer: 0,
+        },
+        Vent {
+            x: 750.0,
+            y: 750.0,
+            composition: vec![("Water".into(), 1.0)],
+            emission_amount: 20.0,
+            emission_interval: 8,
+            emission_timer: 0,
+        },
     ];
     let before = field.total_amount() + reservoir.total_amount();
     for tick in 0..2000u64 {

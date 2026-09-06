@@ -242,12 +242,7 @@ impl OrganismStructure {
 
     /// Derive connection load from the immutable resource properties at each
     /// bond endpoint. Stored `Bond::strength` is deliberately not authoritative.
-    pub fn connection_load(
-        &self,
-        unit: usize,
-        point: usize,
-        catalog: &[BaseResource],
-    ) -> f64 {
+    pub fn connection_load(&self, unit: usize, point: usize, catalog: &[BaseResource]) -> f64 {
         self.bonds
             .iter()
             .filter(|b| b.touches(unit, point))

@@ -71,8 +71,7 @@ pub fn experimental_combine_work_cost(
 ) -> f64 {
     let interaction = experimental_interaction(a, b, candidate, water_field);
     let complexity_factor = 1.0 + ((a.mass.max(0.0) + b.mass.max(0.0)) * 0.5).sqrt();
-    let cohesion_factor =
-        1.0 + ((a.cohesion.clamp(0.0, 1.0) + b.cohesion.clamp(0.0, 1.0)) * 0.5);
+    let cohesion_factor = 1.0 + ((a.cohesion.clamp(0.0, 1.0) + b.cohesion.clamp(0.0, 1.0)) * 0.5);
     (0.25 + interaction.magnitude) * complexity_factor * cohesion_factor
 }
 
@@ -272,11 +271,11 @@ mod tests {
     }
     fn structured_carbon() -> Material {
         Material {
-            parts: vec![
-                ("Carbon".into(), 1.0),
-                ("Carbon".into(), 1.0),
-            ],
-            internal_bonds: vec![crate::resources::InternalBond { part_a: 0, part_b: 1 }],
+            parts: vec![("Carbon".into(), 1.0), ("Carbon".into(), 1.0)],
+            internal_bonds: vec![crate::resources::InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
         }
     }
     fn props(p: f64, r: f64, c: f64) -> ResourceProperties {
@@ -441,8 +440,14 @@ mod tests {
     fn intrinsic_bond_strength_is_bounded_and_rejects_non_finite_cohesion() {
         assert!((bond_strength(props(0.0, 0.0, 0.0), props(0.0, 0.0, 1.0))).abs() < 1e-12);
         assert!((bond_strength(props(0.0, 0.0, 1.0), props(0.0, 0.0, 1.0)) - 1.0).abs() < 1e-12);
-        assert_eq!(bond_strength(props(0.0, 0.0, f64::NAN), props(0.0, 0.0, 1.0)), 0.0);
-        assert_eq!(bond_strength(props(0.0, 0.0, f64::INFINITY), props(0.0, 0.0, 1.0)), 0.0);
+        assert_eq!(
+            bond_strength(props(0.0, 0.0, f64::NAN), props(0.0, 0.0, 1.0)),
+            0.0
+        );
+        assert_eq!(
+            bond_strength(props(0.0, 0.0, f64::INFINITY), props(0.0, 0.0, 1.0)),
+            0.0
+        );
     }
     #[test]
     fn bond_strength_has_capped_diminishing_returns() {
