@@ -45,9 +45,11 @@ pub fn candidates(
     }
 
     let body = OrganismBodyGeometry::from_structure(&organism.structure, catalog)?;
-    let anchor = organism.occupied_cells.first()?;
+    let center_x = (body.min_x + body.max_x) * 0.5;
+    let center_y = (body.min_y + body.max_y) * 0.5;
+    let body_radius = body.bounding_radius_about(center_x, center_y);
     let candidate_indices =
-        spatial_index.candidate_indices(anchor.x, anchor.y, broad_phase_radius);
+        spatial_index.candidate_indices(center_x, center_y, body_radius + broad_phase_radius);
     let mut out = Vec::new();
 
     for object_index in candidate_indices {
