@@ -121,19 +121,21 @@ fn circle_polygon_boundary_contact(
     let Some(vertices) = world_polygon(polygon) else {
         return false;
     };
+
     let eps = tolerance.max(1e-12);
+    let cx = circle.placement.x;
+    let cy = circle.placement.y;
+
+    // A circle boundary intersects a polygon edge when the minimum distance
+    // from the circle center to that finite segment is the circle radius.
+    // The segment calculation is preferable to an infinite-line test because
+    // the closest point must actually lie on the polygon edge.
     vertices.iter().enumerate().any(|(i, &a)| {
         let b = vertices[(i + 1) % vertices.len()];
-        (point_segment_distance(
-            circle.placement.x,
-            circle.placement.y,
-            a.0,
-            a.1,
-            b.0,
-            b.1,
-        ) - radius)
-            .abs()
-            <= eps
+        let distance = point_segment_distance(cx, cy, a.0, a.1, b.0, b.1);
+        let scale = radius.max(distance).max(1.0);
+        let numerical_eps = eps.max(8.0 * f64::EPSILON * scale);
+        (distance - radius).abs() <= numerical_eps
     })
 }
 
@@ -184,10 +186,10 @@ fn placed_form_boundaries_intersect(
 /// Find every organism/material constituent pair whose actual rigid
 /// boundaries touch or intersect.
 ///
-/// This is deliberately a contact primitive, not a permeability or transfer
-/// calculation. A contact proves only that an interface exists. How much
-/// material can cross that interface belongs to the later permeability and
-/// interaction-capacity layers.
+/// This is deliberately a contact primitive, not a permeability or
+/// transfer calculation. A contact proves only that an interface exists.
+/// How much material can cross that interface belongs to the later
+/// permeability and interaction-capacity layers.
 pub fn boundary_contacts(
     body: &OrganismBodyGeometry,
     material: &PhysicalMaterialInstance,
