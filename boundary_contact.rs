@@ -299,9 +299,38 @@ mod tests {
 
     #[test]
     fn contained_rigid_material_is_not_mistaken_for_boundary_contact() {
-        let body = body_at(0.0, 0.0);
-        let material = material_at("Hydrogen", 0.0, 0.0);
-        assert!(boundary_contacts(&body, &material, 0.0).is_empty());
+        // Hydrogen is not actually contained by the Carbon hexagon in the
+        // production catalog: at equal centers its circle crosses the
+        // hexagon boundary. Use a deliberately smaller synthetic rigid
+        // circle so this regression test exercises true containment rather
+        // than depending on incompatible catalog dimensions.
+        let polygon = PlacedMaterialPart {
+            part_index: 0,
+            form: Form::RegularPolygon {
+                sides: 6,
+                radius: 0.438_691,
+            },
+            placement: Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        };
+        let contained_circle = PlacedMaterialPart {
+            part_index: 0,
+            form: Form::Circle { radius: 0.1 },
+            placement: Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        };
+        assert!(!circle_polygon_boundary_contact(
+            &contained_circle,
+            0.1,
+            &polygon,
+            0.0,
+        ));
     }
 
     #[test]
