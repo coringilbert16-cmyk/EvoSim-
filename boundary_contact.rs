@@ -121,6 +121,7 @@ fn circle_polygon_boundary_contact(
     let Some(vertices) = world_polygon(polygon) else {
         return false;
     };
+    let eps = tolerance.max(1e-12);
     vertices.iter().enumerate().any(|(i, &a)| {
         let b = vertices[(i + 1) % vertices.len()];
         (point_segment_distance(
@@ -132,7 +133,7 @@ fn circle_polygon_boundary_contact(
             b.1,
         ) - radius)
             .abs()
-            <= tolerance
+            <= eps
     })
 }
 
