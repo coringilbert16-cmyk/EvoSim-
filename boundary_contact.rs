@@ -90,14 +90,13 @@ fn segments_intersect(
         return true;
     }
 
-    tolerance > 0.0
-        && point_segment_distance(a.0, a.1, c.0, c.1, d.0, d.1) <= tolerance
-        || tolerance > 0.0
-            && point_segment_distance(b.0, b.1, c.0, c.1, d.0, d.1) <= tolerance
-        || tolerance > 0.0
-            && point_segment_distance(c.0, c.1, a.0, a.1, b.0, b.1) <= tolerance
-        || tolerance > 0.0
-            && point_segment_distance(d.0, d.1, a.0, a.1, b.0, b.1) <= tolerance
+    (tolerance > 0.0 && point_segment_distance(a.0, a.1, c.0, c.1, d.0, d.1) <= tolerance)
+        || (tolerance > 0.0
+            && point_segment_distance(b.0, b.1, c.0, c.1, d.0, d.1) <= tolerance)
+        || (tolerance > 0.0
+            && point_segment_distance(c.0, c.1, a.0, a.1, b.0, b.1) <= tolerance)
+        || (tolerance > 0.0
+            && point_segment_distance(d.0, d.1, a.0, a.1, b.0, b.1) <= tolerance)
 }
 
 fn circle_circle_boundary_contact(
@@ -257,7 +256,7 @@ mod tests {
     #[test]
     fn touching_rigid_boundaries_create_an_interface() {
         let body = body_at(0.0, 0.0);
-        let material = material_at("Hydrogen", 1.5, 0.0);
+        let material = material_at("Hydrogen", 0.837_633, 0.0);
         assert_eq!(
             boundary_contacts(&body, &material, 0.0),
             vec![BoundaryContact {
@@ -270,7 +269,7 @@ mod tests {
     #[test]
     fn intersecting_rigid_boundaries_create_an_interface() {
         let body = body_at(0.0, 0.0);
-        let material = material_at("Hydrogen", 1.0, 0.0);
+        let material = material_at("Hydrogen", 0.6, 0.0);
         assert_eq!(
             boundary_contacts(&body, &material, 0.0),
             vec![BoundaryContact {
