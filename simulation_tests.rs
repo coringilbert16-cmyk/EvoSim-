@@ -66,7 +66,9 @@ mod integration_tests {
         let mut s = Simulation::new(21, 10.0);
         let i = s.environment.field.index_for_position(500.0, 500.0).unwrap();
         s.environment.field.deposit_at_index(i, Material::free_base("Carbon", 10.0));
-        s.organisms[0].decision_history.record(ActionKind::Move, None, OutcomeKind::Harmful);
+        s.organisms[0]
+            .decision_history
+            .record(ActionKind::Acquire, Some(format!("target:{i}")), OutcomeKind::Beneficial);
         let before = s.total_material_in_system();
         s.step();
         let after = s.total_material_in_system();
@@ -80,7 +82,9 @@ mod integration_tests {
         let i = s.environment.field.index_for_position(500.0, 500.0).unwrap();
         let m = structured_carbon_hydrogen();
         s.environment.field.deposit_at_index(i, m.clone());
-        s.organisms[0].decision_history.record(ActionKind::Move, None, OutcomeKind::Harmful);
+        s.organisms[0]
+            .decision_history
+            .record(ActionKind::Acquire, Some(format!("target:{i}")), OutcomeKind::Beneficial);
         s.step();
         assert!(s.environment.field.cells[i].materials.is_empty());
         assert_eq!(s.organisms[0].stored_material.materials, vec![m]);
