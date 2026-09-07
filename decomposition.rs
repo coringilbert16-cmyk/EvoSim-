@@ -38,6 +38,8 @@ impl DecomposingBody {
 
 pub(crate) struct DecompositionStep {
     pub(crate) net_energy: f64,
+    pub(crate) bond_energy: f64,
+    pub(crate) break_interaction_energy: f64,
     pub(crate) heat: f64,
     pub(crate) released_material: Option<Vec<Material>>,
 }
@@ -62,7 +64,7 @@ fn water_field_amount(environment: &Environment, position: &Position) -> f64 {
 ///
 /// Negative net energy is paid from the body's carried death budget. Positive
 /// net energy is returned to the caller for possible harvesting by a living
-/// organism; otherwise it can be dissipated by the simulation boundary.
+/// organism; otherwise it can dissipate into the environment.
 pub(crate) fn resolve_one_bond(
     body: &mut DecomposingBody,
     environment: &Environment,
@@ -105,8 +107,6 @@ pub(crate) fn resolve_one_bond(
             return None;
         }
         body.energy_budget -= deficit;
-    } else {
-        body.energy_budget += net;
     }
 
     body.structure.break_matching_bond(target)?;
@@ -125,6 +125,8 @@ pub(crate) fn resolve_one_bond(
 
     Some(DecompositionStep {
         net_energy: net,
+        bond_energy: target.bond_energy,
+        break_interaction_energy,
         heat: work,
         released_material,
     })
