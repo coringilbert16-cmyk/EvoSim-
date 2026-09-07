@@ -152,7 +152,7 @@ fn add_blueprint_element(
         }
         let pa = candidate_structure.units[new_index].properties(catalog)?;
         let pb = candidate_structure.units[other_structure_index].properties(catalog)?;
-        let Some(connection_candidate) = crate::contact::connection_pair_candidates_cached(
+        let connection_candidate = crate::contact::connection_pair_candidates_cached(
             &candidate_structure,
             new_index,
             other_structure_index,
@@ -165,9 +165,7 @@ fn add_blueprint_element(
                 && c.point_b == other_point
                 && c.available_a
                 && c.available_b
-        }) else {
-            return None;
-        };
+        })?;
         let evaluation = crate::combine::evaluate_formation(
             connection_candidate,
             pa.cohesion,
