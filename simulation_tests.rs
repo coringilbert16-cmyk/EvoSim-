@@ -115,6 +115,10 @@ mod integration_tests {
     }
 
     fn add_test_break_bond(s: &mut Simulation) {
+        // Isolate the transformation under test. The initial blueprint bonds
+        // have legacy zero stored energy, so leaving them in place would make
+        // the decision layer select an unrelated bond before the test bond.
+        s.organisms[0].structure.bonds.clear();
         let a = s.organisms[0].structure.add_unit(StructuralUnit::new(
             "Carbon",
             Placement { x: 500.0, y: 500.0, rotation_radians: 0.0 },
@@ -138,7 +142,7 @@ mod integration_tests {
         let mut s = Simulation::new(7, 10.0);
         add_test_break_bond(&mut s);
         s.step();
-        assert_eq!(s.organisms[0].structure.bonds.len(), 313);
+        assert_eq!(s.organisms[0].structure.bonds.len(), 1);
         assert!(s.organisms[0].active_transformation_id.is_some());
     }
 
@@ -185,10 +189,10 @@ mod integration_tests {
         let work = crate::transformation::break_work_cost(a, b, crate::math::complexity(2.0));
         let expected = 12.5 + break_interaction - work;
 
-        assert!(s.organisms[0].structure.bonds.len() < 313);
+        assert!(s.organisms[0].structure.bonds.is_empty());
         assert!((s.organisms[0].usable_energy - expected).abs() < 1e-12);
         assert!(s.organisms[0]
             .decision_history
-            .has_knowledge(ActionKind::Break, Some("bond:312")));
+            .has_knowledge(ActionKind::Break, Some("bond:0")));
     }
 }
