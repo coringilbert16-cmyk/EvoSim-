@@ -126,16 +126,24 @@ fn circle_polygon_boundary_contact(
     let cx = circle.placement.x;
     let cy = circle.placement.y;
 
-    // A circle boundary intersects a polygon edge when the minimum distance
-    // from the circle center to that finite segment is the circle radius.
-    // The segment calculation is preferable to an infinite-line test because
-    // the closest point must actually lie on the polygon edge.
+    // A circle boundary intersects a finite polygon edge when the segment
+    // reaches the circle while also having some point at or outside the
+    // circle. This distinguishes crossing/tangency from a segment wholly
+    // contained inside the circle.
     vertices.iter().enumerate().any(|(i, &a)| {
         let b = vertices[(i + 1) % vertices.len()];
         let distance = point_segment_distance(cx, cy, a.0, a.1, b.0, b.1);
-        let scale = radius.max(distance).max(1.0);
+        let endpoint_a_distance = (cx - a.0).hypot(cy - a.1);
+        let endpoint_b_distance = (cx - b.0).hypot(cy - b.1);
+        let scale = radius
+            .max(distance)
+            .max(endpoint_a_distance)
+            .max(endpoint_b_distance)
+            .max(1.0);
         let numerical_eps = eps.max(8.0 * f64::EPSILON * scale);
-        (distance - radius).abs() <= numerical_eps
+
+        distance <= radius + numerical_eps
+            && endpoint_a_distance.max(endpoint_b_distance) >= radius - numerical_eps
     })
 }
 
