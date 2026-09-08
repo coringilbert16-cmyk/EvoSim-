@@ -13,7 +13,8 @@ use crate::structure::{Bond, OrganismStructure};
 #[derive(Serialize,Deserialize,Clone)]pub(crate)struct PropertyDeviations{pub(crate)mass:f64,pub(crate)potential_energy:f64,pub(crate)reactivity:f64,pub(crate)cohesion:f64}
 #[derive(Serialize,Deserialize,Clone)]pub(crate)struct AffinityResponses{pub(crate)mass:f64,pub(crate)potential_energy:f64,pub(crate)reactivity:f64,pub(crate)cohesion:f64}
 #[derive(Serialize,Deserialize,Clone)]pub(crate)struct ResourceObservation{pub(crate)name:String,pub(crate)properties:crate::resources::ResourceProperties, pub(crate)perceived_amount:f64,pub(crate)deviations:PropertyDeviations,pub(crate)affinity_responses:AffinityResponses,pub(crate)base_desirability:f64,pub(crate)amount_factor:f64,pub(crate)potential_energy_need_factor:f64,pub(crate)desirability:f64,pub(crate)distance:f64,pub(crate)source_x:f64,pub(crate)source_y:f64,pub(crate)field_index:usize}
-#[derive(Serialize,Deserialize,Clone)]pub(crate)struct ResourceSense{pub(crate)sensed_resources:Vec<ResourceObservation>,pub(crate)direction_x:f64,pub(crate)direction_y:f64,pub(crate)direction_strength:f64}
+#[derive(Serialize,Deserialize,Clone)]pub(crate)struct OrganismObservation{pub(crate)id:String,pub(crate)distance:f64,pub(crate)direction_x:f64,pub(crate)direction_y:f64,pub(crate)size:f64}
+#[derive(Serialize,Deserialize,Clone)]pub(crate)struct ResourceSense{pub(crate)sensed_resources:Vec<ResourceObservation>,#[serde(default)]pub(crate)sensed_organisms:Vec<OrganismObservation>,pub(crate)direction_x:f64,pub(crate)direction_y:f64,pub(crate)direction_strength:f64}
 #[derive(Serialize,Deserialize,Clone)]pub(crate)enum DevelopmentStage{Offspring,Juvenile,Adult}
 #[derive(Serialize,Deserialize,Clone,Debug,PartialEq)]pub(crate)struct Position{pub(crate)x:f64,pub(crate)y:f64}
 #[derive(Serialize,Deserialize,Clone,Debug,PartialEq)]pub(crate)struct MemoryPoint{pub(crate)x:f64,pub(crate)y:f64,pub(crate)strength:f64}
