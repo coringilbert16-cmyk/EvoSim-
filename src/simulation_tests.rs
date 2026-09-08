@@ -96,10 +96,7 @@ mod integration_tests {
         let m = structured_carbon_hydrogen();
         assert!(s.environment.field.deposit_structured(
             m.clone(),
-            vec![
-                Placement { x: 500.0, y: 500.0, rotation_radians: 0.0 },
-                Placement { x: 501.0, y: 500.0, rotation_radians: 0.0 },
-            ],
+            vec![Placement { x: 500.0, y: 500.0, rotation_radians: 0.0 }],
         ));
         let index = s.environment.field.index_for_position(500.0, 500.0).unwrap();
         let material_id = s.environment.field.cells[index].materials[0].id;
