@@ -298,6 +298,10 @@ impl OrganismObservation {
             &organism.structure,
             &simulation.environment.catalog,
         )?;
+        let min_x = geometry.min_x;
+        let max_x = geometry.max_x;
+        let min_y = geometry.min_y;
+        let max_y = geometry.max_y;
         let silhouette = geometry
             .parts
             .into_iter()
@@ -312,10 +316,10 @@ impl OrganismObservation {
             id: organism.id.clone(),
             x: position.x,
             y: position.y,
-            min_x: geometry.min_x,
-            max_x: geometry.max_x,
-            min_y: geometry.min_y,
-            max_y: geometry.max_y,
+            min_x,
+            max_x,
+            min_y,
+            max_y,
             silhouette,
             unit_count: organism.structure.units.len(),
             bond_count: organism.structure.bonds.len(),
@@ -458,11 +462,9 @@ mod tests {
     #[test]
     fn projection_rejects_payload_at_the_wrong_level() {
         let context = ObservationContext::world();
-        assert!(ObservationProjection::organism(
-            context,
-            OrganismObservation::from_simulation(&Simulation::new(1, 20.0), "1").unwrap()
-        )
-        .is_none());
+        let simulation = Simulation::new(1, 20.0);
+        let payload = OrganismObservation::from_simulation(&simulation, "1").unwrap();
+        assert!(ObservationProjection::organism(context, payload).is_none());
     }
 
     #[test]
