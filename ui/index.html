@@ -266,7 +266,9 @@
       const ids = [...selectedIds]; if (ids.length < 2) return;
       let index = ids.indexOf(focusedOrganismId); if (index < 0) index = 0;
       index = (index + delta + ids.length) % ids.length;
-      focusedOrganismId = ids[index]; await loadObservation('Structure', focusedOrganismId);
+      focusedOrganismId = ids[index];
+      cameraInitialized = false;
+      await loadObservation('Structure', focusedOrganismId);
     }
 
     canvas.addEventListener('dblclick', async event => {
