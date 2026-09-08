@@ -1,6 +1,10 @@
 // Read-only observation-layer rendering helpers.
 // Resource identity comes from the simulation-side observation endpoint.
 (async function initializeResourceVisualization() {
+  // The old status/header was a temporary HUD. Observation should be the
+  // canvas itself, not a game-style status bar.
+  document.querySelector('header')?.remove();
+
   const paletteState = { resources: new Map(), fieldCellSize: 25 };
 
   function normalizePalette(payload) {
