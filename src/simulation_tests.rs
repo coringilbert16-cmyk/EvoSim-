@@ -64,11 +64,11 @@ mod integration_tests {
     #[test]
     fn acquire_moves_one_free_unit_into_storage_and_conserves_material() {
         let mut s = Simulation::new(21, 10.0);
-        let i = s.environment.field.index_for_position(500.0, 500.0).unwrap();
-        s.environment.field.deposit_at_index(i, Material::free_base("Carbon", 10.0));
+        s.environment.field.deposit(500.0, 500.0, Material::free_base("Carbon", 10.0));
+        let material_id = s.environment.field.cells[s.environment.field.index_for_position(500.0, 500.0).unwrap()].materials[0].id;
         s.organisms[0]
             .decision_history
-            .record(ActionKind::Acquire, Some(format!("target:{i}")), OutcomeKind::Beneficial);
+            .record(ActionKind::Acquire, Some(format!("target:{material_id}")), OutcomeKind::Beneficial);
         let before = s.total_material_in_system();
         s.step();
         let after = s.total_material_in_system();
@@ -77,21 +77,42 @@ mod integration_tests {
     }
 
     #[test]
-    fn acquire_accepts_and_preserves_structured_material() {
-        let mut s = Simulation::new(23, 10.0);
-        let i = s.environment.field.index_for_position(500.0, 500.0).unwrap();
-        let m = structured_carbon_hydrogen();
-        s.environment.field.deposit_at_index(i, m.clone());
+    fn acquire_requires_actual_geometric_contact_not_shared_cell() {
+        let mut s = Simulation::new(24, 10.0);
+        let index = s.environment.field.index_for_position(500.0, 500.0).unwrap();
+        s.environment.field.deposit(500.0, 510.0, Material::free_base("Carbon", 10.0));
+        let material_id = s.environment.field.cells[index].materials.first().map(|m| m.id);
+        assert!(material_id.is_some());
         s.organisms[0]
             .decision_history
-            .record(ActionKind::Acquire, Some(format!("target:{i}")), OutcomeKind::Beneficial);
+            .record(ActionKind::Acquire, Some(format!("target:{}", material_id.unwrap())), OutcomeKind::Beneficial);
         s.step();
-        assert!(s.environment.field.cells[i].materials.is_empty());
-        assert_eq!(s.organisms[0].stored_material.materials, vec![m]);
+        assert!(s.organisms[0].stored_material.is_empty());
     }
 
     #[test]
-    fn acquire_only_considers_the_currently_occupied_field_cell() {
+    fn acquire_does_not_transfer_structured_material_above_experimental_capacity() {
+        let mut s = Simulation::new(23, 10.0);
+        let m = structured_carbon_hydrogen();
+        assert!(s.environment.field.deposit_structured(
+            m.clone(),
+            vec![
+                Placement { x: 500.0, y: 500.0, rotation_radians: 0.0 },
+                Placement { x: 501.0, y: 500.0, rotation_radians: 0.0 },
+            ],
+        ));
+        let index = s.environment.field.index_for_position(500.0, 500.0).unwrap();
+        let material_id = s.environment.field.cells[index].materials[0].id;
+        s.organisms[0]
+            .decision_history
+            .record(ActionKind::Acquire, Some(format!("target:{material_id}")), OutcomeKind::Beneficial);
+        s.step();
+        assert_eq!(s.environment.field.cells[index].materials.len(), 1);
+        assert!(s.organisms[0].stored_material.is_empty());
+    }
+
+    #[test]
+    fn acquire_does_not_reach_remote_field_material() {
         let mut s = Simulation::new(22, 10.0);
         let i = s.environment.field.index_for_position(600.0, 500.0).unwrap();
         s.environment.field.deposit_at_index(i, Material::free_base("Carbon", 10.0));
@@ -119,9 +140,6 @@ mod integration_tests {
     }
 
     fn add_test_break_bond(s: &mut Simulation) {
-        // Isolate the transformation under test. The initial blueprint bonds
-        // have legacy zero stored energy, so leaving them in place would make
-        // the decision layer select an unrelated bond before the test bond.
         s.organisms[0].structure.bonds.clear();
         let a = s.organisms[0].structure.add_unit(StructuralUnit::new(
             "Carbon",
@@ -195,8 +213,9 @@ mod integration_tests {
 
         assert!(s.organisms[0].structure.bonds.is_empty());
         assert!((s.organisms[0].usable_energy - expected).abs() < 1e-12);
-        assert!(s.organisms[0]
-            .decision_history
-            .has_knowledge(ActionKind::Break, Some("bond:0")));
+        assert!(s.organisms[0].decision_history.has_knowledge(
+            ActionKind::Break,
+            Some("bond:61:0:62:0"),
+        ));
     }
 }
