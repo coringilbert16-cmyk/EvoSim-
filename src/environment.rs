@@ -12,7 +12,7 @@ mod settling;
 #[path = "vents.rs"]
 mod vents;
 
-pub use field::{ActiveMaterialField, DEFAULT_CELL_SIZE, DEFAULT_DIFFUSION_FRACTION};
+pub use field::{ActiveMaterialField, DEFAULT_CELL_SIZE, DEFAULT_DIFFUSION_FRACTION, MATERIAL_EPSILON};
 pub use reservoir::{DeepReservoir, DEFAULT_RESERVOIR_BLOCK_SIZE};
 pub use settling::{apply_settling, DEFAULT_SETTLING_FRACTION, DEFAULT_SETTLING_INTERVAL_TICKS};
 pub use vents::{apply_vents, Vent};
