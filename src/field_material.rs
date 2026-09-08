@@ -6,6 +6,7 @@
 //! membership alone.
 
 use serde::{Deserialize, Serialize};
+use std::ops::{Deref, DerefMut};
 
 use crate::material_geometry::PhysicalMaterialInstance;
 use crate::resources::Material;
@@ -19,6 +20,15 @@ pub struct FieldMaterial {
     /// Structured material therefore cannot be represented without explicit
     /// constituent geometry; no implicit internal arrangement is created here.
     pub placements: Vec<Placement>,
+}
+
+impl Deref for FieldMaterial {
+    type Target = Material;
+    fn deref(&self) -> &Self::Target { &self.material }
+}
+
+impl DerefMut for FieldMaterial {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.material }
 }
 
 impl FieldMaterial {
@@ -37,27 +47,13 @@ impl FieldMaterial {
     }
 
     pub fn translated(&self, dx: f64, dy: f64) -> Option<Self> {
-        if !dx.is_finite() || !dy.is_finite() {
-            return None;
-        }
-        let placements = self
-            .placements
-            .iter()
-            .map(|p| Placement {
-                x: p.x + dx,
-                y: p.y + dy,
-                rotation_radians: p.rotation_radians,
-            })
-            .collect();
+        if !dx.is_finite() || !dy.is_finite() { return None; }
+        let placements = self.placements.iter().map(|p| Placement {
+            x: p.x + dx,
+            y: p.y + dy,
+            rotation_radians: p.rotation_radians,
+        }).collect();
         Self::new(self.id, self.material.clone(), placements)
-    }
-
-    pub fn with_material_and_placements(
-        id: u64,
-        material: Material,
-        placements: Vec<Placement>,
-    ) -> Option<Self> {
-        Self::new(id, material, placements)
     }
 }
 
@@ -113,5 +109,16 @@ mod tests {
         assert_eq!(moved.placements[0].y, 15.0);
         assert_eq!(moved.placements[1].x, 36.0);
         assert_eq!(moved.placements[1].y, 15.0);
+    }
+
+    #[test]
+    fn material_fields_remain_accessible_through_deref() {
+        let field = FieldMaterial::new(
+            1,
+            Material::free_base("Carbon", 2.0),
+            vec![Placement { x: 1.0, y: 2.0, rotation_radians: 0.0 }],
+        ).unwrap();
+        assert_eq!(field.parts[0].0, "Carbon");
+        assert_eq!(field.total_amount(), 2.0);
     }
 }
