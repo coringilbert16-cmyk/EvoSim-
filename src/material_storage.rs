@@ -11,6 +11,7 @@ const MATERIAL_EPSILON:f64=1e-12;
 impl MaterialStorage{
  pub(crate)fn is_empty(&self)->bool{self.materials.is_empty()}
  pub(crate)fn total_amount(&self)->f64{self.materials.iter().map(Material::total_amount).sum()}
+ pub(crate)fn has_valid_material(&self)->bool{self.materials.iter().any(|material|!material.is_empty()&&material.is_valid())}
  fn is_discrete(material:&Material)->bool{material.parts.iter().all(|(_,amount)|amount.is_finite()&&*amount>0.0&&amount.fract().abs()<=MATERIAL_EPSILON)}
  pub(crate)fn store(&mut self,material:Material)->bool{if material.parts.is_empty()||!material.is_valid()||!Self::is_discrete(&material){return false}if material.has_internal_structure(){self.materials.push(material);return true}for(name,amount)in material.parts{let count=amount.round()as u64;for _ in 0..count{self.materials.push(Material::free_base(name.clone(),1.0));}}true}
  pub(crate)fn peek_one_unstructured(&self)->Option<Material>{self.materials.iter().find(|material|!material.has_internal_structure()&&!material.is_empty()).cloned()}
@@ -30,6 +31,7 @@ impl MaterialStorage{
  #[test]fn peek_does_not_consume_free_material(){let mut storage=MaterialStorage::default();storage.store(Material::free_base("Carbon",1.0));let peeked=storage.peek_one_unstructured().expect("stored unit");assert_eq!(peeked,Material::free_base("Carbon",1.0));assert_eq!(storage.count_unstructured(),1)}
  #[test]fn structured_material_is_stored_intact(){let mut storage=MaterialStorage::default();let m=compound();assert!(storage.store(m.clone()));assert_eq!(storage.materials,vec![m]);assert_eq!(storage.count_structured(),1)}
  #[test]fn structured_material_is_taken_intact(){let mut storage=MaterialStorage::default();let m=compound();storage.store(m.clone());assert_eq!(storage.take_matching(&m),Some(m.clone()));assert!(storage.is_empty())}
+ #[test]fn valid_materials_make_storage_buildable(){let mut storage=MaterialStorage::default();assert!(!storage.has_valid_material());storage.store(Material::free_base("Carbon",1.0));assert!(storage.has_valid_material());}
  #[test]fn storage_never_merges_independent_atoms(){let mut storage=MaterialStorage::default();storage.store(Material::free_base("Carbon",1.0));storage.store(Material::free_base("Carbon",1.0));assert_eq!(storage.materials.len(),2)}
  #[test]fn storage_never_opens_a_compound(){let mut storage=MaterialStorage::default();let m=compound();storage.store(m.clone());assert!(storage.take_unstructured(1).is_none());assert_eq!(storage.materials,vec![m])}
  #[test]fn fractional_material_is_rejected_at_storage_boundary(){let mut storage=MaterialStorage::default();assert!(!storage.store(Material::free_base("Carbon",1.5)));assert!(storage.is_empty())}
