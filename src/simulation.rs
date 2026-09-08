@@ -12,7 +12,6 @@ use crate::environment::{
 use crate::genome::initial_genome;
 use crate::state::{
     DevelopmentStage, EnergyLedger, Environment, Organism, Position, ResourceSense, Simulation,
-    Snapshot,
 };
 
 const ADULTHOOD_GROWTH_FRACTION: f64 = 0.90;
@@ -78,7 +77,7 @@ impl Simulation {
         for index in finished_indices.into_iter().rev(){self.decomposing_bodies.remove(index);}
     }
 
-    pub(crate) fn step(&mut self)->Snapshot{
+    pub(crate) fn step(&mut self){
         self.tick+=1;self.step_environment();
         let mut still_active=Vec::new();let mut completed=Vec::new();for mut transformation in self.active_transformations.drain(..){if transformation.remaining_ticks>0{transformation.remaining_ticks-=1}if transformation.remaining_ticks==0{completed.push(transformation)}else{still_active.push(transformation)}}self.active_transformations=still_active;
         let mut completed_organisms=HashSet::new();for transformation in &completed{completed_organisms.insert(transformation.organism_id.clone());if let Some(organism)=self.organisms.iter_mut().find(|o|o.id==transformation.organism_id){Self::resolve_transformation(transformation,organism,&mut self.environment,&mut self.energy_ledger);}}
@@ -88,10 +87,9 @@ impl Simulation {
         let mut offspring=Vec::new();let mut next_organism_id=self.next_organism_id;for organism in &mut self.organisms{if organism.reproductive_construction.is_some(){if let Some(construction)=organism.reproductive_construction.as_mut(){if let Some(stress)=crate::reproduction::advance_construction(&mut organism.stored_material,construction,&catalog){organism.add_transaction_stress(stress);}}if organism.reproductive_construction.as_ref().map(|construction|construction.realized_elements.len()==construction.target_elements.len()).unwrap_or(false){let child_id=next_organism_id.to_string();if let Some(child)=crate::reproduction::finish_reproduction(organism,child_id){next_organism_id+=1;offspring.push(child);}}}}self.next_organism_id=next_organism_id;self.organisms.extend(offspring);
         let mut survivors=Vec::with_capacity(self.organisms.len());for mut organism in self.organisms.drain(..){let dead=Self::apply_energy_capacity(&mut organism,&self.environment,&mut self.energy_ledger);if dead{if let Some(body)=Self::recycle_dead_organism(&mut self.environment,&organism){self.decomposing_bodies.push(body);}}else{survivors.push(organism);}}self.organisms=survivors;
         self.process_decomposing_bodies();
-        let live_ids:HashSet<String>=self.organisms.iter().map(|o|o.id.clone()).collect();self.active_transformations.retain(|t|live_ids.contains(&t.organism_id));self.energy_ledger.total_usable_energy_held=self.organisms.iter().map(|o|o.usable_energy).sum();self.snapshot()
+        let live_ids:HashSet<String>=self.organisms.iter().map(|o|o.id.clone()).collect();self.active_transformations.retain(|t|live_ids.contains(&t.organism_id));self.energy_ledger.total_usable_energy_held=self.organisms.iter().map(|o|o.usable_energy).sum();
     }
 
     pub(crate) fn apply_energy_capacity(organism:&mut Organism,environment:&Environment,ledger:&mut EnergyLedger)->bool{organism.stress*=crate::state::STRESS_DECAY_PER_TICK;organism.apply_stress_damage(environment,ledger)}
-    pub(crate) fn snapshot(&self)->Snapshot{Snapshot{tick:self.tick,organisms:self.organisms.clone(),environment:self.environment.clone(),active_transformations:self.active_transformations.clone(),energy_ledger:self.energy_ledger}}
     #[cfg(test)]pub(crate)fn total_material_in_system(&self)->f64{let mut total=self.environment.field.total_amount()+self.environment.reservoir.total_amount();for transformation in &self.active_transformations{total+=transformation.material.total_amount();}for organism in &self.organisms{total+=organism.stored_material.total_amount();if let Some(construction)=&organism.reproductive_construction{total+=construction.committed_material.total_amount();}total+=organism.structure.units.iter().map(|unit|unit.material.material().total_amount()).sum::<f64>();}for body in &self.decomposing_bodies{total+=body.structure.units.iter().map(|unit|unit.material.material().total_amount()).sum::<f64>();}total}
 }
