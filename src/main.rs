@@ -21,6 +21,7 @@ mod boundary_contact;
 mod physical_interface;
 mod permeability;
 mod reproduction;
+mod resource_visualization;
 mod resources;
 mod structural_blueprint;
 mod structural_combine;
@@ -29,11 +30,15 @@ mod structure;
 
 mod memory;
 mod movement;
+mod observation;
 mod perception;
 mod server;
 mod simulation;
 mod state;
 mod transformation;
+
+#[cfg(test)]
+mod observation_contract_tests;
 
 #[cfg(test)]
 mod simulation_tests;

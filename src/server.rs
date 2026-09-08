@@ -1,6 +1,6 @@
 use axum::{
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
-    extract::State,
+    extract::{Path, State},
     response::{Html, IntoResponse},
     routing::get,
     Json, Router,
@@ -12,6 +12,11 @@ use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 use tower_http::cors::CorsLayer;
 
+use crate::observation::{
+    ObservationContext, ObservationProjection, OrganismObservation, StructureObservation,
+    WorldObservation,
+};
+use crate::resource_visualization::appearance;
 use crate::state::{AppState, Simulation};
 
 pub(crate) fn start_tick_loop(
@@ -44,12 +49,85 @@ pub(crate) fn start_tick_loop(
 }
 
 async fn index_handler() -> impl IntoResponse {
-    Html(include_str!("../ui/index.html"))
+    let page = include_str!("../ui/index.html");
+    let resource_visualization = include_str!("../ui/resource_visualization.js");
+    Html(format!(
+        "{page}\n<script>{resource_visualization}</script>"
+    ))
 }
 
 async fn snapshot_handler(State(state): State<AppState>) -> impl IntoResponse {
     let simulation = state.simulation.lock();
     Json(simulation.snapshot())
+}
+
+#[derive(serde::Serialize)]
+struct ObservationStatus {
+    tick: u64,
+    running: bool,
+}
+
+async fn observation_status_handler(State(state): State<AppState>) -> impl IntoResponse {
+    let simulation = state.simulation.lock();
+    Json(ObservationStatus {
+        tick: simulation.tick,
+        running: simulation.running,
+    })
+}
+
+async fn world_observation_handler(State(state): State<AppState>) -> impl IntoResponse {
+    let simulation = state.simulation.lock();
+    Json(ObservationProjection::world(WorldObservation::from_simulation(
+        &simulation,
+    )))
+}
+
+async fn organism_observation_handler(
+    Path(id): Path<String>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let simulation = state.simulation.lock();
+    let Some(observation) = OrganismObservation::from_simulation(&simulation, &id) else {
+        return axum::http::StatusCode::NOT_FOUND.into_response();
+    };
+    let context = ObservationContext::organism(vec![id]);
+    Json(ObservationProjection::organism(context, observation).expect("validated level"))
+        .into_response()
+}
+
+async fn structure_observation_handler(
+    Path(id): Path<String>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let simulation = state.simulation.lock();
+    let Some(observation) = StructureObservation::from_simulation(&simulation, &id) else {
+        return axum::http::StatusCode::NOT_FOUND.into_response();
+    };
+    let context = ObservationContext::structure(vec![id.clone()], Some(id));
+    Json(ObservationProjection::structure(context, observation).expect("validated level"))
+        .into_response()
+}
+
+#[derive(serde::Serialize)]
+struct ResourceVisualizationObservation {
+    resources: Vec<(String, crate::resource_visualization::ResourceAppearance)>,
+    field_cell_size: f64,
+}
+
+async fn resource_visualization_handler(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let simulation = state.simulation.lock();
+    let resources = simulation
+        .environment
+        .catalog
+        .iter()
+        .map(|resource| (resource.name.clone(), appearance(resource)))
+        .collect::<Vec<_>>();
+    Json(ResourceVisualizationObservation {
+        resources,
+        field_cell_size: simulation.environment.field.cell_size,
+    })
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
@@ -91,6 +169,11 @@ pub(crate) async fn run() {
     let app = Router::new()
         .route("/", get(index_handler))
         .route("/snapshot", get(snapshot_handler))
+        .route("/observation/status", get(observation_status_handler))
+        .route("/observation/world", get(world_observation_handler))
+        .route("/observation/organism/{id}", get(organism_observation_handler))
+        .route("/observation/structure/{id}", get(structure_observation_handler))
+        .route("/observation/resources", get(resource_visualization_handler))
         .route("/ws", get(ws_handler))
         .with_state(state)
         .layer(CorsLayer::permissive());
