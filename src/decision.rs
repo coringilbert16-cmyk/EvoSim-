@@ -22,7 +22,7 @@ impl ActionKind {
         match self {
             ActionKind::Move => &[NeedKind::Survival, NeedKind::Reproduction],
             ActionKind::Acquire => &[NeedKind::Survival, NeedKind::Reproduction],
-            ActionKind::Combine => &[NeedKind::Reproduction],
+            ActionKind::Combine => &[NeedKind::Survival, NeedKind::Reproduction],
             ActionKind::Break => &[NeedKind::Survival],
             ActionKind::Expel => &[NeedKind::Survival],
         }
@@ -263,6 +263,22 @@ mod tests {
         let needs = CurrentNeeds {
             survival: 0.0,
             reproduction: 0.5,
+        };
+        assert_eq!(
+            approve_action_for_current_needs(ActionKind::Combine, eligibility, needs),
+            DecisionResult::Approve
+        );
+    }
+
+    #[test]
+    fn survival_pressure_also_makes_combine_relevant() {
+        let eligibility = ActionEligibility {
+            can_combine: true,
+            ..Default::default()
+        };
+        let needs = CurrentNeeds {
+            survival: 0.5,
+            reproduction: 0.0,
         };
         assert_eq!(
             approve_action_for_current_needs(ActionKind::Combine, eligibility, needs),
