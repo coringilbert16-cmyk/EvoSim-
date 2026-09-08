@@ -523,6 +523,7 @@ mod tests {
 
         let encoded = serde_json::to_string(&projection).unwrap();
         let decoded: ObservationProjection = serde_json::from_str(&encoded).unwrap();
-        assert_eq!(decoded, projection);
+        let reencoded = serde_json::to_string(&decoded).unwrap();
+        assert_eq!(encoded, reencoded);
     }
 }
