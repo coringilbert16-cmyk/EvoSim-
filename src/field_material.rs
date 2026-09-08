@@ -16,9 +16,10 @@ use crate::structure::Placement;
 pub struct FieldMaterial {
     pub id: u64,
     pub material: Material,
-    /// One placement for each constituent entry in `material.parts`.
-    /// Structured material therefore cannot be represented without explicit
-    /// constituent geometry; no implicit internal arrangement is created here.
+    /// For free material, one placement is retained per constituent entry.
+    /// For structured material, the material itself is the physical object and
+    /// its rigid external geometry is represented by one authoritative unit
+    /// placement. Internal bonds do not imply independently placed geometry.
     pub placements: Vec<Placement>,
 }
 
@@ -33,7 +34,15 @@ impl DerefMut for FieldMaterial {
 
 impl FieldMaterial {
     pub fn new(id: u64, material: Material, placements: Vec<Placement>) -> Option<Self> {
-        if material.is_empty() || !material.is_valid() || placements.len() != material.parts.len() {
+        if material.is_empty() || !material.is_valid() {
+            return None;
+        }
+        let valid_placement_count = if material.has_internal_structure() {
+            placements.len() == 1
+        } else {
+            placements.len() == material.parts.len()
+        };
+        if !valid_placement_count {
             return None;
         }
         Some(Self { id, material, placements })
@@ -73,20 +82,17 @@ mod tests {
     }
 
     #[test]
-    fn structured_material_requires_one_placement_per_constituent() {
+    fn structured_material_uses_one_authoritative_unit_placement() {
         let material = Material {
             parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
             internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
         };
-        assert!(FieldMaterial::new(1, material.clone(), vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }]).is_none());
         assert!(FieldMaterial::new(
             1,
-            material,
-            vec![
-                Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 },
-            ],
+            material.clone(),
+            vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }],
         ).is_some());
+        assert!(FieldMaterial::new(1, material, vec![]).is_none());
     }
 
     #[test]
@@ -100,15 +106,12 @@ mod tests {
             material,
             vec![
                 Placement { x: 10.0, y: 20.0, rotation_radians: 0.0 },
-                Placement { x: 11.0, y: 20.0, rotation_radians: 0.0 },
             ],
         ).unwrap();
         let moved = field.translated(25.0, -5.0).unwrap();
         assert_eq!(moved.id, 4);
         assert_eq!(moved.placements[0].x, 35.0);
         assert_eq!(moved.placements[0].y, 15.0);
-        assert_eq!(moved.placements[1].x, 36.0);
-        assert_eq!(moved.placements[1].y, 15.0);
     }
 
     #[test]
