@@ -7,7 +7,6 @@ use axum::{
 use parking_lot::Mutex;
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::net::TcpListener;
-use tokio::sync::broadcast;
 use tower_http::cors::CorsLayer;
 
 use crate::observation::{
@@ -17,10 +16,7 @@ use crate::observation::{
 use crate::resource_visualization::appearance;
 use crate::state::{AppState, Simulation};
 
-pub(crate) fn start_tick_loop(
-    simulation: Arc<Mutex<Simulation>>,
-    broadcaster: broadcast::Sender<String>,
-) {
+pub(crate) fn start_tick_loop(simulation: Arc<Mutex<Simulation>>) {
     tokio::spawn(async move {
         loop {
             let tick_duration = {
@@ -34,14 +30,8 @@ pub(crate) fn start_tick_loop(
             };
 
             tokio::time::sleep(tick_duration).await;
-            let snapshot = {
-                let mut sim = simulation.lock();
-                sim.step()
-            };
-
-            if let Ok(json) = serde_json::to_string(&snapshot) {
-                let _ = broadcaster.send(json);
-            }
+            let mut sim = simulation.lock();
+            sim.step();
         }
     });
 }
@@ -124,15 +114,13 @@ async fn resource_visualization_handler(
 }
 
 pub(crate) async fn run() {
-    let (tx, _rx) = broadcast::channel::<String>(128);
     let simulation = Arc::new(Mutex::new(Simulation::new(42, 10.0)));
 
     let state = AppState {
         simulation: simulation.clone(),
-        broadcaster: tx.clone(),
     };
 
-    start_tick_loop(simulation, tx);
+    start_tick_loop(simulation);
 
     let app = Router::new()
         .route("/", get(index_handler))
