@@ -48,7 +48,10 @@ impl ObservationContext {
         }
     }
 
-    pub(crate) fn structure(organism_ids: Vec<String>, focused_organism_id: Option<String>) -> Self {
+    pub(crate) fn structure(
+        organism_ids: Vec<String>,
+        focused_organism_id: Option<String>,
+    ) -> Self {
         Self {
             level: ObservationLevel::Structure,
             organism_ids,
@@ -77,7 +80,10 @@ impl ObservationProjection {
         }
     }
 
-    pub(crate) fn organism(context: ObservationContext, payload: OrganismObservation) -> Option<Self> {
+    pub(crate) fn organism(
+        context: ObservationContext,
+        payload: OrganismObservation,
+    ) -> Option<Self> {
         if context.level != ObservationLevel::Organism {
             return None;
         }
@@ -87,7 +93,10 @@ impl ObservationProjection {
         })
     }
 
-    pub(crate) fn structure(context: ObservationContext, payload: StructureObservation) -> Option<Self> {
+    pub(crate) fn structure(
+        context: ObservationContext,
+        payload: StructureObservation,
+    ) -> Option<Self> {
         if context.level != ObservationLevel::Structure {
             return None;
         }
@@ -149,7 +158,11 @@ mod tests {
     #[test]
     fn projection_rejects_payload_at_the_wrong_level() {
         let context = ObservationContext::world();
-        assert!(ObservationProjection::organism(context, OrganismObservation::default()).is_none());
+        assert!(ObservationProjection::organism(
+            context,
+            OrganismObservation::default()
+        )
+        .is_none());
     }
 
     #[test]
