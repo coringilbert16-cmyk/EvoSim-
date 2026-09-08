@@ -1,7 +1,7 @@
 use crate::resources::Material;
 use crate::state::{
-    AffinityResponses, Environment, Organism, PropertyDeviations, ResourceObservation,
-    DESIRABILITY_AMOUNT_HALF_SATURATION, DESIRABILITY_MAX,
+    AffinityResponses, Environment, Organism, OrganismObservation, PropertyDeviations,
+    ResourceObservation, DESIRABILITY_AMOUNT_HALF_SATURATION, DESIRABILITY_MAX,
 };
 
 /// Below this amount, an unstructured ecological stock is perceived as
@@ -13,14 +13,9 @@ impl crate::state::Simulation {
     pub(crate) fn perceived_amount(material: &Material, sensory_resolution: f64) -> f64 {
         let amount = material.total_amount().max(0.0);
         if material.has_internal_structure() {
-            // A compound is one physical object. Its internal atom count does
-            // not turn it into several separately perceptible field objects.
             return (amount * sensory_resolution).max(0.0);
         }
         if amount < DISCRETE_PERCEPTION_THRESHOLD {
-            // Small free stocks are represented by whole available units to
-            // the organism. Sensory resolution still controls whether those
-            // units are perceptible, but never creates fractional units.
             let visible_units = amount.floor();
             return (visible_units * sensory_resolution.max(0.0)).floor();
         }
@@ -193,5 +188,52 @@ impl crate::state::Simulation {
         let quantized_angle = (angle / step_angle).round() * step_angle;
         organism.resource_sense.direction_x = quantized_angle.cos();
         organism.resource_sense.direction_y = quantized_angle.sin();
+    }
+
+    pub(crate) fn update_organism_perception(
+        organism: &mut Organism,
+        organisms: &[Organism],
+        environment: &Environment,
+    ) {
+        let perception_radius = organism.genome.perception_radius();
+        let (px, py) = {
+            let p = &organism.occupied_cells[0];
+            (p.x, p.y)
+        };
+        organism.resource_sense.sensed_organisms.clear();
+
+        for other in organisms {
+            if other.id == organism.id {
+                continue;
+            }
+            let Some(position) = other.occupied_cells.first() else {
+                continue;
+            };
+            let dx = position.x - px;
+            let dy = position.y - py;
+            let distance = dx.hypot(dy);
+            if !distance.is_finite() || distance > perception_radius {
+                continue;
+            }
+            let direction_x = if distance > 0.0 { dx / distance } else { 0.0 };
+            let direction_y = if distance > 0.0 { dy / distance } else { 0.0 };
+            let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_structure(
+                &other.structure,
+                &environment.catalog,
+            ) else {
+                continue;
+            };
+            let size = body.bounding_radius_about(position.x, position.y);
+            if !size.is_finite() {
+                continue;
+            }
+            organism.resource_sense.sensed_organisms.push(OrganismObservation {
+                id: other.id.clone(),
+                distance,
+                direction_x,
+                direction_y,
+                size,
+            });
+        }
     }
 }
