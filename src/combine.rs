@@ -16,6 +16,8 @@ use crate::resources::{
 use crate::structure::{formation_threshold, OrganismStructure};
 
 const EPSILON: f64 = 1e-12;
+pub const EXPERIMENTAL_BOND_STRENGTH_SCALE: f64 = 1.0;
+pub const EXPERIMENTAL_MAX_BOND_STRENGTH: f64 = 1.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ExperimentalInteraction {
@@ -72,6 +74,15 @@ pub fn experimental_combine_work_cost(
     let cohesion_factor =
         1.0 + ((a.cohesion.clamp(0.0, 1.0) + b.cohesion.clamp(0.0, 1.0)) * 0.5);
     (0.25 + interaction.magnitude) * complexity_factor * cohesion_factor
+}
+
+pub fn experimental_bond_strength(surplus: f64) -> f64 {
+    if !surplus.is_finite() || surplus <= 0.0 {
+        return 0.0;
+    }
+    let scale = EXPERIMENTAL_BOND_STRENGTH_SCALE.max(EPSILON);
+    let max_strength = EXPERIMENTAL_MAX_BOND_STRENGTH.max(0.0);
+    max_strength * (1.0 - (-surplus / scale).exp())
 }
 
 /// Derives the intrinsic strength of a formed bond solely from the immutable
