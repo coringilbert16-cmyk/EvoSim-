@@ -16,10 +16,7 @@ impl OrganismBodyGeometry {
   Some(Self{parts,min_x,max_x,min_y,max_y})
  }
  pub fn bounding_box_contains(&self,x:f64,y:f64)->bool{x>=self.min_x&&x<=self.max_x&&y>=self.min_y&&y<=self.max_y}
- pub fn bounding_radius_about(&self,x:f64,y:f64)->f64{self.parts.iter().map(|p|(p.x-x).hypot(p.y-p.y)+p.form.bounding_radius()).fold(0.0,f64::max)}
- /// Exact point containment against the union of the organism's rigid parts.
- /// The bounding box is only an early rejection; it is never used as the
- /// physical containment result.
+ pub fn bounding_radius_about(&self,x:f64,y:f64)->f64{self.parts.iter().map(|p|(p.x-x).hypot(p.y-y)+p.form.bounding_radius()).fold(0.0,f64::max)}
  pub fn contains_point(&self,x:f64,y:f64)->bool{if !self.bounding_box_contains(x,y){return false}self.parts.iter().any(|part|point_in_placed_form(part,x,y))}
 }
 fn point_in_placed_form(part:&PlacedForm,x:f64,y:f64)->bool{let dx=x-part.x;let dy=y-part.y;match &part.form{Form::Circle{radius}=>dx.hypot(dy)<=*radius+f64::EPSILON,Form::Fluid{..}=>false,_=>{let Some(vertices)=part.form.polygon_vertices()else{return false};let(sin,cos)=part.rotation_radians.sin_cos();let local_x=dx*cos+dy*sin;let local_y=-dx*sin+dy*cos;let mut inside=false;for i in 0..vertices.len(){let(x1,y1)=vertices[i];let(x2,y2)=vertices[(i+1)%vertices.len()];let intersects=(y1>local_y)!=(y2>local_y)&&local_x<(x2-x1)*(local_y-y1)/(y2-y1)+x1;if intersects{inside=!inside}}inside}}
