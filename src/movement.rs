@@ -38,10 +38,32 @@ impl Simulation {
             return false;
         }
 
-        let mut move_x =
-            memory_weight * memory_dir_x + perception_weight * organism.resource_sense.direction_x;
-        let mut move_y =
-            memory_weight * memory_dir_y + perception_weight * organism.resource_sense.direction_y;
+        // Organisms are another perceptual source, using the same directional
+        // movement channel as resource perception. There is deliberately no
+        // social need, aggression rule, or organism-specific action here.
+        let mut organism_dir_x = 0.0;
+        let mut organism_dir_y = 0.0;
+        for observation in &organism.resource_sense.sensed_organisms {
+            organism_dir_x += observation.direction_x;
+            organism_dir_y += observation.direction_y;
+        }
+        let organism_magnitude = (organism_dir_x * organism_dir_x + organism_dir_y * organism_dir_y).sqrt();
+        if organism_magnitude > f64::EPSILON {
+            organism_dir_x /= organism_magnitude;
+            organism_dir_y /= organism_magnitude;
+        }
+
+        let perception_dir_x = organism.resource_sense.direction_x + organism_dir_x;
+        let perception_dir_y = organism.resource_sense.direction_y + organism_dir_y;
+        let perception_magnitude = (perception_dir_x * perception_dir_x + perception_dir_y * perception_dir_y).sqrt();
+        let (perception_dir_x, perception_dir_y) = if perception_magnitude > f64::EPSILON {
+            (perception_dir_x / perception_magnitude, perception_dir_y / perception_magnitude)
+        } else {
+            (0.0, 0.0)
+        };
+
+        let mut move_x = memory_weight * memory_dir_x + perception_weight * perception_dir_x;
+        let mut move_y = memory_weight * memory_dir_y + perception_weight * perception_dir_y;
         let magnitude = (move_x * move_x + move_y * move_y).sqrt();
         if magnitude <= f64::EPSILON {
             return false;
