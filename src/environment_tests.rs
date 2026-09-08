@@ -2,6 +2,7 @@ use super::settling::{apply_settling, DEFAULT_SETTLING_FRACTION, DEFAULT_SETTLIN
 use super::vents::{apply_vents, Vent};
 use super::*;
 use crate::resources::{InternalBond, Material};
+use crate::structure::Placement;
 
 fn make_raw(name: &str, amount: f64) -> Material {
     Material::free_base(name, amount)
@@ -12,6 +13,23 @@ fn make_structured(amount: f64) -> Material {
         parts: vec![("Carbon".into(), amount / 2.0), ("Hydrogen".into(), amount / 2.0)],
         internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
     }
+}
+
+// Structured material has real geometry and therefore must be deposited with
+// explicit constituent placements. The test fixture chooses coincident,
+// known positions intentionally; production code must not infer geometry from
+// a field-cell center.
+fn deposit_structured_at(field: &mut ActiveMaterialField, x: f64, y: f64, material: Material) {
+    let placements = material
+        .parts
+        .iter()
+        .map(|_| Placement {
+            x,
+            y,
+            rotation_radians: 0.0,
+        })
+        .collect();
+    assert!(field.deposit_structured(material, placements));
 }
 
 #[test]
@@ -41,8 +59,8 @@ fn out_of_bounds_position_is_none() {
 #[test]
 fn deposit_preserves_distinct_structures_and_aggregates_raw_stock() {
     let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-    field.deposit(500.0, 500.0, make_structured(10.0));
-    field.deposit(500.0, 500.0, make_structured(10.0));
+    deposit_structured_at(&mut field, 500.0, 500.0, make_structured(10.0));
+    deposit_structured_at(&mut field, 500.0, 500.0, make_structured(10.0));
     field.deposit(500.0, 500.0, make_raw("Carbon", 3.0));
     field.deposit(500.0, 500.0, make_raw("Carbon", 7.0));
     let cell = &field.cells[field.index_for_position(500.0, 500.0).unwrap()];
@@ -65,7 +83,7 @@ fn take_removes_up_to_available_amount_from_selected_material() {
 fn take_from_one_material_does_not_touch_another() {
     let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
     field.deposit(50.0, 50.0, make_raw("Carbon", 4.0));
-    field.deposit(50.0, 50.0, make_structured(9.0));
+    deposit_structured_at(&mut field, 50.0, 50.0, make_structured(9.0));
     let taken = field.take_at(50.0, 50.0, 0, 4.0).unwrap();
     assert!((taken.total_amount() - 4.0).abs() < 1e-9);
     let cell = &field.cells[field.index_for_position(50.0, 50.0).unwrap()];
@@ -116,7 +134,7 @@ fn diffusion_conserves_total_mass_over_many_steps() {
     let mut field = ActiveMaterialField::new(500.0, 500.0, 25.0);
     field.deposit(250.0, 250.0, make_raw("Methane", 500.0));
     field.deposit(50.0, 450.0, make_raw("Carbon", 300.0));
-    field.deposit(0.0, 0.0, make_structured(50.0));
+    deposit_structured_at(&mut field, 0.0, 0.0, make_structured(50.0));
     let before = field.total_amount();
     for _ in 0..200 {
         field.diffuse_step(DEFAULT_DIFFUSION_FRACTION);
@@ -271,7 +289,7 @@ fn settling_moves_raw_active_material_into_the_reservoir() {
 fn settling_preserves_structured_material_in_active_field() {
     let (mut field, mut reservoir) = field_and_reservoir();
     let idx = field.index_for_position(500.0, 500.0).unwrap();
-    field.deposit_at_index(idx, make_structured(100.0));
+    deposit_structured_at(&mut field, 500.0, 500.0, make_structured(100.0));
     for _ in 0..50 {
         apply_settling(&mut field, &mut reservoir, DEFAULT_SETTLING_FRACTION);
     }
@@ -286,7 +304,7 @@ fn settling_conserves_total_material_field_plus_reservoir() {
     let (mut field, mut reservoir) = field_and_reservoir();
     let idx = field.index_for_position(500.0, 500.0).unwrap();
     field.deposit_at_index(idx, make_raw("Water", 300.0));
-    field.deposit_at_index(idx, make_structured(150.0));
+    deposit_structured_at(&mut field, 500.0, 500.0, make_structured(150.0));
     let before = field.total_amount() + reservoir.total_amount();
     for _ in 0..100 {
         apply_settling(&mut field, &mut reservoir, DEFAULT_SETTLING_FRACTION);
