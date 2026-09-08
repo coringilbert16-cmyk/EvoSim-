@@ -125,6 +125,28 @@ impl ActiveMaterialField {
         None
     }
 
+    /// Transfer one physical whole unit from an unstructured field aggregate,
+    /// or transfer an intact structured object when its total mass fits within
+    /// the supplied capacity. The caller is responsible for proving contact
+    /// and deriving the capacity; this method performs no spatial inference.
+    pub fn take_for_acquisition_by_id(&mut self, id: u64, maximum_transfer_amount: f64) -> Option<Material> {
+        if !maximum_transfer_amount.is_finite() || maximum_transfer_amount < 1.0 { return None; }
+        for cell in &mut self.cells {
+            let Some(material_index) = cell.materials.iter().position(|material| material.id == id) else { continue; };
+            let field_material = &mut cell.materials[material_index];
+            if field_material.material.has_internal_structure() {
+                if field_material.material.total_amount() > maximum_transfer_amount + MATERIAL_EPSILON { return None; }
+                let material = field_material.material.clone();
+                cell.materials.swap_remove(material_index);
+                return Some(material);
+            }
+            let taken = take_whole_unstructured(&mut field_material.material, 1)?;
+            cell.materials.retain(|material| !material.material.is_empty());
+            return Some(taken);
+        }
+        None
+    }
+
     pub fn take_at(&mut self, x: f64, y: f64, material_index: usize, amount: f64) -> Option<Material> { let index = self.index_for_position(x, y)?; self.take_at_index(index, material_index, amount) }
     pub fn take_at_index(&mut self, index: usize, material_index: usize, amount: f64) -> Option<Material> {
         let material = self.cells.get_mut(index)?.materials.get_mut(material_index)?;
