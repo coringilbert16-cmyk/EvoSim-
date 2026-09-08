@@ -15,21 +15,18 @@ fn make_structured(amount: f64) -> Material {
     }
 }
 
-// Structured material has real geometry and therefore must be deposited with
-// explicit constituent placements. The test fixture chooses coincident,
-// known positions intentionally; production code must not infer geometry from
-// a field-cell center.
+// Structured material is one rigid physical object, so its external field
+// representation has one authoritative placement. The internal bonds define
+// its shape; they do not create independently placed field constituents.
 fn deposit_structured_at(field: &mut ActiveMaterialField, x: f64, y: f64, material: Material) {
-    let placements = material
-        .parts
-        .iter()
-        .map(|_| Placement {
+    assert!(field.deposit_structured(
+        material,
+        vec![Placement {
             x,
             y,
             rotation_radians: 0.0,
-        })
-        .collect();
-    assert!(field.deposit_structured(material, placements));
+        }],
+    ));
 }
 
 #[test]
