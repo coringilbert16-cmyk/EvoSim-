@@ -29,6 +29,7 @@ mod structure;
 
 mod memory;
 mod movement;
+mod observation;
 mod perception;
 mod server;
 mod simulation;
