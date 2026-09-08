@@ -74,6 +74,10 @@ mod tests {
             appearance(&resource("Methane")),
             ResourceAppearance::new("#F5F5F5", "#C93636", 255)
         );
+        assert_eq!(appearance(&resource("Hydrogen")).fill, "#E8E8E8");
+        assert_eq!(appearance(&resource("Nitrogen")).fill, "#315E9E");
+        assert_eq!(appearance(&resource("Phosphorus")).fill, "#D65A32");
+        assert_eq!(appearance(&resource("Water")).fill, "#CFEFFF");
         assert_eq!(appearance(&resource("Water")).fill_opacity, 72);
     }
 
