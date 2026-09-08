@@ -28,6 +28,7 @@ mod structural_blueprint;
 mod structural_combine;
 mod structural_material;
 mod structure;
+mod water;
 
 mod memory;
 mod movement;
