@@ -1,0 +1,138 @@
+// Read-only observation-layer rendering helpers.
+// Resource identity comes from the simulation-side observation endpoint.
+(async function initializeResourceVisualization() {
+  const paletteState = { resources: new Map(), fieldCellSize: 25 };
+
+  function normalizePalette(payload) {
+    const resources = Array.isArray(payload) ? payload : (payload.resources || []);
+    for (const entry of resources) {
+      if (!Array.isArray(entry) || entry.length !== 2) continue;
+      paletteState.resources.set(entry[0], entry[1]);
+    }
+    if (!Array.isArray(payload) && Number.isFinite(payload.field_cell_size)) {
+      paletteState.fieldCellSize = payload.field_cell_size;
+    }
+  }
+
+  function appearanceFor(name) {
+    return paletteState.resources.get(name) || {
+      fill: '#AAAAAA', outline: '#666666', fill_opacity: 255
+    };
+  }
+
+  function dominantResource(material) {
+    const parts = material?.parts || [];
+    if (!parts.length) return null;
+    const totals = new Map();
+    for (const [name, amount] of parts) {
+      if (!Number.isFinite(amount) || amount <= 0) continue;
+      totals.set(name, (totals.get(name) || 0) + amount);
+    }
+    let best = null;
+    for (const [name, amount] of totals) {
+      if (!best || amount > best.amount) best = { name, amount };
+    }
+    return best?.name || null;
+  }
+
+  function drawField(world, viewport) {
+    if (!world) return;
+    const size = paletteState.fieldCellSize;
+    for (const cell of world.field || []) {
+      const total = (cell.materials || []).reduce((sum, [, amount]) => sum + Math.max(0, amount), 0);
+      if (!(total > 0)) continue;
+      const topLeft = camera.worldToScreen(cell.x - size / 2, cell.y - size / 2, viewport.width, viewport.height);
+      const screenSize = size * camera.scale;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(topLeft.x, topLeft.y, screenSize, screenSize);
+      ctx.clip();
+      let offset = 0;
+      for (const [name, amount] of cell.materials || []) {
+        if (!(amount > 0)) continue;
+        const appearance = appearanceFor(name);
+        const height = screenSize * amount / total;
+        ctx.globalAlpha = Math.max(0.03, Math.min(0.75, appearance.fill_opacity / 255 * 0.65));
+        ctx.fillStyle = appearance.fill;
+        ctx.fillRect(topLeft.x, topLeft.y + offset, screenSize, height);
+        offset += height;
+      }
+      ctx.restore();
+      ctx.save();
+      ctx.strokeStyle = '#242424';
+      ctx.globalAlpha = 0.65;
+      ctx.strokeRect(topLeft.x, topLeft.y, screenSize, screenSize);
+      ctx.restore();
+    }
+  }
+
+  function drawWorldPoints(world, viewport) {
+    for (const point of world.vents || []) {
+      const p = camera.worldToScreen(point.x, point.y, viewport.width, viewport.height);
+      ctx.save();
+      ctx.strokeStyle = '#CFCFCF';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(p.x - 5, p.y); ctx.lineTo(p.x + 5, p.y);
+      ctx.moveTo(p.x, p.y - 5); ctx.lineTo(p.x, p.y + 5);
+      ctx.stroke();
+      ctx.restore();
+    }
+    for (const point of world.decomposing_bodies || []) {
+      const p = camera.worldToScreen(point.x, point.y, viewport.width, viewport.height);
+      ctx.save();
+      ctx.strokeStyle = '#8B8B8B';
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  const originalRenderWorld = renderWorld;
+  renderWorld = function resourceAwareWorldRender() {
+    const world = worldPayload();
+    const viewport = viewportSize();
+    drawField(world, viewport);
+    drawWorldPoints(world, viewport);
+    originalRenderWorld();
+  };
+
+  const originalRenderStructure = renderStructure;
+  renderStructure = function resourceAwareStructureRender() {
+    const structure = structurePayload();
+    if (!structure) return;
+    const viewport = viewportSize();
+    ctx.save();
+    for (const bond of structure.bonds || []) {
+      if (!bond.endpoint_a || !bond.endpoint_b) continue;
+      const a = camera.worldToScreen(bond.endpoint_a.x, bond.endpoint_a.y, viewport.width, viewport.height);
+      const b = camera.worldToScreen(bond.endpoint_b.x, bond.endpoint_b.y, viewport.width, viewport.height);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    ctx.restore();
+    for (const unit of structure.units || []) {
+      if (!unit.form || !unit.placement) continue;
+      const point = camera.worldToScreen(unit.placement.x, unit.placement.y, viewport.width, viewport.height);
+      const resourceName = dominantResource(unit.material);
+      const appearance = appearanceFor(resourceName);
+      ctx.save();
+      ctx.translate(point.x, point.y);
+      ctx.scale(camera.scale, camera.scale);
+      ctx.fillStyle = appearance.fill;
+      ctx.strokeStyle = appearance.outline;
+      ctx.globalAlpha = appearance.fill_opacity / 255;
+      drawForm(unit.form, 0, 0, unit.placement.rotation_radians);
+      ctx.restore();
+    }
+  };
+
+  try {
+    const response = await fetch('/observation/resources', { cache: 'no-store' });
+    if (response.ok) {
+      normalizePalette(await response.json());
+      render();
+    }
+  } catch (_) {
+    // The observation renderer already has a neutral fallback.
+  }
+})();
