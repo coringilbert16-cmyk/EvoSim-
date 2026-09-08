@@ -10,8 +10,8 @@
     header { padding: 10px 14px; background: #1b1b1b; border-bottom: 1px solid #333; }
     #status { font-size: 14px; }
     main { flex: 1; display: flex; align-items: center; justify-content: center; }
-    #world { width: min(90vw, 1000px); height: min(80vh, 700px); background: #050505; border: 1px solid #333; cursor: grab; }
-    #world.dragging { cursor: grabbing; }
+    #world { width: min(90vw, 1000px); height: min(80vh, 700px); background: #050505; border: 1px solid #333; cursor: crosshair; }
+    #world.panning { cursor: grabbing; }
   </style>
 </head>
 <body>
@@ -74,15 +74,23 @@
         this.x += before.x - after.x;
         this.y += before.y - after.y;
       }
+
+      centerOn(x, y) {
+        if (Number.isFinite(x) && Number.isFinite(y)) {
+          this.x = x;
+          this.y = y;
+        }
+      }
     }
 
     const status = document.getElementById('status');
     const canvas = document.getElementById('world');
     const ctx = canvas.getContext('2d');
     const camera = new Camera();
+    const selectedIds = new Set();
+    let observation = null;
     let cameraInitialized = false;
-    let lastSnapshot = null;
-    let dragState = null;
+    let interaction = null;
 
     function resize() {
       const rect = canvas.getBoundingClientRect();
@@ -90,120 +98,288 @@
       canvas.height = Math.max(1, Math.floor(rect.height * devicePixelRatio));
       ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
 
-      if (!cameraInitialized && lastSnapshot) {
-        fitToWorld(lastSnapshot);
+      if (!cameraInitialized && observation) {
+        fitToWorld(observation);
       }
+      render();
     }
 
     function viewportSize() {
-      return {
-        width: canvas.clientWidth,
-        height: canvas.clientHeight,
-      };
+      return { width: canvas.clientWidth, height: canvas.clientHeight };
     }
 
-    function fitToWorld(snapshot) {
-      const worldWidth = snapshot.environment?.width || 1;
-      const worldHeight = snapshot.environment?.height || 1;
+    function worldPayload() {
+      return observation?.payload?.World || null;
+    }
+
+    function fitToWorld(payload) {
       const viewport = viewportSize();
-      camera.fitWorld(worldWidth, worldHeight, viewport.width, viewport.height);
+      camera.fitWorld(payload.width || 1, payload.height || 1, viewport.width, viewport.height);
       cameraInitialized = true;
     }
 
-    function render(snapshot) {
-      lastSnapshot = snapshot;
-      if (!cameraInitialized) {
-        fitToWorld(snapshot);
+    function drawForm(form, x, y, rotation) {
+      if (!form) {
+        return;
       }
 
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rotation || 0);
+      ctx.beginPath();
+
+      if (form.Circle) {
+        ctx.arc(0, 0, form.Circle.radius, 0, Math.PI * 2);
+      } else if (form.Rectangle) {
+        ctx.rect(-form.Rectangle.width / 2, -form.Rectangle.height / 2, form.Rectangle.width, form.Rectangle.height);
+      } else if (form.RegularPolygon) {
+        const sides = form.RegularPolygon.sides;
+        const radius = form.RegularPolygon.radius;
+        for (let i = 0; i < sides; i += 1) {
+          const angle = i * Math.PI * 2 / sides;
+          const px = radius * Math.cos(angle);
+          const py = radius * Math.sin(angle);
+          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+      } else if (form.Polygon) {
+        for (let i = 0; i < form.Polygon.vertices.length; i += 1) {
+          const [px, py] = form.Polygon.vertices[i];
+          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+      } else {
+        // Fluid has no authoritative finite boundary and is therefore not drawn as a fabricated shape.
+        ctx.restore();
+        return;
+      }
+
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawOrganism(organism, viewport) {
+      for (const part of organism.parts || []) {
+        const point = camera.worldToScreen(part.x, part.y, viewport.width, viewport.height);
+        ctx.save();
+        ctx.translate(point.x, point.y);
+        ctx.scale(camera.scale, camera.scale);
+        drawForm(part.form, 0, 0, part.rotation_radians);
+        ctx.restore();
+      }
+
+      if (selectedIds.has(organism.id)) {
+        const topLeft = camera.worldToScreen(organism.min_x, organism.min_y, viewport.width, viewport.height);
+        const bottomRight = camera.worldToScreen(organism.max_x, organism.max_y, viewport.width, viewport.height);
+        ctx.strokeRect(
+          topLeft.x - 3,
+          topLeft.y - 3,
+          bottomRight.x - topLeft.x + 6,
+          bottomRight.y - topLeft.y + 6,
+        );
+      }
+    }
+
+    function drawSelectionRectangle(viewport) {
+      if (!interaction?.selecting) {
+        return;
+      }
+      const x = Math.min(interaction.startX, interaction.currentX);
+      const y = Math.min(interaction.startY, interaction.currentY);
+      const width = Math.abs(interaction.currentX - interaction.startX);
+      const height = Math.abs(interaction.currentY - interaction.startY);
+      ctx.save();
+      ctx.setLineDash([5, 4]);
+      ctx.strokeRect(x, y, width, height);
+      ctx.restore();
+    }
+
+    function render() {
+      const payload = worldPayload();
       const viewport = viewportSize();
       ctx.clearRect(0, 0, viewport.width, viewport.height);
-
-      for (const organism of snapshot.organisms || []) {
-        const cells = organism.occupied_cells || [];
-        for (const cell of cells) {
-          const point = camera.worldToScreen(cell.x, cell.y, viewport.width, viewport.height);
-          ctx.beginPath();
-          ctx.arc(point.x, point.y, Math.max(1, 1.5 * camera.scale), 0, Math.PI * 2);
-          ctx.fill();
-        }
+      if (!payload) {
+        return;
+      }
+      if (!cameraInitialized) {
+        fitToWorld(payload);
       }
 
-      status.textContent = `EvoSim connected — tick ${snapshot.tick ?? '?'}`;
+      for (const organism of payload.organisms || []) {
+        drawOrganism(organism, viewport);
+      }
+      drawSelectionRectangle(viewport);
+
+      status.textContent = `Observing World — ${payload.organisms?.length || 0} organisms — ${selectedIds.size} selected`;
+    }
+
+    function canvasPoint(event) {
+      const rect = canvas.getBoundingClientRect();
+      return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    }
+
+    function organismAtScreenPoint(x, y) {
+      const payload = worldPayload();
+      if (!payload) return null;
+      const viewport = viewportSize();
+      const world = camera.screenToWorld(x, y, viewport.width, viewport.height);
+      for (let i = payload.organisms.length - 1; i >= 0; i -= 1) {
+        const organism = payload.organisms[i];
+        if (world.x >= organism.min_x && world.x <= organism.max_x && world.y >= organism.min_y && world.y <= organism.max_y) {
+          return organism;
+        }
+      }
+      return null;
+    }
+
+    function organismsInScreenRect(startX, startY, endX, endY) {
+      const payload = worldPayload();
+      if (!payload) return [];
+      const viewport = viewportSize();
+      const a = camera.screenToWorld(startX, startY, viewport.width, viewport.height);
+      const b = camera.screenToWorld(endX, endY, viewport.width, viewport.height);
+      const minX = Math.min(a.x, b.x);
+      const maxX = Math.max(a.x, b.x);
+      const minY = Math.min(a.y, b.y);
+      const maxY = Math.max(a.y, b.y);
+
+      return payload.organisms.filter(organism =>
+        organism.max_x >= minX && organism.min_x <= maxX &&
+        organism.max_y >= minY && organism.min_y <= maxY,
+      );
+    }
+
+    function centerSelection() {
+      const payload = worldPayload();
+      if (!payload || selectedIds.size === 0) return;
+      const selected = payload.organisms.filter(organism => selectedIds.has(organism.id));
+      if (selected.length === 0) return;
+      const center = selected.reduce((sum, organism) => ({
+        x: sum.x + (organism.min_x + organism.max_x) / 2,
+        y: sum.y + (organism.min_y + organism.max_y) / 2,
+      }), { x: 0, y: 0 });
+      camera.centerOn(center.x / selected.length, center.y / selected.length);
+    }
+
+    function finishSelection(point) {
+      const moved = Math.hypot(point.x - interaction.startX, point.y - interaction.startY);
+      if (moved < 5) {
+        const organism = organismAtScreenPoint(point.x, point.y);
+        if (organism) {
+          selectedIds.add(organism.id);
+          centerSelection();
+        } else {
+          selectedIds.clear();
+        }
+      } else {
+        const organisms = organismsInScreenRect(
+          interaction.startX,
+          interaction.startY,
+          point.x,
+          point.y,
+        );
+        selectedIds.clear();
+        for (const organism of organisms) {
+          selectedIds.add(organism.id);
+        }
+        centerSelection();
+      }
+      interaction = null;
+      render();
     }
 
     canvas.addEventListener('wheel', event => {
       event.preventDefault();
-      const rect = canvas.getBoundingClientRect();
+      const point = canvasPoint(event);
       const viewport = viewportSize();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
       const factor = Math.exp(-event.deltaY * 0.001);
-      camera.zoomAt(x, y, factor, viewport.width, viewport.height);
-      if (lastSnapshot) {
-        render(lastSnapshot);
-      }
+      camera.zoomAt(point.x, point.y, factor, viewport.width, viewport.height);
+      render();
     }, { passive: false });
 
     canvas.addEventListener('pointerdown', event => {
-      if (event.button !== 0) {
+      if (event.button === 1) {
+        canvas.setPointerCapture(event.pointerId);
+        interaction = {
+          pointerId: event.pointerId,
+          panning: true,
+          lastX: event.clientX,
+          lastY: event.clientY,
+        };
+        canvas.classList.add('panning');
         return;
       }
+      if (event.button !== 0) return;
+
+      const point = canvasPoint(event);
       canvas.setPointerCapture(event.pointerId);
-      dragState = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
-      canvas.classList.add('dragging');
+      interaction = {
+        pointerId: event.pointerId,
+        selecting: true,
+        startX: point.x,
+        startY: point.y,
+        currentX: point.x,
+        currentY: point.y,
+      };
     });
 
     canvas.addEventListener('pointermove', event => {
-      if (!dragState || dragState.pointerId !== event.pointerId) {
+      if (!interaction || interaction.pointerId !== event.pointerId) return;
+      if (interaction.panning) {
+        const dx = event.clientX - interaction.lastX;
+        const dy = event.clientY - interaction.lastY;
+        interaction.lastX = event.clientX;
+        interaction.lastY = event.clientY;
+        camera.pan(dx, dy);
+        render();
         return;
       }
-      const dx = event.clientX - dragState.x;
-      const dy = event.clientY - dragState.y;
-      dragState.x = event.clientX;
-      dragState.y = event.clientY;
-      camera.pan(dx, dy);
-      if (lastSnapshot) {
-        render(lastSnapshot);
+
+      if (interaction.selecting) {
+        const point = canvasPoint(event);
+        interaction.currentX = point.x;
+        interaction.currentY = point.y;
+        render();
       }
     });
 
-    function endDrag(event) {
-      if (!dragState || dragState.pointerId !== event.pointerId) {
+    function endPointer(event) {
+      if (!interaction || interaction.pointerId !== event.pointerId) return;
+      if (interaction.panning) {
+        interaction = null;
+        canvas.classList.remove('panning');
         return;
       }
-      dragState = null;
-      canvas.classList.remove('dragging');
+      finishSelection(canvasPoint(event));
     }
 
-    canvas.addEventListener('pointerup', endDrag);
-    canvas.addEventListener('pointercancel', endDrag);
+    canvas.addEventListener('pointerup', endPointer);
+    canvas.addEventListener('pointercancel', () => {
+      interaction = null;
+      canvas.classList.remove('panning');
+      render();
+    });
     canvas.addEventListener('lostpointercapture', () => {
-      dragState = null;
-      canvas.classList.remove('dragging');
+      interaction = null;
+      canvas.classList.remove('panning');
     });
 
     window.addEventListener('resize', resize);
     resize();
 
-    function connect() {
-      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const socket = new WebSocket(`${protocol}//${location.host}/ws`);
-
-      socket.addEventListener('open', () => {
-        status.textContent = 'EvoSim connected';
-      });
-      socket.addEventListener('message', event => {
-        try { render(JSON.parse(event.data)); } catch (_) {}
-      });
-      socket.addEventListener('close', () => {
-        status.textContent = 'EvoSim disconnected — retrying…';
-        setTimeout(connect, 1000);
-      });
-      socket.addEventListener('error', () => socket.close());
+    async function refreshObservation() {
+      try {
+        const response = await fetch('/observation/world', { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        observation = await response.json();
+        render();
+      } catch (_) {
+        status.textContent = 'Observation unavailable — retrying…';
+      }
     }
 
-    connect();
+    refreshObservation();
+    setInterval(refreshObservation, 250);
   </script>
 </body>
 </html>
