@@ -1,5 +1,6 @@
 // Active material field: fixed-resolution 2D grid holding ecological material stock.
 
+use crate::field_material::FieldMaterial;
 use crate::material_transfer::take_whole_unstructured;
 use crate::resources::{merge_parts, Material};
 use serde::{Deserialize, Serialize};
@@ -11,18 +12,19 @@ pub const MATERIAL_EPSILON: f64 = 1e-9;
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FieldCell {
     /// Ecological stock occupying this field cell.
-    /// Unstructured base stock may be aggregated for field physics. Structured
-    /// material remains a distinct object and is never fractionally split.
-    pub materials: Vec<Material>,
+    /// Every entry is now a spatially represented material instance. Base
+    /// stock may still be aggregated, but its placement is explicit and is
+    /// the cell's physical center; structured material retains its own form.
+    pub materials: Vec<FieldMaterial>,
 }
 
 impl FieldCell {
     pub fn empty() -> Self { Self { materials: Vec::new() } }
-    pub fn total_amount(&self) -> f64 { self.materials.iter().map(Material::total_amount).sum() }
+    pub fn total_amount(&self) -> f64 { self.materials.iter().map(|m| m.material.total_amount()).sum() }
     pub fn total_material(&self) -> Vec<(String, f64)> {
         let mut totals = Vec::new();
-        for material in &self.materials {
-            for (name, amount) in &material.parts {
+        for field_material in &self.materials {
+            for (name, amount) in &field_material.material.parts {
                 if let Some(existing) = totals.iter_mut().find(|(n, _)| n == name) { existing.1 += amount; }
                 else { totals.push((name.clone(), *amount)); }
             }
@@ -37,6 +39,7 @@ pub struct ActiveMaterialField {
     pub width_cells: usize,
     pub height_cells: usize,
     pub cells: Vec<FieldCell>,
+    next_material_id: u64,
 }
 
 impl ActiveMaterialField {
@@ -45,7 +48,7 @@ impl ActiveMaterialField {
         let width_cells = (world_width / cell_size).ceil().max(1.0) as usize;
         let height_cells = (world_height / cell_size).ceil().max(1.0) as usize;
         let cells = (0..width_cells * height_cells).map(|_| FieldCell::empty()).collect();
-        Self { cell_size, width_cells, height_cells, cells }
+        Self { cell_size, width_cells, height_cells, cells, next_material_id: 1 }
     }
     pub fn row_col_for_position(&self, x: f64, y: f64) -> Option<(usize, usize)> {
         if !x.is_finite() || !y.is_finite() || x < 0.0 || y < 0.0 { return None; }
@@ -71,14 +74,13 @@ impl ActiveMaterialField {
         if row > 0 { out.push((row - 1) * self.width_cells + col); } if row + 1 < self.height_cells { out.push((row + 1) * self.width_cells + col); }
         if col > 0 { out.push(row * self.width_cells + (col - 1)); } if col + 1 < self.width_cells { out.push(row * self.width_cells + (col + 1)); } out
     }
+    fn allocate_id(&mut self) -> u64 { let id = self.next_material_id; self.next_material_id = self.next_material_id.saturating_add(1); id }
     pub fn deposit(&mut self, x: f64, y: f64, material: Material) -> bool { match self.index_for_position(x, y) { Some(index) => { self.deposit_at_index(index, material); true }, None => false } }
     pub fn deposit_at_index(&mut self, index: usize, material: Material) {
         if material.is_empty() || !material.is_valid() { return; }
-        let cell = &mut self.cells[index];
-        if material.has_internal_structure() { cell.materials.push(material); return; }
-        if let Some(existing) = cell.materials.iter_mut().find(|existing| !existing.has_internal_structure()) {
-            let mut parts = std::mem::take(&mut existing.parts); parts.extend(material.parts); existing.parts = merge_parts(&parts);
-        } else { cell.materials.push(material); }
+        let placement = { let (x, y) = self.cell_center(index); crate::structure::Placement { x, y, rotation_radians: 0.0 } };
+        let id = self.allocate_id();
+        self.cells[index].materials.push(FieldMaterial::new(id, material, placement));
     }
     pub fn take_at(&mut self, x: f64, y: f64, material_index: usize, amount: f64) -> Option<Material> {
         let index = self.index_for_position(x, y)?; self.take_at_index(index, material_index, amount)
@@ -86,27 +88,22 @@ impl ActiveMaterialField {
     pub fn take_at_index(&mut self, index: usize, material_index: usize, amount: f64) -> Option<Material> {
         let material = self.cells.get_mut(index)?.materials.get_mut(material_index)?;
         let requested = if amount.is_finite() && amount >= 1.0 { amount.floor() as usize } else { return None; };
-        let taken = take_whole_unstructured(material, requested)?;
-        self.cells[index].materials.retain(|material| !material.is_empty()); Some(taken)
+        let taken = take_whole_unstructured(&mut material.material, requested)?;
+        self.cells[index].materials.retain(|material| !material.material.is_empty()); Some(taken)
     }
-
-    /// ACQUIRE transfer: one intact structured material object when available;
-    /// otherwise one discrete base unit. The field may contain both, and
-    /// acquisition must not destroy the identity of the structured object.
     pub fn take_for_acquisition(&mut self, index: usize) -> Option<Material> {
         let cell = self.cells.get_mut(index)?;
-        if let Some(material_index) = cell.materials.iter().position(|material| {
+        if let Some(material_index) = cell.materials.iter().position(|field_material| {
+            let material = &field_material.material;
             material.has_internal_structure() && material.is_valid() && !material.is_empty()
                 && material.parts.iter().all(|(_, amount)| amount.is_finite() && *amount > 0.0 && amount.fract().abs() <= MATERIAL_EPSILON)
-        }) {
-            return Some(cell.materials.swap_remove(material_index));
-        }
-        let material_index = cell.materials.iter().position(|material| !material.has_internal_structure() && !material.is_empty() && material.is_valid())?;
-        let part_index = cell.materials[material_index].parts.iter().position(|(_, amount)| amount.is_finite() && *amount >= 1.0 && amount.fract().abs() <= MATERIAL_EPSILON)?;
-        let name = cell.materials[material_index].parts[part_index].0.clone();
-        cell.materials[material_index].parts[part_index].1 -= 1.0;
-        cell.materials[material_index].parts.retain(|(_, amount)| *amount > MATERIAL_EPSILON);
-        let material = Material::free_base(name, 1.0); cell.materials.retain(|material| !material.is_empty()); Some(material)
+        }) { return Some(cell.materials.swap_remove(material_index).material); }
+        let material_index = cell.materials.iter().position(|field_material| !field_material.material.has_internal_structure() && !field_material.material.is_empty() && field_material.material.is_valid())?;
+        let part_index = cell.materials[material_index].material.parts.iter().position(|(_, amount)| amount.is_finite() && *amount >= 1.0 && amount.fract().abs() <= MATERIAL_EPSILON)?;
+        let name = cell.materials[material_index].material.parts[part_index].0.clone();
+        cell.materials[material_index].material.parts[part_index].1 -= 1.0;
+        cell.materials[material_index].material.parts.retain(|(_, amount)| *amount > MATERIAL_EPSILON);
+        let material = Material::free_base(name, 1.0); cell.materials.retain(|material| !material.material.is_empty()); Some(material)
     }
     pub fn diffuse_step(&mut self, fraction: f64) {
         let fraction = fraction.clamp(0.0, 1.0); if fraction <= 0.0 { return; }
@@ -115,12 +112,12 @@ impl ActiveMaterialField {
             if self.neighbor_indices(i).is_empty() { continue; }
             let material_count = self.cells[i].materials.len();
             for material_index in 0..material_count {
-                if self.cells[i].materials[material_index].has_internal_structure() { continue; }
-                let total = self.cells[i].materials[material_index].total_amount(); if total <= MATERIAL_EPSILON { continue; }
+                if self.cells[i].materials[material_index].material.has_internal_structure() { continue; }
+                let total = self.cells[i].materials[material_index].material.total_amount(); if total <= MATERIAL_EPSILON { continue; }
                 let outflow = (total * fraction).floor() as usize;
-                if outflow >= 1 { if let Some(piece) = take_whole_unstructured(&mut self.cells[i].materials[material_index], outflow) { outgoing_cell.push(piece); } }
+                if outflow >= 1 { if let Some(piece) = take_whole_unstructured(&mut self.cells[i].materials[material_index].material, outflow) { outgoing_cell.push(piece); } }
             }
-            self.cells[i].materials.retain(|material| !material.is_empty());
+            self.cells[i].materials.retain(|material| !material.material.is_empty());
         }
         for (i, outgoing_cell) in outgoing.iter_mut().enumerate() { let neighbors = self.neighbor_indices(i); for material in outgoing_cell.drain(..) { distribute_evenly(self, material, &neighbors); } }
     }
@@ -130,12 +127,13 @@ impl ActiveMaterialField {
     }
     pub fn total_amount(&self) -> f64 { self.cells.iter().map(FieldCell::total_amount).sum() }
 }
-fn distribute_evenly(field: &mut ActiveMaterialField, mut mat: Material, neighbors: &[usize]) {
+fn distribute_evenly(field: &mut ActiveMaterialField, mat: Material, neighbors: &[usize]) {
     if neighbors.is_empty() { return; }
     let total = mat.total_amount().floor() as usize; let base_share = total / neighbors.len(); let remainder = total % neighbors.len();
     for (k, &neighbor_index) in neighbors.iter().enumerate() {
         let count = base_share + usize::from(k < remainder); if count == 0 { continue; }
-        let piece = if count == mat.total_amount() as usize { Material { parts: std::mem::take(&mut mat.parts), internal_bonds: std::mem::take(&mut mat.internal_bonds) } } else { match take_whole_unstructured(&mut mat, count) { Some(piece) => piece, None => continue } };
-        if !piece.is_empty() { field.deposit_at_index(neighbor_index, piece); }
+        let mut piece = mat.clone();
+        if count != total { piece = match take_whole_unstructured(&mut piece, count) { Some(piece) => piece, None => continue }; }
+        field.deposit_at_index(neighbor_index, piece);
     }
 }
