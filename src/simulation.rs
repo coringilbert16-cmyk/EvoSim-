@@ -53,10 +53,6 @@ impl Simulation {
     fn current_needs(organism:&Organism,environment:&Environment,parameters:DecisionParameters)->CurrentNeeds{let survival_reserve=parameters.survival_reserve.max(f64::EPSILON);let reserve_pressure=(1.0-organism.usable_energy/survival_reserve).clamp(0.0,1.0);let survival=(reserve_pressure*(1.0+organism.stress.max(0.0))).clamp(0.0,1.0);let _=environment;CurrentNeeds{survival,reproduction:organism.reproductive_readiness.clamp(0.0,1.0)}}
     fn update_reproductive_readiness(organism:&mut Organism,environment:&Environment,parameters:DecisionParameters){if !matches!(organism.development_stage,DevelopmentStage::Adult){return}let mature_mass=Self::mature_structural_mass(organism,environment).max(f64::EPSILON);let maturity=(organism.structural_mass(&environment.catalog)/mature_mass).clamp(0.0,1.0);let reproduction_reserve=parameters.reproduction_reserve.max(f64::EPSILON);let energy_readiness=(organism.usable_energy/reproduction_reserve).clamp(0.0,1.0);let accumulation=(maturity*energy_readiness*parameters.reproduction_accumulation_rate.max(0.0)).clamp(0.0,1.0);organism.reproductive_readiness=(organism.reproductive_readiness+accumulation).clamp(0.0,1.0)}
 
-    /// Return stable field-material identities that are both physically in
-    /// contact with the organism and transferable under the organism's current
-    /// experimental permeability capacity. Cell membership is only an index;
-    /// it is never used as proof of contact.
     fn acquisition_targets(organism:&Organism,environment:&Environment)->Vec<u64>{
         let Some(position)=organism.occupied_cells.first()else{return Vec::new()};
         let Some(body)=crate::organism_geometry::OrganismBodyGeometry::from_structure_at(&organism.structure,&environment.catalog,(position.x,position.y))else{return Vec::new()};
@@ -88,7 +84,16 @@ impl Simulation {
         organism.store_material(material)
     }
 
-    fn recycle_dead_organism(environment:&mut Environment,organism:&Organism)->Option<crate::decomposition::DecomposingBody>{let position=organism.occupied_cells.first().cloned()?;for material in organism.stored_material.materials.iter().cloned(){environment.field.deposit(position.x,position.y,material);}if let Some(construction)=&organism.reproductive_construction{for material in construction.committed_material.materials.iter().cloned(){environment.field.deposit(position.x,position.y,material);}}crate::decomposition::DecomposingBody::new(organism.structure.clone(),organism.usable_energy,position)}
+    fn recycle_material(environment:&mut Environment,position:&Position,material:crate::resources::Material){
+        if material.has_internal_structure(){
+            let placement=crate::structure::Placement{x:position.x,y:position.y,rotation_radians:0.0};
+            let _=environment.field.deposit_structured(material,vec![placement]);
+        }else{
+            environment.field.deposit(position.x,position.y,material);
+        }
+    }
+
+    fn recycle_dead_organism(environment:&mut Environment,organism:&Organism)->Option<crate::decomposition::DecomposingBody>{let position=organism.occupied_cells.first().cloned()?;for material in organism.stored_material.materials.iter().cloned(){Self::recycle_material(environment,&position,material);}if let Some(construction)=&organism.reproductive_construction{for material in construction.committed_material.materials.iter().cloned(){Self::recycle_material(environment,&position,material);}}crate::decomposition::DecomposingBody::new(organism.structure.clone(),organism.usable_energy,position)}
 
     fn process_decomposing_bodies(&mut self){
         let mut finished_indices=Vec::new();
@@ -103,7 +108,7 @@ impl Simulation {
                     self.energy_ledger.total_usable_energy_gained+=step.net_energy;
                 }
             }
-            if let Some(materials)=step.released_material{let position=self.decomposing_bodies[index].position.clone();for material in materials{self.environment.field.deposit(position.x,position.y,material);}finished_indices.push(index);}
+            if let Some(materials)=step.released_material{for (material,placement) in materials{let position=Position{x:placement.x,y:placement.y};Self::recycle_material(&mut self.environment,&position,material);}finished_indices.push(index);}
         }
         for index in finished_indices.into_iter().rev(){self.decomposing_bodies.remove(index);}
     }
