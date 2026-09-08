@@ -13,42 +13,37 @@ pub fn apply_settling(
     fraction: f64,
 ) {
     let fraction = fraction.clamp(0.0, 1.0);
-    if fraction <= 0.0 {
-        return;
-    }
+    if fraction <= 0.0 { return; }
 
     for field_index in 0..field.cells.len() {
         let reservoir_index = reservoir.reservoir_index_for_field_index(field, field_index);
         let mut retained = Vec::new();
         let materials = std::mem::take(&mut field.cells[field_index].materials);
 
-        for mut material in materials {
-            // The current deep reservoir is intentionally an aggregate
-            // ecological store. Until Phase 5 gives it material identity,
-            // structured material must remain in the active field rather than
-            // being flattened and losing its physical structure.
-            if material.has_internal_structure() {
-                retained.push(material);
+        for mut field_material in materials {
+            // The deep reservoir is an aggregate ecological store. Structured
+            // field material has physical constituent geometry and therefore
+            // cannot be flattened into the reservoir without losing state.
+            if field_material.material.has_internal_structure() {
+                retained.push(field_material);
                 continue;
             }
 
-            let total = material.total_amount();
-            if total <= MATERIAL_EPSILON {
-                continue;
-            }
+            let total = field_material.material.total_amount();
+            if total <= MATERIAL_EPSILON { continue; }
             let outflow = (total * fraction).floor() as usize;
             if outflow == 0 {
-                retained.push(material);
+                retained.push(field_material);
                 continue;
             }
 
-            if let Some(taken) = take_whole_unstructured(&mut material, outflow) {
+            if let Some(taken) = take_whole_unstructured(&mut field_material.material, outflow) {
                 for (name, amount) in taken.parts {
                     reservoir.cells[reservoir_index].add(&name, amount);
                 }
             }
-            if !material.is_empty() {
-                retained.push(material);
+            if !field_material.material.is_empty() {
+                retained.push(field_material);
             }
         }
 
