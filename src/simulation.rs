@@ -135,18 +135,18 @@ impl Simulation {
     #[cfg(test)]
     mod tests {
         use super::*;
-        use crate::organism_geometry::OrganismBodyGeometry;
 
         #[test]
-        fn initial_structure_and_anchor_share_world_position() {
+        fn initial_structure_is_translated_to_organism_anchor() {
             let organism = Simulation::create_initial_organism();
             let catalog = crate::resources::default_catalog();
-            let body = OrganismBodyGeometry::from_structure(&organism.structure, &catalog).unwrap();
-            let anchor = organism.occupied_cells[0];
             let local = organism.genome.structural_blueprint.realize(&catalog).unwrap();
-            let local_body = OrganismBodyGeometry::from_structure(&local, &catalog).unwrap();
-            assert!((body.center.x - (local_body.center.x + anchor.x)).abs() < 1e-9);
-            assert!((body.center.y - (local_body.center.y + anchor.y)).abs() < 1e-9);
+            assert_eq!(organism.structure.units.len(), local.units.len());
+            for (world, local) in organism.structure.units.iter().zip(local.units.iter()) {
+                assert!((world.placement.x - (local.placement.x + INITIAL_ORGANISM_POSITION.x)).abs() < 1e-9);
+                assert!((world.placement.y - (local.placement.y + INITIAL_ORGANISM_POSITION.y)).abs() < 1e-9);
+                assert_eq!(world.placement.rotation_radians, local.placement.rotation_radians);
+            }
         }
 
         #[test]
