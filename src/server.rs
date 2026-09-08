@@ -61,6 +61,20 @@ async fn snapshot_handler(State(state): State<AppState>) -> impl IntoResponse {
     Json(simulation.snapshot())
 }
 
+#[derive(serde::Serialize)]
+struct ObservationStatus {
+    tick: u64,
+    running: bool,
+}
+
+async fn observation_status_handler(State(state): State<AppState>) -> impl IntoResponse {
+    let simulation = state.simulation.lock();
+    Json(ObservationStatus {
+        tick: simulation.tick,
+        running: simulation.running,
+    })
+}
+
 async fn world_observation_handler(State(state): State<AppState>) -> impl IntoResponse {
     let simulation = state.simulation.lock();
     Json(ObservationProjection::world(WorldObservation::from_simulation(
@@ -155,6 +169,7 @@ pub(crate) async fn run() {
     let app = Router::new()
         .route("/", get(index_handler))
         .route("/snapshot", get(snapshot_handler))
+        .route("/observation/status", get(observation_status_handler))
         .route("/observation/world", get(world_observation_handler))
         .route("/observation/organism/{id}", get(organism_observation_handler))
         .route("/observation/structure/{id}", get(structure_observation_handler))
