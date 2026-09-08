@@ -1,207 +1,110 @@
-//! Permeability derived from material composition and exact physical interface.
+//! Transfer capacity derived from physically accessible organism water.
 //!
-//! Permeability is not a stored material property and has no magic coefficient.
-//! It is derived from the approved physical model:
+//! Permeability is not a stored material property and is not derived from an
+//! abstract water pool or from the water content of the environmental
+//! material. The locked model is a linear threshold/ramp/saturation function
+//! of physically accessible organism water mass.
 //!
-//! W = Water mass / total material mass
-//! G = clamp(L_I / L_P, 0, 1)
-//! P = W * G
+//! W  = physically accessible organism water mass
+//! WT = threshold water mass
+//! Wmax = water mass at full permeability
+//! Pmax = maximum transfer capacity
 //!
-//! Composition supplies W. Exact interface geometry supplies L_I and L_P.
-//! No field-cell, movement, reach, or transfer-rate concept belongs here.
+//! P(W) = 0                       when W < WT
+//! P(W) = linear WT -> Wmax       when WT <= W < Wmax
+//! P(W) = Pmax                    when W >= Wmax
 
-use crate::resources::{BaseResource, Material};
-
-/// Return the fraction of a material's physical mass contributed by Water.
+/// Calculate the transfer capacity for a physically accessible amount of
+/// organism water.
 ///
-/// Water content is therefore derived from composition and immutable resource
-/// mass properties. It is not stored on Material and cannot drift separately
-/// from the material itself.
-pub fn water_mass_fraction(material: &Material, catalog: &[BaseResource]) -> f64 {
-    if !material.is_valid() {
-        return 0.0;
-    }
-
-    let mut total_mass = 0.0;
-    let mut water_mass = 0.0;
-
-    for (name, amount) in &material.parts {
-        let Some(resource) = catalog.iter().find(|resource| resource.name == *name) else {
-            return 0.0;
-        };
-
-        let mass = resource.properties.mass * *amount;
-        total_mass += mass;
-        if name == "Water" {
-            water_mass += mass;
-        }
-    }
-
-    if total_mass <= 0.0 || !total_mass.is_finite() || !water_mass.is_finite() {
-        return 0.0;
-    }
-
-    (water_mass / total_mass).clamp(0.0, 1.0)
-}
-
-/// Calculate permeability from material water content and exact interface geometry.
-///
-/// `interface_length` is L_I: the exact physical shared-boundary measure.
-/// `participating_boundary_length` is L_P: the boundary measure against which
-/// that interface participates. A zero participating boundary produces no
-/// permeability rather than an invented infinite ratio.
-pub fn permeability(
-    material: &Material,
-    catalog: &[BaseResource],
-    interface_length: f64,
-    participating_boundary_length: f64,
+/// The caller supplies WT, Wmax, and Pmax because those are model parameters,
+/// not properties of a resource and not properties of the environmental field.
+/// This function deliberately does not invent default values for them.
+pub fn permeability_from_water_mass(
+    water_mass: f64,
+    threshold_water_mass: f64,
+    full_permeability_water_mass: f64,
+    maximum_transfer_capacity: f64,
 ) -> Option<f64> {
-    if !material.is_valid()
-        || !interface_length.is_finite()
-        || !participating_boundary_length.is_finite()
-        || interface_length < 0.0
-        || participating_boundary_length < 0.0
+    if !water_mass.is_finite()
+        || !threshold_water_mass.is_finite()
+        || !full_permeability_water_mass.is_finite()
+        || !maximum_transfer_capacity.is_finite()
+        || water_mass < 0.0
+        || threshold_water_mass < 0.0
+        || full_permeability_water_mass < threshold_water_mass
+        || maximum_transfer_capacity < 0.0
     {
         return None;
     }
 
-    if participating_boundary_length == 0.0 {
+    if water_mass < threshold_water_mass {
         return Some(0.0);
     }
 
-    let water_fraction = water_mass_fraction(material, catalog);
-    let geometry_factor =
-        (interface_length / participating_boundary_length).clamp(0.0, 1.0);
-    let result = water_fraction * geometry_factor;
-
-    if result.is_finite() {
-        Some(result.clamp(0.0, 1.0))
-    } else {
-        None
+    if water_mass >= full_permeability_water_mass {
+        return Some(maximum_transfer_capacity);
     }
+
+    let span = full_permeability_water_mass - threshold_water_mass;
+    if span <= 0.0 {
+        return Some(maximum_transfer_capacity);
+    }
+
+    let result = maximum_transfer_capacity
+        * ((water_mass - threshold_water_mass) / span).clamp(0.0, 1.0);
+
+    result.is_finite().then_some(result.clamp(0.0, maximum_transfer_capacity))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::resources::default_catalog;
+
+    const WT: f64 = 2.0;
+    const WMAX: f64 = 10.0;
+    const PMAX: f64 = 4.0;
 
     #[test]
-    fn pure_water_has_full_water_mass_fraction() {
-        let catalog = default_catalog();
-        let material = Material::free_base("Water", 2.0);
-        assert!((water_mass_fraction(&material, &catalog) - 1.0).abs() < 1e-12);
+    fn below_threshold_has_no_transfer_capacity() {
+        assert_eq!(permeability_from_water_mass(1.999, WT, WMAX, PMAX), Some(0.0));
     }
 
     #[test]
-    fn water_fraction_is_mass_weighted() {
-        let catalog = default_catalog();
-        let water_mass = catalog
-            .iter()
-            .find(|resource| resource.name == "Water")
-            .unwrap()
-            .properties
-            .mass;
-        let carbon_mass = catalog
-            .iter()
-            .find(|resource| resource.name == "Carbon")
-            .unwrap()
-            .properties
-            .mass;
-        let material = Material {
-            parts: vec![("Water".to_string(), 1.0), ("Carbon".to_string(), 1.0)],
-            internal_bonds: Vec::new(),
-        };
-        let expected = water_mass / (water_mass + carbon_mass);
-        assert!((water_mass_fraction(&material, &catalog) - expected).abs() < 1e-12);
+    fn threshold_is_the_start_of_the_linear_ramp() {
+        assert_eq!(permeability_from_water_mass(WT, WT, WMAX, PMAX), Some(0.0));
     }
 
     #[test]
-    fn water_fraction_is_zero_without_water() {
-        let catalog = default_catalog();
-        let material = Material::free_base("Carbon", 2.0);
-        assert_eq!(water_mass_fraction(&material, &catalog), 0.0);
+    fn midpoint_of_ramp_is_linear() {
+        assert!((permeability_from_water_mass(6.0, WT, WMAX, PMAX).unwrap() - 2.0).abs() < 1e-12);
     }
 
     #[test]
-    fn invalid_material_does_not_produce_water_content() {
-        let catalog = default_catalog();
-        let material = Material {
-            parts: vec![("Water".to_string(), 1.0)],
-            internal_bonds: vec![crate::resources::InternalBond {
-                part_a: 0,
-                part_b: 1,
-            }],
-        };
-        assert_eq!(water_mass_fraction(&material, &catalog), 0.0);
+    fn full_water_level_reaches_maximum_capacity() {
+        assert_eq!(permeability_from_water_mass(WMAX, WT, WMAX, PMAX), Some(PMAX));
     }
 
     #[test]
-    fn no_interface_produces_zero_permeability() {
-        let catalog = default_catalog();
-        let material = Material::free_base("Water", 1.0);
-        assert_eq!(permeability(&material, &catalog, 0.0, 5.0), Some(0.0));
+    fn water_above_full_level_is_saturated() {
+        assert_eq!(permeability_from_water_mass(100.0, WT, WMAX, PMAX), Some(PMAX));
     }
 
     #[test]
-    fn pure_water_permeability_equals_geometry_factor() {
-        let catalog = default_catalog();
-        let material = Material::free_base("Water", 1.0);
-        assert!((permeability(&material, &catalog, 2.0, 4.0).unwrap() - 0.5).abs() < 1e-12);
+    fn zero_maximum_capacity_stays_zero() {
+        assert_eq!(permeability_from_water_mass(100.0, WT, WMAX, 0.0), Some(0.0));
     }
 
     #[test]
-    fn full_participating_boundary_gives_full_geometry_factor() {
-        let catalog = default_catalog();
-        let material = Material::free_base("Water", 1.0);
-        assert_eq!(permeability(&material, &catalog, 4.0, 4.0), Some(1.0));
+    fn invalid_parameter_order_is_rejected() {
+        assert!(permeability_from_water_mass(1.0, 10.0, 2.0, PMAX).is_none());
     }
 
     #[test]
-    fn interface_ratio_is_clamped_to_one() {
-        let catalog = default_catalog();
-        let material = Material::free_base("Water", 1.0);
-        assert_eq!(permeability(&material, &catalog, 8.0, 4.0), Some(1.0));
-    }
-
-    #[test]
-    fn zero_participating_boundary_has_zero_permeability() {
-        let catalog = default_catalog();
-        let material = Material::free_base("Water", 1.0);
-        assert_eq!(permeability(&material, &catalog, 0.0, 0.0), Some(0.0));
-    }
-
-    #[test]
-    fn non_water_material_reduces_permeability_by_water_fraction() {
-        let catalog = default_catalog();
-        let water_mass = catalog
-            .iter()
-            .find(|resource| resource.name == "Water")
-            .unwrap()
-            .properties
-            .mass;
-        let carbon_mass = catalog
-            .iter()
-            .find(|resource| resource.name == "Carbon")
-            .unwrap()
-            .properties
-            .mass;
-        let material = Material {
-            parts: vec![("Water".to_string(), 1.0), ("Carbon".to_string(), 1.0)],
-            internal_bonds: Vec::new(),
-        };
-        let expected_water_fraction = water_mass / (water_mass + carbon_mass);
-        let expected = expected_water_fraction * 0.5;
-        assert!((permeability(&material, &catalog, 2.0, 4.0).unwrap() - expected).abs() < 1e-12);
-    }
-
-    #[test]
-    fn invalid_geometry_is_rejected() {
-        let catalog = default_catalog();
-        let material = Material::free_base("Water", 1.0);
-        assert!(permeability(&material, &catalog, -1.0, 4.0).is_none());
-        assert!(permeability(&material, &catalog, 1.0, -1.0).is_none());
-        assert!(permeability(&material, &catalog, f64::NAN, 4.0).is_none());
-        assert!(permeability(&material, &catalog, 1.0, f64::INFINITY).is_none());
+    fn invalid_values_are_rejected() {
+        assert!(permeability_from_water_mass(-1.0, WT, WMAX, PMAX).is_none());
+        assert!(permeability_from_water_mass(1.0, f64::NAN, WMAX, PMAX).is_none());
+        assert!(permeability_from_water_mass(1.0, WT, f64::INFINITY, PMAX).is_none());
+        assert!(permeability_from_water_mass(1.0, WT, WMAX, -1.0).is_none());
     }
 }
