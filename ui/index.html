@@ -10,7 +10,8 @@
     header { padding: 10px 14px; background: #1b1b1b; border-bottom: 1px solid #333; }
     #status { font-size: 14px; }
     main { flex: 1; display: flex; align-items: center; justify-content: center; }
-    #world { width: min(90vw, 1000px); height: min(80vh, 700px); background: #050505; border: 1px solid #333; }
+    #world { width: min(90vw, 1000px); height: min(80vh, 700px); background: #050505; border: 1px solid #333; cursor: grab; }
+    #world.dragging { cursor: grabbing; }
   </style>
 </head>
 <body>
@@ -18,49 +19,119 @@
     <header><div id="status">Connecting to EvoSim…</div></header>
     <main><canvas id="world"></canvas></main>
   </div>
+  <script src="camera.js"></script>
   <script>
     const status = document.getElementById('status');
     const canvas = document.getElementById('world');
     const ctx = canvas.getContext('2d');
+    const camera = new window.EvoSimCamera();
+    let cameraInitialized = false;
+    let lastSnapshot = null;
+    let dragState = null;
 
     function resize() {
       const rect = canvas.getBoundingClientRect();
       canvas.width = Math.max(1, Math.floor(rect.width * devicePixelRatio));
       canvas.height = Math.max(1, Math.floor(rect.height * devicePixelRatio));
       ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+
+      if (!cameraInitialized && lastSnapshot) {
+        fitToWorld(lastSnapshot);
+      }
     }
 
-    window.addEventListener('resize', resize);
-    resize();
+    function viewportSize() {
+      return {
+        width: canvas.clientWidth,
+        height: canvas.clientHeight,
+      };
+    }
 
-    function render(snapshot) {
-      const width = canvas.clientWidth;
-      const height = canvas.clientHeight;
+    function fitToWorld(snapshot) {
       const worldWidth = snapshot.environment?.width || 1;
       const worldHeight = snapshot.environment?.height || 1;
-      const scaleX = width / worldWidth;
-      const scaleY = height / worldHeight;
-      const scale = Math.min(scaleX, scaleY);
-      const offsetX = (width - worldWidth * scale) / 2;
-      const offsetY = (height - worldHeight * scale) / 2;
+      const viewport = viewportSize();
+      camera.fitWorld(worldWidth, worldHeight, viewport.width, viewport.height);
+      cameraInitialized = true;
+    }
 
-      ctx.clearRect(0, 0, width, height);
+    function render(snapshot) {
+      lastSnapshot = snapshot;
+      if (!cameraInitialized) {
+        fitToWorld(snapshot);
+      }
+
+      const viewport = viewportSize();
+      ctx.clearRect(0, 0, viewport.width, viewport.height);
+
       ctx.save();
-      ctx.translate(offsetX, offsetY);
-      ctx.scale(scale, scale);
-
       for (const organism of snapshot.organisms || []) {
         const cells = organism.occupied_cells || [];
         for (const cell of cells) {
+          const point = camera.worldToScreen(cell.x, cell.y, viewport.width, viewport.height);
           ctx.beginPath();
-          ctx.arc(cell.x, cell.y, 1.5, 0, Math.PI * 2);
+          ctx.arc(point.x, point.y, Math.max(1, 1.5 * camera.scale), 0, Math.PI * 2);
           ctx.fill();
         }
       }
-
       ctx.restore();
+
       status.textContent = `EvoSim connected — tick ${snapshot.tick ?? '?'}`;
     }
+
+    canvas.addEventListener('wheel', event => {
+      event.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const viewport = viewportSize();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      const factor = Math.exp(-event.deltaY * 0.001);
+      camera.zoomAt(x, y, factor, viewport.width, viewport.height);
+      if (lastSnapshot) {
+        render(lastSnapshot);
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('pointerdown', event => {
+      if (event.button !== 0) {
+        return;
+      }
+      canvas.setPointerCapture(event.pointerId);
+      dragState = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+      canvas.classList.add('dragging');
+    });
+
+    canvas.addEventListener('pointermove', event => {
+      if (!dragState || dragState.pointerId !== event.pointerId) {
+        return;
+      }
+      const dx = event.clientX - dragState.x;
+      const dy = event.clientY - dragState.y;
+      dragState.x = event.clientX;
+      dragState.y = event.clientY;
+      camera.pan(dx, dy);
+      if (lastSnapshot) {
+        render(lastSnapshot);
+      }
+    });
+
+    function endDrag(event) {
+      if (!dragState || dragState.pointerId !== event.pointerId) {
+        return;
+      }
+      dragState = null;
+      canvas.classList.remove('dragging');
+    }
+
+    canvas.addEventListener('pointerup', endDrag);
+    canvas.addEventListener('pointercancel', endDrag);
+    canvas.addEventListener('lostpointercapture', () => {
+      dragState = null;
+      canvas.classList.remove('dragging');
+    });
+
+    window.addEventListener('resize', resize);
+    resize();
 
     function connect() {
       const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
