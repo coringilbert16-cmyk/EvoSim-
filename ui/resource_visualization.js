@@ -154,6 +154,19 @@
     }
   };
 
+  // A drag selection that contains zero or multiple organisms has no unique
+  // focus. Clear stale focus so Structure navigation can never target an
+  // organism that is no longer the selected focus.
+  const originalFinishWorldSelection = finishWorldSelection;
+  finishWorldSelection = function normalizedWorldSelection(point) {
+    originalFinishWorldSelection(point);
+    const validFocus = selectedIds.size === 1 && selectedIds.has(focusedOrganismId);
+    if (!validFocus && focusedOrganismId !== null) {
+      focusedOrganismId = selectedIds.size === 1 ? [...selectedIds][0] : null;
+      render();
+    }
+  };
+
   // Observation payloads are fetched only when the simulation tick has
   // advanced. The lightweight status request keeps live observation without
   // repeatedly serializing the much larger observation payload.
