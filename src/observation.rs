@@ -10,8 +10,6 @@ use crate::organism_geometry::OrganismBodyGeometry;
 use crate::state::Simulation;
 
 /// Semantic resolution of an observation.
-///
-/// These are observation levels, not simulation or camera zoom levels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum ObservationLevel {
     World,
@@ -20,11 +18,6 @@ pub(crate) enum ObservationLevel {
 }
 
 /// Context describing what the observer is asking to see.
-///
-/// Selection and focus remain browser-owned state. This type is deliberately
-/// request-oriented so the server can later use it to produce only the detail
-/// required by the current observation without making selection simulation
-/// state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct ObservationContext {
     pub(crate) level: ObservationLevel,
@@ -36,39 +29,19 @@ pub(crate) struct ObservationContext {
 
 impl ObservationContext {
     pub(crate) fn world() -> Self {
-        Self {
-            level: ObservationLevel::World,
-            organism_ids: Vec::new(),
-            focused_organism_id: None,
-        }
+        Self { level: ObservationLevel::World, organism_ids: Vec::new(), focused_organism_id: None }
     }
 
     pub(crate) fn organism(organism_ids: Vec<String>) -> Self {
-        Self {
-            level: ObservationLevel::Organism,
-            organism_ids,
-            focused_organism_id: None,
-        }
+        Self { level: ObservationLevel::Organism, organism_ids, focused_organism_id: None }
     }
 
-    pub(crate) fn structure(
-        organism_ids: Vec<String>,
-        focused_organism_id: Option<String>,
-    ) -> Self {
-        Self {
-            level: ObservationLevel::Structure,
-            organism_ids,
-            focused_organism_id,
-        }
+    pub(crate) fn structure(organism_ids: Vec<String>, focused_organism_id: Option<String>) -> Self {
+        Self { level: ObservationLevel::Structure, organism_ids, focused_organism_id }
     }
 }
 
 /// Common envelope for an observation produced from simulation truth.
-///
-/// The payload is intentionally separate from the context. Context describes
-/// the requested scope; the payload is the derived result. Neither is an
-/// alternate representation of an organism or environment owned by the
-/// simulation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct ObservationProjection {
     pub(crate) context: ObservationContext,
@@ -77,44 +50,25 @@ pub(crate) struct ObservationProjection {
 
 impl ObservationProjection {
     pub(crate) fn world(payload: WorldObservation) -> Self {
-        Self {
-            context: ObservationContext::world(),
-            payload: ObservationPayload::World(payload),
-        }
+        Self { context: ObservationContext::world(), payload: ObservationPayload::World(payload) }
     }
 
-    pub(crate) fn organism(
-        context: ObservationContext,
-        payload: OrganismObservation,
-    ) -> Option<Self> {
-        if context.level != ObservationLevel::Organism {
-            return None;
-        }
-        Some(Self {
-            context,
-            payload: ObservationPayload::Organism(payload),
-        })
+    pub(crate) fn organism(context: ObservationContext, payload: OrganismObservation) -> Option<Self> {
+        if context.level != ObservationLevel::Organism { return None; }
+        Some(Self { context, payload: ObservationPayload::Organism(payload) })
     }
 
-    pub(crate) fn structure(
-        context: ObservationContext,
-        payload: StructureObservation,
-    ) -> Option<Self> {
-        if context.level != ObservationLevel::Structure {
-            return None;
-        }
-        Some(Self {
-            context,
-            payload: ObservationPayload::Structure(payload),
-        })
+    pub(crate) fn structure(context: ObservationContext, payload: StructureObservation) -> Option<Self> {
+        if context.level != ObservationLevel::Structure { return None; }
+        Some(Self { context, payload: ObservationPayload::Structure(payload) })
     }
 }
 
-/// Coarse, world-scale representation of one organism.
+/// Coarse world-scale representation of one organism.
 ///
-/// The organism ID is copied from simulation truth and remains stable across
-/// observation levels. Physical parts come from the authoritative organism
-/// geometry; no browser-side resource-name geometry is introduced here.
+/// World observation deliberately does not contain exact physical parts. The
+/// authoritative bounds are enough for world-scale placement, hit testing,
+/// and camera fitting. Exact geometry begins at the Organism observation level.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct WorldOrganismObservation {
     pub(crate) id: String,
@@ -124,15 +78,6 @@ pub(crate) struct WorldOrganismObservation {
     pub(crate) max_x: f64,
     pub(crate) min_y: f64,
     pub(crate) max_y: f64,
-    pub(crate) parts: Vec<WorldOrganismPart>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub(crate) struct WorldOrganismPart {
-    pub(crate) form: crate::resources::Form,
-    pub(crate) x: f64,
-    pub(crate) y: f64,
-    pub(crate) rotation_radians: f64,
 }
 
 /// Environmental material stock that is spatially known only at field-cell
@@ -152,7 +97,8 @@ pub(crate) struct WorldPointObservation {
 }
 
 /// World-scale observation data. It intentionally excludes organism energy,
-/// stress, genome, decision history, memory, and other hidden bookkeeping.
+/// stress, genome, decision history, memory, exact structure, and other hidden
+/// bookkeeping.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct WorldObservation {
     pub(crate) width: f64,
@@ -175,31 +121,9 @@ impl WorldObservation {
                     .first()
                     .map(|position| (position.x, position.y))
                     .unwrap_or((0.0, 0.0));
-                let geometry = OrganismBodyGeometry::from_structure(&organism.structure, catalog);
-                let (min_x, max_x, min_y, max_y, parts) = match geometry {
-                    Some(geometry) => (
-                        geometry.min_x,
-                        geometry.max_x,
-                        geometry.min_y,
-                        geometry.max_y,
-                        geometry
-                            .parts
-                            .into_iter()
-                            .map(|part| WorldOrganismPart {
-                                form: part.form,
-                                x: part.x,
-                                y: part.y,
-                                rotation_radians: part.rotation_radians,
-                            })
-                            .collect(),
-                    ),
-                    None => (
-                        position.0,
-                        position.0,
-                        position.1,
-                        position.1,
-                        Vec::new(),
-                    ),
+                let (min_x, max_x, min_y, max_y) = match OrganismBodyGeometry::from_structure(&organism.structure, catalog) {
+                    Some(geometry) => (geometry.min_x, geometry.max_x, geometry.min_y, geometry.max_y),
+                    None => (position.0, position.0, position.1, position.1),
                 };
 
                 WorldOrganismObservation {
@@ -210,7 +134,6 @@ impl WorldObservation {
                     max_x,
                     min_y,
                     max_y,
-                    parts,
                 }
             })
             .collect();
@@ -223,37 +146,14 @@ impl WorldObservation {
             .enumerate()
             .filter_map(|(cell_index, cell)| {
                 let materials = cell.total_material();
-                if materials.is_empty() {
-                    return None;
-                }
+                if materials.is_empty() { return None; }
                 let (x, y) = simulation.environment.field.cell_center(cell_index);
-                Some(WorldFieldObservation {
-                    cell_index,
-                    x,
-                    y,
-                    materials,
-                })
+                Some(WorldFieldObservation { cell_index, x, y, materials })
             })
             .collect();
 
-        let vents = simulation
-            .environment
-            .vents
-            .iter()
-            .map(|vent| WorldPointObservation {
-                x: vent.x,
-                y: vent.y,
-            })
-            .collect();
-
-        let decomposing_bodies = simulation
-            .decomposing_bodies
-            .iter()
-            .map(|body| WorldPointObservation {
-                x: body.position.x,
-                y: body.position.y,
-            })
-            .collect();
+        let vents = simulation.environment.vents.iter().map(|vent| WorldPointObservation { x: vent.x, y: vent.y }).collect();
+        let decomposing_bodies = simulation.decomposing_bodies.iter().map(|body| WorldPointObservation { x: body.position.x, y: body.position.y }).collect();
 
         Self {
             width: simulation.environment.width,
@@ -294,33 +194,20 @@ impl OrganismObservation {
     pub(crate) fn from_simulation(simulation: &Simulation, organism_id: &str) -> Option<Self> {
         let organism = simulation.organisms.iter().find(|organism| organism.id == organism_id)?;
         let position = organism.occupied_cells.first()?;
-        let geometry = OrganismBodyGeometry::from_structure(
-            &organism.structure,
-            &simulation.environment.catalog,
-        )?;
+        let geometry = OrganismBodyGeometry::from_structure(&organism.structure, &simulation.environment.catalog)?;
         let min_x = geometry.min_x;
         let max_x = geometry.max_x;
         let min_y = geometry.min_y;
         let max_y = geometry.max_y;
-        let silhouette = geometry
-            .parts
-            .into_iter()
-            .map(|part| OrganismSilhouettePart {
-                form: part.form,
-                x: part.x,
-                y: part.y,
-                rotation_radians: part.rotation_radians,
-            })
-            .collect();
+        let silhouette = geometry.parts.into_iter().map(|part| OrganismSilhouettePart {
+            form: part.form,
+            x: part.x,
+            y: part.y,
+            rotation_radians: part.rotation_radians,
+        }).collect();
         Some(Self {
-            id: organism.id.clone(),
-            x: position.x,
-            y: position.y,
-            min_x,
-            max_x,
-            min_y,
-            max_y,
-            silhouette,
+            id: organism.id.clone(), x: position.x, y: position.y,
+            min_x, max_x, min_y, max_y, silhouette,
             unit_count: organism.structure.units.len(),
             bond_count: organism.structure.bonds.len(),
         })
@@ -328,11 +215,6 @@ impl OrganismObservation {
 }
 
 /// Exact structural observation of one focused organism.
-///
-/// Internal constituent placement is intentionally not invented: a structural
-/// unit supplies its authoritative external form and placement, while its
-/// material retains composition and internal bonds. Bond endpoints are derived
-/// from authoritative connection sites when those sites have known positions.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct StructureObservation {
     pub(crate) id: String,
@@ -364,50 +246,23 @@ impl StructureObservation {
     pub(crate) fn from_simulation(simulation: &Simulation, organism_id: &str) -> Option<Self> {
         let organism = simulation.organisms.iter().find(|organism| organism.id == organism_id)?;
         let catalog = &simulation.environment.catalog;
-        let units = organism
-            .structure
-            .units
-            .iter()
-            .enumerate()
-            .map(|(unit_index, unit)| StructureUnitObservation {
-                unit_index,
-                material: unit.material.material().clone(),
-                placement: unit.placement,
-                form: unit.shape(catalog).map(|shape| shape.form.clone()),
-            })
-            .collect::<Vec<_>>();
-
-        let bonds = organism
-            .structure
-            .bonds
-            .iter()
-            .map(|bond| StructureBondObservation {
-                unit_a: bond.unit_a,
-                point_a: bond.point_a,
-                unit_b: bond.unit_b,
-                point_b: bond.point_b,
-                strength: bond.strength,
-                bond_energy: bond.bond_energy,
-                endpoint_a: connection_endpoint(
-                    &organism.structure,
-                    bond.unit_a,
-                    bond.point_a,
-                    catalog,
-                ),
-                endpoint_b: connection_endpoint(
-                    &organism.structure,
-                    bond.unit_b,
-                    bond.point_b,
-                    catalog,
-                ),
-            })
-            .collect();
-
-        Some(Self {
-            id: organism.id.clone(),
-            units,
-            bonds,
-        })
+        let units = organism.structure.units.iter().enumerate().map(|(unit_index, unit)| StructureUnitObservation {
+            unit_index,
+            material: unit.material.material().clone(),
+            placement: unit.placement,
+            form: unit.shape(catalog).map(|shape| shape.form.clone()),
+        }).collect::<Vec<_>>();
+        let bonds = organism.structure.bonds.iter().map(|bond| StructureBondObservation {
+            unit_a: bond.unit_a,
+            point_a: bond.point_a,
+            unit_b: bond.unit_b,
+            point_b: bond.point_b,
+            strength: bond.strength,
+            bond_energy: bond.bond_energy,
+            endpoint_a: connection_endpoint(&organism.structure, bond.unit_a, bond.point_a, catalog),
+            endpoint_b: connection_endpoint(&organism.structure, bond.unit_b, bond.point_b, catalog),
+        }).collect();
+        Some(Self { id: organism.id.clone(), units, bonds })
     }
 }
 
@@ -418,13 +273,7 @@ fn connection_endpoint(
     catalog: &[crate::resources::BaseResource],
 ) -> Option<WorldPointObservation> {
     let unit = structure.units.get(unit_index)?;
-    let local = structure.connection_site(
-        crate::structure::ConnectionSiteRef {
-            unit_index,
-            point_index,
-        },
-        catalog,
-    )?;
+    let local = structure.connection_site(crate::structure::ConnectionSiteRef { unit_index, point_index }, catalog)?;
     let rotation = unit.placement.rotation_radians;
     let (sin, cos) = rotation.sin_cos();
     Some(WorldPointObservation {
@@ -460,10 +309,7 @@ mod tests {
 
     #[test]
     fn structure_context_preserves_stable_ids_and_focus() {
-        let context = ObservationContext::structure(
-            vec!["17".into(), "23".into()],
-            Some("23".into()),
-        );
+        let context = ObservationContext::structure(vec!["17".into(), "23".into()], Some("23".into()));
         assert_eq!(context.level, ObservationLevel::Structure);
         assert_eq!(context.organism_ids, vec!["17", "23"]);
         assert_eq!(context.focused_organism_id.as_deref(), Some("23"));
@@ -486,14 +332,12 @@ mod tests {
     }
 
     #[test]
-    fn world_observation_uses_actual_forms() {
+    fn world_observation_is_coarse_and_contains_no_exact_parts() {
         let simulation = Simulation::new(1, 20.0);
         let observation = WorldObservation::from_simulation(&simulation);
-        assert!(!observation.organisms[0].parts.is_empty());
-        assert!(observation.organisms[0]
-            .parts
-            .iter()
-            .all(|part| part.form.is_valid()));
+        let organism = &observation.organisms[0];
+        assert!(organism.max_x >= organism.min_x);
+        assert!(organism.max_y >= organism.min_y);
     }
 
     #[test]
@@ -514,9 +358,7 @@ mod tests {
         assert!(!observation.units.is_empty());
         assert!(!observation.bonds.is_empty());
         assert!(observation.units.iter().all(|unit| unit.form.is_some()));
-        assert!(observation.bonds.iter().all(|bond| {
-            bond.endpoint_a.is_some() && bond.endpoint_b.is_some()
-        }));
+        assert!(observation.bonds.iter().all(|bond| bond.endpoint_a.is_some() && bond.endpoint_b.is_some()));
     }
 
     #[test]
@@ -525,18 +367,9 @@ mod tests {
         let projection = ObservationProjection::structure(
             ObservationContext::structure(vec!["1".into()], Some("1".into())),
             StructureObservation::from_simulation(&simulation, "1").unwrap(),
-        )
-        .unwrap();
-
+        ).unwrap();
         let encoded = serde_json::to_string(&projection).unwrap();
         let decoded: ObservationProjection = serde_json::from_str(&encoded).unwrap();
-
-        // JSON represents floating-point values as decimal numbers. Parsing
-        // those numbers back into f64 can choose a neighboring binary float,
-        // so exact Rust-struct equality is not a valid serialization invariant.
-        // Comparing serde_json::Value instead verifies that the decoded object
-        // has the same JSON-level representation without depending on that
-        // implementation detail of f64 parsing.
         let original_json: serde_json::Value = serde_json::from_str(&encoded).unwrap();
         let decoded_json = serde_json::to_value(&decoded).unwrap();
         assert_eq!(original_json, decoded_json);
