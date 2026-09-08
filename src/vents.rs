@@ -39,8 +39,12 @@ pub fn apply_vents(
             }
         }
         if !parts.is_empty() {
-            field.deposit_at_index(
-                field_index,
+            // Vent output enters the active field at the vent's actual world
+            // position. Do not replace that position with the field-cell
+            // center, because this location is part of the physical state.
+            field.deposit(
+                vent.x,
+                vent.y,
                 Material {
                     parts,
                     internal_bonds: Vec::new(),
