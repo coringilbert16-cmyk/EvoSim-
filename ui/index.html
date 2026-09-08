@@ -279,6 +279,7 @@
 
     async function loadObservation(level, organismId = null) {
       const serial = ++requestSerial;
+      const levelChanged = observationLevel !== level;
       let url = '/observation/world';
       if (level === 'Organism' && organismId) url = `/observation/organism/${encodeURIComponent(organismId)}`;
       try {
@@ -288,7 +289,7 @@
         if (serial !== requestSerial) return;
         observation = next;
         observationLevel = level;
-        cameraInitialized = false;
+        if (levelChanged) cameraInitialized = false;
         render();
       } catch (_) {
         if (serial === requestSerial) status.textContent = 'Observation unavailable — retrying…';
