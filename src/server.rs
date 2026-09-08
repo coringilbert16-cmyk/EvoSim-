@@ -1,15 +1,12 @@
 use axum::{
-    extract::ws::{Message, WebSocket, WebSocketUpgrade},
     extract::{Path, State},
     response::{Html, IntoResponse},
     routing::get,
     Json, Router,
 };
-use futures_util::{SinkExt, StreamExt};
 use parking_lot::Mutex;
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::net::TcpListener;
-use tokio::sync::broadcast;
 use tower_http::cors::CorsLayer;
 
 use crate::observation::{
@@ -19,10 +16,7 @@ use crate::observation::{
 use crate::resource_visualization::appearance;
 use crate::state::{AppState, Simulation};
 
-pub(crate) fn start_tick_loop(
-    simulation: Arc<Mutex<Simulation>>,
-    broadcaster: broadcast::Sender<String>,
-) {
+pub(crate) fn start_tick_loop(simulation: Arc<Mutex<Simulation>>) {
     tokio::spawn(async move {
         loop {
             let tick_duration = {
@@ -36,14 +30,8 @@ pub(crate) fn start_tick_loop(
             };
 
             tokio::time::sleep(tick_duration).await;
-            let snapshot = {
-                let mut sim = simulation.lock();
-                sim.step()
-            };
-
-            if let Ok(json) = serde_json::to_string(&snapshot) {
-                let _ = broadcaster.send(json);
-            }
+            let mut sim = simulation.lock();
+            sim.step();
         }
     });
 }
@@ -54,11 +42,6 @@ async fn index_handler() -> impl IntoResponse {
     Html(format!(
         "{page}\n<script>{resource_visualization}</script>"
     ))
-}
-
-async fn snapshot_handler(State(state): State<AppState>) -> impl IntoResponse {
-    let simulation = state.simulation.lock();
-    Json(simulation.snapshot())
 }
 
 #[derive(serde::Serialize)]
@@ -130,51 +113,22 @@ async fn resource_visualization_handler(
     })
 }
 
-async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
-    ws.on_upgrade(|socket| handle_socket(socket, state))
-}
-
-async fn handle_socket(socket: WebSocket, state: AppState) {
-    let (mut sender, mut receiver) = socket.split();
-    let mut rx = state.broadcaster.subscribe();
-
-    let mut send_task = tokio::spawn(async move {
-        while let Ok(message) = rx.recv().await {
-            if sender.send(Message::Text(message.into())).await.is_err() {
-                break;
-            }
-        }
-    });
-
-    let mut receive_task =
-        tokio::spawn(async move { while let Some(Ok(_message)) = receiver.next().await {} });
-
-    tokio::select! {
-        _ = (&mut send_task) => receive_task.abort(),
-        _ = (&mut receive_task) => send_task.abort(),
-    }
-}
-
 pub(crate) async fn run() {
-    let (tx, _rx) = broadcast::channel::<String>(128);
     let simulation = Arc::new(Mutex::new(Simulation::new(42, 10.0)));
 
     let state = AppState {
         simulation: simulation.clone(),
-        broadcaster: tx.clone(),
     };
 
-    start_tick_loop(simulation, tx);
+    start_tick_loop(simulation);
 
     let app = Router::new()
         .route("/", get(index_handler))
-        .route("/snapshot", get(snapshot_handler))
         .route("/observation/status", get(observation_status_handler))
         .route("/observation/world", get(world_observation_handler))
         .route("/observation/organism/{id}", get(organism_observation_handler))
         .route("/observation/structure/{id}", get(structure_observation_handler))
         .route("/observation/resources", get(resource_visualization_handler))
-        .route("/ws", get(ws_handler))
         .with_state(state)
         .layer(CorsLayer::permissive());
 
