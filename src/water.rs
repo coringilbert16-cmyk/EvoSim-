@@ -86,18 +86,18 @@ pub(crate) fn experimental_transfer_capacity(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genome::Genome;
+    use crate::decision::DecisionHistory;
+    use crate::genome::initial_genome;
     use crate::material_storage::MaterialStorage;
     use crate::resources::{InternalBond, Material};
     use crate::state::{DevelopmentStage, MemoryPoint, Organism, ResourceSense};
     use crate::structure::{OrganismStructure, Placement, StructuralUnit};
-    use crate::decision::DecisionHistory;
 
     fn organism_with_material(structure: OrganismStructure, stored: MaterialStorage) -> Organism {
         Organism {
             id: "test".into(),
             occupied_cells: vec![],
-            genome: Genome::default(),
+            genome: initial_genome(),
             resource_sense: ResourceSense {
                 sensed_resources: vec![],
                 direction_x: 0.0,
@@ -129,7 +129,11 @@ mod tests {
         structure.add_unit(
             StructuralUnit::from_material(
                 hydrated,
-                Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
             )
             .unwrap(),
         );
@@ -138,7 +142,10 @@ mod tests {
         assert!(stored.store(Material::free_base("Water", 2.0)));
         let organism = organism_with_material(structure, stored);
 
-        assert_eq!(physically_accessible_water_mass(&organism, &crate::resources::default_catalog()), 5.0);
+        assert_eq!(
+            physically_accessible_water_mass(&organism, &crate::resources::default_catalog()),
+            5.0
+        );
     }
 
     #[test]
@@ -146,7 +153,10 @@ mod tests {
         let mut stored = MaterialStorage::default();
         assert!(stored.store(Material::free_base("Carbon", 5.0)));
         let organism = organism_with_material(OrganismStructure::new(), stored);
-        assert_eq!(physically_accessible_water_mass(&organism, &crate::resources::default_catalog()), 0.0);
+        assert_eq!(
+            physically_accessible_water_mass(&organism, &crate::resources::default_catalog()),
+            0.0
+        );
     }
 
     #[test]
@@ -162,13 +172,19 @@ mod tests {
     #[test]
     fn experimental_permeability_is_zero_below_threshold() {
         let organism = organism_with_material(OrganismStructure::new(), MaterialStorage::default());
-        assert_eq!(experimental_transfer_capacity(&organism, &crate::resources::default_catalog()), Some(0.0));
+        assert_eq!(
+            experimental_transfer_capacity(&organism, &crate::resources::default_catalog()),
+            Some(0.0)
+        );
     }
 
     #[test]
     fn experimental_permeability_reaches_full_capacity_at_full_water() {
         let mut stored = MaterialStorage::default();
-        assert!(stored.store(Material::free_base("Water", EXPERIMENTAL_WATER_FULL_PERMEABILITY)));
+        assert!(stored.store(Material::free_base(
+            "Water",
+            EXPERIMENTAL_WATER_FULL_PERMEABILITY,
+        )));
         let organism = organism_with_material(OrganismStructure::new(), stored);
         assert_eq!(
             experimental_transfer_capacity(&organism, &crate::resources::default_catalog()),
