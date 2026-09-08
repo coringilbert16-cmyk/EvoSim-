@@ -18,10 +18,7 @@ impl StructuralMaterial{
  pub fn is_composite(&self)->bool{self.material.parts.len()>1}
  pub fn is_valid(&self)->bool{self.material.is_valid()&&!self.material.is_empty()}
  pub fn resolves_in_catalog(&self,catalog:&[BaseResource])->bool{self.material.parts.iter().all(|(name,_)|catalog.iter().any(|base|base.name==*name))}
- /// The first constituent is the rigid exterior scaffold for a structured
- /// composite. Later constituents are internal reinforcement, hydration, or
- /// other chemistry and do not invent a second external boundary.
- fn external_geometry_resource<'a>(&self,catalog:&'a [BaseResource])->Option<&'a BaseResource>{let(name,amount)=self.material.parts.first()?;if(*amount-1.0).abs()>f64::EPSILON{return None}let resource=catalog.iter().find(|base|base.name==*name)?;if matches!(&resource.shape.form,Form::Fluid{..}){return None}for(other_name,other_amount)in self.material.parts.iter().skip(1){if(*other_amount-1.0).abs()>f64::EPSILON{return None}if catalog.iter().find(|base|base.name==*other_name).is_none(){return None}}Some(resource)}
+ fn external_geometry_resource<'a>(&self,catalog:&'a [BaseResource])->Option<&'a BaseResource>{let(name,amount)=self.material.parts.first()?;if(*amount-1.0).abs()>f64::EPSILON{return None}let resource=catalog.iter().find(|base|base.name==*name)?;if matches!(&resource.shape.form,Form::Fluid{..}){return None}for(other_name,other_amount)in self.material.parts.iter().skip(1){if(*other_amount-1.0).abs()>f64::EPSILON{return None}catalog.iter().find(|base|base.name==*other_name)?;}Some(resource)}
  pub fn connection_sites(&self,catalog:&[BaseResource])->Option<ConnectionSites>{if !self.material.has_internal_structure(){let[(name,amount)]=self.material.parts.as_slice()else{return None};if(*amount-1.0).abs()>f64::EPSILON{return None}return catalog.iter().find(|base|base.name==*name).map(|base|base.shape.connection_sites())}self.external_geometry_resource(catalog).map(|base|base.shape.connection_sites())}
  pub fn shape<'a>(&self,catalog:&'a [BaseResource])->Option<&'a Shape>{if !self.material.has_internal_structure(){let[(name,amount)]=self.material.parts.as_slice()else{return None};if(*amount-1.0).abs()>f64::EPSILON{return None}return catalog.iter().find(|base|base.name==*name).map(|base|&base.shape)}self.external_geometry_resource(catalog).map(|base|&base.shape)}
 }

@@ -6,6 +6,7 @@ mod core_geometry;
 mod core_integrity;
 mod decision;
 mod decision_runtime;
+mod decomposition;
 mod environment;
 mod genome;
 mod interface_geometry;
