@@ -101,7 +101,6 @@
     originalRenderWorld();
   };
 
-  const originalRenderStructure = renderStructure;
   renderStructure = function resourceAwareStructureRender() {
     const structure = structurePayload();
     if (!structure) return;
@@ -128,6 +127,39 @@
       drawForm(unit.form, 0, 0, unit.placement.rotation_radians);
       ctx.restore();
     }
+  };
+
+  // Observation payloads are fetched only when the simulation tick has
+  // advanced. The lightweight status request keeps live observation without
+  // repeatedly serializing the much larger observation payload.
+  const originalLoadObservation = loadObservation;
+  let lastObservationTick = null;
+  let statusRequestInFlight = false;
+  loadObservation = async function demandDrivenObservation(level, organismId = null) {
+    if (statusRequestInFlight) return;
+    statusRequestInFlight = true;
+    let tick = null;
+    try {
+      const response = await fetch('/observation/status', { cache: 'no-store' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      tick = (await response.json()).tick;
+    } catch (_) {
+      statusRequestInFlight = false;
+      return originalLoadObservation(level, organismId);
+    }
+    statusRequestInFlight = false;
+
+    const currentPayload = observation?.payload || {};
+    const currentLevel = observation?.context?.level;
+    const currentObject = currentPayload[level];
+    const sameTarget = currentLevel === level && (
+      level === 'World' ||
+      (currentObject?.id != null && String(currentObject.id) === String(organismId))
+    );
+    if (sameTarget && lastObservationTick === tick) return;
+
+    await originalLoadObservation(level, organismId);
+    lastObservationTick = tick;
   };
 
   try {
