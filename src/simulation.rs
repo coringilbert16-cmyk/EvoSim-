@@ -58,45 +58,17 @@ impl Simulation {
     fn current_needs(organism:&Organism,environment:&Environment,parameters:DecisionParameters)->CurrentNeeds{let survival_reserve=parameters.survival_reserve.max(f64::EPSILON);let reserve_pressure=(1.0-organism.usable_energy/survival_reserve).clamp(0.0,1.0);let energetic_survival=(reserve_pressure*(1.0+organism.stress.max(0.0))).clamp(0.0,1.0);let developmental_survival=if matches!(organism.development_stage,DevelopmentStage::Juvenile){(1.0-Self::growth_fraction(organism,environment)).clamp(0.0,1.0)}else{0.0};let survival=energetic_survival.max(developmental_survival);CurrentNeeds{survival,reproduction:organism.reproductive_readiness.clamp(0.0,1.0)}}
     fn update_reproductive_readiness(organism:&mut Organism,environment:&Environment,parameters:DecisionParameters){if !matches!(organism.development_stage,DevelopmentStage::Adult){return}let mature_mass=Self::mature_structural_mass(organism,environment).max(f64::EPSILON);let maturity=(organism.structural_mass(&environment.catalog)/mature_mass).clamp(0.0,1.0);let reproduction_reserve=parameters.reproduction_reserve.max(f64::EPSILON);let energy_readiness=(organism.usable_energy/reproduction_reserve).clamp(0.0,1.0);let accumulation=(maturity*energy_readiness*parameters.reproduction_accumulation_rate.max(0.0)).clamp(0.0,1.0);organism.reproductive_readiness=(organism.reproductive_readiness+accumulation).clamp(0.0,1.0)}
 
-    fn acquisition_targets(organism:&Organism,environment:&Environment)->Vec<u64>{
-        let Some(body)=crate::organism_geometry::OrganismBodyGeometry::from_structure(&organism.structure,&environment.catalog)else{return Vec::new()};
-        let Some(capacity)=crate::water::experimental_transfer_capacity(organism,&environment.catalog)else{return Vec::new()};
-        if capacity < 1.0 { return Vec::new(); }
-        environment.field.contacting_materials(&body,&environment.catalog,ACQUISITION_CONTACT_TOLERANCE)
-            .into_iter()
-            .filter_map(|(cell_index,material_index,_)|environment.field.cells.get(cell_index).and_then(|cell|cell.materials.get(material_index)))
-            .filter(|material|{
-                if material.is_empty()||!material.is_valid(){return false}
-                if material.has_internal_structure(){material.total_amount()<=capacity+crate::field::MATERIAL_EPSILON}else{material.total_amount()>=1.0}
-            })
-            .map(|material|material.id)
-            .collect()
-    }
+    fn acquisition_targets(organism:&Organism,environment:&Environment)->Vec<u64>{let Some(body)=crate::organism_geometry::OrganismBodyGeometry::from_structure(&organism.structure,&environment.catalog)else{return Vec::new()};let Some(capacity)=crate::water::experimental_transfer_capacity(organism,&environment.catalog)else{return Vec::new()};if capacity<1.0{return Vec::new()}environment.field.contacting_materials(&body,&environment.catalog,ACQUISITION_CONTACT_TOLERANCE).into_iter().filter_map(|(cell_index,material_index,_)|environment.field.cells.get(cell_index).and_then(|cell|cell.materials.get(material_index))).filter(|material|{if material.is_empty()||!material.is_valid(){return false}if material.has_internal_structure(){material.total_amount()<=capacity+crate::field::MATERIAL_EPSILON}else{material.total_amount()>=1.0}}).map(|material|material.id).collect()}
     fn acquisition_context_key(material_id:u64)->String{format!("target:{material_id}")}
     fn bond_context_key(bond:&crate::structure::Bond)->String{format!("bond:{}:{}:{}:{}",bond.unit_a,bond.point_a,bond.unit_b,bond.point_b)}
     fn action_eligibility(organism:&Organism,environment:&Environment)->ActionEligibility{let can_build_from_storage=!organism.structure.units.is_empty()&&organism.stored_material.has_valid_material();let can_join_existing_structure=organism.structure.units.len()>=2;ActionEligibility{can_move:organism.active_transformation_id.is_none(),can_acquire:organism.active_transformation_id.is_none()&&!Self::acquisition_targets(organism,environment).is_empty(),can_combine:organism.active_transformation_id.is_none()&&(can_build_from_storage||can_join_existing_structure),can_break:organism.active_transformation_id.is_none()&&!organism.structure.bonds.is_empty(),can_expel:false}}
     fn decision_candidates(organism:&Organism,environment:&Environment,needs:CurrentNeeds,eligibility:ActionEligibility)->Vec<ActionCandidate>{let mut candidates=Vec::new();let relevant=|action:ActionKind|eligibility.permits(action)&&needs.any_for(action.relevant_needs());if relevant(ActionKind::Break){candidates.extend(organism.structure.bonds.iter().map(|bond|ActionCandidate{action:ActionKind::Break,context_key:Some(Self::bond_context_key(bond))}))}if relevant(ActionKind::Combine){candidates.push(ActionCandidate{action:ActionKind::Combine,context_key:None})}if relevant(ActionKind::Move){candidates.push(ActionCandidate{action:ActionKind::Move,context_key:None})}if relevant(ActionKind::Acquire){candidates.extend(Self::acquisition_targets(organism,environment).into_iter().map(|material_id|ActionCandidate{action:ActionKind::Acquire,context_key:Some(Self::acquisition_context_key(material_id))}))}if relevant(ActionKind::Expel){candidates.push(ActionCandidate{action:ActionKind::Expel,context_key:None})}candidates}
 
-    fn acquire_target(organism:&mut Organism,environment:&mut Environment,material_id:u64)->bool{
-        let Some(body)=crate::organism_geometry::OrganismBodyGeometry::from_structure(&organism.structure,&environment.catalog)else{return false};
-        let Some(capacity)=crate::water::experimental_transfer_capacity(organism,&environment.catalog)else{return false};
-        if capacity < 1.0 {return false;}
-        let contact_exists=environment.field.contacting_materials(&body,&environment.catalog,ACQUISITION_CONTACT_TOLERANCE).into_iter().any(|(cell_index,material_index,_)|environment.field.cells.get(cell_index).and_then(|cell|cell.materials.get(material_index)).map(|material|material.id==material_id).unwrap_or(false));
-        if !contact_exists{return false;}
-        let Some(material)=environment.field.take_for_acquisition_by_id(material_id,capacity)else{return false};
-        organism.store_material(material)
-    }
+    fn acquire_target(organism:&mut Organism,environment:&mut Environment,material_id:u64)->bool{let Some(body)=crate::organism_geometry::OrganismBodyGeometry::from_structure(&organism.structure,&environment.catalog)else{return false};let Some(capacity)=crate::water::experimental_transfer_capacity(organism,&environment.catalog)else{return false};if capacity<1.0{return false}let contact_exists=environment.field.contacting_materials(&body,&environment.catalog,ACQUISITION_CONTACT_TOLERANCE).into_iter().any(|(cell_index,material_index,_)|environment.field.cells.get(cell_index).and_then(|cell|cell.materials.get(material_index)).map(|material|material.id==material_id).unwrap_or(false));if !contact_exists{return false}let Some(material)=environment.field.take_for_acquisition_by_id(material_id,capacity)else{return false};organism.store_material(material)}
 
-    fn recycle_material(environment:&mut Environment,position:&Position,material:crate::resources::Material){
-        if material.has_internal_structure(){
-            let placement=crate::structure::Placement{x:position.x,y:position.y,rotation_radians:0.0};
-            let _=environment.field.deposit_structured(material,vec![placement]);
-        }else{
-            environment.field.deposit(position.x,position.y,material);
-        }
-    }
+    fn recycle_material(environment:&mut Environment,position:&Position,material:crate::resources::Material){if material.has_internal_structure(){let placement=crate::structure::Placement{x:position.x,y:position.y,rotation_radians:0.0};let _=environment.field.deposit_structured(material,vec![placement]);}else{environment.field.deposit(position.x,position.y,material);}}
 
-    fn recycle_dead_organism(environment:&mut Environment,organism:&Organism)->Option<crate::decomposition::DecomposingBody>{let position=organism.occupied_cells.first().cloned()?;for material in organism.stored_material.materials.iter().cloned(){Self::recycle_material(environment,&position,material);}if let Some(construction)=&organism.reproductive_construction{for material in construction.committed_material.materials.iter().cloned(){Self::recycle_material(environment,&position,material);}}crate::decomposition::DecomposingBody::new(organism.structure.clone(),organism.usable_energy,position)}
+    fn recycle_dead_organism(environment:&mut Environment,organism:&Organism)->Option<crate::decomposition::DecomposingBody>{let position=organism.occupied_cells.first().cloned()?;for material in organism.stored_material.materials.iter().cloned(){Self::recycle_material(environment,&position,material);}if let Some(construction)=&organism.reproductive_construction{for material in construction.committed_material.materials.iter().cloned(){Self::recycle_material(environment,&position,material);}}let structure=if let Some(construction)=&organism.reproductive_construction{crate::reproduction::take_dead_construction_structure(&organism.structure,construction,position)}else{organism.structure.clone()};crate::decomposition::DecomposingBody::new(structure,organism.usable_energy,position)}
 
     fn process_decomposing_bodies(&mut self){
         let mut finished_indices=Vec::new();
@@ -130,5 +102,5 @@ impl Simulation {
     }
 
     pub(crate) fn apply_energy_capacity(organism:&mut Organism,environment:&Environment,ledger:&mut EnergyLedger)->bool{organism.stress*=crate::state::STRESS_DECAY_PER_TICK;organism.apply_stress_damage(environment,ledger)}
-    #[cfg(test)]pub(crate)fn total_material_in_system(&self)->f64{let mut total=self.environment.field.total_amount()+self.environment.reservoir.total_amount();for transformation in &self.active_transformations{total+=transformation.material.total_amount();}for organism in &self.organisms{total+=organism.stored_material.total_amount();if let Some(construction)=&organism.reproductive_construction{total+=construction.committed_material.total_amount();}total+=organism.structure.units.iter().map(|unit|unit.material.material().total_amount()).sum::<f64>();}for body in &self.decomposing_bodies{total+=body.structure.units.iter().map(|unit|unit.material.material().total_amount()).sum::<f64>();}total}
+    #[cfg(test)]pub(crate)fn total_material_in_system(&self)->f64{let mut total=self.environment.field.total_amount()+self.environment.reservoir.total_amount();for transformation in &self.active_transformations{total+=transformation.material.total_amount();}for organism in &self.organisms{total+=organism.stored_material.total_amount();if let Some(construction)=&organism.reproductive_construction{total+=construction.committed_material.total_amount();total+=construction.developing_structure.units.iter().map(|unit|unit.material.material().total_amount()).sum::<f64>();}total+=organism.structure.units.iter().map(|unit|unit.material.material().total_amount()).sum::<f64>();}for body in &self.decomposing_bodies{total+=body.structure.units.iter().map(|unit|unit.material.material().total_amount()).sum::<f64>();}total}
 }
