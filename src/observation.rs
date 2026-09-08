@@ -64,11 +64,11 @@ impl ObservationProjection {
     }
 }
 
-/// Coarse world-scale representation of one organism.
+/// World-scale representation of one organism.
 ///
-/// World observation deliberately does not contain exact physical parts. The
-/// authoritative bounds are enough for world-scale placement, hit testing,
-/// and camera fitting. Exact geometry begins at the Organism observation level.
+/// The world observation exposes the organism's actual finite silhouette so
+/// the browser can render and hit-test visible cells without fabricating a
+/// shape from aggregate bounds. Hidden biological bookkeeping remains absent.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct WorldOrganismObservation {
     pub(crate) id: String,
@@ -78,6 +78,7 @@ pub(crate) struct WorldOrganismObservation {
     pub(crate) max_x: f64,
     pub(crate) min_y: f64,
     pub(crate) max_y: f64,
+    pub(crate) silhouette: Vec<OrganismSilhouettePart>,
 }
 
 /// Environmental material stock that is spatially known only at field-cell
@@ -97,8 +98,8 @@ pub(crate) struct WorldPointObservation {
 }
 
 /// World-scale observation data. It intentionally excludes organism energy,
-/// stress, genome, decision history, memory, exact structure, and other hidden
-/// bookkeeping.
+/// stress, genome, decision history, memory, exact material bookkeeping, and
+/// other hidden biological state.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct WorldObservation {
     pub(crate) width: f64,
@@ -121,10 +122,19 @@ impl WorldObservation {
                     .first()
                     .map(|position| (position.x, position.y))
                     .unwrap_or((0.0, 0.0));
-                let (min_x, max_x, min_y, max_y) = match OrganismBodyGeometry::from_structure(&organism.structure, catalog) {
-                    Some(geometry) => (geometry.min_x, geometry.max_x, geometry.min_y, geometry.max_y),
-                    None => (position.0, position.0, position.1, position.1),
-                };
+                let (min_x, max_x, min_y, max_y, silhouette) =
+                    match OrganismBodyGeometry::from_structure(&organism.structure, catalog) {
+                        Some(geometry) => {
+                            let silhouette = geometry.parts.into_iter().map(|part| OrganismSilhouettePart {
+                                form: part.form,
+                                x: part.x,
+                                y: part.y,
+                                rotation_radians: part.rotation_radians,
+                            }).collect();
+                            (geometry.min_x, geometry.max_x, geometry.min_y, geometry.max_y, silhouette)
+                        }
+                        None => (position.0, position.0, position.1, position.1, Vec::new()),
+                    };
 
                 WorldOrganismObservation {
                     id: organism.id.clone(),
@@ -134,6 +144,7 @@ impl WorldObservation {
                     max_x,
                     min_y,
                     max_y,
+                    silhouette,
                 }
             })
             .collect();
@@ -332,12 +343,13 @@ mod tests {
     }
 
     #[test]
-    fn world_observation_is_coarse_and_contains_no_exact_parts() {
+    fn world_observation_exposes_authoritative_silhouette() {
         let simulation = Simulation::new(1, 20.0);
         let observation = WorldObservation::from_simulation(&simulation);
         let organism = &observation.organisms[0];
         assert!(organism.max_x >= organism.min_x);
         assert!(organism.max_y >= organism.min_y);
+        assert!(!organism.silhouette.is_empty());
     }
 
     #[test]
