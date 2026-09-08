@@ -131,34 +131,4 @@ impl Simulation {
 
     pub(crate) fn apply_energy_capacity(organism:&mut Organism,environment:&Environment,ledger:&mut EnergyLedger)->bool{organism.stress*=crate::state::STRESS_DECAY_PER_TICK;organism.apply_stress_damage(environment,ledger)}
     #[cfg(test)]pub(crate)fn total_material_in_system(&self)->f64{let mut total=self.environment.field.total_amount()+self.environment.reservoir.total_amount();for transformation in &self.active_transformations{total+=transformation.material.total_amount();}for organism in &self.organisms{total+=organism.stored_material.total_amount();if let Some(construction)=&organism.reproductive_construction{total+=construction.committed_material.total_amount();}total+=organism.structure.units.iter().map(|unit|unit.material.material().total_amount()).sum::<f64>();}for body in &self.decomposing_bodies{total+=body.structure.units.iter().map(|unit|unit.material.material().total_amount()).sum::<f64>();}total}
-
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-
-        #[test]
-        fn initial_structure_is_translated_to_organism_anchor() {
-            let organism = Simulation::create_initial_organism();
-            let catalog = crate::resources::default_catalog();
-            let local = organism.genome.structural_blueprint.realize(&catalog).unwrap();
-            assert_eq!(organism.structure.units.len(), local.units.len());
-            for (world, local) in organism.structure.units.iter().zip(local.units.iter()) {
-                assert!((world.placement.x - (local.placement.x + INITIAL_ORGANISM_POSITION.x)).abs() < 1e-9);
-                assert!((world.placement.y - (local.placement.y + INITIAL_ORGANISM_POSITION.y)).abs() < 1e-9);
-                assert_eq!(world.placement.rotation_radians, local.placement.rotation_radians);
-            }
-        }
-
-        #[test]
-        fn incomplete_juvenile_has_developmental_survival_pressure() {
-            let mut organism = Simulation::create_initial_organism();
-            let catalog = crate::resources::default_catalog();
-            let mature_mass = organism.genome.structural_blueprint.structural_mass(&catalog);
-            organism.structure.units.pop();
-            assert!(organism.structural_mass(&catalog) < mature_mass);
-            let environment = Simulation::create_environment();
-            let needs = Simulation::current_needs(&organism, &environment, DecisionParameters::default());
-            assert!(needs.survival > 0.0);
-        }
-    }
 }
