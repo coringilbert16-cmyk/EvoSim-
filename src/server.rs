@@ -49,7 +49,11 @@ pub(crate) fn start_tick_loop(
 }
 
 async fn index_handler() -> impl IntoResponse {
-    Html(include_str!("../ui/index.html"))
+    let page = include_str!("../ui/index.html");
+    let resource_visualization = include_str!("../ui/resource_visualization.js");
+    Html(format!(
+        "{page}\n<script>{resource_visualization}</script>"
+    ))
 }
 
 async fn snapshot_handler(State(state): State<AppState>) -> impl IntoResponse {
@@ -90,17 +94,26 @@ async fn structure_observation_handler(
         .into_response()
 }
 
+#[derive(serde::Serialize)]
+struct ResourceVisualizationObservation {
+    resources: Vec<(String, crate::resource_visualization::ResourceAppearance)>,
+    field_cell_size: f64,
+}
+
 async fn resource_visualization_handler(
     State(state): State<AppState>,
 ) -> impl IntoResponse {
     let simulation = state.simulation.lock();
-    let appearances = simulation
+    let resources = simulation
         .environment
         .catalog
         .iter()
         .map(|resource| (resource.name.clone(), appearance(resource)))
         .collect::<Vec<_>>();
-    Json(appearances)
+    Json(ResourceVisualizationObservation {
+        resources,
+        field_cell_size: simulation.environment.field.cell_size,
+    })
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
