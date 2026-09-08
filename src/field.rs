@@ -3,6 +3,7 @@
 use crate::field_material::FieldMaterial;
 use crate::material_transfer::take_whole_unstructured;
 use crate::resources::Material;
+use crate::organism_geometry::OrganismBodyGeometry;
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_CELL_SIZE: f64 = 25.0;
@@ -82,7 +83,7 @@ impl ActiveMaterialField {
     pub fn deposit_structured(&mut self, material: Material, placements: Vec<crate::structure::Placement>) -> bool {
         if material.is_empty() || !material.is_valid() || !material.has_internal_structure() || placements.len() != material.parts.len() { return false; }
         let Some((x, y)) = placements.first().map(|p| (p.x, p.y)) else { return false; };
-        let Some(index) = self.index_for_position(x, y) else { return false; };
+        let Some(index) = self.index_for_position(x, y) else { return false; }
         let id = self.allocate_id(); let Some(instance) = FieldMaterial::new(id, material, placements) else { return false; };
         self.cells[index].materials.push(instance); true
     }
@@ -92,6 +93,38 @@ impl ActiveMaterialField {
         let placements = material.parts.iter().map(|_| crate::structure::Placement { x, y, rotation_radians: 0.0 }).collect();
         if let Some(instance) = FieldMaterial::new(id, material, placements) { self.cells[index].materials.push(instance); }
     }
+
+    /// Return spatial field material instances whose actual constituent
+    /// boundaries touch/intersect the organism body. This deliberately scans
+    /// instances rather than selecting by containing field cell.
+    pub fn contacting_materials(
+        &self,
+        body: &OrganismBodyGeometry,
+        catalog: &[crate::resources::BaseResource],
+        tolerance: f64,
+    ) -> Vec<(usize, usize, Vec<crate::boundary_contact::BoundaryContact>)> {
+        if tolerance < 0.0 { return Vec::new(); }
+        let mut contacts = Vec::new();
+        for (cell_index, cell) in self.cells.iter().enumerate() {
+            for (material_index, field_material) in cell.materials.iter().enumerate() {
+                let Some(instance) = field_material.physical_instance(catalog) else { continue; };
+                let boundary = crate::boundary_contact::boundary_contacts(body, &instance, tolerance);
+                if !boundary.is_empty() { contacts.push((cell_index, material_index, boundary)); }
+            }
+        }
+        contacts
+    }
+
+    /// Remove an exact field material instance by its stable identity.
+    pub fn take_material_by_id(&mut self, id: u64) -> Option<FieldMaterial> {
+        for cell in &mut self.cells {
+            if let Some(index) = cell.materials.iter().position(|material| material.id == id) {
+                return Some(cell.materials.swap_remove(index));
+            }
+        }
+        None
+    }
+
     pub fn take_at(&mut self, x: f64, y: f64, material_index: usize, amount: f64) -> Option<Material> { let index = self.index_for_position(x, y)?; self.take_at_index(index, material_index, amount) }
     pub fn take_at_index(&mut self, index: usize, material_index: usize, amount: f64) -> Option<Material> {
         let material = self.cells.get_mut(index)?.materials.get_mut(material_index)?;
