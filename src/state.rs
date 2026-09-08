@@ -2,7 +2,6 @@ use parking_lot::Mutex;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::broadcast;
 use crate::decision::{DecisionHistory, DecisionParameters};
 use crate::decomposition::DecomposingBody;
 use crate::environment::{ActiveMaterialField, DeepReservoir, Vent};
@@ -10,7 +9,7 @@ use crate::genome::Genome;
 use crate::material_storage::MaterialStorage;
 use crate::resources::{BaseResource, Material};
 use crate::structure::{Bond, OrganismStructure};
-#[derive(Clone)]pub(crate)struct AppState{pub(crate)simulation:Arc<Mutex<Simulation>>,pub(crate)broadcaster:broadcast::Sender<String>}
+#[derive(Clone)]pub(crate)struct AppState{pub(crate)simulation:Arc<Mutex<Simulation>>}
 #[derive(Serialize,Deserialize,Clone)]pub(crate)struct PropertyDeviations{pub(crate)mass:f64,pub(crate)potential_energy:f64,pub(crate)reactivity:f64,pub(crate)cohesion:f64}
 #[derive(Serialize,Deserialize,Clone)]pub(crate)struct AffinityResponses{pub(crate)mass:f64,pub(crate)potential_energy:f64,pub(crate)reactivity:f64,pub(crate)cohesion:f64}
 #[derive(Serialize,Deserialize,Clone)]pub(crate)struct ResourceObservation{pub(crate)name:String,pub(crate)properties:crate::resources::ResourceProperties, pub(crate)perceived_amount:f64,pub(crate)deviations:PropertyDeviations,pub(crate)affinity_responses:AffinityResponses,pub(crate)base_desirability:f64,pub(crate)amount_factor:f64,pub(crate)potential_energy_need_factor:f64,pub(crate)desirability:f64,pub(crate)distance:f64,pub(crate)source_x:f64,pub(crate)source_y:f64,pub(crate)field_index:usize}
