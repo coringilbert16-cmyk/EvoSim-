@@ -21,6 +21,7 @@ mod boundary_contact;
 mod physical_interface;
 mod permeability;
 mod reproduction;
+mod resource_visualization;
 mod resources;
 mod structural_blueprint;
 mod structural_combine;
