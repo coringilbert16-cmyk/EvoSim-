@@ -42,31 +42,56 @@
   function drawField(world, viewport) {
     if (!world) return;
     const size = paletteState.fieldCellSize;
-    for (const cell of world.field || []) {
-      const total = (cell.materials || []).reduce((sum, [, amount]) => sum + Math.max(0, amount), 0);
-      if (!(total > 0)) continue;
-      const topLeft = camera.worldToScreen(cell.x - size / 2, cell.y - size / 2, viewport.width, viewport.height);
-      const screenSize = size * camera.scale;
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(topLeft.x, topLeft.y, screenSize, screenSize);
-      ctx.clip();
-      let offset = 0;
+    const cells = world.field || [];
+
+    // A field cell is a fixed area, so material amount is the observable
+    // density measure. Normalize each resource independently so a scarce
+    // resource can still be seen without inventing a spatial distribution.
+    const maxByResource = new Map();
+    for (const cell of cells) {
       for (const [name, amount] of cell.materials || []) {
-        if (!(amount > 0)) continue;
-        const appearance = appearanceFor(name);
-        const height = screenSize * amount / total;
-        ctx.globalAlpha = Math.max(0.03, Math.min(0.75, appearance.fill_opacity / 255 * 0.65));
-        ctx.fillStyle = appearance.fill;
-        ctx.fillRect(topLeft.x, topLeft.y + offset, screenSize, height);
-        offset += height;
+        if (!Number.isFinite(amount) || amount <= 0) continue;
+        maxByResource.set(name, Math.max(maxByResource.get(name) || 0, amount));
       }
-      ctx.restore();
-      ctx.save();
-      ctx.strokeStyle = '#242424';
-      ctx.globalAlpha = 0.65;
-      ctx.strokeRect(topLeft.x, topLeft.y, screenSize, screenSize);
-      ctx.restore();
+    }
+
+    for (const cell of cells) {
+      const topLeft = camera.worldToScreen(
+        cell.x - size / 2, cell.y - size / 2, viewport.width, viewport.height
+      );
+      const screenSize = size * camera.scale;
+      if (screenSize <= 0) continue;
+
+      for (const [name, amount] of cell.materials || []) {
+        const maximum = maxByResource.get(name) || 0;
+        if (!Number.isFinite(amount) || amount <= 0 || !(maximum > 0)) continue;
+
+        const appearance = appearanceFor(name);
+        const density = Math.max(0, Math.min(1, amount / maximum));
+        const baseOpacity = Math.max(0, Math.min(1, appearance.fill_opacity / 255));
+        if (!(baseOpacity > 0)) continue;
+
+        // The gradient is a visual field projection, not a claim that the
+        // material occupies a circular sub-region inside the simulation cell.
+        // Neighboring gradients overlap to form a continuous concentration
+        // cloud, while opacity communicates relative density.
+        const centerX = topLeft.x + screenSize / 2;
+        const centerY = topLeft.y + screenSize / 2;
+        const innerRadius = Math.max(0, screenSize * 0.08);
+        const outerRadius = Math.max(innerRadius + 1, screenSize * 0.72);
+        const peakAlpha = Math.min(0.82, 0.08 + density * 0.74) * baseOpacity;
+        const gradient = ctx.createRadialGradient(
+          centerX, centerY, innerRadius,
+          centerX, centerY, outerRadius
+        );
+        gradient.addColorStop(0, `${appearance.fill}${Math.round(peakAlpha * 255).toString(16).padStart(2, '0')}`);
+        gradient.addColorStop(0.45, `${appearance.fill}${Math.round(peakAlpha * 0.72 * 255).toString(16).padStart(2, '0')}`);
+        gradient.addColorStop(1, `${appearance.fill}00`);
+        ctx.save();
+        ctx.fillStyle = gradient;
+        ctx.fillRect(centerX - outerRadius, centerY - outerRadius, outerRadius * 2, outerRadius * 2);
+        ctx.restore();
+      }
     }
   }
 
