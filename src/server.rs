@@ -1,11 +1,9 @@
 use axum::{
-    extract::ws::{Message, WebSocket, WebSocketUpgrade},
     extract::{Path, State},
     response::{Html, IntoResponse},
     routing::get,
     Json, Router,
 };
-use futures_util::{SinkExt, StreamExt};
 use parking_lot::Mutex;
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::net::TcpListener;
@@ -54,11 +52,6 @@ async fn index_handler() -> impl IntoResponse {
     Html(format!(
         "{page}\n<script>{resource_visualization}</script>"
     ))
-}
-
-async fn snapshot_handler(State(state): State<AppState>) -> impl IntoResponse {
-    let simulation = state.simulation.lock();
-    Json(simulation.snapshot())
 }
 
 #[derive(serde::Serialize)]
@@ -130,31 +123,6 @@ async fn resource_visualization_handler(
     })
 }
 
-async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
-    ws.on_upgrade(|socket| handle_socket(socket, state))
-}
-
-async fn handle_socket(socket: WebSocket, state: AppState) {
-    let (mut sender, mut receiver) = socket.split();
-    let mut rx = state.broadcaster.subscribe();
-
-    let mut send_task = tokio::spawn(async move {
-        while let Ok(message) = rx.recv().await {
-            if sender.send(Message::Text(message.into())).await.is_err() {
-                break;
-            }
-        }
-    });
-
-    let mut receive_task =
-        tokio::spawn(async move { while let Some(Ok(_message)) = receiver.next().await {} });
-
-    tokio::select! {
-        _ = (&mut send_task) => receive_task.abort(),
-        _ = (&mut receive_task) => send_task.abort(),
-    }
-}
-
 pub(crate) async fn run() {
     let (tx, _rx) = broadcast::channel::<String>(128);
     let simulation = Arc::new(Mutex::new(Simulation::new(42, 10.0)));
@@ -168,13 +136,11 @@ pub(crate) async fn run() {
 
     let app = Router::new()
         .route("/", get(index_handler))
-        .route("/snapshot", get(snapshot_handler))
         .route("/observation/status", get(observation_status_handler))
         .route("/observation/world", get(world_observation_handler))
         .route("/observation/organism/{id}", get(organism_observation_handler))
         .route("/observation/structure/{id}", get(structure_observation_handler))
         .route("/observation/resources", get(resource_visualization_handler))
-        .route("/ws", get(ws_handler))
         .with_state(state)
         .layer(CorsLayer::permissive());
 
