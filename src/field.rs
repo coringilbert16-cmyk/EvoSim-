@@ -223,8 +223,7 @@ impl ActiveMaterialField {
         {
             return;
         }
-        let id = self.allocate_id();
-        let placements = material
+        let placements: Vec<_> = material
             .parts
             .iter()
             .map(|_| crate::structure::Placement {
@@ -233,6 +232,40 @@ impl ActiveMaterialField {
                 rotation_radians: 0.0,
             })
             .collect();
+
+        if let Some(existing) = self.cells[index].materials.iter_mut().find(|existing| {
+            !existing.material.has_internal_structure()
+                && existing.placements.len() == placements.len()
+                && existing
+                    .placements
+                    .iter()
+                    .zip(&placements)
+                    .all(|(a, b)| {
+                        a.x == b.x
+                            && a.y == b.y
+                            && a.rotation_radians == b.rotation_radians
+                    })
+                && existing.material.parts.len() == material.parts.len()
+                && existing
+                    .material
+                    .parts
+                    .iter()
+                    .zip(&material.parts)
+                    .all(|((a, _), (b, _))| a == b)
+        }) {
+            let mut merged_parts = existing.material.parts.clone();
+            for ((_, existing_amount), (_, incoming_amount)) in
+                merged_parts.iter_mut().zip(&material.parts)
+            {
+                *existing_amount += *incoming_amount;
+            }
+            if merged_parts.iter().all(|(_, amount)| amount.is_finite()) {
+                existing.material.parts = merged_parts;
+                return;
+            }
+        }
+
+        let id = self.allocate_id();
         if let Some(instance) = FieldMaterial::new(id, material, placements) {
             self.cells[index].materials.push(instance);
         }
