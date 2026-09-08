@@ -8,8 +8,7 @@ name = "evosim"
 path = "src/main.rs"
 
 [dependencies]
-axum = { version = "0.8", features = ["ws"] }
-futures-util = "0.3"
+axum = "0.8"
 parking_lot = "0.12"
 rand = "0.8"
 rand_chacha = "0.3"
