@@ -84,8 +84,8 @@ impl Simulation {
         if capacity < 1.0 {return false;}
         let contact_exists=environment.field.contacting_materials(&body,&environment.catalog,ACQUISITION_CONTACT_TOLERANCE).into_iter().any(|(cell_index,material_index,_)|environment.field.cells.get(cell_index).and_then(|cell|cell.materials.get(material_index)).map(|material|material.id==material_id).unwrap_or(false));
         if !contact_exists{return false;}
-        let material=environment.field.take_for_acquisition_by_id(material_id,capacity)?;
-        if organism.store_material(material.clone()){true}else{false}
+        let Some(material)=environment.field.take_for_acquisition_by_id(material_id,capacity)else{return false};
+        organism.store_material(material)
     }
 
     fn recycle_dead_organism(environment:&mut Environment,organism:&Organism)->Option<crate::decomposition::DecomposingBody>{let position=organism.occupied_cells.first().cloned()?;for material in organism.stored_material.materials.iter().cloned(){environment.field.deposit(position.x,position.y,material);}if let Some(construction)=&organism.reproductive_construction{for material in construction.committed_material.materials.iter().cloned(){environment.field.deposit(position.x,position.y,material);}}crate::decomposition::DecomposingBody::new(organism.structure.clone(),organism.usable_energy,position)}
