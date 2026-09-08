@@ -99,3 +99,57 @@ impl Simulation {
         true
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::OrganismObservation;
+
+    #[test]
+    fn organism_perception_uses_same_radius_and_records_geometry_size() {
+        let environment = Simulation::create_environment();
+        let mut observer = Simulation::create_initial_organism();
+        let mut other = Simulation::create_initial_organism();
+        other.id = "2".into();
+        let offset = observer.genome.perception_radius() * 0.5;
+        let origin = observer.occupied_cells[0].clone();
+        other.occupied_cells[0].x = origin.x + offset;
+        other.occupied_cells[0].y = origin.y;
+        let mut organisms = vec![observer.clone(), other];
+
+        Simulation::update_organism_perception(&mut observer, &organisms, &environment);
+
+        assert_eq!(observer.resource_sense.sensed_organisms.len(), 1);
+        let observation = &observer.resource_sense.sensed_organisms[0];
+        assert_eq!(observation.id, "2");
+        assert!((observation.distance - offset).abs() < 1e-9);
+        assert!((observation.direction_x - 1.0).abs() < 1e-9);
+        assert!(observation.direction_y.abs() < 1e-9);
+        assert!(observation.size > 0.0);
+
+        organisms[1].occupied_cells[0].x = origin.x + observer.genome.perception_radius() + 1.0;
+        Simulation::update_organism_perception(&mut observer, &organisms, &environment);
+        assert!(observer.resource_sense.sensed_organisms.is_empty());
+    }
+
+    #[test]
+    fn sensed_organism_direction_affects_movement() {
+        let environment = Simulation::create_environment();
+        let mut organism = Simulation::create_initial_organism();
+        let old_x = organism.occupied_cells[0].x;
+        let old_y = organism.occupied_cells[0].y;
+        organism.resource_sense.sensed_organisms = vec![OrganismObservation {
+            id: "2".into(),
+            distance: 10.0,
+            direction_x: 1.0,
+            direction_y: 0.0,
+            size: 1.0,
+        }];
+        organism.resource_sense.direction_x = 0.0;
+        organism.resource_sense.direction_y = 0.0;
+
+        assert!(Simulation::update_movement(&mut organism, &environment));
+        assert!(organism.occupied_cells[0].x > old_x);
+        assert!((organism.occupied_cells[0].y - old_y).abs() < 1e-9);
+    }
+}
