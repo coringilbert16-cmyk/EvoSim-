@@ -39,6 +39,11 @@ mod simulation;
 mod state;
 mod transformation;
 
+// Compatibility alias for existing simulation references. The field
+// implementation is owned by the environment facade, not a separate
+// top-level subsystem.
+use crate::environment as field;
+
 #[cfg(test)]
 mod observation_contract_tests;
 
