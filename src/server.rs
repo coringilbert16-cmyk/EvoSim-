@@ -16,6 +16,7 @@ use crate::observation::{
     ObservationContext, ObservationProjection, OrganismObservation, StructureObservation,
     WorldObservation,
 };
+use crate::resource_visualization::appearance;
 use crate::state::{AppState, Simulation};
 
 pub(crate) fn start_tick_loop(
@@ -89,6 +90,19 @@ async fn structure_observation_handler(
         .into_response()
 }
 
+async fn resource_visualization_handler(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let simulation = state.simulation.lock();
+    let appearances = simulation
+        .environment
+        .catalog
+        .iter()
+        .map(|resource| (resource.name.clone(), appearance(resource)))
+        .collect::<Vec<_>>();
+    Json(appearances)
+}
+
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
     ws.on_upgrade(|socket| handle_socket(socket, state))
 }
@@ -131,6 +145,7 @@ pub(crate) async fn run() {
         .route("/observation/world", get(world_observation_handler))
         .route("/observation/organism/{id}", get(organism_observation_handler))
         .route("/observation/structure/{id}", get(structure_observation_handler))
+        .route("/observation/resources", get(resource_visualization_handler))
         .route("/ws", get(ws_handler))
         .with_state(state)
         .layer(CorsLayer::permissive());
