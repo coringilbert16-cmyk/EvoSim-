@@ -80,7 +80,7 @@ mod integration_tests {
     fn acquire_requires_actual_geometric_contact_not_shared_cell() {
         let mut s = Simulation::new(24, 10.0);
         let index = s.environment.field.index_for_position(500.0, 500.0).unwrap();
-        s.environment.field.deposit(500.0, 510.0, Material::free_base("Carbon", 10.0));
+        s.environment.field.deposit(520.0, 500.0, Material::free_base("Carbon", 10.0));
         let material_id = s.environment.field.cells[index].materials.first().map(|m| m.id);
         assert!(material_id.is_some());
         s.organisms[0]
