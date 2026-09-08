@@ -7,21 +7,21 @@ use serde::{Deserialize, Serialize};
 
 use crate::resources::BaseResource;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct ResourceAppearance {
     /// CSS/canvas-compatible fill representation.
-    pub(crate) fill: &'static str,
+    pub(crate) fill: String,
     /// CSS/canvas-compatible outline representation.
-    pub(crate) outline: &'static str,
+    pub(crate) outline: String,
     /// Fill opacity, primarily used for transparent fluids such as water.
     pub(crate) fill_opacity: u8,
 }
 
 impl ResourceAppearance {
-    pub(crate) const fn new(fill: &'static str, outline: &'static str, fill_opacity: u8) -> Self {
+    pub(crate) fn new(fill: &str, outline: &str, fill_opacity: u8) -> Self {
         Self {
-            fill,
-            outline,
+            fill: fill.into(),
+            outline: outline.into(),
             fill_opacity,
         }
     }
@@ -70,7 +70,10 @@ mod tests {
     fn approved_resource_appearances_are_stable() {
         assert_eq!(appearance(&resource("Carbon")).fill, "#080808");
         assert_eq!(appearance(&resource("Sulfur")).fill, "#D6D44A");
-        assert_eq!(appearance(&resource("Methane")), ResourceAppearance::new("#F5F5F5", "#C93636", 255));
+        assert_eq!(
+            appearance(&resource("Methane")),
+            ResourceAppearance::new("#F5F5F5", "#C93636", 255)
+        );
         assert_eq!(appearance(&resource("Water")).fill_opacity, 72);
     }
 
