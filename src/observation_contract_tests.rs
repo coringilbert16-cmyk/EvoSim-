@@ -1,4 +1,4 @@
-use crate::observation::{ObservationLevel, WorldObservation};
+use crate::observation::{ObservationLevel, ObservationProjection, WorldObservation};
 use crate::state::Simulation;
 
 #[test]
@@ -26,10 +26,11 @@ fn world_observation_preserves_environmental_observation_contract() {
 }
 
 #[test]
-fn environmental_observation_stays_at_world_level() {
+fn world_projection_is_explicitly_world_level() {
     let simulation = Simulation::new(1, 20.0);
-    let observation = WorldObservation::from_simulation(&simulation);
+    let projection = ObservationProjection::world(WorldObservation::from_simulation(&simulation));
 
-    assert_eq!(ObservationLevel::World, ObservationLevel::World);
-    assert!(!observation.organisms.is_empty());
+    assert_eq!(projection.context.level, ObservationLevel::World);
+    assert!(projection.context.organism_ids.is_empty());
+    assert!(projection.context.focused_organism_id.is_none());
 }
