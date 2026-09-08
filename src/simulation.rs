@@ -26,7 +26,7 @@ impl Simulation {
         Self { tick: 0, ticks_per_second, running: true, organisms: vec![organism], environment, active_transformations: Vec::new(), decomposing_bodies: Vec::new(), energy_ledger: EnergyLedger::default(), next_organism_id: 2, next_transformation_id: 1, rng, decision_parameters: DecisionParameters::default() }
     }
 
-    fn create_environment() -> Environment {
+    pub(crate) fn create_environment() -> Environment {
         let catalog = crate::resources::default_catalog();
         let width = 1000.0; let height = 1000.0;
         let field = ActiveMaterialField::new(width, height, DEFAULT_CELL_SIZE);
