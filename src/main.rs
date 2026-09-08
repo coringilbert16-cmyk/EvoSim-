@@ -37,6 +37,9 @@ mod state;
 mod transformation;
 
 #[cfg(test)]
+mod observation_contract_tests;
+
+#[cfg(test)]
 mod simulation_tests;
 
 #[tokio::main]
