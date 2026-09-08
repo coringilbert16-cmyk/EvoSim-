@@ -141,13 +141,22 @@ impl StructuralBlueprint {
             if !strength.is_finite() || !(0.0..=1.0).contains(&strength) {
                 return Err("connection produced invalid intrinsic bond strength".into());
             }
+            let bond_energy = crate::structure::formation_threshold(
+                pa.cohesion,
+                pb.cohesion,
+                0.0,
+                0.0,
+            );
+            if !bond_energy.is_finite() || bond_energy <= f64::EPSILON {
+                return Err("connection produced non-positive bond energy".into());
+            }
             s.add_bond(crate::structure::Bond {
                 unit_a: c.element_a,
                 point_a: c.point_a,
                 unit_b: c.element_b,
                 point_b: c.point_b,
                 strength,
-                bond_energy: 0.0,
+                bond_energy,
             });
         }
         Ok(s)
@@ -354,5 +363,40 @@ mod tests {
             vec![0, 1],
         );
         assert!(!b.is_valid());
+    }
+
+    #[test]
+    fn realized_connections_have_positive_bond_energy() {
+        let catalog = default_catalog();
+        let elements = vec![
+            BlueprintElement {
+                material: Material::free_base("Carbon", 1.0),
+                placement: Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            },
+            BlueprintElement {
+                material: Material::free_base("Carbon", 1.0),
+                placement: Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            },
+        ];
+        let blueprint = StructuralBlueprint::new(
+            elements,
+            vec![BlueprintConnection {
+                element_a: 0,
+                point_a: 0,
+                element_b: 1,
+                point_b: 3,
+            }],
+        );
+        let structure = blueprint.realize(&catalog).unwrap();
+        assert_eq!(structure.bonds.len(), 1);
+        assert!(structure.bonds[0].bond_energy > 0.0);
     }
 }
