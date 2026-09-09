@@ -1,4 +1,4 @@
-use crate::resources::BaseResource;
+use crate::resources::{BaseResource, Material};
 use serde::{Deserialize, Serialize};
 
 /// World placement of one physically instantiated constituent.
@@ -105,6 +105,37 @@ impl PhysicalConstituentGraph {
         id
     }
 
+    /// Materialization converts a physically instantiable material into
+    /// individual graph constituents. It deliberately creates NO physical
+    /// relationships: composition is input data, while actual structure is
+    /// established only by physical realization.
+    ///
+    /// Every graph constituent represents one physical unit. Therefore this
+    /// seam accepts only unit quantities; aggregate quantities must be split
+    /// by storage/acquisition before becoming physical constituents.
+    pub fn materialize_material(
+        &mut self,
+        material: &Material,
+        placement: Placement,
+    ) -> Result<Vec<PhysicalConstituentId>, &'static str> {
+        if !material.is_valid() || material.is_empty() {
+            return Err("material is invalid or empty");
+        }
+        if material
+            .parts
+            .iter()
+            .any(|(_, amount)| (*amount - 1.0).abs() > 1e-9)
+        {
+            return Err("physical materialization requires one unit per constituent");
+        }
+
+        Ok(material
+            .parts
+            .iter()
+            .map(|(name, _)| self.add_constituent(name.clone(), placement))
+            .collect())
+    }
+
     pub fn remove_constituent(&mut self, id: PhysicalConstituentId) -> Option<PhysicalConstituent> {
         let index = self.constituents.iter().position(|c| c.id == id)?;
         self.relationships
@@ -205,6 +236,7 @@ impl PhysicalConstituentGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::resources::Material;
 
     fn placement(x: f64, y: f64) -> Placement {
         Placement {
@@ -221,6 +253,29 @@ mod tests {
         let b = graph.add_constituent("Hydrogen", placement(1.0, 0.0));
         assert_ne!(a, b);
         assert_eq!(graph.constituents().len(), 2);
+    }
+
+    #[test]
+    fn materialization_creates_constituents_without_inventing_structure() {
+        let material = Material {
+            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+            internal_bonds: vec![crate::resources::InternalBond { part_a: 0, part_b: 1 }],
+        };
+        let mut graph = PhysicalConstituentGraph::new();
+        let ids = graph
+            .materialize_material(&material, placement(0.0, 0.0))
+            .unwrap();
+        assert_eq!(ids.len(), 2);
+        assert!(graph.relationships().is_empty());
+    }
+
+    #[test]
+    fn aggregate_material_cannot_become_one_constituent() {
+        let material = Material::free_base("Carbon", 2.0);
+        let mut graph = PhysicalConstituentGraph::new();
+        assert!(graph
+            .materialize_material(&material, placement(0.0, 0.0))
+            .is_err());
     }
 
     #[test]
