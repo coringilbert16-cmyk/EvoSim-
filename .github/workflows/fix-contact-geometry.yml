@@ -1,0 +1,52 @@
+name: Fix contact geometry
+on:
+  push:
+    branches: [combine-unification]
+permissions:
+  contents: write
+jobs:
+  fix:
+    if: github.actor == 'coringilbert16-cmyk'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore geometry-based connection occupancy
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/contact.rs')
+          s = p.read_text()
+          anchor = 'fn facing(a:crate::connection_geometry::WorldConnectionPoint,b:crate::connection_geometry::WorldConnectionPoint)->f64{facing_compatibility(a,b)}\n'
+          helpers = '''fn direction_from_to(a:crate::connection_geometry::WorldConnectionPoint,b:crate::connection_geometry::WorldConnectionPoint)->Option<(f64,f64)>{let dx=b.x-a.x;let dy=b.y-a.y;let len=dx.hypot(dy);(len>f64::EPSILON).then_some((dx/len,dy/len))}\nfn same_ray(a:(f64,f64),b:(f64,f64))->bool{let cross=a.0*b.1-a.1*b.0;let dot=a.0*b.0+a.1*b.1;cross.abs()<=1e-9&&dot>=1.0-1e-9}\nfn endpoint_world_point(s:&OrganismStructure,u:usize,p:usize,c:&[crate::resources::BaseResource])->Option<crate::connection_geometry::WorldConnectionPoint>{let unit=s.units.get(u)?;let ConnectionSites::Corners(points)=unit.connection_sites(c)?;Some(transform_point(*points.get(p)?,unit))}\nfn connection_point_has_space(s:&OrganismStructure,u:usize,p:usize,other_u:usize,other_p:usize,c:&[crate::resources::BaseResource])->bool{let Some(start)=endpoint_world_point(s,u,p,c)else{return false};let Some(end)=endpoint_world_point(s,other_u,other_p,c)else{return false};let Some(proposed)=direction_from_to(start,end)else{return false};s.bonds.iter().filter(|b|b.touches(u,p)).all(|bond|{let(ou,op)=if bond.unit_a==u&&bond.point_a==p{(bond.unit_b,bond.point_b)}else{(bond.unit_a,bond.point_a)};let Some(existing_end)=endpoint_world_point(s,ou,op,c)else{return false};direction_from_to(start,existing_end).is_some_and(|existing|!same_ray(proposed,existing))})}\n'''
+          if anchor not in s:
+              raise SystemExit('contact helper anchor not found')
+          s = s.replace(anchor, anchor + helpers, 1)
+          old = 'available_a:true,available_b:true});}}out}'
+          new = 'available_a:connection_point_has_space(s,ua,ia,ub,ib,c),available_b:connection_point_has_space(s,ub,ib,ua,ia,c)});}}out}'
+          if old not in s:
+              raise SystemExit('uncached candidate availability pattern not found')
+          s = s.replace(old, new, 1)
+          old = 'available_a:true,available_b:true})}).collect()}'
+          new = 'available_a:connection_point_has_space(s,ua,ia,ub,ib,c),available_b:connection_point_has_space(s,ub,ib,ua,ia,c)})}).collect()}'
+          if old not in s:
+              raise SystemExit('cached candidate availability pattern not found')
+          s = s.replace(old, new, 1)
+          old = 'pub fn try_add_bond(s:&mut OrganismStructure,b:crate::structure::Bond,c:&[crate::resources::BaseResource])->Result<usize,&\'static str>{if !s.is_valid_bond(&b,c){return Err("invalid bond")}if s.bonds.iter().any(|existing|existing.has_same_identity(&b)){return Err("bond geometry overlaps existing bond")}Ok(s.add_bond(b))}'
+          new = 'pub fn try_add_bond(s:&mut OrganismStructure,b:crate::structure::Bond,c:&[crate::resources::BaseResource])->Result<usize,&\'static str>{if !s.is_valid_bond(&b,c){return Err("invalid bond")}if !connection_point_has_space(s,b.unit_a,b.point_a,b.unit_b,b.point_b,c)||!connection_point_has_space(s,b.unit_b,b.point_b,b.unit_a,b.point_a,c){return Err("bond geometry overlaps existing bond")}if s.bonds.iter().any(|existing|existing.has_same_identity(&b)){return Err("bond geometry overlaps existing bond")}Ok(s.add_bond(b))}'
+          if old not in s:
+              raise SystemExit('try_add_bond pattern not found')
+          s = s.replace(old, new, 1)
+          old = 'assert_eq!(structure.connection_count(a,0),2);}}'
+          new = '''assert_eq!(structure.connection_count(a,0),2);}\n#[test]fn connection_point_rejects_same_geometric_ray(){let catalog=default_catalog();let mut structure=OrganismStructure::new();let a=structure.add_unit(StructuralUnit::new("Carbon",Placement{x:0.0,y:0.0,rotation_radians:0.0}));let b=structure.add_unit(StructuralUnit::new("Carbon",Placement{x:1.0,y:0.0,rotation_radians:0.0}));let c=structure.add_unit(StructuralUnit::new("Carbon",Placement{x:2.0,y:0.0,rotation_radians:0.0}));let first=Bond{unit_a:a,point_a:0,unit_b:b,point_b:0,strength:0.5,bond_energy:1.0};let second=Bond{unit_a:a,point_a:0,unit_b:c,point_b:0,strength:0.5,bond_energy:1.0};assert!(try_add_bond(&mut structure,first,&catalog).is_ok());assert_eq!(try_add_bond(&mut structure,second,&catalog),Err("bond geometry overlaps existing bond"));}}'''
+          if old not in s:
+              raise SystemExit('contact regression-test anchor not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+          PY
+          rm -f .github/workflows/fix-contact-geometry.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/contact.rs .github/workflows/fix-contact-geometry.yml
+          git commit -m 'Restore geometry-based connection-point limits'
+          git push
