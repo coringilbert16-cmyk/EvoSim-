@@ -2,15 +2,15 @@
 use crate::combine::FormationEvaluation;
 use crate::resources::BaseResource;
 use crate::state::{Environment, Organism};
-use crate::structure::{Bond, OrganismStructure, Placement, StructuralUnit};
+use crate::structure::{Bond, ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
 const EPSILON: f64 = 1e-12;
 const COMBINE_CONTACT_TOLERANCE: f64 = 1.0;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct CombineAttempt {
     pub unit_a: usize,
     pub unit_b: usize,
-    pub point_a: usize,
-    pub point_b: usize,
+    pub point_a: ConnectionEndpoint,
+    pub point_b: ConnectionEndpoint,
     pub work_cost: f64,
     pub energy_invested: f64,
     pub interaction_direction: f64,
@@ -50,7 +50,7 @@ fn candidate_is_fully_feasible(structure: &OrganismStructure, ua: usize, ub: usi
 /// The sole runtime bond-formation primitive. Candidate geometry and formation
 /// physics are validated before the structure or energy ledger is mutated.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn form_bond(structure: &mut OrganismStructure, ua: usize, point_a: usize, ub: usize, point_b: usize, catalog: &[BaseResource], _cache: &mut crate::contact::ConnectionCompatibilityCache, investment: f64, water_dilution: f64, energy: &mut f64) -> Option<CombineAttempt> {
+pub(crate) fn form_bond(structure: &mut OrganismStructure, ua: usize, point_a: ConnectionEndpoint, ub: usize, point_b: ConnectionEndpoint, catalog: &[BaseResource], _cache: &mut crate::contact::ConnectionCompatibilityCache, investment: f64, water_dilution: f64, energy: &mut f64) -> Option<CombineAttempt> {
     if ua >= structure.units.len() || ub >= structure.units.len() || ua == ub { return None; }
     let candidate = crate::contact::connection_pair_candidates(structure, ua, ub, catalog).into_iter().find(|c| c.point_a == point_a && c.point_b == point_b && c.distance <= COMBINE_CONTACT_TOLERANCE && c.available_a && c.available_b)?;
     let a = structure.units[ua].properties(catalog)?;
@@ -83,21 +83,25 @@ pub(crate) fn try_combine_stored_unit(organism: &mut Organism, environment: &Env
                 let placement = placement_for_connection(&organism.structure.units[ua], ep, np);
                 let mut hypothetical = organism.structure.clone();
                 let ub = hypothetical.add_unit(StructuralUnit::from_material(raw.clone(), placement)?);
-                let Some(candidate) = crate::contact::connection_pair_candidates(&hypothetical, ua, ub, &environment.catalog).into_iter().find(|c| c.point_a == pa && c.point_b == point_b && c.distance <= COMBINE_CONTACT_TOLERANCE && c.available_a && c.available_b) else { continue; };
+                let wanted_a = ConnectionEndpoint::Discrete(pa);
+                let wanted_b = ConnectionEndpoint::Discrete(point_b);
+                let Some(candidate) = crate::contact::connection_pair_candidates(&hypothetical, ua, ub, &environment.catalog).into_iter().find(|c| c.point_a == wanted_a && c.point_b == wanted_b && c.distance <= COMBINE_CONTACT_TOLERANCE && c.available_a && c.available_b) else { continue; };
                 let Some(evaluation) = candidate_is_fully_feasible(&hypothetical, ua, ub, candidate, &environment.catalog, organism.usable_energy) else { continue; };
-                if best.as_ref().map(|x| candidate.distance < x.4).unwrap_or(true) { best = Some((ua, pa, placement, evaluation.candidate.point_b, candidate.distance)); }
+                if best.as_ref().map(|x| candidate.distance < x.4).unwrap_or(true) { best = Some((ua, pa, placement, point_b, candidate.distance)); }
             }
         }
     }
     let (ua, pa, placement, point_b, _) = best?;
     let mut hypothetical = organism.structure.clone();
     let ub = hypothetical.add_unit(StructuralUnit::from_material(raw.clone(), placement)?);
-    let candidate = crate::contact::connection_pair_candidates(&hypothetical, ua, ub, &environment.catalog).into_iter().find(|c| c.point_a == pa && c.point_b == point_b && c.distance <= COMBINE_CONTACT_TOLERANCE && c.available_a && c.available_b)?;
+    let endpoint_a = ConnectionEndpoint::Discrete(pa);
+    let endpoint_b = ConnectionEndpoint::Discrete(point_b);
+    let candidate = crate::contact::connection_pair_candidates(&hypothetical, ua, ub, &environment.catalog).into_iter().find(|c| c.point_a == endpoint_a && c.point_b == endpoint_b && c.distance <= COMBINE_CONTACT_TOLERANCE && c.available_a && c.available_b)?;
     let a = hypothetical.units[ua].properties(&environment.catalog)?;
     let b = hypothetical.units[ub].properties(&environment.catalog)?;
     let investment = crate::combine::evaluate_formation(candidate, a.cohesion, b.cohesion).threshold;
     let mut energy = organism.usable_energy;
-    let attempt = form_bond(&mut hypothetical, ua, pa, ub, point_b, &environment.catalog, cache, investment, 0.0, &mut energy)?;
+    let attempt = form_bond(&mut hypothetical, ua, endpoint_a, ub, endpoint_b, &environment.catalog, cache, investment, 0.0, &mut energy)?;
     let material = organism.stored_material.take_one_unstructured_named(&resource_name)?;
     organism.structure = hypothetical;
     organism.usable_energy = energy;
