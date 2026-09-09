@@ -1,6 +1,40 @@
-use crate::structure::{ConnectionEndpoint, Placement};
 use crate::resources::BaseResource;
 use serde::{Deserialize, Serialize};
+
+/// World placement of one physically instantiated constituent.
+/// This type belongs to the physical graph layer so physical identity does not
+/// depend on the legacy organism-structure representation.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+pub struct Placement {
+    pub x: f64,
+    pub y: f64,
+    pub rotation_radians: f64,
+}
+
+/// Physical region at which a relationship may attach.
+/// There is deliberately no authored bond-count field: physical fit and
+/// geometry determine whether additional relationships can be admitted.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+pub enum ConnectionEndpoint {
+    Corner { point_index: usize },
+    Boundary { angle_radians: f64 },
+    Fluid { x: f64, y: f64 },
+}
+
+impl ConnectionEndpoint {
+    pub fn same_location(self, other: Self) -> bool {
+        match (self, other) {
+            (Self::Corner { point_index: a }, Self::Corner { point_index: b }) => a == b,
+            (Self::Boundary { angle_radians: a }, Self::Boundary { angle_radians: b }) => {
+                (a - b).abs() <= 1e-12
+            }
+            (Self::Fluid { x: ax, y: ay }, Self::Fluid { x: bx, y: by }) => {
+                (ax - bx).hypot(ay - by) <= 1e-12
+            }
+            _ => false,
+        }
+    }
+}
 
 /// Stable identity for one physically instantiated constituent.
 /// Aggregate material quantities are never physical graph nodes.
@@ -33,10 +67,17 @@ pub struct PhysicalConstituentGraph {
 }
 
 impl PhysicalConstituentGraph {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
-    pub fn constituents(&self) -> &[PhysicalConstituent] { &self.constituents }
-    pub fn relationships(&self) -> &[PhysicalRelationship] { &self.relationships }
+    pub fn constituents(&self) -> &[PhysicalConstituent] {
+        &self.constituents
+    }
+
+    pub fn relationships(&self) -> &[PhysicalRelationship] {
+        &self.relationships
+    }
 
     pub fn constituent(&self, id: PhysicalConstituentId) -> Option<&PhysicalConstituent> {
         self.constituents.iter().find(|c| c.id == id)
@@ -46,28 +87,50 @@ impl PhysicalConstituentGraph {
         self.constituents.iter_mut().find(|c| c.id == id)
     }
 
-    pub fn add_constituent(&mut self, resource_name: impl Into<String>, placement: Placement) -> PhysicalConstituentId {
+    pub fn add_constituent(
+        &mut self,
+        resource_name: impl Into<String>,
+        placement: Placement,
+    ) -> PhysicalConstituentId {
         let id = PhysicalConstituentId(self.next_id);
-        self.next_id = self.next_id.checked_add(1).expect("physical constituent id overflow");
-        self.constituents.push(PhysicalConstituent { id, resource_name: resource_name.into(), placement });
+        self.next_id = self
+            .next_id
+            .checked_add(1)
+            .expect("physical constituent id overflow");
+        self.constituents.push(PhysicalConstituent {
+            id,
+            resource_name: resource_name.into(),
+            placement,
+        });
         id
     }
 
     pub fn remove_constituent(&mut self, id: PhysicalConstituentId) -> Option<PhysicalConstituent> {
         let index = self.constituents.iter().position(|c| c.id == id)?;
-        self.relationships.retain(|r| r.constituent_a != id && r.constituent_b != id);
+        self.relationships
+            .retain(|r| r.constituent_a != id && r.constituent_b != id);
         Some(self.constituents.remove(index))
     }
 
-    /// Physical admission is intentionally independent of an authored bond count.
-    /// Geometry/capacity validation belongs to the contact/connection-geometry layer.
-    pub fn add_relationship(&mut self, relationship: PhysicalRelationship) -> Result<usize, &'static str> {
-        if relationship.constituent_a == relationship.constituent_b { return Err("relationship requires two distinct constituents"); }
-        if self.constituent(relationship.constituent_a).is_none() || self.constituent(relationship.constituent_b).is_none() {
+    /// Relationship admission never enforces a fixed number of bonds per endpoint.
+    /// Geometry/capacity validation belongs to the physical contact layer.
+    pub fn add_relationship(
+        &mut self,
+        relationship: PhysicalRelationship,
+    ) -> Result<usize, &'static str> {
+        if relationship.constituent_a == relationship.constituent_b {
+            return Err("relationship requires two distinct constituents");
+        }
+        if self.constituent(relationship.constituent_a).is_none()
+            || self.constituent(relationship.constituent_b).is_none()
+        {
             return Err("relationship references an unknown constituent");
         }
-        if !relationship.strength.is_finite() || relationship.strength < 0.0 ||
-           !relationship.bond_energy.is_finite() || relationship.bond_energy < 0.0 {
+        if !relationship.strength.is_finite()
+            || relationship.strength < 0.0
+            || !relationship.bond_energy.is_finite()
+            || relationship.bond_energy < 0.0
+        {
             return Err("relationship contains invalid physical values");
         }
         self.relationships.push(relationship);
@@ -78,39 +141,64 @@ impl PhysicalConstituentGraph {
         (index < self.relationships.len()).then(|| self.relationships.remove(index))
     }
 
-    pub fn relationships_touching(&self, id: PhysicalConstituentId) -> impl Iterator<Item = &PhysicalRelationship> {
-        self.relationships.iter().filter(move |r| r.constituent_a == id || r.constituent_b == id)
+    pub fn relationships_touching(
+        &self,
+        id: PhysicalConstituentId,
+    ) -> impl Iterator<Item = &PhysicalRelationship> {
+        self.relationships
+            .iter()
+            .filter(move |r| r.constituent_a == id || r.constituent_b == id)
     }
 
-    pub fn relationship_count_at(&self, id: PhysicalConstituentId, endpoint: ConnectionEndpoint) -> usize {
-        self.relationships.iter().filter(|r| {
-            (r.constituent_a == id && r.endpoint_a.same_location(endpoint)) ||
-            (r.constituent_b == id && r.endpoint_b.same_location(endpoint))
-        }).count()
+    pub fn relationship_count_at(
+        &self,
+        id: PhysicalConstituentId,
+        endpoint: ConnectionEndpoint,
+    ) -> usize {
+        self.relationships
+            .iter()
+            .filter(|r| {
+                (r.constituent_a == id && r.endpoint_a.same_location(endpoint))
+                    || (r.constituent_b == id && r.endpoint_b.same_location(endpoint))
+            })
+            .count()
     }
 
     pub fn connected_components(&self) -> Vec<Vec<PhysicalConstituentId>> {
         let mut components = Vec::new();
-        let mut unseen: std::collections::HashSet<_> = self.constituents.iter().map(|c| c.id).collect();
+        let mut unseen: std::collections::HashSet<_> =
+            self.constituents.iter().map(|c| c.id).collect();
+
         while let Some(start) = unseen.iter().next().copied() {
             let mut stack = vec![start];
             unseen.remove(&start);
             let mut component = Vec::new();
+
             while let Some(id) = stack.pop() {
                 component.push(id);
                 for relationship in self.relationships_touching(id) {
-                    let other = if relationship.constituent_a == id { relationship.constituent_b } else { relationship.constituent_a };
-                    if unseen.remove(&other) { stack.push(other); }
+                    let other = if relationship.constituent_a == id {
+                        relationship.constituent_b
+                    } else {
+                        relationship.constituent_a
+                    };
+                    if unseen.remove(&other) {
+                        stack.push(other);
+                    }
                 }
             }
+
             component.sort_unstable();
             components.push(component);
         }
+
         components
     }
 
     pub fn validate_resource_names(&self, catalog: &[BaseResource]) -> bool {
-        self.constituents.iter().all(|c| catalog.iter().any(|r| r.name == c.resource_name))
+        self.constituents
+            .iter()
+            .all(|c| catalog.iter().any(|r| r.name == c.resource_name))
     }
 }
 
@@ -118,7 +206,13 @@ impl PhysicalConstituentGraph {
 mod tests {
     use super::*;
 
-    fn placement(x: f64, y: f64) -> Placement { Placement { x, y, rotation_radians: 0.0 } }
+    fn placement(x: f64, y: f64) -> Placement {
+        Placement {
+            x,
+            y,
+            rotation_radians: 0.0,
+        }
+    }
 
     #[test]
     fn graph_nodes_are_individual_constituents() {
@@ -138,7 +232,10 @@ mod tests {
         graph.remove_constituent(b);
         assert!(graph.constituent(a).is_some());
         assert!(graph.constituent(c).is_some());
-        assert_eq!(graph.constituents().iter().map(|x| x.id).collect::<Vec<_>>(), vec![a, c]);
+        assert_eq!(
+            graph.constituents().iter().map(|x| x.id).collect::<Vec<_>>(),
+            vec![a, c]
+        );
     }
 
     #[test]
@@ -148,16 +245,20 @@ mod tests {
         let b = graph.add_constituent("Hydrogen", placement(1.0, 0.0));
         let c = graph.add_constituent("Hydrogen", placement(-1.0, 0.0));
         let endpoint = ConnectionEndpoint::Corner { point_index: 0 };
+
         for other in [b, c] {
-            graph.add_relationship(PhysicalRelationship {
-                constituent_a: a,
-                constituent_b: other,
-                endpoint_a: endpoint,
-                endpoint_b: endpoint,
-                strength: 1.0,
-                bond_energy: 1.0,
-            }).unwrap();
+            graph
+                .add_relationship(PhysicalRelationship {
+                    constituent_a: a,
+                    constituent_b: other,
+                    endpoint_a: endpoint,
+                    endpoint_b: endpoint,
+                    strength: 1.0,
+                    bond_energy: 1.0,
+                })
+                .unwrap();
         }
+
         assert_eq!(graph.relationship_count_at(a, endpoint), 2);
     }
 
@@ -167,14 +268,18 @@ mod tests {
         let a = graph.add_constituent("Carbon", placement(0.0, 0.0));
         let b = graph.add_constituent("Hydrogen", placement(1.0, 0.0));
         let c = graph.add_constituent("Water", placement(5.0, 0.0));
-        graph.add_relationship(PhysicalRelationship {
-            constituent_a: a,
-            constituent_b: b,
-            endpoint_a: ConnectionEndpoint::Corner { point_index: 0 },
-            endpoint_b: ConnectionEndpoint::Corner { point_index: 0 },
-            strength: 1.0,
-            bond_energy: 1.0,
-        }).unwrap();
+
+        graph
+            .add_relationship(PhysicalRelationship {
+                constituent_a: a,
+                constituent_b: b,
+                endpoint_a: ConnectionEndpoint::Corner { point_index: 0 },
+                endpoint_b: ConnectionEndpoint::Corner { point_index: 0 },
+                strength: 1.0,
+                bond_energy: 1.0,
+            })
+            .unwrap();
+
         let components = graph.connected_components();
         assert_eq!(components.len(), 2);
         assert!(components.contains(&vec![a, b]));
