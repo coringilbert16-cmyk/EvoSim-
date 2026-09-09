@@ -74,20 +74,34 @@ impl Form {
         }
     }
 
-    pub fn bounding_radius(&self) -> f64 {
+    /// Bounding radius exists only for rigid geometry. Fluid has no authored
+    /// boundary, so its nominal area must never be converted into an invented
+    /// circular radius.
+    pub fn rigid_bounding_radius(&self) -> Option<f64> {
         match self {
-            Form::Circle { radius } => *radius,
-            Form::Line { length, radius } => ((length / 2.0).powi(2) + radius.powi(2)).sqrt(),
-            Form::Rectangle { width, height } => {
-                ((width / 2.0).powi(2) + (height / 2.0).powi(2)).sqrt()
+            Form::Circle { radius } => Some(*radius),
+            Form::Line { length, radius } => {
+                Some(((length / 2.0).powi(2) + radius.powi(2)).sqrt())
             }
-            Form::RegularPolygon { radius, .. } => *radius,
-            Form::Polygon { vertices } => vertices
-                .iter()
-                .map(|(x, y)| (x * x + y * y).sqrt())
-                .fold(0.0_f64, f64::max),
-            Form::Fluid { nominal_area } => (nominal_area / std::f64::consts::PI).sqrt(),
+            Form::Rectangle { width, height } => {
+                Some(((width / 2.0).powi(2) + (height / 2.0).powi(2)).sqrt())
+            }
+            Form::RegularPolygon { radius, .. } => Some(*radius),
+            Form::Polygon { vertices } => Some(
+                vertices
+                    .iter()
+                    .map(|(x, y)| (x * x + y * y).sqrt())
+                    .fold(0.0_f64, f64::max),
+            ),
+            Form::Fluid { .. } => None,
         }
+    }
+
+    /// Legacy convenience retained temporarily for callers that have not yet
+    /// migrated to `rigid_bounding_radius`. New physical geometry code must
+    /// use the Option-returning rigid-only API instead.
+    pub fn bounding_radius(&self) -> f64 {
+        self.rigid_bounding_radius().unwrap_or(0.0)
     }
 }
 
@@ -256,6 +270,10 @@ impl Material {
             }
         }
 
+        if self.has_internal_structure() && !self.is_connected() {
+            return false;
+        }
+
         true
     }
 
@@ -263,6 +281,37 @@ impl Material {
     /// contains at least one internal bond. No independent bonding flag exists.
     pub fn has_internal_structure(&self) -> bool {
         !self.internal_bonds.is_empty()
+    }
+
+    /// Determine whether every constituent belongs to the same physical
+    /// structure. Constituent order is deliberately irrelevant.
+    pub fn is_connected(&self) -> bool {
+        if self.parts.len() <= 1 {
+            return true;
+        }
+        if !self.has_internal_structure() {
+            return false;
+        }
+
+        let mut visited = vec![false; self.parts.len()];
+        let mut stack = vec![0usize];
+        visited[0] = true;
+        while let Some(current) = stack.pop() {
+            for bond in &self.internal_bonds {
+                let next = if bond.part_a == current {
+                    bond.part_b
+                } else if bond.part_b == current {
+                    bond.part_a
+                } else {
+                    continue;
+                };
+                if !visited[next] {
+                    visited[next] = true;
+                    stack.push(next);
+                }
+            }
+        }
+        visited.into_iter().all(|seen| seen)
     }
 
     /// Potential energy is NOT stored on Material. It is derived on demand
@@ -337,7 +386,14 @@ impl Material {
         }
     }
 
+    /// Fractional extraction is valid only for unstructured aggregate
+    /// composition. Structured material is a physical graph and must only be
+    /// separated through explicit BREAK/decomposition so the attachment graph
+    /// can be resolved correctly.
     pub fn take(&mut self, amount: f64) -> Option<Material> {
+        if self.has_internal_structure() {
+            return None;
+        }
         let total = self.total_amount();
         if amount <= 0.0 || total <= 0.0 {
             return None;
@@ -353,7 +409,7 @@ impl Material {
         self.parts.retain(|(_, q)| *q > 1e-12);
         Some(Material {
             parts,
-            internal_bonds: self.internal_bonds.clone(),
+            internal_bonds: Vec::new(),
         })
     }
 }
@@ -769,6 +825,21 @@ mod shape_tests {
             assert_eq!(restored.name, resource.name);
             assert_eq!(restored.shape.form, resource.shape.form);
             assert_eq!(restored.shape.connection_sites(), resource.shape.connection_sites());
+        }
+    }
+
+    #[test]
+    fn fluid_has_no_rigid_bounding_radius() {
+        let water = default_catalog().into_iter().find(|r| r.name == "Water").unwrap();
+        assert_eq!(water.shape.form.rigid_bounding_radius(), None);
+    }
+
+    #[test]
+    fn rigid_forms_have_rigid_bounding_radii() {
+        for resource in default_catalog() {
+            if !matches!(resource.shape.form, Form::Fluid { .. }) {
+                assert!(resource.shape.form.rigid_bounding_radius().unwrap().is_finite());
+            }
         }
     }
 }
