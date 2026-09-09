@@ -2,153 +2,17 @@ use crate::connection_geometry::{ConnectionRegion, WorldConnectionPoint};
 use crate::resources::{BaseResource, ConnectionPoint, ConnectionSites};
 use crate::structural_material::StructuralMaterial;
 use serde::{Deserialize, Serialize};
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
-pub struct Placement { pub x: f64, pub y: f64, pub rotation_radians: f64 }
-
-#[derive(Serialize, Clone, Debug, PartialEq)]
-pub struct StructuralUnit { pub material: StructuralMaterial, pub placement: Placement }
-impl StructuralUnit {
-    pub fn new(resource_name: impl Into<String>, placement: Placement) -> Self { Self { material: StructuralMaterial::single(resource_name), placement } }
-    pub fn from_material(material: crate::resources::Material, placement: Placement) -> Option<Self> { Some(Self { material: StructuralMaterial::from_material(material)?, placement }) }
-    pub fn resource_name(&self) -> Option<&str> { let [(name, amount)] = self.material.constituents() else { return None }; if self.material.internal_bonds().is_empty() && (*amount - 1.0).abs() <= f64::EPSILON { Some(name.as_str()) } else { None } }
-    pub fn properties(&self, catalog: &[BaseResource]) -> Option<crate::resources::ResourceProperties> { if !self.material.is_valid() || !self.material.resolves_in_catalog(catalog) { return None } Some(self.material.weighted_properties(catalog)) }
-    pub fn connection_sites(&self, catalog: &[BaseResource]) -> Option<ConnectionSites> { self.material.connection_sites(catalog) }
-    pub fn shape<'a>(&self, catalog: &'a [BaseResource]) -> Option<&'a crate::resources::Shape> { self.material.shape(catalog) }
-}
-impl<'de> Deserialize<'de> for StructuralUnit {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: serde::Deserializer<'de> {
-        #[derive(Deserialize)] struct Stored { material: Option<StructuralMaterial>, resource_name: Option<String>, placement: Placement }
-        let s = Stored::deserialize(deserializer)?;
-        let m = match s.material { Some(m) => m, None => StructuralMaterial::single(s.resource_name.ok_or_else(|| serde::de::Error::custom("structural unit has no material"))?) };
-        if !m.is_valid() { return Err(serde::de::Error::custom("invalid structural material")) }
-        Ok(Self { material: m, placement: s.placement })
-    }
-}
-
-/// An authored, discrete connection location. This remains useful for blueprint
-/// declarations, but is not used as the physical identity of a realized bond.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct ConnectionSiteRef { pub unit_index: usize, pub point_index: usize }
-
-/// A concrete physical location at which a bond is realized.
-///
-/// Corners are discrete geometric locations. Boundary and Fluid endpoints are
-/// continuous locations and therefore carry a physical coordinate rather than
-/// an invented socket number.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
-pub enum ConnectionEndpoint {
-    Corner { point_index: usize },
-    Boundary { angle_radians: f64 },
-    Fluid { x: f64, y: f64 },
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
-pub struct BondEndpoint { pub unit_index: usize, pub location: ConnectionEndpoint }
-
-impl ConnectionEndpoint {
-    pub fn region(self, unit: &StructuralUnit, catalog: &[BaseResource]) -> Option<ConnectionRegion> {
-        match self {
-            Self::Corner { point_index } => match unit.connection_sites(catalog)? {
-                ConnectionSites::Corners(points) => points.get(point_index).copied().map(|p| ConnectionRegion::Corner(crate::connection_geometry::transform_connection_point(p, unit.placement.x, unit.placement.y, unit.placement.rotation_radians))),
-                _ => None,
-            },
-            Self::Boundary { .. } => match unit.connection_sites(catalog)? {
-                ConnectionSites::Circumference { radius } => Some(ConnectionRegion::Boundary { center_x: unit.placement.x, center_y: unit.placement.y, radius }),
-                _ => None,
-            },
-            Self::Fluid { .. } => match unit.connection_sites(catalog)? {
-                ConnectionSites::Undetermined => {
-                    let radius = unit.shape(catalog)?.form.bounding_radius();
-                    Some(ConnectionRegion::Fluid { center_x: unit.placement.x, center_y: unit.placement.y, effective_radius: radius })
-                }
-                _ => None,
-            },
-        }
-    }
-
-    pub fn world_point(self, unit: &StructuralUnit, catalog: &[BaseResource]) -> Option<WorldConnectionPoint> {
-        let (local_x, local_y, normal_x, normal_y) = match self {
-            Self::Corner { point_index } => {
-                let ConnectionSites::Corners(points) = unit.connection_sites(catalog)? else { return None };
-                let p = *points.get(point_index)?;
-                (p.x, p.y, p.direction_radians.cos(), p.direction_radians.sin())
-            }
-            Self::Boundary { angle_radians } => {
-                let ConnectionSites::Circumference { radius } = unit.connection_sites(catalog)? else { return None };
-                let (nx, ny) = angle_radians.sin_cos();
-                (radius * nx, radius * ny, nx, ny)
-            }
-            Self::Fluid { x, y } => (x, y, 0.0, 0.0),
-        };
-        let (s, c) = unit.placement.rotation_radians.sin_cos();
-        Some(WorldConnectionPoint {
-            x: unit.placement.x + local_x * c - local_y * s,
-            y: unit.placement.y + local_x * s + local_y * c,
-            normal_x: normal_x * c - normal_y * s,
-            normal_y: normal_x * s + normal_y * c,
-        })
-    }
-
-    pub fn same_location(self, other: Self) -> bool {
-        match (self, other) {
-            (Self::Corner { point_index: a }, Self::Corner { point_index: b }) => a == b,
-            (Self::Boundary { angle_radians: a }, Self::Boundary { angle_radians: b }) => (a - b).abs() <= 1e-12,
-            (Self::Fluid { x: ax, y: ay }, Self::Fluid { x: bx, y: by }) => (ax - bx).hypot(ay - by) <= 1e-12,
-            _ => false,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
-pub struct Bond { pub endpoint_a: BondEndpoint, pub endpoint_b: BondEndpoint, pub strength: f64, #[serde(default)] pub bond_energy: f64 }
-impl Bond {
-    pub fn touches(&self, u: usize, location: ConnectionEndpoint) -> bool { (self.endpoint_a.unit_index == u && self.endpoint_a.location.same_location(location)) || (self.endpoint_b.unit_index == u && self.endpoint_b.location.same_location(location)) }
-    pub fn has_same_identity(&self, o: &Bond) -> bool { (self.endpoint_a.unit_index == o.endpoint_a.unit_index && self.endpoint_a.location.same_location(o.endpoint_a.location) && self.endpoint_b.unit_index == o.endpoint_b.unit_index && self.endpoint_b.location.same_location(o.endpoint_b.location)) || (self.endpoint_a.unit_index == o.endpoint_b.unit_index && self.endpoint_a.location.same_location(o.endpoint_b.location) && self.endpoint_b.unit_index == o.endpoint_a.unit_index && self.endpoint_b.location.same_location(o.endpoint_a.location)) }
-    pub fn is_valid(&self, n: usize, connection_is_valid: impl Fn(BondEndpoint) -> bool) -> bool { self.endpoint_a.unit_index < n && self.endpoint_b.unit_index < n && self.endpoint_a.unit_index != self.endpoint_b.unit_index && self.bond_energy.is_finite() && self.bond_energy >= 0.0 && connection_is_valid(self.endpoint_a) && connection_is_valid(self.endpoint_b) }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct OrganismStructure { pub units: Vec<StructuralUnit>, pub bonds: Vec<Bond> }
-impl OrganismStructure {
-    pub fn new() -> Self { Self::default() }
-    pub fn add_unit(&mut self, u: StructuralUnit) -> usize { self.units.push(u); self.units.len() - 1 }
-    pub(crate) fn push_bond_unchecked(&mut self, b: Bond) -> usize { self.bonds.push(b); self.bonds.len() - 1 }
-    pub fn is_valid_bond(&self, b: &Bond, c: &[BaseResource]) -> bool {
-        if !b.is_valid(self.units.len(), |e| self.endpoint_is_valid(e, c)) { return false }
-        let Some(a) = self.units[b.endpoint_a.unit_index].properties(c) else { return false };
-        let Some(d) = self.units[b.endpoint_b.unit_index].properties(c) else { return false };
-        let strength = crate::combine::bond_strength(a, d);
-        strength.is_finite() && (0.0..=1.0).contains(&strength)
-    }
-    fn endpoint_is_valid(&self, endpoint: BondEndpoint, catalog: &[BaseResource]) -> bool { self.units.get(endpoint.unit_index).and_then(|u| endpoint.location.world_point(u, catalog)).is_some() }
-    pub fn connection_site(&self, s: ConnectionSiteRef, c: &[BaseResource]) -> Option<ConnectionPoint> {
-        match self.units.get(s.unit_index)?.connection_sites(c)? { ConnectionSites::Corners(p) => p.get(s.point_index).copied(), _ => None }
-    }
-    pub fn available_connection_sites(&self, c: &[BaseResource]) -> Vec<ConnectionSiteRef> {
-        let mut out = Vec::new();
-        for i in 0..self.units.len() {
-            let Some(ConnectionSites::Corners(points)) = self.units[i].connection_sites(c) else { continue };
-            for j in 0..points.len() { out.push(ConnectionSiteRef { unit_index: i, point_index: j }); }
-        }
-        out
-    }
-    pub fn connected_components(&self) -> Vec<Vec<usize>> { let mut adjacency = vec![Vec::<usize>::new(); self.units.len()]; for b in &self.bonds { let a = b.endpoint_a.unit_index; let d = b.endpoint_b.unit_index; if a < self.units.len() && d < self.units.len() { adjacency[a].push(d); adjacency[d].push(a); } } let mut visited = vec![false; self.units.len()]; let mut out = Vec::new(); for start in 0..self.units.len() { if visited[start] { continue } let mut stack = vec![start]; visited[start] = true; let mut component = Vec::new(); while let Some(u) = stack.pop() { component.push(u); for &next in &adjacency[u] { if !visited[next] { visited[next] = true; stack.push(next); } } } component.sort_unstable(); out.push(component); } out }
-    pub fn component_connection_sites(&self, component: &[usize], catalog: &[BaseResource]) -> Vec<ConnectionSiteRef> { let set: std::collections::HashSet<usize> = component.iter().copied().collect(); self.available_connection_sites(catalog).into_iter().filter(|s| set.contains(&s.unit_index)).collect() }
-    pub fn connection_load(&self, u: usize, location: ConnectionEndpoint, _c: &[BaseResource]) -> f64 { self.bonds.iter().filter(|b| b.touches(u, location)).map(|b| crate::combine::experimental_bond_strength(b.bond_energy)).sum() }
-    pub fn connection_count(&self, u: usize, location: ConnectionEndpoint) -> usize { self.bonds.iter().filter(|b| b.touches(u, location)).count() }
-    pub fn break_bond(&mut self, i: usize) -> Option<Bond> { if i < self.bonds.len() { Some(self.bonds.remove(i)) } else { None } }
-    pub fn break_matching_bond(&mut self, t: Bond) -> Option<Bond> { let i = self.bonds.iter().position(|b| b.has_same_identity(&t))?; self.break_bond(i) }
-    pub fn disconnect_point(&mut self, u: usize, location: ConnectionEndpoint) -> Vec<Bond> { let mut out = Vec::new(); let mut i = 0; while i < self.bonds.len() { if self.bonds[i].touches(u, location) { out.push(self.bonds.remove(i)); } else { i += 1; } } out }
-    pub fn loaded_points(&self) -> Vec<(usize, ConnectionEndpoint)> { let mut out = Vec::new(); for b in &self.bonds { for e in [b.endpoint_a, b.endpoint_b] { if !out.iter().any(|(u, p)| *u == e.unit_index && p.same_location(e.location)) { out.push((e.unit_index, e.location)); } } } out }
-}
-
-pub fn formation_threshold(a: f64, b: f64, la: f64, lb: f64) -> f64 { let la = la.max(0.0); let lb = lb.max(0.0); ((a + b) / 2.0) * (1.0 + la.sqrt() + lb.sqrt()) }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test] fn material_is_owned_by_unit() { let u = StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }); assert_eq!(u.material.constituents(), &[("Carbon".into(), 1.0)]) }
-    #[test] fn composite_identity_is_preserved() { let m = crate::resources::Material { parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)], internal_bonds: vec![crate::resources::InternalBond { part_a: 0, part_b: 1 }] }; let u = StructuralUnit::from_material(m.clone(), Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }).unwrap(); assert_eq!(u.material.material(), &m); assert!(matches!(u.connection_sites(&crate::resources::default_catalog()), Some(ConnectionSites::Corners(_)))) }
-    #[test] fn connection_load_tracks_derived_bond_energy_strength() { let catalog = crate::resources::default_catalog(); let mut structure = OrganismStructure::new(); let a = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 })); let b = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 })); structure.push_bond_unchecked(Bond { endpoint_a: BondEndpoint { unit_index: a, location: ConnectionEndpoint::Corner { point_index: 0 } }, endpoint_b: BondEndpoint { unit_index: b, location: ConnectionEndpoint::Corner { point_index: 0 } }, strength: 0.05, bond_energy: 1.0 }); let expected = crate::combine::experimental_bond_strength(1.0); assert!((structure.connection_load(a, ConnectionEndpoint::Corner { point_index: 0 }, &catalog) - expected).abs() < 1e-12); structure.bonds[0].strength = 0.95; assert!((structure.connection_load(a, ConnectionEndpoint::Corner { point_index: 0 }, &catalog) - expected).abs() < 1e-12) }
-}
+#[derive(Serialize,Deserialize,Clone,Copy,Debug,PartialEq)]pub struct Placement{pub x:f64,pub y:f64,pub rotation_radians:f64}
+#[derive(Serialize,Clone,Debug,PartialEq)]pub struct StructuralUnit{pub material:StructuralMaterial,pub placement:Placement}
+impl StructuralUnit{pub fn new(resource_name:impl Into<String>,placement:Placement)->Self{Self{material:StructuralMaterial::single(resource_name),placement}}pub fn from_material(material:crate::resources::Material,placement:Placement)->Option<Self>{Some(Self{material:StructuralMaterial::from_material(material)?,placement})}pub fn resource_name(&self)->Option<&str>{let[(name,amount)]=self.material.constituents()else{return None};if self.material.internal_bonds().is_empty()&&(*amount-1.0).abs()<=f64::EPSILON{Some(name.as_str())}else{None}}pub fn properties(&self,catalog:&[BaseResource])->Option<crate::resources::ResourceProperties>{if !self.material.is_valid()||!self.material.resolves_in_catalog(catalog){return None}Some(self.material.weighted_properties(catalog))}pub fn connection_sites(&self,catalog:&[BaseResource])->Option<ConnectionSites>{self.material.connection_sites(catalog)}pub fn shape<'a>(&self,catalog:&'a[BaseResource])->Option<&'a crate::resources::Shape>{self.material.shape(catalog)}}
+impl<'de>Deserialize<'de>for StructuralUnit{fn deserialize<D>(deserializer:D)->Result<Self,D::Error>where D:serde::Deserializer<'de>{#[derive(Deserialize)]struct Stored{material:Option<StructuralMaterial>,resource_name:Option<String>,placement:Placement}let s=Stored::deserialize(deserializer)?;let m=match s.material{Some(m)=>m,None=>StructuralMaterial::single(s.resource_name.ok_or_else(||serde::de::Error::custom("structural unit has no material"))?)};if !m.is_valid(){return Err(serde::de::Error::custom("invalid structural material"))}Ok(Self{material:m,placement:s.placement})}}
+#[derive(Serialize,Deserialize,Clone,Copy,Debug,PartialEq,Eq,Hash)]pub struct ConnectionSiteRef{pub unit_index:usize,pub point_index:usize}
+#[derive(Serialize,Deserialize,Clone,Copy,Debug,PartialEq)]pub enum ConnectionEndpoint{Corner{point_index:usize},Boundary{angle_radians:f64},Fluid{x:f64,y:f64}}
+#[derive(Serialize,Deserialize,Clone,Copy,Debug,PartialEq)]pub struct BondEndpoint{pub unit_index:usize,pub location:ConnectionEndpoint}
+impl ConnectionEndpoint{pub fn region(self,unit:&StructuralUnit,catalog:&[BaseResource])->Option<ConnectionRegion>{match self{Self::Corner{point_index}=>match unit.connection_sites(catalog)?{ConnectionSites::Corners(points)=>points.get(point_index).copied().map(|p|ConnectionRegion::Corner(crate::connection_geometry::transform_connection_point(p,unit.placement.x,unit.placement.y,unit.placement.rotation_radians))),_=>None},Self::Boundary{..}=>match unit.connection_sites(catalog)?{ConnectionSites::Circumference{radius}=>Some(ConnectionRegion::Boundary{center_x:unit.placement.x,center_y:unit.placement.y,radius}),_=>None},Self::Fluid{..}=>match unit.connection_sites(catalog)?{ConnectionSites::Undetermined=>{let radius=unit.shape(catalog)?.form.bounding_radius();Some(ConnectionRegion::Fluid{center_x:unit.placement.x,center_y:unit.placement.y,effective_radius:radius})}_=>None}}}pub fn world_point(self,unit:&StructuralUnit,catalog:&[BaseResource])->Option<WorldConnectionPoint>{let(local_x,local_y,normal_x,normal_y)=match self{Self::Corner{point_index}=>{let ConnectionSites::Corners(points)=unit.connection_sites(catalog)? else{return None};let p=*points.get(point_index)?;(p.x,p.y,p.direction_radians.cos(),p.direction_radians.sin())},Self::Boundary{angle_radians}=>{let ConnectionSites::Circumference{radius}=unit.connection_sites(catalog)? else{return None};let(nx,ny)=angle_radians.sin_cos();(radius*nx,radius*ny,nx,ny)},Self::Fluid{x,y}=>(x,y,0.0,0.0)};let(s,c)=unit.placement.rotation_radians.sin_cos();Some(WorldConnectionPoint{x:unit.placement.x+local_x*c-local_y*s,y:unit.placement.y+local_x*s+local_y*c,normal_x:normal_x*c-normal_y*s,normal_y:normal_x*s+normal_y*c})}pub fn same_location(self,other:Self)->bool{match(self,other){(Self::Corner{point_index:a},Self::Corner{point_index:b})=>a==b,(Self::Boundary{angle_radians:a},Self::Boundary{angle_radians:b})=>(a-b).abs()<=1e-12,(Self::Fluid{x:ax,y:ay},Self::Fluid{x:bx,y:by})=>(ax-bx).hypot(ay-by)<=1e-12,_=>false}}}
+#[derive(Serialize,Deserialize,Clone,Copy,Debug,PartialEq)]pub struct Bond{pub endpoint_a:BondEndpoint,pub endpoint_b:BondEndpoint,pub strength:f64,#[serde(default)]pub bond_energy:f64}
+impl Bond{pub fn touches(&self,u:usize,location:ConnectionEndpoint)->bool{(self.endpoint_a.unit_index==u&&self.endpoint_a.location.same_location(location))||(self.endpoint_b.unit_index==u&&self.endpoint_b.location.same_location(location))}pub fn has_same_identity(&self,o:&Bond)->bool{(self.endpoint_a.unit_index==o.endpoint_a.unit_index&&self.endpoint_a.location.same_location(o.endpoint_a.location)&&self.endpoint_b.unit_index==o.endpoint_b.unit_index&&self.endpoint_b.location.same_location(o.endpoint_b.location))||(self.endpoint_a.unit_index==o.endpoint_b.unit_index&&self.endpoint_a.location.same_location(o.endpoint_b.location)&&self.endpoint_b.unit_index==o.endpoint_a.unit_index&&self.endpoint_b.location.same_location(o.endpoint_a.location))}pub fn is_valid(&self,n:usize,connection_is_valid:impl Fn(BondEndpoint)->bool)->bool{self.endpoint_a.unit_index<n&&self.endpoint_b.unit_index<n&&self.endpoint_a.unit_index!=self.endpoint_b.unit_index&&self.bond_energy.is_finite()&&self.bond_energy>=0.0&&connection_is_valid(self.endpoint_a)&&connection_is_valid(self.endpoint_b)}}
+#[derive(Serialize,Deserialize,Clone,Debug,Default)]pub struct OrganismStructure{pub units:Vec<StructuralUnit>,pub bonds:Vec<Bond>}
+impl OrganismStructure{pub fn new()->Self{Self::default()}pub fn add_unit(&mut self,u:StructuralUnit)->usize{self.units.push(u);self.units.len()-1}pub(crate)fn push_bond_unchecked(&mut self,b:Bond)->usize{self.bonds.push(b);self.bonds.len()-1}pub fn is_valid_bond(&self,b:&Bond,c:&[BaseResource])->bool{if !b.is_valid(self.units.len(),|e|self.endpoint_is_valid(e,c)){return false}let Some(a)=self.units[b.endpoint_a.unit_index].properties(c)else{return false};let Some(d)=self.units[b.endpoint_b.unit_index].properties(c)else{return false};let strength=crate::combine::bond_strength(a,d);strength.is_finite()&&(0.0..=1.0).contains(&strength)}fn endpoint_is_valid(&self,endpoint:BondEndpoint,catalog:&[BaseResource])->bool{self.units.get(endpoint.unit_index).and_then(|u|endpoint.location.world_point(u,catalog)).is_some()}pub fn connection_site(&self,s:ConnectionSiteRef,c:&[BaseResource])->Option<ConnectionPoint>{match self.units.get(s.unit_index)?.connection_sites(c)?{ConnectionSites::Corners(p)=>p.get(s.point_index).copied(),_=>None}}pub fn available_connection_sites(&self,c:&[BaseResource])->Vec<ConnectionSiteRef>{let mut out=Vec::new();for i in 0..self.units.len(){let Some(ConnectionSites::Corners(points))=self.units[i].connection_sites(c)else{continue};for j in 0..points.len(){out.push(ConnectionSiteRef{unit_index:i,point_index:j})}}out}pub fn connected_components(&self)->Vec<Vec<usize>>{let mut adjacency=vec![Vec::<usize>::new();self.units.len()];for b in &self.bonds{let a=b.endpoint_a.unit_index;let d=b.endpoint_b.unit_index;if a<self.units.len()&&d<self.units.len(){adjacency[a].push(d);adjacency[d].push(a)}}let mut visited=vec![false;self.units.len()];let mut out=Vec::new();for start in 0..self.units.len(){if visited[start]{continue}let mut stack=vec![start];visited[start]=true;let mut component=Vec::new();while let Some(u)=stack.pop(){component.push(u);for &next in &adjacency[u]{if !visited[next]{visited[next]=true;stack.push(next)}}}component.sort_unstable();out.push(component)}out}pub fn component_connection_sites(&self,component:&[usize],catalog:&[BaseResource])->Vec<ConnectionSiteRef>{let set:std::collections::HashSet<usize>=component.iter().copied().collect();self.available_connection_sites(catalog).into_iter().filter(|s|set.contains(&s.unit_index)).collect()}pub fn connection_load(&self,u:usize,location:ConnectionEndpoint,_c:&[BaseResource])->f64{self.bonds.iter().filter(|b|b.touches(u,location)).map(|b|crate::combine::experimental_bond_strength(b.bond_energy)).sum()}pub fn connection_count(&self,u:usize,location:ConnectionEndpoint)->usize{self.bonds.iter().filter(|b|b.touches(u,location)).count()}pub fn break_bond(&mut self,i:usize)->Option<Bond>{if i<self.bonds.len(){Some(self.bonds.remove(i))}else{None}}pub fn break_matching_bond(&mut self,t:Bond)->Option<Bond>{let i=self.bonds.iter().position(|b|b.has_same_identity(&t))?;self.break_bond(i)}pub fn disconnect_point(&mut self,u:usize,location:ConnectionEndpoint)->Vec<Bond>{let mut out=Vec::new();let mut i=0;while i<self.bonds.len(){if self.bonds[i].touches(u,location){out.push(self.bonds.remove(i))}else{i+=1}}out}pub fn loaded_points(&self)->Vec<(usize,ConnectionEndpoint)>{let mut out:Vec<(usize,ConnectionEndpoint)>=Vec::new();for b in &self.bonds{for e in[b.endpoint_a,b.endpoint_b]{if !out.iter().any(|(u,p)|*u==e.unit_index&&p.same_location(e.location)){out.push((e.unit_index,e.location))}}}out}}
+pub fn formation_threshold(a:f64,b:f64,la:f64,lb:f64)->f64{let la=la.max(0.0);let lb=lb.max(0.0);((a+b)/2.0)*(1.0+la.sqrt()+lb.sqrt())}
+#[cfg(test)]mod tests{use super::*;#[test]fn material_is_owned_by_unit(){let u=StructuralUnit::new("Carbon",Placement{x:0.0,y:0.0,rotation_radians:0.0});assert_eq!(u.material.constituents(),&[("Carbon".into(),1.0)])}#[test]fn composite_identity_is_preserved(){let m=crate::resources::Material{parts:vec![("Carbon".into(),1.0),("Hydrogen".into(),1.0)],internal_bonds:vec![crate::resources::InternalBond{part_a:0,part_b:1}]};let u=StructuralUnit::from_material(m.clone(),Placement{x:0.0,y:0.0,rotation_radians:0.0}).unwrap();assert_eq!(u.material.material(),&m);assert!(matches!(u.connection_sites(&crate::resources::default_catalog()),Some(ConnectionSites::Corners(_))))}#[test]fn connection_load_tracks_derived_bond_energy_strength(){let catalog=crate::resources::default_catalog();let mut structure=OrganismStructure::new();let a=structure.add_unit(StructuralUnit::new("Carbon",Placement{x:0.0,y:0.0,rotation_radians:0.0}));let b=structure.add_unit(StructuralUnit::new("Carbon",Placement{x:1.0,y:0.0,rotation_radians:0.0}));structure.push_bond_unchecked(Bond{endpoint_a:BondEndpoint{unit_index:a,location:ConnectionEndpoint::Corner{point_index:0}},endpoint_b:BondEndpoint{unit_index:b,location:ConnectionEndpoint::Corner{point_index:0}},strength:0.05,bond_energy:1.0});let expected=crate::combine::experimental_bond_strength(1.0);assert!((structure.connection_load(a,ConnectionEndpoint::Corner{point_index:0},&catalog)-expected).abs()<1e-12);structure.bonds[0].strength=0.95;assert!((structure.connection_load(a,ConnectionEndpoint::Corner{point_index:0},&catalog)-expected).abs()<1e-12)}}
