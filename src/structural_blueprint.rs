@@ -3,9 +3,7 @@ use crate::resources::{BaseResource, InternalBond, Material};
 use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 use serde::{Deserialize, Serialize};
 
-fn default_core_elements() -> Vec<usize> {
-    vec![0]
-}
+fn default_core_elements() -> Vec<usize> { vec![0] }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct StructuralBlueprint {
@@ -19,77 +17,28 @@ pub struct StructuralBlueprint {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct BlueprintElement {
-    pub material: Material,
-    pub placement: Placement,
-}
+pub struct BlueprintElement { pub material: Material, pub placement: Placement }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub struct BlueprintConnection {
-    pub element_a: usize,
-    pub point_a: usize,
-    pub element_b: usize,
-    pub point_b: usize,
-}
+pub struct BlueprintConnection { pub element_a: usize, pub point_a: usize, pub element_b: usize, pub point_b: usize }
 
 impl StructuralBlueprint {
-    pub fn new(
-        elements: Vec<BlueprintElement>,
-        connections: Vec<BlueprintConnection>,
-    ) -> Self {
-        Self {
-            elements,
-            connections,
-            core_elements: default_core_elements(),
-        }
-    }
-
-    pub fn with_core_elements(
-        elements: Vec<BlueprintElement>,
-        connections: Vec<BlueprintConnection>,
-        core_elements: Vec<usize>,
-    ) -> Self {
-        Self {
-            elements,
-            connections,
-            core_elements,
-        }
-    }
-
-    pub fn is_valid(&self) -> bool {
-        self.validate().is_ok()
-    }
-
+    pub fn new(elements: Vec<BlueprintElement>, connections: Vec<BlueprintConnection>) -> Self { Self { elements, connections, core_elements: default_core_elements() } }
+    pub fn with_core_elements(elements: Vec<BlueprintElement>, connections: Vec<BlueprintConnection>, core_elements: Vec<usize>) -> Self { Self { elements, connections, core_elements } }
+    pub fn is_valid(&self) -> bool { self.validate().is_ok() }
     pub fn validate(&self) -> Result<(), String> {
-        if self.elements.is_empty() {
-            return Err("blueprint must contain at least one element".into());
-        }
-        if self.core_elements.is_empty() {
-            return Err("blueprint must define a genome core".into());
-        }
+        if self.elements.is_empty() { return Err("blueprint must contain at least one element".into()); }
+        if self.core_elements.is_empty() { return Err("blueprint must define a genome core".into()); }
         let mut core_seen = vec![false; self.elements.len()];
         for &index in &self.core_elements {
-            if index >= self.elements.len() {
-                return Err("genome core references a missing element".into());
-            }
-            if core_seen[index] {
-                return Err("genome core contains a duplicate element".into());
-            }
+            if index >= self.elements.len() { return Err("genome core references a missing element".into()); }
+            if core_seen[index] { return Err("genome core contains a duplicate element".into()); }
             core_seen[index] = true;
         }
-        for (i, e) in self.elements.iter().enumerate() {
-            e.validate().map_err(|x| format!("element {i}: {x}"))?;
-        }
-        for (i, c) in self.connections.iter().enumerate() {
-            c.validate(self)
-                .map_err(|x| format!("connection {i}: {x}"))?;
-        }
-        if self.elements.len() > 1 && !self.is_connected() {
-            return Err("multi-element blueprint must be connected".into());
-        }
-        if self.core_elements.len() > 1 && !self.core_is_connected() {
-            return Err("genome core must be connected".into());
-        }
+        for (i, e) in self.elements.iter().enumerate() { e.validate().map_err(|x| format!("element {i}: {x}"))?; }
+        for (i, c) in self.connections.iter().enumerate() { c.validate(self).map_err(|x| format!("connection {i}: {x}"))?; }
+        if self.elements.len() > 1 && !self.is_connected() { return Err("multi-element blueprint must be connected".into()); }
+        if self.core_elements.len() > 1 && !self.core_is_connected() { return Err("genome core must be connected".into()); }
         Ok(())
     }
 
@@ -97,262 +46,79 @@ impl StructuralBlueprint {
         self.validate()?;
         let mut s = OrganismStructure::new();
         for e in &self.elements {
-            s.add_unit(
-                StructuralUnit::from_material(e.material.clone(), e.placement)
-                    .ok_or_else(|| "invalid blueprint structural material".to_string())?,
-            );
+            s.add_unit(StructuralUnit::from_material(e.material.clone(), e.placement).ok_or_else(|| "invalid blueprint structural material".to_string())?);
         }
         for c in &self.connections {
-            let a = s
-                .connection_site(
-                    crate::structure::ConnectionSiteRef {
-                        unit_index: c.element_a,
-                        point_index: c.point_a,
-                    },
-                    catalog,
-                )
-                .ok_or_else(|| format!("connection {c:?} references an invalid first site"))?;
-            let b = s
-                .connection_site(
-                    crate::structure::ConnectionSiteRef {
-                        unit_index: c.element_b,
-                        point_index: c.point_b,
-                    },
-                    catalog,
-                )
-                .ok_or_else(|| format!("connection {c:?} references an invalid second site"))?;
-            if !crate::contact::connection_points_contact(
-                a,
-                &s.units[c.element_a],
-                b,
-                &s.units[c.element_b],
-                1e-9,
-                1.0 - 1e-9,
-            ) {
+            let a = s.connection_site(crate::structure::ConnectionSiteRef { unit_index: c.element_a, point_index: c.point_a }, catalog).ok_or_else(|| format!("connection {c:?} references an invalid first site"))?;
+            let b = s.connection_site(crate::structure::ConnectionSiteRef { unit_index: c.element_b, point_index: c.point_b }, catalog).ok_or_else(|| format!("connection {c:?} references an invalid second site"))?;
+            if !crate::contact::connection_points_contact(a, &s.units[c.element_a], b, &s.units[c.element_b], 1e-9, 1.0 - 1e-9) {
                 return Err(format!("connection {c:?} does not realize as physical contact"));
             }
-            let pa = s.units[c.element_a]
-                .properties(catalog)
-                .ok_or_else(|| "missing catalog properties for first connection endpoint".to_string())?;
-            let pb = s.units[c.element_b]
-                .properties(catalog)
-                .ok_or_else(|| "missing catalog properties for second connection endpoint".to_string())?;
+            let pa = s.units[c.element_a].properties(catalog).ok_or_else(|| "missing catalog properties for first connection endpoint".to_string())?;
+            let pb = s.units[c.element_b].properties(catalog).ok_or_else(|| "missing catalog properties for second connection endpoint".to_string())?;
             let strength = crate::combine::bond_strength(pa, pb);
-            if !strength.is_finite() || !(0.0..=1.0).contains(&strength) {
-                return Err("connection produced invalid intrinsic bond strength".into());
-            }
+            if !strength.is_finite() || !(0.0..=1.0).contains(&strength) { return Err("connection produced invalid intrinsic bond strength".into()); }
+            let candidate = crate::contact::connection_pair_candidates_cached(
+                &s, c.element_a, c.element_b, catalog, &mut crate::contact::ConnectionCompatibilityCache::new()
+            ).into_iter().find(|candidate| candidate.point_a == c.point_a && candidate.point_b == c.point_b).ok_or_else(|| format!("connection {c:?} has no valid physical candidate"))?;
+            let evaluation = crate::combine::evaluate_formation(candidate, pa.cohesion, pb.cohesion);
+            if !evaluation.threshold.is_finite() || evaluation.threshold <= 0.0 { return Err("connection produced invalid COMBINE formation investment".into()); }
             s.add_bond(crate::structure::Bond {
                 unit_a: c.element_a,
                 point_a: c.point_a,
                 unit_b: c.element_b,
                 point_b: c.point_b,
                 strength,
-                bond_energy: 0.0,
+                bond_energy: evaluation.threshold,
             });
         }
         Ok(s)
     }
 
     pub fn is_connected(&self) -> bool {
-        if self.elements.is_empty() {
-            return false;
-        }
-        let mut v = vec![false; self.elements.len()];
-        let mut stack = vec![0usize];
-        v[0] = true;
+        if self.elements.is_empty() { return false; }
+        let mut v = vec![false; self.elements.len()]; let mut stack = vec![0usize]; v[0] = true;
         while let Some(cur) = stack.pop() {
             for c in &self.connections {
-                let next = if c.element_a == cur {
-                    c.element_b
-                } else if c.element_b == cur {
-                    c.element_a
-                } else {
-                    continue;
-                };
-                if next < v.len() && !v[next] {
-                    v[next] = true;
-                    stack.push(next);
-                }
+                let next = if c.element_a == cur { c.element_b } else if c.element_b == cur { c.element_a } else { continue };
+                if next < v.len() && !v[next] { v[next] = true; stack.push(next); }
             }
         }
         v.into_iter().all(|x| x)
     }
-
     fn core_is_connected(&self) -> bool {
-        let core = self
-            .core_elements
-            .iter()
-            .copied()
-            .collect::<std::collections::HashSet<_>>();
-        let mut visited = std::collections::HashSet::new();
-        let mut stack = vec![self.core_elements[0]];
-        visited.insert(self.core_elements[0]);
-        while let Some(cur) = stack.pop() {
-            for c in &self.connections {
-                let next = if c.element_a == cur {
-                    c.element_b
-                } else if c.element_b == cur {
-                    c.element_a
-                } else {
-                    continue;
-                };
-                if core.contains(&next) && visited.insert(next) {
-                    stack.push(next);
-                }
-            }
-        }
+        let core = self.core_elements.iter().copied().collect::<std::collections::HashSet<_>>(); let mut visited = std::collections::HashSet::new(); let mut stack = vec![self.core_elements[0]]; visited.insert(self.core_elements[0]);
+        while let Some(cur) = stack.pop() { for c in &self.connections { let next = if c.element_a == cur { c.element_b } else if c.element_b == cur { c.element_a } else { continue }; if core.contains(&next) && visited.insert(next) { stack.push(next); } } }
         visited.len() == core.len()
     }
-
-    pub fn total_material_amount(&self) -> f64 {
-        self.elements.iter().map(|e| e.material.total_amount()).sum()
-    }
-
-    pub fn structural_mass(&self, catalog: &[BaseResource]) -> f64 {
-        self.elements
-            .iter()
-            .map(|e| e.material.mass(catalog))
-            .sum()
-    }
+    pub fn total_material_amount(&self) -> f64 { self.elements.iter().map(|e| e.material.total_amount()).sum() }
+    pub fn structural_mass(&self, catalog: &[BaseResource]) -> f64 { self.elements.iter().map(|e| e.material.mass(catalog)).sum() }
 }
 
 impl BlueprintElement {
     pub fn validate(&self) -> Result<(), String> {
-        if !self.material.is_valid() {
-            return Err("material is invalid".into());
-        }
-        if !self.placement.x.is_finite()
-            || !self.placement.y.is_finite()
-            || !self.placement.rotation_radians.is_finite()
-        {
-            return Err("placement must be finite".into());
-        }
-        if self
-            .material
-            .parts
-            .iter()
-            .any(|(_, amount)| (*amount - 1.0).abs() > f64::EPSILON)
-        {
-            return Err("each blueprint constituent must represent exactly one material unit".into());
-        }
-        if self.material.parts.len() == 1 && !self.material.has_internal_structure() {
-            return Ok(());
-        }
-        if !self.material.has_internal_structure() {
-            return Err("multi-constituent structural material must have internal bonds".into());
-        }
-        if !material_structure_is_connected(&self.material) {
-            return Err("internal structural material must be connected".into());
-        }
+        if !self.material.is_valid() { return Err("material is invalid".into()); }
+        if !self.placement.x.is_finite() || !self.placement.y.is_finite() || !self.placement.rotation_radians.is_finite() { return Err("placement must be finite".into()); }
+        if self.material.parts.iter().any(|(_, amount)| (*amount - 1.0).abs() > f64::EPSILON) { return Err("each blueprint constituent must represent exactly one material unit".into()); }
+        if self.material.parts.len() == 1 && !self.material.has_internal_structure() { return Ok(()); }
+        if !self.material.has_internal_structure() { return Err("multi-constituent structural material must have internal bonds".into()); }
+        if !material_structure_is_connected(&self.material) { return Err("internal structural material must be connected".into()); }
         Ok(())
     }
 }
-
 fn material_structure_is_connected(material: &Material) -> bool {
-    if material.parts.len() <= 1 {
-        return true;
-    }
-    let mut visited = vec![false; material.parts.len()];
-    let mut stack = vec![0usize];
-    visited[0] = true;
-    while let Some(cur) = stack.pop() {
-        for InternalBond { part_a, part_b } in &material.internal_bonds {
-            let next = if *part_a == cur {
-                *part_b
-            } else if *part_b == cur {
-                *part_a
-            } else {
-                continue;
-            };
-            if !visited[next] {
-                visited[next] = true;
-                stack.push(next);
-            }
-        }
-    }
+    if material.parts.len() <= 1 { return true; }
+    let mut visited = vec![false; material.parts.len()]; let mut stack = vec![0usize]; visited[0] = true;
+    while let Some(cur) = stack.pop() { for InternalBond { part_a, part_b } in &material.internal_bonds { let next = if *part_a == cur { *part_b } else if *part_b == cur { *part_a } else { continue }; if !visited[next] { visited[next] = true; stack.push(next); } } }
     visited.into_iter().all(|x| x)
 }
-
-impl BlueprintConnection {
-    fn validate(&self, b: &StructuralBlueprint) -> Result<(), String> {
-        if self.element_a >= b.elements.len() || self.element_b >= b.elements.len() {
-            return Err("references a missing element".into());
-        }
-        if self.element_a == self.element_b {
-            return Err("self-connections are not permitted".into());
-        }
-        Ok(())
-    }
-}
+impl BlueprintConnection { fn validate(&self, b: &StructuralBlueprint) -> Result<(), String> { if self.element_a >= b.elements.len() || self.element_b >= b.elements.len() { return Err("references a missing element".into()); } if self.element_a == self.element_b { return Err("self-connections are not permitted".into()); } Ok(()) } }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::resources::default_catalog;
-
-    fn hydrated_carbon_water() -> Material {
-        Material {
-            parts: vec![("Carbon".into(), 1.0), ("Water".into(), 1.0)],
-            internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
-        }
-    }
-
-    #[test]
-    fn structured_hydrated_element_is_valid() {
-        let b = StructuralBlueprint::new(
-            vec![BlueprintElement {
-                material: hydrated_carbon_water(),
-                placement: Placement {
-                    x: 0.0,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                },
-            }],
-            Vec::new(),
-        );
-        assert!(b.validate().is_ok());
-        assert_eq!(b.realize(&default_catalog()).unwrap().units.len(), 1);
-    }
-
-    #[test]
-    fn disconnected_internal_composite_is_rejected() {
-        let m = Material {
-            parts: vec![
-                ("Carbon".into(), 1.0),
-                ("Water".into(), 1.0),
-                ("Nitrogen".into(), 1.0),
-            ],
-            internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
-        };
-        let b = StructuralBlueprint::new(
-            vec![BlueprintElement {
-                material: m,
-                placement: Placement {
-                    x: 0.0,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                },
-            }],
-            Vec::new(),
-        );
-        assert!(!b.is_valid());
-    }
-
-    #[test]
-    fn genome_core_must_be_connected() {
-        let element = BlueprintElement {
-            material: Material::free_base("Carbon", 1.0),
-            placement: Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        };
-        let b = StructuralBlueprint::with_core_elements(
-            vec![element.clone(), element],
-            Vec::new(),
-            vec![0, 1],
-        );
-        assert!(!b.is_valid());
-    }
+    #[test] fn structured_hydrated_element_is_valid() { let b = StructuralBlueprint::new(vec![BlueprintElement { material: Material { parts: vec![("Carbon".into(), 1.0), ("Water".into(), 1.0)], internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }] }, placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 } }], Vec::new()); assert!(b.validate().is_ok()); assert_eq!(b.realize(&default_catalog()).unwrap().units.len(), 1); }
+    #[test] fn disconnected_internal_composite_is_rejected() { let m = Material { parts: vec![("Carbon".into(), 1.0), ("Water".into(), 1.0), ("Nitrogen".into(), 1.0)], internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }] }; let b = StructuralBlueprint::new(vec![BlueprintElement { material: m, placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 } }], Vec::new()); assert!(!b.is_valid()); }
+    #[test] fn genome_core_must_be_connected() { let element = BlueprintElement { material: Material::free_base("Carbon", 1.0), placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 } }; let b = StructuralBlueprint::with_core_elements(vec![element.clone(), element], Vec::new(), vec![0, 1]); assert!(!b.is_valid()); }
 }
