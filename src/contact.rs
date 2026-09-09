@@ -11,7 +11,6 @@ fn facing(a: WorldConnectionPoint, b: WorldConnectionPoint) -> f64 { facing_comp
 fn endpoint_world_point(s: &OrganismStructure, unit: usize, endpoint: ConnectionEndpoint, catalog: &[BaseResource]) -> Option<WorldConnectionPoint> { let u = s.units.get(unit)?; Some(transform_point(s.connection_endpoint_local(unit, endpoint, catalog)?, u)) }
 fn direction_from_to(a: WorldConnectionPoint, b: WorldConnectionPoint) -> Option<(f64, f64)> { let dx = b.x - a.x; let dy = b.y - a.y; let len = dx.hypot(dy); (len > f64::EPSILON).then_some((dx / len, dy / len)) }
 fn same_ray(a: (f64, f64), b: (f64, f64)) -> bool { let cross = a.0 * b.1 - a.1 * b.0; let dot = a.0 * b.0 + a.1 * b.1; cross.abs() <= 1e-9 && dot >= 1.0 - 1e-9 }
-
 fn connection_point_has_space(s: &OrganismStructure, u: usize, endpoint: ConnectionEndpoint, other_u: usize, other_endpoint: ConnectionEndpoint, c: &[BaseResource]) -> bool {
     let Some(start) = endpoint_world_point(s, u, endpoint, c) else { return false };
     let Some(end) = endpoint_world_point(s, other_u, other_endpoint, c) else { return false };
@@ -22,22 +21,14 @@ fn connection_point_has_space(s: &OrganismStructure, u: usize, endpoint: Connect
         direction_from_to(start, existing_end).is_none_or(|existing| !same_ray(proposed, existing))
     })
 }
-
 pub fn world_connection_point(point: ConnectionPoint, unit: &StructuralUnit) -> WorldConnectionPoint { transform_point(point, unit) }
 pub fn connection_points_contact(a: ConnectionPoint, unit_a: &StructuralUnit, b: ConnectionPoint, unit_b: &StructuralUnit, tolerance: f64, _min_facing: f64) -> bool { distance(transform_point(a, unit_a), transform_point(b, unit_b)) <= tolerance.max(0.0) }
 pub fn connection_point_distance(a: ConnectionPoint, unit_a: &StructuralUnit, b: ConnectionPoint, unit_b: &StructuralUnit) -> f64 { distance(transform_point(a, unit_a), transform_point(b, unit_b)) }
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ConnectionPairCandidate { pub point_a: ConnectionEndpoint, pub point_b: ConnectionEndpoint, pub distance: f64, pub facing: f64, pub load_a: f64, pub load_b: f64, pub available_a: bool, pub available_b: bool }
-
 fn world_to_local(world: WorldConnectionPoint, unit: &StructuralUnit) -> (f64, f64) { let dx = world.x - unit.placement.x; let dy = world.y - unit.placement.y; let c = unit.placement.rotation_radians.cos(); let s = unit.placement.rotation_radians.sin(); (dx * c + dy * s, -dx * s + dy * c) }
-fn circumference_endpoint_toward(unit: &StructuralUnit, radius: f64, target: WorldConnectionPoint) -> ConnectionEndpoint { let dx = target.x - unit.placement.x; let dy = target.y - unit.placement.y; let len = dx.hypot(dy); let world_x = unit.placement.x + if len > f64::EPSILON { dx / len * radius } else { radius }; let world_y = unit.placement.y + if len > f64::EPSILON { dy / len * radius } else { 0.0 }; let (x, y) = world_to_local(WorldConnectionPoint { x: world_x, y: world_y, direction_radians: 0.0 }, unit); ConnectionEndpoint::Continuous { x, y } }
-
-fn candidate(s: &OrganismStructure, ua: usize, ub: usize, ea: ConnectionEndpoint, eb: ConnectionEndpoint, c: &[BaseResource]) -> Option<ConnectionPairCandidate> {
-    let wa = endpoint_world_point(s, ua, ea, c)?; let wb = endpoint_world_point(s, ub, eb, c)?;
-    Some(ConnectionPairCandidate { point_a: ea, point_b: eb, distance: distance(wa, wb), facing: facing(wa, wb), load_a: s.connection_load_endpoint(ua, ea, c), load_b: s.connection_load_endpoint(ub, eb, c), available_a: connection_point_has_space(s, ua, ea, ub, eb, c), available_b: connection_point_has_space(s, ub, eb, ua, ea, c) })
-}
-
+fn circumference_endpoint_toward(unit: &StructuralUnit, radius: f64, target: WorldConnectionPoint) -> ConnectionEndpoint { let dx = target.x - unit.placement.x; let dy = target.y - unit.placement.y; let len = dx.hypot(dy); let world_x = unit.placement.x + if len > f64::EPSILON { dx / len * radius } else { radius }; let world_y = unit.placement.y + if len > f64::EPSILON { dy / len * radius } else { 0.0 }; let (x, y) = world_to_local(WorldConnectionPoint { x: world_x, y: world_y, normal_x: 0.0, normal_y: 0.0 }, unit); ConnectionEndpoint::Continuous { x, y } }
+fn candidate(s: &OrganismStructure, ua: usize, ub: usize, ea: ConnectionEndpoint, eb: ConnectionEndpoint, c: &[BaseResource]) -> Option<ConnectionPairCandidate> { let wa = endpoint_world_point(s, ua, ea, c)?; let wb = endpoint_world_point(s, ub, eb, c)?; Some(ConnectionPairCandidate { point_a: ea, point_b: eb, distance: distance(wa, wb), facing: facing(wa, wb), load_a: s.connection_load_endpoint(ua, ea, c), load_b: s.connection_load_endpoint(ub, eb, c), available_a: connection_point_has_space(s, ua, ea, ub, eb, c), available_b: connection_point_has_space(s, ub, eb, ua, ea, c) }) }
 pub fn connection_pair_candidates(s: &OrganismStructure, ua: usize, ub: usize, c: &[BaseResource]) -> Vec<ConnectionPairCandidate> {
     let Some(a) = s.units.get(ua) else { return Vec::new() }; let Some(b) = s.units.get(ub) else { return Vec::new() }; let Some(sa) = a.connection_sites(c) else { return Vec::new() }; let Some(sb) = b.connection_sites(c) else { return Vec::new() }; let mut out = Vec::new();
     match (sa, sb) {
@@ -46,50 +37,25 @@ pub fn connection_pair_candidates(s: &OrganismStructure, ua: usize, ub: usize, c
         (ConnectionSites::Circumference { radius }, ConnectionSites::Corners(pb)) => for (ib, point) in pb.iter().enumerate() { let world = transform_point(*point, b); let ea = circumference_endpoint_toward(a, radius, world); if let Some(x) = candidate(s, ua, ub, ea, ConnectionEndpoint::Discrete(ib), c) { out.push(x); } },
         (ConnectionSites::Circumference { radius: ra }, ConnectionSites::Circumference { radius: rb }) => {
             let dx = b.placement.x - a.placement.x; let dy = b.placement.y - a.placement.y; let len = dx.hypot(dy);
-            let target_a = if len > f64::EPSILON { WorldConnectionPoint { x: a.placement.x + dx / len * ra, y: a.placement.y + dy / len * ra, direction_radians: dy.atan2(dx) } } else { WorldConnectionPoint { x: a.placement.x + ra, y: a.placement.y, direction_radians: 0.0 } };
-            let target_b = if len > f64::EPSILON { WorldConnectionPoint { x: b.placement.x - dx / len * rb, y: b.placement.y - dy / len * rb, direction_radians: dy.atan2(dx) + std::f64::consts::PI } } else { WorldConnectionPoint { x: b.placement.x + rb, y: b.placement.y, direction_radians: 0.0 } };
+            let target_a = if len > f64::EPSILON { WorldConnectionPoint { x: a.placement.x + dx / len * ra, y: a.placement.y + dy / len * ra, normal_x: dx / len, normal_y: dy / len } } else { WorldConnectionPoint { x: a.placement.x + ra, y: a.placement.y, normal_x: 1.0, normal_y: 0.0 } };
+            let target_b = if len > f64::EPSILON { WorldConnectionPoint { x: b.placement.x - dx / len * rb, y: b.placement.y - dy / len * rb, normal_x: -dx / len, normal_y: -dy / len } } else { WorldConnectionPoint { x: b.placement.x + rb, y: b.placement.y, normal_x: 1.0, normal_y: 0.0 } };
             let (ax, ay) = world_to_local(target_a, a); let (bx, by) = world_to_local(target_b, b);
             if let Some(x) = candidate(s, ua, ub, ConnectionEndpoint::Continuous { x: ax, y: ay }, ConnectionEndpoint::Continuous { x: bx, y: by }, c) { out.push(x); }
         }
-        // Water has no authored boundary, so it does not manufacture geometric candidates.
         _ => {}
     }
     out
 }
-
 pub fn contacting_connection_pair_candidates(s: &OrganismStructure, ua: usize, ub: usize, c: &[BaseResource], t: f64, m: f64) -> Vec<ConnectionPairCandidate> { connection_pair_candidates(s, ua, ub, c).into_iter().filter(|x| x.distance <= t.max(0.0) && x.facing >= m).collect() }
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash)] struct ConnectionTypeKey(String, String);
 impl ConnectionTypeKey { fn new(a: &str, b: &str) -> Self { if a <= b { Self(a.into(), b.into()) } else { Self(b.into(), a.into()) } } }
 #[derive(Clone, Debug, Default)] pub struct ConnectionCompatibilityCache { pairs: HashMap<ConnectionTypeKey, Vec<(usize, usize)>> }
-impl ConnectionCompatibilityCache {
-    pub fn new() -> Self { Self::default() }
-    pub fn pairs_for_owned(&mut self, a: &str, b: &str, c: &[BaseResource]) -> Vec<(usize, usize)> { let rev = a > b; let k = ConnectionTypeKey::new(a, b); if !self.pairs.contains_key(&k) { self.pairs.insert(k.clone(), Self::build_pairs(&k.0, &k.1, c)); } let p = self.pairs.get(&k).unwrap(); if rev { p.iter().map(|(x, y)| (*y, *x)).collect() } else { p.clone() } }
-    fn build_pairs(a: &str, b: &str, c: &[BaseResource]) -> Vec<(usize, usize)> { let Some(a) = c.iter().find(|r| r.name == a) else { return Vec::new() }; let Some(b) = c.iter().find(|r| r.name == b) else { return Vec::new() }; let ConnectionSites::Corners(pa) = a.shape.connection_sites() else { return Vec::new() }; let ConnectionSites::Corners(pb) = b.shape.connection_sites() else { return Vec::new() }; (0..pa.len()).flat_map(|i| (0..pb.len()).map(move |j| (i, j))).collect() }
-    pub fn len(&self) -> usize { self.pairs.len() }
-    pub fn is_empty(&self) -> bool { self.pairs.is_empty() }
-    pub fn clear(&mut self) { self.pairs.clear(); }
-}
-
-pub fn connection_pair_candidates_cached(s: &OrganismStructure, ua: usize, ub: usize, c: &[BaseResource], cache: &mut ConnectionCompatibilityCache) -> Vec<ConnectionPairCandidate> {
-    let Some(a) = s.units.get(ua) else { return Vec::new() }; let Some(b) = s.units.get(ub) else { return Vec::new() };
-    let Some(ka) = a.resource_name() else { return connection_pair_candidates(s, ua, ub, c) }; let Some(kb) = b.resource_name() else { return connection_pair_candidates(s, ua, ub, c) };
-    let Some(ConnectionSites::Corners(pa)) = a.connection_sites(c) else { return connection_pair_candidates(s, ua, ub, c) }; let Some(ConnectionSites::Corners(pb)) = b.connection_sites(c) else { return connection_pair_candidates(s, ua, ub, c) };
-    let pairs = cache.pairs_for_owned(ka, kb, c);
-    pairs.into_iter().filter_map(|(ia, ib)| { let _ = (pa.get(ia)?, pb.get(ib)?); candidate(s, ua, ub, ConnectionEndpoint::Discrete(ia), ConnectionEndpoint::Discrete(ib), c) }).collect()
-}
-
-pub fn try_add_bond(s: &mut OrganismStructure, b: crate::structure::Bond, c: &[crate::resources::BaseResource]) -> Result<usize, &'static str> {
-    if !s.is_valid_bond(&b, c) { return Err("invalid bond") }
-    if !connection_point_has_space(s, b.unit_a, b.point_a, b.unit_b, b.point_b, c) || !connection_point_has_space(s, b.unit_b, b.point_b, b.unit_a, b.point_a, c) { return Err("bond geometry overlaps existing bond") }
-    if s.bonds.iter().any(|existing| existing.has_same_identity(&b)) { return Err("bond geometry overlaps existing bond") }
-    Ok(s.add_bond(b))
-}
-
+impl ConnectionCompatibilityCache { pub fn new() -> Self { Self::default() } pub fn pairs_for_owned(&mut self, a: &str, b: &str, c: &[BaseResource]) -> Vec<(usize, usize)> { let rev = a > b; let k = ConnectionTypeKey::new(a, b); if !self.pairs.contains_key(&k) { self.pairs.insert(k.clone(), Self::build_pairs(&k.0, &k.1, c)); } let p = self.pairs.get(&k).unwrap(); if rev { p.iter().map(|(x, y)| (*y, *x)).collect() } else { p.clone() } } fn build_pairs(a: &str, b: &str, c: &[BaseResource]) -> Vec<(usize, usize)> { let Some(a) = c.iter().find(|r| r.name == a) else { return Vec::new() }; let Some(b) = c.iter().find(|r| r.name == b) else { return Vec::new() }; let ConnectionSites::Corners(pa) = a.shape.connection_sites() else { return Vec::new() }; let ConnectionSites::Corners(pb) = b.shape.connection_sites() else { return Vec::new() }; (0..pa.len()).flat_map(|i| (0..pb.len()).map(move |j| (i, j))).collect() } pub fn len(&self) -> usize { self.pairs.len() } pub fn is_empty(&self) -> bool { self.pairs.is_empty() } pub fn clear(&mut self) { self.pairs.clear(); } }
+pub fn connection_pair_candidates_cached(s: &OrganismStructure, ua: usize, ub: usize, c: &[BaseResource], cache: &mut ConnectionCompatibilityCache) -> Vec<ConnectionPairCandidate> { let Some(a) = s.units.get(ua) else { return Vec::new() }; let Some(b) = s.units.get(ub) else { return Vec::new() }; let Some(ka) = a.resource_name() else { return connection_pair_candidates(s, ua, ub, c) }; let Some(kb) = b.resource_name() else { return connection_pair_candidates(s, ua, ub, c) }; let Some(ConnectionSites::Corners(pa)) = a.connection_sites(c) else { return connection_pair_candidates(s, ua, ub, c) }; let Some(ConnectionSites::Corners(pb)) = b.connection_sites(c) else { return connection_pair_candidates(s, ua, ub, c) }; let pairs = cache.pairs_for_owned(ka, kb, c); pairs.into_iter().filter_map(|(ia, ib)| { let _ = (pa.get(ia)?, pb.get(ib)?); candidate(s, ua, ub, ConnectionEndpoint::Discrete(ia), ConnectionEndpoint::Discrete(ib), c) }).collect() }
+pub fn try_add_bond(s: &mut OrganismStructure, b: crate::structure::Bond, c: &[crate::resources::BaseResource]) -> Result<usize, &'static str> { if !s.is_valid_bond(&b, c) { return Err("invalid bond") } if !connection_point_has_space(s, b.unit_a, b.point_a, b.unit_b, b.point_b, c) || !connection_point_has_space(s, b.unit_b, b.point_b, b.unit_a, b.point_a, c) { return Err("bond geometry overlaps existing bond") } if s.bonds.iter().any(|existing| existing.has_same_identity(&b)) { return Err("bond geometry overlaps existing bond") } Ok(s.add_bond(b)) }
 #[cfg(test)]
-mod tests {
-    use super::*; use crate::resources::default_catalog; use crate::structure::{Bond, Placement, StructuralUnit};
-    #[test] fn connection_point_can_support_multiple_geometrically_distinct_bonds() { let catalog = default_catalog(); let mut structure = OrganismStructure::new(); let a = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 })); let b = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 })); let c = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: -1.0, y: 0.0, rotation_radians: 0.0 })); let first = Bond::discrete(a, 0, b, 0, 0.5, 1.0); let second = Bond::discrete(a, 0, c, 0, 0.5, 1.0); assert!(try_add_bond(&mut structure, first, &catalog).is_ok()); assert!(try_add_bond(&mut structure, second, &catalog).is_ok()); assert_eq!(structure.connection_count(a, 0), 2); }
-    #[test] fn connection_point_rejects_same_geometric_ray() { let catalog = default_catalog(); let mut structure = OrganismStructure::new(); let a = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 })); let b = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 })); let c = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 2.0, y: 0.0, rotation_radians: 0.0 })); let first = Bond::discrete(a, 0, b, 0, 0.5, 1.0); let second = Bond::discrete(a, 0, c, 0, 0.5, 1.0); assert!(try_add_bond(&mut structure, first, &catalog).is_ok()); assert_eq!(try_add_bond(&mut structure, second, &catalog), Err("bond geometry overlaps existing bond")); }
-    #[test] fn zero_length_contacts_do_not_occupy_a_ray() { let catalog = default_catalog(); let mut structure = OrganismStructure::new(); let a = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 })); let b = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 })); let c = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 })); let first = Bond::discrete(a, 0, b, 0, 0.5, 1.0); let second = Bond::discrete(a, 0, c, 0, 0.5, 1.0); assert!(try_add_bond(&mut structure, first, &catalog).is_ok()); assert!(try_add_bond(&mut structure, second, &catalog).is_ok()); }
+mod tests { use super::*; use crate::resources::default_catalog; use crate::structure::{Bond, Placement, StructuralUnit};
+#[test] fn connection_point_can_support_multiple_geometrically_distinct_bonds() { let catalog = default_catalog(); let mut structure = OrganismStructure::new(); let a = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 })); let b = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 })); let c = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: -1.0, y: 0.0, rotation_radians: 0.0 })); let first = Bond::discrete(a, 0, b, 0, 0.5, 1.0); let second = Bond::discrete(a, 0, c, 0, 0.5, 1.0); assert!(try_add_bond(&mut structure, first, &catalog).is_ok()); assert!(try_add_bond(&mut structure, second, &catalog).is_ok()); assert_eq!(structure.connection_count(a, 0), 2); }
+#[test] fn connection_point_rejects_same_geometric_ray() { let catalog = default_catalog(); let mut structure = OrganismStructure::new(); let a = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 })); let b = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 })); let c = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 2.0, y: 0.0, rotation_radians: 0.0 })); let first = Bond::discrete(a, 0, b, 0, 0.5, 1.0); let second = Bond::discrete(a, 0, c, 0, 0.5, 1.0); assert!(try_add_bond(&mut structure, first, &catalog).is_ok()); assert_eq!(try_add_bond(&mut structure, second, &catalog), Err("bond geometry overlaps existing bond")); }
+#[test] fn zero_length_contacts_do_not_occupy_a_ray() { let catalog = default_catalog(); let mut structure = OrganismStructure::new(); let a = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 })); let b = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 })); let c = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 })); let first = Bond::discrete(a, 0, b, 0, 0.5, 1.0); let second = Bond::discrete(a, 0, c, 0, 0.5, 1.0); assert!(try_add_bond(&mut structure, first, &catalog).is_ok()); assert!(try_add_bond(&mut structure, second, &catalog).is_ok()); }
 }
