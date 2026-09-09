@@ -68,6 +68,7 @@ fn add_blueprint_element(structure: &mut OrganismStructure, realized_units: &Has
     Some((new_index, added_stress))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn construct_any_frontier_element(stored_material: &MaterialStorage, structure: &mut OrganismStructure, realized_units: &HashMap<usize, usize>, realized: &HashSet<usize>, allowed: &HashSet<usize>, blueprint: &crate::structural_blueprint::StructuralBlueprint, catalog: &[BaseResource], energy: &mut f64) -> Option<(usize, MaterialStorage, f64)> {
     let mut candidates = frontier(blueprint, realized, allowed);
     candidates.sort_unstable();
