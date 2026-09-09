@@ -13,9 +13,7 @@ const JUVENILE_MATURE_MASS_FRACTION: f64 = 0.40;
 fn assemble_blueprint_material(remaining: &mut MaterialStorage, target: &Material) -> Option<Material> {
     let mut inputs = Vec::with_capacity(target.parts.len());
     for (name, amount) in &target.parts {
-        if (*amount - 1.0).abs() > f64::EPSILON {
-            return None;
-        }
+        if (*amount - 1.0).abs() > f64::EPSILON { return None; }
         inputs.push(remaining.take_one_unstructured_named(name)?);
     }
     let assembled = if inputs.len() == 1 { inputs.into_iter().next()? } else { crate::resources::combine_materials(&inputs) };
@@ -54,7 +52,7 @@ fn add_blueprint_element(structure: &mut OrganismStructure, realized_units: &Has
     let mut cache = crate::contact::ConnectionCompatibilityCache::new();
     for connection in &blueprint.connections {
         let other_blueprint_index = if connection.element_a == blueprint_index { connection.element_b } else if connection.element_b == blueprint_index { connection.element_a } else { continue };
-        let Some(&other_structure_index) = realized_units.get(&other_blueprint_index) else { continue };
+        let Some(&other_structure_index) = realized_units.get(&other_blueprint_index) else { continue; };
         let (new_point, other_point) = if connection.element_a == blueprint_index { (connection.point_a, connection.point_b) } else { (connection.point_b, connection.point_a) };
         let candidate = crate::contact::connection_pair_candidates_cached(&candidate_structure, new_index, other_structure_index, catalog, &mut cache).into_iter().find(|c| c.point_a == new_point && c.point_b == other_point && c.distance <= 1.0 && c.available_a && c.available_b)?;
         let pa = candidate_structure.units[new_index].properties(catalog)?;
@@ -147,13 +145,42 @@ pub(crate) fn advance_construction(stored_material: &mut MaterialStorage, constr
     Some(stress)
 }
 
-pub(crate) fn finish_reproduction(parent: &mut Organism) -> Option<Organism> {
+pub(crate) fn finish_reproduction(parent: &mut Organism, child_id: String) -> Option<Organism> {
     let construction = parent.reproductive_construction.take()?;
-    let mature_mass = construction.developing_structure.structural_mass(&construction.child_genome.structural_blueprint);
-    let target_mass = construction.child_genome.structural_blueprint.structural_mass(&construction.child_genome.structural_blueprint) * JUVENILE_MATURE_MASS_FRACTION;
-    if mature_mass + f64::EPSILON < target_mass { parent.reproductive_construction = Some(construction); return None; }
-    let mut child = Organism::new_from_genome(construction.child_genome, construction.developing_structure, parent.position, ResourceSense::default());
-    child.development_stage = DevelopmentStage::Juvenile;
-    child.reproductive_readiness = 0.0;
-    Some(child)
+    let target = construction.target_elements.iter().copied().collect::<HashSet<_>>();
+    let realized = construction.realized_elements.iter().copied().collect::<HashSet<_>>();
+    if realized != target || !construction.committed_material.is_empty() {
+        parent.reproductive_construction = Some(construction);
+        return None;
+    }
+    let position = match parent.occupied_cells.first().cloned() {
+        Some(p) => p,
+        None => {
+            parent.reproductive_construction = Some(construction);
+            return None;
+        }
+    };
+    Some(Organism {
+        id: child_id,
+        occupied_cells: vec![position],
+        genome: construction.child_genome,
+        resource_sense: ResourceSense {
+            sensed_resources: Vec::new(),
+            direction_x: 0.0,
+            direction_y: 0.0,
+            direction_strength: 0.0,
+        },
+        memory: Vec::new(),
+        decision_history: crate::decision::DecisionHistory::default(),
+        usable_energy: 0.0,
+        stress: 0.0,
+        stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
+        stored_material: MaterialStorage::default(),
+        structure: construction.developing_structure,
+        development_stage: DevelopmentStage::Juvenile,
+        age: 0,
+        reproductive_readiness: 0.0,
+        active_transformation_id: None,
+        reproductive_construction: None,
+    })
 }
