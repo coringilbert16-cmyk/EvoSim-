@@ -106,8 +106,10 @@ impl ConnectionPoint {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum ConnectionSites {
+    /// Finite physical connection regions resolved from rigid geometry.
+    /// For polygonal bodies these are literal corners; for a line they are
+    /// its two terminal regions. They are not authored sockets.
     Corners(Vec<ConnectionPoint>),
-    Endpoints(Vec<ConnectionPoint>),
     Circumference { radius: f64 },
     Undetermined,
 }
@@ -125,7 +127,7 @@ impl Shape {
     pub fn connection_sites(&self) -> ConnectionSites {
         match &self.form {
             Form::Circle { radius } => ConnectionSites::Circumference { radius: *radius },
-            Form::Line { length, .. } => ConnectionSites::Endpoints(vec![
+            Form::Line { length, .. } => ConnectionSites::Corners(vec![
                 ConnectionPoint {
                     x: -length / 2.0,
                     y: 0.0,
@@ -499,8 +501,8 @@ pub fn default_catalog() -> Vec<BaseResource> {
             },
             shape: Shape {
                 form: Form::Line {
-                    length: 0.797_884,
-                    radius: 0.02,
+                    length: 2.342_920,
+                    radius: 0.10,
                 },
             },
         },
@@ -670,10 +672,12 @@ mod shape_tests {
     #[test]
     fn line_has_exactly_two_terminal_connection_points() {
         let hydrogen = default_catalog().into_iter().find(|r| r.name == "Hydrogen").unwrap();
-        let ConnectionSites::Endpoints(points) = hydrogen.shape.connection_sites() else { panic!("hydrogen is not terminally connected") };
+        let ConnectionSites::Corners(points) = hydrogen.shape.connection_sites() else { panic!("hydrogen is not represented by discrete terminal regions") };
         assert_eq!(points.len(), 2);
         assert!((points[0].x + points[1].x).abs() < 1e-12);
         assert!(points.iter().all(ConnectionPoint::is_valid));
+        assert!((points[0].direction_radians - std::f64::consts::PI).abs() < 1e-12);
+        assert!(points[1].direction_radians.abs() < 1e-12);
     }
 
     #[test]
@@ -691,19 +695,16 @@ mod shape_tests {
     #[test]
     fn connection_points_are_valid_where_present() {
         for resource in default_catalog() {
-            match resource.shape.connection_sites() {
-                ConnectionSites::Corners(points) | ConnectionSites::Endpoints(points) => {
-                    for cp in points { assert!(cp.is_valid()); }
-                }
-                _ => {}
+            if let ConnectionSites::Corners(points) = resource.shape.connection_sites() {
+                for cp in points { assert!(cp.is_valid()); }
             }
         }
     }
 
     #[test]
-    fn circle_has_no_finite_connection_point_list() {
-        let circle_resources: Vec<_> = default_catalog().into_iter().filter(|r| matches!(r.shape.form, Form::Circle { .. })).collect();
-        assert_eq!(circle_resources.len(), 0);
+    fn no_catalog_resource_uses_a_circle_connection_shape() {
+        let catalog = default_catalog();
+        assert!(catalog.iter().all(|r| !matches!(r.shape.form, Form::Circle { .. })));
     }
 
     #[test]
