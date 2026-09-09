@@ -80,7 +80,7 @@ mod tests {
             ));
         }
         for i in 0..6 {
-            structure.add_bond(Bond {
+            structure.push_bond_unchecked(Bond {
                 unit_a: i,
                 point_a: 0,
                 unit_b: (i + 1) % 6,
@@ -132,7 +132,7 @@ mod tests {
                 rotation_radians: 0.0,
             },
         ));
-        structure.add_bond(Bond {
+        structure.push_bond_unchecked(Bond {
             unit_a: 0,
             point_a: 2,
             unit_b: external,
