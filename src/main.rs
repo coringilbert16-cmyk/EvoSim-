@@ -1,3 +1,4 @@
+mod attachment;
 mod combine;
 mod combine_runtime;
 mod connection_geometry;
