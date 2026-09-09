@@ -7,43 +7,37 @@
 use serde::{Deserialize, Serialize};
 
 /// Stable identity for a structural element in a blueprint.
-///
-/// This is intentionally distinct from a vector index. Mutation may add or
-/// remove elements without changing the identity of unrelated elements.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct BlueprintElementId(pub u64);
 
 /// Stable identity for a constituent within a material definition.
-///
-/// Constituent order is not physical identity. A material realization may use
-/// this identifier to resolve internal structural relationships after other
-/// constituents are inserted, removed, or reordered.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ConstituentId(pub u64);
 
-/// A physical feature that can participate in a structural attachment.
+/// What physical part of a blueprint element an attachment addresses.
 ///
-/// Discrete features identify immutable geometric features such as a polygon
-/// corner or a line terminal. Boundary and Fluid are continuous regions: they
-/// contain no authored socket index, capacity count, or world-space position.
+/// `Constituent` addresses immutable geometry belonging to a specific material
+/// constituent. `Assembly` addresses an exposed region of the realized whole
+/// element. Neither variant is a socket, capacity slot, or authored position.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BlueprintAttachmentTarget {
+    Constituent(ConstituentId),
+    Assembly,
+}
+
+/// A physical feature that can participate in a structural attachment.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AttachmentFeature {
-    /// Immutable feature identity within the referenced physical constituent.
+    /// Immutable geometric feature of the addressed physical constituent.
     Discrete(u32),
-    /// A continuous rigid boundary. The physical resolver chooses the actual
-    /// contact location from geometry and the opposing attachment.
+    /// Continuous rigid boundary. The physical resolver chooses the contact.
     Boundary,
-    /// A continuous fluid region. The physical resolver chooses the actual
-    /// contact location from fluid occupancy and the opposing attachment.
+    /// Continuous fluid region. The physical resolver chooses the contact.
     Fluid,
 }
 
 impl AttachmentFeature {
-    pub fn is_valid(&self) -> bool {
-        match self {
-            Self::Discrete(_) | Self::Boundary | Self::Fluid => true,
-        }
-    }
+    pub fn is_valid(&self) -> bool { true }
 }
 
 /// An attachment target inside a material's constituent graph.
@@ -57,6 +51,7 @@ pub struct ConstituentAttachment {
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BlueprintAttachment {
     pub element: BlueprintElementId,
+    pub target: BlueprintAttachmentTarget,
     pub feature: AttachmentFeature,
 }
 
@@ -83,6 +78,23 @@ mod tests {
     }
 
     #[test]
+    fn blueprint_attachment_distinguishes_constituent_from_assembly() {
+        let constituent = BlueprintAttachment {
+            element: BlueprintElementId(7),
+            target: BlueprintAttachmentTarget::Constituent(ConstituentId(42)),
+            feature: AttachmentFeature::Discrete(1),
+        };
+        let assembly = BlueprintAttachment {
+            element: BlueprintElementId(7),
+            target: BlueprintAttachmentTarget::Assembly,
+            feature: AttachmentFeature::Boundary,
+        };
+        assert_ne!(constituent.target, assembly.target);
+        assert_eq!(constituent.target, BlueprintAttachmentTarget::Constituent(ConstituentId(42)));
+        assert_eq!(assembly.target, BlueprintAttachmentTarget::Assembly);
+    }
+
+    #[test]
     fn continuous_features_carry_no_socket_or_position() {
         assert_eq!(AttachmentFeature::Boundary, AttachmentFeature::Boundary);
         assert_eq!(AttachmentFeature::Fluid, AttachmentFeature::Fluid);
@@ -92,6 +104,7 @@ mod tests {
     fn attachment_identity_round_trips() {
         let original = BlueprintAttachment {
             element: BlueprintElementId(7),
+            target: BlueprintAttachmentTarget::Assembly,
             feature: AttachmentFeature::Boundary,
         };
         let encoded = serde_json::to_string(&original).unwrap();
