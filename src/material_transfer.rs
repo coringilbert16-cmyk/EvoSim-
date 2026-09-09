@@ -1,115 +1,50 @@
 use crate::resources::Material;
 
-/// Extract up to `requested` whole unstructured units from an ecological aggregate.
-///
-/// This is deliberately separate from `Material::take`: the latter is a
-/// legacy aggregate operation that can represent fractional material and must
-/// not be used for organism-facing physical transfer. Structured material is
-/// never fractionally extracted here.
+/// Extract whole units only from unstructured ecological composition.
+/// Structured material is a physical graph and can only be separated by an
+/// explicit physical BREAK/decomposition operation.
 pub(crate) fn take_whole_unstructured(material: &mut Material, requested: usize) -> Option<Material> {
-    if requested == 0 || material.has_internal_structure() || material.is_empty() {
-        return None;
-    }
-
+    if requested == 0 || material.is_structured() || material.is_empty() { return None; }
     let available = material.total_amount();
-    if !available.is_finite() || available < 1.0 {
-        return None;
-    }
-
-    let whole_available = available.floor() as usize;
-    let target_units = requested.min(whole_available);
-    if target_units == 0 {
-        return None;
-    }
-
+    if !available.is_finite() || available < 1.0 { return None; }
+    let target_units = requested.min(available.floor() as usize);
+    if target_units == 0 { return None; }
     let total = available;
     let target = target_units as f64;
-    let mut taken_parts = Vec::new();
+    let mut allocations: Vec<(usize, f64, usize)> = Vec::with_capacity(material.composition().len());
     let mut remaining = target_units;
-
-    // Preserve aggregate composition as closely as possible while moving only
-    // whole units. Because the environment may still use aggregate f64 stock,
-    // the final remainder is allocated by largest fractional remainder.
-    let mut allocations: Vec<(usize, f64, usize)> = Vec::with_capacity(material.parts.len());
-    for (index, (_, amount)) in material.parts.iter().enumerate() {
-        if *amount <= 0.0 {
-            allocations.push((index, 0.0, 0));
-            continue;
-        }
-        let ideal = (*amount / total) * target;
+    for (index, component) in material.composition().iter().enumerate() {
+        if component.amount <= 0.0 { allocations.push((index, 0.0, 0)); continue; }
+        let ideal = component.amount / total * target;
         let base = ideal.floor() as usize;
         allocations.push((index, ideal - base as f64, base));
         remaining = remaining.saturating_sub(base);
     }
-
-    allocations.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    allocations.sort_by(|a,b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     for (index, _, base) in &mut allocations {
-        if remaining == 0 {
-            break;
-        }
-        if *base < material.parts[*index].1.floor() as usize {
-            *base += 1;
-            remaining -= 1;
-        }
+        if remaining == 0 { break; }
+        if *base < material.composition()[*index].amount.floor() as usize { *base += 1; remaining -= 1; }
     }
-
-    if remaining != 0 {
-        return None;
-    }
-
-    allocations.sort_by_key(|(index, _, _)| *index);
+    if remaining != 0 { return None; }
+    allocations.sort_by_key(|(index,_,_)| *index);
+    let mut taken = Vec::new();
     for (index, _, count) in allocations {
-        if count == 0 {
-            continue;
-        }
-        let amount = count as f64;
-        material.parts[index].1 -= amount;
-        taken_parts.push((material.parts[index].0.clone(), amount));
+        if count == 0 { continue; }
+        material.composition[index].amount -= count as f64;
+        taken.push(crate::resources::MaterialComponent { resource: material.composition[index].resource.clone(), amount: count as f64 });
     }
-
-    material.parts.retain(|(_, amount)| *amount > 1e-12);
-    Some(Material {
-        parts: taken_parts,
-        internal_bonds: Vec::new(),
-    })
+    material.composition.retain(|c| c.amount > 1e-12);
+    Some(Material { composition: taken, structure: None })
 }
 
 #[cfg(test)]
 mod tests {
     use super::take_whole_unstructured;
-    use crate::resources::{InternalBond, Material};
-
-    #[test]
-    fn takes_only_whole_units() {
-        let mut material = Material::free_base("Carbon", 10.0);
-        let taken = take_whole_unstructured(&mut material, 3).unwrap();
-        assert_eq!(taken.total_amount(), 3.0);
-        assert_eq!(material.total_amount(), 7.0);
-    }
-
-    #[test]
-    fn takes_only_available_whole_units_when_request_exceeds_stock() {
-        let mut material = Material::free_base("Carbon", 3.5);
-        let taken = take_whole_unstructured(&mut material, 5).unwrap();
-        assert_eq!(taken.total_amount(), 3.0);
-        assert_eq!(material.total_amount(), 0.5);
-    }
-
-    #[test]
-    fn transfers_whole_units_from_fractional_aggregate() {
-        let mut material = Material::free_base("Carbon", 3.5);
-        let taken = take_whole_unstructured(&mut material, 1).unwrap();
-        assert_eq!(taken.total_amount(), 1.0);
-        assert_eq!(material.total_amount(), 2.5);
-    }
-
-    #[test]
-    fn refuses_structured_material() {
-        let mut material = Material {
-            parts: vec![("Carbon".to_string(), 1.0), ("Nitrogen".to_string(), 1.0)],
-            internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
-        };
-        assert!(take_whole_unstructured(&mut material, 1).is_none());
-        assert_eq!(material.total_amount(), 2.0);
-    }
+    use crate::attachment::{AttachmentFeature, ConstituentAttachment, ConstituentId};
+    use crate::material_structure::{InternalAttachmentBond, MaterialConstituent, MaterialStructure};
+    use crate::resources::Material;
+    #[test] fn takes_only_whole_units(){let mut m=Material::free_base("Carbon",10.0);let t=take_whole_unstructured(&mut m,3).unwrap();assert_eq!(t.total_amount(),3.0);assert_eq!(m.total_amount(),7.0)}
+    #[test] fn takes_only_available_whole_units(){let mut m=Material::free_base("Carbon",3.5);let t=take_whole_unstructured(&mut m,5).unwrap();assert_eq!(t.total_amount(),3.0);assert_eq!(m.total_amount(),0.5)}
+    #[test] fn transfers_whole_units_from_fractional_aggregate(){let mut m=Material::free_base("Carbon",3.5);let t=take_whole_unstructured(&mut m,1).unwrap();assert_eq!(t.total_amount(),1.0);assert_eq!(m.total_amount(),2.5)}
+    #[test] fn refuses_structured_material(){let mut m=Material{composition:Vec::new(),structure:Some(MaterialStructure{constituents:vec![MaterialConstituent{id:ConstituentId(1),resource:"Carbon".into()},MaterialConstituent{id:ConstituentId(2),resource:"Nitrogen".into()}],internal_bonds:vec![InternalAttachmentBond{a:ConstituentAttachment{constituent:ConstituentId(1),feature:AttachmentFeature::Discrete(0)},b:ConstituentAttachment{constituent:ConstituentId(2),feature:AttachmentFeature::Discrete(0)}}]})};assert!(take_whole_unstructured(&mut m,1).is_none());assert_eq!(m.total_amount(),2.0)}
 }
