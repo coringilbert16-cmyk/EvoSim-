@@ -1,7 +1,7 @@
 //! Physical reproduction lifecycle.
 
 use rand_chacha::ChaCha8Rng;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::material_storage::MaterialStorage;
 use crate::resources::{BaseResource, Material};
@@ -83,7 +83,7 @@ fn all_indices(blueprint: &crate::structural_blueprint::StructuralBlueprint) -> 
 /// Parent energy and structure are committed only after every bond succeeds.
 fn add_blueprint_element(
     structure: &mut OrganismStructure,
-    realized: &HashSet<usize>,
+    realized_units: &HashMap<usize, usize>,
     blueprint_index: usize,
     material: Material,
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
@@ -109,10 +109,7 @@ fn add_blueprint_element(
         let Some(other_blueprint_index) = other_blueprint_index else {
             continue;
         };
-        let Some(other_structure_index) = realized
-            .iter()
-            .position(|&index| index == other_blueprint_index)
-        else {
+        let Some(&other_structure_index) = realized_units.get(&other_blueprint_index) else {
             continue;
         };
         let (new_point, other_point) = if connection.element_a == blueprint_index {
@@ -168,6 +165,7 @@ fn add_blueprint_element(
 fn construct_any_frontier_element(
     stored_material: &MaterialStorage,
     structure: &mut OrganismStructure,
+    realized_units: &HashMap<usize, usize>,
     realized: &HashSet<usize>,
     allowed: &HashSet<usize>,
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
@@ -187,7 +185,7 @@ fn construct_any_frontier_element(
         let mut candidate_energy = *energy;
         if let Some((_, stress)) = add_blueprint_element(
             &mut candidate_structure,
-            realized,
+            realized_units,
             blueprint_index,
             material,
             blueprint,
@@ -224,6 +222,7 @@ pub(crate) fn begin_reproduction(
     let mut remaining = parent.stored_material.clone();
     let mut structure = OrganismStructure::new();
     let mut realized = HashSet::new();
+    let mut realized_units = HashMap::new();
     let mut initial_stress = 0.0;
     let mut available_energy = parent.usable_energy;
 
@@ -231,6 +230,7 @@ pub(crate) fn begin_reproduction(
         let Some((index, next_remaining, stress)) = construct_any_frontier_element(
             &remaining,
             &mut structure,
+            &realized_units,
             &realized,
             &core,
             blueprint,
@@ -248,7 +248,7 @@ pub(crate) fn begin_reproduction(
                 };
                 let mut trial_structure = structure.clone();
                 let mut trial_energy = available_energy;
-                let empty = HashSet::new();
+                let empty = HashMap::new();
                 if let Some((_, stress)) = add_blueprint_element(
                     &mut trial_structure,
                     &empty,
@@ -269,7 +269,9 @@ pub(crate) fn begin_reproduction(
             return false;
         };
 
+        let structure_index = structure.units.len().checked_sub(1)?;
         remaining = next_remaining;
+        realized_units.insert(index, structure_index);
         realized.insert(index);
         initial_stress += stress;
     }
@@ -302,10 +304,21 @@ pub(crate) fn advance_construction(
         return None;
     }
 
+    let mut realized_units = HashMap::new();
+    for &blueprint_index in &realized {
+        let structure_index = construction
+            .developing_structure
+            .units
+            .iter()
+            .position(|unit| unit.placement == blueprint.elements[blueprint_index].placement)?;
+        realized_units.insert(blueprint_index, structure_index);
+    }
+
     let mut trial_energy = *energy;
     let (index, remaining, stress) = construct_any_frontier_element(
         stored_material,
         &mut construction.developing_structure,
+        &realized_units,
         &realized,
         &target,
         blueprint,
