@@ -125,13 +125,17 @@ impl WorldObservation {
                 let (min_x, max_x, min_y, max_y, silhouette) =
                     match OrganismBodyGeometry::from_structure(&organism.structure, catalog) {
                         Some(geometry) => {
+                            let min_x = geometry.min_x + position.0;
+                            let max_x = geometry.max_x + position.0;
+                            let min_y = geometry.min_y + position.1;
+                            let max_y = geometry.max_y + position.1;
                             let silhouette = geometry.parts.into_iter().map(|part| OrganismSilhouettePart {
                                 form: part.form,
-                                x: part.x,
-                                y: part.y,
+                                x: part.x + position.0,
+                                y: part.y + position.1,
                                 rotation_radians: part.rotation_radians,
                             }).collect();
-                            (geometry.min_x, geometry.max_x, geometry.min_y, geometry.max_y, silhouette)
+                            (min_x, max_x, min_y, max_y, silhouette)
                         }
                         None => (position.0, position.0, position.1, position.1, Vec::new()),
                     };
@@ -206,14 +210,14 @@ impl OrganismObservation {
         let organism = simulation.organisms.iter().find(|organism| organism.id == organism_id)?;
         let position = organism.occupied_cells.first()?;
         let geometry = OrganismBodyGeometry::from_structure(&organism.structure, &simulation.environment.catalog)?;
-        let min_x = geometry.min_x;
-        let max_x = geometry.max_x;
-        let min_y = geometry.min_y;
-        let max_y = geometry.max_y;
+        let min_x = geometry.min_x + position.x;
+        let max_x = geometry.max_x + position.x;
+        let min_y = geometry.min_y + position.y;
+        let max_y = geometry.max_y + position.y;
         let silhouette = geometry.parts.into_iter().map(|part| OrganismSilhouettePart {
             form: part.form,
-            x: part.x,
-            y: part.y,
+            x: part.x + position.x,
+            y: part.y + position.y,
             rotation_radians: part.rotation_radians,
         }).collect();
         Some(Self {
