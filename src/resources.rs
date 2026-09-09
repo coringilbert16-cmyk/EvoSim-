@@ -55,7 +55,7 @@ BaseResource{name:"Carbon".into(),properties:ResourceProperties{mass:1.0,potenti
 BaseResource{name:"Methane".into(),properties:ResourceProperties{mass:0.75,potential_energy:20.0,reactivity:4.0,cohesion:0.1},shape:Shape{form:Form::RegularPolygon{sides:3,radius:0.620403}}},
 BaseResource{name:"Hydrogen".into(),properties:ResourceProperties{mass:0.25,potential_energy:12.0,reactivity:3.5,cohesion:0.05},shape:Shape{form:Form::Line{length:2.342920,radius:0.1}}},
 BaseResource{name:"Sulfur".into(),properties:ResourceProperties{mass:1.5,potential_energy:8.0,reactivity:2.0,cohesion:0.45},shape:Shape{form:Form::RegularPolygon{sides:5,radius:0.458577}}},
-BaseResource{name:"Nitrogen".into(),properties:ResourceProperties{mass:1.25,potential_energy:0.75,reactivity:0.35,cohesion:0.7},shape:Shape{form:Rectangle{width:1.511858,height:0.330719}}},
+BaseResource{name:"Nitrogen".into(),properties:ResourceProperties{mass:1.25,potential_energy:0.75,reactivity:0.35,cohesion:0.7},shape:Shape{form:Form::Rectangle{width:1.511858,height:0.330719}}},
 BaseResource{name:"Phosphorus".into(),properties:ResourceProperties{mass:1.75,potential_energy:1.5,reactivity:0.75,cohesion:0.6},shape:Shape{form:Form::Polygon{vertices:vec![(-0.408248,-0.408248),(0.408248,-0.408248),(0.408248,0.0),(0.0,0.0),(0.0,0.408248),(-0.408248,0.408248)]}}},
 BaseResource{name:"Water".into(),properties:ResourceProperties{mass:1.0,potential_energy:0.0,reactivity:0.0,cohesion:0.5},shape:Shape{form:Form::Fluid{nominal_area:NOMINAL_UNIT_AREA}}}]}
 pub fn fresh_energy(catalog:&[BaseResource],name:&str,amount:f64)->f64{catalog.iter().find(|b|b.name==name).map(|b|b.properties.potential_energy*amount).unwrap_or(0.0)}
