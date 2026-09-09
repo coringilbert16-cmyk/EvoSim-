@@ -27,9 +27,14 @@ This file describes the implementation state of the repository on the current `m
 
 ## Physical interfaces
 
-- Boundary contact and interface geometry are separate concerns.
+- A connection point is a physical location/region where bonds can attach, subject to geometry and physical capacity. This is the single source of truth for connection admission.
+- Hydrogen is represented as a rigid line body with two geometry-derived terminal connection regions. The terminals are physical endpoints of the line, not authored sockets.
+- Water remains fluid, has no fixed authored shape or connection-point list, and uses a continuous fluid connection region.
+- Physical connection capacity is derived from the connection-region geometry class: rigid discrete points admit two attachments, Hydrogen line terminals admit one, continuous rigid boundary locations admit one at an exact location, and fluid capacity scales with physical area.
+- COMBINE candidates report availability from the live structure's physical capacity rather than hardcoded `true` values.
 - Interpenetrating polygon placements are prevented from producing a false finite shared boundary when their boundaries cross transversely or one polygon is strictly contained inside another.
 - Exact coincident or partially shared collinear boundaries retain their intended interface behavior.
+- Hydrogen line geometry participates in rigid body collision, interface geometry, organism/environment boundary contact, and browser rendering.
 
 ## Organism lifecycle
 
