@@ -5,6 +5,35 @@ use crate::structure::{Bond, OrganismStructure, Placement, StructuralUnit};
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct BlueprintElement { pub material: Material, pub placement: Placement }
 
+impl BlueprintElement {
+    fn validate(&self) -> Result<(), String> {
+        if !self.material.is_valid() { return Err("invalid structural material".into()); }
+        if !self.placement.x.is_finite() || !self.placement.y.is_finite() || !self.placement.rotation_radians.is_finite() { return Err("element placement must be finite".into()); }
+        if !self.material.internal_bonds.is_empty() {
+            if self.material.parts.iter().any(|(_, amount)| (*amount - 1.0).abs() > f64::EPSILON) { return Err("structured material constituents must each have amount 1.0".into()); }
+            if !material_structure_is_connected(&self.material) { return Err("structured material must have connected internal structure".into()); }
+        } else if self.material.parts.len() != 1 || (self.material.total_amount() - 1.0).abs() > f64::EPSILON {
+            return Err("unstructured blueprint element must represent exactly one unit".into());
+        }
+        Ok(())
+    }
+}
+
+fn material_structure_is_connected(material: &Material) -> bool {
+    if material.parts.len() <= 1 { return true; }
+    if material.internal_bonds.is_empty() { return false; }
+    let mut seen = std::collections::HashSet::new();
+    let mut stack = vec![0usize];
+    while let Some(current) = stack.pop() {
+        if !seen.insert(current) { continue; }
+        for bond in &material.internal_bonds {
+            if bond.part_a == current { stack.push(bond.part_b); }
+            if bond.part_b == current { stack.push(bond.part_a); }
+        }
+    }
+    seen.len() == material.parts.len()
+}
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BlueprintConnection { pub element_a: usize, pub point_a: usize, pub element_b: usize, pub point_b: usize }
 
@@ -29,8 +58,9 @@ impl StructuralBlueprint {
     pub fn is_valid(&self) -> bool { self.validate().is_ok() }
     pub fn validate(&self) -> Result<(), String> {
         if self.elements.is_empty() { return Err("blueprint must contain at least one element".into()); }
-        for &i in &self.core_elements { if i >= self.elements.len() { return Err("genome core references an invalid element".into()); } }
-        for (i,e) in self.elements.iter().enumerate() { e.material.is_valid().then_some(()).ok_or_else(|| format!("element {i}: invalid structural material"))?; }
+        let mut seen_core = std::collections::HashSet::new();
+        for &i in &self.core_elements { if i >= self.elements.len() { return Err("genome core references an invalid element".into()); } if !seen_core.insert(i) { return Err("genome core contains a duplicate element".into()); } }
+        for (i,e) in self.elements.iter().enumerate() { e.validate().map_err(|x| format!("element {i}: {x}"))?; }
         for (i,c) in self.connections.iter().enumerate() { c.validate(self).map_err(|x| format!("connection {i}: {x}"))?; }
         if self.elements.len() > 1 && !self.is_connected() { return Err("multi-element blueprint must be connected".into()); }
         if self.core_elements.len() > 1 && !self.core_is_connected() { return Err("genome core must be connected".into()); }
@@ -48,7 +78,7 @@ impl StructuralBlueprint {
             let strength=crate::combine::bond_strength(pa,pb); if !strength.is_finite()||!(0.0..=1.0).contains(&strength){return Err("connection produced invalid intrinsic bond strength".into());}
             let candidate=crate::contact::connection_pair_candidates(&s,c.element_a,c.element_b,catalog).into_iter().find(|x|x.point_a==c.point_a&&x.point_b==c.point_b).ok_or_else(||format!("connection {c:?} has no valid formation candidate"))?;
             let evaluation=crate::combine::evaluate_formation(candidate,pa.cohesion,pb.cohesion); if !evaluation.threshold.is_finite()||evaluation.threshold<=0.0{return Err("connection produced invalid COMBINE formation investment".into());}
-            s.add_bond(Bond{unit_a:c.element_a,point_a:c.point_a,unit_b:c.element_b,point_b:c.point_b,strength,bond_energy:evaluation.threshold});
+            crate::contact::try_add_bond(&mut s,Bond{unit_a:c.element_a,point_a:c.point_a,unit_b:c.element_b,point_b:c.point_b,strength,bond_energy:evaluation.threshold},catalog).map_err(|_|format!("connection {c:?} could not be committed as a valid bond"))?;
         }
         Ok(s)
     }
