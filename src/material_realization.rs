@@ -8,46 +8,30 @@ use crate::attachment::{AttachmentFeature, ConstituentAttachment};
 use crate::resources::{BaseResource, ConnectionSites, Form};
 use crate::structure::Placement;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ResolvedPartPlacement {
-    pub part_index: usize,
-    pub placement: Placement,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct AttachmentResolution {
-    pub part_a: usize,
-    pub part_b: usize,
-    pub placement_a: Placement,
-    pub placement_b: Placement,
-}
-
 /// Resolve a rigid discrete attachment without storing an authored placement.
 ///
-/// The first constituent is treated only as the reference frame for this
-/// local solve; it has no special scaffold meaning. The second constituent is
+/// The first constituent is treated only as the local reference frame for this
+/// solve; it has no special scaffold meaning. The second constituent is
 /// rotated so its attachment direction faces the first, then translated so
 /// the two physical features coincide.
 ///
 /// Continuous Boundary/Fluid features intentionally return `None` here. They
 /// require an assembly/contact resolver to select the actual point on the
 /// continuous region rather than inventing a socket or coordinate.
-pub fn resolve_discrete_attachment(
-    a: &ConstituentAttachment,
-    b: &ConstituentAttachment,
-    catalog: &[BaseResource],
-) -> Option<AttachmentResolution> {
-    let AttachmentFeature::Discrete(feature_a) = a.feature else {
+pub fn resolve_rigid_attachment(
+    resource_a: &BaseResource,
+    attachment_a: &ConstituentAttachment,
+    resource_b: &BaseResource,
+    attachment_b: &ConstituentAttachment,
+) -> Option<(Placement, Placement)> {
+    let AttachmentFeature::Discrete(feature_a) = attachment_a.feature else {
         return None;
     };
-    let AttachmentFeature::Discrete(feature_b) = b.feature else {
+    let AttachmentFeature::Discrete(feature_b) = attachment_b.feature else {
         return None;
     };
 
-    let resource_a = catalog.iter().find(|resource| resource.name == "")?;
-    let resource_b = catalog.iter().find(|resource| resource.name == "")?;
-    let _ = (resource_a, resource_b, feature_a, feature_b);
-    None
+    resolve_rigid_discrete_features(resource_a, feature_a, resource_b, feature_b)
 }
 
 fn discrete_connection_point(
@@ -63,10 +47,8 @@ fn discrete_connection_point(
     }
 }
 
-/// Resolve a pair of already-selected resource names into relative placement.
-///
-/// This lower-level primitive is deliberately independent of `Material` so it
-/// can be used by both material realization and future blueprint realization.
+/// Resolve a pair of immutable resource geometry features into relative
+/// placement. No world-space coordinates are stored in the attachment itself.
 pub fn resolve_rigid_discrete_features(
     resource_a: &BaseResource,
     feature_a: u32,
@@ -76,8 +58,8 @@ pub fn resolve_rigid_discrete_features(
     let (ax, ay, adir) = discrete_connection_point(resource_a, feature_a)?;
     let (bx, by, bdir) = discrete_connection_point(resource_b, feature_b)?;
 
-    // Put A in the canonical reference frame. Its attachment direction points
-    // toward B; B must face back toward A at the shared contact.
+    // Put A in the canonical reference frame. B's attachment direction must
+    // face back toward A at the shared contact.
     let rotation_a = 0.0;
     let rotation_b = normalize_angle(adir + std::f64::consts::PI - bdir);
 
@@ -85,12 +67,10 @@ pub fn resolve_rigid_discrete_features(
     let rotated_bx = bx * bcos - by * bsin;
     let rotated_by = bx * bsin + by * bcos;
 
-    // The two attachment features must occupy the same world point.
-    let contact_x = ax;
-    let contact_y = ay;
+    // The attachment features occupy the same world-space contact point.
     let placement_b = Placement {
-        x: contact_x - rotated_bx,
-        y: contact_y - rotated_by,
+        x: ax - rotated_bx,
+        y: ay - rotated_by,
         rotation_radians: rotation_b,
     };
 
@@ -109,8 +89,8 @@ fn normalize_angle(angle: f64) -> f64 {
     (angle + std::f64::consts::PI).rem_euclid(tau) - std::f64::consts::PI
 }
 
-/// Rigid forms currently have meaningful local geometry. Fluid deliberately
-/// does not: its nominal area is a quantity, not a circular boundary.
+/// Rigid forms have meaningful local geometry. Fluid deliberately does not:
+/// its nominal area is a quantity, not a circular boundary.
 pub fn has_rigid_geometry(form: &Form) -> bool {
     !matches!(form, Form::Fluid { .. })
 }
@@ -118,6 +98,7 @@ pub fn has_rigid_geometry(form: &Form) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::attachment::{AttachmentFeature, ConstituentId};
     use crate::resources::default_catalog;
 
     fn resource<'a>(catalog: &'a [BaseResource], name: &str) -> &'a BaseResource {
@@ -129,9 +110,22 @@ mod tests {
         let catalog = default_catalog();
         let carbon = resource(&catalog, "Carbon");
         let hydrogen = resource(&catalog, "Hydrogen");
+        let carbon_attachment = ConstituentAttachment {
+            constituent: ConstituentId(0),
+            feature: AttachmentFeature::Discrete(0),
+        };
+        let hydrogen_attachment = ConstituentAttachment {
+            constituent: ConstituentId(1),
+            feature: AttachmentFeature::Discrete(0),
+        };
 
-        let (carbon_placement, hydrogen_placement) =
-            resolve_rigid_discrete_features(carbon, 0, hydrogen, 0).unwrap();
+        let (carbon_placement, hydrogen_placement) = resolve_rigid_attachment(
+            carbon,
+            &carbon_attachment,
+            hydrogen,
+            &hydrogen_attachment,
+        )
+        .unwrap();
 
         assert_eq!(carbon_placement, Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 });
         assert!(hydrogen_placement.x.is_finite());
@@ -158,14 +152,22 @@ mod tests {
     #[test]
     fn continuous_attachment_is_not_faked_as_a_socket() {
         let catalog = default_catalog();
-        let a = ConstituentAttachment {
-            constituent: crate::attachment::ConstituentId(0),
+        let carbon = resource(&catalog, "Carbon");
+        let water = resource(&catalog, "Water");
+        let carbon_attachment = ConstituentAttachment {
+            constituent: ConstituentId(0),
             feature: AttachmentFeature::Boundary,
         };
-        let b = ConstituentAttachment {
-            constituent: crate::attachment::ConstituentId(1),
-            feature: AttachmentFeature::Discrete(0),
+        let water_attachment = ConstituentAttachment {
+            constituent: ConstituentId(1),
+            feature: AttachmentFeature::Fluid,
         };
-        assert!(resolve_discrete_attachment(&a, &b, &catalog).is_none());
+        assert!(resolve_rigid_attachment(
+            carbon,
+            &carbon_attachment,
+            water,
+            &water_attachment,
+        )
+        .is_none());
     }
 }
