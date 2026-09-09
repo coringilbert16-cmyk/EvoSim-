@@ -18,6 +18,8 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Check source file sizes
         run: bash scripts/check_large_files.sh
+      - name: Check COMBINE architecture
+        run: bash scripts/check_combine_architecture.sh
       - name: Run Rust tests
         run: cargo test --all-targets
       - name: Run Clippy
