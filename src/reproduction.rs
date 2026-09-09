@@ -223,6 +223,7 @@ pub(crate) fn begin_reproduction(
     let mut structure = OrganismStructure::new();
     let mut realized = HashSet::new();
     let mut realized_units = HashMap::new();
+    let mut realized_order = Vec::new();
     let mut initial_stress = 0.0;
     let mut available_energy = parent.usable_energy;
 
@@ -273,6 +274,7 @@ pub(crate) fn begin_reproduction(
         remaining = next_remaining;
         realized_units.insert(index, structure_index);
         realized.insert(index);
+        realized_order.push(index);
         initial_stress += stress;
     }
 
@@ -285,7 +287,7 @@ pub(crate) fn begin_reproduction(
         developing_structure: structure,
         child_genome,
         target_elements: target_set.into_iter().collect(),
-        realized_elements: realized.into_iter().collect(),
+        realized_elements: realized_order,
         pending_stress: 0.0,
     });
     true
@@ -304,15 +306,12 @@ pub(crate) fn advance_construction(
         return None;
     }
 
-    let mut realized_units = HashMap::new();
-    for &blueprint_index in &realized {
-        let structure_index = construction
-            .developing_structure
-            .units
-            .iter()
-            .position(|unit| unit.placement == blueprint.elements[blueprint_index].placement)?;
-        realized_units.insert(blueprint_index, structure_index);
-    }
+    let realized_units = construction
+        .realized_elements
+        .iter()
+        .enumerate()
+        .map(|(structure_index, &blueprint_index)| (blueprint_index, structure_index))
+        .collect::<HashMap<_, _>>();
 
     let mut trial_energy = *energy;
     let (index, remaining, stress) = construct_any_frontier_element(
