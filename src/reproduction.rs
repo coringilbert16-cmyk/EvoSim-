@@ -55,11 +55,11 @@ fn add_blueprint_element(structure: &mut OrganismStructure, realized_units: &Has
         let other_blueprint_index = if connection.element_a == blueprint_index { connection.element_b } else if connection.element_b == blueprint_index { connection.element_a } else { continue; };
         let Some(&other_structure_index) = realized_units.get(&other_blueprint_index) else { continue; };
         let (new_point, other_point) = if connection.element_a == blueprint_index { (connection.point_a, connection.point_b) } else { (connection.point_b, connection.point_a) };
-        let candidate = crate::contact::connection_pair_candidates_cached(&candidate_structure, new_index, other_structure_index, catalog, &mut cache).into_iter().find(|c| c.point_a == new_point && c.point_b == other_point && c.distance <= 1.0 && c.available_a && c.available_b)?;
+        let candidate = crate::contact::connection_pair_candidates(&candidate_structure, new_index, other_structure_index, catalog).into_iter().find(|c| c.point_a == new_point && c.point_b == other_point && c.distance <= 1.0 && c.available_a && c.available_b)?;
         let pa = candidate_structure.units[new_index].properties(catalog)?;
         let pb = candidate_structure.units[other_structure_index].properties(catalog)?;
         let evaluation = crate::combine::evaluate_formation(candidate, pa.cohesion, pb.cohesion);
-        if !evaluation.threshold.is_finite() || evaluation.threshold < 0.0 { return None; }
+        if !evaluation.threshold.is_finite() || evaluation.threshold <= 0.0 { return None; }
         let attempt = crate::combine_runtime::form_bond(&mut candidate_structure, new_index, new_point, other_structure_index, other_point, catalog, &mut cache, evaluation.threshold, 0.0, &mut trial_energy)?;
         added_stress += attempt.work_cost;
     }
@@ -107,7 +107,7 @@ pub(crate) fn begin_reproduction(parent: &mut Organism, rng: &mut ChaCha8Rng, ca
                 let Some(material) = assemble_blueprint_material(&mut trial_remaining, &blueprint.elements[candidate].material) else { continue; };
                 let mut trial_structure = structure.clone();
                 let mut trial_energy = available_energy;
-                if let Some((_, stress)) = add_blueprint_element(&mut trial_structure, &HashMap::new(), candidate, material, blueprint, catalog, &mut trial_energy) {
+                if let Some((_, stress)) = add_blueprint_element(&mut trial_structure, &realized_units, candidate, material, blueprint, catalog, &mut trial_energy) {
                     structure = trial_structure;
                     available_energy = trial_energy;
                     return Some((candidate, trial_remaining, stress));
