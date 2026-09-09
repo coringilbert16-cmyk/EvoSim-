@@ -42,6 +42,7 @@ fn juvenile_target_set(blueprint: &crate::structural_blueprint::StructuralBluepr
 
 fn all_indices(blueprint: &crate::structural_blueprint::StructuralBlueprint) -> HashSet<usize> { (0..blueprint.elements.len()).collect() }
 
+#[allow(clippy::too_many_arguments)]
 fn add_blueprint_element(structure: &mut OrganismStructure, realized_units: &HashMap<usize, usize>, blueprint_index: usize, material: Material, blueprint: &crate::structural_blueprint::StructuralBlueprint, catalog: &[BaseResource], energy: &mut f64) -> Option<(usize, f64)> {
     let element = &blueprint.elements[blueprint_index];
     let unit = crate::structure::StructuralUnit::from_material(material, element.placement)?;
@@ -51,7 +52,7 @@ fn add_blueprint_element(structure: &mut OrganismStructure, realized_units: &Has
     let mut trial_energy = *energy;
     let mut cache = crate::contact::ConnectionCompatibilityCache::new();
     for connection in &blueprint.connections {
-        let other_blueprint_index = if connection.element_a == blueprint_index { connection.element_b } else if connection.element_b == blueprint_index { connection.element_a } else { continue };
+        let other_blueprint_index = if connection.element_a == blueprint_index { connection.element_b } else if connection.element_b == blueprint_index { connection.element_a } else { continue; };
         let Some(&other_structure_index) = realized_units.get(&other_blueprint_index) else { continue; };
         let (new_point, other_point) = if connection.element_a == blueprint_index { (connection.point_a, connection.point_b) } else { (connection.point_b, connection.point_a) };
         let candidate = crate::contact::connection_pair_candidates_cached(&candidate_structure, new_index, other_structure_index, catalog, &mut cache).into_iter().find(|c| c.point_a == new_point && c.point_b == other_point && c.distance <= 1.0 && c.available_a && c.available_b)?;
@@ -137,7 +138,7 @@ pub(crate) fn advance_construction(stored_material: &mut MaterialStorage, constr
     let realized_units = construction.realized_elements.iter().enumerate().map(|(structure_index, &blueprint_index)| (blueprint_index, structure_index)).collect::<HashMap<_, _>>();
     let mut next_structure = construction.developing_structure.clone();
     let mut next_energy = *energy;
-    let Some((index, remaining, stress)) = construct_any_frontier_element(stored_material, &mut next_structure, &realized_units, &realized, &target, blueprint, catalog, &mut next_energy) else { return None; };
+    let (index, remaining, stress) = construct_any_frontier_element(stored_material, &mut next_structure, &realized_units, &realized, &target, blueprint, catalog, &mut next_energy)?;
     construction.developing_structure = next_structure;
     *stored_material = remaining;
     *energy = next_energy;
