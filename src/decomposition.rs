@@ -44,22 +44,6 @@ pub(crate) struct DecompositionStep {
     pub(crate) released_material: Option<Vec<Material>>,
 }
 
-fn water_field_amount(environment: &Environment, position: &Position) -> f64 {
-    environment
-        .field
-        .index_for_position(position.x, position.y)
-        .map(|index| {
-            environment.field.cells[index]
-                .materials
-                .iter()
-                .flat_map(|material| material.parts.iter())
-                .filter(|(name, _)| name == "Water")
-                .map(|(_, amount)| *amount)
-                .sum()
-        })
-        .unwrap_or(0.0)
-}
-
 /// Execute at most one structural BREAK on a decomposing body.
 ///
 /// Negative net energy is paid from the body's carried death budget. Positive
@@ -83,12 +67,7 @@ pub(crate) fn resolve_one_bond(
         candidate.point_a == target.point_a && candidate.point_b == target.point_b
     })?;
 
-    let interaction = experimental_interaction(
-        a,
-        b,
-        candidate,
-        water_field_amount(environment, &body.position),
-    );
+    let interaction = experimental_interaction(a, b, candidate, 0.0);
     let break_interaction_energy = -interaction.signed_value;
     let complexity = crate::math::complexity(2.0);
     let work = crate::transformation::break_work_cost(a, b, complexity);
@@ -181,7 +160,12 @@ mod tests {
             .realize(&default_catalog())
             .unwrap();
         structure.bonds.clear();
-        let body = DecomposingBody::new(structure, 0.0, Position { x: 0.0, y: 0.0 }).unwrap();
+        let body = DecomposingBody::new(
+            structure,
+            0.0,
+            Position { x: 0.0, y: 0.0 },
+        )
+        .unwrap();
         assert!(body.is_finished());
     }
 }
