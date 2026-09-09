@@ -79,12 +79,6 @@ impl StructuralBlueprint {
             let pb = s.units[c.element_b].properties(catalog).ok_or_else(|| "missing catalog properties for second connection endpoint".to_string())?;
             let strength = crate::combine::bond_strength(pa, pb);
             if !strength.is_finite() || !(0.0..=1.0).contains(&strength) { return Err("connection produced invalid intrinsic bond strength".into()); }
-            // Blueprint connections are authored topology, so they may legally
-            // share a geometric connection point. Runtime COMBINE availability
-            // is an emergent constraint and must not invalidate the inherited
-            // topology. We still use the same physical candidate + formation
-            // calculation so the bond receives the same nonzero investment
-            // basis as runtime formation.
             let candidate = crate::contact::connection_pair_candidates(&s, c.element_a, c.element_b, catalog)
                 .into_iter()
                 .find(|x| x.point_a == c.point_a && x.point_b == c.point_b)
@@ -92,8 +86,7 @@ impl StructuralBlueprint {
             let evaluation = crate::combine::evaluate_formation(candidate, pa.cohesion, pb.cohesion);
             if !evaluation.threshold.is_finite() || evaluation.threshold <= 0.0 { return Err("connection produced invalid COMBINE formation investment".into()); }
             let bond = Bond { unit_a: c.element_a, point_a: c.point_a, unit_b: c.element_b, point_b: c.point_b, strength, bond_energy: evaluation.threshold };
-            if !bond.is_valid(s.units.len(), |i| s.units.get(i).and_then(|u| u.connection_sites(catalog)).and_then(|sites| match sites { crate::resources::ConnectionSites::Corners(points) => Some(points.len()), _ => None })) { return Err(format!("connection {c:?} produced an invalid bond")); }
-            s.add_bond(bond);
+            crate::contact::try_add_bond(&mut s, bond, catalog).map_err(|reason| format!("connection {c:?} rejected by physical bond geometry: {reason}"))?;
         }
         Ok(s)
     }
