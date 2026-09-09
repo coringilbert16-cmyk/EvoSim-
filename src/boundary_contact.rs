@@ -20,7 +20,20 @@ pub struct BoundaryContact {
 }
 
 fn world_polygon(part: &PlacedMaterialPart) -> Option<Vec<(f64, f64)>> {
-    part.form.polygon_vertices().map(|vertices| {
+    let vertices = match &part.form {
+        Form::Line { length, radius } => {
+            let half_length = *length / 2.0;
+            let half_width = *radius;
+            vec![
+                (-half_length, -half_width),
+                (half_length, -half_width),
+                (half_length, half_width),
+                (-half_length, half_width),
+            ]
+        }
+        form => form.polygon_vertices()?,
+    };
+    Some(
         vertices
             .into_iter()
             .map(|(x, y)| {
@@ -32,8 +45,8 @@ fn world_polygon(part: &PlacedMaterialPart) -> Option<Vec<(f64, f64)>> {
                     part.placement.y + x * sin + y * cos,
                 )
             })
-            .collect()
-    })
+            .collect(),
+    )
 }
 
 fn point_segment_distance(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
@@ -126,10 +139,6 @@ fn circle_polygon_boundary_contact(
     let cx = circle.placement.x;
     let cy = circle.placement.y;
 
-    // A circle boundary intersects a finite polygon edge when the segment
-    // reaches the circle while also having some point at or outside the
-    // circle. This distinguishes crossing/tangency from a segment wholly
-    // contained inside the circle.
     vertices.iter().enumerate().any(|(i, &a)| {
         let b = vertices[(i + 1) % vertices.len()];
         let distance = point_segment_distance(cx, cy, a.0, a.1, b.0, b.1);
@@ -165,12 +174,6 @@ fn polygon_polygon_boundary_contact(
     })
 }
 
-/// Determine whether two rigid constituent boundaries actually meet.
-///
-/// This is intentionally different from volume/area overlap. It rejects
-/// complete containment and therefore identifies the physical interface
-/// needed by the later permeability layer. Fluids remain unsupported until
-/// they have an authoritative spatial boundary.
 fn placed_form_boundaries_intersect(
     a: &PlacedMaterialPart,
     b: &PlacedMaterialPart,
@@ -191,13 +194,6 @@ fn placed_form_boundaries_intersect(
     }
 }
 
-/// Find every organism/material constituent pair whose actual rigid
-/// boundaries touch or intersect.
-///
-/// This is deliberately a contact primitive, not a permeability or
-/// transfer calculation. A contact proves only that an interface exists.
-/// How much material can cross that interface belongs to the later
-/// permeability and interaction-capacity layers.
 pub fn boundary_contacts(
     body: &OrganismBodyGeometry,
     material: &PhysicalMaterialInstance,
@@ -299,11 +295,6 @@ mod tests {
 
     #[test]
     fn contained_rigid_material_is_not_mistaken_for_boundary_contact() {
-        // Hydrogen is not actually contained by the Carbon hexagon in the
-        // production catalog: at equal centers its circle crosses the
-        // hexagon boundary. Use a deliberately smaller synthetic rigid
-        // circle so this regression test exercises true containment rather
-        // than depending on incompatible catalog dimensions.
         let polygon = PlacedMaterialPart {
             part_index: 0,
             form: Form::RegularPolygon {
