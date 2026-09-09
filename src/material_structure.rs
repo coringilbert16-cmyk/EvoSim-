@@ -29,13 +29,18 @@ pub struct InternalAttachmentBond {
     pub b: ConstituentAttachment,
 }
 
+/// Physical structure carried by a structured `Material`.
+///
+/// This type deliberately contains no aggregate quantity and no world-space
+/// placement. It describes constituent identity and the physical attachment
+/// relationships that later determine realization.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct AttachmentMaterial {
+pub struct MaterialStructure {
     pub constituents: Vec<MaterialConstituent>,
     pub internal_bonds: Vec<InternalAttachmentBond>,
 }
 
-impl AttachmentMaterial {
+impl MaterialStructure {
     pub fn is_valid(&self) -> bool {
         if self.constituents.is_empty() {
             return self.internal_bonds.is_empty();
@@ -168,8 +173,6 @@ impl AttachmentMaterial {
             return None;
         }
 
-        // Every edge, including edges that were not used to construct the
-        // spanning tree, must reproduce the same placement.
         for bond in &self.internal_bonds {
             let a = bond.a.constituent;
             let b = bond.b.constituent;
@@ -247,7 +250,7 @@ mod tests {
 
     #[test]
     fn attachment_material_requires_stable_unique_constituent_ids() {
-        let material = AttachmentMaterial {
+        let material = MaterialStructure {
             constituents: vec![constituent(1, "Carbon"), constituent(1, "Hydrogen")],
             internal_bonds: Vec::new(),
         };
@@ -256,7 +259,7 @@ mod tests {
 
     #[test]
     fn disconnected_material_is_not_a_single_physical_structure() {
-        let material = AttachmentMaterial {
+        let material = MaterialStructure {
             constituents: vec![constituent(1, "Carbon"), constituent(2, "Hydrogen")],
             internal_bonds: Vec::new(),
         };
@@ -266,7 +269,7 @@ mod tests {
 
     #[test]
     fn discrete_attachment_graph_derives_constituent_placements() {
-        let material = AttachmentMaterial {
+        let material = MaterialStructure {
             constituents: vec![constituent(1, "Carbon"), constituent(2, "Hydrogen")],
             internal_bonds: vec![bond(1, 0, 2, 0)],
         };
@@ -277,7 +280,7 @@ mod tests {
 
     #[test]
     fn inconsistent_cycle_is_rejected() {
-        let material = AttachmentMaterial {
+        let material = MaterialStructure {
             constituents: vec![
                 constituent(1, "Carbon"),
                 constituent(2, "Carbon"),
@@ -292,7 +295,7 @@ mod tests {
 
     #[test]
     fn continuous_internal_attachment_waits_for_contact_realization() {
-        let material = AttachmentMaterial {
+        let material = MaterialStructure {
             constituents: vec![constituent(1, "Carbon"), constituent(2, "Water")],
             internal_bonds: vec![InternalAttachmentBond {
                 a: ConstituentAttachment {
@@ -312,31 +315,27 @@ mod tests {
 
     #[test]
     fn reordering_constituents_does_not_change_identity() {
-        let a = AttachmentMaterial {
+        let a = MaterialStructure {
             constituents: vec![constituent(1, "Carbon"), constituent(2, "Hydrogen")],
             internal_bonds: vec![bond(1, 0, 2, 0)],
         };
-        let b = AttachmentMaterial {
+        let b = MaterialStructure {
             constituents: vec![constituent(2, "Hydrogen"), constituent(1, "Carbon")],
             internal_bonds: vec![bond(1, 0, 2, 0)],
         };
         assert!(a.is_valid() && b.is_valid());
-        assert_eq!(
-            a.internal_bonds,
-            b.internal_bonds,
-            "attachments identify constituents by stable ID, not vector position"
-        );
+        assert_eq!(a.internal_bonds, b.internal_bonds);
     }
 
     #[test]
     fn duplicate_attachment_pair_is_rejected_but_distinct_pairs_are_allowed() {
-        let duplicate = AttachmentMaterial {
+        let duplicate = MaterialStructure {
             constituents: vec![constituent(1, "Carbon"), constituent(2, "Hydrogen")],
             internal_bonds: vec![bond(1, 0, 2, 0), bond(1, 0, 2, 0)],
         };
         assert!(!duplicate.is_valid());
 
-        let distinct = AttachmentMaterial {
+        let distinct = MaterialStructure {
             constituents: vec![constituent(1, "Carbon"), constituent(2, "Hydrogen")],
             internal_bonds: vec![bond(1, 0, 2, 0), bond(1, 1, 2, 1)],
         };
