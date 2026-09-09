@@ -39,8 +39,9 @@ pub(crate) fn start_tick_loop(simulation: Arc<Mutex<Simulation>>) {
 async fn index_handler() -> impl IntoResponse {
     let page = include_str!("../ui/index.html");
     let resource_visualization = include_str!("../ui/resource_visualization.js");
+    let organism_inspector = include_str!("../ui/organism_inspector.js");
     Html(format!(
-        "{page}\n<script>{resource_visualization}</script>"
+        "{page}\n<script>{resource_visualization}</script>\n<script>{organism_inspector}</script>"
     ))
 }
 
