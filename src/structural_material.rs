@@ -1,21 +1,105 @@
 //! Structural material owned by a physical structural unit.
+//!
+//! `StructuralMaterial` is a thin ownership wrapper around `Material`.
+//! Physical constituent identity and internal attachments belong to
+//! `MaterialStructure`; this type must not invent a scaffold constituent or
+//! reinterpret constituent ordering as geometry.
 use serde::{Deserialize, Serialize};
-use crate::resources::{BaseResource, ConnectionSites, Form, Material, ResourceProperties, Shape};
-#[derive(Serialize,Deserialize,Clone,Debug,PartialEq)]pub struct StructuralMaterial{pub material:Material}
-impl StructuralMaterial{
- pub fn from_material(material:Material)->Option<Self>{if !material.is_valid()||material.is_empty(){return None}if !material.has_internal_structure()&&(material.parts.len()!=1||(material.total_amount()-1.0).abs()>f64::EPSILON){return None}Some(Self{material})}
- pub fn single(resource_name:impl Into<String>)->Self{Self{material:Material::free_base(resource_name,1.0)}}
- pub fn material(&self)->&Material{&self.material}
- pub fn constituents(&self)->&[(String,f64)]{&self.material.parts}
- pub fn internal_bonds(&self)->&[crate::resources::InternalBond]{&self.material.internal_bonds}
- pub fn total_amount(&self)->f64{self.material.total_amount()}
- pub fn mass(&self,catalog:&[BaseResource])->f64{self.material.mass(catalog)}
- pub fn weighted_properties(&self,catalog:&[BaseResource])->ResourceProperties{self.material.weighted_properties(catalog)}
- pub fn is_composite(&self)->bool{self.material.parts.len()>1}
- pub fn is_valid(&self)->bool{self.material.is_valid()&&!self.material.is_empty()}
- pub fn resolves_in_catalog(&self,catalog:&[BaseResource])->bool{self.material.parts.iter().all(|(name,_)|catalog.iter().any(|base|base.name==*name))}
- fn external_geometry_resource<'a>(&self,catalog:&'a[BaseResource])->Option<&'a BaseResource>{let(name,amount)=self.material.parts.first()?;if(*amount-1.0).abs()>f64::EPSILON{return None}let resource=catalog.iter().find(|base|base.name==*name)?;if matches!(&resource.shape.form,Form::Fluid{..}){return None}for(other_name,other_amount)in self.material.parts.iter().skip(1){if(*other_amount-1.0).abs()>f64::EPSILON{return None}catalog.iter().find(|base|base.name==*other_name)?;}Some(resource)}
- pub fn connection_sites(&self,catalog:&[BaseResource])->Option<ConnectionSites>{if !self.material.has_internal_structure(){let[(name,amount)]=self.material.parts.as_slice()else{return None};if(*amount-1.0).abs()>f64::EPSILON{return None}return catalog.iter().find(|base|base.name==*name).map(|base|base.shape.connection_sites())}self.external_geometry_resource(catalog).map(|base|base.shape.connection_sites())}
- pub fn shape<'a>(&self,catalog:&'a[BaseResource])->Option<&'a Shape>{if !self.material.has_internal_structure(){let[(name,amount)]=self.material.parts.as_slice()else{return None};if(*amount-1.0).abs()>f64::EPSILON{return None}return catalog.iter().find(|base|base.name==*name).map(|base|&base.shape)}self.external_geometry_resource(catalog).map(|base|&base.shape)}
+use crate::resources::{BaseResource, ConnectionSites, Material, ResourceProperties, Shape};
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct StructuralMaterial { pub material: Material }
+
+impl StructuralMaterial {
+    pub fn from_material(material: Material) -> Option<Self> {
+        if !material.is_valid() || material.empty() { return None; }
+        if !material.is_structured() && (material.composition().len() != 1 || (material.total_amount() - 1.0).abs() > f64::EPSILON) { return None; }
+        Some(Self { material })
+    }
+    pub fn single(resource_name: impl Into<String>) -> Self { Self { material: Material::free_base(resource_name, 1.0) } }
+    pub fn material(&self) -> &Material { &self.material }
+    pub fn composition(&self) -> &[crate::resources::MaterialComponent] { self.material.composition() }
+    pub fn structure(&self) -> Option<&crate::material_structure::MaterialStructure> { self.material.structure() }
+    pub fn total_amount(&self) -> f64 { self.material.total_amount() }
+    pub fn mass(&self, catalog: &[BaseResource]) -> f64 { self.material.mass(catalog) }
+    pub fn weighted_properties(&self, catalog: &[BaseResource]) -> ResourceProperties { self.material.weighted_properties(catalog) }
+    pub fn is_composite(&self) -> bool { self.material.structure().map_or(false, |s| s.constituents.len() > 1) }
+    pub fn is_valid(&self) -> bool { self.material.is_valid() && !self.material.empty() }
+    pub fn resolves_in_catalog(&self, catalog: &[BaseResource]) -> bool {
+        if let Some(structure) = self.material.structure() {
+            structure.constituents.iter().all(|c| catalog.iter().any(|base| base.name == c.resource))
+        } else {
+            self.material.composition().iter().all(|c| catalog.iter().any(|base| base.name == c.resource))
+        }
+    }
+
+    /// A composite assembly has no authored external scaffold. Its exposed
+    /// connection regions must be derived from the realized geometry of the
+    /// complete assembly, so this method is authoritative only for a single
+    /// physical constituent.
+    pub fn connection_sites(&self, catalog: &[BaseResource]) -> Option<ConnectionSites> {
+        if self.material.is_structured() { return None; }
+        let [component] = self.material.composition() else { return None; };
+        if (component.amount - 1.0).abs() > f64::EPSILON { return None; }
+        catalog.iter().find(|base| base.name == component.resource).map(|base| base.shape.connection_sites())
+    }
+
+    /// Composite material has no authored external shape. Its shape must be
+    /// obtained from its physical constituent realization, not its first part.
+    pub fn shape<'a>(&self, catalog: &'a [BaseResource]) -> Option<&'a Shape> {
+        if self.material.is_structured() { return None; }
+        let [component] = self.material.composition() else { return None; };
+        if (component.amount - 1.0).abs() > f64::EPSILON { return None; }
+        catalog.iter().find(|base| base.name == component.resource).map(|base| &base.shape)
+    }
 }
-#[cfg(test)]mod tests{use super::*;use crate::resources::{default_catalog,InternalBond};fn hydrated(parts:Vec<(String,f64)>,bonds:Vec<InternalBond>)->Material{Material{parts,internal_bonds:bonds}}#[test]fn storage_material_becomes_owned_structural_material_without_losing_structure(){let m=hydrated(vec![("Carbon".into(),1.0),("Hydrogen".into(),1.0)],vec![InternalBond{part_a:0,part_b:1}]);let s=StructuralMaterial::from_material(m.clone()).unwrap();assert_eq!(s.material(),&m);assert!(s.is_composite());assert_eq!(s.internal_bonds(),m.internal_bonds.as_slice())}#[test]fn free_unit_is_valid_structural_material(){let s=StructuralMaterial::from_material(Material::free_base("Carbon",1.0)).unwrap();assert!(!s.is_composite());assert!(s.resolves_in_catalog(&default_catalog()))}#[test]fn free_aggregate_cannot_become_one_structural_unit(){assert!(StructuralMaterial::from_material(Material::free_base("Carbon",2.0)).is_none())}#[test]fn hydrated_composite_uses_rigid_scaffold_geometry(){let m=hydrated(vec![("Carbon".into(),1.0),("Water".into(),1.0)],vec![InternalBond{part_a:0,part_b:1}]);let s=StructuralMaterial::from_material(m).unwrap();let c=default_catalog();assert!(matches!(&s.shape(&c).unwrap().form,Form::RegularPolygon{sides:6,..}));assert!(matches!(s.connection_sites(&c).unwrap(),ConnectionSites::Corners(_)))}#[test]fn standalone_water_is_a_fluid_connection_region(){let s=StructuralMaterial::from_material(Material::free_base("Water",1.0)).unwrap();let c=default_catalog();assert!(matches!(s.shape(&c).unwrap().form,Form::Fluid{..}));assert!(matches!(s.connection_sites(&c).unwrap(),ConnectionSites::Undetermined))}#[test]fn hydrated_composite_can_have_internal_rigid_reinforcement(){let m=hydrated(vec![("Carbon".into(),1.0),("Nitrogen".into(),1.0),("Water".into(),1.0)],vec![InternalBond{part_a:0,part_b:1},InternalBond{part_a:1,part_b:2}]);let s=StructuralMaterial::from_material(m).unwrap();let c=default_catalog();assert!(matches!(&s.shape(&c).unwrap().form,Form::RegularPolygon{sides:6,..}))}#[test]fn serialization_round_trip_preserves_material_identity(){let m=hydrated(vec![("Carbon".into(),1.0),("Hydrogen".into(),1.0)],vec![InternalBond{part_a:0,part_b:1}]);let s=StructuralMaterial::from_material(m).unwrap();let r:StructuralMaterial=serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();assert_eq!(r,s)}}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::attachment::{AttachmentFeature, ConstituentAttachment, ConstituentId};
+    use crate::material_structure::{InternalAttachmentBond, MaterialConstituent, MaterialStructure};
+    use crate::resources::{default_catalog, Material};
+
+    #[test]
+    fn free_unit_is_valid_structural_material() {
+        let s = StructuralMaterial::from_material(Material::free_base("Carbon", 1.0)).unwrap();
+        let catalog = default_catalog();
+        assert!(!s.is_composite());
+        assert!(s.resolves_in_catalog(&catalog));
+        assert!(s.shape(&catalog).is_some());
+        assert!(s.connection_sites(&catalog).is_some());
+    }
+
+    #[test]
+    fn free_aggregate_cannot_become_one_structural_unit() {
+        assert!(StructuralMaterial::from_material(Material::free_base("Carbon", 2.0)).is_none());
+    }
+
+    #[test]
+    fn structured_material_does_not_choose_a_scaffold() {
+        let structure = MaterialStructure {
+            constituents: vec![
+                MaterialConstituent { id: ConstituentId(1), resource: "Carbon".into() },
+                MaterialConstituent { id: ConstituentId(2), resource: "Hydrogen".into() },
+            ],
+            internal_bonds: vec![InternalAttachmentBond {
+                a: ConstituentAttachment { constituent: ConstituentId(1), feature: AttachmentFeature::Discrete(0) },
+                b: ConstituentAttachment { constituent: ConstituentId(2), feature: AttachmentFeature::Discrete(0) },
+            }],
+        };
+        let material = Material { composition: Vec::new(), structure: Some(structure) };
+        let structural = StructuralMaterial::from_material(material).unwrap();
+        let catalog = default_catalog();
+        assert!(structural.is_composite());
+        assert!(structural.shape(&catalog).is_none());
+        assert!(structural.connection_sites(&catalog).is_none());
+    }
+
+    #[test]
+    fn serialization_round_trip_preserves_material_identity() {
+        let structural = StructuralMaterial::from_material(Material::free_base("Carbon", 1.0)).unwrap();
+        let round_trip: StructuralMaterial = serde_json::from_str(&serde_json::to_string(&structural).unwrap()).unwrap();
+        assert_eq!(round_trip, structural);
+    }
+}
