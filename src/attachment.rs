@@ -26,7 +26,7 @@ pub struct ConstituentId(pub u64);
 /// Discrete features identify immutable geometric features such as a polygon
 /// corner or a line terminal. Boundary and Fluid are continuous regions: they
 /// contain no authored socket index, capacity count, or world-space position.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AttachmentFeature {
     /// Immutable feature identity within the referenced physical constituent.
     Discrete(u32),
@@ -47,14 +47,14 @@ impl AttachmentFeature {
 }
 
 /// An attachment target inside a material's constituent graph.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ConstituentAttachment {
     pub constituent: ConstituentId,
     pub feature: AttachmentFeature,
 }
 
 /// An attachment target inside an organism blueprint.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BlueprintAttachment {
     pub element: BlueprintElementId,
     pub feature: AttachmentFeature,
