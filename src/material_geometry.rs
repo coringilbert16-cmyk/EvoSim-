@@ -116,11 +116,11 @@ impl MaterialGeometry {
 /// Whether two placed resource forms physically overlap within a tolerance.
 ///
 /// This is an exact shape-level test for the rigid forms currently represented
-/// by the catalog: circles and polygonal forms. `Fluid` deliberately returns
-/// `false` because its nominal area is not yet a spatial boundary and must not
-/// be turned into an invented circle. The broad-phase bounding radii are only
-/// used to reject clearly separated shapes; the final decision uses the actual
-/// form geometry.
+/// by the catalog: circles, lines, and polygonal forms. `Fluid` deliberately
+/// returns `false` because its nominal area is not yet a spatial boundary and
+/// must not be turned into an invented circle. The broad-phase bounding radii
+/// are only used to reject clearly separated shapes; the final decision uses
+/// the actual form geometry.
 pub fn placed_forms_overlap(a: &PlacedMaterialPart, b: &PlacedMaterialPart, tolerance: f64) -> bool {
     if !tolerance.is_finite() || !a.placement.x.is_finite() || !a.placement.y.is_finite()
         || !b.placement.x.is_finite() || !b.placement.y.is_finite()
@@ -191,7 +191,19 @@ fn polygons_overlap(a: &PlacedMaterialPart, b: &PlacedMaterialPart, tolerance: f
 }
 
 fn world_polygon_vertices(form: &Form, placement: Placement) -> Option<Vec<(f64, f64)>> {
-    let vertices = form.polygon_vertices()?;
+    let vertices = match form {
+        Form::Line { length, radius } => {
+            let half_length = *length / 2.0;
+            let half_width = *radius;
+            vec![
+                (-half_length, -half_width),
+                (half_length, -half_width),
+                (half_length, half_width),
+                (-half_length, half_width),
+            ]
+        }
+        other => other.polygon_vertices()?,
+    };
     let (sin, cos) = placement.rotation_radians.sin_cos();
     Some(
         vertices
@@ -399,6 +411,15 @@ mod tests {
             0.0,
         );
         assert!(placed_forms_overlap(&circle, &square, 0.0));
+    }
+
+    #[test]
+    fn line_has_physical_collision_geometry() {
+        let line = part(Form::Line { length: 4.0, radius: 0.25 }, 0.0, 0.0, 0.0);
+        let touching = part(Form::Rectangle { width: 1.0, height: 1.0 }, 2.4, 0.0, 0.0);
+        let separated = part(Form::Rectangle { width: 1.0, height: 1.0 }, 3.0, 0.0, 0.0);
+        assert!(placed_forms_overlap(&line, &touching, 0.0));
+        assert!(!placed_forms_overlap(&line, &separated, 0.0));
     }
 
     #[test]
