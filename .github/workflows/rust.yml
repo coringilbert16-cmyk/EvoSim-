@@ -2,7 +2,7 @@ name: Rust
 
 on:
   push:
-    branches: [main]
+    branches: [main, phase4-runtime-integrity]
   pull_request:
     branches: [main]
 
