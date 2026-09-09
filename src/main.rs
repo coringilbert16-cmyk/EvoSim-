@@ -18,7 +18,6 @@ mod membrane_geometry;
 mod organism_boundary;
 mod organism_geometry;
 mod boundary_contact;
-// Physical graph is the sole target for unified constituent relationships.
 mod physical_graph;
 mod physical_interface;
 mod permeability;
