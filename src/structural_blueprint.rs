@@ -153,8 +153,6 @@ impl StructuralBlueprint {
             .find(|candidate| {
                 candidate.point_a == c.point_a
                     && candidate.point_b == c.point_b
-                    && candidate.available_a
-                    && candidate.available_b
             })
             .ok_or_else(|| format!("connection {c:?} has no valid formation candidate"))?;
             let evaluation = crate::combine::evaluate_formation(candidate, pa.cohesion, pb.cohesion);
