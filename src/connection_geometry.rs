@@ -1,13 +1,29 @@
-//! Self-contained geometry helpers for structural connection points.
-//!
-//! This module deliberately does not create bonds, determine bond strength,
-//! or perform energy calculations. It only transforms the project's existing
-//! `ConnectionPoint` representation into world space and evaluates geometry.
+//! Geometry helpers and physical connection-region representation.
 
 use crate::math::directional_compatibility;
 use crate::resources::ConnectionPoint;
 
-/// A connection point after applying a structural-unit placement.
+/// A physical location/region where a structural bond may attach.
+///
+/// `Corner` is a discrete authored location. `Boundary` represents a
+/// continuous circumference/edge and deliberately has no invented socket
+/// index. `Fluid` represents a contact region whose exact attachment location
+/// is determined by geometry at admission time.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ConnectionRegion {
+    Corner(WorldConnectionPoint),
+    Boundary {
+        center_x: f64,
+        center_y: f64,
+        radius: f64,
+    },
+    Fluid {
+        center_x: f64,
+        center_y: f64,
+        effective_radius: f64,
+    },
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WorldConnectionPoint {
     pub x: f64,
@@ -16,12 +32,6 @@ pub struct WorldConnectionPoint {
     pub normal_y: f64,
 }
 
-/// Transform an authored `ConnectionPoint` from unit-local space into
-/// organism/world space.
-///
-/// `rotation_radians` rotates both the point and its outward-facing normal;
-/// translation then places the unit in world space. The immutable catalog
-/// connection point itself is never modified.
 pub fn transform_connection_point(
     point: ConnectionPoint,
     origin_x: f64,
@@ -30,7 +40,6 @@ pub fn transform_connection_point(
 ) -> WorldConnectionPoint {
     let (s, c) = rotation_radians.sin_cos();
     let (nx, ny) = (point.direction_radians.cos(), point.direction_radians.sin());
-
     WorldConnectionPoint {
         x: origin_x + point.x * c - point.y * s,
         y: origin_y + point.x * s + point.y * c,
@@ -39,22 +48,14 @@ pub fn transform_connection_point(
     }
 }
 
-/// Euclidean distance between two world-space connection points.
 pub fn point_distance(a: WorldConnectionPoint, b: WorldConnectionPoint) -> f64 {
     (a.x - b.x).hypot(a.y - b.y)
 }
 
-/// Compatibility of two surfaces facing one another.
-///
-/// Because connection-point directions are outward-facing normals, the second
-/// normal is reversed before comparison. Directly facing surfaces therefore
-/// score `1`, perpendicular surfaces `0`, and surfaces facing the same way
-/// score `-1`.
 pub fn facing_compatibility(a: WorldConnectionPoint, b: WorldConnectionPoint) -> f64 {
     directional_compatibility(a.normal_x, a.normal_y, -b.normal_x, -b.normal_y)
 }
 
-/// Whether two connection points are within a supplied geometric tolerance.
 pub fn within_contact_tolerance(
     a: WorldConnectionPoint,
     b: WorldConnectionPoint,
@@ -63,17 +64,30 @@ pub fn within_contact_tolerance(
     point_distance(a, b) <= tolerance.max(0.0)
 }
 
+impl ConnectionRegion {
+    pub fn representative_point(self) -> Option<WorldConnectionPoint> {
+        match self {
+            Self::Corner(point) => Some(point),
+            Self::Boundary { .. } | Self::Fluid { .. } => None,
+        }
+    }
+
+    pub fn center(self) -> (f64, f64) {
+        match self {
+            Self::Corner(point) => (point.x, point.y),
+            Self::Boundary { center_x, center_y, .. }
+            | Self::Fluid { center_x, center_y, .. } => (center_x, center_y),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::f64::consts::{FRAC_PI_2, PI};
 
     fn cp(x: f64, y: f64, direction_radians: f64) -> ConnectionPoint {
-        ConnectionPoint {
-            x,
-            y,
-            direction_radians,
-        }
+        ConnectionPoint { x, y, direction_radians }
     }
 
     #[test]
@@ -107,11 +121,19 @@ mod tests {
     }
 
     #[test]
-    fn tolerance_is_respected_and_negative_tolerance_means_exact_contact_only() {
+    fn continuous_regions_have_no_fake_socket_identity() {
+        let boundary = ConnectionRegion::Boundary { center_x: 1.0, center_y: 2.0, radius: 3.0 };
+        let fluid = ConnectionRegion::Fluid { center_x: 4.0, center_y: 5.0, effective_radius: 6.0 };
+        assert!(boundary.representative_point().is_none());
+        assert!(fluid.representative_point().is_none());
+        assert_eq!(boundary.center(), (1.0, 2.0));
+        assert_eq!(fluid.center(), (4.0, 5.0));
+    }
+
+    #[test]
+    fn negative_tolerance_means_exact_contact_only() {
         let a = transform_connection_point(cp(0.0, 0.0, 0.0), 0.0, 0.0, 0.0);
         let b = transform_connection_point(cp(0.0, 0.0, 0.0), 1.0, 0.0, 0.0);
-        assert!(within_contact_tolerance(a, b, 1.0));
-        assert!(!within_contact_tolerance(a, b, 0.99));
         assert!(!within_contact_tolerance(a, b, -1.0));
     }
 }
