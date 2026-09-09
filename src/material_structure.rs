@@ -59,10 +59,10 @@ impl AttachmentMaterial {
             if !ids.contains(&bond.a.constituent) || !ids.contains(&bond.b.constituent) {
                 return false;
             }
-            if self.internal_bonds[..index].iter().any(|previous| {
-                previous == bond
-                    || (previous.a == bond.b && previous.b == bond.a)
-            }) {
+            if self.internal_bonds[..index]
+                .iter()
+                .any(|previous| previous == bond || (previous.a == bond.b && previous.b == bond.a))
+            {
                 return false;
             }
         }
@@ -101,11 +101,21 @@ impl AttachmentMaterial {
         visited.len() == self.constituents.len()
     }
 
+    /// Construct placements from a spanning tree and then validate every
+    /// remaining graph edge as a physical consistency constraint. Cycles are
+    /// therefore preserved as structure rather than silently discarded.
     pub fn rigid_discrete_placement(
         &self,
         catalog: &[BaseResource],
     ) -> Option<Vec<(ConstituentId, Placement)>> {
         if !self.is_valid() || !self.is_connected() {
+            return None;
+        }
+
+        if self.internal_bonds.iter().any(|bond| {
+            !matches!(bond.a.feature, AttachmentFeature::Discrete(_))
+                || !matches!(bond.b.feature, AttachmentFeature::Discrete(_))
+        }) {
             return None;
         }
 
@@ -115,12 +125,16 @@ impl AttachmentMaterial {
             resource_by_id.insert(constituent.id, resource);
         }
 
-        // Placement construction uses a spanning tree. Every remaining graph
-        // edge is checked later as a physical consistency constraint rather
-        // than being allowed to overwrite an already-derived placement.
         let root = self.constituents[0].id;
         let mut placements = HashMap::new();
-        placements.insert(root, Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 });
+        placements.insert(
+            root,
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
 
         let mut queue = VecDeque::from([root]);
         while let Some(current) = queue.pop_front() {
@@ -140,24 +154,13 @@ impl AttachmentMaterial {
 
                 let current_resource = resource_by_id.get(&current)?;
                 let neighbor_resource = resource_by_id.get(&neighbor)?;
-                let (mut current_local, neighbor_local) =
-                    crate::material_realization::resolve_rigid_attachment(
-                        current_resource,
-                        &current_attachment,
-                        neighbor_resource,
-                        &neighbor_attachment,
-                    )?;
-
-                let transformed_current = compose(current_placement, current_local);
-                let neighbor_world = compose(current_placement, neighbor_local);
-                let correction = Placement {
-                    x: transformed_current.x,
-                    y: transformed_current.y,
-                    rotation_radians: transformed_current.rotation_radians,
-                };
-                current_local = correction;
-                let _ = current_local;
-                placements.insert(neighbor, neighbor_world);
+                let (_, neighbor_local) = crate::material_realization::resolve_rigid_attachment(
+                    current_resource,
+                    &current_attachment,
+                    neighbor_resource,
+                    &neighbor_attachment,
+                )?;
+                placements.insert(neighbor, compose(current_placement, neighbor_local));
                 queue.push_back(neighbor);
             }
         }
@@ -166,13 +169,23 @@ impl AttachmentMaterial {
             return None;
         }
 
-        // A complete physical realization must satisfy every cycle. For the
-        // first implementation, all internal edges must be rigid/discrete so
-        // every edge has a deterministic contact point to validate.
+        // Every edge, including edges that were not used to construct the
+        // spanning tree, must reproduce the same placement.
         for bond in &self.internal_bonds {
-            if !matches!(bond.a.feature, AttachmentFeature::Discrete(_))
-                || !matches!(bond.b.feature, AttachmentFeature::Discrete(_))
-            {
+            let a = bond.a.constituent;
+            let b = bond.b.constituent;
+            let a_resource = resource_by_id.get(&a)?;
+            let b_resource = resource_by_id.get(&b)?;
+            let a_placement = *placements.get(&a)?;
+            let b_placement = *placements.get(&b)?;
+            let (_, expected_b_local) = crate::material_realization::resolve_rigid_attachment(
+                a_resource,
+                &bond.a,
+                b_resource,
+                &bond.b,
+            )?;
+            let expected_b = compose(a_placement, expected_b_local);
+            if !placements_match(expected_b, b_placement) {
                 return None;
             }
         }
@@ -193,6 +206,18 @@ fn compose(parent: Placement, local: Placement) -> Placement {
         y: parent.y + local.x * sin + local.y * cos,
         rotation_radians: parent.rotation_radians + local.rotation_radians,
     }
+}
+
+fn placements_match(a: Placement, b: Placement) -> bool {
+    const EPS: f64 = 1e-9;
+    (a.x - b.x).abs() <= EPS
+        && (a.y - b.y).abs() <= EPS
+        && angle_distance(a.rotation_radians, b.rotation_radians) <= EPS
+}
+
+fn angle_distance(a: f64, b: f64) -> f64 {
+    let tau = std::f64::consts::TAU;
+    (a - b + std::f64::consts::PI).rem_euclid(tau) - std::f64::consts::PI
 }
 
 #[cfg(test)]
@@ -250,6 +275,21 @@ mod tests {
         let placements = material.rigid_discrete_placement(&default_catalog()).unwrap();
         assert_eq!(placements.len(), 2);
         assert!(placements.iter().all(|(_, placement)| placement.x.is_finite()));
+    }
+
+    #[test]
+    fn inconsistent_cycle_is_rejected() {
+        let material = AttachmentMaterial {
+            constituents: vec![
+                constituent(1, "Carbon"),
+                constituent(2, "Carbon"),
+                constituent(3, "Carbon"),
+            ],
+            internal_bonds: vec![bond(1, 0, 2, 0), bond(2, 0, 3, 0), bond(3, 0, 1, 1)],
+        };
+        assert!(material.is_valid());
+        assert!(material.is_connected());
+        assert!(material.rigid_discrete_placement(&default_catalog()).is_none());
     }
 
     #[test]
