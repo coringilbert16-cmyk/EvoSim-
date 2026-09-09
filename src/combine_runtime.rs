@@ -44,7 +44,7 @@ fn settle_energy(energy: &mut f64, investment: f64, work: f64, interaction: f64)
     if !net.is_finite() || !next.is_finite() || next < -EPSILON { return None; } *energy = next.max(0.0); Some(net)
 }
 fn evaluate_candidate(structure: &crate::structure::OrganismStructure, ua: usize, ub: usize, candidate: crate::contact::ConnectionPairCandidate, catalog: &[BaseResource], water: f64) -> Option<(FormationEvaluation, ExperimentalInteraction, f64, f64, f64)> {
-    if candidate.distance > COMBINE_CONTACT_TOLERANCE || !candidate.available_a || !candidate.available_b { return None; }
+    if candidate.distance > COMBINE_CONTACT_TOLERANCE { return None; }
     let a = structure.units.get(ua)?.properties(catalog)?; let b = structure.units.get(ub)?.properties(catalog)?;
     let evaluation = crate::combine::evaluate_formation(candidate, a.cohesion, b.cohesion);
     let (interaction, work, investment) = required_investment(a, b, evaluation, water).ok()?;
@@ -54,7 +54,7 @@ fn evaluate_candidate(structure: &crate::structure::OrganismStructure, ua: usize
 fn form_bond(structure: &mut crate::structure::OrganismStructure, request: BondFormationRequest, catalog: &[BaseResource], cache: &mut ConnectionCompatibilityCache, energy: &mut f64) -> Option<CombineAttempt> {
     let BondFormationRequest { unit_a: ua, unit_b: ub, endpoint_a, endpoint_b, investment, water } = request;
     if ua >= structure.units.len() || ub >= structure.units.len() || ua == ub { return None; }
-    let candidate = crate::contact::connection_pair_candidates_cached(structure, ua, ub, catalog, cache).into_iter().find(|c| c.endpoint_a == endpoint_a && c.endpoint_b == endpoint_b && c.distance <= COMBINE_CONTACT_TOLERANCE && c.available_a && c.available_b)?;
+    let candidate = crate::contact::connection_pair_candidates_cached(structure, ua, ub, catalog, cache).into_iter().find(|c| c.endpoint_a == endpoint_a && c.endpoint_b == endpoint_b && c.distance <= COMBINE_CONTACT_TOLERANCE)?;
     let a = structure.units[ua].properties(catalog)?; let b = structure.units[ub].properties(catalog)?;
     let evaluation = crate::combine::evaluate_formation(candidate, a.cohesion, b.cohesion);
     if !crate::combine::formation_succeeds(evaluation, investment) { return None; }
