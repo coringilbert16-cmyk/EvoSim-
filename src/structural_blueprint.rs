@@ -4,18 +4,19 @@ use crate::resources::{BaseResource, Material};
 use crate::structure::{Bond, BondEndpoint, ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
 use serde::{Deserialize, Serialize};
 
-fn default_core_elements() -> Vec<usize> { vec![0] }
+fn default_core_elements() -> Vec<BlueprintElementId> { vec![BlueprintElementId(1)] }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct StructuralBlueprint {
     pub elements: Vec<BlueprintElement>,
     pub connections: Vec<BlueprintConnection>,
     #[serde(default = "default_core_elements")]
-    pub core_elements: Vec<usize>,
+    pub core_elements: Vec<BlueprintElementId>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct BlueprintElement {
+    pub id: BlueprintElementId,
     pub material: Material,
     pub placement: Placement,
 }
@@ -24,8 +25,8 @@ pub struct BlueprintElement {
 ///
 /// The blueprint stores stable element identity plus attachment feature identity;
 /// it does not store a socket number or a bond-capacity count. Discrete features
-/// refer to immutable geometry of the referenced material. Boundary and Fluid
-/// features remain continuous and are resolved by the physical contact solver.
+/// refer to immutable geometry of the referenced physical constituent. Boundary
+/// and Fluid features remain continuous and are resolved by the physical solver.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BlueprintConnection {
     pub a: BlueprintAttachment,
@@ -40,23 +41,27 @@ impl StructuralBlueprint {
     pub fn with_core_elements(
         elements: Vec<BlueprintElement>,
         connections: Vec<BlueprintConnection>,
-        core_elements: Vec<usize>,
+        core_elements: Vec<BlueprintElementId>,
     ) -> Self {
         Self { elements, connections, core_elements }
     }
 
     pub fn is_valid(&self) -> bool { self.validate().is_ok() }
 
+    fn element_index(&self, id: BlueprintElementId) -> Option<usize> {
+        self.elements.iter().position(|e| e.id == id)
+    }
+
     pub fn validate(&self) -> Result<(), String> {
         if self.elements.is_empty() { return Err("blueprint must contain at least one element".into()); }
         if self.core_elements.is_empty() { return Err("blueprint must define a genome core".into()); }
-        let mut seen = vec![false; self.elements.len()];
-        for &i in &self.core_elements {
-            if i >= self.elements.len() || seen[i] { return Err("invalid genome core".into()); }
-            seen[i] = true;
-        }
+        let mut ids = std::collections::HashSet::new();
         for (i, e) in self.elements.iter().enumerate() {
+            if !ids.insert(e.id) { return Err(format!("duplicate blueprint element id at element {i}")); }
             e.validate().map_err(|x| format!("element {i}: {x}"))?;
+        }
+        for &id in &self.core_elements {
+            if self.element_index(id).is_none() { return Err("genome core references a missing element".into()); }
         }
         for (i, c) in self.connections.iter().enumerate() {
             c.validate(self).map_err(|x| format!("connection {i}: {x}"))?;
@@ -78,7 +83,7 @@ impl StructuralBlueprint {
                 .ok_or_else(|| "invalid blueprint structural material".to_string())?);
         }
         for c in &self.connections {
-            realize_connection(&mut s, *c, catalog)
+            realize_connection(self, &mut s, *c, catalog)
                 .map_err(|e| format!("connection {c:?}: {e}"))?;
         }
         Ok(s)
@@ -86,22 +91,18 @@ impl StructuralBlueprint {
 
     pub fn is_connected(&self) -> bool {
         if self.elements.is_empty() { return false; }
-        let mut v = vec![false; self.elements.len()];
-        let mut stack = vec![0];
-        v[0] = true;
+        let mut seen = std::collections::HashSet::new();
+        let mut stack = vec![self.elements[0].id];
+        seen.insert(self.elements[0].id);
         while let Some(cur) = stack.pop() {
             for c in &self.connections {
-                let n = if c.a.element.0 as usize == cur {
-                    c.b.element.0 as usize
-                } else if c.b.element.0 as usize == cur {
-                    c.a.element.0 as usize
-                } else {
-                    continue;
-                };
-                if n < v.len() && !v[n] { v[n] = true; stack.push(n); }
+                let next = if c.a.element == cur { c.b.element }
+                    else if c.b.element == cur { c.a.element }
+                    else { continue };
+                if self.element_index(next).is_some() && seen.insert(next) { stack.push(next); }
             }
         }
-        v.into_iter().all(|x| x)
+        seen.len() == self.elements.len()
     }
 
     fn core_is_connected(&self) -> bool {
@@ -111,30 +112,17 @@ impl StructuralBlueprint {
         seen.insert(self.core_elements[0]);
         while let Some(cur) = stack.pop() {
             for c in &self.connections {
-                let n = if c.a.element.0 as usize == cur {
-                    c.b.element.0 as usize
-                } else if c.b.element.0 as usize == cur {
-                    c.a.element.0 as usize
-                } else {
-                    continue;
-                };
-                if core.contains(&n) && seen.insert(n) { stack.push(n); }
+                let next = if c.a.element == cur { c.b.element }
+                    else if c.b.element == cur { c.a.element }
+                    else { continue };
+                if core.contains(&next) && seen.insert(next) { stack.push(next); }
             }
         }
         seen.len() == core.len()
     }
 
-    pub fn total_material_amount(&self) -> f64 {
-        self.elements.iter().map(|e| e.material.total_amount()).sum()
-    }
-
-    pub fn structural_mass(&self, catalog: &[BaseResource]) -> f64 {
-        self.elements.iter().map(|e| e.material.mass(catalog)).sum()
-    }
-}
-
-fn blueprint_element_index(attachment: BlueprintAttachment) -> usize {
-    attachment.element.0 as usize
+    pub fn total_material_amount(&self) -> f64 { self.elements.iter().map(|e| e.material.total_amount()).sum() }
+    pub fn structural_mass(&self, catalog: &[BaseResource]) -> f64 { self.elements.iter().map(|e| e.material.mass(catalog)).sum() }
 }
 
 fn runtime_endpoint(attachment: BlueprintAttachment) -> Result<ConnectionEndpoint, String> {
@@ -146,23 +134,18 @@ fn runtime_endpoint(attachment: BlueprintAttachment) -> Result<ConnectionEndpoin
 }
 
 pub(crate) fn realize_connection(
+    blueprint: &StructuralBlueprint,
     structure: &mut OrganismStructure,
     connection: BlueprintConnection,
     catalog: &[BaseResource],
 ) -> Result<f64, String> {
-    let a = blueprint_element_index(connection.a);
-    let b = blueprint_element_index(connection.b);
-    if a >= structure.units.len() || b >= structure.units.len() || a == b {
-        return Err("invalid blueprint connection elements".into());
-    }
+    let a = blueprint.element_index(connection.a.element).ok_or_else(|| "invalid first blueprint element".to_string())?;
+    let b = blueprint.element_index(connection.b.element).ok_or_else(|| "invalid second blueprint element".to_string())?;
+    if a == b { return Err("self-connections are not permitted".into()); }
     let endpoint_a = runtime_endpoint(connection.a)?;
     let endpoint_b = runtime_endpoint(connection.b)?;
-    let ConnectionEndpoint::Corner { point_index: point_a } = endpoint_a else {
-        unreachable!();
-    };
-    let ConnectionEndpoint::Corner { point_index: point_b } = endpoint_b else {
-        unreachable!();
-    };
+    let ConnectionEndpoint::Corner { point_index: point_a } = endpoint_a else { unreachable!() };
+    let ConnectionEndpoint::Corner { point_index: point_b } = endpoint_b else { unreachable!() };
     let _ = structure.connection_site(crate::structure::ConnectionSiteRef { unit_index: a, point_index: point_a }, catalog)
         .ok_or_else(|| "invalid first connection site".to_string())?;
     let _ = structure.connection_site(crate::structure::ConnectionSiteRef { unit_index: b, point_index: point_b }, catalog)
@@ -178,9 +161,7 @@ pub(crate) fn realize_connection(
     let (_, work, _) = crate::combine::required_investment(pa, pb, evaluation, 0.0)
         .map_err(|e| format!("formation investment failed: {e:?}"))?;
     let strength = crate::combine::bond_strength(pa, pb);
-    if !strength.is_finite() || !(0.0..=1.0).contains(&strength) {
-        return Err("invalid intrinsic bond strength".into());
-    }
+    if !strength.is_finite() || !(0.0..=1.0).contains(&strength) { return Err("invalid intrinsic bond strength".into()); }
     crate::contact::try_add_bond(structure, Bond {
         endpoint_a: BondEndpoint { unit_index: a, location: endpoint_a },
         endpoint_b: BondEndpoint { unit_index: b, location: endpoint_b },
@@ -211,24 +192,8 @@ impl BlueprintElement {
 impl BlueprintConnection {
     fn validate(&self, blueprint: &StructuralBlueprint) -> Result<(), String> {
         for attachment in [self.a, self.b] {
-            let index = blueprint_element_index(attachment);
-            if index >= blueprint.elements.len() {
-                return Err("references a missing element".into());
-            }
-            if !attachment.feature.is_valid() {
-                return Err("invalid attachment feature".into());
-            }
-            if let AttachmentFeature::Discrete(point_index) = attachment.feature {
-                let material = &blueprint.elements[index].material;
-                if !material.is_structured() {
-                    let component = material.composition().first().ok_or_else(|| "missing blueprint material".to_string())?;
-                    if component.amount != 1.0 {
-                        return Err("discrete attachment requires one physical material unit".into());
-                    }
-                }
-                // Actual discrete-feature existence is checked against immutable resource geometry during realization.
-                let _ = point_index;
-            }
+            if blueprint.element_index(attachment.element).is_none() { return Err("references a missing element".into()); }
+            if !attachment.feature.is_valid() { return Err("invalid attachment feature".into()); }
         }
         if self.a.element == self.b.element { return Err("self-connections are not permitted".into()); }
         Ok(())
