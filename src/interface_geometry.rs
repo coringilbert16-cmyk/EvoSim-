@@ -53,7 +53,19 @@ pub fn shared_boundary_length(
 }
 
 fn world_polygon_vertices(part: &PlacedMaterialPart) -> Option<Vec<(f64, f64)>> {
-    let vertices = part.form.polygon_vertices()?;
+    let vertices = match &part.form {
+        Form::Line { length, radius } => {
+            let half_length = *length / 2.0;
+            let half_width = *radius;
+            vec![
+                (-half_length, -half_width),
+                (half_length, -half_width),
+                (half_length, half_width),
+                (-half_length, half_width),
+            ]
+        }
+        form => form.polygon_vertices()?,
+    };
     let (sin, cos) = part.placement.rotation_radians.sin_cos();
     Some(
         vertices
@@ -316,6 +328,12 @@ mod tests {
     fn rectangle_boundary_length_is_exact_perimeter() {
         let rectangle = part(Form::Rectangle { width: 4.0, height: 2.0 }, 0.0, 0.0, 0.0);
         assert!((boundary_length(&rectangle) - 12.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn line_boundary_length_uses_its_physical_body() {
+        let line = part(Form::Line { length: 4.0, radius: 0.25 }, 0.0, 0.0, 0.0);
+        assert!((boundary_length(&line) - 9.0).abs() < 1e-12);
     }
 
     #[test]
