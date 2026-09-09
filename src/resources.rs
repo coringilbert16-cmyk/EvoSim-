@@ -24,6 +24,7 @@ pub struct BaseResource {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum Form {
     Circle { radius: f64 },
+    Line { length: f64, radius: f64 },
     Rectangle { width: f64, height: f64 },
     RegularPolygon { sides: u8, radius: f64 },
     Polygon { vertices: Vec<(f64, f64)> },
@@ -34,6 +35,9 @@ impl Form {
     pub fn is_valid(&self) -> bool {
         match self {
             Form::Circle { radius } => radius.is_finite() && *radius > 0.0,
+            Form::Line { length, radius } => {
+                length.is_finite() && radius.is_finite() && *length > 0.0 && *radius > 0.0
+            }
             Form::Rectangle { width, height } => {
                 width.is_finite() && height.is_finite() && *width > 0.0 && *height > 0.0
             }
@@ -49,7 +53,7 @@ impl Form {
 
     pub fn polygon_vertices(&self) -> Option<Vec<(f64, f64)>> {
         match self {
-            Form::Circle { .. } | Form::Fluid { .. } => None,
+            Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. } => None,
             Form::Rectangle { width, height } => {
                 let hw = width / 2.0;
                 let hh = height / 2.0;
@@ -73,6 +77,7 @@ impl Form {
     pub fn bounding_radius(&self) -> f64 {
         match self {
             Form::Circle { radius } => *radius,
+            Form::Line { length, radius } => ((length / 2.0).powi(2) + radius.powi(2)).sqrt(),
             Form::Rectangle { width, height } => {
                 ((width / 2.0).powi(2) + (height / 2.0).powi(2)).sqrt()
             }
@@ -102,6 +107,7 @@ impl ConnectionPoint {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum ConnectionSites {
     Corners(Vec<ConnectionPoint>),
+    Endpoints(Vec<ConnectionPoint>),
     Circumference { radius: f64 },
     Undetermined,
 }
@@ -119,11 +125,23 @@ impl Shape {
     pub fn connection_sites(&self) -> ConnectionSites {
         match &self.form {
             Form::Circle { radius } => ConnectionSites::Circumference { radius: *radius },
+            Form::Line { length, .. } => ConnectionSites::Endpoints(vec![
+                ConnectionPoint {
+                    x: -length / 2.0,
+                    y: 0.0,
+                    direction_radians: std::f64::consts::PI,
+                },
+                ConnectionPoint {
+                    x: length / 2.0,
+                    y: 0.0,
+                    direction_radians: 0.0,
+                },
+            ]),
             Form::Fluid { .. } => ConnectionSites::Undetermined,
             other => {
                 let vertices = other
                     .polygon_vertices()
-                    .expect("rigid non-Circle/Fluid forms always resolve to a vertex list");
+                    .expect("rigid non-Circle/Line/Fluid forms always resolve to a vertex list");
                 let points = vertices
                     .into_iter()
                     .map(|(x, y)| ConnectionPoint {
@@ -480,7 +498,10 @@ pub fn default_catalog() -> Vec<BaseResource> {
                 cohesion: 0.05,
             },
             shape: Shape {
-                form: Form::Circle { radius: 0.398_942 },
+                form: Form::Line {
+                    length: 0.797_884,
+                    radius: 0.02,
+                },
             },
         },
         BaseResource {
@@ -599,7 +620,7 @@ mod shape_tests {
     fn polygon_vertices_resolve_correctly_per_form() {
         for resource in default_catalog() {
             match &resource.shape.form {
-                Form::Circle { .. } | Form::Fluid { .. } => {
+                Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. } => {
                     assert!(resource.shape.form.polygon_vertices().is_none());
                 }
                 Form::Rectangle { .. } => {
@@ -619,7 +640,7 @@ mod shape_tests {
     fn locked_resource_geometry_assignments_are_correct() {
         let catalog = default_catalog();
         let find = |name: &str| catalog.iter().find(|r| r.name == name).unwrap();
-        assert!(matches!(find("Hydrogen").shape.form, Form::Circle { .. }));
+        assert!(matches!(find("Hydrogen").shape.form, Form::Line { .. }));
         assert!(matches!(find("Carbon").shape.form, Form::RegularPolygon { sides: 6, .. }));
         assert!(matches!(find("Methane").shape.form, Form::RegularPolygon { sides: 3, .. }));
         assert!(matches!(find("Sulfur").shape.form, Form::RegularPolygon { sides: 5, .. }));
@@ -634,7 +655,7 @@ mod shape_tests {
     fn every_polygonal_resource_has_one_connection_point_per_corner() {
         for resource in default_catalog() {
             let expected = match &resource.shape.form {
-                Form::Circle { .. } | Form::Fluid { .. } => continue,
+                Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. } => continue,
                 Form::Rectangle { .. } => 4,
                 Form::RegularPolygon { sides, .. } => *sides as usize,
                 Form::Polygon { vertices } => vertices.len(),
@@ -644,6 +665,15 @@ mod shape_tests {
                 other => panic!("unexpected connection sites: {other:?}"),
             }
         }
+    }
+
+    #[test]
+    fn line_has_exactly_two_terminal_connection_points() {
+        let hydrogen = default_catalog().into_iter().find(|r| r.name == "Hydrogen").unwrap();
+        let ConnectionSites::Endpoints(points) = hydrogen.shape.connection_sites() else { panic!("hydrogen is not terminally connected") };
+        assert_eq!(points.len(), 2);
+        assert!((points[0].x + points[1].x).abs() < 1e-12);
+        assert!(points.iter().all(ConnectionPoint::is_valid));
     }
 
     #[test]
@@ -661,8 +691,11 @@ mod shape_tests {
     #[test]
     fn connection_points_are_valid_where_present() {
         for resource in default_catalog() {
-            if let ConnectionSites::Corners(points) = resource.shape.connection_sites() {
-                for cp in points { assert!(cp.is_valid()); }
+            match resource.shape.connection_sites() {
+                ConnectionSites::Corners(points) | ConnectionSites::Endpoints(points) => {
+                    for cp in points { assert!(cp.is_valid()); }
+                }
+                _ => {}
             }
         }
     }
@@ -670,10 +703,7 @@ mod shape_tests {
     #[test]
     fn circle_has_no_finite_connection_point_list() {
         let circle_resources: Vec<_> = default_catalog().into_iter().filter(|r| matches!(r.shape.form, Form::Circle { .. })).collect();
-        assert_eq!(circle_resources.len(), 1);
-        for resource in circle_resources {
-            assert!(matches!(resource.shape.connection_sites(), ConnectionSites::Circumference { radius } if radius > 0.0));
-        }
+        assert_eq!(circle_resources.len(), 0);
     }
 
     #[test]
@@ -697,6 +727,7 @@ mod shape_tests {
             let area = match &resource.shape.form {
                 Form::Circle { radius } => std::f64::consts::PI * radius * radius,
                 Form::Fluid { nominal_area } => *nominal_area,
+                Form::Line { length, radius } => 2.0 * radius * length + std::f64::consts::PI * radius * radius,
                 other => polygon_area(&other.polygon_vertices().unwrap()),
             };
             assert!((area - NOMINAL_UNIT_AREA).abs() < EPS);
@@ -713,7 +744,6 @@ mod shape_tests {
     #[test]
     fn every_resource_has_a_unique_shape() {
         let catalog = default_catalog();
-        assert_eq!(catalog.iter().filter(|r| matches!(r.shape.form, Form::Circle { .. })).count(), 1);
         for i in 0..catalog.len() {
             for j in (i + 1)..catalog.len() {
                 assert_ne!(catalog[i].shape.form, catalog[j].shape.form);
@@ -726,6 +756,8 @@ mod shape_tests {
         let catalog = default_catalog();
         assert!(catalog.iter().any(|r| matches!(r.shape.form, Form::Polygon { .. })));
         assert!(catalog.iter().any(|r| matches!(r.shape.form, Form::RegularPolygon { sides, .. } if sides != 6)));
+        assert!(catalog.iter().any(|r| matches!(r.shape.form, Form::Line { .. })));
+        assert!(catalog.iter().any(|r| matches!(r.shape.form, Form::Fluid { .. })));
     }
 
     #[test]
