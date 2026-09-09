@@ -123,8 +123,8 @@ mod tests {
     #[test] fn energy_requirement_is_single_runtime_accounting_rule() { assert_eq!(energy_requirement(2.0, 3.0, 1.0), Some(4.0)); assert_eq!(energy_requirement(2.0, 3.0, 10.0), Some(0.0)); assert!(energy_requirement(f64::NAN, 1.0, 0.0).is_none()); }
     #[test] fn form_bond_requires_physical_admission() {
         let catalog = default_catalog(); let mut structure = crate::structure::OrganismStructure::new();
-        let a = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 })); let b = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }));
-        let mut cache = ConnectionCompatibilityCache::new(); let candidates = crate::contact::connection_pair_candidates(&structure, a, b, &catalog); let c = candidates.first().unwrap();
+        let a = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_6 })); let b = structure.add_unit(StructuralUnit::new("Carbon", Placement { x: 3.0_f64.sqrt() * 0.438_691, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_6 }));
+        let mut cache = ConnectionCompatibilityCache::new(); let candidates = crate::contact::connection_pair_candidates(&structure, a, b, &catalog); let c = candidates.iter().find(|c| c.endpoint_a == ConnectionEndpoint::Corner { point_index: 0 } && c.endpoint_b == ConnectionEndpoint::Corner { point_index: 2 }).unwrap();
         let pa = structure.units[a].properties(&catalog).unwrap(); let pb = structure.units[b].properties(&catalog).unwrap(); let evaluation = crate::combine::evaluate_formation(*c, pa.cohesion, pb.cohesion); let mut energy = 100.0;
         let result = form_bond(&mut structure, BondFormationRequest { unit_a: a, unit_b: b, endpoint_a: c.endpoint_a, endpoint_b: c.endpoint_b, investment: evaluation.threshold, water: 0.0 }, &catalog, &mut cache, &mut energy);
         assert!(result.is_some()); assert_eq!(structure.bonds.len(), 1);
