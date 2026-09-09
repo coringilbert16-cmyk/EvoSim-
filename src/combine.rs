@@ -443,7 +443,7 @@ mod tests {
         assert!(!formation_succeeds(e, f64::INFINITY));
     }
     #[test]
-    fn geometry_gate_rejects_candidates_marked_unavailable() {
+    fn geometry_gate_allows_candidates_at_occupied_physical_contacts() {
         let catalog = default_catalog();
         let mut structure = OrganismStructure::new();
         let a = unit(&mut structure, "Carbon", 0.0, 0.0);
@@ -458,18 +458,6 @@ mod tests {
                 .is_ok()
         );
         let second = eligible_candidates(&structure, a, b, &catalog, &mut cache);
-        assert!(second.iter().all(|c| c.available_a && c.available_b));
-    }
-    #[test]
-    fn occupied_point_is_no_longer_eligible() {
-        let catalog = default_catalog();
-        let mut structure = OrganismStructure::new();
-        let a = unit(&mut structure, "Carbon", 0.0, 0.0);
-        let b = unit(&mut structure, "Carbon", 1.0, 0.0);
-        let c = unit(&mut structure, "Carbon", 0.0, 1.0);
-        assert!(crate::contact::try_add_bond(&mut structure, bond(a, 0, b, 0), &catalog).is_ok());
-        let mut cache = ConnectionCompatibilityCache::new();
-        let candidates = eligible_candidates(&structure, a, c, &catalog, &mut cache);
-        assert!(candidates.iter().all(|candidate| candidate.point_a != 0));
+        assert!(second.iter().any(|c| c.point_a == point && c.point_b == other));
     }
 }
