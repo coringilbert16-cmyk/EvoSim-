@@ -15,6 +15,7 @@ mod math;
 mod material_geometry;
 mod material_realization;
 mod material_storage;
+mod material_structure;
 mod material_transfer;
 mod membrane_geometry;
 mod organism_boundary;
