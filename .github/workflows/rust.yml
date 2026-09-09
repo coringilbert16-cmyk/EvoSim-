@@ -2,7 +2,7 @@ name: Rust
 
 on:
   push:
-    branches: [main]
+    branches: [main, ci-validation-break-water]
   pull_request:
     branches: [main]
 
