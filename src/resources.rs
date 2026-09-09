@@ -27,7 +27,6 @@ pub enum Form {
     Rectangle { width: f64, height: f64 },
     RegularPolygon { sides: u8, radius: f64 },
     Polygon { vertices: Vec<(f64, f64)> },
-    Fluid { nominal_area: f64 },
 }
 
 impl Form {
@@ -43,13 +42,12 @@ impl Form {
             Form::Polygon { vertices } => {
                 vertices.len() >= 3 && vertices.iter().all(|(x, y)| x.is_finite() && y.is_finite())
             }
-            Form::Fluid { nominal_area } => nominal_area.is_finite() && *nominal_area > 0.0,
         }
     }
 
     pub fn polygon_vertices(&self) -> Option<Vec<(f64, f64)>> {
         match self {
-            Form::Circle { .. } | Form::Fluid { .. } => None,
+            Form::Circle { .. } => None,
             Form::Rectangle { width, height } => {
                 let hw = width / 2.0;
                 let hh = height / 2.0;
@@ -81,7 +79,6 @@ impl Form {
                 .iter()
                 .map(|(x, y)| (x * x + y * y).sqrt())
                 .fold(0.0_f64, f64::max),
-            Form::Fluid { nominal_area } => (nominal_area / std::f64::consts::PI).sqrt(),
         }
     }
 }
@@ -119,11 +116,10 @@ impl Shape {
     pub fn connection_sites(&self) -> ConnectionSites {
         match &self.form {
             Form::Circle { radius } => ConnectionSites::Circumference { radius: *radius },
-            Form::Fluid { .. } => ConnectionSites::Undetermined,
             other => {
                 let vertices = other
                     .polygon_vertices()
-                    .expect("rigid non-Circle/Fluid forms always resolve to a vertex list");
+                    .expect("rigid non-Circle forms always resolve to a vertex list");
                 let points = vertices
                     .into_iter()
                     .map(|(x, y)| ConnectionPoint {
@@ -543,9 +539,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
                 cohesion: 0.50,
             },
             shape: Shape {
-                form: Form::Fluid {
-                    nominal_area: NOMINAL_UNIT_AREA,
-                },
+                form: Form::Circle { radius: 0.398_942 },
             },
         },
     ]
@@ -599,7 +593,7 @@ mod shape_tests {
     fn polygon_vertices_resolve_correctly_per_form() {
         for resource in default_catalog() {
             match &resource.shape.form {
-                Form::Circle { .. } | Form::Fluid { .. } => {
+                Form::Circle { .. } => {
                     assert!(resource.shape.form.polygon_vertices().is_none());
                 }
                 Form::Rectangle { .. } => {
@@ -620,6 +614,7 @@ mod shape_tests {
         let catalog = default_catalog();
         let find = |name: &str| catalog.iter().find(|r| r.name == name).unwrap();
         assert!(matches!(find("Hydrogen").shape.form, Form::Circle { .. }));
+        assert!(matches!(find("Water").shape.form, Form::Circle { .. }));
         assert!(matches!(find("Carbon").shape.form, Form::RegularPolygon { sides: 6, .. }));
         assert!(matches!(find("Methane").shape.form, Form::RegularPolygon { sides: 3, .. }));
         assert!(matches!(find("Sulfur").shape.form, Form::RegularPolygon { sides: 5, .. }));
@@ -634,7 +629,7 @@ mod shape_tests {
     fn every_polygonal_resource_has_one_connection_point_per_corner() {
         for resource in default_catalog() {
             let expected = match &resource.shape.form {
-                Form::Circle { .. } | Form::Fluid { .. } => continue,
+                Form::Circle { .. } => continue,
                 Form::Rectangle { .. } => 4,
                 Form::RegularPolygon { sides, .. } => *sides as usize,
                 Form::Polygon { vertices } => vertices.len(),
@@ -670,7 +665,7 @@ mod shape_tests {
     #[test]
     fn circle_has_no_finite_connection_point_list() {
         let circle_resources: Vec<_> = default_catalog().into_iter().filter(|r| matches!(r.shape.form, Form::Circle { .. })).collect();
-        assert_eq!(circle_resources.len(), 1);
+        assert_eq!(circle_resources.len(), 2);
         for resource in circle_resources {
             assert!(matches!(resource.shape.connection_sites(), ConnectionSites::Circumference { radius } if radius > 0.0));
         }
@@ -696,7 +691,6 @@ mod shape_tests {
         for resource in default_catalog() {
             let area = match &resource.shape.form {
                 Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-                Form::Fluid { nominal_area } => *nominal_area,
                 other => polygon_area(&other.polygon_vertices().unwrap()),
             };
             assert!((area - NOMINAL_UNIT_AREA).abs() < EPS);
@@ -704,21 +698,17 @@ mod shape_tests {
     }
 
     #[test]
-    fn water_is_a_fluid_with_undetermined_connection_sites() {
+    fn water_is_a_circle_with_circumference_connection_sites() {
         let water = default_catalog().into_iter().find(|r| r.name == "Water").unwrap();
-        assert!(matches!(water.shape.form, Form::Fluid { .. }));
-        assert_eq!(water.shape.connection_sites(), ConnectionSites::Undetermined);
+        assert!(matches!(water.shape.form, Form::Circle { radius } if radius > 0.0));
+        assert!(matches!(water.shape.connection_sites(), ConnectionSites::Circumference { radius } if radius > 0.0));
     }
 
     #[test]
-    fn every_resource_has_a_unique_shape() {
+    fn multiple_resources_may_share_the_same_physical_shape() {
         let catalog = default_catalog();
-        assert_eq!(catalog.iter().filter(|r| matches!(r.shape.form, Form::Circle { .. })).count(), 1);
-        for i in 0..catalog.len() {
-            for j in (i + 1)..catalog.len() {
-                assert_ne!(catalog[i].shape.form, catalog[j].shape.form);
-            }
-        }
+        let circles = catalog.iter().filter(|r| matches!(r.shape.form, Form::Circle { .. })).count();
+        assert_eq!(circles, 2);
     }
 
     #[test]
