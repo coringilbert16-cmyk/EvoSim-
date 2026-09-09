@@ -18,6 +18,7 @@ mod membrane_geometry;
 mod organism_boundary;
 mod organism_geometry;
 mod boundary_contact;
+mod physical_graph;
 mod physical_interface;
 mod permeability;
 mod reproduction;
