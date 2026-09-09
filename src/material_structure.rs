@@ -41,6 +41,9 @@ pub struct MaterialStructure {
 }
 
 impl MaterialStructure {
+    /// Validate the complete graph-level invariant set that does not require
+    /// looking up immutable resource geometry. A multi-constituent structure
+    /// must be connected; otherwise it is not one physical material structure.
     pub fn is_valid(&self) -> bool {
         if self.constituents.is_empty() {
             return self.internal_bonds.is_empty();
@@ -71,7 +74,7 @@ impl MaterialStructure {
             }
         }
 
-        true
+        self.is_connected()
     }
 
     pub fn is_connected(&self) -> bool {
@@ -87,8 +90,14 @@ impl MaterialStructure {
             adjacency.insert(constituent.id, Vec::new());
         }
         for bond in &self.internal_bonds {
-            adjacency.get_mut(&bond.a.constituent).unwrap().push(bond.b.constituent);
-            adjacency.get_mut(&bond.b.constituent).unwrap().push(bond.a.constituent);
+            let Some(a_neighbors) = adjacency.get_mut(&bond.a.constituent) else {
+                return false;
+            };
+            a_neighbors.push(bond.b.constituent);
+            let Some(b_neighbors) = adjacency.get_mut(&bond.b.constituent) else {
+                return false;
+            };
+            b_neighbors.push(bond.a.constituent);
         }
 
         let start = self.constituents[0].id;
@@ -112,7 +121,7 @@ impl MaterialStructure {
         &self,
         catalog: &[BaseResource],
     ) -> Option<Vec<(ConstituentId, Placement)>> {
-        if !self.is_valid() || !self.is_connected() {
+        if !self.is_valid() {
             return None;
         }
 
@@ -263,7 +272,7 @@ mod tests {
             constituents: vec![constituent(1, "Carbon"), constituent(2, "Hydrogen")],
             internal_bonds: Vec::new(),
         };
-        assert!(material.is_valid());
+        assert!(!material.is_valid());
         assert!(!material.is_connected());
     }
 
