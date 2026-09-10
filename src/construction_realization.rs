@@ -44,8 +44,7 @@ fn placement_for_new(neighbor: &StructuralUnit, neighbor_endpoint: ConnectionEnd
 }
 
 fn connect_units(structure: &mut OrganismStructure, a: usize, b: usize, catalog: &[BaseResource]) -> Option<f64> {
-    let mut candidates = connection_pair_candidates(structure, a, b, catalog);
-    candidates.sort_by(|x, y| x.distance.total_cmp(&y.distance).then_with(|| y.facing.total_cmp(&x.facing)));
+    let candidates = connection_pair_candidates(structure, a, b, catalog);
     let id_a = structure.physical_id(a)?;
     let id_b = structure.physical_id(b)?;
     let pa = structure.units.get(a)?.properties(catalog)?;
@@ -85,10 +84,7 @@ fn try_place_and_connect(structure: &mut OrganismStructure, neighbor_index: usiz
 fn already_related(structure: &OrganismStructure, a: usize, b: usize) -> bool {
     let Some(id_a) = structure.physical_id(a) else { return false; };
     let Some(id_b) = structure.physical_id(b) else { return false; };
-    structure.bonds.iter().any(|bond| {
-        (bond.endpoint_a.constituent_id == id_a && bond.endpoint_b.constituent_id == id_b) ||
-        (bond.endpoint_a.constituent_id == id_b && bond.endpoint_b.constituent_id == id_a)
-    })
+    structure.bonds.iter().any(|bond| (bond.endpoint_a.constituent_id == id_a && bond.endpoint_b.constituent_id == id_b) || (bond.endpoint_a.constituent_id == id_b && bond.endpoint_b.constituent_id == id_a))
 }
 
 /// Expand one construction-intent Material into one StructuralUnit per
