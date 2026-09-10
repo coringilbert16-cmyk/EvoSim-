@@ -1,7 +1,7 @@
 //! Inherited structural blueprint.
 
 use crate::resources::{BaseResource, InternalBond, Material};
-use crate::structure::{Bond, BondEndpoint, ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
+use crate::structure::{Bond, BondEndpoint, ConnectionEndpoint, OrganismStructure};
 use serde::{Deserialize, Deserializer, Serialize};
 
 fn default_core_elements() -> Vec<usize> { vec![0] }
