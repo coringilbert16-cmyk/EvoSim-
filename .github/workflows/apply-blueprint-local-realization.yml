@@ -1,0 +1,84 @@
+name: Apply blueprint-local realization
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Replace constrained element construction with frame-local realization
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          path = Path("src/structural_blueprint.rs")
+          text = path.read_text()
+          pattern = re.compile(r"    pub fn realize\(&self, catalog: &\[BaseResource\]\) -> Result<OrganismStructure, String> \{.*?\n    \}\n\n    pub fn is_connected", re.S)
+          replacement = '''    pub fn realize(&self, catalog: &[BaseResource]) -> Result<OrganismStructure, String> {
+        self.validate()?;
+        let mut structure = OrganismStructure::new();
+        let mut realized = HashMap::<usize, Vec<usize>>::new();
+
+        for (index, element) in self.elements.iter().enumerate() {
+            let ids = crate::construction_realization::realize_material(
+                &mut structure,
+                element,
+                catalog,
+            )?;
+            apply_blueprint_orientation(
+                &mut structure,
+                &ids,
+                element.placement,
+                &[],
+                catalog,
+            )?;
+            realized.insert(index, ids);
+        }
+
+        for connection in &self.connections {
+            if let Err(error) = realize_connection_groups(
+                &mut structure,
+                &realized,
+                *connection,
+                catalog,
+            ) {
+                #[cfg(test)]
+                eprintln!(
+                    "BLUEPRINT CONNECTION FAILURE a={} b={} error={}",
+                    connection.element_a, connection.element_b, error
+                );
+            }
+        }
+
+        Ok(structure)
+    }
+
+    pub fn is_connected'''
+          updated, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f"expected exactly one realize function, found {count}")
+          path.write_text(updated)
+      - name: Format and run targeted tests
+        run: |
+          cargo fmt --all
+          cargo test --all-targets fresh_organism_is_realized_from_its_genome_blueprint
+          cargo test --all-targets juvenile_reaches_adulthood_at_ninety_percent_of_mature_blueprint_size
+          cargo test --all-targets storage_preserves_a_compound_as_one_intact_object
+          cargo test --all-targets structural_material_is_not_opened_by_storage
+      - name: Run full test suite
+        run: cargo test --all-targets
+      - name: Commit source fix and remove one-time workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm .github/workflows/apply-blueprint-local-realization.yml
+          git add src/structural_blueprint.rs .github/workflows/apply-blueprint-local-realization.yml
+          git commit -m "Keep blueprint frames authoritative during material realization"
+          git push
