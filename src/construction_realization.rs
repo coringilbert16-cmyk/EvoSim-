@@ -24,9 +24,10 @@ fn endpoint_prototypes(
         Some(ConnectionSites::Endpoints(points)) => (0..points.len())
             .map(|i| ConnectionEndpoint::LineEndpoint { point_index: i })
             .collect(),
-        Some(ConnectionSites::Circumference { .. })
-        | Some(ConnectionSites::Undetermined)
-        | None => Vec::new(),
+        Some(ConnectionSites::Circumference { .. }) => {
+            vec![ConnectionEndpoint::Boundary { angle_radians: 0.0 }]
+        }
+        Some(ConnectionSites::Undetermined) | None => Vec::new(),
     }
 }
 
