@@ -20,6 +20,15 @@ jobs:
         run: bash scripts/check_large_files.sh
       - name: Check COMBINE architecture
         run: bash scripts/check_combine_architecture.sh
+      - name: Capture Rust test diagnostics
+        run: |
+          cargo test --all-targets > /tmp/test-output.log 2>&1 || true
+          cp /tmp/test-output.log test-output.log
+      - name: Upload Rust test diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-test-diagnostics
+          path: test-output.log
       - name: Run Rust tests
         run: cargo test --all-targets
       - name: Run Clippy
