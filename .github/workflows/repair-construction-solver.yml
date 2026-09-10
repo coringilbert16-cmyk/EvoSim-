@@ -11,6 +11,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Restore intact solver and apply targeted corrections
         run: |
           git checkout a5a2a6cb5f6662544d7feff2046cc68d9b744537 -- src/construction_realization.rs
