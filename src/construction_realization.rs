@@ -150,26 +150,28 @@ fn try_place_and_connect(
 ) -> Option<usize> {
     let neighbor = structure.units.get(neighbor_index)?.clone();
     let base = resource(catalog, name)?;
-    let Some(placements) = placement_candidates_for_new(
-        &neighbor,
-        endpoint_prototypes(&neighbor, catalog).into_iter().next()?,
-        base,
-        desired_x,
-        desired_y,
-        catalog,
-    ) else {
-        return None;
-    };
-    for placement in placements {
-        let mut unit = StructuralUnit::new(name.to_owned(), placement);
-        if !unit.realize_default_geometry(catalog) {
+    for neighbor_endpoint in endpoint_prototypes(&neighbor, catalog) {
+        let Some(placements) = placement_candidates_for_new(
+            &neighbor,
+            neighbor_endpoint,
+            base,
+            desired_x,
+            desired_y,
+            catalog,
+        ) else {
             continue;
+        };
+        for placement in placements {
+            let mut unit = StructuralUnit::new(name.to_owned(), placement);
+            if !unit.realize_default_geometry(catalog) {
+                continue;
+            }
+            let new_index = structure.add_unit(unit);
+            if connect_units(structure, neighbor_index, new_index, catalog).is_some() {
+                return Some(new_index);
+            }
+            structure.units.pop();
         }
-        let new_index = structure.add_unit(unit);
-        if connect_units(structure, neighbor_index, new_index, catalog).is_some() {
-            return Some(new_index);
-        }
-        structure.units.pop();
     }
     None
 }
