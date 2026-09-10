@@ -5,16 +5,11 @@ use crate::math::{complexity, exponential_influence};
 /// Immutable physical state of a resource type. Geometry describes what the
 /// material currently occupies; state describes whether that geometry may
 /// deform without changing its composition.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum PhysicalState {
+    #[default]
     Rigid,
     Fluid,
-}
-
-impl Default for PhysicalState {
-    fn default() -> Self {
-        Self::Rigid
-    }
 }
 
 /// Immutable type properties. These never change and never evolve.
