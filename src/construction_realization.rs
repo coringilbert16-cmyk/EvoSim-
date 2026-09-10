@@ -63,28 +63,40 @@ fn contact_targets_for_units(structure: &OrganismStructure, unit_indices: &[usiz
     targets
 }
 
-/// Generate only analytically determined placements. There is no arbitrary
-/// rotation sweep and no global search over the organism.
 fn candidate_placements_for_targets(resource: &BaseResource, targets: &[ContactTarget], structure: &OrganismStructure, anchor: Placement, catalog: &[BaseResource]) -> Vec<Placement> {
     let temp = StructuralUnit::new(resource.name.clone(), Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 });
     let endpoints = endpoint_prototypes(&temp, catalog);
     let mut out = Vec::new();
 
-    // A blueprint placement is an ideal location, not a hard anchor. When a
-    // neighboring endpoint is available, exact point-contact placements are
-    // preferred because they let the physical structure realize the intended
-    // connection without requiring the blueprint to dictate topology.
+    // A single target admits a continuous family of rigid placements. The
+    // blueprint position is the preferred center; choose the two orientations
+    // that put the contact endpoint on the target while minimizing displacement
+    // of that ideal position. This gives the material rotational freedom without
+    // introducing an arbitrary rotation sweep.
     for &target in targets {
         let Some(world_target) = target_world_point(structure, target, catalog) else { continue };
         for endpoint in &endpoints {
             let Some(local) = local_endpoint_point(resource, *endpoint, catalog) else { continue };
+            let radius = local.0.hypot(local.1);
+            if radius <= CONTACT_EPSILON {
+                add_unique_placement(&mut out, placement_for_point_contact(local, world_target, 0.0));
+                continue;
+            }
+            let desired_dx = world_target.0 - anchor.x;
+            let desired_dy = world_target.1 - anchor.y;
+            let desired_radius = desired_dx.hypot(desired_dy);
+            if desired_radius > CONTACT_EPSILON {
+                let target_angle = desired_dy.atan2(desired_dx);
+                let local_angle = local.1.atan2(local.0);
+                let rotation = target_angle - local_angle;
+                add_unique_placement(&mut out, Placement { x: anchor.x, y: anchor.y, rotation_radians: rotation });
+            }
+            // Exact contact is retained as a fallback. It may move the material
+            // away from its ideal blueprint location, but remains physically valid.
             add_unique_placement(&mut out, placement_for_point_contact(local, world_target, 0.0));
         }
     }
 
-    // If two physical targets happen to admit a rigid two-point realization,
-    // include those candidates as well. These are still preferences: later
-    // physical validation may reject them and the solver may fall back.
     if targets.len() >= 2 && endpoints.len() >= 2 {
         let local_points = endpoints.iter().filter_map(|e| local_endpoint_point(resource, *e, catalog)).collect::<Vec<_>>();
         for (ia, target_a) in targets.iter().enumerate() {
@@ -118,8 +130,6 @@ fn candidate_placements_for_targets(resource: &BaseResource, targets: &[ContactT
         }
     }
 
-    // Preserve the ideal placement as the final fallback. This is what makes
-    // the blueprint best-effort rather than a mandatory contact specification.
     add_unique_placement(&mut out, anchor);
     out
 }
@@ -183,11 +193,6 @@ fn solve_material_placements(structure: &OrganismStructure, element: &BlueprintE
             let other = if bond.part_a == part && assigned[bond.part_b].is_some() { working_indices[bond.part_b] } else if bond.part_b == part && assigned[bond.part_a].is_some() { working_indices[bond.part_a] } else { None };
             if let Some(index) = other { target_units.push(index); }
         }
-        // External blueprint neighbors guide only the placement of the first
-        // constituent. Once that constituent is placed, internal material
-        // relationships determine the remaining geometry. This keeps the
-        // blueprint influence bounded and prevents external targets from
-        // multiplying the local material search.
         if part == 0 {
             for constraint in external { target_units.extend(constraint.iter().copied()); }
         }
