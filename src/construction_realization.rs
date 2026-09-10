@@ -411,7 +411,7 @@ fn solve_material_placements(
             }
             wi[i] = Some(working.add_unit(u))
         }
-        let mut target_units = Vec::new();
+        let mut internal_target_units = Vec::new();
         for bond in &m.internal_bonds {
             let other = if bond.part_a == part && assigned[bond.part_b].is_some() {
                 wi[bond.part_b]
@@ -421,17 +421,40 @@ fn solve_material_placements(
                 None
             };
             if let Some(i) = other {
-                target_units.push(i)
+                internal_target_units.push(i)
             }
         }
-        for constraint in external {
-            target_units.extend(constraint.iter().copied())
+        internal_target_units.sort_unstable();
+        internal_target_units.dedup();
+
+        let mut candidates = Vec::new();
+        let internal_targets = contact_targets_for_units(&working, &internal_target_units, c);
+        for candidate in candidate_placements_for_targets(
+            res,
+            &internal_targets,
+            &working,
+            anchor,
+            fixed_rotation,
+            c,
+        ) {
+            add_unique_placement(&mut candidates, candidate);
         }
-        target_units.sort_unstable();
-        target_units.dedup();
-        let targets = contact_targets_for_units(&working, &target_units, c);
-        let candidates =
-            candidate_placements_for_targets(res, &targets, &working, anchor, fixed_rotation, c);
+
+        for constraint in external {
+            for &target_unit in constraint {
+                let targets = contact_targets_for_units(&working, &[target_unit], c);
+                for candidate in candidate_placements_for_targets(
+                    res,
+                    &targets,
+                    &working,
+                    anchor,
+                    fixed_rotation,
+                    c,
+                ) {
+                    add_unique_placement(&mut candidates, candidate);
+                }
+            }
+        }
         for candidate in candidates {
             let mut trial = base.clone();
             let mut ti = vec![None; m.parts.len()];
