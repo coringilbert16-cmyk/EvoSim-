@@ -80,7 +80,7 @@ impl AtomicBlueprint {
         legacy.validate()?;
         let mut structure = OrganismStructure::new();
         let mut groups = HashMap::<usize, Vec<usize>>::new();
-        for (index, element) in legacy.elements.iter().enumerate() { let ids = crate::construction_realization::realize_material(&mut structure, element, catalog)?; groups.insert(index, ids); }
+        for (index, element) in legacy.elements.iter().enumerate() { let ids = crate::seed_legacy_realization::realize_material(&mut structure, element, catalog)?; groups.insert(index, ids); }
         for connection in &legacy.connections { crate::structural_blueprint::realize_connection_groups(&mut structure, &groups, *connection, catalog)?; }
         let mut atoms = Vec::with_capacity(structure.units.len());
         let mut unit_to_atom = vec![usize::MAX; structure.units.len()];
