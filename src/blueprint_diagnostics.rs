@@ -18,21 +18,11 @@ mod tests {
         }
     }
 
-    fn blueprint(
-        element_count: usize,
-        edges: &[(usize, usize)],
-        positions: &[(f64, f64)],
-    ) -> StructuralBlueprint {
+    fn blueprint(element_count: usize, edges: &[(usize, usize)], positions: &[(f64, f64)]) -> StructuralBlueprint {
         assert_eq!(element_count, positions.len());
         StructuralBlueprint::new(
-            positions
-                .iter()
-                .map(|&(x, y)| water_element(x, y))
-                .collect(),
-            edges
-                .iter()
-                .map(|&(a, b)| crate::structural_blueprint::BlueprintConnection { element_a: a, element_b: b })
-                .collect(),
+            positions.iter().map(|&(x, y)| water_element(x, y)).collect(),
+            edges.iter().map(|&(a, b)| crate::structural_blueprint::BlueprintConnection { element_a: a, element_b: b }).collect(),
         )
     }
 
@@ -44,14 +34,8 @@ mod tests {
 
     #[test]
     fn legacy_and_explicit_orientation_round_trip() {
-        let legacy = r#"{
-            "material":{"parts":[["Water",1.0]],"internal_bonds":[]},
-            "placement":{"x":2.0,"y":3.0}
-        }"#;
-        let explicit = r#"{
-            "material":{"parts":[["Water",1.0]],"internal_bonds":[]},
-            "placement":{"x":2.0,"y":3.0,"rotation_radians":1.25}
-        }"#;
+        let legacy = r#"{"material":{"parts":[["Water",1.0]],"internal_bonds":[]},"placement":{"x":2.0,"y":3.0}}"#;
+        let explicit = r#"{"material":{"parts":[["Water",1.0]],"internal_bonds":[]},"placement":{"x":2.0,"y":3.0,"rotation_radians":1.25}}"#;
         let legacy: BlueprintElement = serde_json::from_str(legacy).expect("legacy blueprint must deserialize");
         let explicit: BlueprintElement = serde_json::from_str(explicit).expect("oriented blueprint must deserialize");
         assert_eq!(legacy.placement.rotation_radians, 0.0);
@@ -59,7 +43,21 @@ mod tests {
     }
 
     #[test]
-    fn blueprint_orientation_is_validated_as_finite() {
+    fn blueprint_orientation_is_realized_as_element_frame() {
+        let angle = std::f64::consts::FRAC_PI_3;
+        let element = BlueprintElement {
+            material: Material::free_base("Water", 1.0),
+            placement: BlueprintPlacement { x: 4.0, y: -2.0, rotation_radians: angle },
+        };
+        let structure = StructuralBlueprint::new(vec![element], &[]).realize(&default_catalog()).expect("oriented element must realize");
+        assert_eq!(structure.units.len(), 1);
+        assert!((structure.units[0].placement.x - 4.0).abs() <= 1e-12);
+        assert!((structure.units[0].placement.y + 2.0).abs() <= 1e-12);
+        assert!((structure.units[0].placement.rotation_radians - angle).abs() <= 1e-12);
+    }
+
+    #[test]
+    fn blueprint_orientation_must_be_finite() {
         let element = water_element(0.0, 0.0);
         let mut oriented = element.clone();
         oriented.placement.rotation_radians = f64::NAN;
@@ -73,7 +71,6 @@ mod tests {
         let d = 2.0 * r;
         let b = blueprint(4, &[(0, 1), (1, 2), (2, 3)], &[(0.0, 0.0), (d, 0.0), (2.0 * d, 0.0), (3.0 * d, 0.0)]);
         let (units, bonds) = realized_result(&b);
-        println!("easy_chain: elements={} units={} intended_bonds={} realized_bonds={}", b.elements.len(), units, b.connections.len(), bonds);
         assert_eq!(units, 4, "easy blueprint must realize every constituent");
         assert_eq!(bonds, 3, "easy blueprint must realize every intended connection");
     }
@@ -85,7 +82,6 @@ mod tests {
         let h = d * (3.0_f64).sqrt() / 2.0;
         let b = blueprint(3, &[(0, 1), (0, 2), (1, 2)], &[(0.0, 0.0), (d, 0.0), (d / 2.0, h)]);
         let (units, bonds) = realized_result(&b);
-        println!("triangle: elements={} units={} intended_bonds={} realized_bonds={}", b.elements.len(), units, b.connections.len(), bonds);
         assert_eq!(units, 3, "triangle blueprint must realize every constituent");
         assert_eq!(bonds, 3, "triangle must realize all three constraints");
     }
