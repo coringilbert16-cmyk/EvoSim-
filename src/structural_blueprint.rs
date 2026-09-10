@@ -80,15 +80,20 @@ impl StructuralBlueprint {
                     let removed_ids = ids.iter().filter_map(|&index| structure.physical_id(index)).collect::<std::collections::HashSet<_>>();
                     structure.bonds.retain(|bond| !removed_ids.contains(&bond.endpoint_a.constituent_id) && !removed_ids.contains(&bond.endpoint_b.constituent_id));
                     structure.units.retain(|unit| !removed_ids.contains(&unit.physical_id));
-                    return Err("blueprint connection could not physically constrain construction".into());
+                    return Err(format!("blueprint connection {connection_index} could not physically constrain construction"));
                 }
             }
         }
         if realized.len() != self.elements.len() { return Err("blueprint could not realize every connected element".into()); }
         for (connection_index, connection) in self.connections.iter().enumerate() {
             if realized_connections.contains(&connection_index) { continue; }
-            realize_connection_groups(&mut structure, &realized, *connection, catalog)?;
+            realize_connection_groups(&mut structure, &realized, *connection, catalog)
+                .map_err(|error| format!("blueprint connection {connection_index} failed: {error}"))?;
+            // The discovery set is bookkeeping for the two-phase algorithm;
+            // every successful blueprint connection belongs in the final set.
+            realized_connections.insert(connection_index);
         }
+        debug_assert_eq!(realized_connections.len(), self.connections.len());
         Ok(structure)
     }
     pub fn is_connected(&self) -> bool {
@@ -120,9 +125,6 @@ impl StructuralBlueprint {
 pub(crate) fn realize_connection_groups(structure: &mut OrganismStructure, realized: &std::collections::HashMap<usize, Vec<usize>>, connection: BlueprintConnection, catalog: &[BaseResource]) -> Result<f64, String> {
     let a = realized.get(&connection.element_a).ok_or_else(|| "missing realized first blueprint element".to_string())?;
     let b = realized.get(&connection.element_b).ok_or_else(|| "missing realized second blueprint element".to_string())?;
-    // Blueprint placement is authoritative. An external connection may select
-    // compatible physical endpoints, but it must never translate an already
-    // realized blueprint element to make the connection possible.
     for &ua in a { for &ub in b {
         let Some(pa) = structure.units.get(ua).and_then(|unit| unit.properties(catalog)) else { continue; };
         let Some(pb) = structure.units.get(ub).and_then(|unit| unit.properties(catalog)) else { continue; };
