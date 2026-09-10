@@ -1,7 +1,8 @@
 //! Inherited structural blueprint.
 
 use crate::resources::{BaseResource, InternalBond, Material};
-use crate::structure::{Bond, BondEndpoint, OrganismStructure};
+use crate::structural_blueprint::BlueprintElement;
+use crate::structure::{Bond, BondEndpoint, ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
 use serde::{Deserialize, Deserializer, Serialize};
 
 fn default_core_elements() -> Vec<usize> { vec![0] }
@@ -117,10 +118,52 @@ impl StructuralBlueprint {
     pub fn structural_mass(&self, catalog: &[BaseResource]) -> f64 { self.elements.iter().map(|element| element.material.mass(catalog)).sum() }
 }
 
+fn rotate_group(structure: &mut OrganismStructure, group: &[usize], pivot_x: f64, pivot_y: f64, angle: f64) {
+    let (sin, cos) = angle.sin_cos();
+    for &index in group {
+        let Some(unit) = structure.units.get_mut(index) else { continue; };
+        let dx = unit.placement.x - pivot_x;
+        let dy = unit.placement.y - pivot_y;
+        unit.placement.x = pivot_x + dx * cos - dy * sin;
+        unit.placement.y = pivot_y + dx * sin + dy * cos;
+        unit.placement.rotation_radians += angle;
+    }
+}
+
+fn align_group_for_connection(
+    structure: &mut OrganismStructure,
+    group: &[usize],
+    moving_unit: usize,
+    moving_endpoint: ConnectionEndpoint,
+    fixed_point: crate::structure::WorldConnectionPoint,
+    catalog: &[BaseResource],
+) -> bool {
+    let Some(moving_point) = moving_endpoint.world_point(&structure.units[moving_unit], catalog) else { return false; };
+    let fixed_normal_length = fixed_point.normal_x.hypot(fixed_point.normal_y);
+    let moving_normal_length = moving_point.normal_x.hypot(moving_point.normal_y);
+    if fixed_normal_length <= f64::EPSILON || moving_normal_length <= f64::EPSILON { return true; }
+    let fixed_angle = fixed_point.normal_y.atan2(fixed_point.normal_x);
+    let moving_angle = moving_point.normal_y.atan2(moving_point.normal_x);
+    let delta = fixed_angle + std::f64::consts::PI - moving_angle;
+    let pivot = structure.units.get(*group.first()?)?.placement;
+    rotate_group(structure, group, pivot.x, pivot.y, delta);
+    let Some(rotated_point) = moving_endpoint.world_point(&structure.units[moving_unit], catalog) else { return false; };
+    let dx = fixed_point.x - rotated_point.x;
+    let dy = fixed_point.y - rotated_point.y;
+    for &index in group {
+        if let Some(unit) = structure.units.get_mut(index) {
+            unit.placement.x += dx;
+            unit.placement.y += dy;
+        }
+    }
+    true
+}
+
 pub(crate) fn realize_connection_groups(structure: &mut OrganismStructure, realized: &std::collections::HashMap<usize, Vec<usize>>, connection: BlueprintConnection, catalog: &[BaseResource]) -> Result<f64, String> {
     let a = realized.get(&connection.element_a).ok_or_else(|| "missing realized first blueprint element".to_string())?;
     let b = realized.get(&connection.element_b).ok_or_else(|| "missing realized second blueprint element".to_string())?;
-    // A material's internal bonds do not fix its external placement. Placement becomes fixed only after this physical group has bonded to another blueprint group.
+    // Internal material bonds make a physical group rigid, but do not anchor its world pose.
+    // The first external bond establishes that pose; later blueprint connections cannot reposition it.
     let b_has_external_bond = structure.bonds.iter().any(|bond| {
         let endpoint_a_index = structure.unit_index(bond.endpoint_a.constituent_id);
         let endpoint_b_index = structure.unit_index(bond.endpoint_b.constituent_id);
@@ -136,18 +179,19 @@ pub(crate) fn realize_connection_groups(structure: &mut OrganismStructure, reali
         let id_a = structure.physical_id(ua).ok_or_else(|| "missing first physical constituent".to_string())?;
         let id_b = structure.physical_id(ub).ok_or_else(|| "missing second physical constituent".to_string())?;
         for candidate in candidates {
-            let evaluation = crate::combine::evaluate_formation(candidate, pa.cohesion, pb.cohesion);
+            let mut trial = structure.clone();
+            if !b_has_external_bond {
+                let Some(fixed_point) = candidate.endpoint_a.world_point(trial.units.get(ua).ok_or("missing first endpoint unit")?, catalog) else { continue; };
+                if !align_group_for_connection(&mut trial, b, ub, candidate.endpoint_b, fixed_point, catalog) { continue; }
+            }
+            let mut transformed_cache = crate::contact::ConnectionCompatibilityCache::new();
+            let transformed_candidates = crate::contact::connection_pair_candidates_cached(&trial, ua, ub, catalog, &mut transformed_cache);
+            let Some(transformed) = transformed_candidates.into_iter().find(|candidate_after| candidate_after.endpoint_a == candidate.endpoint_a && candidate_after.endpoint_b == candidate.endpoint_b && candidate_after.distance <= 1e-9) else { continue; };
+            let evaluation = crate::combine::evaluate_formation(transformed, pa.cohesion, pb.cohesion);
             let (_, work, _) = crate::combine::required_investment(pa, pb, evaluation, 0.0).map_err(|error| format!("formation investment failed: {error:?}"))?;
             let strength = crate::combine::bond_strength(pa, pb);
             if !strength.is_finite() || !(0.0..=1.0).contains(&strength) { continue; }
-            let bond = Bond { endpoint_a: BondEndpoint::new(id_a, candidate.endpoint_a), endpoint_b: BondEndpoint::new(id_b, candidate.endpoint_b), strength, bond_energy: 0.0 };
-            let mut trial = structure.clone();
-            if !b_has_external_bond {
-                let Some(wa) = candidate.endpoint_a.world_point(trial.units.get(ua).ok_or("missing first endpoint unit")?, catalog) else { continue; };
-                let Some(wb) = candidate.endpoint_b.world_point(trial.units.get(ub).ok_or("missing second endpoint unit")?, catalog) else { continue; };
-                let dx = wa.x - wb.x; let dy = wa.y - wb.y;
-                for &index in b { if let Some(unit) = trial.units.get_mut(index) { unit.placement.x += dx; unit.placement.y += dy; } }
-            }
+            let bond = Bond { endpoint_a: BondEndpoint::new(id_a, transformed.endpoint_a), endpoint_b: BondEndpoint::new(id_b, transformed.endpoint_b), strength, bond_energy: 0.0 };
             if crate::contact::try_add_bond(&mut trial, bond, catalog).is_ok() { *structure = trial; return Ok(work); }
         }
     }}
