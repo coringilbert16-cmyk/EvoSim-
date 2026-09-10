@@ -156,33 +156,51 @@ impl StructuralBlueprint {
         )?;
         realized.insert(0, first_ids);
 
-        // Each later element uses already-realized blueprint neighbors as soft
-        // physical targets. The construction solver may move or rotate the
-        // material away from its ideal placement when that produces a valid
-        // contact, but it may always fall back to the ideal placement.
-        for (index, element) in self.elements.iter().enumerate().skip(1) {
-            let neighbor_targets = self
-                .connections
-                .iter()
-                .filter_map(|connection| {
-                    let neighbor = if connection.element_a == index {
-                        connection.element_b
-                    } else if connection.element_b == index {
-                        connection.element_a
-                    } else {
-                        return None;
-                    };
-                    realized.get(&neighbor).cloned()
-                })
-                .collect::<Vec<_>>();
+        // Construction follows the blueprint graph rather than the arbitrary
+        // numeric ordering of its elements. An element is attempted as soon as
+        // it has a realized neighbor, so its physical placement can use the
+        // actual frontier of the organism. Failed elements remain optional and
+        // may be retried after another neighbor becomes available.
+        loop {
+            let mut progress = false;
+            for index in 1..self.elements.len() {
+                if realized.contains_key(&index) {
+                    continue;
+                }
 
-            if let Ok(ids) = crate::construction_realization::realize_material_with_constraints(
-                &mut structure,
-                element,
-                catalog,
-                &neighbor_targets,
-            ) {
-                realized.insert(index, ids);
+                let neighbor_targets = self
+                    .connections
+                    .iter()
+                    .filter_map(|connection| {
+                        let neighbor = if connection.element_a == index {
+                            connection.element_b
+                        } else if connection.element_b == index {
+                            connection.element_a
+                        } else {
+                            return None;
+                        };
+                        realized.get(&neighbor).cloned()
+                    })
+                    .collect::<Vec<_>>();
+
+                if neighbor_targets.is_empty() {
+                    continue;
+                }
+
+                let element = &self.elements[index];
+                if let Ok(ids) = crate::construction_realization::realize_material_with_constraints(
+                    &mut structure,
+                    element,
+                    catalog,
+                    &neighbor_targets,
+                ) {
+                    realized.insert(index, ids);
+                    progress = true;
+                }
+            }
+
+            if !progress {
+                break;
             }
         }
 
