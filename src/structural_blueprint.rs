@@ -110,12 +110,23 @@ impl StructuralBlueprint {
                 realized.get(&neighbor).cloned()
             }).collect::<Vec<_>>();
             if neighbor_targets.is_empty() { continue; }
-            if let Ok(ids) = crate::construction_realization::realize_material_with_constraints(&mut structure, &self.elements[index], catalog, &neighbor_targets) { realized.insert(index, ids); }
+            match crate::construction_realization::realize_material_with_constraints(&mut structure, &self.elements[index], catalog, &neighbor_targets) {
+                Ok(ids) => { realized.insert(index, ids); }
+                Err(error) => {
+                    #[cfg(test)]
+                    eprintln!("BLUEPRINT ELEMENT FAILURE index={index} realized_neighbors={best_neighbors} error={error}");
+                }
+            }
         }
         for connection in &self.connections {
             if !realized.contains_key(&connection.element_a) || !realized.contains_key(&connection.element_b) { continue; }
-            let _ = realize_connection_groups(&mut structure, &realized, *connection, catalog);
+            if let Err(error) = realize_connection_groups(&mut structure, &realized, *connection, catalog) {
+                #[cfg(test)]
+                eprintln!("BLUEPRINT CONNECTION FAILURE a={} b={} error={}", connection.element_a, connection.element_b, error);
+            }
         }
+        #[cfg(test)]
+        eprintln!("BLUEPRINT SUMMARY elements={} realized_elements={} units={} bonds={}", self.elements.len(), realized.len(), structure.units.len(), structure.bonds.len());
         Ok(structure)
     }
     pub fn is_connected(&self) -> bool {
