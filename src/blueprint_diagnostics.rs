@@ -49,7 +49,7 @@ mod tests {
             material: Material::free_base("Water", 1.0),
             placement: BlueprintPlacement { x: 4.0, y: -2.0, rotation_radians: angle },
         };
-        let structure = StructuralBlueprint::new(vec![element], &[]).realize(&default_catalog()).expect("oriented element must realize");
+        let structure = StructuralBlueprint::new(vec![element], Vec::new()).realize(&default_catalog()).expect("oriented element must realize");
         assert_eq!(structure.units.len(), 1);
         assert!((structure.units[0].placement.x - 4.0).abs() <= 1e-12);
         assert!((structure.units[0].placement.y + 2.0).abs() <= 1e-12);
@@ -61,7 +61,7 @@ mod tests {
         let element = water_element(0.0, 0.0);
         let mut oriented = element.clone();
         oriented.placement.rotation_radians = f64::NAN;
-        let blueprint = StructuralBlueprint::new(vec![oriented], &[]);
+        let blueprint = StructuralBlueprint::new(vec![oriented], Vec::new());
         assert_eq!(blueprint.validate(), Err("element 0: blueprint orientation must be finite".into()));
     }
 
