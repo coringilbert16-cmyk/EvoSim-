@@ -12,8 +12,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Format source
-        run: cargo fmt --all
+      - name: Capture formatter diagnostics
+        run: |
+          cargo fmt --all 2> /tmp/format-error.log || true
+          cp /tmp/format-error.log format-error.log
+      - name: Upload formatter diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: formatter-diagnostics
+          path: format-error.log
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Check source file sizes
