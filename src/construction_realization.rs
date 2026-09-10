@@ -258,9 +258,13 @@ fn candidate_placements_for_targets(
                         {
                             continue;
                         }
-                        let rotated = rotate_point(pa, fixed_rotation);
-                        let expected_b = rotate_point(pb, fixed_rotation);
-                        if (wa.0 + expected_b.0 - wb.0).hypot(wa.1 + expected_b.1 - wb.1) > 1e-7 {
+                        let rotated_a = rotate_point(pa, fixed_rotation);
+                        let rotated_b = rotate_point(pb, fixed_rotation);
+                        let expected_dx = rotated_b.0 - rotated_a.0;
+                        let expected_dy = rotated_b.1 - rotated_a.1;
+                        let actual_dx = wb.0 - wa.0;
+                        let actual_dy = wb.1 - wa.1;
+                        if (expected_dx - actual_dx).hypot(expected_dy - actual_dy) > 1e-7 {
                             continue;
                         }
                         add_unique_placement(
@@ -429,6 +433,7 @@ fn solve_material_placements(
 
         let mut candidates = Vec::new();
         let internal_targets = contact_targets_for_units(&working, &internal_target_units, c);
+
         for candidate in candidate_placements_for_targets(
             res,
             &internal_targets,
@@ -440,12 +445,31 @@ fn solve_material_placements(
             add_unique_placement(&mut candidates, candidate);
         }
 
-        for constraint in external {
-            for &target_unit in constraint {
-                let targets = contact_targets_for_units(&working, &[target_unit], c);
+        let external_target_groups: Vec<Vec<ContactTarget>> = external
+            .iter()
+            .map(|group| contact_targets_for_units(&working, group, c))
+            .collect();
+
+        for (group_index, group_targets) in external_target_groups.iter().enumerate() {
+            let mut targets = internal_targets.clone();
+            targets.extend(group_targets.iter().copied());
+            for candidate in candidate_placements_for_targets(
+                res,
+                &targets,
+                &working,
+                anchor,
+                fixed_rotation,
+                c,
+            ) {
+                add_unique_placement(&mut candidates, candidate);
+            }
+
+            for other_group_targets in external_target_groups.iter().skip(group_index + 1) {
+                let mut pair_targets = group_targets.clone();
+                pair_targets.extend(other_group_targets.iter().copied());
                 for candidate in candidate_placements_for_targets(
                     res,
-                    &targets,
+                    &pair_targets,
                     &working,
                     anchor,
                     fixed_rotation,
