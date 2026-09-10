@@ -48,7 +48,7 @@ impl BlueprintAtom {
 /// The topology is inherited. Construction is responsible only for fulfilling
 /// it with physical material; it must never select a different constituent or
 /// connection location to make the design work.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 pub struct BlueprintBond {
     pub atom_a: usize,
     pub endpoint_a: ConnectionEndpoint,
@@ -121,13 +121,16 @@ impl AtomicBlueprint {
             }
             core_seen[atom] = true;
         }
-        let mut seen = std::collections::HashSet::new();
-        for bond in &self.bonds {
+        for (i, bond) in self.bonds.iter().enumerate() {
             if !bond.is_valid(self.atoms.len()) {
-                return Err("atomic blueprint contains an invalid bond".into());
+                return Err(format!("atomic blueprint bond {i} is invalid"));
             }
-            let bond = bond.canonical();
-            if !seen.insert((bond.atom_a, bond.endpoint_a, bond.atom_b, bond.endpoint_b)) {
+            let canonical = bond.canonical();
+            if self.bonds[..i]
+                .iter()
+                .map(|previous| previous.canonical())
+                .any(|previous| previous == canonical)
+            {
                 return Err("atomic blueprint contains duplicate bonds".into());
             }
         }
@@ -150,11 +153,11 @@ impl AtomicBlueprint {
 mod tests {
     use super::*;
 
-    fn carbon() -> BlueprintAtom {
+    fn carbon(x: f64) -> BlueprintAtom {
         BlueprintAtom {
             resource: "Carbon".into(),
             transform: BlueprintTransform {
-                x: 0.0,
+                x,
                 y: 0.0,
                 rotation_radians: 0.0,
             },
@@ -169,17 +172,7 @@ mod tests {
                 y: 0.0,
                 rotation_radians: 0.0,
             },
-            atoms: vec![
-                carbon(),
-                BlueprintAtom {
-                    resource: "Carbon".into(),
-                    transform: BlueprintTransform {
-                        x: 1.0,
-                        y: 0.0,
-                        rotation_radians: 0.0,
-                    },
-                },
-            ],
+            atoms: vec![carbon(0.0), carbon(1.0)],
             core_atoms: vec![0],
             bonds: vec![BlueprintBond {
                 atom_a: 0,
@@ -190,6 +183,36 @@ mod tests {
             }],
         };
         assert!(blueprint.validate().is_ok());
+    }
+
+    #[test]
+    fn atomic_blueprint_rejects_duplicate_relationships() {
+        let blueprint = AtomicBlueprint {
+            anchor: BlueprintTransform {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            atoms: vec![carbon(0.0), carbon(1.0)],
+            core_atoms: vec![0],
+            bonds: vec![
+                BlueprintBond {
+                    atom_a: 0,
+                    endpoint_a: ConnectionEndpoint::Corner { point_index: 0 },
+                    atom_b: 1,
+                    endpoint_b: ConnectionEndpoint::Corner { point_index: 3 },
+                    required_bonds: 1,
+                },
+                BlueprintBond {
+                    atom_a: 1,
+                    endpoint_a: ConnectionEndpoint::Corner { point_index: 3 },
+                    atom_b: 0,
+                    endpoint_b: ConnectionEndpoint::Corner { point_index: 0 },
+                    required_bonds: 1,
+                },
+            ],
+        };
+        assert!(blueprint.validate().is_err());
     }
 
     #[test]
