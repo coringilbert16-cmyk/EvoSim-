@@ -14,10 +14,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply strict penetration orientation validation
+      - name: Apply construction and orientation fixes under test
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
+
+          p = Path('src/construction_realization.rs')
+          s = p.read_text()
+          old = 'if !crate::material_geometry::placed_forms_overlap(&pa,&pb,0.0){return false}let dx=b.placement.x-a.placement.x;let dy=b.placement.y-a.placement.y;let d=dx.hypot(dy);let(sx,sy)=if d>CONTACT_EPSILON{(dx/d,dy/d)}else{(1.0,0.0)};let scale=pa.form.bounding_radius().max(pb.form.bounding_radius()).max(1.0);let eps=1e-8*scale;let shifted=crate::material_geometry::PlacedMaterialPart{part_index:0,form:pa.form,placement:Placement{x:a.placement.x-sx*eps,y:a.placement.y-sy*eps,rotation_radians:a.placement.rotation_radians}};crate::material_geometry::placed_forms_overlap(&shifted,&pb,0.0)'
+          new = 'crate::material_geometry::placed_forms_penetrate(&pa,&pb,0.0)'
+          if s.count(old) != 1:
+              raise SystemExit(f'expected exactly one legacy strict-overlap heuristic, found {s.count(old)}')
+          p.write_text(s.replace(old, new))
+
           p = Path('src/structural_blueprint.rs')
           s = p.read_text()
           old = 'crate::material_geometry::placed_forms_overlap(&pa, &pb, 0.0)'
@@ -88,7 +98,7 @@ jobs:
                 - name: Run Clippy
                   run: cargo clippy --all-targets --all-features -- -D warnings -A dead_code -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of
           EOF
-          git add src/structural_blueprint.rs .github/workflows/rust.yml
+          git add src/construction_realization.rs src/structural_blueprint.rs .github/workflows/rust.yml
           git rm .github/workflows/strict-penetration-fix.yml
-          git commit -m 'Use strict penetration for blueprint orientation validation'
+          git commit -m 'Use strict penetration for construction and blueprint validation'
           git push
