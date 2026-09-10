@@ -28,7 +28,6 @@ jobs:
               p.write_text(s.replace(old, new))
 
           # Numerical boundary contacts are not penetration.
-          p = Path('src/material_geometry.rs')
           replace_once('src/material_geometry.rs', 'if center_distance >= a.form.bounding_radius() + b.form.bounding_radius() + tolerance {', 'if center_distance >= a.form.bounding_radius() + b.form.bounding_radius() + tolerance + 1e-12 {')
           replace_once('src/material_geometry.rs', 'center_distance < ar + br - tolerance', 'center_distance < ar + br - tolerance - 1e-12')
           replace_once('src/material_geometry.rs', '< (radius - tolerance).max(0.0)', '< (radius - tolerance - 1e-12).max(0.0)')
@@ -38,12 +37,26 @@ jobs:
           # Construction candidates are constrained to the blueprint frame.
           p = Path('src/construction_realization.rs')
           s = p.read_text()
-          s = s.replace('anchor:Placement,c:&[BaseResource])', 'anchor:Placement,fixed_rotation:f64,c:&[BaseResource])', 1)
+          s, n = re.subn(
+              r'fn add_circle_contact_candidates\((.*?)anchor:Placement,c:&\[BaseResource\]\)',
+              r'fn add_circle_contact_candidates(\1anchor:Placement,fixed_rotation:f64,c:&[BaseResource])',
+              s,
+              count=1,
+          )
+          if n != 1:
+              raise SystemExit(f'construction: circle candidate signature not found ({n})')
           start = s.index('fn add_circle_contact_candidates(')
           end = s.index('\nfn candidate_placements_for_targets', start)
           chunk = s[start:end].replace('rotation_radians:0.0', 'rotation_radians:fixed_rotation')
           s = s[:start] + chunk + s[end:]
-          s = s.replace('fn candidate_placements_for_targets(resource:&BaseResource,targets:&[ContactTarget],s:&OrganismStructure,anchor:Placement,c:&[BaseResource])', 'fn candidate_placements_for_targets(resource:&BaseResource,targets:&[ContactTarget],s:&OrganismStructure,anchor:Placement,fixed_rotation:f64,c:&[BaseResource])', 1)
+          s, n = re.subn(
+              r'fn candidate_placements_for_targets\((.*?)anchor:Placement,c:&\[BaseResource\]\)->Vec<Placement>',
+              r'fn candidate_placements_for_targets(\1anchor:Placement,fixed_rotation:f64,c:&[BaseResource])->Vec<Placement>',
+              s,
+              count=1,
+          )
+          if n != 1:
+              raise SystemExit(f'construction: candidate solver signature not found ({n})')
           s = s.replace('add_circle_contact_candidates(&mut out,resource,targets,s,anchor,c);', 'add_circle_contact_candidates(&mut out,resource,targets,s,anchor,fixed_rotation,c);', 1)
           fixed_candidates = 'for &target in targets{let Some(world)=target_world_point(s,target,c)else{continue};for endpoint in &endpoints{let Some(local)=local_endpoint_point(resource,*endpoint,c)else{continue};add_unique_placement(&mut out,placement_for_point_contact(local,world,fixed_rotation));}}'
           anchor_tail = 'add_unique_placement(&mut out,anchor);out}'
@@ -66,12 +79,8 @@ jobs:
           s2, n = re.subn(pattern, '\n    for &id in ids {', s, count=1, flags=re.S)
           if n != 1:
               raise SystemExit(f'structural_blueprint: orientation transform block not found exactly once ({n})')
-          s = s2
-          start = s.index('fn apply_blueprint_orientation(')
-          end = s.index('\npub(crate) fn realize_connection_groups', start)
-          chunk = s[start:end].replace('crate::material_geometry::placed_forms_overlap(&pa, &pb, 0.0)', 'crate::material_geometry::placed_forms_penetrate(&pa, &pb, 0.0)')
-          s = s[:start] + chunk + s[end:]
-          p.write_text(s)
+          p.write_text(s2.replace('    placement: BlueprintPlacement,', '    _placement: BlueprintPlacement,'))
+          replace_once('src/material_geometry.rs', '(Form::Line { .. }, polygon) | (polygon, Form::Line { .. }) => {', '(Form::Line { .. }, _polygon) | (_polygon, Form::Line { .. }) => {')
           PY
       - uses: dtolnay/rust-toolchain@stable
       - name: Format source
