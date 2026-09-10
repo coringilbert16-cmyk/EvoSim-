@@ -1,7 +1,7 @@
 //! Physical realization of blueprint material intent.
 
 use crate::contact::{connection_pair_candidates, try_add_bond};
-use crate::resources::{BaseResource, ConnectionSites, Form, Material, Shape};
+use crate::resources::{BaseResource, ConnectionSites, Material};
 use crate::structural_blueprint::BlueprintElement;
 use crate::structure::{
     Bond, BondEndpoint, ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit,
@@ -140,57 +140,6 @@ fn adjacent_realized(material: &Material, part: usize, realized: &[Option<usize>
         .collect()
 }
 
-fn try_place_fluid_and_connect(
-    structure: &mut OrganismStructure,
-    neighbor_index: usize,
-    neighbor_endpoint: ConnectionEndpoint,
-    name: &str,
-    base: &BaseResource,
-    catalog: &[BaseResource],
-) -> Option<usize> {
-    let target = neighbor_endpoint
-        .world_point(structure.units.get(neighbor_index)?, catalog)?;
-    let radius = match &base.shape.form {
-        Form::Circle { radius } => *radius,
-        _ => return None,
-    };
-    if !radius.is_finite() || radius <= 0.0 {
-        return None;
-    }
-
-    let (mut ux, mut uy) = (target.normal_x, target.normal_y);
-    if ux.hypot(uy) <= CONTACT_EPSILON {
-        let dx = target.x - structure.units[neighbor_index].placement.x;
-        let dy = target.y - structure.units[neighbor_index].placement.y;
-        let distance = dx.hypot(dy);
-        if distance <= CONTACT_EPSILON {
-            return None;
-        }
-        ux = dx / distance;
-        uy = dy / distance;
-    }
-
-    let placement = Placement {
-        x: target.x + ux * radius,
-        y: target.y + uy * radius,
-        rotation_radians: 0.0,
-    };
-    let mut unit = StructuralUnit::new(name.to_owned(), placement);
-    if !unit.replace_geometry(Shape {
-        form: Form::Circle { radius },
-    }) {
-        return None;
-    }
-
-    let new_index = structure.add_unit(unit);
-    if connect_units(structure, neighbor_index, new_index, catalog).is_some() {
-        Some(new_index)
-    } else {
-        structure.units.pop();
-        None
-    }
-}
-
 fn try_place_and_connect(
     structure: &mut OrganismStructure,
     neighbor_index: usize,
@@ -201,41 +150,26 @@ fn try_place_and_connect(
 ) -> Option<usize> {
     let neighbor = structure.units.get(neighbor_index)?.clone();
     let base = resource(catalog, name)?;
-    for neighbor_endpoint in endpoint_prototypes(&neighbor, catalog) {
-        if base.physical_state == crate::resources::PhysicalState::Fluid {
-            if let Some(index) = try_place_fluid_and_connect(
-                structure,
-                neighbor_index,
-                neighbor_endpoint,
-                name,
-                base,
-                catalog,
-            ) {
-                return Some(index);
-            }
+    let Some(placements) = placement_candidates_for_new(
+        &neighbor,
+        endpoint_prototypes(&neighbor, catalog).into_iter().next()?,
+        base,
+        desired_x,
+        desired_y,
+        catalog,
+    ) else {
+        return None;
+    };
+    for placement in placements {
+        let mut unit = StructuralUnit::new(name.to_owned(), placement);
+        if !unit.realize_default_geometry(catalog) {
             continue;
         }
-        let Some(placements) = placement_candidates_for_new(
-            &neighbor,
-            neighbor_endpoint,
-            base,
-            desired_x,
-            desired_y,
-            catalog,
-        ) else {
-            continue;
-        };
-        for placement in placements {
-            let mut unit = StructuralUnit::new(name.to_owned(), placement);
-            if !unit.realize_default_geometry(catalog) {
-                continue;
-            }
-            let new_index = structure.add_unit(unit);
-            if connect_units(structure, neighbor_index, new_index, catalog).is_some() {
-                return Some(new_index);
-            }
-            structure.units.pop();
+        let new_index = structure.add_unit(unit);
+        if connect_units(structure, neighbor_index, new_index, catalog).is_some() {
+            return Some(new_index);
         }
+        structure.units.pop();
     }
     None
 }
@@ -255,9 +189,8 @@ fn already_related(structure: &OrganismStructure, a: usize, b: usize) -> bool {
 
 /// Expand construction-intent material into individual physical constituents.
 /// The first constituent is only an algorithmic seed; every subsequent placement
-/// is first-fit and preserves its current orientation. Fluid geometry starts from
-/// the resource's default realization and is not arbitrarily resized by the
-/// construction algorithm.
+/// is first-fit and preserves its current orientation. The physical constituent
+/// owns the realized geometry used by contact and bond validation.
 pub(crate) fn realize_material(
     structure: &mut OrganismStructure,
     element: &BlueprintElement,
