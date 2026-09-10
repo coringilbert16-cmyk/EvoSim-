@@ -6,7 +6,7 @@
 //! becomes the authority for the realization.
 
 use crate::resources::{BaseResource, InternalBond, Material};
-use crate::structure::{Bond, BondEndpoint, OrganismStructure, Placement};
+use crate::structure::{Bond, BondEndpoint, OrganismStructure};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -116,7 +116,12 @@ impl StructuralBlueprint {
         let mut structure = OrganismStructure::new();
         let mut realized = HashMap::<usize, Vec<usize>>::new();
         let first = self.elements.first().ok_or_else(|| "blueprint has no elements".to_string())?;
+        let before_first = structure.clone();
         let first_ids = crate::construction_realization::realize_material(&mut structure, first, catalog)?;
+        if let Err(error) = apply_blueprint_orientation(&mut structure, &first_ids, first.placement, &[], catalog) {
+            structure = before_first;
+            return Err(format!("blueprint element 0 orientation failed: {error}"));
+        }
         realized.insert(0, first_ids);
         let mut attempted = vec![false; self.elements.len()]; attempted[0] = true;
         loop {
@@ -135,8 +140,17 @@ impl StructuralBlueprint {
                 realized.get(&neighbor).cloned()
             }).collect::<Vec<_>>();
             if neighbor_targets.is_empty() { continue; }
+            let before = structure.clone();
             match crate::construction_realization::realize_material_with_constraints(&mut structure, &self.elements[index], catalog, &neighbor_targets) {
-                Ok(ids) => { realized.insert(index, ids); }
+                Ok(ids) => {
+                    if let Err(error) = apply_blueprint_orientation(&mut structure, &ids, self.elements[index].placement, &neighbor_targets, catalog) {
+                        structure = before;
+                        #[cfg(test)]
+                        eprintln!("BLUEPRINT ELEMENT ORIENTATION FAILURE index={index} realized_neighbors={best_neighbors} error={error}");
+                    } else {
+                        realized.insert(index, ids);
+                    }
+                }
                 Err(error) => {
                     #[cfg(test)]
                     eprintln!("BLUEPRINT ELEMENT FAILURE index={index} realized_neighbors={best_neighbors} error={error}");
@@ -173,6 +187,46 @@ impl StructuralBlueprint {
     }
     pub fn total_material_amount(&self) -> f64 { self.elements.iter().map(|element| element.material.total_amount()).sum() }
     pub fn structural_mass(&self, catalog: &[BaseResource]) -> f64 { self.elements.iter().map(|element| element.material.mass(catalog)).sum() }
+}
+
+fn apply_blueprint_orientation(
+    structure: &mut OrganismStructure,
+    ids: &[usize],
+    placement: BlueprintPlacement,
+    neighbor_groups: &[Vec<usize>],
+    catalog: &[BaseResource],
+) -> Result<(), String> {
+    let angle = placement.rotation_radians;
+    if angle.abs() > 1e-12 {
+        let (s, c) = angle.sin_cos();
+        for &id in ids {
+            let unit = structure.units.get_mut(id).ok_or_else(|| "orientation references a missing constituent".to_string())?;
+            let dx = unit.placement.x - placement.x;
+            let dy = unit.placement.y - placement.y;
+            unit.placement.x = placement.x + dx * c - dy * s;
+            unit.placement.y = placement.y + dx * s + dy * c;
+            unit.placement.rotation_radians += angle;
+        }
+    }
+    for &id in ids {
+        for &other in structure.units.iter().enumerate().filter_map(|(i, _)| (!ids.contains(&i)).then_some(i)) {
+            let Some(a) = structure.units.get(id) else { continue };
+            let Some(b) = structure.units.get(other) else { continue };
+            let Some(sa) = a.shape(catalog) else { continue };
+            let Some(sb) = b.shape(catalog) else { continue };
+            let pa = crate::material_geometry::PlacedMaterialPart { part_index: id, form: sa.form.clone(), placement: a.placement };
+            let pb = crate::material_geometry::PlacedMaterialPart { part_index: other, form: sb.form.clone(), placement: b.placement };
+            if crate::material_geometry::placed_forms_overlap(&pa, &pb, 0.0) {
+                return Err("oriented material overlaps existing physical structure".into());
+            }
+        }
+    }
+    for group in neighbor_groups {
+        if !ids.iter().any(|&a| group.iter().any(|&b| crate::contact::connection_pair_candidates(structure, a, b, catalog).iter().any(|candidate| candidate.distance <= 1e-9))) {
+            return Err("oriented material no longer has a physical contact with a prescribed neighbor".into());
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn realize_connection_groups(structure: &mut OrganismStructure, realized: &HashMap<usize, Vec<usize>>, connection: BlueprintConnection, catalog: &[BaseResource]) -> Result<f64, String> {
