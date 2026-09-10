@@ -1,0 +1,113 @@
+name: One-time blueprint orientation fix
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Remove post-solve blueprint rotation
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          path = Path("src/structural_blueprint.rs")
+          text = path.read_text()
+
+          pattern = re.compile(
+              r"fn apply_blueprint_orientation\(.*?\n\}\n\npub\(crate\) fn realize_connection_groups",
+              re.S,
+          )
+          replacement = r'''fn apply_blueprint_orientation(
+              structure: &mut OrganismStructure,
+              ids: &[usize],
+              placement: BlueprintPlacement,
+              neighbor_groups: &[Vec<usize>],
+              catalog: &[BaseResource],
+          ) -> Result<(), String> {
+              let angle = placement.rotation_radians;
+
+              for &id in ids {
+                  let unit = structure
+                      .units
+                      .get(id)
+                      .ok_or_else(|| "orientation references a missing constituent".to_string())?;
+                  if (unit.placement.rotation_radians - angle).abs() > 1e-12 {
+                      return Err("realized material does not preserve the prescribed element frame".into());
+                  }
+              }
+
+              for &id in ids {
+                  for other in structure
+                      .units
+                      .iter()
+                      .enumerate()
+                      .filter_map(|(i, _)| (!ids.contains(&i)).then_some(i))
+                  {
+                      let Some(a) = structure.units.get(id) else {
+                          continue;
+                      };
+                      let Some(b) = structure.units.get(other) else {
+                          continue;
+                      };
+                      let Some(sa) = a.shape(catalog) else {
+                          continue;
+                      };
+                      let Some(sb) = b.shape(catalog) else {
+                          continue;
+                      };
+                      let pa = crate::material_geometry::PlacedMaterialPart {
+                          part_index: id,
+                          form: sa.form.clone(),
+                          placement: a.placement,
+                      };
+                      let pb = crate::material_geometry::PlacedMaterialPart {
+                          part_index: other,
+                          form: sb.form.clone(),
+                          placement: b.placement,
+                      };
+                      if crate::material_geometry::placed_forms_penetrate(&pa, &pb, 0.0) {
+                          return Err("realized material penetrates existing physical structure".into());
+                      }
+                  }
+              }
+
+              for group in neighbor_groups {
+                  if !ids.iter().any(|&a| {
+                      group.iter().any(|&b| {
+                          crate::contact::connection_pair_candidates(structure, a, b, catalog)
+                              .iter()
+                              .any(|candidate| candidate.distance <= 1e-9)
+                      })
+                  }) {
+                      return Err("realized material no longer has a physical contact with a prescribed neighbor".into());
+                  }
+              }
+              Ok(())
+          }
+
+          pub(crate) fn realize_connection_groups'''
+
+          updated, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f"expected exactly one orientation function, found {count}")
+          path.write_text(updated)
+
+      - name: Commit source fix and remove one-time workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm .github/workflows/one-time-blueprint-fix.yml
+          git add src/structural_blueprint.rs .github/workflows/one-time-blueprint-fix.yml
+          git commit -m "Fix blueprint frame validation after construction"
+          git push
