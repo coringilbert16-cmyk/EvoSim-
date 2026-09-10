@@ -18,7 +18,6 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
           p = Path('src/construction_realization.rs')
           s = p.read_text()
@@ -38,12 +37,11 @@ jobs:
 
           p = Path('src/structure.rs')
           s = p.read_text()
-          pattern = r'fn units_strictly_overlap\(a:&StructuralUnit,b:&StructuralUnit,catalog:&\[BaseResource\]\)->bool\{.*?\}'
-          replacement = 'fn units_strictly_overlap(a:&StructuralUnit,b:&StructuralUnit,catalog:&[BaseResource])->bool{let(Some(form_a),Some(form_b))=(a.shape(catalog),b.shape(catalog))else{return false};let pa=crate::material_geometry::PlacedMaterialPart{part_index:0,form:form_a.form.clone(),placement:a.placement};let pb=crate::material_geometry::PlacedMaterialPart{part_index:1,form:form_b.form.clone(),placement:b.placement};crate::material_geometry::placed_forms_penetrate(&pa,&pb,0.0)}'
-          s2, count = re.subn(pattern, replacement, s, count=1, flags=re.S)
-          if count != 1:
-              raise SystemExit(f'expected exactly one structure strict-overlap helper, found {count}')
-          p.write_text(s2)
+          old = 'fn units_strictly_overlap(a:&StructuralUnit,b:&StructuralUnit,catalog:&[BaseResource])->bool{let(Some(form_a),Some(form_b))=(a.shape(catalog),b.shape(catalog))else{return false};let pa=crate::material_geometry::PlacedMaterialPart{part_index:0,form:form_a.form.clone(),placement:a.placement};let pb=crate::material_geometry::PlacedMaterialPart{part_index:1,form:form_b.form.clone(),placement:b.placement};if !crate::material_geometry::placed_forms_overlap(&pa,&pb,0.0){return false}let dx=b.placement.x-a.placement.x;let dy=b.placement.y-a.placement.y;let distance=dx.hypot(dy);let(sx,sy)=if distance>1e-12{(dx/distance,dy/distance)}else{(1.0,0.0)};let scale=pa.form.bounding_radius().max(pb.form.bounding_radius()).max(1.0);let epsilon=1e-8*scale;let shifted=crate::material_geometry::PlacedMaterialPart{part_index:0,form:pa.form.clone(),placement:Placement{x:a.placement.x-sx*epsilon,y:a.placement.y-sy*epsilon,rotation_radians:a.placement.rotation_radians}};crate::material_geometry::placed_forms_overlap(&shifted,&pb,0.0)}'
+          new = 'fn units_strictly_overlap(a:&StructuralUnit,b:&StructuralUnit,catalog:&[BaseResource])->bool{let(Some(form_a),Some(form_b))=(a.shape(catalog),b.shape(catalog))else{return false};let pa=crate::material_geometry::PlacedMaterialPart{part_index:0,form:form_a.form.clone(),placement:a.placement};let pb=crate::material_geometry::PlacedMaterialPart{part_index:1,form:form_b.form.clone(),placement:b.placement};crate::material_geometry::placed_forms_penetrate(&pa,&pb,0.0)}'
+          if s.count(old) != 1:
+              raise SystemExit(f'expected exactly one legacy structure strict-overlap heuristic, found {s.count(old)}')
+          p.write_text(s.replace(old, new))
           PY
       - uses: dtolnay/rust-toolchain@stable
       - name: Format source
