@@ -2,17 +2,164 @@ use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+use crate::atomic_blueprint::{AtomicBlueprint, BlueprintAtom, BlueprintBond, BlueprintTransform};
 use crate::resources::{InternalBond, Material};
 use crate::structural_blueprint::{BlueprintConnection, BlueprintElement, BlueprintPlacement, StructuralBlueprint};
-#[derive(Serialize, Deserialize, Clone, Debug)]pub struct TraitDef{pub name:String,pub value:f64,pub mutation_probability:f64,pub mutation_sigma:f64}
-#[derive(Serialize, Deserialize, Clone, Debug)]pub struct Genome{pub traits:Vec<TraitDef>,#[serde(default="default_structural_blueprint")]pub structural_blueprint:StructuralBlueprint}
-impl Genome{pub fn trait_value(&self,name:&str,default:f64)->f64{self.traits.iter().find(|t|t.name==name).map(|t|t.value).unwrap_or(default)}pub fn mass_affinity(&self)->f64{self.trait_value("mass_affinity",0.0).clamp(-1.0,1.0)}pub fn potential_energy_affinity(&self)->f64{self.trait_value("potential_energy_affinity",0.0).clamp(-1.0,1.0)}pub fn reactivity_affinity(&self)->f64{self.trait_value("reactivity_affinity",0.0).clamp(-1.0,1.0)}pub fn cohesion_affinity(&self)->f64{self.trait_value("cohesion_affinity",0.0).clamp(-1.0,1.0)}pub fn memory_strength(&self)->f64{self.trait_value("memory_strength",0.5).clamp(0.0,1.0)}pub fn perception_radius(&self)->f64{self.trait_value("perception_radius",100.0).max(0.0)}pub fn sensory_resolution(&self)->f64{self.trait_value("sensory_resolution",0.5).clamp(0.0,1.0)}pub fn directional_resolution(&self)->f64{self.trait_value("directional_resolution",1.0).clamp(0.0,1.0)}pub fn processing_efficiency(&self)->f64{self.trait_value("processing_efficiency",0.8).clamp(0.05,1.0)}pub fn movement_efficiency(&self)->f64{self.trait_value("movement_efficiency",0.8).clamp(0.05,1.0)}pub fn reproductive_investment(&self)->f64{self.trait_value("reproductive_investment",0.5).clamp(0.15,1.0)}pub fn mutate(&mut self,rng:&mut ChaCha8Rng){for t in &mut self.traits{if rng.gen::<f64>()<t.mutation_probability.clamp(1e-6,0.25){let delta=rng.gen_range(-1.0..1.0)*t.mutation_sigma.max(0.0);t.value+=delta;}if rng.gen::<f64>()<0.001{t.mutation_probability=(t.mutation_probability*rng.gen_range(0.5..1.5)).clamp(1e-6,0.1);}}}}
-fn trait_def(name:&str,value:f64,sigma:f64)->TraitDef{TraitDef{name:name.into(),value,mutation_probability:0.001,mutation_sigma:sigma}}
-fn f_core_carbon_nitrogen()->Material{Material{parts:vec![("Carbon".into(),1.0),("Carbon".into(),1.0),("Nitrogen".into(),1.0)],internal_bonds:vec![InternalBond{part_a:0,part_b:1},InternalBond{part_a:0,part_b:2}]}}
-fn hydrated_carbon_sulfur()->Material{Material{parts:vec![("Carbon".into(),1.0),("Sulfur".into(),1.0),("Water".into(),1.0)],internal_bonds:vec![InternalBond{part_a:0,part_b:1},InternalBond{part_a:0,part_b:2}]}}
-fn hydrated_carbon_nitrogen_water()->Material{Material{parts:vec![("Carbon".into(),1.0),("Nitrogen".into(),1.0),("Water".into(),1.0)],internal_bonds:vec![InternalBond{part_a:0,part_b:1},InternalBond{part_a:0,part_b:2}]}}
-fn default_structural_blueprint()->StructuralBlueprint{let r=0.438_691_f64;let spacing=4.0*r;let mut elements=Vec::with_capacity(61);let mut core_elements=Vec::with_capacity(19);let mut index_by_axial=HashMap::new();for ring in 0_i32..=4{for q in -4_i32..=4_i32{for axial_r in -4_i32..=4_i32{let current=q.abs().max(axial_r.abs()).max((q+axial_r).abs());if current!=ring{continue}let material=match ring{0..=2=>f_core_carbon_nitrogen(),3=>hydrated_carbon_sulfur(),4=>hydrated_carbon_nitrogen_water(),_=>unreachable!()};let x=3.0_f64.sqrt()*spacing*(q as f64+0.5*axial_r as f64);let y=1.5*spacing*axial_r as f64;let index=elements.len();if ring<=2{core_elements.push(index)}elements.push(BlueprintElement{material,placement:BlueprintPlacement{x,y,rotation_radians:0.0}});index_by_axial.insert((q,axial_r),index);}}}let mut connections=Vec::with_capacity(156);for q in -4_i32..=4_i32{for axial_r in -4_i32..=4_i32{let Some(&a)=index_by_axial.get(&(q,axial_r))else{continue};for(dq,dr)in[(1_i32,0_i32),(0_i32,1_i32),(-1_i32,1_i32)]{let Some(&b)=index_by_axial.get(&(q+dq,axial_r+dr))else{continue};connections.push(BlueprintConnection{element_a:a,element_b:b});}}}StructuralBlueprint::with_core_elements(elements,connections,core_elements)}
-pub fn initial_genome()->Genome{Genome{traits:vec![trait_def("memory_strength",0.5,0.05),trait_def("perception_radius",100.0,1.0),trait_def("sensory_resolution",0.5,0.05),trait_def("directional_resolution",1.0,0.05),trait_def("mass_affinity",0.0,0.05),trait_def("potential_energy_affinity",0.5,0.05),trait_def("reactivity_affinity",0.0,0.05),trait_def("cohesion_affinity",0.0,0.05),trait_def("processing_efficiency",0.8,0.05),trait_def("movement_efficiency",0.8,0.05),trait_def("reproductive_investment",0.5,0.05)],structural_blueprint:default_structural_blueprint()}}
-#[cfg(test)]mod tests{use super::*;use crate::resources::default_catalog;#[test]fn seed_blueprint_has_three_composite_layers(){let g=initial_genome();let b=&g.structural_blueprint;assert_eq!(b.elements.len(),61);assert_eq!(b.connections.len(),156);assert_eq!(b.core_elements.len(),19);assert!(b.validate().is_ok());assert!(b.elements.iter().all(|e|e.material.parts.len()==3));assert!(b.elements[..19].iter().all(|e|e.material.parts==vec![("Carbon".into(),1.0),("Carbon".into(),1.0),("Nitrogen".into(),1.0)]));assert!(b.elements[19..37].iter().all(|e|e.material.parts==vec![("Carbon".into(),1.0),("Sulfur".into(),1.0),("Water".into(),1.0)]));assert!(b.elements[37..].iter().all(|e|e.material.parts==vec![("Carbon".into(),1.0),("Nitrogen".into(),1.0),("Water".into(),1.0)]));assert!(b.elements.iter().all(|e|e.placement.rotation_radians==0.0));assert!(b.realize(&default_catalog()).is_ok())}
-#[test]fn seed_blueprint_is_connected(){assert!(initial_genome().structural_blueprint.is_connected())}
-#[test]fn seed_genome_core_is_connected(){let b=&initial_genome().structural_blueprint;assert!(b.core_elements.iter().all(|&i|i<b.elements.len()));assert_eq!(b.core_elements.len(),19);assert!(b.core_elements.windows(1).all(|_|true));}}
+use crate::structure::ConnectionEndpoint;
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TraitDef {
+    pub name: String,
+    pub value: f64,
+    pub mutation_probability: f64,
+    pub mutation_sigma: f64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Genome {
+    pub traits: Vec<TraitDef>,
+    #[serde(default = "default_structural_blueprint")]
+    pub structural_blueprint: StructuralBlueprint,
+    #[serde(default = "default_atomic_blueprint")]
+    pub atomic_blueprint: AtomicBlueprint,
+}
+
+impl Genome {
+    pub fn trait_value(&self, name: &str, default: f64) -> f64 {
+        self.traits.iter().find(|t| t.name == name).map(|t| t.value).unwrap_or(default)
+    }
+    pub fn mass_affinity(&self) -> f64 { self.trait_value("mass_affinity", 0.0).clamp(-1.0, 1.0) }
+    pub fn potential_energy_affinity(&self) -> f64 { self.trait_value("potential_energy_affinity", 0.0).clamp(-1.0, 1.0) }
+    pub fn reactivity_affinity(&self) -> f64 { self.trait_value("reactivity_affinity", 0.0).clamp(-1.0, 1.0) }
+    pub fn cohesion_affinity(&self) -> f64 { self.trait_value("cohesion_affinity", 0.0).clamp(-1.0, 1.0) }
+    pub fn memory_strength(&self) -> f64 { self.trait_value("memory_strength", 0.5).clamp(0.0, 1.0) }
+    pub fn perception_radius(&self) -> f64 { self.trait_value("perception_radius", 100.0).max(0.0) }
+    pub fn sensory_resolution(&self) -> f64 { self.trait_value("sensory_resolution", 0.5).clamp(0.0, 1.0) }
+    pub fn directional_resolution(&self) -> f64 { self.trait_value("directional_resolution", 1.0).clamp(0.0, 1.0) }
+    pub fn processing_efficiency(&self) -> f64 { self.trait_value("processing_efficiency", 0.8).clamp(0.05, 1.0) }
+    pub fn movement_efficiency(&self) -> f64 { self.trait_value("movement_efficiency", 0.8).clamp(0.05, 1.0) }
+    pub fn reproductive_investment(&self) -> f64 { self.trait_value("reproductive_investment", 0.5).clamp(0.15, 1.0) }
+    pub fn mutate(&mut self, rng: &mut ChaCha8Rng) {
+        for t in &mut self.traits {
+            if rng.gen::<f64>() < t.mutation_probability.clamp(1e-6, 0.25) {
+                t.value += rng.gen_range(-1.0..1.0) * t.mutation_sigma.max(0.0);
+            }
+            if rng.gen::<f64>() < 0.001 {
+                t.mutation_probability = (t.mutation_probability * rng.gen_range(0.5..1.5)).clamp(1e-6, 0.1);
+            }
+        }
+    }
+}
+
+fn trait_def(name: &str, value: f64, sigma: f64) -> TraitDef {
+    TraitDef { name: name.into(), value, mutation_probability: 0.001, mutation_sigma: sigma }
+}
+
+fn f_core_carbon_nitrogen() -> Material {
+    Material { parts: vec![("Carbon".into(), 1.0), ("Carbon".into(), 1.0), ("Nitrogen".into(), 1.0)], internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }, InternalBond { part_a: 0, part_b: 2 }] }
+}
+fn hydrated_carbon_sulfur() -> Material {
+    Material { parts: vec![("Carbon".into(), 1.0), ("Sulfur".into(), 1.0), ("Water".into(), 1.0)], internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }, InternalBond { part_a: 0, part_b: 2 }] }
+}
+fn hydrated_carbon_nitrogen_water() -> Material {
+    Material { parts: vec![("Carbon".into(), 1.0), ("Nitrogen".into(), 1.0), ("Water".into(), 1.0)], internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }, InternalBond { part_a: 0, part_b: 2 }] }
+}
+
+fn default_structural_blueprint() -> StructuralBlueprint {
+    let r = 0.438_691_f64;
+    let spacing = 4.0 * r;
+    let mut elements = Vec::with_capacity(61);
+    let mut core_elements = Vec::with_capacity(19);
+    let mut index_by_axial = HashMap::new();
+    for ring in 0_i32..=4 {
+        for q in -4_i32..=4_i32 {
+            for axial_r in -4_i32..=4_i32 {
+                let current = q.abs().max(axial_r.abs()).max((q + axial_r).abs());
+                if current != ring { continue; }
+                let material = match ring {
+                    0..=2 => f_core_carbon_nitrogen(),
+                    3 => hydrated_carbon_sulfur(),
+                    4 => hydrated_carbon_nitrogen_water(),
+                    _ => unreachable!(),
+                };
+                let x = 3.0_f64.sqrt() * spacing * (q as f64 + 0.5 * axial_r as f64);
+                let y = 1.5 * spacing * axial_r as f64;
+                let index = elements.len();
+                if ring <= 2 { core_elements.push(index); }
+                elements.push(BlueprintElement { material, placement: BlueprintPlacement { x, y, rotation_radians: 0.0 } });
+                index_by_axial.insert((q, axial_r), index);
+            }
+        }
+    }
+    let mut connections = Vec::with_capacity(156);
+    for q in -4_i32..=4_i32 {
+        for axial_r in -4_i32..=4_i32 {
+            let Some(&a) = index_by_axial.get(&(q, axial_r)) else { continue; };
+            for (dq, dr) in [(1_i32, 0_i32), (0_i32, 1_i32), (-1_i32, 1_i32)] {
+                let Some(&b) = index_by_axial.get(&(q + dq, axial_r + dr)) else { continue; };
+                connections.push(BlueprintConnection { element_a: a, element_b: b });
+            }
+        }
+    }
+    StructuralBlueprint::with_core_elements(elements, connections, core_elements)
+}
+
+fn default_atomic_blueprint() -> AtomicBlueprint {
+    let legacy = default_structural_blueprint();
+    AtomicBlueprint::compile_seed_from_legacy(&legacy, &crate::resources::default_catalog())
+        .expect("default seed structural blueprint must compile into an atomic blueprint")
+}
+
+pub fn initial_genome() -> Genome {
+    Genome {
+        traits: vec![
+            trait_def("memory_strength", 0.5, 0.05),
+            trait_def("perception_radius", 100.0, 1.0),
+            trait_def("sensory_resolution", 0.5, 0.05),
+            trait_def("directional_resolution", 1.0, 0.05),
+            trait_def("mass_affinity", 0.0, 0.05),
+            trait_def("potential_energy_affinity", 0.5, 0.05),
+            trait_def("reactivity_affinity", 0.0, 0.05),
+            trait_def("cohesion_affinity", 0.0, 0.05),
+            trait_def("processing_efficiency", 0.8, 0.05),
+            trait_def("movement_efficiency", 0.8, 0.05),
+            trait_def("reproductive_investment", 0.5, 0.05),
+        ],
+        structural_blueprint: default_structural_blueprint(),
+        atomic_blueprint: default_atomic_blueprint(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::resources::default_catalog;
+
+    #[test]
+    fn seed_blueprint_has_three_composite_layers() {
+        let g = initial_genome();
+        let b = &g.structural_blueprint;
+        assert_eq!(b.elements.len(), 61);
+        assert_eq!(b.connections.len(), 156);
+        assert_eq!(b.core_elements.len(), 19);
+        assert!(b.validate().is_ok());
+        assert_eq!(g.atomic_blueprint.atoms.len(), 183);
+        assert_eq!(g.atomic_blueprint.bonds.len(), 278);
+        assert!(b.elements.iter().all(|e| e.material.parts.len() == 3));
+        assert!(b.elements[..19].iter().all(|e| e.material.parts == vec![("Carbon".into(), 1.0), ("Carbon".into(), 1.0), ("Nitrogen".into(), 1.0)]));
+        assert!(b.elements[19..37].iter().all(|e| e.material.parts == vec![("Carbon".into(), 1.0), ("Sulfur".into(), 1.0), ("Water".into(), 1.0)]));
+        assert!(b.elements[37..].iter().all(|e| e.material.parts == vec![("Carbon".into(), 1.0), ("Nitrogen".into(), 1.0), ("Water".into(), 1.0)]));
+        assert!(b.elements.iter().all(|e| e.placement.rotation_radians == 0.0));
+        assert!(b.realize(&default_catalog()).is_ok());
+    }
+
+    #[test]
+    fn seed_blueprint_is_connected() { assert!(initial_genome().structural_blueprint.is_connected()); }
+    #[test]
+    fn seed_genome_core_is_connected() {
+        let b = &initial_genome().structural_blueprint;
+        assert!(b.core_elements.iter().all(|&i| i < b.elements.len()));
+        assert_eq!(b.core_elements.len(), 19);
+    }
+}
