@@ -190,10 +190,9 @@ impl StructuralBlueprint {
                         !removed_ids.contains(&bond.endpoint_a.constituent_id)
                             && !removed_ids.contains(&bond.endpoint_b.constituent_id)
                     });
-                    let removed_indices = ids.into_iter().collect::<std::collections::HashSet<_>>();
                     structure
                         .units
-                        .retain(|unit| !removed_indices.contains(&structure.unit_index(unit.physical_id).unwrap_or(usize::MAX)));
+                        .retain(|unit| !removed_ids.contains(&unit.physical_id));
                     return Err("blueprint connection could not physically constrain construction".into());
                 }
             }
