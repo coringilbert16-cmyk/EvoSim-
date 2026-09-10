@@ -1,4 +1,4 @@
-use crate::resources::Form;
+use crate::resources::Shape;
 use serde::{Deserialize, Serialize};
 
 /// The geometry an individual physical constituent currently occupies.
@@ -8,27 +8,32 @@ use serde::{Deserialize, Serialize};
 /// geometry may diverge from its resource's default geometry.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct PhysicalGeometry {
-    pub form: Form,
+    pub shape: Shape,
 }
 
 impl PhysicalGeometry {
-    /// Start a physical constituent at the resource's immutable default form.
-    pub fn from_default(form: &Form) -> Self {
-        Self { form: form.clone() }
+    /// Start a physical constituent at the resource's immutable default shape.
+    pub fn from_default(shape: &Shape) -> Self {
+        Self { shape: shape.clone() }
     }
 
-    /// Return the currently realized geometry.
-    pub fn form(&self) -> &Form {
-        &self.form
+    /// Return the currently realized shape.
+    pub fn shape(&self) -> &Shape {
+        &self.shape
+    }
+
+    /// Return the currently realized form.
+    pub fn form(&self) -> &crate::resources::Form {
+        &self.shape.form
     }
 
     /// Replace the realized geometry after a physical interaction has
     /// produced a new valid configuration.
-    pub fn replace(&mut self, form: Form) -> bool {
-        if !form.is_valid() {
+    pub fn replace(&mut self, shape: Shape) -> bool {
+        if !shape.is_valid() {
             return false;
         }
-        self.form = form;
+        self.shape = shape;
         true
     }
 }
@@ -38,17 +43,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn physical_geometry_starts_from_default_form() {
-        let default_form = Form::Circle { radius: 1.0 };
-        let geometry = PhysicalGeometry::from_default(&default_form);
-        assert_eq!(geometry.form(), &default_form);
+    fn physical_geometry_starts_from_default_shape() {
+        let default_shape = Shape {
+            form: crate::resources::Form::Circle { radius: 1.0 },
+        };
+        let geometry = PhysicalGeometry::from_default(&default_shape);
+        assert_eq!(geometry.shape(), &default_shape);
     }
 
     #[test]
     fn invalid_replacement_is_rejected_without_mutation() {
-        let default_form = Form::Circle { radius: 1.0 };
-        let mut geometry = PhysicalGeometry::from_default(&default_form);
-        assert!(!geometry.replace(Form::Circle { radius: 0.0 }));
-        assert_eq!(geometry.form(), &default_form);
+        let default_shape = Shape {
+            form: crate::resources::Form::Circle { radius: 1.0 },
+        };
+        let mut geometry = PhysicalGeometry::from_default(&default_shape);
+        assert!(!geometry.replace(Shape {
+            form: crate::resources::Form::Circle { radius: 0.0 },
+        }));
+        assert_eq!(geometry.shape(), &default_shape);
     }
 }
