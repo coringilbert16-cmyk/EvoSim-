@@ -3,128 +3,13 @@ use crate::contact::{connection_pair_candidates, try_add_bond};
 use crate::resources::{BaseResource, ConnectionSites, Material};
 use crate::structural_blueprint::BlueprintElement;
 use crate::structure::{Bond, BondEndpoint, ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
-
-const CONTACT_EPSILON: f64 = 1e-9;
-
-fn resource<'a>(catalog: &'a [BaseResource], name: &str) -> Option<&'a BaseResource> { catalog.iter().find(|r| r.name == name) }
-
-fn endpoint_prototypes(unit: &StructuralUnit, catalog: &[BaseResource]) -> Vec<ConnectionEndpoint> {
-    match unit.connection_sites(catalog) {
-        Some(ConnectionSites::Corners(points)) => (0..points.len()).map(|i| ConnectionEndpoint::Corner { point_index: i }).collect(),
-        Some(ConnectionSites::Circumference { .. }) => vec![ConnectionEndpoint::Boundary { angle_radians: 0.0 }],
-        Some(ConnectionSites::Undetermined) => {
-            let radius = unit.shape(catalog).map(|s| s.form.bounding_radius()).unwrap_or(0.0);
-            vec![ConnectionEndpoint::Fluid { x: radius, y: 0.0 }]
-        }
-        None => Vec::new(),
-    }
-}
-
-fn placement_for_new(neighbor: &StructuralUnit, neighbor_endpoint: ConnectionEndpoint, resource: &BaseResource, desired_x: f64, desired_y: f64, catalog: &[BaseResource]) -> Option<Placement> {
-    let target = neighbor_endpoint.world_point(neighbor, catalog)?;
-    let temp = StructuralUnit::new(resource.name.clone(), Placement { x: desired_x, y: desired_y, rotation_radians: 0.0 });
-    let endpoint = endpoint_prototypes(&temp, catalog).into_iter().next()?;
-    match endpoint {
-        ConnectionEndpoint::Corner { point_index } => {
-            let ConnectionSites::Corners(points) = temp.connection_sites(catalog)? else { return None; };
-            let p = *points.get(point_index)?;
-            let rotation = (-target.normal_y).atan2(-target.normal_x) - p.direction_radians;
-            let (s, c) = rotation.sin_cos();
-            Some(Placement { x: target.x - (p.x * c - p.y * s), y: target.y - (p.x * s + p.y * c), rotation_radians: rotation })
-        }
-        ConnectionEndpoint::Boundary { .. } | ConnectionEndpoint::Fluid { .. } => {
-            let radius = resource.shape.form.bounding_radius();
-            let dx = target.x - desired_x;
-            let dy = target.y - desired_y;
-            let distance = dx.hypot(dy);
-            let (ux, uy) = if distance > CONTACT_EPSILON { (dx / distance, dy / distance) } else { (1.0, 0.0) };
-            Some(Placement { x: target.x - ux * radius, y: target.y - uy * radius, rotation_radians: 0.0 })
-        }
-    }
-}
-
-fn connect_units(structure: &mut OrganismStructure, a: usize, b: usize, catalog: &[BaseResource]) -> Option<f64> {
-    let candidates = connection_pair_candidates(structure, a, b, catalog);
-    let id_a = structure.physical_id(a)?;
-    let id_b = structure.physical_id(b)?;
-    let pa = structure.units.get(a)?.properties(catalog)?;
-    let pb = structure.units.get(b)?.properties(catalog)?;
-    for candidate in candidates {
-        if candidate.distance > CONTACT_EPSILON { continue; }
-        let evaluation = crate::combine::evaluate_formation(candidate, pa.cohesion, pb.cohesion);
-        let (_, work, _) = crate::combine::required_investment(pa, pb, evaluation, 0.0).ok()?;
-        let strength = crate::combine::bond_strength(pa, pb);
-        if !strength.is_finite() || !(0.0..=1.0).contains(&strength) { continue; }
-        let bond = Bond { endpoint_a: BondEndpoint::new(id_a, candidate.endpoint_a), endpoint_b: BondEndpoint::new(id_b, candidate.endpoint_b), strength, bond_energy: 0.0 };
-        let mut trial = structure.clone();
-        if try_add_bond(&mut trial, bond, catalog).is_ok() { *structure = trial; return Some(work); }
-    }
-    None
-}
-
-fn adjacent_realized(material: &Material, part: usize, realized: &[Option<usize>]) -> Vec<usize> {
-    material.internal_bonds.iter().filter_map(|bond| {
-        let other = if bond.part_a == part { bond.part_b } else if bond.part_b == part { bond.part_a } else { return None };
-        realized.get(other).and_then(|index| *index)
-    }).collect()
-}
-
-fn try_place_and_connect(structure: &mut OrganismStructure, neighbor_index: usize, name: &str, desired_x: f64, desired_y: f64, catalog: &[BaseResource]) -> Option<usize> {
-    let neighbor = structure.units.get(neighbor_index)?.clone();
-    let base = resource(catalog, name)?;
-    for neighbor_endpoint in endpoint_prototypes(&neighbor, catalog) {
-        let Some(placement) = placement_for_new(&neighbor, neighbor_endpoint, base, desired_x, desired_y, catalog) else { continue; };
-        let new_index = structure.add_unit(StructuralUnit::new(name.to_owned(), placement));
-        if connect_units(structure, neighbor_index, new_index, catalog).is_some() { return Some(new_index); }
-        structure.units.pop();
-    }
-    None
-}
-
-fn already_related(structure: &OrganismStructure, a: usize, b: usize) -> bool {
-    let Some(id_a) = structure.physical_id(a) else { return false; };
-    let Some(id_b) = structure.physical_id(b) else { return false; };
-    structure.bonds.iter().any(|bond| (bond.endpoint_a.constituent_id == id_a && bond.endpoint_b.constituent_id == id_b) || (bond.endpoint_a.constituent_id == id_b && bond.endpoint_b.constituent_id == id_a))
-}
-
-/// Expand one construction-intent Material into one StructuralUnit per
-/// constituent and one physical Bond per successfully realized relationship.
-/// The first constituent is only an algorithmic construction seed; subsequent
-/// geometry is accepted on the first physically admissible fit.
-pub(crate) fn realize_material(structure: &mut OrganismStructure, element: &BlueprintElement, catalog: &[BaseResource]) -> Result<Vec<usize>, String> {
-    let material = &element.material;
-    if !material.is_valid() || material.parts.is_empty() { return Err("invalid material intent".into()); }
-    if material.parts.iter().any(|(_, amount)| (*amount - 1.0).abs() > f64::EPSILON) { return Err("physical construction requires one unit per material constituent".into()); }
-    if material.parts.len() > 1 && !material.has_internal_structure() { return Err("multi-constituent material requires construction relationships".into()); }
-    if material.internal_bonds.iter().any(|b| b.part_a >= material.parts.len() || b.part_b >= material.parts.len() || b.part_a == b.part_b) { return Err("material contains an invalid construction relationship".into()); }
-
-    let mut realized = vec![None; material.parts.len()];
-    let (first_name, _) = &material.parts[0];
-    if resource(catalog, first_name).is_none() { return Err(format!("material references missing resource {first_name}")); }
-    realized[0] = Some(structure.add_unit(StructuralUnit::new(first_name.clone(), Placement { x: element.placement.x, y: element.placement.y, rotation_radians: 0.0 })));
-
-    while realized.iter().any(Option::is_none) {
-        let mut progress = false;
-        for part in 0..material.parts.len() {
-            if realized[part].is_some() { continue; }
-            let Some(neighbor) = adjacent_realized(material, part, &realized).into_iter().next() else { continue; };
-            let (name, _) = &material.parts[part];
-            if let Some(index) = try_place_and_connect(structure, neighbor, name, element.placement.x, element.placement.y, catalog) {
-                realized[part] = Some(index);
-                progress = true;
-            }
-        }
-        if !progress { return Err("construction could not realize the material relationship graph".into()); }
-    }
-
-    // Any relationship not used to introduce a constituent is a cycle closure.
-    // Existing geometry remains fixed; construction never globally optimizes it.
-    for relationship in &material.internal_bonds {
-        let a = realized[relationship.part_a].ok_or_else(|| "missing realized constituent".to_string())?;
-        let b = realized[relationship.part_b].ok_or_else(|| "missing realized constituent".to_string())?;
-        if already_related(structure, a, b) { continue; }
-        if connect_units(structure, a, b, catalog).is_none() { return Err("material relationship could not be physically realized".into()); }
-    }
-
-    Ok(realized.into_iter().map(|index| index.expect("all constituents realized")).collect())
-}
+const CONTACT_EPSILON:f64=1e-9;
+fn resource<'a>(catalog:&'a[BaseResource],name:&str)->Option<&'a BaseResource>{catalog.iter().find(|r|r.name==name)}
+fn endpoint_prototypes(unit:&StructuralUnit,catalog:&[BaseResource])->Vec<ConnectionEndpoint>{match unit.connection_sites(catalog){Some(ConnectionSites::Corners(points))=>(0..points.len()).map(|i|ConnectionEndpoint::Corner{point_index:i}).collect(),Some(ConnectionSites::Circumference{..})=>vec![ConnectionEndpoint::Boundary{angle_radians:0.0}],Some(ConnectionSites::Undetermined)=>{let radius=unit.shape(catalog).map(|s|s.form.bounding_radius()).unwrap_or(0.0);vec![ConnectionEndpoint::Fluid{x:radius,y:0.0}]},None=>Vec::new()}}
+fn placement_candidates_for_new(neighbor:&StructuralUnit,neighbor_endpoint:ConnectionEndpoint,resource:&BaseResource,desired_x:f64,desired_y:f64,catalog:&[BaseResource])->Option<Vec<Placement>>{let target=neighbor_endpoint.world_point(neighbor,catalog)?;let temp=StructuralUnit::new(resource.name.clone(),Placement{x:desired_x,y:desired_y,rotation_radians:0.0});let mut out=Vec::new();for endpoint in endpoint_prototypes(&temp,catalog){match endpoint{ConnectionEndpoint::Corner{point_index}=>{let ConnectionSites::Corners(points)=temp.connection_sites(catalog)? else{continue};let p=*points.get(point_index)?;let rotation=(-target.normal_y).atan2(-target.normal_x)-p.direction_radians;let(s,c)=rotation.sin_cos();out.push(Placement{x:target.x-(p.x*c-p.y*s),y:target.y-(p.x*s+p.y*c),rotation_radians:rotation});},ConnectionEndpoint::Boundary{..}|ConnectionEndpoint::Fluid{..}=>{let radius=resource.shape.form.bounding_radius();let dx=target.x-desired_x;let dy=target.y-desired_y;let distance=dx.hypot(dy);let(ux,uy)=if distance>CONTACT_EPSILON{(dx/distance,dy/distance)}else{(1.0,0.0)};out.push(Placement{x:target.x-ux*radius,y:target.y-uy*radius,rotation_radians:0.0});}}}Some(out)}
+fn connect_units(structure:&mut OrganismStructure,a:usize,b:usize,catalog:&[BaseResource])->Option<f64>{let candidates=connection_pair_candidates(structure,a,b,catalog);let id_a=structure.physical_id(a)?;let id_b=structure.physical_id(b)?;let pa=structure.units.get(a)?.properties(catalog)?;let pb=structure.units.get(b)?.properties(catalog)?;for candidate in candidates{if candidate.distance>CONTACT_EPSILON{continue}let evaluation=crate::combine::evaluate_formation(candidate,pa.cohesion,pb.cohesion);let(_,work,_)=crate::combine::required_investment(pa,pb,evaluation,0.0).ok()?;let strength=crate::combine::bond_strength(pa,pb);if !strength.is_finite()||!(0.0..=1.0).contains(&strength){continue}let bond=Bond{endpoint_a:BondEndpoint::new(id_a,candidate.endpoint_a),endpoint_b:BondEndpoint::new(id_b,candidate.endpoint_b),strength,bond_energy:0.0};let mut trial=structure.clone();if try_add_bond(&mut trial,bond,catalog).is_ok(){*structure=trial;return Some(work)}}None}
+fn adjacent_realized(material:&Material,part:usize,realized:&[Option<usize>])->Vec<usize>{material.internal_bonds.iter().filter_map(|bond|{let other=if bond.part_a==part{bond.part_b}else if bond.part_b==part{bond.part_a}else{return None};realized.get(other).and_then(|index|*index)}).collect()}
+fn try_place_and_connect(structure:&mut OrganismStructure,neighbor_index:usize,name:&str,desired_x:f64,desired_y:f64,catalog:&[BaseResource])->Option<usize>{let neighbor=structure.units.get(neighbor_index)?.clone();let base=resource(catalog,name)?;for neighbor_endpoint in endpoint_prototypes(&neighbor,catalog){let Some(placements)=placement_candidates_for_new(&neighbor,neighbor_endpoint,base,desired_x,desired_y,catalog)else{continue};for placement in placements{let new_index=structure.add_unit(StructuralUnit::new(name.to_owned(),placement));if connect_units(structure,neighbor_index,new_index,catalog).is_some(){return Some(new_index)}structure.units.pop();}}None}
+fn already_related(structure:&OrganismStructure,a:usize,b:usize)->bool{let Some(id_a)=structure.physical_id(a)else{return false};let Some(id_b)=structure.physical_id(b)else{return false};structure.bonds.iter().any(|bond|(bond.endpoint_a.constituent_id==id_a&&bond.endpoint_b.constituent_id==id_b)||(bond.endpoint_a.constituent_id==id_b&&bond.endpoint_b.constituent_id==id_a))}
+/// Expand construction-intent material into individual physical constituents. The first constituent is only an algorithmic seed; every subsequent placement is first-fit.
+pub(crate)fn realize_material(structure:&mut OrganismStructure,element:&BlueprintElement,catalog:&[BaseResource])->Result<Vec<usize>,String>{let material=&element.material;if !material.is_valid()||material.parts.is_empty(){return Err("invalid material intent".into())}if material.parts.iter().any(|(_,amount)|(*amount-1.0).abs()>f64::EPSILON){return Err("physical construction requires one unit per material constituent".into())}if material.parts.len()>1&&!material.has_internal_structure(){return Err("multi-constituent material requires construction relationships".into())}if material.internal_bonds.iter().any(|b|b.part_a>=material.parts.len()||b.part_b>=material.parts.len()||b.part_a==b.part_b){return Err("material contains an invalid construction relationship".into())}let mut realized=vec![None;material.parts.len()];let(first_name,_)=&material.parts[0];if resource(catalog,first_name).is_none(){return Err(format!("material references missing resource {first_name}"))}realized[0]=Some(structure.add_unit(StructuralUnit::new(first_name.clone(),Placement{x:element.placement.x,y:element.placement.y,rotation_radians:0.0})));while realized.iter().any(Option::is_none){let mut progress=false;for part in 0..material.parts.len(){if realized[part].is_some(){continue}let Some(neighbor)=adjacent_realized(material,part,&realized).into_iter().next()else{continue};let(name,_)=&material.parts[part];if let Some(index)=try_place_and_connect(structure,neighbor,name,element.placement.x,element.placement.y,catalog){realized[part]=Some(index);progress=true}}if !progress{return Err("construction could not realize the material relationship graph".into())}}for relationship in &material.internal_bonds{let a=realized[relationship.part_a].ok_or_else(||"missing realized constituent".to_string())?;let b=realized[relationship.part_b].ok_or_else(||"missing realized constituent".to_string())?;if already_related(structure,a,b){continue}if connect_units(structure,a,b,catalog).is_none(){return Err("material relationship could not be physically realized".into())}}Ok(realized.into_iter().map(|index|index.expect("all constituents realized")).collect())}
