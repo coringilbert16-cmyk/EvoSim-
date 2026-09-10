@@ -1,0 +1,45 @@
+name: Fix orientation compile
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Fix candidate solver signature
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/construction_realization.rs')
+          s = p.read_text()
+          old = 'fn candidate_placements_for_targets(resource:&BaseResource,targets:&[ContactTarget],s:&OrganismStructure,anchor:Placement,c:&[BaseResource])->Vec<Placement>'
+          new = 'fn candidate_placements_for_targets(resource:&BaseResource,targets:&[ContactTarget],s:&OrganismStructure,anchor:Placement,fixed_rotation:f64,c:&[BaseResource])->Vec<Placement>'
+          if s.count(old) == 1:
+              s = s.replace(old, new)
+          elif s.count(new) == 1:
+              pass
+          else:
+              raise SystemExit(f'candidate signature state unexpected: old={s.count(old)} new={s.count(new)}')
+          p.write_text(s)
+          PY
+          cargo fmt --all
+      - name: Run Rust tests
+        run: cargo test --all-targets
+      - name: Run Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings -A dead_code -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of
+      - name: Persist fix and remove temporary workflow
+        if: success()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/construction_realization.rs
+          git rm .github/workflows/fix-orientation-compile.yml
+          git commit -m 'Fix construction candidate rotation parameter'
+          git push
