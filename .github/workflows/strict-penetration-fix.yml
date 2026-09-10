@@ -1,0 +1,32 @@
+name: Apply strict penetration fix
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  fix:
+    if: contains(github.event.head_commit.message, 'TEMP: trigger strict penetration fix')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replace inclusive contact check with strict penetration check
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/structural_blueprint.rs')
+          s = p.read_text()
+          old = 'crate::material_geometry::placed_forms_overlap(&pa, &pb, 0.0)'
+          new = 'crate::material_geometry::placed_forms_penetrate(&pa, &pb, 0.0)'
+          if s.count(old) != 1:
+              raise SystemExit(f'expected exactly one orientation overlap check, found {s.count(old)}')
+          p.write_text(s.replace(old, new))
+          PY
+      - name: Commit source change and remove temporary workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/structural_blueprint.rs
+          git rm .github/workflows/strict-penetration-fix.yml
+          git commit -m 'Use strict penetration for blueprint orientation validation'
+          git push
