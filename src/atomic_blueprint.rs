@@ -101,7 +101,6 @@ impl AtomicBlueprint {
         let mut ids = Vec::with_capacity(self.atoms.len());
 
         for atom in &self.atoms {
-            let (sin_local, cos_local) = atom.transform.rotation_radians.sin_cos();
             let placement = Placement {
                 x: self.anchor.x + atom.transform.x * cos_anchor - atom.transform.y * sin_anchor,
                 y: self.anchor.y + atom.transform.x * sin_anchor + atom.transform.y * cos_anchor,
@@ -111,10 +110,6 @@ impl AtomicBlueprint {
             if !unit.realize_default_geometry(catalog) {
                 return Err(format!("atomic blueprint references invalid resource {}", atom.resource));
             }
-            // Keep the local sine/cosine calculation explicit here: orientation
-            // is part of the authored transform even when the resource geometry
-            // is rotationally symmetric.
-            let _ = (sin_local, cos_local);
             ids.push(structure.add_unit(unit));
         }
 
@@ -189,6 +184,23 @@ mod tests {
         assert!((structure.units[0].placement.x - 10.0).abs() < 1e-9);
         assert!((structure.units[0].placement.y - 22.0).abs() < 1e-9);
         assert!((structure.units[0].placement.rotation_radians - (std::f64::consts::FRAC_PI_2 + 0.25)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn atomic_realization_fulfills_the_prescribed_endpoint_identity() {
+        let radius = crate::resources::default_catalog().into_iter().find(|r| r.name == "Carbon").unwrap().shape.form.bounding_radius();
+        let blueprint = AtomicBlueprint {
+            anchor: BlueprintTransform { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+            atoms: vec![carbon(0.0), carbon(2.0 * radius)], core_atoms: vec![0],
+            bonds: vec![BlueprintBond { atom_a: 0, endpoint_a: ConnectionEndpoint::Corner { point_index: 0 }, atom_b: 1, endpoint_b: ConnectionEndpoint::Corner { point_index: 3 }, required_bonds: 1 }],
+        };
+        let structure = blueprint.realize(&crate::resources::default_catalog()).unwrap();
+        assert_eq!(structure.units.len(), 2);
+        assert_eq!(structure.bonds.len(), 1);
+        assert_eq!(structure.bonds[0].endpoint_a.constituent_id, structure.physical_id(0).unwrap());
+        assert_eq!(structure.bonds[0].endpoint_b.constituent_id, structure.physical_id(1).unwrap());
+        assert_eq!(structure.bonds[0].endpoint_a.location, ConnectionEndpoint::Corner { point_index: 0 });
+        assert_eq!(structure.bonds[0].endpoint_b.location, ConnectionEndpoint::Corner { point_index: 3 });
     }
 
     #[test]
