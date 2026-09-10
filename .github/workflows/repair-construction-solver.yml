@@ -1,0 +1,32 @@
+name: Repair construction solver
+on:
+  push:
+    paths:
+      - '.github/workflows/repair-construction-solver.yml'
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply fixed-orientation solver candidate
+        run: |
+          git checkout 7268774304946d49612fe5ef3f48cf758f0f0540 -- src/construction_realization.rs
+          sed -i 's/y: wa\.1 - rotated\.1,/y: wa.1 - rotated_a.1,/' src/construction_realization.rs
+          cargo fmt --all
+      - name: Run focused construction tests
+        run: cargo test --all-targets construction_realization::tests simulation_tests::integration_tests::fresh_organism_is_realized_from_its_genome_blueprint simulation_tests::integration_tests::juvenile_reaches_adulthood_at_ninety_percent_of_mature_blueprint_size simulation_tests::integration_tests::storage_preserves_a_compound_as_one_intact_object simulation_tests::integration_tests::structural_material_is_not_opened_by_storage
+      - name: Run full tests
+        run: cargo test --all-targets
+      - name: Commit repaired solver and remove temporary workflow
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/construction_realization.rs
+          git rm .github/workflows/repair-construction-solver.yml
+          git commit -m 'Fix blueprint material construction realization'
+          git push
