@@ -1,9 +1,8 @@
 //! Inherited structural blueprint.
 //!
-//! A blueprint specifies material intent and which material elements should
-//! physically attach. It never owns the resulting constituent geometry or
-//! bonds; construction solves those physical details and the structure graph
-//! becomes the authority for the realization.
+//! The genome specifies material composition, element frames, and which
+//! elements should connect. Physical constituent geometry and bonds are
+//! realized by the construction/contact systems and become the authority.
 
 use crate::resources::{BaseResource, InternalBond, Material};
 use crate::structure::{Bond, BondEndpoint, OrganismStructure};
@@ -33,7 +32,7 @@ pub struct StructuralBlueprint {
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct BlueprintElement {
     pub material: Material,
-    /// Desired rigid spatial frame for this blueprint element.
+    /// The rigid spatial frame in which this material is realized.
     pub placement: BlueprintPlacement,
 }
 
@@ -131,7 +130,7 @@ impl StructuralBlueprint {
         connections
             .into_iter()
             .map(BlueprintConnection::canonical)
-            .filter(|c| seen.insert((c.element_a, c.element_b)))
+            .filter(|connection| seen.insert((connection.element_a, connection.element_b)))
             .collect()
     }
 
@@ -159,14 +158,16 @@ impl StructuralBlueprint {
         }
 
         let mut connection_seen = HashSet::new();
-        for (i, e) in self.elements.iter().enumerate() {
-            e.validate()
-                .map_err(|error| format!("element {i}: {error}"))?;
+        for (index, element) in self.elements.iter().enumerate() {
+            element
+                .validate()
+                .map_err(|error| format!("element {index}: {error}"))?;
         }
-        for (i, c) in self.connections.iter().enumerate() {
-            c.validate(self)
-                .map_err(|error| format!("connection {i}: {error}"))?;
-            if !connection_seen.insert((c.element_a, c.element_b)) {
+        for (index, connection) in self.connections.iter().enumerate() {
+            connection
+                .validate(self)
+                .map_err(|error| format!("connection {index}: {error}"))?;
+            if !connection_seen.insert((connection.element_a, connection.element_b)) {
                 return Err("blueprint contains duplicate connections".into());
             }
         }
@@ -181,139 +182,33 @@ impl StructuralBlueprint {
 
     pub fn realize(&self, catalog: &[BaseResource]) -> Result<OrganismStructure, String> {
         self.validate()?;
+
         let mut structure = OrganismStructure::new();
         let mut realized = HashMap::<usize, Vec<usize>>::new();
-        let first = self
-            .elements
-            .first()
-            .ok_or_else(|| "blueprint has no elements".to_string())?;
-        let first_ids = crate::construction_realization::realize_material(
-            &mut structure,
-            first,
-            catalog,
-        )?;
-        apply_blueprint_orientation(
-            &mut structure,
-            &first_ids,
-            first.placement,
-            &[],
-            catalog,
-        )?;
-        realized.insert(0, first_ids);
 
-        let mut attempted = vec![false; self.elements.len()];
-        attempted[0] = true;
-        loop {
-            let mut best = None;
-            let mut best_neighbors = 0usize;
-            for index in 1..self.elements.len() {
-                if attempted[index] {
-                    continue;
-                }
-                let neighbors = self
-                    .connections
-                    .iter()
-                    .filter_map(|connection| {
-                        let neighbor = if connection.element_a == index {
-                            connection.element_b
-                        } else if connection.element_b == index {
-                            connection.element_a
-                        } else {
-                            return None;
-                        };
-                        realized.contains_key(&neighbor).then_some(neighbor)
-                    })
-                    .collect::<HashSet<_>>();
-                if neighbors.len() > best_neighbors {
-                    best_neighbors = neighbors.len();
-                    best = Some(index);
-                }
-            }
-
-            let Some(index) = best else {
-                break;
-            };
-            attempted[index] = true;
-
-            let neighbor_targets = self
-                .connections
-                .iter()
-                .filter_map(|connection| {
-                    let neighbor = if connection.element_a == index {
-                        connection.element_b
-                    } else if connection.element_b == index {
-                        connection.element_a
-                    } else {
-                        return None;
-                    };
-                    realized.get(&neighbor).cloned()
-                })
-                .collect::<Vec<_>>();
-            if neighbor_targets.is_empty() {
-                continue;
-            }
-
-            let before = structure.clone();
-            match crate::construction_realization::realize_material_with_constraints(
+        // Each material is constructed independently inside its authored rigid
+        // frame. Blueprint connections are graph-level intent and are resolved
+        // only after every physical element exists.
+        for (index, element) in self.elements.iter().enumerate() {
+            let ids = crate::construction_realization::realize_material(
                 &mut structure,
-                &self.elements[index],
+                element,
                 catalog,
-                &neighbor_targets,
-            ) {
-                Ok(ids) => match apply_blueprint_orientation(
-                    &mut structure,
-                    &ids,
-                    self.elements[index].placement,
-                    &neighbor_targets,
-                    catalog,
-                ) {
-                    Ok(()) => {
-                        realized.insert(index, ids);
-                    }
-                    Err(error) => {
-                        structure = before;
-                        #[cfg(test)]
-                        eprintln!(
-                            "BLUEPRINT ELEMENT ORIENTATION FAILURE index={index} realized_neighbors={best_neighbors} error={error}"
-                        );
-                    }
-                },
-                Err(error) => {
-                    #[cfg(test)]
-                    eprintln!(
-                        "BLUEPRINT ELEMENT FAILURE index={index} realized_neighbors={best_neighbors} error={error}"
-                    );
-                }
-            }
+            )?;
+            apply_blueprint_orientation(&structure, &ids, element.placement, catalog)?;
+            realized.insert(index, ids);
         }
 
         for connection in &self.connections {
-            if !realized.contains_key(&connection.element_a)
-                || !realized.contains_key(&connection.element_b)
-            {
-                continue;
-            }
-            if let Err(error) = realize_connection_groups(
-                &mut structure,
-                &realized,
-                *connection,
-                catalog,
-            ) {
-                #[cfg(test)]
-                eprintln!(
-                    "BLUEPRINT CONNECTION FAILURE a={} b={} error={}",
-                    connection.element_a, connection.element_b, error
-                );
-            }
+            realize_connection_groups(&mut structure, &realized, *connection, catalog)
+                .map_err(|error| {
+                    format!(
+                        "blueprint connection {}-{} failed: {error}",
+                        connection.element_a, connection.element_b
+                    )
+                })?;
         }
-        #[cfg(test)]
-        eprintln!(
-            "BLUEPRINT SUMMARY elements={} realized_elements={} units={} bonds={}",
-            self.elements.len(),
-            realized.len(),
-            structure.units.len(),
-            structure.bonds.len()
-        );
+
         Ok(structure)
     }
 
@@ -380,68 +275,39 @@ impl StructuralBlueprint {
 }
 
 fn apply_blueprint_orientation(
-    structure: &mut OrganismStructure,
+    structure: &OrganismStructure,
     ids: &[usize],
     placement: BlueprintPlacement,
-    neighbor_groups: &[Vec<usize>],
     catalog: &[BaseResource],
 ) -> Result<(), String> {
-    let angle = placement.rotation_radians;
-
     for &id in ids {
         let unit = structure
             .units
             .get(id)
             .ok_or_else(|| "orientation references a missing constituent".to_string())?;
-        if (unit.placement.rotation_radians - angle).abs() > 1e-12 {
+        if (unit.placement.rotation_radians - placement.rotation_radians).abs() > 1e-12 {
             return Err("realized material does not preserve the prescribed element frame".into());
         }
-    }
 
-    for &id in ids {
-        for other in structure
-            .units
-            .iter()
-            .enumerate()
-            .filter_map(|(i, _)| (!ids.contains(&i)).then_some(i))
-        {
-            let Some(a) = structure.units.get(id) else {
+        for (other_index, other) in structure.units.iter().enumerate() {
+            if ids.contains(&other_index) {
                 continue;
-            };
-            let Some(b) = structure.units.get(other) else {
-                continue;
-            };
-            let Some(sa) = a.shape(catalog) else {
-                continue;
-            };
-            let Some(sb) = b.shape(catalog) else {
-                continue;
-            };
+            }
+            let Some(a) = unit.shape(catalog) else { continue };
+            let Some(b) = other.shape(catalog) else { continue };
             let pa = crate::material_geometry::PlacedMaterialPart {
                 part_index: id,
-                form: sa.form.clone(),
-                placement: a.placement,
+                form: a.form.clone(),
+                placement: unit.placement,
             };
             let pb = crate::material_geometry::PlacedMaterialPart {
-                part_index: other,
-                form: sb.form.clone(),
-                placement: b.placement,
+                part_index: other_index,
+                form: b.form.clone(),
+                placement: other.placement,
             };
             if crate::material_geometry::placed_forms_penetrate(&pa, &pb, 0.0) {
                 return Err("realized material penetrates existing physical structure".into());
             }
-        }
-    }
-
-    for group in neighbor_groups {
-        if !ids.iter().any(|&a| {
-            group.iter().any(|&b| {
-                crate::contact::connection_pair_candidates(structure, a, b, catalog)
-                    .iter()
-                    .any(|candidate| candidate.distance <= 1e-9)
-            })
-        }) {
-            return Err("realized material no longer has a physical contact with a prescribed neighbor".into());
         }
     }
     Ok(())
@@ -459,6 +325,7 @@ pub(crate) fn realize_connection_groups(
     let b = realized
         .get(&connection.element_b)
         .ok_or_else(|| "missing realized second blueprint element".to_string())?;
+
     for &ua in a {
         for &ub in b {
             let Some(pa) = structure.units.get(ua).and_then(|unit| unit.properties(catalog)) else {
@@ -467,25 +334,34 @@ pub(crate) fn realize_connection_groups(
             let Some(pb) = structure.units.get(ub).and_then(|unit| unit.properties(catalog)) else {
                 continue;
             };
+
             let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-            let candidates = crate::contact::connection_pair_candidates_cached(
-                structure, ua, ub, catalog, &mut cache,
+            let mut candidates = crate::contact::connection_pair_candidates_cached(
+                structure,
+                ua,
+                ub,
+                catalog,
+                &mut cache,
             );
+            candidates.sort_by(|left, right| {
+                left.distance
+                    .total_cmp(&right.distance)
+                    .then_with(|| right.facing.total_cmp(&left.facing))
+            });
+
             let id_a = structure
                 .physical_id(ua)
                 .ok_or_else(|| "missing first physical constituent".to_string())?;
             let id_b = structure
                 .physical_id(ub)
                 .ok_or_else(|| "missing second physical constituent".to_string())?;
+
             for candidate in candidates {
                 if candidate.distance > 1e-9 {
                     continue;
                 }
-                let evaluation = crate::combine::evaluate_formation(
-                    candidate,
-                    pa.cohesion,
-                    pb.cohesion,
-                );
+                let evaluation =
+                    crate::combine::evaluate_formation(candidate, pa.cohesion, pb.cohesion);
                 let (_, work, _) = crate::combine::required_investment(
                     pa,
                     pb,
@@ -503,6 +379,13 @@ pub(crate) fn realize_connection_groups(
                     strength,
                     bond_energy: 0.0,
                 };
+                if structure
+                    .bonds
+                    .iter()
+                    .any(|existing| existing.has_same_identity(&bond))
+                {
+                    continue;
+                }
                 let mut trial = structure.clone();
                 if crate::contact::try_add_bond(&mut trial, bond, catalog).is_ok() {
                     *structure = trial;
@@ -511,6 +394,7 @@ pub(crate) fn realize_connection_groups(
             }
         }
     }
+
     Err("no physically admissible endpoint pair for blueprint connection".into())
 }
 
@@ -519,11 +403,11 @@ impl BlueprintElement {
         if !self.material.is_valid() {
             return Err("material is invalid".into());
         }
-        if !self.placement.x.is_finite() || !self.placement.y.is_finite() {
-            return Err("blueprint construction location must be finite".into());
-        }
-        if !self.placement.rotation_radians.is_finite() {
-            return Err("blueprint orientation must be finite".into());
+        if !self.placement.x.is_finite()
+            || !self.placement.y.is_finite()
+            || !self.placement.rotation_radians.is_finite()
+        {
+            return Err("placement must be finite".into());
         }
         if self
             .material
