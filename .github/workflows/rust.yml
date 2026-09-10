@@ -29,9 +29,7 @@ jobs:
 
           # Numerical boundary contacts are not penetration.
           p = Path('src/material_geometry.rs')
-          s = p.read_text()
           replace_once('src/material_geometry.rs', 'if center_distance >= a.form.bounding_radius() + b.form.bounding_radius() + tolerance {', 'if center_distance >= a.form.bounding_radius() + b.form.bounding_radius() + tolerance + 1e-12 {')
-          s = p.read_text()
           replace_once('src/material_geometry.rs', 'center_distance < ar + br - tolerance', 'center_distance < ar + br - tolerance - 1e-12')
           replace_once('src/material_geometry.rs', '< (radius - tolerance).max(0.0)', '< (radius - tolerance - 1e-12).max(0.0)')
           replace_once('src/material_geometry.rs', 'a_max - tolerance <= b_min', 'a_max - tolerance - 1e-12 <= b_min')
@@ -53,7 +51,10 @@ jobs:
               raise SystemExit('construction: candidate anchor tail not found exactly once')
           s = s.replace(anchor_tail, fixed_candidates + 'out.retain(|p|(p.rotation_radians-fixed_rotation).abs()<=1e-10);add_unique_placement(&mut out,Placement{rotation_radians:fixed_rotation,..anchor});out}', 1)
           replace_once('src/construction_realization.rs', 'let anchor=Placement{x:e.placement.x,y:e.placement.y,rotation_radians:0.0};', 'let anchor=Placement{x:e.placement.x,y:e.placement.y,rotation_radians:e.placement.rotation_radians};')
-          replace_once('src/construction_realization.rs', 'candidate_placements_for_targets(res,&targets,&working,anchor,c)', 'candidate_placements_for_targets(res,&targets,&working,anchor,e.placement.rotation_radians,c)')
+          replace_once('src/construction_realization.rs', 'fn search(base:&OrganismStructure,m:&Material,anchor:Placement,placements:&mut[Option<Placement>],assigned:&mut[Option<usize>],external:&[Vec<usize>],c:&[BaseResource])->bool{', 'fn search(base:&OrganismStructure,m:&Material,anchor:Placement,fixed_rotation:f64,placements:&mut[Option<Placement>],assigned:&mut[Option<usize>],external:&[Vec<usize>],c:&[BaseResource])->bool{')
+          replace_once('src/construction_realization.rs', 'candidate_placements_for_targets(res,&targets,&working,anchor,c)', 'candidate_placements_for_targets(res,&targets,&working,anchor,fixed_rotation,c)')
+          replace_once('src/construction_realization.rs', 'if search(base,m,anchor,placements,assigned,external,c){return true}', 'if search(base,m,anchor,fixed_rotation,placements,assigned,external,c){return true}')
+          replace_once('src/construction_realization.rs', 'if !search(s,m,anchor,&mut placements,&mut assigned,external,c){', 'if !search(s,m,anchor,e.placement.rotation_radians,&mut placements,&mut assigned,external,c){')
 
           # Structure validation uses strict penetration, never inclusive contact.
           replace_once('src/structure.rs', 'if !crate::material_geometry::placed_forms_overlap(&pa,&pb,0.0){return false}let dx=b.placement.x-a.placement.x;let dy=b.placement.y-a.placement.y;let distance=dx.hypot(dy);let(sx,sy)=if distance>1e-12{(dx/distance,dy/distance)}else{(1.0,0.0)};let scale=pa.form.bounding_radius().max(pb.form.bounding_radius()).max(1.0);let epsilon=1e-8*scale;let shifted=crate::material_geometry::PlacedMaterialPart{part_index:0,form:pa.form.clone(),placement:Placement{x:a.placement.x-sx*epsilon,y:a.placement.y-sy*epsilon,rotation_radians:a.placement.rotation_radians}};crate::material_geometry::placed_forms_overlap(&shifted,&pb,0.0)', 'crate::material_geometry::placed_forms_penetrate(&pa,&pb,0.0)')
@@ -106,6 +107,9 @@ jobs:
               branches: [main]
             pull_request:
               branches: [main]
+
+          permissions:
+            contents: write
 
           jobs:
             test:
