@@ -19,7 +19,12 @@ jobs:
           sed -i 's/y: wa\.1 - rotated\.1,/y: wa.1 - rotated_a.1,/' src/construction_realization.rs
           cargo fmt --all
       - name: Run focused construction tests
-        run: cargo test --all-targets construction_realization::tests simulation_tests::integration_tests::fresh_organism_is_realized_from_its_genome_blueprint simulation_tests::integration_tests::juvenile_reaches_adulthood_at_ninety_percent_of_mature_blueprint_size simulation_tests::integration_tests::storage_preserves_a_compound_as_one_intact_object simulation_tests::integration_tests::structural_material_is_not_opened_by_storage
+        run: |
+          cargo test --all-targets construction_realization::tests
+          cargo test --all-targets fresh_organism_is_realized_from_its_genome_blueprint
+          cargo test --all-targets juvenile_reaches_adulthood_at_ninety_percent_of_mature_blueprint_size
+          cargo test --all-targets storage_preserves_a_compound_as_one_intact_object
+          cargo test --all-targets structural_material_is_not_opened_by_storage
       - name: Run full tests
         run: cargo test --all-targets
       - name: Commit repaired solver and remove temporary workflow
