@@ -27,6 +27,7 @@ mod resource_visualization;
 mod resources;
 mod structural_blueprint;
 mod structure;
+mod surface_geometry;
 
 mod memory;
 mod movement;
