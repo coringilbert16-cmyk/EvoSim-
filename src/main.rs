@@ -26,6 +26,7 @@ mod permeability;
 mod reproduction;
 mod resource_visualization;
 mod resources;
+mod seed_legacy_realization;
 mod structural_blueprint;
 mod structure;
 mod surface_geometry;
