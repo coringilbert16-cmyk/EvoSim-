@@ -1,5 +1,6 @@
 //! Inherited structural blueprint.
 
+use crate::connection_geometry::WorldConnectionPoint;
 use crate::resources::{BaseResource, InternalBond, Material};
 use crate::structure::{Bond, BondEndpoint, ConnectionEndpoint, OrganismStructure};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -134,7 +135,7 @@ fn align_group_for_connection(
     group: &[usize],
     moving_unit: usize,
     moving_endpoint: ConnectionEndpoint,
-    fixed_point: crate::structure::WorldConnectionPoint,
+    fixed_point: WorldConnectionPoint,
     catalog: &[BaseResource],
 ) -> bool {
     let Some(moving_point) = moving_endpoint.world_point(&structure.units[moving_unit], catalog) else { return false; };
