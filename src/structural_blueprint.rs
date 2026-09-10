@@ -89,8 +89,6 @@ impl StructuralBlueprint {
             if realized_connections.contains(&connection_index) { continue; }
             realize_connection_groups(&mut structure, &realized, *connection, catalog)
                 .map_err(|error| format!("blueprint connection {connection_index} failed: {error}"))?;
-            // The discovery set is bookkeeping for the two-phase algorithm;
-            // every successful blueprint connection belongs in the final set.
             realized_connections.insert(connection_index);
         }
         debug_assert_eq!(realized_connections.len(), self.connections.len());
@@ -133,6 +131,9 @@ pub(crate) fn realize_connection_groups(structure: &mut OrganismStructure, reali
         let id_a = structure.physical_id(ua).ok_or_else(|| "missing first physical constituent".to_string())?;
         let id_b = structure.physical_id(ub).ok_or_else(|| "missing second physical constituent".to_string())?;
         for candidate in candidates {
+            // A blueprint connection denotes a physical attachment, not an abstract long-range edge.
+            // The endpoint pair must already be in contact; realization may not bridge a gap.
+            if candidate.distance > 1e-9 { continue; }
             let evaluation = crate::combine::evaluate_formation(candidate, pa.cohesion, pb.cohesion);
             let (_, work, _) = crate::combine::required_investment(pa, pb, evaluation, 0.0).map_err(|error| format!("formation investment failed: {error:?}"))?;
             let strength = crate::combine::bond_strength(pa, pb);
