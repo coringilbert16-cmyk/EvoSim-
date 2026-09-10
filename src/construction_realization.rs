@@ -67,36 +67,13 @@ fn candidate_placements_for_targets(resource: &BaseResource, targets: &[ContactT
     let temp = StructuralUnit::new(resource.name.clone(), Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 });
     let endpoints = endpoint_prototypes(&temp, catalog);
     let mut out = Vec::new();
-
-    // A single target admits a continuous family of rigid placements. The
-    // blueprint position is the preferred center; choose the two orientations
-    // that put the contact endpoint on the target while minimizing displacement
-    // of that ideal position. This gives the material rotational freedom without
-    // introducing an arbitrary rotation sweep.
     for &target in targets {
         let Some(world_target) = target_world_point(structure, target, catalog) else { continue };
         for endpoint in &endpoints {
             let Some(local) = local_endpoint_point(resource, *endpoint, catalog) else { continue };
-            let radius = local.0.hypot(local.1);
-            if radius <= CONTACT_EPSILON {
-                add_unique_placement(&mut out, placement_for_point_contact(local, world_target, 0.0));
-                continue;
-            }
-            let desired_dx = world_target.0 - anchor.x;
-            let desired_dy = world_target.1 - anchor.y;
-            let desired_radius = desired_dx.hypot(desired_dy);
-            if desired_radius > CONTACT_EPSILON {
-                let target_angle = desired_dy.atan2(desired_dx);
-                let local_angle = local.1.atan2(local.0);
-                let rotation = target_angle - local_angle;
-                add_unique_placement(&mut out, Placement { x: anchor.x, y: anchor.y, rotation_radians: rotation });
-            }
-            // Exact contact is retained as a fallback. It may move the material
-            // away from its ideal blueprint location, but remains physically valid.
             add_unique_placement(&mut out, placement_for_point_contact(local, world_target, 0.0));
         }
     }
-
     if targets.len() >= 2 && endpoints.len() >= 2 {
         let local_points = endpoints.iter().filter_map(|e| local_endpoint_point(resource, *e, catalog)).collect::<Vec<_>>();
         for (ia, target_a) in targets.iter().enumerate() {
@@ -129,7 +106,6 @@ fn candidate_placements_for_targets(resource: &BaseResource, targets: &[ContactT
             }
         }
     }
-
     add_unique_placement(&mut out, anchor);
     out
 }
@@ -180,7 +156,7 @@ fn solve_material_placements(structure: &OrganismStructure, element: &BlueprintE
     fn search(base: &OrganismStructure, material: &Material, anchor: Placement, placements: &mut [Option<Placement>], assigned: &mut [Option<usize>], external: &[Vec<usize>], catalog: &[BaseResource]) -> bool {
         if assigned.iter().all(Option::is_some) { return true; }
         let Some(part) = choose_next_part(material, assigned) else { return false; };
-        let Some(res) = resource(catalog, &material.parts[part].0) else { return false; };
+        let Some(res) = resource(catalog, &material.parts[part].0) else { return false; }
         let mut working = base.clone(); let mut working_indices = vec![None; material.parts.len()];
         for i in 0..material.parts.len() {
             let Some(p) = placements[i] else { continue };
