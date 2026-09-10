@@ -318,6 +318,14 @@ impl Material {
     }
 
     pub fn take(&mut self, amount: f64) -> Option<Material> {
+        // A structured material is an indivisible physical object here. Splitting
+        // its scalar composition while cloning its internal bonds would duplicate
+        // physical relationships and invalidate constituent identity. Structural
+        // decomposition must go through the graph/decomposition path instead.
+        if self.has_internal_structure() {
+            return None;
+        }
+
         let total = self.total_amount();
         if amount <= 0.0 || total <= 0.0 {
             return None;
@@ -333,7 +341,7 @@ impl Material {
         self.parts.retain(|(_, q)| *q > 1e-12);
         Some(Material {
             parts,
-            internal_bonds: self.internal_bonds.clone(),
+            internal_bonds: Vec::new(),
         })
     }
 }
