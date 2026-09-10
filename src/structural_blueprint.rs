@@ -6,14 +6,19 @@
 //! becomes the authority for the realization.
 
 use crate::resources::{BaseResource, InternalBond, Material};
-use crate::structure::{Bond, BondEndpoint, OrganismStructure};
+use crate::structure::{Bond, BondEndpoint, OrganismStructure, Placement};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::{HashMap, HashSet};
 
 fn default_core_elements() -> Vec<usize> { vec![0] }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
-pub struct BlueprintPlacement { pub x: f64, pub y: f64 }
+pub struct BlueprintPlacement {
+    pub x: f64,
+    pub y: f64,
+    #[serde(default)]
+    pub rotation_radians: f64,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct StructuralBlueprint {
@@ -26,17 +31,37 @@ pub struct StructuralBlueprint {
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct BlueprintElement {
     pub material: Material,
-    /// Desired construction location. Physical orientation is not inherited.
+    /// Desired rigid spatial frame for this blueprint element.
     pub placement: BlueprintPlacement,
 }
 
 impl<'de> Deserialize<'de> for BlueprintElement {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
-        #[derive(Deserialize)] struct StoredPlacement { x: f64, y: f64, #[serde(default)] rotation_radians: Option<f64> }
-        #[derive(Deserialize)] struct Stored { material: Material, placement: StoredPlacement }
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct StoredPlacement {
+            x: f64,
+            y: f64,
+            #[serde(default)]
+            rotation_radians: Option<f64>,
+        }
+        #[derive(Deserialize)]
+        struct Stored {
+            material: Material,
+            placement: StoredPlacement,
+        }
         let stored = Stored::deserialize(deserializer)?;
-        let _ = stored.placement.rotation_radians;
-        Ok(Self { material: stored.material, placement: BlueprintPlacement { x: stored.placement.x, y: stored.placement.y } })
+        let rotation_radians = stored.placement.rotation_radians.unwrap_or(0.0);
+        Ok(Self {
+            material: stored.material,
+            placement: BlueprintPlacement {
+                x: stored.placement.x,
+                y: stored.placement.y,
+                rotation_radians,
+            },
+        })
     }
 }
 
@@ -176,6 +201,7 @@ impl BlueprintElement {
     pub fn validate(&self) -> Result<(), String> {
         if !self.material.is_valid() { return Err("material is invalid".into()); }
         if !self.placement.x.is_finite() || !self.placement.y.is_finite() { return Err("blueprint construction location must be finite".into()); }
+        if !self.placement.rotation_radians.is_finite() { return Err("blueprint orientation must be finite".into()); }
         if self.material.parts.iter().any(|(_, amount)| (*amount - 1.0).abs() > f64::EPSILON) { return Err("each blueprint constituent must represent exactly one material unit".into()); }
         if self.material.parts.len() == 1 && !self.material.has_internal_structure() { return Ok(()); }
         if !self.material.has_internal_structure() { return Err("multi-constituent structural material must have internal bonds".into()); }
