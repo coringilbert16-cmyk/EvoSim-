@@ -156,24 +156,39 @@ impl StructuralBlueprint {
         )?;
         realized.insert(0, first_ids);
 
-        // The blueprint is an ideal design, not a mandatory global placement
-        // solution. Each material is therefore attempted independently at its
-        // desired location. A material that cannot be physically constructed
-        // does not invalidate the rest of the organism.
+        // Each later element uses already-realized blueprint neighbors as soft
+        // physical targets. The construction solver may move or rotate the
+        // material away from its ideal placement when that produces a valid
+        // contact, but it may always fall back to the ideal placement.
         for (index, element) in self.elements.iter().enumerate().skip(1) {
-            if let Ok(ids) = crate::construction_realization::realize_material(
+            let neighbor_targets = self
+                .connections
+                .iter()
+                .filter_map(|connection| {
+                    let neighbor = if connection.element_a == index {
+                        connection.element_b
+                    } else if connection.element_b == index {
+                        connection.element_a
+                    } else {
+                        return None;
+                    };
+                    realized.get(&neighbor).cloned()
+                })
+                .collect::<Vec<_>>();
+
+            if let Ok(ids) = crate::construction_realization::realize_material_with_constraints(
                 &mut structure,
                 element,
                 catalog,
+                &neighbor_targets,
             ) {
                 realized.insert(index, ids);
             }
         }
 
-        // Blueprint connections are also soft goals. Only physically
-        // admissible contacts become bonds; an unrealized element or an
-        // unachievable ideal connection is simply absent from the physical
-        // organism.
+        // Blueprint connections remain soft goals. Only physically admissible
+        // contacts become bonds; an unrealized element or an unachievable ideal
+        // connection is simply absent from the physical organism.
         for connection in &self.connections {
             if !realized.contains_key(&connection.element_a)
                 || !realized.contains_key(&connection.element_b)
