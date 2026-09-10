@@ -377,7 +377,11 @@ fn partial_configuration_valid(
     true
 }
 
-fn choose_next_part(material: &Material, assigned: &[Option<usize>]) -> Option<usize> {
+fn choose_next_part(
+    material: &Material,
+    assigned: &[Option<usize>],
+    external_constraints: &[Vec<usize>],
+) -> Option<usize> {
     let mut best = None;
     let mut best_score = i32::MIN;
     for part in 0..material.parts.len() {
@@ -392,7 +396,12 @@ fn choose_next_part(material: &Material, assigned: &[Option<usize>]) -> Option<u
                     || (bond.part_b == part && assigned[bond.part_a].is_some())
             })
             .count() as i32;
-        let score = assigned_neighbors * 100 - part as i32;
+        let external_relevance = if external_constraints.is_empty() {
+            0
+        } else {
+            external_constraints.len() as i32
+        };
+        let score = assigned_neighbors * 100 + external_relevance - part as i32;
         if score > best_score {
             best_score = score;
             best = Some(part);
@@ -409,7 +418,7 @@ fn solve_material_placements(
 ) -> Result<Vec<Placement>, String> {
     let material = &element.material;
     let mut placements = vec![None; material.parts.len()];
-    let mut assigned = vec![false; material.parts.len()];
+    let mut assigned = vec![None; material.parts.len()];
     let anchor = Placement {
         x: element.placement.x,
         y: element.placement.y,
@@ -421,11 +430,11 @@ fn solve_material_placements(
         material: &Material,
         anchor: Placement,
         placements: &mut [Option<Placement>],
-        assigned: &mut [bool],
+        assigned: &mut [Option<usize>],
         external_constraints: &[Vec<usize>],
         catalog: &[BaseResource],
     ) -> bool {
-        if assigned.iter().all(|value| *value) {
+        if assigned.iter().all(Option::is_some) {
             let mut final_structure = base_structure.clone();
             let mut indices = Vec::with_capacity(material.parts.len());
             for i in 0..material.parts.len() {
@@ -450,28 +459,28 @@ fn solve_material_placements(
             for relationship in &material.internal_bonds {
                 let a = indices[relationship.part_a];
                 let b = indices[relationship.part_b];
-                if !internal_contact_exists(&final_structure, a, b, catalog) {
+                if connect_units(&mut final_structure, a, b, catalog).is_none() {
                     return false;
                 }
             }
             for constraint in external_constraints {
-                if !external_constraint_satisfied(
-                    &final_structure,
-                    &indices,
-                    constraint,
-                    catalog,
-                ) {
+                let mut connected = false;
+                'pair: for &a in &indices {
+                    for &b in constraint {
+                        if connect_units(&mut final_structure, a, b, catalog).is_some() {
+                            connected = true;
+                            break 'pair;
+                        }
+                    }
+                }
+                if !connected {
                     return false;
                 }
             }
             return true;
         }
 
-        let assigned_options = assigned
-            .iter()
-            .map(|value| if *value { Some(0usize) } else { None })
-            .collect::<Vec<_>>();
-        let Some(part) = choose_next_part(material, &assigned_options) else {
+        let Some(part) = choose_next_part(material, assigned, external_constraints) else {
             return false;
         };
         let name = &material.parts[part].0;
@@ -496,9 +505,9 @@ fn solve_material_placements(
             .internal_bonds
             .iter()
             .filter_map(|bond| {
-                if bond.part_a == part && assigned[bond.part_b] {
+                if bond.part_a == part && assigned[bond.part_b].is_some() {
                     working_indices[bond.part_b]
-                } else if bond.part_b == part && assigned[bond.part_a] {
+                } else if bond.part_b == part && assigned[bond.part_a].is_some() {
                     working_indices[bond.part_a]
                 } else {
                     None
@@ -512,11 +521,15 @@ fn solve_material_placements(
         target_units.dedup();
 
         let mut candidates = Vec::new();
-        if target_units.is_empty() && part == 0 {
+        if part == 0 {
+            // The blueprint fixes the anchor position, not orientation. Keep
+            // neutral orientation as a valid option and add contact-compatible
+            // rotations without ever moving the anchor.
             candidates.push(anchor);
-        } else {
+        }
+        if !target_units.is_empty() {
             let targets = contact_targets_for_unit(&working, &target_units, catalog);
-            candidates = candidate_placements_for_targets(
+            let mut contact_candidates = candidate_placements_for_targets(
                 base_resource,
                 &targets,
                 &working,
@@ -524,11 +537,12 @@ fn solve_material_placements(
                 catalog,
             );
             if part == 0 {
-                candidates.retain(|candidate| {
+                contact_candidates.retain(|candidate| {
                     (candidate.x - anchor.x).abs() <= 1e-7
                         && (candidate.y - anchor.y).abs() <= 1e-7
                 });
             }
+            candidates.extend(contact_candidates);
         }
 
         candidates.sort_by(|a, b| {
@@ -572,7 +586,7 @@ fn solve_material_placements(
             }
 
             placements[part] = Some(candidate);
-            assigned[part] = true;
+            assigned[part] = trial_indices[part];
             if search(
                 base_structure,
                 material,
@@ -584,7 +598,7 @@ fn solve_material_placements(
             ) {
                 return true;
             }
-            assigned[part] = false;
+            assigned[part] = None;
             placements[part] = None;
         }
         false
@@ -682,8 +696,8 @@ fn commit_material(
         }
     }
 
-    // Blueprint connections are physical bonds. Resolve every required external
-    // connection on the same trial graph so the whole material commit is atomic.
+    // Blueprint connections are physical bonds. Resolve all required external
+    // contacts on the same trial graph so this material commit is atomic.
     for constraint in external_constraints {
         let mut connected = false;
         'pair: for &a in &indices {
