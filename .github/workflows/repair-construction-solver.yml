@@ -21,10 +21,16 @@ jobs:
           from pathlib import Path
           p = Path('src/construction_realization.rs')
           s = p.read_text()
-          old = 'let candidates=candidate_placements_for_targets(res,&targets,&working,anchor,fixed_rotation,c);'
-          new = 'let candidates=if part==0{vec![Placement{x:anchor.x,y:anchor.y,rotation_radians:fixed_rotation}]}else{candidate_placements_for_targets(res,&targets,&working,anchor,fixed_rotation,c)};'
+          old = '''        for candidate in candidates {
+            let mut trial = base.clone();'''
+          new = '''        if part == 0 {
+            candidates.clear();
+            add_unique_placement(&mut candidates, anchor);
+        }
+        for candidate in candidates {
+            let mut trial = base.clone();'''
           if old not in s:
-              raise SystemExit('solver candidate line not found')
+              raise SystemExit('candidate loop not found')
           p.write_text(s.replace(old,new,1))
           PY
           cargo fmt --all
