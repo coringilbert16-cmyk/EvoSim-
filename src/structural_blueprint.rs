@@ -156,19 +156,22 @@ impl StructuralBlueprint {
         )?;
         realized.insert(0, first_ids);
 
-        // Construction follows the blueprint graph rather than the arbitrary
-        // numeric ordering of its elements. An element is attempted as soon as
-        // it has a realized neighbor, so its physical placement can use the
-        // actual frontier of the organism. Failed elements remain optional and
-        // may be retried after another neighbor becomes available.
+        // Construction follows the blueprint graph rather than arbitrary
+        // element numbering. At each step choose the unattempted element with
+        // the most already-realized neighbors, so the local solver gets as much
+        // real physical context as is available without introducing a global
+        // backtracking search. A failed element is not a fatal blueprint
+        // failure; the physical organism simply omits that ideal component.
+        let mut attempted = vec![false; self.elements.len()];
+        attempted[0] = true;
         loop {
-            let mut progress = false;
+            let mut best = None;
+            let mut best_neighbors = 0usize;
             for index in 1..self.elements.len() {
-                if realized.contains_key(&index) {
+                if attempted[index] {
                     continue;
                 }
-
-                let neighbor_targets = self
+                let neighbors = self
                     .connections
                     .iter()
                     .filter_map(|connection| {
@@ -179,28 +182,47 @@ impl StructuralBlueprint {
                         } else {
                             return None;
                         };
-                        realized.get(&neighbor).cloned()
+                        realized.contains_key(&neighbor).then_some(neighbor)
                     })
-                    .collect::<Vec<_>>();
-
-                if neighbor_targets.is_empty() {
-                    continue;
-                }
-
-                let element = &self.elements[index];
-                if let Ok(ids) = crate::construction_realization::realize_material_with_constraints(
-                    &mut structure,
-                    element,
-                    catalog,
-                    &neighbor_targets,
-                ) {
-                    realized.insert(index, ids);
-                    progress = true;
+                    .collect::<HashSet<_>>();
+                if neighbors.len() > best_neighbors {
+                    best_neighbors = neighbors.len();
+                    best = Some(index);
                 }
             }
 
-            if !progress {
+            let Some(index) = best else {
                 break;
+            };
+            attempted[index] = true;
+
+            let neighbor_targets = self
+                .connections
+                .iter()
+                .filter_map(|connection| {
+                    let neighbor = if connection.element_a == index {
+                        connection.element_b
+                    } else if connection.element_b == index {
+                        connection.element_a
+                    } else {
+                        return None;
+                    };
+                    realized.get(&neighbor).cloned()
+                })
+                .collect::<Vec<_>>();
+
+            if neighbor_targets.is_empty() {
+                continue;
+            }
+
+            let element = &self.elements[index];
+            if let Ok(ids) = crate::construction_realization::realize_material_with_constraints(
+                &mut structure,
+                element,
+                catalog,
+                &neighbor_targets,
+            ) {
+                realized.insert(index, ids);
             }
         }
 
