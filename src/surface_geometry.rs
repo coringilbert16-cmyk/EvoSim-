@@ -25,12 +25,32 @@ fn normalized(x: f64, y: f64) -> Option<(f64, f64)> {
     }
 }
 
-fn polygon_boundary_toward(vertices: &[(f64, f64)], target_x: f64, target_y: f64) -> Option<BoundaryPoint> {
+fn polygon_winding(vertices: &[(f64, f64)]) -> f64 {
+    vertices
+        .iter()
+        .enumerate()
+        .map(|(index, &(ax, ay))| {
+            let (bx, by) = vertices[(index + 1) % vertices.len()];
+            ax * by - ay * bx
+        })
+        .sum::<f64>()
+}
+
+fn polygon_boundary_toward(
+    vertices: &[(f64, f64)],
+    target_x: f64,
+    target_y: f64,
+) -> Option<BoundaryPoint> {
     if vertices.len() < 3 {
         return None;
     }
 
     let (ux, uy) = normalized(target_x, target_y)?;
+    let winding = polygon_winding(vertices);
+    if winding.abs() <= 1e-12 {
+        return None;
+    }
+
     let mut best: Option<(f64, BoundaryPoint)> = None;
 
     for index in 0..vertices.len() {
@@ -55,10 +75,12 @@ fn polygon_boundary_toward(vertices: &[(f64, f64)], target_x: f64, target_y: f64
             continue;
         }
 
-        // The catalog's polygon vertices are authored counter-clockwise.
-        // The outward normal of an edge is therefore its right-hand normal.
-        let nx = ey / edge_length;
-        let ny = -ex / edge_length;
+        // Right-hand normal is outward for counter-clockwise polygons; reverse
+        // it for clockwise authored polygons. Winding is geometry, not genome
+        // intent, so this does not impose an orientation on construction.
+        let winding_sign = winding.signum();
+        let nx = winding_sign * ey / edge_length;
+        let ny = -winding_sign * ex / edge_length;
         let point = BoundaryPoint {
             x: t * ux,
             y: t * uy,
@@ -82,7 +104,11 @@ fn polygon_boundary_toward(vertices: &[(f64, f64)], target_x: f64, target_y: f64
 /// The query is intentionally directional rather than socket-based. A caller
 /// may ask again with a different direction, allowing the same continuous
 /// boundary to accept arbitrarily many physically separated relationships.
-pub fn boundary_point_toward(shape: &Shape, target_x: f64, target_y: f64) -> Option<BoundaryPoint> {
+pub fn boundary_point_toward(
+    shape: &Shape,
+    target_x: f64,
+    target_y: f64,
+) -> Option<BoundaryPoint> {
     let form = &shape.form;
     match form {
         Form::Circle { radius } => {
@@ -94,9 +120,7 @@ pub fn boundary_point_toward(shape: &Shape, target_x: f64, target_y: f64) -> Opt
                 normal_y: uy,
             })
         }
-        Form::Rectangle { .. }
-        | Form::RegularPolygon { .. }
-        | Form::Polygon { .. } => {
+        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
             polygon_boundary_toward(form.polygon_vertices()?.as_slice(), target_x, target_y)
         }
         Form::Fluid { .. } => None,
@@ -108,7 +132,12 @@ pub fn boundary_point_toward(shape: &Shape, target_x: f64, target_y: f64) -> Opt
 ///
 /// This helper stays independent of `Form::Line` until that form is introduced
 /// into the immutable resource geometry model.
-pub fn segment_endpoints(x0: f64, y0: f64, x1: f64, y1: f64) -> Option<(BoundaryPoint, BoundaryPoint)> {
+pub fn segment_endpoints(
+    x0: f64,
+    y0: f64,
+    x1: f64,
+    y1: f64,
+) -> Option<(BoundaryPoint, BoundaryPoint)> {
     let dx = x1 - x0;
     let dy = y1 - y0;
     let (nx, ny) = normalized(dx, dy)?;
@@ -158,6 +187,18 @@ mod tests {
         let point = boundary_point_toward(&shape, 3.0, 1.0).unwrap();
         assert!((point.x - 1.0).abs() < 1e-12);
         assert!((point.y - (1.0 / 3.0)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn clockwise_polygon_still_produces_an_outward_normal() {
+        let shape = Shape {
+            form: Form::Polygon {
+                vertices: vec![(1.0, 2.0), (1.0, -2.0), (-1.0, -2.0), (-1.0, 2.0)],
+            },
+        };
+        let point = boundary_point_toward(&shape, 3.0, 1.0).unwrap();
+        assert!(point.normal_x > 0.99);
+        assert!(point.normal_y.abs() < 0.01);
     }
 
     #[test]
