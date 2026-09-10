@@ -75,14 +75,8 @@ fn candidate_placements_for_targets(resource: &BaseResource, targets: &[ContactT
             let target_dy = world_target.1 - anchor.y;
             if local.0.hypot(local.1) > CONTACT_EPSILON && target_dx.hypot(target_dy) > CONTACT_EPSILON {
                 let rotation = target_dy.atan2(target_dx) - local.1.atan2(local.0);
-                // Exact contact, with the material's center placed as close as
-                // possible to its ideal blueprint location. This is the
-                // bounded rotational freedom the soft blueprint permits.
                 add_unique_placement(&mut out, placement_for_point_contact(local, world_target, rotation));
             }
-            // Preserve the old zero-rotation exact-contact candidate as a
-            // deterministic alternative when the preferred orientation is
-            // physically unavailable.
             add_unique_placement(&mut out, placement_for_point_contact(local, world_target, 0.0));
         }
     }
@@ -178,10 +172,10 @@ fn solve_material_placements(structure: &OrganismStructure, element: &BlueprintE
             let other = if bond.part_a == part && assigned[bond.part_b].is_some() { working_indices[bond.part_b] } else if bond.part_b == part && assigned[bond.part_a].is_some() { working_indices[bond.part_a] } else { None };
             if let Some(index) = other { target_units.push(index); }
         }
-        if part == 0 { for constraint in external { target_units.extend(constraint.iter().copied()); } }
+        for constraint in external { target_units.extend(constraint.iter().copied()); }
         target_units.sort_unstable(); target_units.dedup();
         let target_endpoints = contact_targets_for_units(&working, &target_units, catalog);
-        let candidates = if target_endpoints.is_empty() && part != 0 { Vec::new() } else { candidate_placements_for_targets(res, &target_endpoints, &working, anchor, catalog) };
+        let candidates = if target_endpoints.is_empty() && !assigned.iter().any(Option::is_some) { candidate_placements_for_targets(res, &target_endpoints, &working, anchor, catalog) } else if target_endpoints.is_empty() { Vec::new() } else { candidate_placements_for_targets(res, &target_endpoints, &working, anchor, catalog) };
         for candidate in candidates {
             let mut trial = base.clone(); let mut trial_indices = vec![None; material.parts.len()]; let mut valid = true;
             for i in 0..material.parts.len() {
@@ -206,7 +200,9 @@ fn connect_units(structure: &mut OrganismStructure, a: usize, b: usize, catalog:
     let candidates = connection_pair_candidates(structure, a, b, catalog); let id_a = structure.physical_id(a)?; let id_b = structure.physical_id(b)?; let pa = structure.units.get(a)?.properties(catalog)?; let pb = structure.units.get(b)?.properties(catalog)?;
     for candidate in candidates {
         if candidate.distance > CONTACT_EPSILON { continue; }
-        let evaluation = crate::combine::evaluate_formation(candidate, pa.cohesion, pb.cohesion); let (_, work, _) = crate::combine::required_investment(pa, pb, evaluation, 0.0).ok()?; let strength = crate::combine::bond_strength(pa, pb);
+        let evaluation = crate::combine::evaluate_formation(candidate, pa.cohesion, pb.cohesion);
+        let (_, work, _) = match crate::combine::required_investment(pa, pb, evaluation, 0.0) { Ok(value) => value, Err(_) => continue };
+        let strength = crate::combine::bond_strength(pa, pb);
         if !strength.is_finite() || !(0.0..=1.0).contains(&strength) { continue; }
         let bond = Bond { endpoint_a: BondEndpoint::new(id_a, candidate.endpoint_a), endpoint_b: BondEndpoint::new(id_b, candidate.endpoint_b), strength, bond_energy: 0.0 };
         let mut trial = structure.clone(); if try_add_bond(&mut trial, bond, catalog).is_ok() { *structure = trial; return Some(work); }
