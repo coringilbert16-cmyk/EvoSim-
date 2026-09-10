@@ -2,8 +2,8 @@
 //!
 //! Material realization is deliberately local. A material contains a small
 //! number of constituents, so its geometry is solved from its own physical
-//! relationships. Blueprint-neighbor contacts are constraints on the finished
-//! material, not a second global placement search.
+//! relationships. Blueprint-neighbor contacts are soft construction targets,
+//! not mandatory constraints on the material or finished organism.
 
 use crate::contact::{connection_pair_candidates, try_add_bond};
 use crate::resources::{BaseResource, ConnectionSites, Form, Material};
@@ -39,15 +39,6 @@ fn placement_for_point_contact(local: (f64, f64), target: (f64, f64), rotation: 
     Placement { x: target.0 - rotated.0, y: target.1 - rotated.1, rotation_radians: rotation }
 }
 
-fn anchor_rotation(local: (f64, f64), target: (f64, f64), anchor: Placement) -> Option<f64> {
-    let vx = target.0 - anchor.x;
-    let vy = target.1 - anchor.y;
-    let v_len = vx.hypot(vy);
-    let p_len = local.0.hypot(local.1);
-    if v_len <= CONTACT_EPSILON || p_len <= CONTACT_EPSILON { return Some(0.0); }
-    Some(vy.atan2(vx) - local.1.atan2(local.0))
-}
-
 fn add_unique_placement(out: &mut Vec<Placement>, placement: Placement) {
     if !placement.x.is_finite() || !placement.y.is_finite() || !placement.rotation_radians.is_finite() { return; }
     let normalized = Placement { x: placement.x, y: placement.y, rotation_radians: placement.rotation_radians.rem_euclid(std::f64::consts::TAU) };
@@ -74,28 +65,27 @@ fn contact_targets_for_units(structure: &OrganismStructure, unit_indices: &[usiz
 
 /// Generate only analytically determined placements. There is no arbitrary
 /// rotation sweep and no global search over the organism.
-fn candidate_placements_for_targets(resource: &BaseResource, targets: &[ContactTarget], structure: &OrganismStructure, anchor: Placement, anchored: bool, catalog: &[BaseResource]) -> Vec<Placement> {
+fn candidate_placements_for_targets(resource: &BaseResource, targets: &[ContactTarget], structure: &OrganismStructure, anchor: Placement, catalog: &[BaseResource]) -> Vec<Placement> {
     let temp = StructuralUnit::new(resource.name.clone(), Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 });
     let endpoints = endpoint_prototypes(&temp, catalog);
     let mut out = Vec::new();
 
+    // A blueprint placement is an ideal location, not a hard anchor. When a
+    // neighboring endpoint is available, exact point-contact placements are
+    // preferred because they let the physical structure realize the intended
+    // connection without requiring the blueprint to dictate topology.
     for &target in targets {
         let Some(world_target) = target_world_point(structure, target, catalog) else { continue };
         for endpoint in &endpoints {
             let Some(local) = local_endpoint_point(resource, *endpoint, catalog) else { continue };
-            if anchored {
-                let Some(rotation) = anchor_rotation(local, world_target, anchor) else { continue };
-                let rotated = rotate_point(local, rotation);
-                if (anchor.x + rotated.0 - world_target.0).abs() <= 1e-7 && (anchor.y + rotated.1 - world_target.1).abs() <= 1e-7 {
-                    add_unique_placement(&mut out, Placement { x: anchor.x, y: anchor.y, rotation_radians: rotation });
-                }
-            } else {
-                add_unique_placement(&mut out, placement_for_point_contact(local, world_target, 0.0));
-            }
+            add_unique_placement(&mut out, placement_for_point_contact(local, world_target, 0.0));
         }
     }
 
-    if !anchored && targets.len() >= 2 && endpoints.len() >= 2 {
+    // If two physical targets happen to admit a rigid two-point realization,
+    // include those candidates as well. These are still preferences: later
+    // physical validation may reject them and the solver may fall back.
+    if targets.len() >= 2 && endpoints.len() >= 2 {
         let local_points = endpoints.iter().filter_map(|e| local_endpoint_point(resource, *e, catalog)).collect::<Vec<_>>();
         for (ia, target_a) in targets.iter().enumerate() {
             let Some(world_a) = target_world_point(structure, *target_a, catalog) else { continue };
@@ -127,6 +117,10 @@ fn candidate_placements_for_targets(resource: &BaseResource, targets: &[ContactT
             }
         }
     }
+
+    // Preserve the ideal placement as the final fallback. This is what makes
+    // the blueprint best-effort rather than a mandatory contact specification.
+    add_unique_placement(&mut out, anchor);
     out
 }
 
@@ -192,7 +186,7 @@ fn solve_material_placements(structure: &OrganismStructure, element: &BlueprintE
         for constraint in external { target_units.extend(constraint.iter().copied()); }
         target_units.sort_unstable(); target_units.dedup();
         let target_endpoints = contact_targets_for_units(&working, &target_units, catalog);
-        let candidates = if target_endpoints.is_empty() && part == 0 { vec![anchor] } else { candidate_placements_for_targets(res, &target_endpoints, &working, anchor, part == 0, catalog) };
+        let candidates = if target_endpoints.is_empty() && part != 0 { Vec::new() } else { candidate_placements_for_targets(res, &target_endpoints, &working, anchor, catalog) };
         for candidate in candidates {
             let mut trial = base.clone(); let mut trial_indices = vec![None; material.parts.len()]; let mut valid = true;
             for i in 0..material.parts.len() {
@@ -226,7 +220,7 @@ fn connect_units(structure: &mut OrganismStructure, a: usize, b: usize, catalog:
     None
 }
 
-fn commit_material(structure: &mut OrganismStructure, material: &Material, placements: &[Placement], catalog: &[BaseResource], external_constraints: &[Vec<usize>]) -> Result<Vec<usize>, String> {
+fn commit_material(structure: &mut OrganismStructure, material: &Material, placements: &[Placement], catalog: &[BaseResource]) -> Result<Vec<usize>, String> {
     let mut trial = structure.clone(); let mut indices = Vec::with_capacity(placements.len());
     for ((name, _), placement) in material.parts.iter().zip(placements.iter()) {
         let mut unit = StructuralUnit::new(name.clone(), *placement);
@@ -238,11 +232,6 @@ fn commit_material(structure: &mut OrganismStructure, material: &Material, place
         let a = indices[relationship.part_a]; let b = indices[relationship.part_b];
         if !internal_contact_exists(&trial, a, b, catalog) { return Err("material relationship could not be physically realized".into()); }
         if connect_units(&mut trial, a, b, catalog).is_none() { return Err("material relationship could not be committed as a physical bond".into()); }
-    }
-    for constraint in external_constraints {
-        let mut connected = false;
-        'pair: for &a in &indices { for &b in constraint { if connect_units(&mut trial, a, b, catalog).is_some() { connected = true; break 'pair; } } }
-        if !connected { return Err("required blueprint contact could not be committed as a physical bond".into()); }
     }
     *structure = trial; Ok(indices)
 }
@@ -257,7 +246,7 @@ pub(crate) fn realize_material_with_constraints(structure: &mut OrganismStructur
     if material.internal_bonds.iter().any(|b| b.part_a >= material.parts.len() || b.part_b >= material.parts.len() || b.part_a == b.part_b) { return Err("material contains an invalid construction relationship".into()); }
     if external_constraints.iter().any(|constraint| constraint.is_empty()) { return Err("material has an empty external construction constraint".into()); }
     let placements = solve_material_placements(structure, element, catalog, external_constraints)?;
-    commit_material(structure, material, &placements, catalog, external_constraints)
+    commit_material(structure, material, &placements, catalog)
 }
 
 #[cfg(test)]
