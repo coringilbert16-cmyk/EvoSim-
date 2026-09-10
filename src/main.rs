@@ -39,6 +39,9 @@ mod state;
 mod transformation;
 
 #[cfg(test)]
+mod blueprint_diagnostics;
+
+#[cfg(test)]
 mod observation_contract_tests;
 
 #[cfg(test)]
