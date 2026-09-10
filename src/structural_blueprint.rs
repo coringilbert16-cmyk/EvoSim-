@@ -16,8 +16,7 @@ pub struct StructuralBlueprint {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct BlueprintElement {
     pub material: Material,
-    /// Desired construction location. Rotation is deliberately not inherited:
-    /// physical orientation emerges when constituents are fitted together.
+    /// Desired construction location. Physical orientation emerges during realization.
     pub placement: Placement,
 }
 
@@ -49,12 +48,10 @@ impl StructuralBlueprint {
         let mut structure = OrganismStructure::new();
         let mut realized = std::collections::HashMap::<usize, Vec<usize>>::new();
         for (index, element) in self.elements.iter().enumerate() {
-            let ids = crate::construction::realize_material(&mut structure, element, catalog)?;
+            let ids = crate::construction_realization::realize_material(&mut structure, element, catalog)?;
             realized.insert(index, ids);
         }
-        for connection in &self.connections {
-            realize_connection_groups(&mut structure, &realized, *connection, catalog)?;
-        }
+        for connection in &self.connections { realize_connection_groups(&mut structure, &realized, *connection, catalog)?; }
         Ok(structure)
     }
 
