@@ -1,0 +1,48 @@
+name: Repair construction solver
+on:
+  push:
+    paths:
+      - '.github/workflows/repair-construction-solver.yml'
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore intact solver and apply targeted corrections
+        run: |
+          git checkout a5a2a6cb5f6662544d7feff2046cc68d9b744537 -- src/construction_realization.rs
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/construction_realization.rs')
+          s = p.read_text()
+          old = 'let rotated=rotate_point(pa,fixed_rotation);let expected_b=rotate_point(pb,fixed_rotation);if (wa.0+expected_b.0-wb.0).hypot(wa.1+expected_b.1-wb.1)>1e-7{continue}add_unique_placement(&mut out,Placement{x:wa.0-rotated.0,y:wa.1-rotated.1,rotation_radians:fixed_rotation})'
+          new = 'let rotated_a=rotate_point(pa,fixed_rotation);let rotated_b=rotate_point(pb,fixed_rotation);let expected_dx=rotated_b.0-rotated_a.0;let expected_dy=rotated_b.1-rotated_a.1;let actual_dx=wb.0-wa.0;let actual_dy=wb.1-wa.1;if (expected_dx-actual_dx).hypot(expected_dy-actual_dy)>1e-7{continue}add_unique_placement(&mut out,Placement{x:wa.0-rotated_a.0,y:wa.1-rotated_a.1,rotation_radians:fixed_rotation})'
+          if s.count(old) != 1:
+              raise SystemExit(f'pair-geometry pattern count={s.count(old)}')
+          s = s.replace(old, new, 1)
+          old2 = 'let mut target_units=Vec::new();for bond in &m.internal_bonds{let other=if bond.part_a==part&&assigned[bond.part_b].is_some(){wi[bond.part_b]}else if bond.part_b==part&&assigned[bond.part_a].is_some(){wi[bond.part_a]}else{None};if let Some(i)=other{target_units.push(i)}}let first_part=assigned.iter().all(Option::is_none);if first_part{for constraint in external{target_units.extend(constraint.iter().copied())}}target_units.sort_unstable();target_units.dedup();let targets=contact_targets_for_units(&working,&target_units,c);let candidates=candidate_placements_for_targets(res,&targets,&working,anchor,fixed_rotation,c);'
+          new2 = 'let mut internal_target_units=Vec::new();for bond in &m.internal_bonds{let other=if bond.part_a==part&&assigned[bond.part_b].is_some(){wi[bond.part_b]}else if bond.part_b==part&&assigned[bond.part_a].is_some(){wi[bond.part_a]}else{None};if let Some(i)=other{internal_target_units.push(i)}}internal_target_units.sort_unstable();internal_target_units.dedup();let internal_targets=contact_targets_for_units(&working,&internal_target_units,c);let mut candidates=Vec::new();for candidate in candidate_placements_for_targets(res,&internal_targets,&working,anchor,fixed_rotation,c){add_unique_placement(&mut candidates,candidate)}let external_target_groups:Vec<Vec<ContactTarget>>=external.iter().map(|group|contact_targets_for_units(&working,group,c)).collect();for(group_index,group_targets)in external_target_groups.iter().enumerate(){let mut targets=internal_targets.clone();targets.extend(group_targets.iter().copied());for candidate in candidate_placements_for_targets(res,&targets,&working,anchor,fixed_rotation,c){add_unique_placement(&mut candidates,candidate)}for other_group_targets in external_target_groups.iter().skip(group_index+1){let mut pair_targets=group_targets.clone();pair_targets.extend(other_group_targets.iter().copied());for candidate in candidate_placements_for_targets(res,&pair_targets,&working,anchor,fixed_rotation,c){add_unique_placement(&mut candidates,candidate)}}}'
+          if s.count(old2) != 1:
+              raise SystemExit(f'candidate-generation pattern count={s.count(old2)}')
+          s = s.replace(old2, new2, 1)
+          old3 = 'if !valid||!partial_configuration_valid(&trial,m,&ti,c){continue}placements[part]=Some(candidate);assigned[part]=ti[part];if search(base,m,anchor,fixed_rotation,placements,assigned,external,c){return true}assigned[part]=None;placements[part]=None'
+          new3 = 'if !valid||!partial_configuration_valid(&trial,m,&ti,c){continue}placements[part]=Some(candidate);assigned[part]=ti[part];let external_ok=external.iter().all(|group|assigned.iter().flatten().any(|&a|group.iter().any(|&b|internal_contact_exists(&trial,a,b,c))));if external_ok&&search(base,m,anchor,fixed_rotation,placements,assigned,external,c){return true}assigned[part]=None;placements[part]=None'
+          if s.count(old3) != 1:
+              raise SystemExit(f'external-validation pattern count={s.count(old3)}')
+          s = s.replace(old3, new3, 1)
+          p.write_text(s)
+          PY
+          cargo fmt --all
+          cargo check --all-targets
+          cargo test --all-targets
+      - name: Commit repaired solver
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/construction_realization.rs
+          git rm .github/workflows/repair-construction-solver.yml
+          git commit -m 'Repair construction solver from intact checkpoint'
+          git push
