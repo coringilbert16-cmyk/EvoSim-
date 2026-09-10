@@ -292,7 +292,7 @@ pub(crate) fn realize_connection_groups(
     let b_has_external_bond = structure.bonds.iter().any(|bond| {
         let a_in = b.contains(&structure.unit_index(bond.endpoint_a.constituent_id).unwrap_or(usize::MAX));
         let b_in = b.contains(&structure.unit_index(bond.endpoint_b.constituent_id).unwrap_or(usize::MAX));
-        a_in != b_in
+        a_in || b_in
     });
 
     for &ua in a {
