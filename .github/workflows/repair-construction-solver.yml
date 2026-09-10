@@ -35,6 +35,7 @@ jobs:
           if s.count(old3) != 1:
               raise SystemExit(f'external-validation pattern count={s.count(old3)}')
           s = s.replace(old3, new3, 1)
+          s = s.replace('y: wa.1 - rotated.1,', 'y: wa.1 - rotated_a.1,')
           p.write_text(s)
           PY
           cargo fmt --all
