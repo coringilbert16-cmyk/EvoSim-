@@ -52,9 +52,6 @@ fn placement_for_point_contact(local: (f64, f64), target: (f64, f64), rotation: 
         rotation_radians: rotation,
     }
 }
-fn rem_euclid_tau(angle: f64) -> f64 {
-    angle.rem_euclid(std::f64::consts::TAU)
-}
 fn add_unique_placement(out: &mut Vec<Placement>, placement: Placement) {
     if !placement.x.is_finite()
         || !placement.y.is_finite()
@@ -62,17 +59,18 @@ fn add_unique_placement(out: &mut Vec<Placement>, placement: Placement) {
     {
         return;
     }
-    let normalized = placement.rotation_radians.rem_euclid(std::f64::consts::TAU);
-    if out.iter().any(|e| {
-        (e.x - placement.x).abs() <= CONTACT_EPSILON
-            && (e.y - placement.y).abs() <= CONTACT_EPSILON
-            && ((e.rotation_radians - normalized).abs() <= 1e-10
-                || (e.rotation_radians.rem_euclid(std::f64::consts::TAU) - normalized).abs()
-                    <= 1e-10)
+    let normalized = Placement {
+        x: placement.x,
+        y: placement.y,
+        rotation_radians: placement.rotation_radians.rem_euclid(std::f64::consts::TAU),
+    };
+    if !out.iter().any(|e| {
+        (e.x - normalized.x).abs() <= CONTACT_EPSILON
+            && (e.y - normalized.y).abs() <= CONTACT_EPSILON
+            && (e.rotation_radians - normalized.rotation_radians).abs() <= 1e-10
     }) {
-        return;
+        out.push(normalized)
     }
-    out.push(placement)
 }
 #[derive(Clone, Copy, Debug)]
 struct ContactTarget {
@@ -259,19 +257,15 @@ fn candidate_placements_for_targets(
                         {
                             continue;
                         }
-                        let rotated_a = rotate_point(pa, fixed_rotation);
-                        let rotated_b = rotate_point(pb, fixed_rotation);
-                        let expected_dx = rotated_b.0 - rotated_a.0;
-                        let expected_dy = rotated_b.1 - rotated_a.1;
-                        let actual_dx = wb.0 - wa.0;
-                        let actual_dy = wb.1 - wa.1;
-                        if (expected_dx - actual_dx).hypot(expected_dy - actual_dy) > 1e-7 {
+                        let rotated = rotate_point(pa, fixed_rotation);
+                        let expected_b = rotate_point(pb, fixed_rotation);
+                        if (wa.0 + expected_b.0 - wb.0).hypot(wa.1 + expected_b.1 - wb.1) > 1e-7 {
                             continue;
                         }
                         add_unique_placement(
                             &mut out,
                             Placement {
-                                x: wa.0 - rotated_a.0,
+                                x: wa.0 - rotated.0,
                                 y: wa.1 - rotated.1,
                                 rotation_radians: fixed_rotation,
                             },
@@ -369,19 +363,6 @@ fn solve_material_placements(
         y: e.placement.y,
         rotation_radians: e.placement.rotation_radians,
     };
-    fn external_constraints_satisfied(
-        s: &OrganismStructure,
-        assigned: &[Option<usize>],
-        external: &[Vec<usize>],
-        c: &[BaseResource],
-    ) -> bool {
-        external.iter().all(|group| {
-            assigned
-                .iter()
-                .flatten()
-                .any(|&a| group.iter().any(|&b| internal_contact_exists(s, a, b, c)))
-        })
-    }
     fn search(
         base: &OrganismStructure,
         m: &Material,
@@ -416,7 +397,7 @@ fn solve_material_placements(
             }
             wi[i] = Some(working.add_unit(u))
         }
-        let mut internal_target_units = Vec::new();
+        let mut target_units = Vec::new();
         for bond in &m.internal_bonds {
             let other = if bond.part_a == part && assigned[bond.part_b].is_some() {
                 wi[bond.part_b]
@@ -426,55 +407,20 @@ fn solve_material_placements(
                 None
             };
             if let Some(i) = other {
-                internal_target_units.push(i)
+                target_units.push(i)
             }
         }
-        internal_target_units.sort_unstable();
-        internal_target_units.dedup();
-
-        let mut candidates = Vec::new();
-        let internal_targets = contact_targets_for_units(&working, &internal_target_units, c);
-
-        for candidate in candidate_placements_for_targets(
-            res,
-            &internal_targets,
-            &working,
-            anchor,
-            fixed_rotation,
-            c,
-        ) {
-            add_unique_placement(&mut candidates, candidate);
-        }
-
-        let external_target_groups: Vec<Vec<ContactTarget>> = external
-            .iter()
-            .map(|group| contact_targets_for_units(&working, group, c))
-            .collect();
-
-        for (group_index, group_targets) in external_target_groups.iter().enumerate() {
-            let mut targets = internal_targets.clone();
-            targets.extend(group_targets.iter().copied());
-            for candidate in
-                candidate_placements_for_targets(res, &targets, &working, anchor, fixed_rotation, c)
-            {
-                add_unique_placement(&mut candidates, candidate);
-            }
-
-            for other_group_targets in external_target_groups.iter().skip(group_index + 1) {
-                let mut pair_targets = group_targets.clone();
-                pair_targets.extend(other_group_targets.iter().copied());
-                for candidate in candidate_placements_for_targets(
-                    res,
-                    &pair_targets,
-                    &working,
-                    anchor,
-                    fixed_rotation,
-                    c,
-                ) {
-                    add_unique_placement(&mut candidates, candidate);
-                }
+        let first_part = assigned.iter().all(Option::is_none);
+        if first_part {
+            for constraint in external {
+                target_units.extend(constraint.iter().copied())
             }
         }
+        target_units.sort_unstable();
+        target_units.dedup();
+        let targets = contact_targets_for_units(&working, &target_units, c);
+        let candidates =
+            candidate_placements_for_targets(res, &targets, &working, anchor, fixed_rotation, c);
         for candidate in candidates {
             let mut trial = base.clone();
             let mut ti = vec![None; m.parts.len()];
@@ -503,13 +449,6 @@ fn solve_material_placements(
             }
             placements[part] = Some(candidate);
             assigned[part] = ti[part];
-            if assigned.iter().all(Option::is_some)
-                && !external_constraints_satisfied(&trial, &ti, external, c)
-            {
-                assigned[part] = None;
-                placements[part] = None;
-                continue;
-            }
             if search(
                 base,
                 m,
