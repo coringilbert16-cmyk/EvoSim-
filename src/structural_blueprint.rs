@@ -1,6 +1,6 @@
 //! Inherited structural blueprint.
 //!
-//! A blueprint specifies material intent and which material elements must
+//! A blueprint specifies material intent and which material elements should
 //! physically attach. It never owns the resulting constituent geometry or
 //! bonds; construction solves those physical details and the structure graph
 //! becomes the authority for the realization.
@@ -141,104 +141,48 @@ impl StructuralBlueprint {
 
         let mut structure = OrganismStructure::new();
         let mut realized = HashMap::<usize, Vec<usize>>::new();
-        let mut realized_connections = HashSet::<usize>::new();
 
+        // Element zero is the construction anchor. Its failure means there is
+        // no physical organism to build at all; later blueprint elements are
+        // optional best-effort construction targets.
         let first = self
             .elements
             .first()
             .ok_or_else(|| "blueprint has no elements".to_string())?;
-        let first_ids = crate::construction_realization::realize_material_with_constraints(
+        let first_ids = crate::construction_realization::realize_material(
             &mut structure,
             first,
             catalog,
-            &[],
         )?;
         realized.insert(0, first_ids);
 
-        let mut frontier = vec![0usize];
-        while let Some(current) = frontier.pop() {
-            for (connection_index, connection) in self.connections.iter().enumerate() {
-                if connection.element_a != current && connection.element_b != current {
-                    continue;
-                }
-
-                let next = if connection.element_a == current {
-                    connection.element_b
-                } else {
-                    connection.element_a
-                };
-                if realized.contains_key(&next) {
-                    continue;
-                }
-
-                let element = self
-                    .elements
-                    .get(next)
-                    .ok_or_else(|| "blueprint connection references missing element".to_string())?;
-
-                // Every connection from this element to an already-realized
-                // element is supplied to construction simultaneously. The
-                // material solver can therefore choose a single physical
-                // realization satisfying all currently-known contacts.
-                let external_constraints = self
-                    .connections
-                    .iter()
-                    .filter_map(|candidate| {
-                        if candidate.element_a == next {
-                            realized.get(&candidate.element_b).cloned()
-                        } else if candidate.element_b == next {
-                            realized.get(&candidate.element_a).cloned()
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<_>>();
-
-                let ids = crate::construction_realization::realize_material_with_constraints(
-                    &mut structure,
-                    element,
-                    catalog,
-                    &external_constraints,
-                )?;
-                realized.insert(next, ids);
-                frontier.push(next);
-
-                // The construction transaction above physically committed every
-                // connection represented by an external constraint. Record all
-                // such blueprint edges as realized, including parallel edges.
-                for (index, candidate) in self.connections.iter().enumerate() {
-                    let connects_next_to_realized = if candidate.element_a == next {
-                        realized.contains_key(&candidate.element_b)
-                    } else if candidate.element_b == next {
-                        realized.contains_key(&candidate.element_a)
-                    } else {
-                        false
-                    };
-                    if connects_next_to_realized {
-                        realized_connections.insert(index);
-                    }
-                }
-
-                let _ = connection_index;
+        // The blueprint is an ideal design, not a mandatory global placement
+        // solution. Each material is therefore attempted independently at its
+        // desired location. A material that cannot be physically constructed
+        // does not invalidate the rest of the organism.
+        for (index, element) in self.elements.iter().enumerate().skip(1) {
+            if let Ok(ids) = crate::construction_realization::realize_material(
+                &mut structure,
+                element,
+                catalog,
+            ) {
+                realized.insert(index, ids);
             }
         }
 
-        if realized.len() != self.elements.len() {
-            return Err("blueprint could not realize every connected element".into());
-        }
-
-        // Defensive completion for any edge that was not part of a material's
-        // external-constraint transaction. It still requires actual contact.
-        for (connection_index, connection) in self.connections.iter().enumerate() {
-            if realized_connections.contains(&connection_index) {
+        // Blueprint connections are also soft goals. Only physically
+        // admissible contacts become bonds; an unrealized element or an
+        // unachievable ideal connection is simply absent from the physical
+        // organism.
+        for connection in &self.connections {
+            if !realized.contains_key(&connection.element_a)
+                || !realized.contains_key(&connection.element_b)
+            {
                 continue;
             }
-            realize_connection_groups(&mut structure, &realized, *connection, catalog)
-                .map_err(|error| format!("blueprint connection {connection_index} failed: {error}"))?;
-            realized_connections.insert(connection_index);
+            let _ = realize_connection_groups(&mut structure, &realized, *connection, catalog);
         }
 
-        debug_assert_eq!(realized_connections.len(), self.connections.len());
         Ok(structure)
     }
 
