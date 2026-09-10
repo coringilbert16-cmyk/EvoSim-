@@ -137,6 +137,7 @@ impl StructuralBlueprint {
         self.validate()?;
         let mut structure = OrganismStructure::new();
         let mut realized = std::collections::HashMap::<usize, Vec<usize>>::new();
+        let mut realized_connections = std::collections::HashSet::<usize>::new();
 
         let first = self
             .elements
@@ -149,10 +150,11 @@ impl StructuralBlueprint {
 
         let mut frontier = vec![0usize];
         while let Some(current) = frontier.pop() {
-            for connection in self
+            for (connection_index, connection) in self
                 .connections
                 .iter()
-                .filter(|connection| {
+                .enumerate()
+                .filter(|(_, connection)| {
                     connection.element_a == current || connection.element_b == current
                 })
             {
@@ -179,6 +181,7 @@ impl StructuralBlueprint {
                 if realize_connection_groups(&mut structure, &realized, *connection, catalog)
                     .is_ok()
                 {
+                    realized_connections.insert(connection_index);
                     frontier.push(next);
                 } else {
                     let ids = realized.remove(&next).unwrap();
@@ -202,7 +205,10 @@ impl StructuralBlueprint {
             return Err("blueprint could not realize every connected element".into());
         }
 
-        for connection in &self.connections {
+        for (connection_index, connection) in self.connections.iter().enumerate() {
+            if realized_connections.contains(&connection_index) {
+                continue;
+            }
             realize_connection_groups(&mut structure, &realized, *connection, catalog)?;
         }
         Ok(structure)
@@ -286,7 +292,7 @@ pub(crate) fn realize_connection_groups(
     let b_has_external_bond = structure.bonds.iter().any(|bond| {
         let a_in = b.contains(&structure.unit_index(bond.endpoint_a.constituent_id).unwrap_or(usize::MAX));
         let b_in = b.contains(&structure.unit_index(bond.endpoint_b.constituent_id).unwrap_or(usize::MAX));
-        a_in || b_in
+        a_in != b_in
     });
 
     for &ua in a {
