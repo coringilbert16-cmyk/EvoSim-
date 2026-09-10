@@ -120,14 +120,9 @@ impl StructuralBlueprint {
 pub(crate) fn realize_connection_groups(structure: &mut OrganismStructure, realized: &std::collections::HashMap<usize, Vec<usize>>, connection: BlueprintConnection, catalog: &[BaseResource]) -> Result<f64, String> {
     let a = realized.get(&connection.element_a).ok_or_else(|| "missing realized first blueprint element".to_string())?;
     let b = realized.get(&connection.element_b).ok_or_else(|| "missing realized second blueprint element".to_string())?;
-    // A material's internal bonds do not fix its external placement. Placement becomes fixed only after this physical group has bonded to another blueprint group.
-    let b_has_external_bond = structure.bonds.iter().any(|bond| {
-        let endpoint_a_index = structure.unit_index(bond.endpoint_a.constituent_id);
-        let endpoint_b_index = structure.unit_index(bond.endpoint_b.constituent_id);
-        let a_in = endpoint_a_index.map(|index| b.contains(&index)).unwrap_or(false);
-        let b_in = endpoint_b_index.map(|index| b.contains(&index)).unwrap_or(false);
-        a_in ^ b_in
-    });
+    // Blueprint placement is authoritative. An external connection may select
+    // compatible physical endpoints, but it must never translate an already
+    // realized blueprint element to make the connection possible.
     for &ua in a { for &ub in b {
         let Some(pa) = structure.units.get(ua).and_then(|unit| unit.properties(catalog)) else { continue; };
         let Some(pb) = structure.units.get(ub).and_then(|unit| unit.properties(catalog)) else { continue; };
@@ -142,12 +137,6 @@ pub(crate) fn realize_connection_groups(structure: &mut OrganismStructure, reali
             if !strength.is_finite() || !(0.0..=1.0).contains(&strength) { continue; }
             let bond = Bond { endpoint_a: BondEndpoint::new(id_a, candidate.endpoint_a), endpoint_b: BondEndpoint::new(id_b, candidate.endpoint_b), strength, bond_energy: 0.0 };
             let mut trial = structure.clone();
-            if !b_has_external_bond {
-                let Some(wa) = candidate.endpoint_a.world_point(trial.units.get(ua).ok_or("missing first endpoint unit")?, catalog) else { continue; };
-                let Some(wb) = candidate.endpoint_b.world_point(trial.units.get(ub).ok_or("missing second endpoint unit")?, catalog) else { continue; };
-                let dx = wa.x - wb.x; let dy = wa.y - wb.y;
-                for &index in b { if let Some(unit) = trial.units.get_mut(index) { unit.placement.x += dx; unit.placement.y += dy; } }
-            }
             if crate::contact::try_add_bond(&mut trial, bond, catalog).is_ok() { *structure = trial; return Ok(work); }
         }
     }}
