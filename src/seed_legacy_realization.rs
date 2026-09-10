@@ -9,6 +9,7 @@ fn resource<'a>(catalog: &'a [BaseResource], name: &str) -> Option<&'a BaseResou
 fn endpoint_prototypes(unit: &StructuralUnit, catalog: &[BaseResource]) -> Vec<ConnectionEndpoint> {
     match unit.connection_sites(catalog) {
         Some(ConnectionSites::Corners(points)) => (0..points.len()).map(|i| ConnectionEndpoint::Corner { point_index: i }).collect(),
+        Some(ConnectionSites::Endpoints(points)) => (0..points.len()).map(|i| ConnectionEndpoint::LineEndpoint { point_index: i }).collect(),
         Some(ConnectionSites::Circumference { .. }) => vec![ConnectionEndpoint::Boundary { angle_radians: 0.0 }],
         Some(ConnectionSites::Undetermined) => { let radius = unit.shape(catalog).map(|s| s.form.bounding_radius()).unwrap_or(0.0); vec![ConnectionEndpoint::Fluid { x: radius, y: 0.0 }] },
         None => Vec::new(),
@@ -20,8 +21,8 @@ fn placement_candidates_for_new(neighbor: &StructuralUnit, neighbor_endpoint: Co
     let mut out = Vec::new();
     for endpoint in endpoint_prototypes(&temp, catalog) {
         match endpoint {
-            ConnectionEndpoint::Corner { point_index } => {
-                let ConnectionSites::Corners(points) = temp.connection_sites(catalog)? else { continue };
+            ConnectionEndpoint::Corner { point_index } | ConnectionEndpoint::LineEndpoint { point_index } => {
+                let points = match temp.connection_sites(catalog)? { ConnectionSites::Corners(points) | ConnectionSites::Endpoints(points) => points, _ => continue };
                 let p = *points.get(point_index)?;
                 let rotation = (-target.normal_y).atan2(-target.normal_x) - p.direction_radians;
                 let (s, c) = rotation.sin_cos();
@@ -53,54 +54,32 @@ fn connect_units(structure: &mut OrganismStructure, a: usize, b: usize, catalog:
     }
     None
 }
-fn adjacent_realized(material: &Material, part: usize, realized: &[Option<usize>]) -> Vec<usize> {
-    material.internal_bonds.iter().filter_map(|bond| { let other = if bond.part_a == part { bond.part_b } else if bond.part_b == part { bond.part_a } else { return None }; realized.get(other).and_then(|index| *index) }).collect()
-}
+fn adjacent_realized(material: &Material, part: usize, realized: &[Option<usize>]) -> Vec<usize> { material.internal_bonds.iter().filter_map(|bond| { let other = if bond.part_a == part { bond.part_b } else if bond.part_b == part { bond.part_a } else { return None }; realized.get(other).and_then(|index| *index) }).collect() }
 fn try_place_and_connect(structure: &mut OrganismStructure, neighbor_index: usize, name: &str, desired_x: f64, desired_y: f64, catalog: &[BaseResource]) -> Option<usize> {
     let neighbor = structure.units.get(neighbor_index)?.clone(); let base = resource(catalog, name)?;
     for neighbor_endpoint in endpoint_prototypes(&neighbor, catalog) {
         let Some(placements) = placement_candidates_for_new(&neighbor, neighbor_endpoint, base, desired_x, desired_y, catalog) else { continue };
-        for placement in placements {
-            let mut unit = StructuralUnit::new(name.to_owned(), placement);
-            if !unit.realize_default_geometry(catalog) { continue }
-            let new_index = structure.add_unit(unit);
-            if connect_units(structure, neighbor_index, new_index, catalog).is_some() { return Some(new_index); }
-            structure.units.pop();
-        }
+        for placement in placements { let mut unit = StructuralUnit::new(name.to_owned(), placement); if !unit.realize_default_geometry(catalog) { continue } let new_index = structure.add_unit(unit); if connect_units(structure, neighbor_index, new_index, catalog).is_some() { return Some(new_index); } structure.units.pop(); }
     }
     None
 }
-fn already_related(structure: &OrganismStructure, a: usize, b: usize) -> bool {
-    let Some(id_a) = structure.physical_id(a) else { return false }; let Some(id_b) = structure.physical_id(b) else { return false };
-    structure.bonds.iter().any(|bond| (bond.endpoint_a.constituent_id == id_a && bond.endpoint_b.constituent_id == id_b) || (bond.endpoint_a.constituent_id == id_b && bond.endpoint_b.constituent_id == id_a))
-}
+fn already_related(structure: &OrganismStructure, a: usize, b: usize) -> bool { let Some(id_a) = structure.physical_id(a) else { return false }; let Some(id_b) = structure.physical_id(b) else { return false }; structure.bonds.iter().any(|bond| (bond.endpoint_a.constituent_id == id_a && bond.endpoint_b.constituent_id == id_b) || (bond.endpoint_a.constituent_id == id_b && bond.endpoint_b.constituent_id == id_a)) }
 pub(crate) fn realize_material(structure: &mut OrganismStructure, element: &BlueprintElement, catalog: &[BaseResource]) -> Result<Vec<usize>, String> {
     let material = &element.material;
     if !material.is_valid() || material.parts.is_empty() { return Err("invalid material intent".into()); }
     if material.parts.iter().any(|(_, amount)| (*amount - 1.0).abs() > f64::EPSILON) { return Err("physical construction requires one unit per material constituent".into()); }
     if material.parts.len() > 1 && !material.has_internal_structure() { return Err("multi-constituent material requires construction relationships".into()); }
     if material.internal_bonds.iter().any(|b| b.part_a >= material.parts.len() || b.part_b >= material.parts.len() || b.part_a == b.part_b) { return Err("material contains an invalid construction relationship".into()); }
-    let mut realized = vec![None; material.parts.len()];
-    let (first_name, _) = &material.parts[0];
+    let mut realized = vec![None; material.parts.len()]; let (first_name, _) = &material.parts[0];
     if resource(catalog, first_name).is_none() { return Err(format!("material references missing resource {first_name}")); }
     let mut first_unit = StructuralUnit::new(first_name.clone(), Placement { x: element.placement.x, y: element.placement.y, rotation_radians: 0.0 });
     if !first_unit.realize_default_geometry(catalog) { return Err(format!("material references invalid resource {first_name}")); }
     realized[0] = Some(structure.add_unit(first_unit));
     while realized.iter().any(Option::is_none) {
         let mut progress = false;
-        for part in 0..material.parts.len() {
-            if realized[part].is_some() { continue; }
-            let Some(neighbor) = adjacent_realized(material, part, &realized).into_iter().next() else { continue };
-            let (name, _) = &material.parts[part];
-            if let Some(index) = try_place_and_connect(structure, neighbor, name, element.placement.x, element.placement.y, catalog) { realized[part] = Some(index); progress = true; }
-        }
+        for part in 0..material.parts.len() { if realized[part].is_some() { continue; } let Some(neighbor) = adjacent_realized(material, part, &realized).into_iter().next() else { continue }; let (name, _) = &material.parts[part]; if let Some(index) = try_place_and_connect(structure, neighbor, name, element.placement.x, element.placement.y, catalog) { realized[part] = Some(index); progress = true; } }
         if !progress { return Err("construction could not realize the material relationship graph".into()); }
     }
-    for relationship in &material.internal_bonds {
-        let a = realized[relationship.part_a].ok_or_else(|| "missing realized constituent".to_string())?;
-        let b = realized[relationship.part_b].ok_or_else(|| "missing realized constituent".to_string())?;
-        if already_related(structure, a, b) { continue; }
-        if connect_units(structure, a, b, catalog).is_none() { return Err("material relationship could not be physically realized".into()); }
-    }
+    for relationship in &material.internal_bonds { let a = realized[relationship.part_a].ok_or_else(|| "missing realized constituent".to_string())?; let b = realized[relationship.part_b].ok_or_else(|| "missing realized constituent".to_string())?; if already_related(structure, a, b) { continue; } if connect_units(structure, a, b, catalog).is_none() { return Err("material relationship could not be physically realized".into()); } }
     Ok(realized.into_iter().map(|index| index.expect("all constituents realized")).collect())
 }
