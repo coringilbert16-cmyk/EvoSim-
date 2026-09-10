@@ -1,6 +1,6 @@
 name: Rust
 
-# CI retrigger after blueprint frame validation fix.
+# CI retrigger to validate the restored construction solver baseline.
 on:
   push:
     branches: [main]
