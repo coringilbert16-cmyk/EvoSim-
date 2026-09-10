@@ -1,0 +1,31 @@
+name: Reset construction baseline
+
+on:
+  push:
+    paths:
+      - '.github/workflows/reset-construction-baseline.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore known-complete construction solver
+        run: |
+          set -euo pipefail
+          git checkout a5a2a6cb5f6662544d7feff2046cc68d9b744537 -- src/construction_realization.rs
+          cargo fmt --all -- --check
+          cargo check --all-targets
+          git diff --exit-code -- src/construction_realization.rs && { echo 'Solver already matches baseline.'; exit 0; } || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/construction_realization.rs
+          git rm .github/workflows/reset-construction-baseline.yml
+          git commit -m 'Reset construction solver to known-complete baseline'
+          git push
