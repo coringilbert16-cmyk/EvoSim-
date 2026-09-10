@@ -1,0 +1,34 @@
+name: One-time construction solver performance correction
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  fix:
+    if: github.event.head_commit.message != 'Apply targeted construction solver performance correction'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Split internal and external candidate generation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/construction_realization.rs')
+          s = p.read_text()
+          old = '''        let mut target_units = Vec::new();\n        for bond in &m.internal_bonds {\n            let other = if bond.part_a == part && assigned[bond.part_b].is_some() {\n                wi[bond.part_b]\n            } else if bond.part_b == part && assigned[bond.part_a].is_some() {\n                wi[bond.part_a]\n            } else {\n                None\n            };\n            if let Some(i) = other {\n                target_units.push(i)\n            }\n        }\n        for constraint in external {\n            target_units.extend(constraint.iter().copied())\n        }\n        target_units.sort_unstable();\n        target_units.dedup();\n        let targets = contact_targets_for_units(&working, &target_units, c);\n        let candidates =\n            candidate_placements_for_targets(res, &targets, &working, anchor, fixed_rotation, c);'''
+          new = '''        let mut internal_target_units = Vec::new();\n        for bond in &m.internal_bonds {\n            let other = if bond.part_a == part && assigned[bond.part_b].is_some() {\n                wi[bond.part_b]\n            } else if bond.part_b == part && assigned[bond.part_a].is_some() {\n                wi[bond.part_a]\n            } else {\n                None\n            };\n            if let Some(i) = other {\n                internal_target_units.push(i)\n            }\n        }\n        internal_target_units.sort_unstable();\n        internal_target_units.dedup();\n\n        let mut candidates = Vec::new();\n        let internal_targets = contact_targets_for_units(&working, &internal_target_units, c);\n        for candidate in candidate_placements_for_targets(\n            res,\n            &internal_targets,\n            &working,\n            anchor,\n            fixed_rotation,\n            c,\n        ) {\n            add_unique_placement(&mut candidates, candidate);\n        }\n\n        for constraint in external {\n            for &target_unit in constraint {\n                let targets = contact_targets_for_units(&working, &[target_unit], c);\n                for candidate in candidate_placements_for_targets(\n                    res,\n                    &targets,\n                    &working,\n                    anchor,\n                    fixed_rotation,\n                    c,\n                ) {\n                    add_unique_placement(&mut candidates, candidate);\n                }\n            }\n        }'''
+          if old not in s:
+              raise SystemExit('combined target-generation block not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+      - name: Commit and remove temporary workflow
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/construction_realization.rs
+          git rm .github/workflows/one-time-construction-performance-fix.yml
+          git commit -m "Apply targeted construction solver performance correction"
+          git push
