@@ -1,7 +1,6 @@
 //! Inherited structural blueprint.
 
 use crate::resources::{BaseResource, InternalBond, Material};
-use crate::structural_blueprint::BlueprintElement;
 use crate::structure::{Bond, BondEndpoint, ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -141,12 +140,14 @@ fn align_group_for_connection(
     let Some(moving_point) = moving_endpoint.world_point(&structure.units[moving_unit], catalog) else { return false; };
     let fixed_normal_length = fixed_point.normal_x.hypot(fixed_point.normal_y);
     let moving_normal_length = moving_point.normal_x.hypot(moving_point.normal_y);
-    if fixed_normal_length <= f64::EPSILON || moving_normal_length <= f64::EPSILON { return true; }
-    let fixed_angle = fixed_point.normal_y.atan2(fixed_point.normal_x);
-    let moving_angle = moving_point.normal_y.atan2(moving_point.normal_x);
-    let delta = fixed_angle + std::f64::consts::PI - moving_angle;
-    let pivot = structure.units.get(*group.first()?)?.placement;
-    rotate_group(structure, group, pivot.x, pivot.y, delta);
+    if fixed_normal_length > f64::EPSILON && moving_normal_length > f64::EPSILON {
+        let fixed_angle = fixed_point.normal_y.atan2(fixed_point.normal_x);
+        let moving_angle = moving_point.normal_y.atan2(moving_point.normal_x);
+        let delta = fixed_angle + std::f64::consts::PI - moving_angle;
+        let Some(&pivot_index) = group.first() else { return false; };
+        let Some(pivot) = structure.units.get(pivot_index).map(|unit| unit.placement) else { return false; };
+        rotate_group(structure, group, pivot.x, pivot.y, delta);
+    }
     let Some(rotated_point) = moving_endpoint.world_point(&structure.units[moving_unit], catalog) else { return false; };
     let dx = fixed_point.x - rotated_point.x;
     let dy = fixed_point.y - rotated_point.y;
