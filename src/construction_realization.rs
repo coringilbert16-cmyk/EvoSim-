@@ -67,7 +67,8 @@ fn add_unique_placement(out: &mut Vec<Placement>, placement: Placement) {
         (e.x - placement.x).abs() <= CONTACT_EPSILON
             && (e.y - placement.y).abs() <= CONTACT_EPSILON
             && ((e.rotation_radians - normalized).abs() <= 1e-10
-                || (e.rotation_radians.rem_euclid(std::f64::consts::TAU) - normalized).abs() <= 1e-10)
+                || (e.rotation_radians.rem_euclid(std::f64::consts::TAU) - normalized).abs()
+                    <= 1e-10)
     }) {
         return;
     }
@@ -270,7 +271,7 @@ fn candidate_placements_for_targets(
                         add_unique_placement(
                             &mut out,
                             Placement {
-                                x: wa.0 - rotated.0,
+                                x: wa.0 - rotated_a.0,
                                 y: wa.1 - rotated.1,
                                 rotation_radians: fixed_rotation,
                             },
@@ -453,14 +454,9 @@ fn solve_material_placements(
         for (group_index, group_targets) in external_target_groups.iter().enumerate() {
             let mut targets = internal_targets.clone();
             targets.extend(group_targets.iter().copied());
-            for candidate in candidate_placements_for_targets(
-                res,
-                &targets,
-                &working,
-                anchor,
-                fixed_rotation,
-                c,
-            ) {
+            for candidate in
+                candidate_placements_for_targets(res, &targets, &working, anchor, fixed_rotation, c)
+            {
                 add_unique_placement(&mut candidates, candidate);
             }
 
