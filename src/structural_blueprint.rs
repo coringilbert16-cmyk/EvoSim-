@@ -182,20 +182,18 @@ impl StructuralBlueprint {
                     frontier.push(next);
                 } else {
                     let ids = realized.remove(&next).unwrap();
-                    let ids_set = ids.into_iter().collect::<std::collections::HashSet<_>>();
+                    let removed_ids = ids
+                        .iter()
+                        .filter_map(|&index| structure.physical_id(index))
+                        .collect::<std::collections::HashSet<_>>();
                     structure.bonds.retain(|bond| {
-                        let a = structure.unit_index(bond.endpoint_a.constituent_id);
-                        let b = structure.unit_index(bond.endpoint_b.constituent_id);
-                        !a.is_some_and(|i| ids_set.contains(&i))
-                            && !b.is_some_and(|i| ids_set.contains(&i))
+                        !removed_ids.contains(&bond.endpoint_a.constituent_id)
+                            && !removed_ids.contains(&bond.endpoint_b.constituent_id)
                     });
-                    structure.units.retain(|unit| {
-                        !ids_set.contains(
-                            &structure
-                                .unit_index(unit.physical_id)
-                                .unwrap_or(usize::MAX),
-                        )
-                    });
+                    let removed_indices = ids.into_iter().collect::<std::collections::HashSet<_>>();
+                    structure
+                        .units
+                        .retain(|unit| !removed_indices.contains(&structure.unit_index(unit.physical_id).unwrap_or(usize::MAX)));
                     return Err("blueprint connection could not physically constrain construction".into());
                 }
             }
