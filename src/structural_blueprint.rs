@@ -387,18 +387,14 @@ fn apply_blueprint_orientation(
     catalog: &[BaseResource],
 ) -> Result<(), String> {
     let angle = placement.rotation_radians;
-    if angle.abs() > 1e-12 {
-        let (s, c) = angle.sin_cos();
-        for &id in ids {
-            let unit = structure
-                .units
-                .get_mut(id)
-                .ok_or_else(|| "orientation references a missing constituent".to_string())?;
-            let dx = unit.placement.x - placement.x;
-            let dy = unit.placement.y - placement.y;
-            unit.placement.x = placement.x + dx * c - dy * s;
-            unit.placement.y = placement.y + dx * s + dy * c;
-            unit.placement.rotation_radians += angle;
+
+    for &id in ids {
+        let unit = structure
+            .units
+            .get(id)
+            .ok_or_else(|| "orientation references a missing constituent".to_string())?;
+        if (unit.placement.rotation_radians - angle).abs() > 1e-12 {
+            return Err("realized material does not preserve the prescribed element frame".into());
         }
     }
 
@@ -431,8 +427,8 @@ fn apply_blueprint_orientation(
                 form: sb.form.clone(),
                 placement: b.placement,
             };
-            if crate::material_geometry::placed_forms_overlap(&pa, &pb, 0.0) {
-                return Err("oriented material overlaps existing physical structure".into());
+            if crate::material_geometry::placed_forms_penetrate(&pa, &pb, 0.0) {
+                return Err("realized material penetrates existing physical structure".into());
             }
         }
     }
@@ -445,7 +441,7 @@ fn apply_blueprint_orientation(
                     .any(|candidate| candidate.distance <= 1e-9)
             })
         }) {
-            return Err("oriented material no longer has a physical contact with a prescribed neighbor".into());
+            return Err("realized material no longer has a physical contact with a prescribed neighbor".into());
         }
     }
     Ok(())
