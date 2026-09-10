@@ -63,11 +63,11 @@ fn add_unique_placement(out: &mut Vec<Placement>, placement: Placement) {
         return;
     }
     let normalized = placement.rotation_radians.rem_euclid(std::f64::consts::TAU);
-    if !out.iter().any(|e| {
+    if out.iter().any(|e| {
         (e.x - placement.x).abs() <= CONTACT_EPSILON
             && (e.y - placement.y).abs() <= CONTACT_EPSILON
             && ((e.rotation_radians - normalized).abs() <= 1e-10
-                || (e.rotation_radians - rem_euclid_tau(normalized)).abs() <= 1e-10)
+                || (e.rotation_radians.rem_euclid(std::f64::consts::TAU) - normalized).abs() <= 1e-10)
     }) {
         return;
     }
@@ -388,7 +388,7 @@ fn solve_material_placements(
         c: &[BaseResource],
     ) -> bool {
         if assigned.iter().all(Option::is_some) {
-            return external_constraints_satisfied(base, assigned, external, c);
+            return true;
         }
         let Some(part) = choose_next_part(m, assigned) else {
             return false;
@@ -460,6 +460,13 @@ fn solve_material_placements(
             }
             placements[part] = Some(candidate);
             assigned[part] = ti[part];
+            if assigned.iter().all(Option::is_some)
+                && !external_constraints_satisfied(&trial, &ti, external, c)
+            {
+                assigned[part] = None;
+                placements[part] = None;
+                continue;
+            }
             if search(
                 base,
                 m,
