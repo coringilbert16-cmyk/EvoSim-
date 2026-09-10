@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Apply anchored-root solver candidate
+      - name: Apply diagnostic solver candidate
         run: |
           git checkout 7268774304946d49612fe5ef3f48cf758f0f0540 -- src/construction_realization.rs
           sed -i 's/y: wa\.1 - rotated\.1,/y: wa.1 - rotated_a.1,/' src/construction_realization.rs
@@ -23,10 +23,7 @@ jobs:
           s = p.read_text()
           old = '''        for candidate in candidates {
             let mut trial = base.clone();'''
-          new = '''        if part == 0 {
-            candidates.clear();
-            add_unique_placement(&mut candidates, anchor);
-        }
+          new = '''        eprintln!("SOLVER part={} external_groups={} group_sizes={:?} candidates={} anchor=({:.6},{:.6})", part, external.len(), external.iter().map(Vec::len).collect::<Vec<_>>(), candidates.len(), anchor.x, anchor.y);
         for candidate in candidates {
             let mut trial = base.clone();'''
           if old not in s:
@@ -36,13 +33,3 @@ jobs:
           cargo fmt --all
       - name: Run fresh organism realization test
         run: cargo test --all-targets fresh_organism_is_realized_from_its_genome_blueprint -- --nocapture
-      - name: Run full tests
-        run: cargo test --all-targets
-      - name: Commit repaired solver and remove temporary workflow
-        run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add src/construction_realization.rs
-          git rm .github/workflows/repair-construction-solver.yml
-          git commit -m 'Anchor material construction to blueprint frame'
-          git push
