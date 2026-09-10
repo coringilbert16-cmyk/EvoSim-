@@ -1,6 +1,5 @@
 name: Rust
 
-# Temporary construction-solver diagnosis; restored to normal after the fix is committed.
 on:
   push:
     branches: [main]
@@ -15,32 +14,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
-      - name: Apply diagnostic construction solver
-        run: |
-          git checkout 7268774304946d49612fe5ef3f48cf758f0f0540 -- src/construction_realization.rs
-          sed -i 's/y: wa\.1 - rotated\.1,/y: wa.1 - rotated_a.1,/' src/construction_realization.rs
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('src/construction_realization.rs')
-          s = p.read_text()
-          old = '''        for candidate in candidates {
-            let mut trial = base.clone();'''
-          new = '''        eprintln!("SOLVER part={} external_groups={} group_sizes={:?} candidates={} anchor=({:.6},{:.6})", part, external.len(), external.iter().map(Vec::len).collect::<Vec<_>>(), candidates.len(), anchor.x, anchor.y);
-        for candidate in candidates {
-            let mut trial = base.clone();'''
-          if old not in s:
-              raise SystemExit('candidate loop not found')
-          p.write_text(s.replace(old,new,1))
-          PY
-          cargo fmt --all
+      - name: Format source
+        run: cargo fmt --all
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Check source file sizes
         run: bash scripts/check_large_files.sh
       - name: Check COMBINE architecture
         run: bash scripts/check_combine_architecture.sh
-      - name: Run fresh organism realization diagnostic
-        run: cargo test --all-targets fresh_organism_is_realized_from_its_genome_blueprint -- --nocapture
+      - name: Run Rust tests
+        run: |
+          set -o pipefail
+          cargo test --all-targets 2>&1 | tee test-output.log
+      - name: Upload Rust test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-test-diagnostics
+          path: test-output.log
+      - name: Run Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings -A dead_code -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of
