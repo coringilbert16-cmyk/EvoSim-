@@ -183,7 +183,14 @@ fn solve_material_placements(structure: &OrganismStructure, element: &BlueprintE
             let other = if bond.part_a == part && assigned[bond.part_b].is_some() { working_indices[bond.part_b] } else if bond.part_b == part && assigned[bond.part_a].is_some() { working_indices[bond.part_a] } else { None };
             if let Some(index) = other { target_units.push(index); }
         }
-        for constraint in external { target_units.extend(constraint.iter().copied()); }
+        // External blueprint neighbors guide only the placement of the first
+        // constituent. Once that constituent is placed, internal material
+        // relationships determine the remaining geometry. This keeps the
+        // blueprint influence bounded and prevents external targets from
+        // multiplying the local material search.
+        if part == 0 {
+            for constraint in external { target_units.extend(constraint.iter().copied()); }
+        }
         target_units.sort_unstable(); target_units.dedup();
         let target_endpoints = contact_targets_for_units(&working, &target_units, catalog);
         let candidates = if target_endpoints.is_empty() && part != 0 { Vec::new() } else { candidate_placements_for_targets(res, &target_endpoints, &working, anchor, catalog) };
