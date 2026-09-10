@@ -82,6 +82,15 @@ fn try_place_and_connect(structure: &mut OrganismStructure, neighbor_index: usiz
     None
 }
 
+fn already_related(structure: &OrganismStructure, a: usize, b: usize) -> bool {
+    let Some(id_a) = structure.physical_id(a) else { return false; };
+    let Some(id_b) = structure.physical_id(b) else { return false; };
+    structure.bonds.iter().any(|bond| {
+        (bond.endpoint_a.constituent_id == id_a && bond.endpoint_b.constituent_id == id_b) ||
+        (bond.endpoint_a.constituent_id == id_b && bond.endpoint_b.constituent_id == id_a)
+    })
+}
+
 /// Expand one construction-intent Material into one StructuralUnit per
 /// constituent and one physical Bond per successfully realized relationship.
 /// The first constituent is only an algorithmic construction seed; subsequent
@@ -112,14 +121,12 @@ pub(crate) fn realize_material(structure: &mut OrganismStructure, element: &Blue
         if !progress { return Err("construction could not realize the material relationship graph".into()); }
     }
 
-    // Relationships not used to introduce a constituent are cycle closures.
+    // Any relationship not used to introduce a constituent is a cycle closure.
     // Existing geometry remains fixed; construction never globally optimizes it.
     for relationship in &material.internal_bonds {
         let a = realized[relationship.part_a].ok_or_else(|| "missing realized constituent".to_string())?;
         let b = realized[relationship.part_b].ok_or_else(|| "missing realized constituent".to_string())?;
-        let id_a = structure.physical_id(a).ok_or_else(|| "missing physical constituent".to_string())?;
-        let id_b = structure.physical_id(b).ok_or_else(|| "missing physical constituent".to_string())?;
-        if structure.bonds.iter().any(|bond| (bond.endpoint_a.constituent_id == id_a && bond.endpoint_b.constituent_id == id_b) || (bond.endpoint_a.constituent_id == id_b && bond.endpoint_b.constituent_id == id_a)) { continue; }
+        if already_related(structure, a, b) { continue; }
         if connect_units(structure, a, b, catalog).is_none() { return Err("material relationship could not be physically realized".into()); }
     }
 
