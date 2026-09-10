@@ -34,6 +34,7 @@ impl AtomicBlueprint {
         for (i, bond) in self.bonds.iter().enumerate() { if !bond.is_valid(self.atoms.len()) { return Err(format!("atomic blueprint bond {i} is invalid")); } if bond.required_bonds != 1 { return Err("atomic blueprint currently permits exactly one physical bond per prescribed relationship".into()); } let canonical = bond.canonical(); if self.bonds[..i].iter().map(|previous| previous.canonical()).any(|previous| previous == canonical) { return Err("atomic blueprint contains duplicate bonds".into()); } }
         Ok(())
     }
+    pub fn structural_mass(&self, catalog: &[BaseResource]) -> f64 { self.atoms.iter().filter_map(|atom| catalog.iter().find(|resource| resource.name == atom.resource)).map(|resource| resource.properties.mass).sum() }
     pub fn realize(&self, catalog: &[BaseResource]) -> Result<OrganismStructure, String> {
         self.validate()?;
         let mut structure = OrganismStructure::new(); let (sin_anchor, cos_anchor) = self.anchor.rotation_radians.sin_cos(); let mut ids = Vec::with_capacity(self.atoms.len());
