@@ -1,6 +1,12 @@
 use crate::resources::Shape;
 use serde::{Deserialize, Serialize};
 
+impl PartialEq for Shape {
+    fn eq(&self, other: &Self) -> bool {
+        self.form == other.form
+    }
+}
+
 /// The geometry an individual physical constituent currently occupies.
 ///
 /// Resource catalog geometry remains immutable. This value is per physical
