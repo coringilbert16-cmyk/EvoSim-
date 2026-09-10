@@ -1,6 +1,7 @@
 //! Physical realization of blueprint material intent.
+
 use crate::contact::{connection_pair_candidates, try_add_bond};
-use crate::resources::{BaseResource, ConnectionSites, Form, PhysicalState, Material, Shape};
+use crate::resources::{BaseResource, ConnectionSites, Form, Material, Shape};
 use crate::structural_blueprint::BlueprintElement;
 use crate::structure::{
     Bond, BondEndpoint, ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit,
@@ -23,9 +24,9 @@ fn endpoint_prototypes(
         Some(ConnectionSites::Endpoints(points)) => (0..points.len())
             .map(|i| ConnectionEndpoint::LineEndpoint { point_index: i })
             .collect(),
-        Some(ConnectionSites::Circumference { .. }) | Some(ConnectionSites::Undetermined) | None => {
-            Vec::new()
-        }
+        Some(ConnectionSites::Circumference { .. })
+        | Some(ConnectionSites::Undetermined)
+        | None => Vec::new(),
     }
 }
 
@@ -148,12 +149,14 @@ fn try_place_fluid_and_connect(
 ) -> Option<usize> {
     let target = neighbor_endpoint
         .world_point(structure.units.get(neighbor_index)?, catalog)?;
-    let Form::Circle { radius } = base.shape.form else {
-        return None;
+    let radius = match &base.shape.form {
+        Form::Circle { radius } => *radius,
+        _ => return None,
     };
     if !radius.is_finite() || radius <= 0.0 {
         return None;
     }
+
     let (mut ux, mut uy) = (target.normal_x, target.normal_y);
     if ux.hypot(uy) <= CONTACT_EPSILON {
         let dx = target.x - structure.units[neighbor_index].placement.x;
@@ -165,6 +168,7 @@ fn try_place_fluid_and_connect(
         ux = dx / distance;
         uy = dy / distance;
     }
+
     let placement = Placement {
         x: target.x + ux * radius,
         y: target.y + uy * radius,
@@ -176,10 +180,9 @@ fn try_place_fluid_and_connect(
     }) {
         return None;
     }
+
     let new_index = structure.add_unit(unit);
-    if base.physical_state == PhysicalState::Fluid
-        && connect_units(structure, neighbor_index, new_index, catalog).is_some()
-    {
+    if connect_units(structure, neighbor_index, new_index, catalog).is_some() {
         Some(new_index)
     } else {
         structure.units.pop();
@@ -198,7 +201,7 @@ fn try_place_and_connect(
     let neighbor = structure.units.get(neighbor_index)?.clone();
     let base = resource(catalog, name)?;
     for neighbor_endpoint in endpoint_prototypes(&neighbor, catalog) {
-        if base.physical_state == PhysicalState::Fluid {
+        if base.physical_state == crate::resources::PhysicalState::Fluid {
             if let Some(index) = try_place_fluid_and_connect(
                 structure,
                 neighbor_index,
