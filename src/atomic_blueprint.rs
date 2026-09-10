@@ -1,18 +1,16 @@
 //! Atomic inherited construction blueprint.
 //!
 //! This module is the design-side representation of an organism's physical
-//! construction plan.  Unlike the legacy element/material representation,
-//! every structural constituent has its own identity and every prescribed
-//! structural relationship names both participating constituents and their
-//! connection locations.
+//! construction plan. Every structural constituent has its own identity and
+//! every prescribed relationship names both participating constituents and
+//! their connection locations.
 
 use serde::{Deserialize, Serialize};
 
-use crate::resources::Material;
 use crate::structural_blueprint::StructuralBlueprint;
 use crate::structure::ConnectionEndpoint;
 
-/// A transform in blueprint space.  World-space position and orientation are
+/// A transform in blueprint space. World-space position and orientation are
 /// supplied by the organism anchor at realization time.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 pub struct BlueprintTransform {
@@ -24,31 +22,24 @@ pub struct BlueprintTransform {
 
 impl BlueprintTransform {
     pub fn is_valid(&self) -> bool {
-        self.x.is_finite()
-            && self.y.is_finite()
-            && self.rotation_radians.is_finite()
+        self.x.is_finite() && self.y.is_finite() && self.rotation_radians.is_finite()
     }
 }
 
-/// One atomic material constituent in an inherited structural design.
+/// One atomic resource constituent in an inherited structural design.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct BlueprintAtom {
-    /// Exactly one constituent is represented by an atomic blueprint node.
-    pub material: Material,
+    /// Resource identity is atomic: one blueprint node represents one unit of
+    /// one resource type. Compound Material objects do not belong in this
+    /// structural layer.
+    pub resource: String,
     /// Position and orientation relative to the blueprint anchor.
     pub transform: BlueprintTransform,
 }
 
 impl BlueprintAtom {
     pub fn is_valid(&self) -> bool {
-        self.material.parts.len() == 1
-            && self.material.parts[0].1 == 1.0
-            && self.material.internal_bonds.is_empty()
-            && self.transform.is_valid()
-    }
-
-    pub fn resource_name(&self) -> Option<&str> {
-        self.material.parts.get(0).map(|(name, _)| name.as_str())
+        !self.resource.is_empty() && self.transform.is_valid()
     }
 }
 
@@ -64,8 +55,6 @@ pub struct BlueprintBond {
     pub atom_b: usize,
     pub endpoint_b: ConnectionEndpoint,
     /// Number of physical bonds required at this prescribed relationship.
-    /// A value of one is the normal case; values greater than one are retained
-    /// because the physical bond system permits repeated bonds at a contact.
     #[serde(default = "default_required_bonds")]
     pub required_bonds: u16,
 }
@@ -145,11 +134,9 @@ impl AtomicBlueprint {
         Ok(())
     }
 
-    /// Explicitly refuses to infer missing endpoint topology from the legacy
-    /// element graph.  The old format does not contain enough information to
-    /// recover which constituent and connection point an external connection
-    /// intended, so guessing here would recreate the exact ambiguity this
-    /// representation is designed to eliminate.
+    /// Refuse to infer missing endpoint topology from the legacy element graph.
+    /// The old format does not contain enough information to recover which
+    /// constituent and connection point an external connection intended.
     pub fn from_legacy(_legacy: &StructuralBlueprint) -> Result<Self, String> {
         Err(
             "legacy structural blueprint cannot be flattened deterministically: "
@@ -162,12 +149,10 @@ impl AtomicBlueprint {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::resources::Material;
-    use crate::structure::ConnectionEndpoint;
 
     fn carbon() -> BlueprintAtom {
         BlueprintAtom {
-            material: Material::free_base("Carbon", 1.0),
+            resource: "Carbon".into(),
             transform: BlueprintTransform {
                 x: 0.0,
                 y: 0.0,
@@ -184,7 +169,17 @@ mod tests {
                 y: 0.0,
                 rotation_radians: 0.0,
             },
-            atoms: vec![carbon(), BlueprintAtom { transform: BlueprintTransform { x: 1.0, y: 0.0, rotation_radians: 0.0 }, ..carbon() }],
+            atoms: vec![
+                carbon(),
+                BlueprintAtom {
+                    resource: "Carbon".into(),
+                    transform: BlueprintTransform {
+                        x: 1.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                },
+            ],
             core_atoms: vec![0],
             bonds: vec![BlueprintBond {
                 atom_a: 0,
