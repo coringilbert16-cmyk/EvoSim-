@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply construction and orientation fixes under test
+      - name: Apply tested geometry and orientation fixes
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -23,304 +23,53 @@ jobs:
           def replace_once(path, old, new):
               p = Path(path)
               s = p.read_text()
-              count = s.count(old)
-              if count != 1:
-                  raise SystemExit(f'{path}: expected exactly one match, found {count}')
+              if s.count(old) != 1:
+                  raise SystemExit(f'{path}: expected one match, found {s.count(old)}')
               p.write_text(s.replace(old, new))
 
-          # Strict penetration is deliberately tolerant of floating-point
-          # roundoff at an otherwise exact boundary contact.
+          # Numerical boundary contacts are not penetration.
           p = Path('src/material_geometry.rs')
           s = p.read_text()
-          old = '''    let center_distance =
-        (a.placement.x - b.placement.x).hypot(a.placement.y - b.placement.y);
-    if center_distance >= a.form.bounding_radius() + b.form.bounding_radius() + tolerance {
-        return false;
-    }'''
-          new = '''    let center_distance =
-        (a.placement.x - b.placement.x).hypot(a.placement.y - b.placement.y);
-    const PENETRATION_EPSILON: f64 = 1e-12;
-    if center_distance
-        >= a.form.bounding_radius() + b.form.bounding_radius() + tolerance + PENETRATION_EPSILON
-    {
-        return false;
-    }'''
-          if s.count(old) != 1:
-              raise SystemExit(f'material_geometry: expected one penetration center-distance guard, found {s.count(old)}')
-          s = s.replace(old, new)
-          replacements = [
-              ('center_distance < ar + br - tolerance', 'center_distance < ar + br - tolerance - PENETRATION_EPSILON'),
-              ('< (radius - tolerance).max(0.0)', '< (radius - tolerance - PENETRATION_EPSILON).max(0.0)'),
-              ('a_max - tolerance <= b_min', 'a_max - tolerance - PENETRATION_EPSILON <= b_min'),
-              ('b_max - tolerance <= a_min', 'b_max - tolerance - PENETRATION_EPSILON <= a_min'),
-          ]
-          for old, new in replacements:
-              if s.count(old) != 1:
-                  raise SystemExit(f'material_geometry: expected one penetration replacement for {old!r}, found {s.count(old)}')
-              s = s.replace(old, new)
-          p.write_text(s)
+          replace_once('src/material_geometry.rs', 'if center_distance >= a.form.bounding_radius() + b.form.bounding_radius() + tolerance {', 'if center_distance >= a.form.bounding_radius() + b.form.bounding_radius() + tolerance + 1e-12 {')
+          s = p.read_text()
+          replace_once('src/material_geometry.rs', 'center_distance < ar + br - tolerance', 'center_distance < ar + br - tolerance - 1e-12')
+          replace_once('src/material_geometry.rs', '< (radius - tolerance).max(0.0)', '< (radius - tolerance - 1e-12).max(0.0)')
+          replace_once('src/material_geometry.rs', 'a_max - tolerance <= b_min', 'a_max - tolerance - 1e-12 <= b_min')
+          replace_once('src/material_geometry.rs', 'b_max - tolerance <= a_min', 'b_max - tolerance - 1e-12 <= a_min')
 
-          # Construction must solve inside the blueprint element's rigid
-          # frame. Candidate generation may not invent a different rotation.
+          # Construction candidates are constrained to the blueprint frame.
           p = Path('src/construction_realization.rs')
           s = p.read_text()
+          s = s.replace('anchor:Placement,c:&[BaseResource])', 'anchor:Placement,fixed_rotation:f64,c:&[BaseResource])', 1)
           start = s.index('fn add_circle_contact_candidates(')
           end = s.index('\nfn candidate_placements_for_targets', start)
-          new_circle = '''fn add_circle_contact_candidates(
-    out: &mut Vec<Placement>,
-    resource: &BaseResource,
-    targets: &[ContactTarget],
-    s: &OrganismStructure,
-    anchor: Placement,
-    fixed_rotation: f64,
-    c: &[BaseResource],
-) {
-    let Form::Circle { radius } = &resource.shape.form else {
-        return;
-    };
-    let target_units = targets
-        .iter()
-        .map(|t| t.unit_index)
-        .collect::<std::collections::BTreeSet<_>>()
-        .into_iter()
-        .collect::<Vec<_>>();
-    for &ti in &target_units {
-        let Some((tx, ty, tr)) = circle_center(s, ti, c) else {
-            continue;
-        };
-        let d = *radius + tr;
-        if d <= CONTACT_EPSILON {
-            continue;
-        }
-        let angle = (anchor.y - ty).atan2(anchor.x - tx);
-        add_unique_placement(
-            out,
-            Placement {
-                x: tx + d * angle.cos(),
-                y: ty + d * angle.sin(),
-                rotation_radians: fixed_rotation,
-            },
-        );
-    }
-    for ia in 0..target_units.len() {
-        let Some((ax, ay, ar)) = circle_center(s, target_units[ia], c) else {
-            continue;
-        };
-        for &bi in target_units.iter().skip(ia + 1) {
-            let Some((bx, by, br)) = circle_center(s, bi, c) else {
-                continue;
-            };
-            let dx = bx - ax;
-            let dy = by - ay;
-            let d = dx.hypot(dy);
-            let ra = *radius + ar;
-            let rb = *radius + br;
-            if d <= CONTACT_EPSILON
-                || d > ra + rb + CONTACT_EPSILON
-                || d < (ra - rb).abs() - CONTACT_EPSILON
-            {
-                continue;
-            }
-            let along = (ra * ra - rb * rb + d * d) / (2.0 * d);
-            let h2 = ra * ra - along * along;
-            if h2 < -CONTACT_EPSILON {
-                continue;
-            }
-            let h = h2.max(0.0).sqrt();
-            let ux = dx / d;
-            let uy = dy / d;
-            let px = -uy * h;
-            let py = ux * h;
-            add_unique_placement(
-                out,
-                Placement {
-                    x: ax + ux * along + px,
-                    y: ay + uy * along + py,
-                    rotation_radians: fixed_rotation,
-                },
-            );
-            add_unique_placement(
-                out,
-                Placement {
-                    x: ax + ux * along - px,
-                    y: ay + uy * along - py,
-                    rotation_radians: fixed_rotation,
-                },
-            );
-        }
-    }
-}
-'''
-          s = s[:start] + new_circle + s[end:]
+          chunk = s[start:end].replace('rotation_radians:0.0', 'rotation_radians:fixed_rotation')
+          s = s[:start] + chunk + s[end:]
+          s = s.replace('fn candidate_placements_for_targets(resource:&BaseResource,targets:&[ContactTarget],s:&OrganismStructure,anchor:Placement,c:&[BaseResource])', 'fn candidate_placements_for_targets(resource:&BaseResource,targets:&[ContactTarget],s:&OrganismStructure,anchor:Placement,fixed_rotation:f64,c:&[BaseResource])', 1)
+          s = s.replace('add_circle_contact_candidates(&mut out,resource,targets,s,anchor,c);', 'add_circle_contact_candidates(&mut out,resource,targets,s,anchor,fixed_rotation,c);', 1)
+          fixed_candidates = 'for &target in targets{let Some(world)=target_world_point(s,target,c)else{continue};for endpoint in &endpoints{let Some(local)=local_endpoint_point(resource,*endpoint,c)else{continue};add_unique_placement(&mut out,placement_for_point_contact(local,world,fixed_rotation));}}'
+          anchor_tail = 'add_unique_placement(&mut out,anchor);out}'
+          if s.count(anchor_tail) != 1:
+              raise SystemExit('construction: candidate anchor tail not found exactly once')
+          s = s.replace(anchor_tail, fixed_candidates + 'out.retain(|p|(p.rotation_radians-fixed_rotation).abs()<=1e-10);add_unique_placement(&mut out,Placement{rotation_radians:fixed_rotation,..anchor});out}', 1)
+          replace_once('src/construction_realization.rs', 'let anchor=Placement{x:e.placement.x,y:e.placement.y,rotation_radians:0.0};', 'let anchor=Placement{x:e.placement.x,y:e.placement.y,rotation_radians:e.placement.rotation_radians};')
+          replace_once('src/construction_realization.rs', 'candidate_placements_for_targets(res,&targets,&working,anchor,c)', 'candidate_placements_for_targets(res,&targets,&working,anchor,e.placement.rotation_radians,c)')
 
-          start = s.index('fn candidate_placements_for_targets(')
-          end = s.index('\nfn units_strictly_overlap', start)
-          new_candidates = '''fn candidate_placements_for_targets(
-    resource: &BaseResource,
-    targets: &[ContactTarget],
-    s: &OrganismStructure,
-    anchor: Placement,
-    fixed_rotation: f64,
-    c: &[BaseResource],
-) -> Vec<Placement> {
-    let temp = StructuralUnit::new(
-        resource.name.clone(),
-        Placement {
-            x: 0.0,
-            y: 0.0,
-            rotation_radians: fixed_rotation,
-        },
-    );
-    let endpoints = endpoint_prototypes(&temp, c);
-    let mut out = Vec::new();
-    add_circle_contact_candidates(&mut out, resource, targets, s, anchor, fixed_rotation, c);
+          # Structure validation uses strict penetration, never inclusive contact.
+          replace_once('src/structure.rs', 'if !crate::material_geometry::placed_forms_overlap(&pa,&pb,0.0){return false}let dx=b.placement.x-a.placement.x;let dy=b.placement.y-a.placement.y;let distance=dx.hypot(dy);let(sx,sy)=if distance>1e-12{(dx/distance,dy/distance)}else{(1.0,0.0)};let scale=pa.form.bounding_radius().max(pb.form.bounding_radius()).max(1.0);let epsilon=1e-8*scale;let shifted=crate::material_geometry::PlacedMaterialPart{part_index:0,form:pa.form.clone(),placement:Placement{x:a.placement.x-sx*epsilon,y:a.placement.y-sy*epsilon,rotation_radians:a.placement.rotation_radians}};crate::material_geometry::placed_forms_overlap(&shifted,&pb,0.0)', 'crate::material_geometry::placed_forms_penetrate(&pa,&pb,0.0)')
 
-    for &target in targets {
-        let Some(world) = target_world_point(s, target, c) else {
-            continue;
-        };
-        for endpoint in &endpoints {
-            let Some(local) = local_endpoint_point(resource, *endpoint, c) else {
-                continue;
-            };
-            add_unique_placement(&mut out, placement_for_point_contact(local, world, fixed_rotation));
-        }
-    }
-
-    if targets.len() >= 2 && endpoints.len() >= 2 {
-        let local_points = endpoints
-            .iter()
-            .filter_map(|e| local_endpoint_point(resource, *e, c))
-            .collect::<Vec<_>>();
-        let (sine, cosine) = fixed_rotation.sin_cos();
-        for (ia, a) in targets.iter().enumerate() {
-            let Some(wa) = target_world_point(s, *a, c) else {
-                continue;
-            };
-            for b in targets.iter().skip(ia + 1) {
-                let Some(wb) = target_world_point(s, *b, c) else {
-                    continue;
-                };
-                for la in 0..local_points.len() {
-                    for lb in (la + 1)..local_points.len() {
-                        let pa = local_points[la];
-                        let pb = local_points[lb];
-                        let rpa = (pa.0 * cosine - pa.1 * sine, pa.0 * sine + pa.1 * cosine);
-                        let rpb = (pb.0 * cosine - pb.1 * sine, pb.0 * sine + pb.1 * cosine);
-                        let world_local_dx = rpb.0 - rpa.0;
-                        let world_local_dy = rpb.1 - rpa.1;
-                        let target_dx = wb.0 - wa.0;
-                        let target_dy = wb.1 - wa.1;
-                        if (world_local_dx - target_dx).hypot(world_local_dy - target_dy)
-                            > 1e-7 * world_local_dx.hypot(world_local_dy).max(target_dx.hypot(target_dy)).max(1.0)
-                        {
-                            continue;
-                        }
-                        add_unique_placement(
-                            &mut out,
-                            Placement {
-                                x: wa.0 - rpa.0,
-                                y: wa.1 - rpa.1,
-                                rotation_radians: fixed_rotation,
-                            },
-                        );
-                    }
-                }
-            }
-        }
-    }
-    add_unique_placement(&mut out, Placement { rotation_radians: fixed_rotation, ..anchor });
-    out
-}
-'''
-          s = s[:start] + new_candidates + s[end:]
-          replace_once(
-              'src/construction_realization.rs',
-              'let anchor=Placement{x:e.placement.x,y:e.placement.y,rotation_radians:0.0};',
-              'let anchor=Placement{x:e.placement.x,y:e.placement.y,rotation_radians:e.placement.rotation_radians};',
-          )
-          p = Path('src/construction_realization.rs')
-          s = p.read_text()
-          old = 'candidate_placements_for_targets(res,&targets,&working,anchor,c)'
-          new = 'candidate_placements_for_targets(res,&targets,&working,anchor,e.placement.rotation_radians,c)'
-          if s.count(old) != 1:
-              raise SystemExit(f'construction: expected one candidate solver call, found {s.count(old)}')
-          p.write_text(s.replace(old, new))
-
-          # Structure-level strict overlap uses the same strict predicate.
-          replace_once(
-              'src/structure.rs',
-              'if !crate::material_geometry::placed_forms_overlap(&pa,&pb,0.0){return false}let dx=b.placement.x-a.placement.x;let dy=b.placement.y-a.placement.y;let distance=dx.hypot(dy);let(sx,sy)=if distance>1e-12{(dx/distance,dy/distance)}else{(1.0,0.0)};let scale=pa.form.bounding_radius().max(pb.form.bounding_radius()).max(1.0);let epsilon=1e-8*scale;let shifted=crate::material_geometry::PlacedMaterialPart{part_index:0,form:pa.form.clone(),placement:Placement{x:a.placement.x-sx*epsilon,y:a.placement.y-sy*epsilon,rotation_radians:a.placement.rotation_radians}};crate::material_geometry::placed_forms_overlap(&shifted,&pb,0.0)',
-              'crate::material_geometry::placed_forms_penetrate(&pa,&pb,0.0)',
-          )
-
-          # Orientation is now authoritative during construction; this helper
-          # validates the realized frame rather than rotating it afterward.
+          # Blueprint orientation is solved in construction; do not rotate the finished result again.
           p = Path('src/structural_blueprint.rs')
           s = p.read_text()
-          s = s.replace('apply_blueprint_orientation(', 'validate_blueprint_realization(')
-          start = s.index('fn validate_blueprint_realization(')
+          pattern = r'\n    let angle = placement\.rotation_radians;\n    if angle\.abs\(\) > 1e-12 \{.*?\n    \}\n\n    for &id in ids \{'
+          s2, n = re.subn(pattern, '\n    for &id in ids {', s, count=1, flags=re.S)
+          if n != 1:
+              raise SystemExit(f'structural_blueprint: orientation transform block not found exactly once ({n})')
+          s = s2
+          start = s.index('fn apply_blueprint_orientation(')
           end = s.index('\npub(crate) fn realize_connection_groups', start)
-          new_validate = '''fn validate_blueprint_realization(
-    structure: &OrganismStructure,
-    ids: &[usize],
-    placement: BlueprintPlacement,
-    neighbor_groups: &[Vec<usize>],
-    catalog: &[BaseResource],
-) -> Result<(), String> {
-    for &id in ids {
-        let Some(a) = structure.units.get(id) else {
-            return Err("orientation references a missing constituent".into());
-        };
-        if (a.placement.rotation_radians - placement.rotation_radians).abs() > 1e-9 {
-            return Err("realized constituent does not preserve the blueprint orientation".into());
-        }
-        for other in structure
-            .units
-            .iter()
-            .enumerate()
-            .filter_map(|(i, _)| (!ids.contains(&i)).then_some(i))
-        {
-            let Some(b) = structure.units.get(other) else {
-                continue;
-            };
-            let Some(sa) = a.shape(catalog) else {
-                continue;
-            };
-            let Some(sb) = b.shape(catalog) else {
-                continue;
-            };
-            let pa = crate::material_geometry::PlacedMaterialPart {
-                part_index: id,
-                form: sa.form.clone(),
-                placement: a.placement,
-            };
-            let pb = crate::material_geometry::PlacedMaterialPart {
-                part_index: other,
-                form: sb.form.clone(),
-                placement: b.placement,
-            };
-            if crate::material_geometry::placed_forms_penetrate(&pa, &pb, 0.0) {
-                return Err("realized material penetrates existing physical structure".into());
-            }
-        }
-    }
-
-    for group in neighbor_groups {
-        if !ids.iter().any(|&a| {
-            group.iter().any(|&b| {
-                crate::contact::connection_pair_candidates(structure, a, b, catalog)
-                    .iter()
-                    .any(|candidate| candidate.distance <= 1e-9)
-            })
-        }) {
-            return Err("realized material no longer has a physical contact with a prescribed neighbor".into());
-        }
-    }
-    Ok(())
-}
-'''
-          s = s[:start] + new_validate + s[end:]
+          chunk = s[start:end].replace('crate::material_geometry::placed_forms_overlap(&pa, &pb, 0.0)', 'crate::material_geometry::placed_forms_penetrate(&pa, &pb, 0.0)')
+          s = s[:start] + chunk + s[end:]
           p.write_text(s)
           PY
       - uses: dtolnay/rust-toolchain@stable
@@ -387,5 +136,5 @@ jobs:
           EOF
           git add src/material_geometry.rs src/construction_realization.rs src/structure.rs src/structural_blueprint.rs .github/workflows/rust.yml
           git rm .github/workflows/strict-penetration-fix.yml
-          git commit -m 'Honor blueprint orientation during material construction'
+          git commit -m 'Honor blueprint orientation during construction'
           git push
