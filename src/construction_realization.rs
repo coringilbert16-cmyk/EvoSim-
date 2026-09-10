@@ -71,6 +71,18 @@ fn candidate_placements_for_targets(resource: &BaseResource, targets: &[ContactT
         let Some(world_target) = target_world_point(structure, target, catalog) else { continue };
         for endpoint in &endpoints {
             let Some(local) = local_endpoint_point(resource, *endpoint, catalog) else { continue };
+            let target_dx = world_target.0 - anchor.x;
+            let target_dy = world_target.1 - anchor.y;
+            if local.0.hypot(local.1) > CONTACT_EPSILON && target_dx.hypot(target_dy) > CONTACT_EPSILON {
+                let rotation = target_dy.atan2(target_dx) - local.1.atan2(local.0);
+                // Exact contact, with the material's center placed as close as
+                // possible to its ideal blueprint location. This is the
+                // bounded rotational freedom the soft blueprint permits.
+                add_unique_placement(&mut out, placement_for_point_contact(local, world_target, rotation));
+            }
+            // Preserve the old zero-rotation exact-contact candidate as a
+            // deterministic alternative when the preferred orientation is
+            // physically unavailable.
             add_unique_placement(&mut out, placement_for_point_contact(local, world_target, 0.0));
         }
     }
@@ -111,7 +123,7 @@ fn candidate_placements_for_targets(resource: &BaseResource, targets: &[ContactT
 }
 
 fn units_strictly_overlap(a: &StructuralUnit, b: &StructuralUnit, catalog: &[BaseResource]) -> bool {
-    let (Some(shape_a), Some(shape_b)) = (a.shape(catalog), b.shape(catalog)) else { return false };
+    let (Some(shape_a), Some(shape_b)) = (a.shape(catalog), b.shape(catalog)) else { return false; };
     let pa = crate::material_geometry::PlacedMaterialPart { part_index: 0, form: shape_a.form.clone(), placement: a.placement };
     let pb = crate::material_geometry::PlacedMaterialPart { part_index: 1, form: shape_b.form.clone(), placement: b.placement };
     if !crate::material_geometry::placed_forms_overlap(&pa, &pb, 0.0) { return false; }
@@ -122,13 +134,11 @@ fn units_strictly_overlap(a: &StructuralUnit, b: &StructuralUnit, catalog: &[Bas
     crate::material_geometry::placed_forms_overlap(&shifted, &pb, 0.0)
 }
 
-fn internal_contact_exists(structure: &OrganismStructure, a: usize, b: usize, catalog: &[BaseResource]) -> bool {
-    connection_pair_candidates(structure, a, b, catalog).into_iter().any(|candidate| candidate.distance <= CONTACT_EPSILON)
-}
+fn internal_contact_exists(structure: &OrganismStructure, a: usize, b: usize, catalog: &[BaseResource]) -> bool { connection_pair_candidates(structure, a, b, catalog).into_iter().any(|candidate| candidate.distance <= CONTACT_EPSILON) }
 
 fn partial_configuration_valid(structure: &OrganismStructure, material: &Material, assigned: &[Option<usize>], catalog: &[BaseResource]) -> bool {
     for bond in &material.internal_bonds {
-        let (Some(a), Some(b)) = (assigned[bond.part_a], assigned[bond.part_b]) else { continue };
+        let (Some(a), Some(b)) = (assigned[bond.part_a], assigned[bond.part_b]) else { continue; };
         if !internal_contact_exists(structure, a, b, catalog) { return false; }
     }
     true
@@ -152,14 +162,13 @@ fn solve_material_placements(structure: &OrganismStructure, element: &BlueprintE
     let mut placements = vec![None; material.parts.len()];
     let mut assigned = vec![None; material.parts.len()];
     let anchor = Placement { x: element.placement.x, y: element.placement.y, rotation_radians: 0.0 };
-
     fn search(base: &OrganismStructure, material: &Material, anchor: Placement, placements: &mut [Option<Placement>], assigned: &mut [Option<usize>], external: &[Vec<usize>], catalog: &[BaseResource]) -> bool {
         if assigned.iter().all(Option::is_some) { return true; }
         let Some(part) = choose_next_part(material, assigned) else { return false; };
-        let Some(res) = resource(catalog, &material.parts[part].0) else { return false; }
+        let Some(res) = resource(catalog, &material.parts[part].0) else { return false; };
         let mut working = base.clone(); let mut working_indices = vec![None; material.parts.len()];
         for i in 0..material.parts.len() {
-            let Some(p) = placements[i] else { continue };
+            let Some(p) = placements[i] else { continue; };
             let mut unit = StructuralUnit::new(material.parts[i].0.clone(), p);
             if !unit.realize_default_geometry(catalog) || working.units.iter().any(|old| units_strictly_overlap(&unit, old, catalog)) { return false; }
             working_indices[i] = Some(working.add_unit(unit));
@@ -169,9 +178,7 @@ fn solve_material_placements(structure: &OrganismStructure, element: &BlueprintE
             let other = if bond.part_a == part && assigned[bond.part_b].is_some() { working_indices[bond.part_b] } else if bond.part_b == part && assigned[bond.part_a].is_some() { working_indices[bond.part_a] } else { None };
             if let Some(index) = other { target_units.push(index); }
         }
-        if part == 0 {
-            for constraint in external { target_units.extend(constraint.iter().copied()); }
-        }
+        if part == 0 { for constraint in external { target_units.extend(constraint.iter().copied()); } }
         target_units.sort_unstable(); target_units.dedup();
         let target_endpoints = contact_targets_for_units(&working, &target_units, catalog);
         let candidates = if target_endpoints.is_empty() && part != 0 { Vec::new() } else { candidate_placements_for_targets(res, &target_endpoints, &working, anchor, catalog) };
@@ -179,7 +186,7 @@ fn solve_material_placements(structure: &OrganismStructure, element: &BlueprintE
             let mut trial = base.clone(); let mut trial_indices = vec![None; material.parts.len()]; let mut valid = true;
             for i in 0..material.parts.len() {
                 let p = if i == part { Some(candidate) } else { placements[i] };
-                let Some(p) = p else { continue };
+                let Some(p) = p else { continue; };
                 let mut unit = StructuralUnit::new(material.parts[i].0.clone(), p);
                 if !unit.realize_default_geometry(catalog) || trial.units.iter().any(|old| units_strictly_overlap(&unit, old, catalog)) { valid = false; break; }
                 trial_indices[i] = Some(trial.add_unit(unit));
@@ -191,7 +198,6 @@ fn solve_material_placements(structure: &OrganismStructure, element: &BlueprintE
         }
         false
     }
-
     if !search(structure, material, anchor, &mut placements, &mut assigned, external_constraints, catalog) { return Err("no physically valid material realization satisfies its constraints".into()); }
     placements.into_iter().map(|p| p.ok_or_else(|| "material solver returned incomplete realization".to_string())).collect()
 }
@@ -241,23 +247,7 @@ pub(crate) fn realize_material_with_constraints(structure: &mut OrganismStructur
 mod tests {
     use super::*;
     use crate::resources::{default_catalog, InternalBond};
-
     fn carbon_hydrogen_material() -> Material { Material { parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)], internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }] } }
-
-    #[test]
-    fn single_material_is_realized_at_anchor() {
-        let catalog = default_catalog();
-        let element = BlueprintElement { material: Material::free_base("Carbon", 1.0), placement: crate::structural_blueprint::BlueprintPlacement { x: 2.0, y: 3.0 } };
-        let mut structure = OrganismStructure::new(); let ids = realize_material(&mut structure, &element, &catalog).unwrap();
-        assert_eq!(ids.len(), 1); assert_eq!(structure.units[0].placement.x, 2.0); assert_eq!(structure.units[0].placement.y, 3.0);
-    }
-
-    #[test]
-    fn composite_realization_preserves_internal_contact() {
-        let catalog = default_catalog();
-        let element = BlueprintElement { material: carbon_hydrogen_material(), placement: crate::structural_blueprint::BlueprintPlacement { x: 0.0, y: 0.0 } };
-        let mut structure = OrganismStructure::new(); let ids = realize_material(&mut structure, &element, &catalog).unwrap();
-        assert_eq!(ids.len(), 2); assert_eq!(structure.bonds.len(), 1);
-        assert!(connection_pair_candidates(&structure, ids[0], ids[1], &catalog).into_iter().any(|candidate| candidate.distance <= CONTACT_EPSILON));
-    }
+    #[test] fn single_material_is_realized_at_anchor() { let catalog = default_catalog(); let element = BlueprintElement { material: Material::free_base("Carbon", 1.0), placement: crate::structural_blueprint::BlueprintPlacement { x: 2.0, y: 3.0 } }; let mut structure = OrganismStructure::new(); let ids = realize_material(&mut structure, &element, &catalog).unwrap(); assert_eq!(ids.len(), 1); assert_eq!(structure.units[0].placement.x, 2.0); assert_eq!(structure.units[0].placement.y, 3.0); }
+    #[test] fn composite_realization_preserves_internal_contact() { let catalog = default_catalog(); let element = BlueprintElement { material: carbon_hydrogen_material(), placement: crate::structural_blueprint::BlueprintPlacement { x: 0.0, y: 0.0 } }; let mut structure = OrganismStructure::new(); let ids = realize_material(&mut structure, &element, &catalog).unwrap(); assert_eq!(ids.len(), 2); assert_eq!(structure.bonds.len(), 1); assert!(connection_pair_candidates(&structure, ids[0], ids[1], &catalog).into_iter().any(|candidate| candidate.distance <= CONTACT_EPSILON)); }
 }
