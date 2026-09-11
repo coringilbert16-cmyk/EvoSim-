@@ -1,6 +1,6 @@
 // Vents transfer existing local reservoir material into the active field.
 
-use super::field::{ActiveMaterialField, MATERIAL_EPSILON};
+use super::field::ActiveMaterialField;
 use super::reservoir::DeepReservoir;
 use crate::resources::Material;
 use serde::{Deserialize, Serialize};
@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 pub struct Vent {
     pub x: f64,
     pub y: f64,
+    /// Retained for serialized compatibility; vent output no longer uses an
+    /// authored chemical recipe.
     pub composition: Vec<(String, f64)>,
     pub emission_amount: f64,
     pub emission_interval: u64,
@@ -30,14 +32,11 @@ pub fn apply_vents(
             continue;
         };
         let reservoir_index = reservoir.reservoir_index_for_field_index(field, field_index);
-        let mut parts = Vec::new();
-        for (name, proportion) in &vent.composition {
-            let requested = vent.emission_amount * proportion;
-            let drawn = reservoir.cells[reservoir_index].take_indiscriminate(name, requested);
-            if drawn > MATERIAL_EPSILON {
-                parts.push((name.clone(), drawn));
-            }
-        }
+        let cursor = reservoir_index
+            .wrapping_add(vent.emission_timer as usize)
+            .wrapping_add(vent.x.to_bits() as usize)
+            .wrapping_add(vent.y.to_bits() as usize);
+        let parts = reservoir.cells[reservoir_index].take_any(vent.emission_amount, cursor);
         if !parts.is_empty() {
             field.deposit_at_index(
                 field_index,
