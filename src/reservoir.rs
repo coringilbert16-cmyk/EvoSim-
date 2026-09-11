@@ -54,6 +54,41 @@ impl ReservoirCell {
         self.take(name, amount.min(available))
     }
 
+    /// Draw material without an authored chemical preference.
+    ///
+    /// The starting entry rotates with `cursor`, so repeated vent emissions do
+    /// not permanently favor the first reservoir entry while still remaining
+    /// deterministic and local to this reservoir cell.
+    pub fn take_any(&mut self, amount: f64, cursor: usize) -> Vec<(String, f64)> {
+        if amount <= MATERIAL_EPSILON || self.entries.is_empty() {
+            return Vec::new();
+        }
+
+        let mut remaining = amount;
+        let mut drawn = Vec::new();
+        let len = self.entries.len();
+
+        for offset in 0..len {
+            if remaining <= MATERIAL_EPSILON {
+                break;
+            }
+
+            let index = (cursor + offset) % len;
+            let available = self.entries[index].1;
+            if available <= MATERIAL_EPSILON {
+                continue;
+            }
+
+            let amount_taken = remaining.min(available);
+            self.entries[index].1 -= amount_taken;
+            remaining -= amount_taken;
+            drawn.push((self.entries[index].0.clone(), amount_taken));
+        }
+
+        self.entries.retain(|(_, amount)| *amount > MATERIAL_EPSILON);
+        drawn
+    }
+
     pub fn total_amount(&self) -> f64 {
         self.entries.iter().map(|(_, a)| a).sum()
     }
