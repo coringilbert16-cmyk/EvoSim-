@@ -4,8 +4,8 @@ use crate::resources::{combine_materials, Material};
 /// Small, reusable structured-material seeds for the initial environment.
 ///
 /// These are deliberately compositions rather than terrain types. Their
-/// environmental meaning comes from composition + internal structure + where
-/// they are placed in the active field.
+environmental meaning comes from composition + internal structure + where
+they are placed in the active field.
 pub(crate) const ENVIRONMENTAL_COMPOUND_COUNT: usize = 12;
 
 pub(crate) fn seed_compounds() -> Vec<Material> {
@@ -39,8 +39,6 @@ pub(crate) fn seed_initial_landscape(field: &mut ActiveMaterialField) {
         let nx = x / (field.width_cells as f64 * field.cell_size).max(1.0);
         let ny = y / (field.height_cells as f64 * field.cell_size).max(1.0);
 
-        // Low-frequency fields create broad coherent regions. Higher-frequency
-        // terms break up the boundaries without turning the landscape into noise.
         let field_a = ((nx * 2.4 + ny * 1.3).sin() + 1.0) * 0.5;
         let field_b = ((nx * 1.1 - ny * 2.7 + 0.8).cos() + 1.0) * 0.5;
         let field_c = ((nx * 5.0 + ny * 3.7 + 1.7).sin() + 1.0) * 0.5;
@@ -48,8 +46,6 @@ pub(crate) fn seed_initial_landscape(field: &mut ActiveMaterialField) {
             * compounds.len() as f64) as usize
             % compounds.len();
 
-        // Broad regions get a dominant structured material, with occasional
-        // neighboring compositions creating gradual ecological transitions.
         field.deposit_at_index(index, scaled_material(&compounds[selector], 4.0));
 
         if field_c > 0.62 {
@@ -57,8 +53,6 @@ pub(crate) fn seed_initial_landscape(field: &mut ActiveMaterialField) {
             field.deposit_at_index(index, scaled_material(&compounds[secondary], 2.0));
         }
 
-        // Keep some raw material in the active layer so the initial world is
-        // not made exclusively from pre-structured matter.
         if field_a > 0.72 {
             field.deposit_at_index(index, Material::free_base("Hydrogen", 2.0));
         }
@@ -89,7 +83,8 @@ fn scaled_material(material: &Material, scale: f64) -> Material {
 
 #[cfg(test)]
 mod tests {
-    use super::{seed_compounds, ENVIRONMENTAL_COMPOUND_COUNT};
+    use super::{seed_compounds, seed_initial_landscape, ENVIRONMENTAL_COMPOUND_COUNT};
+    use crate::field::ActiveMaterialField;
 
     #[test]
     fn seed_set_has_expected_size_and_structure() {
@@ -110,6 +105,21 @@ mod tests {
         }));
         assert!(compounds.iter().any(|material| {
             material.parts.iter().all(|(name, _)| name != "Carbon")
+        }));
+    }
+
+    #[test]
+    fn initial_landscape_is_populated_and_structured() {
+        let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
+        seed_initial_landscape(&mut field);
+
+        assert!(field.total_amount() > 0.0);
+        assert!(field.cells.iter().all(|cell| !cell.materials.is_empty()));
+        assert!(field.cells.iter().any(|cell| {
+            cell.materials.iter().any(|material| material.has_internal_structure())
+        }));
+        assert!(field.cells.iter().any(|cell| {
+            cell.materials.iter().any(|material| material.parts.iter().any(|(name, _)| name == "Water"))
         }));
     }
 }
