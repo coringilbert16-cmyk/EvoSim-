@@ -50,12 +50,13 @@ fn core_material() -> Material {
     Material { parts: vec![("Carbon".into(), 1.0), ("Carbon".into(), 1.0), ("Nitrogen".into(), 1.0)], internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }, InternalBond { part_a: 0, part_b: 2 }] }
 }
 
+// The soft interior is structurally soft; water remains environmental fluid stock.
 fn soft_interior_material() -> Material {
-    Material { parts: vec![("Hydrogen".into(), 1.0), ("Nitrogen".into(), 1.0), ("Water".into(), 1.0)], internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }, InternalBond { part_a: 0, part_b: 2 }] }
+    Material { parts: vec![("Hydrogen".into(), 1.0), ("Nitrogen".into(), 1.0), ("Sulfur".into(), 1.0)], internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }, InternalBond { part_a: 0, part_b: 2 }] }
 }
 
 fn membrane_material() -> Material {
-    Material { parts: vec![("Carbon".into(), 1.0), ("Sulfur".into(), 1.0), ("Water".into(), 1.0)], internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }, InternalBond { part_a: 0, part_b: 2 }] }
+    Material { parts: vec![("Carbon".into(), 1.0), ("Sulfur".into(), 1.0), ("Phosphorus".into(), 1.0)], internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }, InternalBond { part_a: 0, part_b: 2 }] }
 }
 
 fn default_structural_blueprint() -> StructuralBlueprint {
