@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 mod atomic_blueprint;
 mod combine;
 mod combine_runtime;
@@ -14,6 +16,7 @@ mod environmental_materials;
 mod genome;
 mod interface_geometry;
 mod math;
+#[allow(unused_variables)]
 mod material_geometry;
 mod material_storage;
 mod material_transfer;
@@ -28,6 +31,7 @@ mod reproduction;
 mod resource_visualization;
 mod resources;
 mod seed_legacy_realization;
+#[allow(clippy::needless_range_loop)]
 mod structural_blueprint;
 mod structure;
 mod surface_geometry;
