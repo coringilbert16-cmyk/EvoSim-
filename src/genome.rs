@@ -92,11 +92,11 @@ mod tests {
         let g = initial_genome();
         let b = &g.structural_blueprint;
         assert_eq!(b.elements.len(), 13);
-        assert_eq!(b.connections.len(), 18);
+        assert_eq!(b.connections.len(), 24);
         assert_eq!(b.core_elements, vec![0]);
         assert!(b.validate().is_ok());
         assert_eq!(g.atomic_blueprint.atoms.len(), 13);
-        assert_eq!(g.atomic_blueprint.bonds.len(), 18);
+        assert_eq!(g.atomic_blueprint.bonds.len(), 24);
         assert!(g.atomic_blueprint.validate().is_ok());
         assert!(g.atomic_blueprint.realize(&default_catalog()).is_ok());
         assert_eq!(b.elements[0].material.parts[0].0, "Carbon");
