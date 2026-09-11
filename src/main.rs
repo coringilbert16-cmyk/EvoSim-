@@ -27,6 +27,7 @@ mod reproduction;
 mod resource_visualization;
 mod resources;
 mod seed_legacy_realization;
+mod seed_selector;
 mod structural_blueprint;
 mod structure;
 mod surface_geometry;
