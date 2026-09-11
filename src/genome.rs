@@ -2,7 +2,7 @@ use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 
-use crate::atomic_blueprint::AtomicBlueprint;
+use crate::seed_blueprint::AtomicBlueprint;
 use crate::resources::{InternalBond, Material};
 use crate::structural_blueprint::{BlueprintConnection, BlueprintElement, BlueprintPlacement, StructuralBlueprint};
 
@@ -80,7 +80,7 @@ fn default_structural_blueprint() -> StructuralBlueprint {
 
 fn default_atomic_blueprint() -> AtomicBlueprint {
     let blueprint = default_structural_blueprint();
-    AtomicBlueprint::compile_seed_from_legacy(&blueprint, &crate::resources::default_catalog())
+    AtomicBlueprint::compile_seed(&blueprint, &crate::resources::default_catalog())
         .expect("default simple cell blueprint must compile into an atomic seed")
 }
 
