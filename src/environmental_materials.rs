@@ -1,4 +1,4 @@
-use crate::environment::field::ActiveMaterialField;
+use crate::environment::ActiveMaterialField;
 use crate::resources::{combine_materials, Material};
 
 /// Small, reusable structured-material seeds for the initial environment.
@@ -84,7 +84,7 @@ mod tests {
     use std::collections::BTreeSet;
 
     use super::{seed_compounds, seed_initial_landscape, ENVIRONMENTAL_COMPOUND_COUNT};
-    use crate::environment::field::ActiveMaterialField;
+    use crate::environment::ActiveMaterialField;
     use crate::resources::Material;
 
     fn structured_signature(material: &Material) -> Option<Vec<String>> {
