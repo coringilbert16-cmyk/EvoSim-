@@ -22,7 +22,6 @@ mod organism_geometry;
 mod boundary_contact;
 mod physical_geometry;
 mod physical_interface;
-mod permeability;
 mod reproduction;
 mod resource_visualization;
 mod resources;
