@@ -24,9 +24,7 @@ pub struct Genome {
 }
 
 impl Genome {
-    pub fn trait_value(&self, name: &str, default: f64) -> f64 {
-        self.traits.iter().find(|t| t.name == name).map(|t| t.value).unwrap_or(default)
-    }
+    pub fn trait_value(&self, name: &str, default: f64) -> f64 { self.traits.iter().find(|t| t.name == name).map(|t| t.value).unwrap_or(default) }
     pub fn mass_affinity(&self) -> f64 { self.trait_value("mass_affinity", 0.0).clamp(-1.0, 1.0) }
     pub fn potential_energy_affinity(&self) -> f64 { self.trait_value("potential_energy_affinity", 0.0).clamp(-1.0, 1.0) }
     pub fn reactivity_affinity(&self) -> f64 { self.trait_value("reactivity_affinity", 0.0).clamp(-1.0, 1.0) }
@@ -40,98 +38,47 @@ impl Genome {
     pub fn reproductive_investment(&self) -> f64 { self.trait_value("reproductive_investment", 0.5).clamp(0.15, 1.0) }
     pub fn mutate(&mut self, rng: &mut ChaCha8Rng) {
         for t in &mut self.traits {
-            if rng.gen::<f64>() < t.mutation_probability.clamp(1e-6, 0.25) {
-                t.value += rng.gen_range(-1.0..1.0) * t.mutation_sigma.max(0.0);
-            }
-            if rng.gen::<f64>() < 0.001 {
-                t.mutation_probability = (t.mutation_probability * rng.gen_range(0.5..1.5)).clamp(1e-6, 0.1);
-            }
+            if rng.gen::<f64>() < t.mutation_probability.clamp(1e-6, 0.25) { t.value += rng.gen_range(-1.0..1.0) * t.mutation_sigma.max(0.0); }
+            if rng.gen::<f64>() < 0.001 { t.mutation_probability = (t.mutation_probability * rng.gen_range(0.5..1.5)).clamp(1e-6, 0.1); }
         }
     }
 }
 
-fn trait_def(name: &str, value: f64, sigma: f64) -> TraitDef {
-    TraitDef { name: name.into(), value, mutation_probability: 0.001, mutation_sigma: sigma }
-}
+fn trait_def(name: &str, value: f64, sigma: f64) -> TraitDef { TraitDef { name: name.into(), value, mutation_probability: 0.001, mutation_sigma: sigma } }
 
-// These are intentionally simple material intents. The seed describes three
-// physical roles only; construction remains responsible for choosing the
-// actual constituent arrangement and contact endpoints.
 fn core_material() -> Material {
-    Material {
-        parts: vec![("Carbon".into(), 1.0), ("Carbon".into(), 1.0), ("Nitrogen".into(), 1.0)],
-        internal_bonds: vec![
-            InternalBond { part_a: 0, part_b: 1 },
-            InternalBond { part_a: 0, part_b: 2 },
-        ],
-    }
+    Material { parts: vec![("Carbon".into(), 1.0), ("Carbon".into(), 1.0), ("Nitrogen".into(), 1.0)], internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }, InternalBond { part_a: 0, part_b: 2 }] }
 }
 
 fn soft_interior_material() -> Material {
-    Material {
-        parts: vec![("Hydrogen".into(), 1.0), ("Nitrogen".into(), 1.0), ("Water".into(), 1.0)],
-        internal_bonds: vec![
-            InternalBond { part_a: 0, part_b: 1 },
-            InternalBond { part_a: 0, part_b: 2 },
-        ],
-    }
+    Material { parts: vec![("Hydrogen".into(), 1.0), ("Nitrogen".into(), 1.0), ("Water".into(), 1.0)], internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }, InternalBond { part_a: 0, part_b: 2 }] }
 }
 
 fn membrane_material() -> Material {
-    Material {
-        parts: vec![("Carbon".into(), 1.0), ("Sulfur".into(), 1.0), ("Water".into(), 1.0)],
-        internal_bonds: vec![
-            InternalBond { part_a: 0, part_b: 1 },
-            InternalBond { part_a: 0, part_b: 2 },
-        ],
-    }
+    Material { parts: vec![("Carbon".into(), 1.0), ("Sulfur".into(), 1.0), ("Water".into(), 1.0)], internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }, InternalBond { part_a: 0, part_b: 2 }] }
 }
 
 fn default_structural_blueprint() -> StructuralBlueprint {
     StructuralBlueprint::with_core_elements(
         vec![
-            BlueprintElement {
-                material: core_material(),
-                placement: BlueprintPlacement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-            },
-            BlueprintElement {
-                material: soft_interior_material(),
-                placement: BlueprintPlacement { x: 2.0, y: 0.0, rotation_radians: 0.0 },
-            },
-            BlueprintElement {
-                material: membrane_material(),
-                placement: BlueprintPlacement { x: 4.0, y: 0.0, rotation_radians: 0.0 },
-            },
+            BlueprintElement { material: core_material(), placement: BlueprintPlacement { x: 0.0, y: 0.0, rotation_radians: 0.0 } },
+            BlueprintElement { material: soft_interior_material(), placement: BlueprintPlacement { x: 2.0, y: 0.0, rotation_radians: 0.0 } },
+            BlueprintElement { material: membrane_material(), placement: BlueprintPlacement { x: 4.0, y: 0.0, rotation_radians: 0.0 } },
         ],
-        vec![
-            BlueprintConnection { element_a: 0, element_b: 1 },
-            BlueprintConnection { element_a: 1, element_b: 2 },
-        ],
+        vec![BlueprintConnection { element_a: 0, element_b: 1 }, BlueprintConnection { element_a: 1, element_b: 2 }],
         vec![0],
     )
 }
 
 fn default_atomic_blueprint() -> AtomicBlueprint {
     let structural = default_structural_blueprint();
-    AtomicBlueprint::compile_seed_from_legacy(&structural, &crate::resources::default_catalog())
-        .expect("default seed structural blueprint must compile into an atomic blueprint")
+    AtomicBlueprint::compile_from_structural(&structural, &crate::resources::default_catalog())
+        .expect("default structural blueprint must compile into an atomic blueprint")
 }
 
 pub fn initial_genome() -> Genome {
     Genome {
-        traits: vec![
-            trait_def("memory_strength", 0.5, 0.05),
-            trait_def("perception_radius", 100.0, 1.0),
-            trait_def("sensory_resolution", 0.5, 0.05),
-            trait_def("directional_resolution", 1.0, 0.05),
-            trait_def("mass_affinity", 0.0, 0.05),
-            trait_def("potential_energy_affinity", 0.5, 0.05),
-            trait_def("reactivity_affinity", 0.0, 0.05),
-            trait_def("cohesion_affinity", 0.0, 0.05),
-            trait_def("processing_efficiency", 0.8, 0.05),
-            trait_def("movement_efficiency", 0.8, 0.05),
-            trait_def("reproductive_investment", 0.5, 0.05),
-        ],
+        traits: vec![trait_def("memory_strength", 0.5, 0.05), trait_def("perception_radius", 100.0, 1.0), trait_def("sensory_resolution", 0.5, 0.05), trait_def("directional_resolution", 1.0, 0.05), trait_def("mass_affinity", 0.0, 0.05), trait_def("potential_energy_affinity", 0.5, 0.05), trait_def("reactivity_affinity", 0.0, 0.05), trait_def("cohesion_affinity", 0.0, 0.05), trait_def("processing_efficiency", 0.8, 0.05), trait_def("movement_efficiency", 0.8, 0.05), trait_def("reproductive_investment", 0.5, 0.05)],
         structural_blueprint: default_structural_blueprint(),
         atomic_blueprint: default_atomic_blueprint(),
     }
@@ -141,38 +88,7 @@ pub fn initial_genome() -> Genome {
 mod tests {
     use super::*;
     use crate::resources::default_catalog;
-
-    #[test]
-    fn seed_blueprint_has_core_soft_interior_and_membrane() {
-        let g = initial_genome();
-        let b = &g.structural_blueprint;
-        assert_eq!(b.elements.len(), 3);
-        assert_eq!(b.connections.len(), 2);
-        assert_eq!(b.core_elements, vec![0]);
-        assert!(b.validate().is_ok());
-        assert!(b.is_connected());
-        assert_eq!(b.elements[0].material.parts.len(), 3);
-        assert_eq!(b.elements[1].material.parts.len(), 3);
-        assert_eq!(b.elements[2].material.parts.len(), 3);
-        assert!(b.elements[0].material.has_internal_structure());
-        assert!(b.elements[1].material.has_internal_structure());
-        assert!(b.elements[2].material.has_internal_structure());
-        assert!(g.atomic_blueprint.validate().is_ok());
-        assert!(!g.atomic_blueprint.atoms.is_empty());
-        assert!(!g.atomic_blueprint.bonds.is_empty());
-        assert!(g.structural_blueprint.realize(&default_catalog()).is_ok());
-        assert!(g.atomic_blueprint.realize(&default_catalog()).is_ok());
-    }
-
-    #[test]
-    fn seed_blueprint_is_connected() {
-        assert!(initial_genome().structural_blueprint.is_connected());
-    }
-
-    #[test]
-    fn seed_genome_core_is_connected() {
-        let b = &initial_genome().structural_blueprint;
-        assert_eq!(b.core_elements, vec![0]);
-        assert!(b.core_elements.iter().all(|&i| i < b.elements.len()));
-    }
+    #[test] fn seed_blueprint_has_core_soft_interior_and_membrane() { let g = initial_genome(); let b = &g.structural_blueprint; assert_eq!(b.elements.len(), 3); assert_eq!(b.connections.len(), 2); assert_eq!(b.core_elements, vec![0]); assert!(b.validate().is_ok()); assert!(b.is_connected()); assert_eq!(b.elements[0].material.parts.len(), 3); assert_eq!(b.elements[1].material.parts.len(), 3); assert_eq!(b.elements[2].material.parts.len(), 3); assert!(b.elements[0].material.has_internal_structure()); assert!(b.elements[1].material.has_internal_structure()); assert!(b.elements[2].material.has_internal_structure()); assert!(g.atomic_blueprint.validate().is_ok()); assert!(!g.atomic_blueprint.atoms.is_empty()); assert!(!g.atomic_blueprint.bonds.is_empty()); assert!(g.structural_blueprint.realize(&default_catalog()).is_ok()); assert!(g.atomic_blueprint.realize(&default_catalog()).is_ok()); }
+    #[test] fn seed_blueprint_is_connected() { assert!(initial_genome().structural_blueprint.is_connected()); }
+    #[test] fn seed_genome_core_is_connected() { let b = &initial_genome().structural_blueprint; assert_eq!(b.core_elements, vec![0]); assert!(b.core_elements.iter().all(|&i| i < b.elements.len())); }
 }
