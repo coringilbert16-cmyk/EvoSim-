@@ -4,11 +4,7 @@ use std::collections::HashSet;
 
 use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
 use crate::decision_runtime::{select_action, ActionCandidate, DecisionContext};
-use crate::environment::{
-    apply_settling, apply_vents, ActiveMaterialField, DeepReservoir, Vent, DEFAULT_CELL_SIZE,
-    DEFAULT_DIFFUSION_FRACTION, DEFAULT_RESERVOIR_BLOCK_SIZE, DEFAULT_SETTLING_FRACTION,
-    DEFAULT_SETTLING_INTERVAL_TICKS,
-};
+use crate::environment::{apply_vents, ActiveMaterialField, Vent, DEFAULT_CELL_SIZE, DEFAULT_DIFFUSION_FRACTION};
 use crate::genome::initial_genome;
 use crate::state::{
     DevelopmentStage, EnergyLedger, Environment, Organism, Position, ResourceSense, Simulation,
@@ -29,15 +25,12 @@ impl Simulation {
         let width = 1000.0; let height = 1000.0;
         let mut field = ActiveMaterialField::new(width, height, DEFAULT_CELL_SIZE);
         crate::environmental_materials::seed_initial_landscape(&mut field);
-        let mut reservoir = DeepReservoir::new_matching_field(&field, DEFAULT_RESERVOIR_BLOCK_SIZE);
-        let starting_amounts: [(&str, f64); 7] = [("Carbon",10_000.0),("Methane",5_000.0),("Hydrogen",5_000.0),("Sulfur",5_000.0),("Nitrogen",5_000.0),("Phosphorus",5_000.0),("Water",20_000.0)];
-        for (name, amount) in starting_amounts { reservoir.seed_uniform(name, amount); }
         let vents = vec![
-            Vent{x:250.0,y:250.0,composition:Vec::new(),emission_amount:50.0,emission_interval:20,emission_timer:0},
-            Vent{x:750.0,y:300.0,composition:Vec::new(),emission_amount:50.0,emission_interval:30,emission_timer:0},
-            Vent{x:520.0,y:550.0,composition:Vec::new(),emission_amount:50.0,emission_interval:25,emission_timer:0},
+            Vent{x:250.0,y:250.0,emission_amount:50.0,emission_interval:20,emission_timer:0},
+            Vent{x:750.0,y:300.0,emission_amount:50.0,emission_interval:30,emission_timer:0},
+            Vent{x:520.0,y:550.0,emission_amount:50.0,emission_interval:25,emission_timer:0},
         ];
-        Environment{width,height,catalog,field,reservoir,vents}
+        Environment{width,height,catalog,field,vents}
     }
 
     pub(crate) fn create_initial_organism() -> Organism {
@@ -49,7 +42,7 @@ impl Simulation {
         Organism{id:"1".into(),occupied_cells:vec![Position{x:500.0,y:500.0}],genome,resource_sense:ResourceSense{sensed_resources:Vec::new(),direction_x:0.0,direction_y:0.0,direction_strength:0.0},memory:Vec::new(),decision_history:crate::decision::DecisionHistory::default(),usable_energy:0.0,stress:0.0,stress_threshold:crate::state::INITIAL_STRESS_THRESHOLD,stored_material:crate::material_storage::MaterialStorage::default(),structure,development_stage,age:0,reproductive_readiness:0.0,active_transformation_id:None,reproductive_construction:None}
     }
 
-    pub(crate) fn step_environment(&mut self){apply_vents(&mut self.environment.field,&mut self.environment.reservoir,&mut self.environment.vents);self.environment.field.diffuse_step(DEFAULT_DIFFUSION_FRACTION);if self.tick%DEFAULT_SETTLING_INTERVAL_TICKS==0{apply_settling(&mut self.environment.field,&mut self.environment.reservoir,DEFAULT_SETTLING_FRACTION);}}
+    pub(crate) fn step_environment(&mut self){apply_vents(&mut self.environment.field,&self.environment.catalog,&mut self.environment.vents,&mut self.rng);self.environment.field.diffuse_step(DEFAULT_DIFFUSION_FRACTION);}
     fn mature_structural_mass(organism:&Organism,environment:&Environment)->f64{organism.genome.structural_blueprint.structural_mass(&environment.catalog)}
     fn growth_fraction(organism:&Organism,environment:&Environment)->f64{let mature_mass=Self::mature_structural_mass(organism,environment);if !mature_mass.is_finite()||mature_mass<=0.0{return 0.0}(organism.structural_mass(&environment.catalog)/mature_mass).max(0.0)}
     fn update_development_stage(organism:&mut Organism,environment:&Environment){match organism.development_stage{DevelopmentStage::Offspring=>{if organism.reproductive_construction.is_none(){organism.development_stage=DevelopmentStage::Juvenile}},DevelopmentStage::Juvenile=>{if Self::growth_fraction(organism,environment)>=ADULTHOOD_GROWTH_FRACTION{organism.development_stage=DevelopmentStage::Adult}},DevelopmentStage::Adult=>{}}}
@@ -95,5 +88,5 @@ impl Simulation {
     }
 
     pub(crate) fn apply_energy_capacity(organism:&mut Organism,environment:&Environment,ledger:&mut EnergyLedger)->bool{organism.stress*=crate::state::STRESS_DECAY_PER_TICK;organism.apply_stress_damage(environment,ledger)}
-    #[cfg(test)]pub(crate)fn total_material_in_system(&self)->f64{let mut total=self.environment.field.total_amount()+self.environment.reservoir.total_amount();for transformation in &self.active_transformations{total+=transformation.material.total_amount();}for organism in &self.organisms{total+=organism.stored_material.total_amount();if let Some(construction)=&organism.reproductive_construction{total+=construction.committed_material.total_amount();}total+=organism.structure.units.iter().map(|unit|unit.material.total_amount()).sum::<f64>();}for body in &self.decomposing_bodies{total+=body.structure.units.iter().map(|unit|unit.material.total_amount()).sum::<f64>();}total}
+    #[cfg(test)]pub(crate)fn total_material_in_system(&self)->f64{let mut total=self.environment.field.total_amount();for transformation in &self.active_transformations{total+=transformation.material.total_amount();}for organism in &self.organisms{total+=organism.stored_material.total_amount();if let Some(construction)=&organism.reproductive_construction{total+=construction.committed_material.total_amount();}total+=organism.structure.units.iter().map(|unit|unit.material.total_amount()).sum::<f64>();}for body in &self.decomposing_bodies{total+=body.structure.units.iter().map(|unit|unit.material.total_amount()).sum::<f64>();}total}
 }
