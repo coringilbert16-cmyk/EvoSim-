@@ -1,5 +1,6 @@
 #![allow(clippy::too_many_arguments)]
 
+#[allow(clippy::needless_range_loop)]
 mod atomic_blueprint;
 mod combine;
 mod combine_runtime;
@@ -31,7 +32,7 @@ mod reproduction;
 mod resource_visualization;
 mod resources;
 mod seed_legacy_realization;
-#[allow(clippy::needless_range_loop)]
+#[allow(clippy::needless_range_loop, unused_variables)]
 mod structural_blueprint;
 mod structure;
 mod surface_geometry;
