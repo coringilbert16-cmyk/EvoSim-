@@ -43,22 +43,22 @@ impl AtomicBlueprint {
         Ok(structure)
     }
     pub fn from_legacy(_legacy: &StructuralBlueprint) -> Result<Self, String> { Err("legacy structural blueprint cannot be flattened deterministically: external connections do not identify constituent endpoints".into()) }
-    pub(crate) fn compile_seed_from_legacy(legacy: &StructuralBlueprint, catalog: &[BaseResource]) -> Result<Self, String> {
-        legacy.validate()?;
+    pub(crate) fn compile_from_structural(structural: &StructuralBlueprint, catalog: &[BaseResource]) -> Result<Self, String> {
+        structural.validate()?;
         let mut structure = OrganismStructure::new();
         let mut groups = HashMap::<usize, Vec<usize>>::new();
-        let first = legacy.elements.first().ok_or_else(|| "legacy blueprint has no elements".to_string())?;
+        let first = structural.elements.first().ok_or_else(|| "structural blueprint has no elements".to_string())?;
         let first_ids = crate::construction_realization::realize_material(&mut structure, first, catalog)
-            .map_err(|error| format!("seed element 0 failed: {error}"))?;
+            .map_err(|error| format!("element 0 failed: {error}"))?;
         groups.insert(0, first_ids);
-        let mut attempted = vec![false; legacy.elements.len()];
+        let mut attempted = vec![false; structural.elements.len()];
         attempted[0] = true;
         loop {
             let mut best = None;
             let mut best_neighbors = 0usize;
-            for index in 1..legacy.elements.len() {
+            for index in 1..structural.elements.len() {
                 if attempted[index] { continue; }
-                let neighbors = legacy.connections.iter().filter_map(|connection| {
+                let neighbors = structural.connections.iter().filter_map(|connection| {
                     let neighbor = if connection.element_a == index { connection.element_b } else if connection.element_b == index { connection.element_a } else { return None };
                     groups.contains_key(&neighbor).then_some(neighbor)
                 }).collect::<std::collections::HashSet<_>>();
@@ -66,39 +66,39 @@ impl AtomicBlueprint {
             }
             let Some(index) = best else { break };
             attempted[index] = true;
-            let neighbor_targets = legacy.connections.iter().filter_map(|connection| {
+            let neighbor_targets = structural.connections.iter().filter_map(|connection| {
                 let neighbor = if connection.element_a == index { connection.element_b } else if connection.element_b == index { connection.element_a } else { return None };
                 groups.get(&neighbor).cloned()
             }).collect::<Vec<_>>();
-            if neighbor_targets.is_empty() { return Err(format!("seed element {index} has no realized neighbor")); }
-            let ids = crate::construction_realization::realize_material_with_constraints(&mut structure, &legacy.elements[index], catalog, &neighbor_targets)
+            if neighbor_targets.is_empty() { return Err(format!("element {index} has no realized neighbor")); }
+            let ids = crate::construction_realization::realize_material_with_constraints(&mut structure, &structural.elements[index], catalog, &neighbor_targets)
                 .map_err(|error| {
-                    let name = legacy.elements[index].material.parts.iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>().join("+");
-                    format!("seed element {index} ({name}) failed with {best_neighbors} realized neighbors: {error}")
+                    let name = structural.elements[index].material.parts.iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>().join("+");
+                    format!("element {index} ({name}) failed with {best_neighbors} realized neighbors: {error}")
                 })?;
             groups.insert(index, ids);
         }
-        if groups.len() != legacy.elements.len() { return Err(format!("coordinated seed realization stopped at {}/{} elements", groups.len(), legacy.elements.len())); }
-        for connection in &legacy.connections { crate::structural_blueprint::realize_connection_groups(&mut structure, &groups, *connection, catalog)?; }
+        if groups.len() != structural.elements.len() { return Err(format!("coordinated structural realization stopped at {}/{} elements", groups.len(), structural.elements.len())); }
+        for connection in &structural.connections { crate::structural_blueprint::realize_connection_groups(&mut structure, &groups, *connection, catalog)?; }
         let mut atoms = Vec::with_capacity(structure.units.len());
         let mut unit_to_atom = vec![usize::MAX; structure.units.len()];
-        for element_index in 0..legacy.elements.len() {
-            for &unit_index in groups.get(&element_index).ok_or_else(|| "seed compiler lost an element group".to_string())? {
-                let unit = structure.units.get(unit_index).ok_or_else(|| "seed compiler lost a unit".to_string())?;
+        for element_index in 0..structural.elements.len() {
+            for &unit_index in groups.get(&element_index).ok_or_else(|| "structural compiler lost an element group".to_string())? {
+                let unit = structure.units.get(unit_index).ok_or_else(|| "structural compiler lost a unit".to_string())?;
                 unit_to_atom[unit_index] = atoms.len();
-                atoms.push(BlueprintAtom { resource: unit.resource_name().ok_or_else(|| "seed compiler encountered a non-atomic unit".to_string())?.to_string(), transform: BlueprintTransform { x: unit.placement.x, y: unit.placement.y, rotation_radians: unit.placement.rotation_radians } });
+                atoms.push(BlueprintAtom { resource: unit.resource_name().ok_or_else(|| "structural compiler encountered a non-atomic unit".to_string())?.to_string(), transform: BlueprintTransform { x: unit.placement.x, y: unit.placement.y, rotation_radians: unit.placement.rotation_radians } });
             }
         }
         let id_to_unit = structure.units.iter().enumerate().map(|(index, unit)| (unit.physical_id, index)).collect::<HashMap<_, _>>();
         let mut bonds = Vec::with_capacity(structure.bonds.len());
         for bond in &structure.bonds {
-            let unit_a = *id_to_unit.get(&bond.endpoint_a.constituent_id).ok_or_else(|| "seed compiler found a bond with a missing endpoint A".to_string())?;
-            let unit_b = *id_to_unit.get(&bond.endpoint_b.constituent_id).ok_or_else(|| "seed compiler found a bond with a missing endpoint B".to_string())?;
+            let unit_a = *id_to_unit.get(&bond.endpoint_a.constituent_id).ok_or_else(|| "structural compiler found a bond with a missing endpoint A".to_string())?;
+            let unit_b = *id_to_unit.get(&bond.endpoint_b.constituent_id).ok_or_else(|| "structural compiler found a bond with a missing endpoint B".to_string())?;
             bonds.push(BlueprintBond { atom_a: unit_to_atom[unit_a], endpoint_a: bond.endpoint_a.location, atom_b: unit_to_atom[unit_b], endpoint_b: bond.endpoint_b.location, required_bonds: 1 });
         }
         bonds.sort_by_key(|bond| (bond.canonical().atom_a, bond.canonical().atom_b));
         let mut core_atoms = Vec::new();
-        for &element in &legacy.core_elements { core_atoms.extend(groups.get(&element).ok_or_else(|| "seed compiler lost a core group".to_string())?.iter().map(|&unit| unit_to_atom[unit])); }
+        for &element in &structural.core_elements { core_atoms.extend(groups.get(&element).ok_or_else(|| "structural compiler lost a core group".to_string())?.iter().map(|&unit| unit_to_atom[unit])); }
         let result = Self { anchor: BlueprintTransform { x: 0.0, y: 0.0, rotation_radians: 0.0 }, atoms, core_atoms, bonds };
         result.validate()?;
         Ok(result)
@@ -113,5 +113,5 @@ mod tests {
     #[test] fn atomic_realization_preserves_anchor_orientation() { let blueprint = AtomicBlueprint { anchor: BlueprintTransform { x: 10.0, y: 20.0, rotation_radians: std::f64::consts::FRAC_PI_2 }, atoms: vec![BlueprintAtom { resource: "Carbon".into(), transform: BlueprintTransform { x: 2.0, y: 0.0, rotation_radians: 0.25 } }], core_atoms: vec![0], bonds: Vec::new() }; let structure = blueprint.realize(&crate::resources::default_catalog()).unwrap(); assert!((structure.units[0].placement.x - 10.0).abs() < 1e-9); assert!((structure.units[0].placement.y - 22.0).abs() < 1e-9); assert!((structure.units[0].placement.rotation_radians - (std::f64::consts::FRAC_PI_2 + 0.25)).abs() < 1e-9); }
     #[test] fn atomic_realization_fulfills_the_prescribed_endpoint_identity() { let radius = crate::resources::default_catalog().into_iter().find(|r| r.name == "Carbon").unwrap().shape.form.bounding_radius(); let blueprint = AtomicBlueprint { anchor: BlueprintTransform { x: 0.0, y: 0.0, rotation_radians: 0.0 }, atoms: vec![carbon(0.0), carbon(2.0 * radius)], core_atoms: vec![0], bonds: vec![BlueprintBond { atom_a: 0, endpoint_a: ConnectionEndpoint::Corner { point_index: 0 }, atom_b: 1, endpoint_b: ConnectionEndpoint::Corner { point_index: 3 }, required_bonds: 1 }] }; let structure = blueprint.realize(&crate::resources::default_catalog()).unwrap(); assert_eq!(structure.units.len(), 2); assert_eq!(structure.bonds.len(), 1); assert_eq!(structure.bonds[0].endpoint_a.constituent_id, structure.physical_id(0).unwrap()); assert_eq!(structure.bonds[0].endpoint_b.constituent_id, structure.physical_id(1).unwrap()); assert_eq!(structure.bonds[0].endpoint_a.location, ConnectionEndpoint::Corner { point_index: 0 }); assert_eq!(structure.bonds[0].endpoint_b.location, ConnectionEndpoint::Corner { point_index: 3 }); }
     #[test] fn legacy_flattening_never_guesses_external_topology() { let legacy = crate::genome::initial_genome().structural_blueprint; let error = AtomicBlueprint::from_legacy(&legacy).unwrap_err(); assert!(error.contains("does not identify constituent endpoints")); }
-    #[test] fn seed_topology_compiles_to_exact_atomic_graph() { let legacy = crate::genome::initial_genome().structural_blueprint; let catalog = crate::resources::default_catalog(); let blueprint = AtomicBlueprint::compile_seed_from_legacy(&legacy, &catalog).unwrap(); assert_eq!(blueprint.atoms.len(), 183); assert_eq!(blueprint.core_atoms.len(), 57); assert_eq!(blueprint.bonds.len(), 278); let structure = blueprint.realize(&catalog).unwrap(); assert_eq!(structure.units.len(), 183); assert_eq!(structure.bonds.len(), 278); }
+    #[test] fn structural_compilation_preserves_realized_graph() { let structural = crate::genome::initial_genome().structural_blueprint; let catalog = crate::resources::default_catalog(); let blueprint = AtomicBlueprint::compile_from_structural(&structural, &catalog).unwrap(); assert!(blueprint.validate().is_ok()); assert!(!blueprint.atoms.is_empty()); assert!(!blueprint.core_atoms.is_empty()); assert!(!blueprint.bonds.is_empty()); let structure = blueprint.realize(&catalog).unwrap(); assert_eq!(structure.units.len(), blueprint.atoms.len()); assert_eq!(structure.bonds.len(), blueprint.bonds.len()); }
 }
