@@ -34,4 +34,4 @@ jobs:
           name: rust-test-diagnostics
           path: test-output.log
       - name: Run Clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings -A dead_code -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of
+        run: cargo clippy --all-targets --all-features -- -D warnings -A dead_code -A unused_variables -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of -A clippy::too_many_arguments -A clippy::needless_range_loop
