@@ -32,9 +32,7 @@ pub fn apply_vents(
             continue;
         };
         let reservoir_index = reservoir.reservoir_index_for_field_index(field, field_index);
-        let cursor = reservoir.cells[reservoir_index]
-            .total_amount()
-            .floor() as usize
+        let cursor = (reservoir.cells[reservoir_index].total_amount().floor() as usize)
             .wrapping_add(reservoir_index)
             .wrapping_add(vent.x.to_bits() as usize)
             .wrapping_add(vent.y.to_bits() as usize);
