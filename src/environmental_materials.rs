@@ -54,189 +54,55 @@ pub(crate) fn seed_initial_landscape(field: &mut ActiveMaterialField) {
         if field_a > 0.72 {
             field.deposit_at_index(index, Material::free_base("Hydrogen", 2.0));
         }
-        if field_b < 0.22 {
+        // The previous threshold was unreachable for this deterministic field
+        // (field_b never fell below 0.22), so water was never seeded at all.
+        // Keep water as unstructured fluid stock and give it a real spatial
+        // distribution without introducing a terrain category.
+        if field_b < 0.5 {
             field.deposit_at_index(index, Material::free_base("Water", 3.0));
         }
     }
 }
 
 fn compound(parts: &[(&str, f64)]) -> Material {
-    let inputs = parts
-        .iter()
-        .map(|(name, amount)| Material::free_base(*name, *amount))
-        .collect::<Vec<_>>();
+    let inputs = parts.iter().map(|(name, amount)| Material::free_base(*name, *amount)).collect::<Vec<_>>();
     combine_materials(&inputs)
 }
 
 fn scaled_material(material: &Material, scale: f64) -> Material {
-    Material {
-        parts: material
-            .parts
-            .iter()
-            .map(|(name, amount)| (name.clone(), amount * scale))
-            .collect(),
-        internal_bonds: material.internal_bonds.clone(),
-    }
+    Material { parts: material.parts.iter().map(|(name, amount)| (name.clone(), amount * scale)).collect(), internal_bonds: material.internal_bonds.clone() }
 }
 
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
-
     use super::{seed_compounds, seed_initial_landscape, ENVIRONMENTAL_COMPOUND_COUNT};
     use crate::environment::ActiveMaterialField;
     use crate::resources::Material;
 
     fn structured_signature(material: &Material) -> Option<Vec<String>> {
-        if !material.has_internal_structure() {
-            return None;
-        }
-
-        let mut names = material
-            .parts
-            .iter()
-            .map(|(name, _)| name.clone())
-            .collect::<Vec<_>>();
+        if !material.has_internal_structure() { return None; }
+        let mut names = material.parts.iter().map(|(name, _)| name.clone()).collect::<Vec<_>>();
         names.sort();
         Some(names)
     }
 
     #[test]
-    fn seed_set_has_expected_size_and_structure() {
-        let compounds = seed_compounds();
-        assert_eq!(compounds.len(), ENVIRONMENTAL_COMPOUND_COUNT);
-        assert!(compounds.iter().all(|material| {
-            material.is_valid()
-                && material.has_internal_structure()
-                && material.parts.len() >= 2
-        }));
-    }
-
+    fn seed_set_has_expected_size_and_structure() { let compounds = seed_compounds(); assert_eq!(compounds.len(), ENVIRONMENTAL_COMPOUND_COUNT); assert!(compounds.iter().all(|material| material.is_valid() && material.has_internal_structure() && material.parts.len() >= 2)); }
     #[test]
-    fn seed_set_contains_carbon_and_non_carbon_compositions() {
-        let compounds = seed_compounds();
-        assert!(compounds.iter().any(|material| {
-            material.parts.iter().any(|(name, _)| name == "Carbon")
-        }));
-        assert!(compounds.iter().any(|material| {
-            material.parts.iter().all(|(name, _)| name != "Carbon")
-        }));
-    }
-
+    fn seed_set_contains_carbon_and_non_carbon_compositions() { let compounds = seed_compounds(); assert!(compounds.iter().any(|material| material.parts.iter().any(|(name, _)| name == "Carbon"))); assert!(compounds.iter().any(|material| material.parts.iter().all(|(name, _)| name != "Carbon"))); }
     #[test]
-    fn initial_landscape_is_populated_and_structured() {
-        let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-        seed_initial_landscape(&mut field);
-
-        assert!(field.total_amount() > 0.0);
-        assert!(field.cells.iter().all(|cell| !cell.materials.is_empty()));
-        assert!(field.cells.iter().any(|cell| {
-            cell.materials.iter().any(|material| material.has_internal_structure())
-        }));
-        assert!(field.cells.iter().any(|cell| {
-            cell.materials.iter().any(|material| material.parts.iter().any(|(name, _)| name == "Water"))
-        }));
-    }
-
+    fn initial_landscape_is_populated_and_structured() { let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0); seed_initial_landscape(&mut field); assert!(field.total_amount() > 0.0); assert!(field.cells.iter().all(|cell| !cell.materials.is_empty())); assert!(field.cells.iter().any(|cell| cell.materials.iter().any(|material| material.has_internal_structure()))); assert!(field.cells.iter().any(|cell| cell.materials.iter().any(|material| material.parts.iter().any(|(name, _)| name == "Water")))); }
     #[test]
-    fn initial_landscape_uses_all_compound_varieties() {
-        let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-        seed_initial_landscape(&mut field);
-
-        let signatures = field
-            .cells
-            .iter()
-            .flat_map(|cell| cell.materials.iter())
-            .filter_map(structured_signature)
-            .collect::<BTreeSet<_>>();
-
-        assert_eq!(signatures.len(), ENVIRONMENTAL_COMPOUND_COUNT);
-    }
-
+    fn initial_landscape_uses_all_compound_varieties() { let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0); seed_initial_landscape(&mut field); let signatures = field.cells.iter().flat_map(|cell| cell.materials.iter()).filter_map(structured_signature).collect::<BTreeSet<_>>(); assert_eq!(signatures.len(), ENVIRONMENTAL_COMPOUND_COUNT); }
     #[test]
-    fn initial_landscape_has_neighboring_material_coherence() {
-        let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-        seed_initial_landscape(&mut field);
-
-        let mut comparable_pairs = 0usize;
-        let mut matching_pairs = 0usize;
-
-        for y in 0..field.height_cells {
-            for x in 0..field.width_cells.saturating_sub(1) {
-                let left_index = y * field.width_cells + x;
-                let right_index = left_index + 1;
-                let left = field.cells[left_index]
-                    .materials
-                    .iter()
-                    .find_map(structured_signature);
-                let right = field.cells[right_index]
-                    .materials
-                    .iter()
-                    .find_map(structured_signature);
-
-                if let (Some(left), Some(right)) = (left, right) {
-                    comparable_pairs += 1;
-                    if left == right {
-                        matching_pairs += 1;
-                    }
-                }
-            }
-        }
-
-        assert!(comparable_pairs > 0);
-        assert!(matching_pairs * 4 > comparable_pairs);
-    }
-
+    fn initial_landscape_has_neighboring_material_coherence() { let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0); seed_initial_landscape(&mut field); let mut comparable_pairs = 0usize; let mut matching_pairs = 0usize; for y in 0..field.height_cells { for x in 0..field.width_cells.saturating_sub(1) { let left_index = y * field.width_cells + x; let right_index = left_index + 1; let left = field.cells[left_index].materials.iter().find_map(structured_signature); let right = field.cells[right_index].materials.iter().find_map(structured_signature); if let (Some(left), Some(right)) = (left, right) { comparable_pairs += 1; if left == right { matching_pairs += 1; } } } } assert!(comparable_pairs > 0); assert!(matching_pairs * 4 > comparable_pairs); }
     #[test]
-    fn initial_landscape_is_not_globally_uniform() {
-        let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-        seed_initial_landscape(&mut field);
-
-        let signatures = field
-            .cells
-            .iter()
-            .filter_map(|cell| cell.materials.iter().find_map(structured_signature))
-            .collect::<BTreeSet<_>>();
-
-        assert!(signatures.len() > 1);
-    }
-
+    fn initial_landscape_is_not_globally_uniform() { let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0); seed_initial_landscape(&mut field); let signatures = field.cells.iter().filter_map(|cell| cell.materials.iter().find_map(structured_signature)).collect::<BTreeSet<_>>(); assert!(signatures.len() > 1); }
     #[test]
-    fn initial_landscape_retains_unstructured_material() {
-        let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-        seed_initial_landscape(&mut field);
-
-        assert!(field.cells.iter().any(|cell| {
-            cell.materials
-                .iter()
-                .any(|material| !material.has_internal_structure())
-        }));
-    }
-
+    fn initial_landscape_retains_unstructured_material() { let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0); seed_initial_landscape(&mut field); assert!(field.cells.iter().any(|cell| cell.materials.iter().any(|material| !material.has_internal_structure()))); }
     #[test]
-    fn initial_landscape_totals_are_finite_and_positive() {
-        let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-        seed_initial_landscape(&mut field);
-
-        let total = field.total_amount();
-        assert!(total.is_finite());
-        assert!(total > 0.0);
-    }
-
+    fn initial_landscape_totals_are_finite_and_positive() { let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0); seed_initial_landscape(&mut field); let total = field.total_amount(); assert!(total.is_finite()); assert!(total > 0.0); }
     #[test]
-    fn initial_landscape_seeding_is_deterministic() {
-        let mut first = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-        let mut second = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-        seed_initial_landscape(&mut first);
-        seed_initial_landscape(&mut second);
-
-        assert_eq!(first.total_amount(), second.total_amount());
-        for (first_cell, second_cell) in first.cells.iter().zip(second.cells.iter()) {
-            assert_eq!(first_cell.materials.len(), second_cell.materials.len());
-            for (first_material, second_material) in first_cell.materials.iter().zip(second_cell.materials.iter()) {
-                assert_eq!(first_material.parts, second_material.parts);
-                assert_eq!(first_material.internal_bonds, second_material.internal_bonds);
-            }
-        }
-    }
+    fn initial_landscape_seeding_is_deterministic() { let mut first = ActiveMaterialField::new(1000.0, 1000.0, 25.0); let mut second = ActiveMaterialField::new(1000.0, 1000.0, 25.0); seed_initial_landscape(&mut first); seed_initial_landscape(&mut second); assert_eq!(first.total_amount(), second.total_amount()); for (first_cell, second_cell) in first.cells.iter().zip(second.cells.iter()) { assert_eq!(first_cell.materials.len(), second_cell.materials.len()); for (first_material, second_material) in first_cell.materials.iter().zip(second_cell.materials.iter()) { assert_eq!(first_material.parts, second_material.parts); assert_eq!(first_material.internal_bonds, second_material.internal_bonds); } } }
 }
