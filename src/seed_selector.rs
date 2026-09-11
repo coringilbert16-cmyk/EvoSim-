@@ -67,12 +67,14 @@ fn candidate(n: usize, radius: f64) -> (StructuralBlueprint, AtomicBlueprint, f6
         });
     }
 
-    let mut bonds = Vec::with_capacity(3 * n);
+    let mut bonds = Vec::with_capacity(4 * n);
     for i in 0..n {
         let soft = 1 + i;
+        let next_soft = 1 + ((i + 1) % n);
         let membrane = 1 + n + i;
         let next_membrane = 1 + n + ((i + 1) % n);
         bonds.push(bond(0, positions[0], soft, positions[soft]));
+        bonds.push(bond(soft, positions[soft], next_soft, positions[next_soft]));
         bonds.push(bond(soft, positions[soft], membrane, positions[membrane]));
         bonds.push(bond(membrane, positions[membrane], next_membrane, positions[next_membrane]));
     }
@@ -111,9 +113,9 @@ fn candidate(n: usize, radius: f64) -> (StructuralBlueprint, AtomicBlueprint, f6
         let membrane = 1 + n + i;
         let next_membrane = 1 + n + ((i + 1) % n);
         connections.push(BlueprintConnection { element_a: 0, element_b: soft });
+        connections.push(BlueprintConnection { element_a: soft, element_b: next_soft });
         connections.push(BlueprintConnection { element_a: soft, element_b: membrane });
         connections.push(BlueprintConnection { element_a: membrane, element_b: next_membrane });
-        connections.push(BlueprintConnection { element_a: soft, element_b: next_soft });
     }
 
     let structural = StructuralBlueprint::with_core_elements(elements, connections, vec![0]);
@@ -160,7 +162,7 @@ mod tests {
         assert_eq!(seed.structural.core_elements, vec![0]);
         assert_eq!(seed.atomic.atoms.len(), 13);
         assert_eq!(seed.atomic.core_atoms, vec![0]);
-        assert_eq!(seed.atomic.bonds.len(), 18);
+        assert_eq!(seed.atomic.bonds.len(), 24);
         assert!(seed.structural.validate().is_ok());
         assert!(seed.atomic.validate().is_ok());
     }
