@@ -6,7 +6,8 @@
 //! 183-atom reconstruction.
 
 use crate::atomic_blueprint::{AtomicBlueprint, BlueprintAtom, BlueprintBond, BlueprintTransform};
-use crate::resources::{ConnectionEndpoint, Material};
+use crate::resources::Material;
+use crate::structure::ConnectionEndpoint;
 use crate::structural_blueprint::{BlueprintConnection, BlueprintElement, BlueprintPlacement, StructuralBlueprint};
 use crate::resources::default_catalog;
 
