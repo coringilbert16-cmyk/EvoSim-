@@ -7,12 +7,7 @@ use crate::resources::{InternalBond, Material};
 use crate::structural_blueprint::{BlueprintConnection, BlueprintElement, BlueprintPlacement, StructuralBlueprint};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct TraitDef {
-    pub name: String,
-    pub value: f64,
-    pub mutation_probability: f64,
-    pub mutation_sigma: f64,
-}
+pub struct TraitDef { pub name: String, pub value: f64, pub mutation_probability: f64, pub mutation_sigma: f64 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Genome {
@@ -46,17 +41,20 @@ impl Genome {
 
 fn trait_def(name: &str, value: f64, sigma: f64) -> TraitDef { TraitDef { name: name.into(), value, mutation_probability: 0.001, mutation_sigma: sigma } }
 
+// Each seed layer is a minimal two-constituent structure. This keeps the seed
+// physically realizable by the normal construction solver while leaving all
+// later complexity to emergence and mutation. Water remains environmental
+// fluid stock rather than a forced structural atom.
 fn core_material() -> Material {
-    Material { parts: vec![("Carbon".into(), 1.0), ("Carbon".into(), 1.0), ("Nitrogen".into(), 1.0)], internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }, InternalBond { part_a: 0, part_b: 2 }] }
+    Material { parts: vec![("Carbon".into(), 1.0), ("Nitrogen".into(), 1.0)], internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }] }
 }
 
-// The soft interior is structurally soft; water remains environmental fluid stock.
 fn soft_interior_material() -> Material {
-    Material { parts: vec![("Hydrogen".into(), 1.0), ("Nitrogen".into(), 1.0), ("Sulfur".into(), 1.0)], internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }, InternalBond { part_a: 0, part_b: 2 }] }
+    Material { parts: vec![("Hydrogen".into(), 1.0), ("Sulfur".into(), 1.0)], internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }] }
 }
 
 fn membrane_material() -> Material {
-    Material { parts: vec![("Carbon".into(), 1.0), ("Sulfur".into(), 1.0), ("Phosphorus".into(), 1.0)], internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }, InternalBond { part_a: 0, part_b: 2 }] }
+    Material { parts: vec![("Carbon".into(), 1.0), ("Phosphorus".into(), 1.0)], internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }] }
 }
 
 fn default_structural_blueprint() -> StructuralBlueprint {
@@ -89,7 +87,7 @@ pub fn initial_genome() -> Genome {
 mod tests {
     use super::*;
     use crate::resources::default_catalog;
-    #[test] fn seed_blueprint_has_core_soft_interior_and_membrane() { let g = initial_genome(); let b = &g.structural_blueprint; assert_eq!(b.elements.len(), 3); assert_eq!(b.connections.len(), 2); assert_eq!(b.core_elements, vec![0]); assert!(b.validate().is_ok()); assert!(b.is_connected()); assert_eq!(b.elements[0].material.parts.len(), 3); assert_eq!(b.elements[1].material.parts.len(), 3); assert_eq!(b.elements[2].material.parts.len(), 3); assert!(b.elements[0].material.has_internal_structure()); assert!(b.elements[1].material.has_internal_structure()); assert!(b.elements[2].material.has_internal_structure()); assert!(g.atomic_blueprint.validate().is_ok()); assert!(!g.atomic_blueprint.atoms.is_empty()); assert!(!g.atomic_blueprint.bonds.is_empty()); assert!(g.structural_blueprint.realize(&default_catalog()).is_ok()); assert!(g.atomic_blueprint.realize(&default_catalog()).is_ok()); }
+    #[test] fn seed_blueprint_has_core_soft_interior_and_membrane() { let g = initial_genome(); let b = &g.structural_blueprint; assert_eq!(b.elements.len(), 3); assert_eq!(b.connections.len(), 2); assert_eq!(b.core_elements, vec![0]); assert!(b.validate().is_ok()); assert!(b.is_connected()); assert_eq!(b.elements[0].material.parts.len(), 2); assert_eq!(b.elements[1].material.parts.len(), 2); assert_eq!(b.elements[2].material.parts.len(), 2); assert!(g.atomic_blueprint.validate().is_ok()); assert!(!g.atomic_blueprint.atoms.is_empty()); assert!(!g.atomic_blueprint.bonds.is_empty()); assert!(g.structural_blueprint.realize(&default_catalog()).is_ok()); assert!(g.atomic_blueprint.realize(&default_catalog()).is_ok()); }
     #[test] fn seed_blueprint_is_connected() { assert!(initial_genome().structural_blueprint.is_connected()); }
     #[test] fn seed_genome_core_is_connected() { let b = &initial_genome().structural_blueprint; assert_eq!(b.core_elements, vec![0]); assert!(b.core_elements.iter().all(|&i| i < b.elements.len())); }
 }
