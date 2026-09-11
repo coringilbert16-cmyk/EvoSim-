@@ -44,7 +44,7 @@ impl Simulation {
         let genome = initial_genome(); let catalog = crate::resources::default_catalog();
         let structure = genome.structural_blueprint.realize(&catalog).expect("initial structural blueprint must be realizable");
         let mature_mass = genome.structural_blueprint.structural_mass(&catalog).max(f64::EPSILON);
-        let realized_mass: f64 = structure.units.iter().map(|unit| unit.material.total_amount()).sum();
+        let realized_mass: f64 = structure.units.iter().map(|unit| unit.material.mass(&catalog)).sum();
         let development_stage = if realized_mass / mature_mass >= ADULTHOOD_GROWTH_FRACTION { DevelopmentStage::Adult } else { DevelopmentStage::Juvenile };
         Organism{id:"1".into(),occupied_cells:vec![Position{x:500.0,y:500.0}],genome,resource_sense:ResourceSense{sensed_resources:Vec::new(),direction_x:0.0,direction_y:0.0,direction_strength:0.0},memory:Vec::new(),decision_history:crate::decision::DecisionHistory::default(),usable_energy:0.0,stress:0.0,stress_threshold:crate::state::INITIAL_STRESS_THRESHOLD,stored_material:crate::material_storage::MaterialStorage::default(),structure,development_stage,age:0,reproductive_readiness:0.0,active_transformation_id:None,reproductive_construction:None}
     }
