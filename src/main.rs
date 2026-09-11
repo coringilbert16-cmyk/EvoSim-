@@ -10,6 +10,7 @@ mod decision;
 mod decision_runtime;
 mod decomposition;
 mod environment;
+mod environmental_materials;
 mod genome;
 mod interface_geometry;
 mod math;
