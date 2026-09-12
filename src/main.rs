@@ -1,9 +1,5 @@
 #![allow(clippy::too_many_arguments)]
 
-// Bonded-cavity implementation is developed as a physical invariant first.
-// Compiler fixes are complete; the next validation is the physical seed topology.
-// Seed geometry diagnostics are intentionally temporary until the cavity invariant is green.
-// Construction now prioritizes the blueprint's requested placement when it is physically valid.
 mod boundary_contact;
 mod cavity;
 mod combine;
@@ -47,9 +43,6 @@ mod transformation;
 
 #[cfg(test)]
 mod blueprint_diagnostics;
-
-#[cfg(test)]
-mod cavity_debug;
 
 #[cfg(test)]
 mod observation_contract_tests;
