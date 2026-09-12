@@ -261,7 +261,7 @@ fn extract_primitives(
             .shape(catalog)
             .ok_or_else(|| format!("unit {unit_index} has no realized geometry"))?;
         let placement = unit.placement;
-        match shape.form {
+        match shape.form.clone() {
             Form::Circle { radius } => out.push(Primitive {
                 unit_index,
                 geometry: PrimitiveGeometry::Circle {
