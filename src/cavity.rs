@@ -255,7 +255,7 @@ fn extract_primitives(
     structure: &OrganismStructure,
     catalog: &[BaseResource],
 ) -> Result<Vec<Primitive>, String> {
-    let mut out: Vec<(f64, Point)> = Vec::new();
+    let mut out: Vec<Primitive> = Vec::new();
     for (unit_index, unit) in structure.units.iter().enumerate() {
         let shape = unit
             .shape(catalog)
@@ -309,7 +309,7 @@ fn extract_primitives(
                     .collect::<Vec<_>>();
                 add_polygon_edges(&mut out, unit_index, &vertices, placement);
             }
-            Form::Polygon { ref vertices } => add_polygon_edges(
+            Form::Polygon { vertices } => add_polygon_edges(
                 &mut out,
                 unit_index,
                 &vertices
@@ -484,7 +484,7 @@ fn line_circle_intersections(a: Point, b: Point, center: Point, radius: f64) -> 
         return Vec::new();
     }
     let root = discriminant.max(0.0).sqrt();
-    let mut out = Vec::new();
+    let mut out: Vec<(f64, Point)> = Vec::new();
     for t in [(-bb - root) / (2.0 * aa), (-bb + root) / (2.0 * aa)] {
         if t >= -EPS && t <= 1.0 + EPS {
             let t = t.clamp(0.0, 1.0);
