@@ -13,5 +13,6 @@ mod tests {
         for (i, bond) in structure.bonds.iter().enumerate() {
             println!("bond {i}: {:?} -> {:?}", bond.endpoint_a, bond.endpoint_b);
         }
+        panic!("temporary seed geometry diagnostic");
     }
 }
