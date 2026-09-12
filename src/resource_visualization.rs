@@ -16,7 +16,11 @@ pub(crate) struct ResourceAppearance {
 
 impl ResourceAppearance {
     pub(crate) fn new(fill: &str, outline: &str, fill_opacity: u8) -> Self {
-        Self { fill: fill.into(), outline: outline.into(), fill_opacity }
+        Self {
+            fill: fill.into(),
+            outline: outline.into(),
+            fill_opacity,
+        }
     }
 }
 
@@ -41,9 +45,16 @@ mod tests {
     fn resource(name: &str) -> BaseResource {
         BaseResource {
             name: name.into(),
-            properties: ResourceProperties { mass: 1.0, potential_energy: 1.0, reactivity: 1.0, cohesion: 1.0 },
+            properties: ResourceProperties {
+                mass: 1.0,
+                potential_energy: 1.0,
+                reactivity: 1.0,
+                cohesion: 1.0,
+            },
             physical_state: PhysicalState::Rigid,
-            shape: Shape { form: Form::Circle { radius: 1.0 } },
+            shape: Shape {
+                form: Form::Circle { radius: 1.0 },
+            },
         }
     }
 
@@ -51,7 +62,10 @@ mod tests {
     fn approved_resource_appearances_are_stable() {
         assert_eq!(appearance(&resource("Carbon")).fill, "#080808");
         assert_eq!(appearance(&resource("Sulfur")).fill, "#D6D44A");
-        assert_eq!(appearance(&resource("Methane")), ResourceAppearance::new("#F5F5F5", "#C93636", 255));
+        assert_eq!(
+            appearance(&resource("Methane")),
+            ResourceAppearance::new("#F5F5F5", "#C93636", 255)
+        );
         assert_eq!(appearance(&resource("Hydrogen")).fill, "#E8E8E8");
         assert_eq!(appearance(&resource("Nitrogen")).fill, "#315E9E");
         assert_eq!(appearance(&resource("Phosphorus")).fill, "#D65A32");

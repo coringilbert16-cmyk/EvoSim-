@@ -1,11 +1,12 @@
 #![allow(clippy::too_many_arguments)]
 
+mod boundary_contact;
 mod cavity;
 mod combine;
 mod combine_runtime;
 mod connection_geometry;
-mod contact;
 mod construction_realization;
+mod contact;
 mod decision;
 mod decision_runtime;
 mod decomposition;
@@ -13,17 +14,16 @@ mod environment;
 mod environmental_materials;
 mod genome;
 mod interface_geometry;
-mod math;
 #[allow(unused_variables)]
 mod material_geometry;
 mod material_storage;
 mod material_transfer;
+mod math;
 mod organism_boundary;
 mod organism_geometry;
-mod boundary_contact;
+mod permeability;
 mod physical_geometry;
 mod physical_interface;
-mod permeability;
 mod reproduction;
 mod resource_visualization;
 mod resources;

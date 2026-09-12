@@ -20,7 +20,9 @@ pub struct PhysicalGeometry {
 impl PhysicalGeometry {
     /// Start a physical constituent at the resource's immutable default shape.
     pub fn from_default(shape: &Shape) -> Self {
-        Self { shape: shape.clone() }
+        Self {
+            shape: shape.clone(),
+        }
     }
 
     /// Return the currently realized shape.
