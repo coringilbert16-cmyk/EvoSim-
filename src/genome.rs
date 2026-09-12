@@ -51,35 +51,34 @@ fn trait_def(name: &str, value: f64, sigma: f64) -> TraitDef {
     TraitDef { name: name.into(), value, mutation_probability: 0.001, mutation_sigma: sigma }
 }
 
-fn core_material() -> Material {
+fn seed_wall_material() -> Material {
     Material {
-        parts: vec![("Carbon".into(), 1.0), ("Nitrogen".into(), 1.0)],
-        internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
-    }
-}
-
-fn soft_interior_material() -> Material {
-    Material {
-        parts: vec![("Hydrogen".into(), 1.0), ("Sulfur".into(), 1.0)],
-        internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
-    }
-}
-
-fn membrane_material() -> Material {
-    Material {
-        parts: vec![("Carbon".into(), 1.0), ("Phosphorus".into(), 1.0)],
-        internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
+        parts: vec![("Nitrogen".into(), 1.0)],
+        internal_bonds: Vec::new(),
     }
 }
 
 fn default_structural_blueprint() -> StructuralBlueprint {
+    // The ancestral phenotype is a four-wall ring made from ordinary rigid
+    // material. The enclosed region is the first physically meaningful place
+    // where the inherited genome can reside; there is no special membrane/core
+    // geometry and no seed-only viability exception.
+    let half_wall = 1.511_858 / 2.0;
+    let half_thickness = 0.330_719 / 2.0;
+    let center_offset = half_wall + half_thickness;
     StructuralBlueprint::with_core_elements(
         vec![
-            BlueprintElement { material: core_material(), placement: BlueprintPlacement { x: 0.0, y: 0.0, rotation_radians: 0.0 } },
-            BlueprintElement { material: soft_interior_material(), placement: BlueprintPlacement { x: 2.0, y: 0.0, rotation_radians: 0.0 } },
-            BlueprintElement { material: membrane_material(), placement: BlueprintPlacement { x: 4.0, y: 0.0, rotation_radians: 0.0 } },
+            BlueprintElement { material: seed_wall_material(), placement: BlueprintPlacement { x: 0.0, y: center_offset, rotation_radians: 0.0 } },
+            BlueprintElement { material: seed_wall_material(), placement: BlueprintPlacement { x: -center_offset, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_2 } },
+            BlueprintElement { material: seed_wall_material(), placement: BlueprintPlacement { x: center_offset, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_2 } },
+            BlueprintElement { material: seed_wall_material(), placement: BlueprintPlacement { x: 0.0, y: -center_offset, rotation_radians: 0.0 } },
         ],
-        vec![BlueprintConnection { element_a: 0, element_b: 1 }, BlueprintConnection { element_a: 1, element_b: 2 }],
+        vec![
+            BlueprintConnection { element_a: 0, element_b: 1 },
+            BlueprintConnection { element_a: 0, element_b: 2 },
+            BlueprintConnection { element_a: 1, element_b: 3 },
+            BlueprintConnection { element_a: 2, element_b: 3 },
+        ],
         vec![0],
     )
 }
@@ -109,17 +108,15 @@ mod tests {
     use crate::resources::default_catalog;
 
     #[test]
-    fn seed_blueprint_has_core_soft_interior_and_membrane() {
+    fn seed_blueprint_has_a_four_wall_genome_bearing_phenotype() {
         let g = initial_genome();
         let b = &g.structural_blueprint;
-        assert_eq!(b.elements.len(), 3);
-        assert_eq!(b.connections.len(), 2);
+        assert_eq!(b.elements.len(), 4);
+        assert_eq!(b.connections.len(), 4);
         assert_eq!(b.core_elements, vec![0]);
         assert!(b.validate().is_ok());
         assert!(b.is_connected());
-        assert_eq!(b.elements[0].material.parts.len(), 2);
-        assert_eq!(b.elements[1].material.parts.len(), 2);
-        assert_eq!(b.elements[2].material.parts.len(), 2);
+        assert!(b.elements.iter().all(|element| element.material.parts.len() == 1));
         assert!(b.realize(&default_catalog()).is_ok());
     }
 
