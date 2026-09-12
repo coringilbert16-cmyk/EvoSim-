@@ -3,6 +3,7 @@
 // Bonded-cavity implementation is developed as a physical invariant first.
 // Compiler fixes are complete; the next validation is the physical seed topology.
 // Seed geometry diagnostics are intentionally temporary until the cavity invariant is green.
+// Construction now prioritizes the blueprint's requested placement when it is physically valid.
 mod boundary_contact;
 mod cavity;
 mod combine;
