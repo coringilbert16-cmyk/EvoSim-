@@ -47,6 +47,9 @@ mod transformation;
 mod blueprint_diagnostics;
 
 #[cfg(test)]
+mod cavity_debug;
+
+#[cfg(test)]
 mod observation_contract_tests;
 
 #[cfg(test)]
