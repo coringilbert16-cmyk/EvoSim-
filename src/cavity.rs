@@ -255,7 +255,7 @@ fn extract_primitives(
     structure: &OrganismStructure,
     catalog: &[BaseResource],
 ) -> Result<Vec<Primitive>, String> {
-    let mut out = Vec::new();
+    let mut out: Vec<(f64, Point)> = Vec::new();
     for (unit_index, unit) in structure.units.iter().enumerate() {
         let shape = unit
             .shape(catalog)
@@ -309,7 +309,7 @@ fn extract_primitives(
                     .collect::<Vec<_>>();
                 add_polygon_edges(&mut out, unit_index, &vertices, placement);
             }
-            Form::Polygon { vertices } => add_polygon_edges(
+            Form::Polygon { ref vertices } => add_polygon_edges(
                 &mut out,
                 unit_index,
                 &vertices

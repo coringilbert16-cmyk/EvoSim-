@@ -2,7 +2,7 @@ use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 
-use crate::resources::{InternalBond, Material};
+use crate::resources::Material;
 use crate::structural_blueprint::{
     BlueprintConnection, BlueprintElement, BlueprintPlacement, StructuralBlueprint,
 };
