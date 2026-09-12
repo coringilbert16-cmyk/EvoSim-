@@ -1,6 +1,7 @@
 #![allow(clippy::too_many_arguments)]
 
 // Bonded-cavity implementation is developed as a physical invariant first.
+// Compiler fixes are complete; the next validation is the physical seed topology.
 mod boundary_contact;
 mod cavity;
 mod combine;
