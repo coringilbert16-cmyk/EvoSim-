@@ -1,5 +1,6 @@
 #![allow(clippy::too_many_arguments)]
 
+mod cavity;
 mod combine;
 mod combine_runtime;
 mod connection_geometry;
