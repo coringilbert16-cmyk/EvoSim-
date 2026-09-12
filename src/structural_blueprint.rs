@@ -101,10 +101,7 @@ impl BlueprintConnection {
 }
 
 impl StructuralBlueprint {
-    pub fn new(
-        elements: Vec<BlueprintElement>,
-        connections: Vec<BlueprintConnection>,
-    ) -> Self {
+    pub fn new(elements: Vec<BlueprintElement>, connections: Vec<BlueprintConnection>) -> Self {
         Self {
             elements,
             connections: Self::canonical_connections(connections),
@@ -124,9 +121,7 @@ impl StructuralBlueprint {
         }
     }
 
-    fn canonical_connections(
-        connections: Vec<BlueprintConnection>,
-    ) -> Vec<BlueprintConnection> {
+    fn canonical_connections(connections: Vec<BlueprintConnection>) -> Vec<BlueprintConnection> {
         let mut seen = HashSet::new();
         connections
             .into_iter()
@@ -187,18 +182,9 @@ impl StructuralBlueprint {
             .elements
             .first()
             .ok_or_else(|| "blueprint has no elements".to_string())?;
-        let first_ids = crate::construction_realization::realize_material(
-            &mut structure,
-            first,
-            catalog,
-        )?;
-        apply_blueprint_orientation(
-            &mut structure,
-            &first_ids,
-            first.placement,
-            &[],
-            catalog,
-        )?;
+        let first_ids =
+            crate::construction_realization::realize_material(&mut structure, first, catalog)?;
+        apply_blueprint_orientation(&mut structure, &first_ids, first.placement, &[], catalog)?;
         realized.insert(0, first_ids);
 
         let mut attempted = vec![false; self.elements.len()];
@@ -293,12 +279,9 @@ impl StructuralBlueprint {
             {
                 continue;
             }
-            if let Err(error) = realize_connection_groups(
-                &mut structure,
-                &realized,
-                *connection,
-                catalog,
-            ) {
+            if let Err(error) =
+                realize_connection_groups(&mut structure, &realized, *connection, catalog)
+            {
                 #[cfg(test)]
                 eprintln!(
                     "BLUEPRINT CONNECTION FAILURE a={} b={} error={}",
@@ -441,7 +424,10 @@ fn apply_blueprint_orientation(
                     .any(|candidate| candidate.distance <= 1e-9)
             })
         }) {
-            return Err("realized material no longer has a physical contact with a prescribed neighbor".into());
+            return Err(
+                "realized material no longer has a physical contact with a prescribed neighbor"
+                    .into(),
+            );
         }
     }
     Ok(())
@@ -461,10 +447,18 @@ pub(crate) fn realize_connection_groups(
         .ok_or_else(|| "missing realized second blueprint element".to_string())?;
     for &ua in a {
         for &ub in b {
-            let Some(pa) = structure.units.get(ua).and_then(|unit| unit.properties(catalog)) else {
+            let Some(pa) = structure
+                .units
+                .get(ua)
+                .and_then(|unit| unit.properties(catalog))
+            else {
                 continue;
             };
-            let Some(pb) = structure.units.get(ub).and_then(|unit| unit.properties(catalog)) else {
+            let Some(pb) = structure
+                .units
+                .get(ub)
+                .and_then(|unit| unit.properties(catalog))
+            else {
                 continue;
             };
             let mut cache = crate::contact::ConnectionCompatibilityCache::new();
@@ -481,18 +475,10 @@ pub(crate) fn realize_connection_groups(
                 if candidate.distance > 1e-9 {
                     continue;
                 }
-                let evaluation = crate::combine::evaluate_formation(
-                    candidate,
-                    pa.cohesion,
-                    pb.cohesion,
-                );
-                let (_, work, _) = crate::combine::required_investment(
-                    pa,
-                    pb,
-                    evaluation,
-                    0.0,
-                )
-                .map_err(|error| format!("formation investment failed: {error:?}"))?;
+                let evaluation =
+                    crate::combine::evaluate_formation(candidate, pa.cohesion, pb.cohesion);
+                let (_, work, _) = crate::combine::required_investment(pa, pb, evaluation, 0.0)
+                    .map_err(|error| format!("formation investment failed: {error:?}"))?;
                 let strength = crate::combine::bond_strength(pa, pb);
                 if !strength.is_finite() || !(0.0..=1.0).contains(&strength) {
                     continue;
@@ -531,7 +517,9 @@ impl BlueprintElement {
             .iter()
             .any(|(_, amount)| (*amount - 1.0).abs() > f64::EPSILON)
         {
-            return Err("each blueprint constituent must represent exactly one material unit".into());
+            return Err(
+                "each blueprint constituent must represent exactly one material unit".into(),
+            );
         }
         if self.material.parts.len() == 1 && !self.material.has_internal_structure() {
             return Ok(());

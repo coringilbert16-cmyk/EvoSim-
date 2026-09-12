@@ -153,6 +153,10 @@ mod tests {
 
     #[test]
     fn empty_structure_has_no_body() {
-        assert!(OrganismBodyGeometry::from_structure(&OrganismStructure::new(), &default_catalog()).is_none());
+        assert!(OrganismBodyGeometry::from_structure(
+            &OrganismStructure::new(),
+            &default_catalog()
+        )
+        .is_none());
     }
 }

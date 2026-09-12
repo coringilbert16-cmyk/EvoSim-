@@ -61,9 +61,9 @@ async fn observation_status_handler(State(state): State<AppState>) -> impl IntoR
 
 async fn world_observation_handler(State(state): State<AppState>) -> impl IntoResponse {
     let simulation = state.simulation.lock();
-    Json(ObservationProjection::world(WorldObservation::from_simulation(
-        &simulation,
-    )))
+    Json(ObservationProjection::world(
+        WorldObservation::from_simulation(&simulation),
+    ))
 }
 
 async fn organism_observation_handler(
@@ -98,9 +98,7 @@ struct ResourceVisualizationObservation {
     field_cell_size: f64,
 }
 
-async fn resource_visualization_handler(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+async fn resource_visualization_handler(State(state): State<AppState>) -> impl IntoResponse {
     let simulation = state.simulation.lock();
     let resources = simulation
         .environment
@@ -127,9 +125,18 @@ pub(crate) async fn run() {
         .route("/", get(index_handler))
         .route("/observation/status", get(observation_status_handler))
         .route("/observation/world", get(world_observation_handler))
-        .route("/observation/organism/{id}", get(organism_observation_handler))
-        .route("/observation/structure/{id}", get(structure_observation_handler))
-        .route("/observation/resources", get(resource_visualization_handler))
+        .route(
+            "/observation/organism/{id}",
+            get(organism_observation_handler),
+        )
+        .route(
+            "/observation/structure/{id}",
+            get(structure_observation_handler),
+        )
+        .route(
+            "/observation/resources",
+            get(resource_visualization_handler),
+        )
         .with_state(state)
         .layer(CorsLayer::permissive());
 

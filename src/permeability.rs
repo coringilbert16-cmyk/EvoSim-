@@ -70,8 +70,7 @@ pub fn permeability(
     }
 
     let water_fraction = water_mass_fraction(material, catalog);
-    let geometry_factor =
-        (interface_length / participating_boundary_length).clamp(0.0, 1.0);
+    let geometry_factor = (interface_length / participating_boundary_length).clamp(0.0, 1.0);
     let result = water_fraction * geometry_factor;
 
     if result.is_finite() {
