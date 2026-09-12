@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   test:
@@ -15,8 +15,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Format source
-        run: cargo fmt --all
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Check source file sizes
@@ -24,14 +22,6 @@ jobs:
       - name: Check COMBINE architecture
         run: bash scripts/check_combine_architecture.sh
       - name: Run Rust tests
-        run: |
-          set -o pipefail
-          cargo test --all-targets 2>&1 | tee test-output.log
-      - name: Upload Rust test diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rust-test-diagnostics
-          path: test-output.log
+        run: cargo test --all-targets
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings -A dead_code -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of
