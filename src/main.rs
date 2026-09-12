@@ -1,5 +1,6 @@
 #![allow(clippy::too_many_arguments)]
 
+// Bonded-cavity implementation is developed as a physical invariant first.
 mod boundary_contact;
 mod cavity;
 mod combine;
