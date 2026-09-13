@@ -35,6 +35,11 @@ impl Genome {
     pub fn processing_efficiency(&self) -> f64 { self.trait_value("processing_efficiency", 0.8).clamp(0.05, 1.0) }
     pub fn movement_efficiency(&self) -> f64 { self.trait_value("movement_efficiency", 0.8).clamp(0.05, 1.0) }
     pub fn reproductive_investment(&self) -> f64 { self.trait_value("reproductive_investment", 0.5).clamp(0.15, 1.0) }
+    /// Probability that one offspring's genome-core construction event receives a
+    /// structural construction mutation. This is inherited as ordinary genome state.
+    pub fn structural_mutation_probability(&self) -> f64 {
+        self.trait_value("structural_mutation_probability", 0.001).clamp(0.0, 1.0)
+    }
     pub fn mutate(&mut self, rng: &mut ChaCha8Rng) {
         for t in &mut self.traits {
             if rng.gen::<f64>() < t.mutation_probability.clamp(1e-6, 0.25) {
@@ -98,6 +103,7 @@ pub fn initial_genome() -> Genome {
             trait_def("processing_efficiency", 0.8, 0.05),
             trait_def("movement_efficiency", 0.8, 0.05),
             trait_def("reproductive_investment", 0.5, 0.05),
+            trait_def("structural_mutation_probability", 0.001, 0.0005),
         ],
         structural_blueprint: default_structural_blueprint(),
     }
@@ -133,5 +139,11 @@ mod tests {
         let b = &initial_genome().structural_blueprint;
         assert_eq!(b.core_elements, vec![0]);
         assert!(b.core_elements.iter().all(|&i| i < b.elements.len()));
+    }
+
+    #[test]
+    fn structural_mutation_probability_is_inherited_genome_state() {
+        let genome = initial_genome();
+        assert!((genome.structural_mutation_probability() - 0.001).abs() < f64::EPSILON);
     }
 }
