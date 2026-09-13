@@ -57,6 +57,14 @@ impl std::fmt::Display for GenomeCoreConstructionFailure {
 
 impl std::error::Error for GenomeCoreConstructionFailure {}
 
+fn developmental_failure_from_cavity(error: String) -> GenomeCoreConstructionFailure {
+    GenomeCoreConstructionFailure::DevelopmentalFailure {
+        reason: format!("cavity measurement failed: {error}"),
+        largest_cavity: 0.0,
+        threshold: 0.0,
+    }
+}
+
 /// Construct one genome core using one inherited mutation state for the entire
 /// construction event. Candidate selection may still vary through the supplied RNG.
 pub fn construct_genome_core(
@@ -111,7 +119,7 @@ pub fn construct_genome_core_with_mutation(
     });
 
     let mut cavity = measure_largest_cavity(&structure, catalog)
-        .map_err(GenomeCoreConstructionFailure::DevelopmentalFailureFromCavity)?;
+        .map_err(developmental_failure_from_cavity)?;
     if cavity.qualifies {
         return Ok(GenomeCoreConstruction { structure, mapping, cavity });
     }
@@ -146,7 +154,7 @@ pub fn construct_genome_core_with_mutation(
             }
 
             let candidate_cavity = measure_largest_cavity(&trial, catalog)
-                .map_err(GenomeCoreConstructionFailure::DevelopmentalFailureFromCavity)?;
+                .map_err(developmental_failure_from_cavity)?;
             let candidate_position = centroid(&trial, &ids).unwrap_or((placement.x, placement.y));
             let (step_length, growth_direction) = match previous_centroid {
                 Some(previous) => {
@@ -228,7 +236,7 @@ pub fn construct_genome_core_with_mutation(
             structure_unit_indices: ids,
         });
         cavity = measure_largest_cavity(&structure, catalog)
-            .map_err(GenomeCoreConstructionFailure::DevelopmentalFailureFromCavity)?;
+            .map_err(developmental_failure_from_cavity)?;
         if cavity.qualifies {
             return Ok(GenomeCoreConstruction { structure, mapping, cavity });
         }
@@ -239,16 +247,6 @@ pub fn construct_genome_core_with_mutation(
         largest_cavity: cavity.largest_enclosed_area,
         threshold: cavity.threshold_area,
     })
-}
-
-impl GenomeCoreConstructionFailure {
-    fn DevelopmentalFailureFromCavity(error: String) -> Self {
-        Self::DevelopmentalFailure {
-            reason: format!("cavity measurement failed: {error}"),
-            largest_cavity: 0.0,
-            threshold: 0.0,
-        }
-    }
 }
 
 fn element_at(element: &BlueprintElement, placement: Placement) -> BlueprintElement {
