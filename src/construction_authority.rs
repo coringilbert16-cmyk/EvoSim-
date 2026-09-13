@@ -1,0 +1,27 @@
+//! Selectively commits a hypothetical candidate through the authoritative COMBINE runtime.
+use crate::contact::ConnectionCompatibilityCache;
+use crate::resources::BaseResource;
+use crate::structure::{Bond, OrganismStructure};
+
+fn bond_exists(bonds: &[Bond], candidate: &Bond) -> bool { bonds.iter().any(|b| b.has_same_identity(candidate)) }
+
+pub(crate) fn commit_candidate_structure(base: &OrganismStructure, candidate: &OrganismStructure, catalog: &[BaseResource], energy: &mut f64, water: f64) -> Result<OrganismStructure, String> {
+    if candidate.units.len() < base.units.len() { return Err("candidate removes existing physical constituents".into()); }
+    for i in 0..base.units.len() {
+        if candidate.units[i].physical_id != base.units[i].physical_id { return Err("candidate does not preserve existing constituent identity".into()); }
+    }
+    let mut trial = base.clone();
+    for unit in candidate.units.iter().skip(base.units.len()).cloned() { trial.add_unit(unit); }
+    let mut cache = ConnectionCompatibilityCache::new();
+    for bond in &candidate.bonds {
+        if bond_exists(&base.bonds, bond) { continue; }
+        let unit_a = candidate.unit_index(bond.endpoint_a.constituent_id).ok_or_else(|| "candidate bond references missing constituent".to_string())?;
+        let unit_b = candidate.unit_index(bond.endpoint_b.constituent_id).ok_or_else(|| "candidate bond references missing constituent".to_string())?;
+        crate::combine_runtime::try_combine_specific_pair(&mut trial, unit_a, unit_b, bond.endpoint_a.location, bond.endpoint_b.location, catalog, &mut cache, energy, water)
+            .ok_or_else(|| "authoritative COMBINE could not realize candidate bond".to_string())?;
+    }
+    let expected_new = candidate.bonds.iter().filter(|b| !bond_exists(&base.bonds, b)).count();
+    let actual_new = trial.bonds.iter().filter(|b| !bond_exists(&base.bonds, b)).count();
+    if actual_new != expected_new { return Err("candidate bond commit incomplete".into()); }
+    Ok(trial)
+}
