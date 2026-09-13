@@ -13,6 +13,7 @@ mod environmental_materials;
 mod genome;
 mod genome_core_constructor;
 mod genome_core_geometry;
+mod genome_core_realization;
 mod interface_geometry;
 mod math;
 #[allow(unused_variables)]
