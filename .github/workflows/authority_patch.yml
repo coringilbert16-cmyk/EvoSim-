@@ -10,13 +10,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply authoritative COMBINE construction changes
-        run: |
-          python3 scripts/apply_authority_patch.py
-          cargo fmt --all
-          cargo test --all-targets
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add src/combine_runtime.rs src/construction_realization.rs src/reproduction.rs src/simulation.rs
-          git commit -m "Route physical construction through authoritative COMBINE"
-          git push
+      - run: cargo test --all-targets
