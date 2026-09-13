@@ -33,32 +33,85 @@ pub struct GenomeCoreConstruction {
     pub cavity: CavityMeasurement,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum GenomeCoreConstructionFailure {
+    InvalidBlueprint(String),
+    DevelopmentalFailure {
+        reason: String,
+        largest_cavity: f64,
+        threshold: f64,
+    },
+}
+
+impl std::fmt::Display for GenomeCoreConstructionFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidBlueprint(reason) => write!(f, "invalid genome-core blueprint: {reason}"),
+            Self::DevelopmentalFailure { reason, largest_cavity, threshold } => write!(
+                f,
+                "developmental genome-core failure: {reason} (largest cavity {largest_cavity:.6}, threshold {threshold:.6})"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for GenomeCoreConstructionFailure {}
+
+/// Construct one genome core using one inherited mutation state for the entire
+/// construction event. Candidate selection may still vary through the supplied RNG.
 pub fn construct_genome_core(
     blueprint: &StructuralBlueprint,
     catalog: &[BaseResource],
     rng: &mut ChaCha8Rng,
-) -> Result<GenomeCoreConstruction, String> {
-    blueprint.validate()?;
+    structural_mutation_probability: f64,
+) -> Result<GenomeCoreConstruction, GenomeCoreConstructionFailure> {
+    let mutation = MutationEffect::sample(
+        rng,
+        structural_mutation_probability,
+        MAX_MUTATION_SCORE_SHIFT,
+    );
+    construct_genome_core_with_mutation(blueprint, catalog, rng, mutation)
+}
+
+/// Retry-safe construction entry point. The caller owns the mutation state so
+/// alternate developmental attempts do not silently create new inherited mutations.
+pub fn construct_genome_core_with_mutation(
+    blueprint: &StructuralBlueprint,
+    catalog: &[BaseResource],
+    rng: &mut ChaCha8Rng,
+    mutation: MutationEffect,
+) -> Result<GenomeCoreConstruction, GenomeCoreConstructionFailure> {
+    blueprint
+        .validate()
+        .map_err(GenomeCoreConstructionFailure::InvalidBlueprint)?;
     if blueprint.core_elements.is_empty() {
-        return Err("blueprint contains no genome-core developmental elements".into());
+        return Err(GenomeCoreConstructionFailure::InvalidBlueprint(
+            "blueprint contains no genome-core developmental elements".into(),
+        ));
     }
 
     let mut structure = OrganismStructure::new();
     let mut mapping = RealizedBlueprint::default();
-    let mutation = MutationEffect::sample(rng, 1.0, MAX_MUTATION_SCORE_SHIFT);
 
     let anchor_index = blueprint.core_elements[0];
-    let anchor = blueprint
-        .elements
-        .get(anchor_index)
-        .ok_or_else(|| "genome-core anchor references a missing blueprint element".to_string())?;
-    let anchor_ids = realize_material_with_constraints(&mut structure, anchor, catalog, &[])?;
+    let anchor = blueprint.elements.get(anchor_index).ok_or_else(|| {
+        GenomeCoreConstructionFailure::InvalidBlueprint(
+            "genome-core anchor references a missing blueprint element".into(),
+        )
+    })?;
+    let anchor_ids = realize_material_with_constraints(&mut structure, anchor, catalog, &[])
+        .map_err(|reason| GenomeCoreConstructionFailure::DevelopmentalFailure {
+            reason: format!("genome-core anchor is not physically realizable: {reason}"),
+            largest_cavity: 0.0,
+            threshold: 0.0,
+        })?;
     mapping.elements.push(RealizedBlueprintElement {
         blueprint_element_index: anchor_index,
         structure_unit_indices: anchor_ids,
     });
 
-    let mut cavity = measure_largest_cavity(&structure, catalog)?;
+    let mut cavity = measure_largest_cavity(&structure, catalog)
+        .map_err(GenomeCoreConstructionFailure::DevelopmentalFailureFromCavity)?;
     if cavity.qualifies {
         return Ok(GenomeCoreConstruction { structure, mapping, cavity });
     }
@@ -73,10 +126,11 @@ pub fn construct_genome_core(
         if mapping.units_for(element_index).is_some() {
             continue;
         }
-        let element = blueprint
-            .elements
-            .get(element_index)
-            .ok_or_else(|| "genome-core references a missing blueprint element".to_string())?;
+        let element = blueprint.elements.get(element_index).ok_or_else(|| {
+            GenomeCoreConstructionFailure::InvalidBlueprint(
+                "genome-core references a missing blueprint element".into(),
+            )
+        })?;
         let external = connected_realized_groups(blueprint, element_index, &mapping);
         let proposals = candidate_anchor_placements(&structure, element, catalog, &external);
         let mut candidates = Vec::<ConstructionCandidate>::new();
@@ -91,7 +145,8 @@ pub fn construct_genome_core(
                 continue;
             }
 
-            let candidate_cavity = measure_largest_cavity(&trial, catalog)?;
+            let candidate_cavity = measure_largest_cavity(&trial, catalog)
+                .map_err(GenomeCoreConstructionFailure::DevelopmentalFailureFromCavity)?;
             let candidate_position = centroid(&trial, &ids).unwrap_or((placement.x, placement.y));
             let (step_length, growth_direction) = match previous_centroid {
                 Some(previous) => {
@@ -137,13 +192,20 @@ pub fn construct_genome_core(
         }
 
         let Some(selected_index) = select_candidate_index(&candidates, DEFAULT_TEMPERATURE, rng) else {
-            return Err(format!(
-                "genome-core construction could not produce a physically feasible candidate for blueprint element {element_index}"
-            ));
+            return Err(GenomeCoreConstructionFailure::DevelopmentalFailure {
+                reason: format!("no physically feasible candidate for blueprint element {element_index}"),
+                largest_cavity: cavity.largest_enclosed_area,
+                threshold: cavity.threshold_area,
+            });
         };
         let selected = &candidates[selected_index];
         let selected_element = element_at(element, selected.placement);
-        let ids = realize_material_with_constraints(&mut structure, &selected_element, catalog, &external)?;
+        let ids = realize_material_with_constraints(&mut structure, &selected_element, catalog, &external)
+            .map_err(|reason| GenomeCoreConstructionFailure::DevelopmentalFailure {
+                reason: format!("selected candidate became physically unrealizable: {reason}"),
+                largest_cavity: cavity.largest_enclosed_area,
+                threshold: cavity.threshold_area,
+            })?;
 
         if let Some(new_centroid) = centroid(&structure, &ids) {
             if let Some(previous) = previous_centroid {
@@ -165,16 +227,28 @@ pub fn construct_genome_core(
             blueprint_element_index: element_index,
             structure_unit_indices: ids,
         });
-        cavity = measure_largest_cavity(&structure, catalog)?;
+        cavity = measure_largest_cavity(&structure, catalog)
+            .map_err(GenomeCoreConstructionFailure::DevelopmentalFailureFromCavity)?;
         if cavity.qualifies {
             return Ok(GenomeCoreConstruction { structure, mapping, cavity });
         }
     }
 
-    Err(format!(
-        "genome-core construction exhausted inherited core elements without a qualifying cavity (largest {:.6}, threshold {:.6})",
-        cavity.largest_enclosed_area, cavity.threshold_area
-    ))
+    Err(GenomeCoreConstructionFailure::DevelopmentalFailure {
+        reason: "inherited core elements were exhausted without a qualifying cavity".into(),
+        largest_cavity: cavity.largest_enclosed_area,
+        threshold: cavity.threshold_area,
+    })
+}
+
+impl GenomeCoreConstructionFailure {
+    fn DevelopmentalFailureFromCavity(error: String) -> Self {
+        Self::DevelopmentalFailure {
+            reason: format!("cavity measurement failed: {error}"),
+            largest_cavity: 0.0,
+            threshold: 0.0,
+        }
+    }
 }
 
 fn element_at(element: &BlueprintElement, placement: Placement) -> BlueprintElement {
@@ -358,6 +432,7 @@ mod tests {
     use super::*;
     use crate::resources::default_catalog;
     use crate::structural_blueprint::BlueprintPlacement;
+    use rand::SeedableRng;
 
     #[test]
     fn candidate_generation_includes_inherited_target() {
@@ -368,5 +443,15 @@ mod tests {
         };
         let placements = candidate_anchor_placements(&OrganismStructure::new(), &element, &catalog, &[]);
         assert!(placements.iter().any(|p| (p.x - 3.0).abs() < POSITION_EPSILON && (p.y - 4.0).abs() < POSITION_EPSILON));
+    }
+
+    #[test]
+    fn zero_structural_mutation_probability_is_neutral() {
+        let catalog = default_catalog();
+        let mut rng = ChaCha8Rng::seed_from_u64(7);
+        let mutation = MutationEffect::sample(&mut rng, 0.0, MAX_MUTATION_SCORE_SHIFT);
+        let result = construct_genome_core_with_mutation(&crate::genome::initial_genome().structural_blueprint, &catalog, &mut rng, mutation);
+        assert!(result.is_ok() || matches!(result, Err(GenomeCoreConstructionFailure::DevelopmentalFailure { .. })));
+        assert_eq!(mutation, MutationEffect::neutral());
     }
 }
