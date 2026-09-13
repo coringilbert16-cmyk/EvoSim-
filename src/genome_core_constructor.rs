@@ -219,18 +219,20 @@ pub fn history_score(input: &CandidateScoreInputs) -> f64 {
     if count == 0 { 0.5 } else { clamp01(total / count as f64) }
 }
 
+/// Return three mutation dimensions without collapsing X/Y position into a
+/// single signed value. The dimensions are radial position deviation,
+/// orientation deviation, and connection-topology deviation.
 pub fn candidate_deviation(input: &CandidateScoreInputs) -> [f64; 3] {
     let radius = input.blueprint_radius.abs().max(EPSILON);
-    let position = (
-        (input.candidate_position.0 - input.blueprint_position.0) / radius,
-        (input.candidate_position.1 - input.blueprint_position.1) / radius,
-    );
+    let dx = (input.candidate_position.0 - input.blueprint_position.0) / radius;
+    let dy = (input.candidate_position.1 - input.blueprint_position.1) / radius;
+    let radial_position = dx.hypot(dy);
     let orientation = angular_difference(input.candidate_orientation, input.blueprint_orientation)
         / std::f64::consts::PI;
     let expected = input.expected_blueprint_connections.max(1) as f64;
     let connection = (input.matched_blueprint_connections as f64
         - input.expected_blueprint_connections as f64) / expected;
-    [position.0 + position.1, orientation, connection]
+    [radial_position, orientation, connection]
 }
 
 pub fn score_candidate(input: &CandidateScoreInputs, mutation: MutationEffect) -> (CandidateScores, f64, f64) {
@@ -315,6 +317,19 @@ mod tests {
             let mutation = MutationEffect::sample(&mut rng, 1.0, 10.0);
             assert!(mutation.score_shift([1.0, 0.0, 0.0]).abs() <= MAX_MUTATION_SCORE_SHIFT + EPSILON);
         }
+    }
+
+    #[test]
+    fn position_deviation_does_not_cancel_across_axes() {
+        let mut a = input();
+        let mut b = input();
+        a.candidate_position = (1.0, -1.0);
+        b.candidate_position = (1.0, 1.0);
+        let da = candidate_deviation(&a);
+        let db = candidate_deviation(&b);
+        assert!((da[0] - db[0]).abs() < EPSILON);
+        assert!((da[0] - 2.0_f64.sqrt() / 4.0).abs() < EPSILON);
+        assert_eq!(da[0], db[0]);
     }
 
     #[test]
