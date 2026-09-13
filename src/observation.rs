@@ -15,6 +15,7 @@ pub(crate) struct SeedObservation {
     pub(crate) ticks_per_second: f64,
     pub(crate) world_width: f64,
     pub(crate) world_height: f64,
+    pub(crate) field_cell_size: f64,
     pub(crate) seed: Organism,
     pub(crate) structure: SeedStructureObservation,
     pub(crate) field: Vec<FieldCellObservation>,
@@ -67,6 +68,7 @@ pub(crate) struct PointObservation {
 impl SeedObservation {
     pub(crate) fn from_simulation(simulation: &Simulation) -> Option<Self> {
         let seed = simulation.organisms.first()?.clone();
+        let seed_position = seed.occupied_cells.first().copied()?;
         let catalog = &simulation.environment.catalog;
 
         let units = seed
@@ -78,8 +80,8 @@ impl SeedObservation {
                 unit_index,
                 material: unit.material.clone(),
                 form: unit.shape(catalog).map(|shape| shape.form.clone()),
-                x: unit.placement.x,
-                y: unit.placement.y,
+                x: unit.placement.x + seed_position.x,
+                y: unit.placement.y + seed_position.y,
                 rotation_radians: unit.placement.rotation_radians,
             })
             .collect();
@@ -97,14 +99,20 @@ impl SeedObservation {
                     .get(ia)
                     .filter(|unit| unit.geometry.is_some())
                     .and_then(|unit| bond.endpoint_a.location.world_point(unit, catalog))
-                    .map(|p| PointObservation { x: p.x, y: p.y });
+                    .map(|p| PointObservation {
+                        x: p.x + seed_position.x,
+                        y: p.y + seed_position.y,
+                    });
                 let endpoint_b = seed
                     .structure
                     .units
                     .get(ib)
                     .filter(|unit| unit.geometry.is_some())
                     .and_then(|unit| bond.endpoint_b.location.world_point(unit, catalog))
-                    .map(|p| PointObservation { x: p.x, y: p.y });
+                    .map(|p| PointObservation {
+                        x: p.x + seed_position.x,
+                        y: p.y + seed_position.y,
+                    });
                 Some(SeedBondObservation {
                     unit_a: ia,
                     unit_b: ib,
@@ -140,6 +148,7 @@ impl SeedObservation {
             ticks_per_second: simulation.ticks_per_second,
             world_width: simulation.environment.width,
             world_height: simulation.environment.height,
+            field_cell_size: simulation.environment.field.cell_size,
             seed: seed.clone(),
             structure: SeedStructureObservation { units, bonds },
             field,
