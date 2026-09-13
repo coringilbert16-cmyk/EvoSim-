@@ -1,6 +1,6 @@
 use crate::break_runtime;
 use crate::resources::Material;
-use crate::state::{EnergyLedger, Environment, Organism, Position};
+use crate::state::{Environment, Organism, Position};
 use crate::structure::OrganismStructure;
 
 #[derive(Clone, Debug)]
@@ -42,7 +42,6 @@ pub(crate) struct DecompositionStep {
 pub(crate) fn resolve_one_bond(
     body: &mut DecomposingBody,
     environment: &Environment,
-    ledger: &mut EnergyLedger,
 ) -> Option<DecompositionStep> {
     let target = *body.structure.bonds.first()?;
     let ia = body.structure.unit_index(target.endpoint_a.constituent_id)?;
@@ -60,7 +59,6 @@ pub(crate) fn resolve_one_bond(
         candidate.endpoint_a == target.endpoint_a.location
             && candidate.endpoint_b == target.endpoint_b.location
     })?;
-    let complexity = crate::math::complexity(2.0);
     let evaluation = break_runtime::evaluate_bond_break(
         &body.structure,
         target,
@@ -68,7 +66,7 @@ pub(crate) fn resolve_one_bond(
         b,
         candidate,
         break_runtime::water_field_amount(environment, &body.position),
-        complexity,
+        crate::math::complexity(2.0),
     )?;
 
     if !break_runtime::execute_break(
@@ -76,7 +74,6 @@ pub(crate) fn resolve_one_bond(
         target,
         &mut body.energy_budget,
         evaluation,
-        ledger,
     ) {
         return None;
     }
