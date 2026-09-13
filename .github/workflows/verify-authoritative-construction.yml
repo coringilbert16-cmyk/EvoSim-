@@ -1,0 +1,13 @@
+name: verify-authoritative-construction
+on:
+  push:
+    branches: [implementation/authoritative-combine-construction]
+permissions:
+  contents: write
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --quiet
