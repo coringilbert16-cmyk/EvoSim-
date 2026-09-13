@@ -6,10 +6,13 @@ use crate::structural_blueprint::BlueprintElement;
 use crate::structure::{
     Bond, BondEndpoint, ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit,
 };
+
 const CONTACT_EPSILON: f64 = 1e-9;
+
 fn resource<'a>(catalog: &'a [BaseResource], name: &str) -> Option<&'a BaseResource> {
     catalog.iter().find(|r| r.name == name)
 }
+
 fn endpoint_prototypes(unit: &StructuralUnit, catalog: &[BaseResource]) -> Vec<ConnectionEndpoint> {
     match unit.connection_sites(catalog) {
         Some(ConnectionSites::Corners(points)) => (0..points.len())
@@ -24,6 +27,7 @@ fn endpoint_prototypes(unit: &StructuralUnit, catalog: &[BaseResource]) -> Vec<C
         Some(ConnectionSites::Undetermined) | None => Vec::new(),
     }
 }
+
 fn local_endpoint_point(
     resource: &BaseResource,
     endpoint: ConnectionEndpoint,
@@ -40,10 +44,12 @@ fn local_endpoint_point(
     let point = endpoint.world_point(&unit, catalog)?;
     Some((point.x, point.y))
 }
+
 fn rotate_point(point: (f64, f64), angle: f64) -> (f64, f64) {
     let (s, c) = angle.sin_cos();
     (point.0 * c - point.1 * s, point.0 * s + point.1 * c)
 }
+
 fn placement_for_point_contact(local: (f64, f64), target: (f64, f64), rotation: f64) -> Placement {
     let rotated = rotate_point(local, rotation);
     Placement {
@@ -52,6 +58,7 @@ fn placement_for_point_contact(local: (f64, f64), target: (f64, f64), rotation: 
         rotation_radians: rotation,
     }
 }
+
 fn add_unique_placement(out: &mut Vec<Placement>, placement: Placement) {
     if !placement.x.is_finite()
         || !placement.y.is_finite()
@@ -72,11 +79,13 @@ fn add_unique_placement(out: &mut Vec<Placement>, placement: Placement) {
         out.push(normalized)
     }
 }
+
 #[derive(Clone, Copy, Debug)]
 struct ContactTarget {
     unit_index: usize,
     endpoint: ConnectionEndpoint,
 }
+
 fn target_world_point(
     s: &OrganismStructure,
     t: ContactTarget,
@@ -86,6 +95,7 @@ fn target_world_point(
     let p = t.endpoint.world_point(u, c)?;
     Some((p.x, p.y))
 }
+
 fn contact_targets_for_units(
     s: &OrganismStructure,
     indices: &[usize],
@@ -103,6 +113,7 @@ fn contact_targets_for_units(
     }
     out
 }
+
 fn circle_center(s: &OrganismStructure, i: usize, c: &[BaseResource]) -> Option<(f64, f64, f64)> {
     let u = s.units.get(i)?;
     let shape = u.shape(c)?;
@@ -111,6 +122,7 @@ fn circle_center(s: &OrganismStructure, i: usize, c: &[BaseResource]) -> Option<
     };
     Some((u.placement.x, u.placement.y, *radius))
 }
+
 fn add_circle_contact_candidates(
     out: &mut Vec<Placement>,
     resource: &BaseResource,
@@ -136,7 +148,7 @@ fn add_circle_contact_candidates(
         let d = *radius + tr;
         if d <= CONTACT_EPSILON {
             continue;
-        };
+        }
         let angle = (anchor.y - ty).atan2(anchor.x - tx);
         add_unique_placement(
             out,
@@ -195,6 +207,7 @@ fn add_circle_contact_candidates(
         }
     }
 }
+
 fn candidate_placements_for_targets(
     resource: &BaseResource,
     targets: &[ContactTarget],
@@ -276,6 +289,23 @@ fn candidate_placements_for_targets(
         }
     }
     out.retain(|p| (p.rotation_radians - fixed_rotation).abs() <= 1e-10);
+
+    // Blueprint placement is a soft target: physical candidates remain the
+    // only admissible choices, but candidates closest to the inherited frame
+    // are attempted first. This preserves constructional variation whenever
+    // the preferred arrangement is unavailable.
+    out.sort_by(|a, b| {
+        let da = (a.x - anchor.x).hypot(a.y - anchor.y);
+        let db = (b.x - anchor.x).hypot(b.y - anchor.y);
+        da.partial_cmp(&db)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| {
+                let da = (a.rotation_radians - fixed_rotation).abs();
+                let db = (b.rotation_radians - fixed_rotation).abs();
+                da.partial_cmp(&db)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+    });
     add_unique_placement(
         &mut out,
         Placement {
@@ -285,6 +315,7 @@ fn candidate_placements_for_targets(
     );
     out
 }
+
 fn units_strictly_overlap(a: &StructuralUnit, b: &StructuralUnit, c: &[BaseResource]) -> bool {
     let (Some(sa), Some(sb)) = (a.shape(c), b.shape(c)) else {
         return false;
@@ -301,11 +332,13 @@ fn units_strictly_overlap(a: &StructuralUnit, b: &StructuralUnit, c: &[BaseResou
     };
     crate::material_geometry::placed_forms_penetrate(&pa, &pb, 0.0)
 }
+
 fn internal_contact_exists(s: &OrganismStructure, a: usize, b: usize, c: &[BaseResource]) -> bool {
     connection_pair_candidates(s, a, b, c)
         .into_iter()
         .any(|x| x.distance <= CONTACT_EPSILON)
 }
+
 fn partial_configuration_valid(
     s: &OrganismStructure,
     m: &Material,
@@ -322,6 +355,7 @@ fn partial_configuration_valid(
     }
     true
 }
+
 fn choose_next_part(m: &Material, a: &[Option<usize>]) -> Option<usize> {
     let mut best = None;
     let mut score_best = i32::MIN;
@@ -333,7 +367,8 @@ fn choose_next_part(m: &Material, a: &[Option<usize>]) -> Option<usize> {
             .internal_bonds
             .iter()
             .filter(|b| {
-                (b.part_a == p && a[b.part_b].is_some()) || (b.part_b == p && a[b.part_a].is_some())
+                (b.part_a == p && a[b.part_b].is_some())
+                    || (b.part_b == p && a[b.part_a].is_some())
             })
             .count() as i32;
         let degree = m
@@ -349,6 +384,7 @@ fn choose_next_part(m: &Material, a: &[Option<usize>]) -> Option<usize> {
     }
     best
 }
+
 fn solve_material_placements(
     s: &OrganismStructure,
     e: &BlueprintElement,
@@ -363,6 +399,7 @@ fn solve_material_placements(
         y: e.placement.y,
         rotation_radians: e.placement.rotation_radians,
     };
+
     fn search(
         base: &OrganismStructure,
         m: &Material,
@@ -410,8 +447,7 @@ fn solve_material_placements(
                 target_units.push(i)
             }
         }
-        let first_part = assigned.iter().all(Option::is_none);
-        if first_part {
+        if assigned.iter().all(Option::is_none) {
             for constraint in external {
                 target_units.extend(constraint.iter().copied())
             }
@@ -466,6 +502,7 @@ fn solve_material_placements(
         }
         false
     }
+
     if !search(
         s,
         m,
@@ -483,6 +520,7 @@ fn solve_material_placements(
         .map(|p| p.ok_or_else(|| "material solver returned incomplete realization".to_string()))
         .collect()
 }
+
 fn connect_units(s: &mut OrganismStructure, a: usize, b: usize, c: &[BaseResource]) -> Option<f64> {
     let candidates = connection_pair_candidates(s, a, b, c);
     let id_a = s.physical_id(a)?;
@@ -516,6 +554,7 @@ fn connect_units(s: &mut OrganismStructure, a: usize, b: usize, c: &[BaseResourc
     }
     None
 }
+
 fn commit_material(
     s: &mut OrganismStructure,
     m: &Material,
@@ -551,6 +590,7 @@ fn commit_material(
     *s = trial;
     Ok(indices)
 }
+
 pub(crate) fn realize_material(
     s: &mut OrganismStructure,
     e: &BlueprintElement,
@@ -558,6 +598,7 @@ pub(crate) fn realize_material(
 ) -> Result<Vec<usize>, String> {
     realize_material_with_constraints(s, e, c, &[])
 }
+
 pub(crate) fn realize_material_with_constraints(
     s: &mut OrganismStructure,
     e: &BlueprintElement,
@@ -586,10 +627,12 @@ pub(crate) fn realize_material_with_constraints(
     let placements = solve_material_placements(s, e, c, external)?;
     commit_material(s, m, &placements, c)
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::resources::{default_catalog, InternalBond};
+
     fn carbon_hydrogen_material() -> Material {
         Material {
             parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
@@ -599,6 +642,7 @@ mod tests {
             }],
         }
     }
+
     #[test]
     fn single_material_is_realized_at_anchor() {
         let c = default_catalog();
@@ -616,6 +660,7 @@ mod tests {
         assert_eq!(s.units[0].placement.x, 2.0);
         assert_eq!(s.units[0].placement.y, 3.0)
     }
+
     #[test]
     fn composite_realization_preserves_internal_contact() {
         let c = default_catalog();
@@ -634,5 +679,55 @@ mod tests {
         assert!(connection_pair_candidates(&s, ids[0], ids[1], &c)
             .into_iter()
             .any(|x| x.distance <= CONTACT_EPSILON))
+    }
+
+    #[test]
+    fn physical_candidates_are_ranked_by_blueprint_anchor() {
+        let a = Placement {
+            x: 10.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut candidates = vec![
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            Placement {
+                x: 9.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            Placement {
+                x: 30.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ];
+        candidates.sort_by(|x, y| {
+            (x.x - a.x)
+                .hypot(x.y - a.y)
+                .partial_cmp(&(y.x - a.x).hypot(y.y - a.y))
+                .unwrap()
+        });
+        assert_eq!(candidates[0].x, 9.0);
+        assert_eq!(candidates[1].x, 0.0);
+        assert_eq!(candidates[2].x, 30.0);
+    }
+
+    #[test]
+    fn anchor_is_preference_not_unconditional_placement() {
+        let anchor = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let candidate = Placement {
+            x: 2.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        assert!(candidate.x != anchor.x || candidate.y != anchor.y);
     }
 }
