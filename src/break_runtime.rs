@@ -1,7 +1,7 @@
 use crate::combine::experimental_interaction;
-use crate::contact::ConnectionCandidate;
+use crate::contact::ConnectionPairCandidate;
 use crate::resources::ResourceProperties;
-use crate::state::{EnergyLedger, Environment, Organism};
+use crate::state::{EnergyLedger, Environment, Organism, Position};
 use crate::structure::{Bond, OrganismStructure};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -12,7 +12,7 @@ pub(crate) struct BreakEvaluation {
     pub(crate) work: f64,
 }
 
-pub(crate) fn water_field_amount(environment: &Environment, position: &crate::state::Position) -> f64 {
+pub(crate) fn water_field_amount(environment: &Environment, position: &Position) -> f64 {
     environment
         .field
         .index_for_position(position.x, position.y)
@@ -41,7 +41,7 @@ pub(crate) fn evaluate_bond_break(
     target: Bond,
     a: ResourceProperties,
     b: ResourceProperties,
-    candidate: ConnectionCandidate,
+    candidate: ConnectionPairCandidate,
     water: f64,
     complexity: f64,
 ) -> Option<BreakEvaluation> {
@@ -61,7 +61,11 @@ pub(crate) fn evaluate_bond_break(
         return None;
     }
 
-    if !structure.bonds.iter().any(|bond| bond.has_same_identity(&target)) {
+    if !structure
+        .bonds
+        .iter()
+        .any(|bond| bond.has_same_identity(&target))
+    {
         return None;
     }
 
@@ -73,6 +77,11 @@ pub(crate) fn evaluate_bond_break(
     })
 }
 
+/// Executes one real BREAK operation and settles its current energy effects.
+///
+/// This is the single physical mutation authority for bond breaking. Callers
+/// may decide which bond should be attempted, but they do not independently
+/// remove the bond or calculate its energy settlement.
 pub(crate) fn execute_break(
     structure: &mut OrganismStructure,
     target: Bond,
@@ -129,6 +138,11 @@ pub(crate) fn evaluate_organism_bond_break(
         candidate.endpoint_a == target.endpoint_a.location
             && candidate.endpoint_b == target.endpoint_b.location
     })?;
+    let position = organism
+        .occupied_cells
+        .first()
+        .cloned()
+        .unwrap_or(Position { x: 0.0, y: 0.0 });
 
     evaluate_bond_break(
         &organism.structure,
@@ -136,10 +150,7 @@ pub(crate) fn evaluate_organism_bond_break(
         a,
         b,
         candidate,
-        water_field_amount(
-            environment,
-            organism.occupied_cells.first().unwrap_or(&crate::state::Position { x: 0.0, y: 0.0 }),
-        ),
+        water_field_amount(environment, &position),
         complexity,
     )
 }
@@ -171,8 +182,7 @@ pub(crate) fn resolve_stress_break(
     ) else {
         return false;
     };
-
-    let worked = evaluation.work;
+    let work = evaluation.work;
     if !execute_break(
         &mut organism.structure,
         target,
@@ -182,7 +192,7 @@ pub(crate) fn resolve_stress_break(
     ) {
         return false;
     }
-    organism.add_transaction_stress(worked);
+    organism.add_transaction_stress(work);
     true
 }
 
@@ -191,22 +201,56 @@ mod tests {
     use super::*;
 
     #[test]
-    fn break_net_energy_is_represented_by_evaluation() {
+    fn break_work_cost_is_nonnegative_for_nonnegative_complexity() {
+        let properties = ResourceProperties {
+            mass: 1.0,
+            potential_energy: 1.0,
+            reactivity: 1.0,
+            cohesion: 1.0,
+        };
+        assert!(break_work_cost(properties, properties, 2.0) >= 0.0);
+    }
+
+    #[test]
+    fn evaluation_rejects_missing_bond() {
         let structure = OrganismStructure::new();
         let target = Bond {
-            endpoint_a: crate::structure::BondEndpoint::new(crate::structure::PhysicalConstituentId(0), crate::contact::ConnectionPointLocation::Center),
-            endpoint_b: crate::structure::BondEndpoint::new(crate::structure::PhysicalConstituentId(1), crate::contact::ConnectionPointLocation::Center),
-            strength: 1.0,
-            bond_energy: 10.0,
+            endpoint_a: crate::structure::BondEndpoint::new(
+                crate::structure::PhysicalConstituentId(1),
+                crate::structure::ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 },
+            ),
+            endpoint_b: crate::structure::BondEndpoint::new(
+                crate::structure::PhysicalConstituentId(2),
+                crate::structure::ConnectionEndpoint::Fluid { x: 1.0, y: 0.0 },
+            ),
+            strength: 0.5,
+            bond_energy: 1.0,
+        };
+        let candidate = ConnectionPairCandidate {
+            endpoint_a: target.endpoint_a.location,
+            endpoint_b: target.endpoint_b.location,
+            distance: 0.0,
+            facing: 1.0,
+            load_a: 0.0,
+            load_b: 0.0,
+            available_a: true,
+            available_b: true,
+        };
+        let properties = ResourceProperties {
+            mass: 1.0,
+            potential_energy: 1.0,
+            reactivity: 1.0,
+            cohesion: 1.0,
         };
         assert!(evaluate_bond_break(
             &structure,
             target,
-            ResourceProperties { mass: 1.0, potential_energy: 1.0, reactivity: 1.0, cohesion: 1.0 },
-            ResourceProperties { mass: 1.0, potential_energy: 1.0, reactivity: 1.0, cohesion: 1.0 },
-            ConnectionCandidate::default(),
+            properties,
+            properties,
+            candidate,
             0.0,
             2.0,
-        ).is_none());
+        )
+        .is_none());
     }
 }
