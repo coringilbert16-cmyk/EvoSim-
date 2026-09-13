@@ -67,7 +67,6 @@ pub(crate) struct PointObservation {
 impl SeedObservation {
     pub(crate) fn from_simulation(simulation: &Simulation) -> Option<Self> {
         let seed = simulation.organisms.first()?.clone();
-        let position = seed.occupied_cells.first().copied()?;
         let catalog = &simulation.environment.catalog;
 
         let units = seed
@@ -75,28 +74,13 @@ impl SeedObservation {
             .units
             .iter()
             .enumerate()
-            .map(|(unit_index, unit)| {
-                let (x, y, rotation_radians, form) = unit
-                    .geometry
-                    .as_ref()
-                    .map(|geometry| {
-                        let placement = geometry.placement();
-                        (
-                            placement.x + position.x,
-                            placement.y + position.y,
-                            placement.rotation_radians,
-                            Some(geometry.shape().form.clone()),
-                        )
-                    })
-                    .unwrap_or((position.x, position.y, 0.0, None));
-                SeedUnitObservation {
-                    unit_index,
-                    material: unit.material.clone(),
-                    form,
-                    x,
-                    y,
-                    rotation_radians,
-                }
+            .map(|(unit_index, unit)| SeedUnitObservation {
+                unit_index,
+                material: unit.material.clone(),
+                form: unit.shape(catalog).map(|shape| shape.form.clone()),
+                x: unit.placement.x,
+                y: unit.placement.y,
+                rotation_radians: unit.placement.rotation_radians,
             })
             .collect();
 
@@ -112,22 +96,14 @@ impl SeedObservation {
                     .units
                     .get(ia)
                     .filter(|unit| unit.geometry.is_some())
-                    .and_then(|unit| {
-                        bond.endpoint_a
-                            .location
-                            .world_point(unit, catalog)
-                    })
+                    .and_then(|unit| bond.endpoint_a.location.world_point(unit, catalog))
                     .map(|p| PointObservation { x: p.x, y: p.y });
                 let endpoint_b = seed
                     .structure
                     .units
                     .get(ib)
                     .filter(|unit| unit.geometry.is_some())
-                    .and_then(|unit| {
-                        bond.endpoint_b
-                            .location
-                            .world_point(unit, catalog)
-                    })
+                    .and_then(|unit| bond.endpoint_b.location.world_point(unit, catalog))
                     .map(|p| PointObservation { x: p.x, y: p.y });
                 Some(SeedBondObservation {
                     unit_a: ia,
@@ -164,7 +140,7 @@ impl SeedObservation {
             ticks_per_second: simulation.ticks_per_second,
             world_width: simulation.environment.width,
             world_height: simulation.environment.height,
-            seed,
+            seed: seed.clone(),
             structure: SeedStructureObservation { units, bonds },
             field,
             vents: simulation
