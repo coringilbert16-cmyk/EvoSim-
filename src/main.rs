@@ -24,7 +24,6 @@ mod physical_geometry;
 mod physical_interface;
 mod permeability;
 mod reproduction;
-mod resource_visualization;
 mod resources;
 #[allow(clippy::needless_range_loop, unused_variables)]
 mod structural_blueprint;
@@ -42,9 +41,6 @@ mod transformation;
 
 #[cfg(test)]
 mod blueprint_diagnostics;
-
-#[cfg(test)]
-mod observation_contract_tests;
 
 #[cfg(test)]
 mod simulation_tests;
