@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::resources::{Form, Material};
 use crate::state::{ActiveTransformation, EnergyLedger, Organism, Simulation};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct SeedObservation {
     pub(crate) tick: u64,
     pub(crate) running: bool,
@@ -25,13 +25,13 @@ pub(crate) struct SeedObservation {
     pub(crate) energy_ledger: EnergyLedger,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct SeedStructureObservation {
     pub(crate) units: Vec<SeedUnitObservation>,
     pub(crate) bonds: Vec<SeedBondObservation>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct SeedUnitObservation {
     pub(crate) unit_index: usize,
     pub(crate) material: Material,
@@ -41,7 +41,7 @@ pub(crate) struct SeedUnitObservation {
     pub(crate) rotation_radians: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct SeedBondObservation {
     pub(crate) unit_a: usize,
     pub(crate) unit_b: usize,
@@ -51,7 +51,7 @@ pub(crate) struct SeedBondObservation {
     pub(crate) endpoint_b: Option<PointObservation>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct FieldCellObservation {
     pub(crate) cell_index: usize,
     pub(crate) x: f64,
@@ -59,7 +59,7 @@ pub(crate) struct FieldCellObservation {
     pub(crate) materials: Vec<Material>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 pub(crate) struct PointObservation {
     pub(crate) x: f64,
     pub(crate) y: f64,
@@ -68,7 +68,7 @@ pub(crate) struct PointObservation {
 impl SeedObservation {
     pub(crate) fn from_simulation(simulation: &Simulation) -> Option<Self> {
         let seed = simulation.organisms.first()?.clone();
-        let seed_position = seed.occupied_cells.first().copied()?;
+        let seed_position = seed.occupied_cells.first().cloned()?;
         let catalog = &simulation.environment.catalog;
 
         let units = seed
