@@ -11,6 +11,7 @@ mod decomposition;
 mod environment;
 mod environmental_materials;
 mod genome;
+mod genome_core_builder;
 mod genome_core_constructor;
 mod genome_core_geometry;
 mod genome_core_realization;
