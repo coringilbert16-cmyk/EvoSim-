@@ -6,10 +6,29 @@
 //! were produced. Blueprint indices are never used as physical indices.
 
 use crate::construction_realization::realize_material_with_constraints;
-use crate::genome_core_constructor::{RealizedBlueprint, RealizedBlueprintElement};
 use crate::resources::BaseResource;
 use crate::structural_blueprint::StructuralBlueprint;
 use crate::structure::OrganismStructure;
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct RealizedBlueprint {
+    pub elements: Vec<RealizedBlueprintElement>,
+}
+
+impl RealizedBlueprint {
+    pub fn units_for(&self, blueprint_element_index: usize) -> Option<&[usize]> {
+        self.elements
+            .iter()
+            .find(|element| element.blueprint_element_index == blueprint_element_index)
+            .map(|element| element.structure_unit_indices.as_slice())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct RealizedBlueprintElement {
+    pub blueprint_element_index: usize,
+    pub structure_unit_indices: Vec<usize>,
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct GenomeCoreRealization {
