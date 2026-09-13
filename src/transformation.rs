@@ -3,6 +3,62 @@ use crate::decision::{ActionKind, OutcomeKind};
 use crate::decision_runtime::ActionCandidate;
 use crate::state::{ActiveTransformation, EnergyLedger, Environment, Organism, Simulation};
 
+pub(crate) fn resolve_stress_break(
+    organism: &mut Organism,
+    environment: &Environment,
+    ledger: &mut EnergyLedger,
+) -> bool {
+    let Some((_, target)) = organism
+        .structure
+        .bonds
+        .iter()
+        .enumerate()
+        .min_by(|(_, a), (_, b)| {
+            a.strength
+                .partial_cmp(&b.strength)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+    else {
+        return false;
+    };
+    let target = *target;
+    let Some(evaluation) = break_runtime::evaluate_organism_bond_break(
+        organism,
+        environment,
+        target,
+        crate::math::complexity(2.0),
+    ) else {
+        return false;
+    };
+    if !break_runtime::execute_break(
+        &mut organism.structure,
+        target,
+        &mut organism.usable_energy,
+        evaluation,
+    ) {
+        return false;
+    }
+
+    organism.add_transaction_stress(evaluation.work);
+    settle_break_ledger(ledger, evaluation);
+    true
+}
+
+fn settle_break_ledger(ledger: &mut EnergyLedger, evaluation: break_runtime::BreakEvaluation) {
+    if evaluation.work > 0.0 {
+        ledger.total_heat_dissipated += evaluation.work;
+    }
+    if evaluation.bond_energy > 0.0 {
+        ledger.total_potential_energy_released += evaluation.bond_energy;
+    }
+    if evaluation.interaction_energy > 0.0 {
+        ledger.total_potential_energy_released += evaluation.interaction_energy;
+    }
+    if evaluation.net_energy > 0.0 {
+        ledger.total_usable_energy_gained += evaluation.net_energy;
+    }
+}
+
 impl Simulation {
     pub(crate) fn try_start_transformation(
         organism: &mut Organism,
@@ -67,13 +123,11 @@ impl Simulation {
         };
 
         let net = evaluation.net_energy;
-        let work = evaluation.work;
         if !break_runtime::execute_break(
             &mut organism.structure,
             target,
             &mut organism.usable_energy,
             evaluation,
-            ledger,
         ) {
             organism.active_transformation_id = None;
             let candidate = ActionCandidate {
@@ -88,7 +142,8 @@ impl Simulation {
             return;
         }
 
-        organism.add_transaction_stress(work);
+        organism.add_transaction_stress(evaluation.work);
+        settle_break_ledger(ledger, evaluation);
         organism.active_transformation_id = None;
 
         let outcome = if net > f64::EPSILON {
@@ -115,7 +170,7 @@ impl Simulation {
                 .first()
                 .map(|p| (p.x, p.y))
                 .unwrap_or((0.0, 0.0));
-            reinforce_memory_point(organism, x, y, reinforcement);
+            Self::reinforce_memory_point(organism, x, y, reinforcement);
         }
     }
 
