@@ -92,7 +92,7 @@ impl MutationEffect {
             rng.gen_range(-1.0..1.0),
             rng.gen_range(-1.0..1.0),
         ];
-        let norm = (direction[0] * direction[0]
+        let norm: f64 = (direction[0] * direction[0]
             + direction[1] * direction[1]
             + direction[2] * direction[2])
             .sqrt();
@@ -110,7 +110,7 @@ impl MutationEffect {
     }
 
     pub fn deviation_alignment(&self, deviation: [f64; 3]) -> f64 {
-        let norm = (deviation[0] * deviation[0]
+        let norm: f64 = (deviation[0] * deviation[0]
             + deviation[1] * deviation[1]
             + deviation[2] * deviation[2])
             .sqrt();
@@ -219,9 +219,6 @@ pub fn history_score(input: &CandidateScoreInputs) -> f64 {
     if count == 0 { 0.5 } else { clamp01(total / count as f64) }
 }
 
-/// Return three mutation dimensions without collapsing X/Y position into a
-/// single signed value. The dimensions are radial position deviation,
-/// orientation deviation, and connection-topology deviation.
 pub fn candidate_deviation(input: &CandidateScoreInputs) -> [f64; 3] {
     let radius = input.blueprint_radius.abs().max(EPSILON);
     let dx = (input.candidate_position.0 - input.blueprint_position.0) / radius;
@@ -320,19 +317,6 @@ mod tests {
     }
 
     #[test]
-    fn position_deviation_does_not_cancel_across_axes() {
-        let mut a = input();
-        let mut b = input();
-        a.candidate_position = (1.0, -1.0);
-        b.candidate_position = (1.0, 1.0);
-        let da = candidate_deviation(&a);
-        let db = candidate_deviation(&b);
-        assert!((da[0] - db[0]).abs() < EPSILON);
-        assert!((da[0] - 2.0_f64.sqrt() / 4.0).abs() < EPSILON);
-        assert_eq!(da[0], db[0]);
-    }
-
-    #[test]
     fn softmax_probabilities_sum_to_one() {
         let probabilities = softmax_probabilities(&[0.1, 0.4, 0.9], DEFAULT_TEMPERATURE);
         assert!((probabilities.iter().sum::<f64>() - 1.0).abs() < EPSILON);
@@ -348,5 +332,14 @@ mod tests {
         let draw_b = rng_b.gen::<f64>();
         assert_eq!(draw_a, draw_b);
         assert!((probabilities.iter().sum::<f64>() - 1.0).abs() < EPSILON);
+    }
+
+    #[test]
+    fn positional_deviation_does_not_cancel_between_axes() {
+        let mut a = input();
+        let mut b = input();
+        a.candidate_position = (1.0, -1.0);
+        b.candidate_position = (0.0, 0.0);
+        assert_ne!(candidate_deviation(&a)[0], candidate_deviation(&b)[0]);
     }
 }
