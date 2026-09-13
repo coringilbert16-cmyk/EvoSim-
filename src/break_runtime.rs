@@ -1,7 +1,7 @@
 use crate::combine::experimental_interaction;
 use crate::contact::ConnectionPairCandidate;
 use crate::resources::ResourceProperties;
-use crate::state::{EnergyLedger, Environment, Organism, Position};
+use crate::state::{Environment, Organism, Position};
 use crate::structure::{Bond, OrganismStructure};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -77,17 +77,16 @@ pub(crate) fn evaluate_bond_break(
     })
 }
 
-/// Executes one real BREAK operation and settles its current energy effects.
+/// Executes one real BREAK operation.
 ///
 /// This is the single physical mutation authority for bond breaking. Callers
 /// may decide which bond should be attempted, but they do not independently
-/// remove the bond or calculate its energy settlement.
+/// remove the bond or calculate its work/interaction result.
 pub(crate) fn execute_break(
     structure: &mut OrganismStructure,
     target: Bond,
     available_energy: &mut f64,
     evaluation: BreakEvaluation,
-    ledger: &mut EnergyLedger,
 ) -> bool {
     if !available_energy.is_finite() || evaluation.net_energy.is_nan() {
         return false;
@@ -102,18 +101,6 @@ pub(crate) fn execute_break(
     }
 
     *available_energy += evaluation.net_energy;
-    if evaluation.work > 0.0 {
-        ledger.total_heat_dissipated += evaluation.work;
-    }
-    if evaluation.bond_energy > 0.0 {
-        ledger.total_potential_energy_released += evaluation.bond_energy;
-    }
-    if evaluation.interaction_energy > 0.0 {
-        ledger.total_potential_energy_released += evaluation.interaction_energy;
-    }
-    if evaluation.net_energy > 0.0 {
-        ledger.total_usable_energy_gained += evaluation.net_energy;
-    }
     true
 }
 
@@ -153,47 +140,6 @@ pub(crate) fn evaluate_organism_bond_break(
         water_field_amount(environment, &position),
         complexity,
     )
-}
-
-pub(crate) fn resolve_stress_break(
-    organism: &mut Organism,
-    environment: &Environment,
-    ledger: &mut EnergyLedger,
-) -> bool {
-    let Some((_, target)) = organism
-        .structure
-        .bonds
-        .iter()
-        .enumerate()
-        .min_by(|(_, a), (_, b)| {
-            a.strength
-                .partial_cmp(&b.strength)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-    else {
-        return false;
-    };
-    let target = *target;
-    let Some(evaluation) = evaluate_organism_bond_break(
-        organism,
-        environment,
-        target,
-        crate::math::complexity(2.0),
-    ) else {
-        return false;
-    };
-    let work = evaluation.work;
-    if !execute_break(
-        &mut organism.structure,
-        target,
-        &mut organism.usable_energy,
-        evaluation,
-        ledger,
-    ) {
-        return false;
-    }
-    organism.add_transaction_stress(work);
-    true
 }
 
 #[cfg(test)]
