@@ -1,0 +1,62 @@
+name: finish-authoritative-construction
+on:
+  push:
+    branches: [implementation/authoritative-combine-construction]
+permissions:
+  contents: write
+jobs:
+  finish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Finish implementation and test
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          def once(path, old, new):
+              p=Path(path); s=p.read_text(); n=s.count(old)
+              if n != 1: raise SystemExit(f'{path}: expected one match, found {n}')
+              p.write_text(s.replace(old,new,1))
+          p=Path('src/reproduction.rs'); s=p.read_text()
+          if 'WaitingForEnergy,' not in s:
+              once('src/reproduction.rs','    WaitingForMaterial,\n    DevelopmentalFailure,','    WaitingForMaterial,\n    WaitingForEnergy,\n    DevelopmentalFailure,'); s=p.read_text()
+          if 'catalog:&[BaseResource],water:f64)->ReproductionStart' not in s:
+              once('src/reproduction.rs','pub(crate)fn begin_reproduction(parent:&mut Organism,rng:&mut ChaCha8Rng,catalog:&[BaseResource])->ReproductionStart{','pub(crate)fn begin_reproduction(parent:&mut Organism,rng:&mut ChaCha8Rng,catalog:&[BaseResource],water:f64)->ReproductionStart{'); s=p.read_text()
+          if 'catalog:&[BaseResource],energy:&mut f64,water:f64)->ConstructionAdvance' not in s:
+              once('src/reproduction.rs','pub(crate)fn advance_construction(stored_material:&mut MaterialStorage,construction:&mut ReproductiveConstruction,catalog:&[BaseResource])->ConstructionAdvance{','pub(crate)fn advance_construction(stored_material:&mut MaterialStorage,construction:&mut ReproductiveConstruction,catalog:&[BaseResource],energy:&mut f64,water:f64)->ConstructionAdvance{'); s=p.read_text()
+          if 'construct_any_frontier_element(stored_material,&mut construction.developing_structure,&realized,&target,blueprint,catalog,energy,water)' not in s:
+              once('src/reproduction.rs','construct_any_frontier_element(stored_material,&mut construction.developing_structure,&realized,&target,blueprint,catalog)','construct_any_frontier_element(stored_material,&mut construction.developing_structure,&realized,&target,blueprint,catalog,energy,water)'); s=p.read_text()
+          pattern=r'fn construct_any_frontier_element\(.*?\n\npub\(crate\)fn begin_reproduction'
+          if 'commit_candidate_structure' not in s:
+              new='''fn construct_any_frontier_element(stored_material:&MaterialStorage,structure:&mut OrganismStructure,realized:&HashMap<usize,Vec<usize>>,allowed:&HashSet<usize>,blueprint:&crate::structural_blueprint::StructuralBlueprint,catalog:&[BaseResource],energy:&mut f64,water:f64)->ConstructionAdvance{let candidates=frontier(blueprint,realized,allowed);if candidates.is_empty(){return ConstructionAdvance::DevelopmentalFailure}let mut physically_valid=false;let mut energy_blocked=false;for blueprint_index in candidates{let mut candidate_structure=structure.clone();let Some((indices,stress))=add_blueprint_element(&mut candidate_structure,realized,blueprint_index,blueprint,catalog)else{continue};physically_valid=true;let mut remaining=stored_material.clone();if assemble_blueprint_material(&mut remaining,&blueprint.elements[blueprint_index].material).is_none(){continue}let mut candidate_energy=*energy;match crate::construction_authority::commit_candidate_structure(structure,&candidate_structure,catalog,&mut candidate_energy,water){Ok(committed)=>{*energy=candidate_energy;*structure=committed;return ConstructionAdvance::Progress{remaining,blueprint_index,stress,structure_indices:indices}},Err(_)=>{energy_blocked=true}}}if physically_valid&&energy_blocked{ConstructionAdvance::WaitingForEnergy}else if physically_valid{ConstructionAdvance::WaitingForMaterial}else{ConstructionAdvance::DevelopmentalFailure}}\n\npub(crate)fn begin_reproduction'''
+              ns,n=re.subn(pattern,new,s,count=1,flags=re.S)
+              if n!=1: raise SystemExit(f'construct replacement count {n}')
+              p.write_text(ns); s=ns
+          if 'let Ok(committed_core)' not in s:
+              old='Ok(core)=>{parent.stored_material=next_remaining;parent.reproductive_readiness=0.0;let realized_elements=core.mapping.elements.iter().map(|element|element.blueprint_element_index).collect::<Vec<_>>();'
+              new='Ok(core)=>{let mut candidate_energy=parent.usable_energy;let Ok(committed_core)=crate::construction_authority::commit_candidate_structure(&OrganismStructure::new(),&core.structure,catalog,&mut candidate_energy,water)else{remaining=next_remaining;for material in consumed.materials{let _=remaining.store(material);}if attempt+1<MAX_CORE_CONSTRUCTION_ATTEMPTS{continue}else{break}};parent.stored_material=next_remaining;parent.usable_energy=candidate_energy;parent.reproductive_readiness=0.0;let realized_elements=core.mapping.elements.iter().map(|element|element.blueprint_element_index).collect::<Vec<_>>();'
+              once('src/reproduction.rs',old,new); s=p.read_text()
+              once('src/reproduction.rs','developing_structure:core.structure','developing_structure:committed_core'); s=p.read_text()
+          p.write_text(s)
+          p=Path('src/simulation.rs'); s=p.read_text()
+          if 'let mut bootstrap_energy = 1.0e12_f64;' not in s:
+              once('src/simulation.rs','let structure = genome.structural_blueprint.realize(&catalog).expect("initial structural blueprint must be realizable");','let hypothetical = genome.structural_blueprint.realize(&catalog).expect("initial structural blueprint must be realizable");\n        let mut bootstrap_energy = 1.0e12_f64;\n        let structure = crate::construction_authority::commit_candidate_structure(&crate::structure::OrganismStructure::new(), &hypothetical, &catalog, &mut bootstrap_energy, 0.0).expect("initial structural blueprint must be physically constructible through COMBINE");'); s=p.read_text()
+          s=re.sub(r'crate::reproduction::begin_reproduction\(organism,&mut self\.rng,&catalog\)', 'crate::reproduction::begin_reproduction(organism,&mut self.rng,&catalog,crate::combine_runtime::water_field_amount(&self.environment,organism))', s, count=1)
+          s=re.sub(r'let outcome=\{let construction=organism\.reproductive_construction\.as_mut\(\)\.expect\("construction checked above"\);crate::reproduction::advance_construction\(&mut organism\.stored_material,construction,&catalog\)\};', 'let outcome={let water=crate::combine_runtime::water_field_amount(&self.environment,organism);let construction=organism.reproductive_construction.as_mut().expect("construction checked above");crate::reproduction::advance_construction(&mut organism.stored_material,construction,&catalog,&mut organism.usable_energy,water)};', s, count=1)
+          if 'WaitingForEnergy=>{}' not in s:
+              s=s.replace('crate::reproduction::ConstructionAdvance::WaitingForMaterial=>{}crate::reproduction::ConstructionAdvance::DevelopmentalFailure=>','crate::reproduction::ConstructionAdvance::WaitingForMaterial=>{}crate::reproduction::ConstructionAdvance::WaitingForEnergy=>{}crate::reproduction::ConstructionAdvance::DevelopmentalFailure=>',1)
+          p.write_text(s)
+          PY
+          cargo test --quiet
+      - name: Commit implementation if changed
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "feat: route physical construction through authoritative COMBINE"
+          git push
