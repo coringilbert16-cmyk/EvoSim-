@@ -11,6 +11,7 @@ mod decomposition;
 mod environment;
 mod environmental_materials;
 mod genome;
+mod genome_core_constructor;
 mod interface_geometry;
 mod math;
 #[allow(unused_variables)]
