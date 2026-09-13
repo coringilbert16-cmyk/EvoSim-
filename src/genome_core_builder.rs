@@ -20,9 +20,6 @@ const CANDIDATE_DIRECTIONS: usize = 16;
 const CANDIDATE_RADIAL_STEPS: usize = 3;
 const POSITION_EPSILON: f64 = 1.0e-9;
 
-/// Structural equality for the physical graph is intentionally limited to
-/// realized units and bonds. The allocator's next-ID cursor is implementation
-/// state and is not part of the realized organism state.
 impl PartialEq for PhysicalConstituentGraph {
     fn eq(&self, other: &Self) -> bool {
         self.units == other.units && self.bonds == other.bonds
@@ -36,9 +33,6 @@ pub struct GenomeCoreConstruction {
     pub cavity: CavityMeasurement,
 }
 
-/// Construct inherited genome-core material until the physical cavity criterion
-/// is met. `core_elements` controls developmental material intent only; it does
-/// not declare which physical structure is the core.
 pub fn construct_genome_core(
     blueprint: &StructuralBlueprint,
     catalog: &[BaseResource],
@@ -53,8 +47,6 @@ pub fn construct_genome_core(
     let mut mapping = RealizedBlueprint::default();
     let mutation = MutationEffect::sample(rng, 1.0, MAX_MUTATION_SCORE_SHIFT);
 
-    // The inherited anchor is mandatory and is always the first committed
-    // construction event. It still does not establish physical core identity.
     let anchor_index = blueprint.core_elements[0];
     let anchor = blueprint
         .elements
@@ -312,7 +304,7 @@ fn collect_attachments(
                         let strength = structure.units.get(new_id)
                             .and_then(|a| a.properties(catalog))
                             .zip(structure.units.get(old_id).and_then(|b| b.properties(catalog)))
-                            .map(|(a, b)| crate::combine::bond_strength(*a, *b))
+                            .map(|(a, b)| crate::combine::bond_strength(a, b))
                             .unwrap_or(0.0);
                         out.push(CandidateAttachment {
                             existing_unit_index: old_id,
