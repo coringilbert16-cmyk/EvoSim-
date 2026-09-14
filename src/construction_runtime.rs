@@ -153,6 +153,10 @@ fn candidate_placements(
         }
     }
 
+    // The inherited placement is the first preference, but external blueprint
+    // constraints are physical constraints, not a post-placement preference.
+    // Candidate order therefore only determines which valid realization wins;
+    // each candidate is checked against COMBINE before it can be committed.
     out.sort_by(|a, b| {
         (a.x - anchor.x)
             .hypot(a.y - anchor.y)
@@ -226,6 +230,9 @@ pub(crate) fn realize_material_with_context(
             let mut cache = crate::contact::ConnectionCompatibilityCache::new();
             let mut candidate_heat = 0.0;
             let mut ok = true;
+
+            // Internal material bonds and already-realized external blueprint
+            // connections are admitted through the exact same COMBINE authority.
             for bond in material
                 .internal_bonds
                 .iter()
@@ -254,6 +261,33 @@ pub(crate) fn realize_material_with_context(
                     }
                 }
             }
+
+            if ok {
+                for group in external {
+                    let mut formed = false;
+                    for &target in group {
+                        if let Some(attempt) = combine_specific_pair(
+                            &mut candidate,
+                            index,
+                            target,
+                            catalog,
+                            0.0,
+                            &mut cache,
+                            &mut candidate_ledger,
+                            &mut candidate_energy,
+                        ) {
+                            candidate_heat += attempt.work_cost;
+                            formed = true;
+                            break;
+                        }
+                    }
+                    if !formed {
+                        ok = false;
+                        break;
+                    }
+                }
+            }
+
             if ok {
                 placed = Some((
                     candidate,
@@ -273,41 +307,6 @@ pub(crate) fn realize_material_with_context(
         trial_energy = next_energy;
         assigned[part] = Some(index);
         heat += step_heat;
-    }
-
-    for group in external {
-        let mut formed = false;
-        for &a in assigned.iter().flatten() {
-            for &b in group {
-                let mut candidate = trial.clone();
-                let mut candidate_ledger = trial_ledger;
-                let mut candidate_energy = trial_energy;
-                let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-                if let Some(attempt) = combine_specific_pair(
-                    &mut candidate,
-                    a,
-                    b,
-                    catalog,
-                    0.0,
-                    &mut cache,
-                    &mut candidate_ledger,
-                    &mut candidate_energy,
-                ) {
-                    trial = candidate;
-                    trial_ledger = candidate_ledger;
-                    trial_energy = candidate_energy;
-                    heat += attempt.work_cost;
-                    formed = true;
-                    break;
-                }
-            }
-            if formed {
-                break;
-            }
-        }
-        if !formed {
-            return Err("external blueprint connection could not be realized".into());
-        }
     }
 
     let ids = assigned.into_iter().flatten().collect::<Vec<_>>();
