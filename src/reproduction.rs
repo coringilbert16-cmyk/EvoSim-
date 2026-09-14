@@ -1,10 +1,7 @@
 //! Physical reproduction lifecycle.
-use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::material_storage::MaterialStorage;
 use crate::resources::{BaseResource, Material};
-use crate::state::{
-    DevelopmentStage, EnergyLedger, Organism, ReproductiveConstruction, ResourceSense,
-};
+use crate::state::{DevelopmentStage, EnergyLedger, Organism, ReproductiveConstruction, ResourceSense};
 use crate::structure::OrganismStructure;
 use rand_chacha::ChaCha8Rng;
 use std::collections::{HashMap, HashSet};
@@ -110,7 +107,12 @@ fn add_blueprint_element(
         })
         .collect::<Vec<_>>();
     crate::construction_runtime::realize_material_with_context(
-        structure, element, catalog, ledger, energy, &external,
+        structure,
+        element,
+        catalog,
+        ledger,
+        energy,
+        &external,
     )
     .ok()
 }
