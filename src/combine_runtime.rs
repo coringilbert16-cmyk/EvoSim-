@@ -349,6 +349,52 @@ pub(crate) fn try_combine_stored_unit(
     Some(attempt)
 }
 
+pub(crate) fn combine_specific_pair(
+    structure: &mut crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    catalog: &[BaseResource],
+    water: f64,
+    cache: &mut ConnectionCompatibilityCache,
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> Option<CombineAttempt> {
+    if unit_a >= structure.units.len() || unit_b >= structure.units.len() || unit_a == unit_b {
+        return None;
+    }
+    let mut best: Option<(FormationEvaluation, f64)> = None;
+    for candidate in eligible_candidates(structure, unit_a, unit_b, catalog, cache) {
+        let Some((evaluation, _, _, _, _required)) =
+            evaluate_candidate(structure, unit_a, unit_b, candidate, catalog, water)
+        else {
+            continue;
+        };
+        if best
+            .as_ref()
+            .map(|(_, distance)| candidate.distance < *distance)
+            .unwrap_or(true)
+        {
+            best = Some((evaluation, candidate.distance));
+        }
+    }
+    let (evaluation, _) = best?;
+    form_bond(
+        structure,
+        BondFormationRequest {
+            unit_a,
+            unit_b,
+            endpoint_a: evaluation.candidate.endpoint_a,
+            endpoint_b: evaluation.candidate.endpoint_b,
+            investment: evaluation.threshold,
+            water,
+        },
+        catalog,
+        cache,
+        ledger,
+        energy,
+    )
+}
+
 pub(crate) fn try_combine(
     organism: &mut Organism,
     environment: &Environment,
