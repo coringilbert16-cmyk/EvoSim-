@@ -30,3 +30,4 @@ jobs:
           git rm .github/workflows/port-spatial-target.yml
           git commit -m 'Remove temporary spatial target port workflow'
           git push origin HEAD:tmp/spatial-target-port
+# retrigger
