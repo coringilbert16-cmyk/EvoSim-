@@ -2,7 +2,9 @@
 mod tests {
     use crate::genome::initial_genome;
     use crate::resources::{default_catalog, Material};
-    use crate::structural_blueprint::{BlueprintConnection, BlueprintElement, BlueprintPlacement, StructuralBlueprint};
+    use crate::structural_blueprint::{
+        BlueprintConnection, BlueprintElement, BlueprintPlacement, StructuralBlueprint,
+    };
 
     fn nitrogen_wall(x: f64, y: f64, rotation_radians: f64) -> BlueprintElement {
         BlueprintElement {
@@ -31,9 +33,7 @@ mod tests {
             let closest = structure
                 .units
                 .iter()
-                .map(|unit| {
-                    (unit.placement.x - target.x).hypot(unit.placement.y - target.y)
-                })
+                .map(|unit| (unit.placement.x - target.x).hypot(unit.placement.y - target.y))
                 .fold(f64::INFINITY, f64::min);
             assert!(
                 closest < 1e-6,

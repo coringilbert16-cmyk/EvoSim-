@@ -12,8 +12,8 @@ mod structure;
 mod boundary_contact;
 mod cavity;
 mod connection_geometry;
-mod contact;
 mod construction_realization;
+mod contact;
 mod interface_geometry;
 #[allow(unused_variables)]
 mod material_geometry;

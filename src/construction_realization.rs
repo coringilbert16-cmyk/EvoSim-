@@ -302,8 +302,7 @@ fn candidate_placements_for_targets(
             .then_with(|| {
                 let da = (a.rotation_radians - fixed_rotation).abs();
                 let db = (b.rotation_radians - fixed_rotation).abs();
-                da.partial_cmp(&db)
-                    .unwrap_or(std::cmp::Ordering::Equal)
+                da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
             })
     });
     add_unique_placement(
@@ -367,8 +366,7 @@ fn choose_next_part(m: &Material, a: &[Option<usize>]) -> Option<usize> {
             .internal_bonds
             .iter()
             .filter(|b| {
-                (b.part_a == p && a[b.part_b].is_some())
-                    || (b.part_b == p && a[b.part_a].is_some())
+                (b.part_a == p && a[b.part_b].is_some()) || (b.part_b == p && a[b.part_a].is_some())
             })
             .count() as i32;
         let degree = m
