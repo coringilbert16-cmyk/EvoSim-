@@ -1,0 +1,33 @@
+name: Temporary spatial target validation 2
+
+on:
+  push:
+    branches:
+      - tmp/spatial-target-port-2
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply and test audited change
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git config core.editor true
+          git fetch origin 970e97f5a29a8db569a494553f3dbd3f9bb49155
+          if ! git cherry-pick dabd34757ebcac95ad1399b58edec0eec3044fdb; then
+            git checkout --theirs -- .
+            git add -A
+            GIT_EDITOR=true git cherry-pick --continue
+          fi
+          cargo fmt --all -- --check
+          cargo test --all-targets
+          git rm .github/workflows/port-spatial-target-2.yml tmp/port-trigger3.txt tmp/port-trigger4.txt tmp/port-trigger5.txt tmp/port-trigger6.txt tmp/port-trigger2.txt
+          git commit -m 'Remove temporary spatial target validation workflow'
+          git push origin HEAD:tmp/spatial-target-port-2
