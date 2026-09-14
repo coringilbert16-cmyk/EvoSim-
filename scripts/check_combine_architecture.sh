@@ -8,11 +8,19 @@ if [[ -e src/structural_combine.rs ]]; then
   fail=1
 fi
 
-# Production code may only insert bonds through contact::try_add_bond().
+# Production code may only insert bonds through the COMBINE runtime authority.
+# contact::try_add_bond is the low-level admission primitive and must not be
+# called directly by construction, reproduction, or other simulation modules.
 while IFS= read -r file; do
-  [[ "$file" == "src/contact.rs" || "$file" == "src/structure.rs" ]] && continue
-  if awk '/#\[cfg\(test\)\]/{exit} /(\.add_bond|::add_bond)\(/ {print; found=1} END{exit found ? 0 : 1}' "$file"; then
-    echo "ERROR: production raw add_bond() path found in $file"
+  case "$file" in
+    src/contact.rs|src/structure.rs|src/combine_runtime.rs) continue ;;
+  esac
+  if awk '/#\[cfg\(test\)\]/{exit} /(\.add_bond|::add_bond|try_add_bond)[[:space:]]*\(/ {print; found=1} END{exit found ? 0 : 1}' "$file"; then
+    echo "ERROR: production raw bond-admission path found in $file"
+    fail=1
+  fi
+  if awk '/#\[cfg\(test\)\]/{exit} /\bBond[[:space:]]*\{/ {print; found=1} END{exit found ? 0 : 1}' "$file"; then
+    echo "ERROR: production Bond construction found outside COMBINE runtime in $file"
     fail=1
   fi
 done < <(find src -name '*.rs' -type f | sort)
@@ -40,6 +48,11 @@ fi
 
 if ! grep -q 'pub fn try_add_bond' src/contact.rs; then
   echo "ERROR: contact::try_add_bond() authority is missing"
+  fail=1
+fi
+
+if ! grep -q 'pub(crate) fn combine_specific_pair' src/combine_runtime.rs; then
+  echo "ERROR: COMBINE runtime construction boundary is missing"
   fail=1
 fi
 
