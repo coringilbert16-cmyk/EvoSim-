@@ -37,10 +37,6 @@ impl EnergyTransaction {
     }
 }
 
-/// Simulation-wide energy accounting infrastructure.
-/// Every subsystem calculates its physical transaction and submits the same
-/// transaction shape here. The ledger owns the accounting mutation; it does
-/// not contain subsystem-specific rules.
 pub(crate) trait EnergyLedgerAuthority {
     fn settle_transaction(&mut self, holder: &mut f64, transaction: EnergyTransaction) -> bool;
     fn transfer(&mut self, from: &mut f64, to: &mut f64, amount: f64) -> bool;
@@ -52,12 +48,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
             return false;
         }
         let next_holder = *holder + transaction.usable_delta;
-        let next_held = self.total_usable_energy_held + transaction.usable_delta;
-        if !next_holder.is_finite()
-            || next_holder < -EPSILON
-            || !next_held.is_finite()
-            || next_held < -EPSILON
-        {
+        if !next_holder.is_finite() || next_holder < -EPSILON {
             return false;
         }
         let next_released = self.total_potential_energy_released + transaction.potential_released;
@@ -67,7 +58,6 @@ impl EnergyLedgerAuthority for EnergyLedger {
             return false;
         }
         *holder = next_holder.max(0.0);
-        self.total_usable_energy_held = next_held.max(0.0);
         self.total_potential_energy_released = next_released;
         self.total_usable_energy_gained = next_gained;
         self.total_heat_dissipated = next_heat;
@@ -134,7 +124,6 @@ mod tests {
         assert!(ledger.settle_transaction(&mut energy, tx));
         assert_eq!(energy, 14.0);
         assert_eq!(ledger.total_potential_energy_released, 10.0);
-        assert_eq!(ledger.total_usable_energy_held, 4.0);
     }
 
     #[test]
@@ -152,42 +141,15 @@ mod tests {
         assert_eq!(energy, 1.0);
         assert_eq!(ledger.total_potential_energy_released, 0.0);
         assert_eq!(ledger.total_usable_energy_gained, 0.0);
-        assert_eq!(ledger.total_usable_energy_held, 0.0);
         assert_eq!(ledger.total_heat_dissipated, 0.0);
     }
 
     #[test]
-    fn held_energy_tracks_transaction_delta() {
-        let mut ledger = EnergyLedger::default();
-        let mut energy = 10.0;
-        let gain = EnergyTransaction {
-            reason: EnergyReason::Combine,
-            potential_released: 5.0,
-            usable_delta: 3.0,
-            structural_delta: 1.0,
-            heat_dissipated: 1.0,
-        };
-        assert!(ledger.settle_transaction(&mut energy, gain));
-        let loss = EnergyTransaction {
-            reason: EnergyReason::Maintenance,
-            potential_released: 0.0,
-            usable_delta: -2.0,
-            structural_delta: 0.0,
-            heat_dissipated: 2.0,
-        };
-        assert!(ledger.settle_transaction(&mut energy, loss));
-        assert_eq!(energy, 11.0);
-        assert_eq!(ledger.total_usable_energy_held, 1.0);
-    }
-
-    #[test]
-    fn transfer_conserves_holder_sum_without_changing_global_held_total() {
+    fn transfer_conserves_holder_sum() {
         let mut ledger = EnergyLedger::default();
         let mut a = 10.0;
         let mut b = 2.0;
-        ledger.total_usable_energy_held = 12.0;
         assert!(ledger.transfer(&mut a, &mut b, 4.0));
         assert_eq!(a + b, 12.0);
-        assert_eq!(ledger.total_usable_energy_held, 12.0);
     }
 }
