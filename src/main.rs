@@ -10,8 +10,10 @@ mod structure;
 
 // Physical geometry, interfaces, contact, and construction.
 mod boundary_contact;
+#[allow(clippy::manual_range_contains)]
 mod cavity;
 mod connection_geometry;
+#[allow(clippy::useless_vec)]
 mod construction_realization;
 mod contact;
 mod interface_geometry;
