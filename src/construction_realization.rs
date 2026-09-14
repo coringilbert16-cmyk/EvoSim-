@@ -1,1 +1,3 @@
-//! Construction realization facade; implementation lives in construction_runtime.
+//! Unified construction facade.
+
+pub(crate) use crate::construction_runtime::realize_material_with_context;
