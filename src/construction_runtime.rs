@@ -145,8 +145,8 @@ fn candidate_placements(
                             if normal_length > 1e-12 {
                                 let nx = tp.normal_x / normal_length;
                                 let ny = tp.normal_y / normal_length;
-                                let clearance = 4.0e-8
-                                    * resource.shape.form.bounding_radius().max(1.0);
+                                let clearance =
+                                    4.0e-8 * resource.shape.form.bounding_radius().max(1.0);
                                 out.push(Placement {
                                     x: base_x + nx * clearance,
                                     y: base_y + ny * clearance,
