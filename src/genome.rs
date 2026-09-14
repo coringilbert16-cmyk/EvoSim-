@@ -69,7 +69,10 @@ impl Genome {
         self.trait_value("reproductive_investment", 0.5)
             .clamp(0.15, 1.0)
     }
+
     pub fn mutate(&mut self, rng: &mut ChaCha8Rng) {
+        let mut mutation_probability_sum = 0.0;
+        let mut mutation_sigma_sum = 0.0;
         for t in &mut self.traits {
             if rng.gen::<f64>() < t.mutation_probability.clamp(1e-6, 0.25) {
                 t.value += rng.gen_range(-1.0..1.0) * t.mutation_sigma.max(0.0);
@@ -78,6 +81,34 @@ impl Genome {
                 t.mutation_probability =
                     (t.mutation_probability * rng.gen_range(0.5..1.5)).clamp(1e-6, 0.1);
             }
+            mutation_probability_sum += t.mutation_probability;
+            mutation_sigma_sum += t.mutation_sigma.max(0.0);
+        }
+        let count = self.traits.len().max(1) as f64;
+        let structural_probability = (mutation_probability_sum / count).clamp(1e-6, 0.25);
+        let structural_sigma = (mutation_sigma_sum / count).clamp(1e-6, 1.0);
+        self.mutate_structural_blueprint(rng, structural_probability, structural_sigma);
+    }
+
+    fn mutate_structural_blueprint(
+        &mut self,
+        rng: &mut ChaCha8Rng,
+        mutation_probability: f64,
+        mutation_sigma: f64,
+    ) {
+        let original = self.structural_blueprint.clone();
+        let probability = mutation_probability.clamp(0.0, 1.0);
+        let sigma = mutation_sigma.max(0.0);
+        for element in &mut self.structural_blueprint.elements {
+            if rng.gen::<f64>() >= probability {
+                continue;
+            }
+            element.placement.x += rng.gen_range(-1.0..1.0) * sigma;
+            element.placement.y += rng.gen_range(-1.0..1.0) * sigma;
+            element.placement.rotation_radians += rng.gen_range(-1.0..1.0) * sigma;
+        }
+        if !self.structural_blueprint.is_valid() {
+            self.structural_blueprint = original;
         }
     }
 }
@@ -99,10 +130,6 @@ fn seed_wall_material() -> Material {
 }
 
 fn default_structural_blueprint() -> StructuralBlueprint {
-    // The ancestral phenotype is a four-wall ring made from ordinary rigid
-    // material. The enclosed region is the first physically meaningful place
-    // where the inherited genome can reside; there is no special membrane/core
-    // geometry and no seed-only viability exception.
     let half_wall = 1.511_858 / 2.0;
     let half_thickness = 0.330_719 / 2.0;
     let center_offset = half_wall + half_thickness;
@@ -186,6 +213,7 @@ pub fn initial_genome() -> Genome {
 mod tests {
     use super::*;
     use crate::resources::default_catalog;
+    use rand::SeedableRng;
 
     #[test]
     fn seed_blueprint_has_a_four_wall_genome_bearing_phenotype() {
@@ -213,5 +241,29 @@ mod tests {
         let b = &initial_genome().structural_blueprint;
         assert_eq!(b.core_elements, vec![0]);
         assert!(b.core_elements.iter().all(|&i| i < b.elements.len()));
+    }
+
+    #[test]
+    fn structural_mutation_is_heritable_and_preserves_blueprint_validity() {
+        let mut genome = initial_genome();
+        let before = genome.structural_blueprint.clone();
+        let mut rng = ChaCha8Rng::seed_from_u64(7);
+        genome.mutate_structural_blueprint(&mut rng, 1.0, 0.05);
+        assert!(genome.structural_blueprint.is_valid());
+        assert_ne!(genome.structural_blueprint, before);
+        assert_eq!(genome.structural_blueprint.connections, before.connections);
+        assert_eq!(
+            genome.structural_blueprint.core_elements,
+            before.core_elements
+        );
+    }
+
+    #[test]
+    fn invalid_structural_mutation_is_rejected_transactionally() {
+        let mut genome = initial_genome();
+        let before = genome.structural_blueprint.clone();
+        let mut rng = ChaCha8Rng::seed_from_u64(7);
+        genome.mutate_structural_blueprint(&mut rng, 1.0, f64::INFINITY);
+        assert_eq!(genome.structural_blueprint, before);
     }
 }
