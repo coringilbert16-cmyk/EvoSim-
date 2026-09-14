@@ -352,7 +352,9 @@ impl Simulation {
                     &self.organisms,
                     &self.decomposing_bodies[index].position,
                 ) {
-                    let amount = step.net_energy.min(self.decomposing_bodies[index].energy_budget);
+                    let amount = step
+                        .net_energy
+                        .min(self.decomposing_bodies[index].energy_budget);
                     let (body, organism) = {
                         let body = &mut self.decomposing_bodies[index].energy_budget;
                         let organism = &mut self.organisms[organism_index].usable_energy;
@@ -556,9 +558,11 @@ impl Simulation {
                 &mut self.energy_ledger,
             );
             if dead {
-                if let Some(body) =
-                    Self::recycle_dead_organism(&mut self.environment, &mut organism, &mut self.energy_ledger)
-                {
+                if let Some(body) = Self::recycle_dead_organism(
+                    &mut self.environment,
+                    &mut organism,
+                    &mut self.energy_ledger,
+                ) {
                     self.decomposing_bodies.push(body);
                 }
             } else {
