@@ -342,18 +342,20 @@ fn validate_element_contact(
         }
     }
     for group in neighbors {
-        if !ids.iter().any(|&a| {
-            group.iter().any(|&b| {
-                crate::contact::contacting_connection_pair_candidates(
-                    structure, a, b, catalog, 1.0, 0.0,
-                )
-                .iter()
-                .any(|candidate| candidate.available_a && candidate.available_b)
+        let min_distance = ids
+            .iter()
+            .flat_map(|&a| {
+                group.iter().flat_map(move |&b| {
+                    crate::contact::connection_pair_candidates(structure, a, b, catalog)
+                        .into_iter()
+                        .map(|candidate| candidate.distance)
+                })
             })
-        }) {
-            return Err(
-                "realized material has no physical contact with a prescribed neighbor".into(),
-            );
+            .fold(f64::INFINITY, f64::min);
+        if min_distance > 1.0 {
+            return Err(format!(
+                "realized material has no physical contact with a prescribed neighbor (minimum endpoint distance: {min_distance})"
+            ));
         }
     }
     Ok(())
