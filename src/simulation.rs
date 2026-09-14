@@ -325,8 +325,11 @@ impl Simulation {
                 environment.field.deposit(position.x, position.y, material);
             }
         }
-        let mut body =
-            crate::decomposition::DecomposingBody::new(organism.structure.clone(), 0.0, position)?;
+        let mut body = crate::decomposition::DecomposingBody::new(
+            organism.structure.clone(),
+            0.0,
+            position,
+        )?;
         let energy = organism.usable_energy;
         if !ledger.transfer(&mut organism.usable_energy, &mut body.energy_budget, energy) {
             return None;
