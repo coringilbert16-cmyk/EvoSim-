@@ -53,7 +53,11 @@ impl EnergyLedgerAuthority for EnergyLedger {
         }
         let next_holder = *holder + transaction.usable_delta;
         let next_held = self.total_usable_energy_held + transaction.usable_delta;
-        if !next_holder.is_finite() || next_holder < -EPSILON || !next_held.is_finite() || next_held < -EPSILON {
+        if !next_holder.is_finite()
+            || next_holder < -EPSILON
+            || !next_held.is_finite()
+            || next_held < -EPSILON
+        {
             return false;
         }
         let next_released = self.total_potential_energy_released + transaction.potential_released;
