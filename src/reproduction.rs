@@ -1,14 +1,10 @@
 //! Physical reproduction lifecycle.
-use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::material_storage::MaterialStorage;
 use crate::resources::{BaseResource, Material};
-use crate::state::{
-    DevelopmentStage, EnergyLedger, Environment, Organism, ReproductiveConstruction, ResourceSense,
-};
+use crate::state::{DevelopmentStage, Organism, ReproductiveConstruction, ResourceSense};
 use crate::structure::OrganismStructure;
 use rand_chacha::ChaCha8Rng;
 use std::collections::{HashMap, HashSet};
-
 const JUVENILE_MATURE_MASS_FRACTION: f64 = 0.40;
 
 fn assemble_blueprint_material(
@@ -26,7 +22,6 @@ fn assemble_blueprint_material(
         internal_bonds: target.internal_bonds.clone(),
     })
 }
-
 fn frontier(
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     realized: &HashMap<usize, Vec<usize>>,
@@ -44,7 +39,6 @@ fn frontier(
         })
         .collect()
 }
-
 fn realized_mapping(elements: &[usize], groups: &[Vec<usize>]) -> HashMap<usize, Vec<usize>> {
     elements
         .iter()
@@ -52,7 +46,6 @@ fn realized_mapping(elements: &[usize], groups: &[Vec<usize>]) -> HashMap<usize,
         .zip(groups.iter().cloned())
         .collect()
 }
-
 fn juvenile_target_set(
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     catalog: &[BaseResource],
@@ -85,75 +78,8 @@ fn juvenile_target_set(
     }
     Some(selected)
 }
-
 fn all_indices(blueprint: &crate::structural_blueprint::StructuralBlueprint) -> HashSet<usize> {
     (0..blueprint.elements.len()).collect()
-}
-
-fn water_field_amount(environment: &Environment, organism: &Organism) -> f64 {
-    organism
-        .occupied_cells
-        .first()
-        .and_then(|p| environment.field.index_for_position(p.x, p.y))
-        .map(|i| {
-            environment.field.cells[i]
-                .materials
-                .iter()
-                .flat_map(|m| m.parts.iter())
-                .filter(|(name, _)| name == "Water")
-                .map(|(_, amount)| *amount)
-                .sum()
-        })
-        .unwrap_or(0.0)
-}
-
-fn combine_material_bonds(
-    structure: &mut OrganismStructure,
-    indices: &[usize],
-    material: &Material,
-    catalog: &[BaseResource],
-    water: f64,
-    ledger: &mut EnergyLedger,
-    energy: &mut f64,
-) -> Result<f64, String> {
-    let mut stress = 0.0;
-    let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-    for bond in &material.internal_bonds {
-        let a = *indices
-            .get(bond.part_a)
-            .ok_or_else(|| "material relationship references a missing constituent".to_string())?;
-        let b = *indices
-            .get(bond.part_b)
-            .ok_or_else(|| "material relationship references a missing constituent".to_string())?;
-        let attempt = crate::combine_runtime::combine_specific_pair(
-            structure, a, b, catalog, water, &mut cache, ledger, energy,
-        )
-        .ok_or_else(|| "material relationship could not be formed through COMBINE".to_string())?;
-        stress += attempt.work_cost;
-    }
-    Ok(stress)
-}
-
-fn combine_blueprint_connection(
-    structure: &mut OrganismStructure,
-    new_indices: &[usize],
-    other_indices: &[usize],
-    catalog: &[BaseResource],
-    water: f64,
-    ledger: &mut EnergyLedger,
-    energy: &mut f64,
-) -> Result<f64, String> {
-    let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-    for &a in new_indices {
-        for &b in other_indices {
-            if let Some(attempt) = crate::combine_runtime::combine_specific_pair(
-                structure, a, b, catalog, water, &mut cache, ledger, energy,
-            ) {
-                return Ok(attempt.work_cost);
-            }
-        }
-    }
-    Err("blueprint connection could not be formed through COMBINE".to_string())
 }
 
 fn add_blueprint_element(
@@ -162,71 +88,43 @@ fn add_blueprint_element(
     blueprint_index: usize,
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     catalog: &[BaseResource],
-    water: f64,
-    ledger: &mut EnergyLedger,
-    energy: &mut f64,
 ) -> Option<(Vec<usize>, f64)> {
     let element = &blueprint.elements[blueprint_index];
     let mut candidate_structure = structure.clone();
-    let original_bond_count = candidate_structure.bonds.len();
-    let new_indices = crate::construction_realization::realize_material_with_constraints(
+    let new_indices = crate::construction_realization::realize_material(
         &mut candidate_structure,
         element,
         catalog,
-        &realized
-            .values()
-            .cloned()
-            .collect::<Vec<_>>(),
     )
     .ok()?;
-
-    // The legacy realization solver may create provisional zero-energy bonds
-    // while searching. They are geometry-search artifacts only. Remove them
-    // before committing any construction state; every actual bond below is
-    // created by the authoritative COMBINE boundary.
-    candidate_structure.bonds.truncate(original_bond_count);
-
-    let mut trial_energy = *energy;
-    let mut trial_ledger = *ledger;
-    let mut stress = combine_material_bonds(
-        &mut candidate_structure,
-        &new_indices,
-        &element.material,
-        catalog,
-        water,
-        &mut trial_ledger,
-        &mut trial_energy,
-    )?;
-
+    let mut added_stress = 0.0;
     for connection in &blueprint.connections {
         let other = if connection.element_a == blueprint_index {
-            connection.element_b
+            Some(connection.element_b)
         } else if connection.element_b == blueprint_index {
-            connection.element_a
+            Some(connection.element_a)
         } else {
-            continue;
+            None
         };
+        let Some(other) = other else { continue };
         let Some(other_indices) = realized.get(&other) else {
             continue;
         };
-        stress += combine_blueprint_connection(
+        let groups = HashMap::from([
+            (blueprint_index, new_indices.clone()),
+            (other, other_indices.clone()),
+        ]);
+        added_stress += crate::structural_blueprint::realize_connection_groups(
             &mut candidate_structure,
-            &new_indices,
-            other_indices,
+            &groups,
+            *connection,
             catalog,
-            water,
-            &mut trial_ledger,
-            &mut trial_energy,
         )
         .ok()?;
     }
-
     *structure = candidate_structure;
-    *energy = trial_energy;
-    *ledger = trial_ledger;
-    Some((new_indices, stress))
+    Some((new_indices, added_stress))
 }
-
 fn construct_any_frontier_element(
     stored_material: &MaterialStorage,
     structure: &mut OrganismStructure,
@@ -234,9 +132,6 @@ fn construct_any_frontier_element(
     allowed: &HashSet<usize>,
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     catalog: &[BaseResource],
-    water: f64,
-    ledger: &mut EnergyLedger,
-    energy: &mut f64,
 ) -> Option<(usize, MaterialStorage, f64, Vec<usize>)> {
     let mut candidates = frontier(blueprint, realized, allowed);
     candidates.sort_unstable();
@@ -249,23 +144,16 @@ fn construct_any_frontier_element(
             continue;
         };
         let mut candidate_structure = structure.clone();
-        let mut candidate_energy = *energy;
-        let mut candidate_ledger = *ledger;
         let Some((indices, stress)) = add_blueprint_element(
             &mut candidate_structure,
             realized,
             blueprint_index,
             blueprint,
             catalog,
-            water,
-            &mut candidate_ledger,
-            &mut candidate_energy,
         ) else {
             continue;
         };
         *structure = candidate_structure;
-        *energy = candidate_energy;
-        *ledger = candidate_ledger;
         return Some((blueprint_index, remaining, stress, indices));
     }
     None
@@ -275,8 +163,6 @@ pub(crate) fn begin_reproduction(
     parent: &mut Organism,
     rng: &mut ChaCha8Rng,
     catalog: &[BaseResource],
-    environment: &Environment,
-    ledger: &mut EnergyLedger,
 ) -> bool {
     if !matches!(parent.development_stage, DevelopmentStage::Adult)
         || parent.reproductive_readiness < 1.0 - f64::EPSILON
@@ -301,10 +187,6 @@ pub(crate) fn begin_reproduction(
     let mut realized_elements = Vec::new();
     let mut realized_groups = Vec::new();
     let mut initial_stress = 0.0;
-    let water = water_field_amount(environment, parent);
-    let mut energy = parent.usable_energy;
-    let mut working_ledger = *ledger;
-
     while realized.len() < core.len() {
         let result = construct_any_frontier_element(
             &remaining,
@@ -313,9 +195,6 @@ pub(crate) fn begin_reproduction(
             &core,
             blueprint,
             catalog,
-            water,
-            &mut working_ledger,
-            &mut energy,
         )
         .or_else(|| {
             for &candidate in &core {
@@ -328,23 +207,16 @@ pub(crate) fn begin_reproduction(
                 };
                 let mut trial_structure = structure.clone();
                 let empty = HashMap::new();
-                let mut trial_energy = energy;
-                let mut trial_ledger = working_ledger;
                 let Some((new_indices, stress)) = add_blueprint_element(
                     &mut trial_structure,
                     &empty,
                     candidate,
                     blueprint,
                     catalog,
-                    water,
-                    &mut trial_ledger,
-                    &mut trial_energy,
                 ) else {
                     continue;
                 };
                 structure = trial_structure;
-                energy = trial_energy;
-                working_ledger = trial_ledger;
                 return Some((candidate, trial_remaining, stress, new_indices));
             }
             None
@@ -358,12 +230,9 @@ pub(crate) fn begin_reproduction(
         realized_groups.push(indices);
         initial_stress += stress;
     }
-
     parent.stored_material = remaining;
-    parent.usable_energy = energy;
     parent.reproductive_readiness = 0.0;
     parent.add_transaction_stress(initial_stress);
-    *ledger = working_ledger;
     parent.reproductive_construction = Some(ReproductiveConstruction {
         committed_material: MaterialStorage::default(),
         developing_structure: structure,
@@ -380,9 +249,6 @@ pub(crate) fn advance_construction(
     stored_material: &mut MaterialStorage,
     construction: &mut ReproductiveConstruction,
     catalog: &[BaseResource],
-    environment: &Environment,
-    energy: &mut f64,
-    ledger: &mut EnergyLedger,
 ) -> Option<f64> {
     let blueprint = &construction.child_genome.structural_blueprint;
     let target = construction
@@ -397,58 +263,15 @@ pub(crate) fn advance_construction(
     if realized.len() >= target.len() {
         return None;
     }
-    let water = environment
-        .field
-        .index_for_position(
-            construction
-                .developing_structure
-                .units
-                .first()
-                .map(|u| crate::state::Position {
-                    x: u.placement.x,
-                    y: u.placement.y,
-                })
-                .unwrap_or(crate::state::Position { x: 0.0, y: 0.0 })
-                .x,
-            construction
-                .developing_structure
-                .units
-                .first()
-                .map(|u| crate::state::Position {
-                    x: u.placement.x,
-                    y: u.placement.y,
-                })
-                .unwrap_or(crate::state::Position { x: 0.0, y: 0.0 })
-                .y,
-        )
-        .map(|i| {
-            environment.field.cells[i]
-                .materials
-                .iter()
-                .flat_map(|m| m.parts.iter())
-                .filter(|(name, _)| name == "Water")
-                .map(|(_, amount)| *amount)
-                .sum()
-        })
-        .unwrap_or(0.0);
-    let mut candidate_structure = construction.developing_structure.clone();
-    let mut candidate_energy = *energy;
-    let mut candidate_ledger = *ledger;
     let (index, remaining, stress, indices) = construct_any_frontier_element(
         stored_material,
-        &mut candidate_structure,
+        &mut construction.developing_structure,
         &realized,
         &target,
         blueprint,
         catalog,
-        water,
-        &mut candidate_ledger,
-        &mut candidate_energy,
     )?;
     *stored_material = remaining;
-    construction.developing_structure = candidate_structure;
-    *energy = candidate_energy;
-    *ledger = candidate_ledger;
     construction.realized_elements.push(index);
     construction.realized_constituent_groups.push(indices);
     Some(stress)
@@ -507,7 +330,6 @@ mod tests {
     use super::*;
     use crate::genome::initial_genome;
     use crate::resources::default_catalog;
-
     #[test]
     fn reproduction_target_contains_the_entire_genome_core() {
         let genome = initial_genome();
@@ -518,7 +340,6 @@ mod tests {
             .iter()
             .all(|index| target.contains(index)));
     }
-
     #[test]
     fn reproduction_target_is_at_least_forty_percent_of_mature_mass() {
         let genome = initial_genome();
@@ -536,7 +357,6 @@ mod tests {
             .sum::<f64>();
         assert!(realized + f64::EPSILON >= mature * JUVENILE_MATURE_MASS_FRACTION);
     }
-
     #[test]
     fn realized_mapping_preserves_constituent_groups() {
         let mapping = realized_mapping(&[17, 3, 42], &[vec![0, 1], vec![2], vec![3, 4]]);
