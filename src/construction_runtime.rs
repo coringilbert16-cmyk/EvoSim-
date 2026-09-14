@@ -163,7 +163,8 @@ pub(crate) fn realize_material_with_context(
             resource(catalog, &material.parts[part].0).ok_or("invalid construction resource")?;
         let targets = neighbors(material, part, &assigned);
         let mut placed = None;
-        for candidate_placement in candidate_placements(&trial, resource, anchor, &targets, catalog) {
+        for candidate_placement in candidate_placements(&trial, resource, anchor, &targets, catalog)
+        {
             let mut candidate = trial.clone();
             let mut candidate_ledger = trial_ledger;
             let mut candidate_energy = trial_energy;
