@@ -62,9 +62,17 @@ pub fn line_endpoint_alignment_rotations(
     if candidate_endpoint > 1 || target_endpoint > 1 {
         return Vec::new();
     }
-    let candidate_interior = if candidate_endpoint == 0 { 0.0 } else { std::f64::consts::PI };
+    let candidate_interior = if candidate_endpoint == 0 {
+        0.0
+    } else {
+        std::f64::consts::PI
+    };
     let target_interior = target_rotation
-        + if target_endpoint == 0 { 0.0 } else { std::f64::consts::PI };
+        + if target_endpoint == 0 {
+            0.0
+        } else {
+            std::f64::consts::PI
+        };
     vec![target_interior + std::f64::consts::PI - candidate_interior]
 }
 
