@@ -119,7 +119,7 @@ mod tests {
         assert!((r.x - 10.0).abs() < 1e-12);
         assert!((r.y - 21.0).abs() < 1e-12);
         assert!(r.normal_x.abs() < 1e-12);
-        assert!((r.normal_y - 1.0).abs() < 1e-12)
+        assert!((r.normal_y - 1.0).abs() < 1e-12);
     }
     #[test]
     fn distance_is_euclidean() {
@@ -154,7 +154,7 @@ mod tests {
         assert!(b.representative_point().is_none());
         assert!(f.representative_point().is_none());
         assert_eq!(b.center(), (1.0, 2.0));
-        assert_eq!(f.center(), (4.0, 5.0))
+        assert_eq!(f.center(), (4.0, 5.0));
     }
     #[test]
     fn continuous_sites_map_to_regions() {
@@ -189,12 +189,12 @@ mod tests {
             0.0,
             0.0,
         );
-        assert_eq!(e.len(), 2)
+        assert_eq!(e.len(), 2);
     }
     #[test]
     fn negative_tolerance_does_not_create_contact() {
         let a = transform_connection_point(cp(0.0, 0.0, 0.0), 0.0, 0.0, 0.0);
         let b = transform_connection_point(cp(0.0, 0.0, 0.0), 1.0, 0.0, 0.0);
-        assert!(!within_contact_tolerance(a, b, -1.0))
+        assert!(!within_contact_tolerance(a, b, -1.0));
     }
 }
