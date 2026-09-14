@@ -1,8 +1,8 @@
 use crate::combine_runtime::combine_specific_pair;
-use crate::energy_ledger::EnergyLedger;
-use crate::resources::{BaseResource, ConnectionEndpoint, ConnectionSites, Material};
-use crate::structural_blueprint_unified::{BlueprintElement, BlueprintPlacement};
-use crate::structure::{OrganismStructure, StructuralUnit};
+use crate::resources::{BaseResource, ConnectionSites, Form, Material};
+use crate::state::EnergyLedger;
+use crate::structure::{ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
+use crate::structural_blueprint::{BlueprintElement, BlueprintPlacement};
 
 fn resource<'a>(catalog: &'a [BaseResource], name: &str) -> Option<&'a BaseResource> {
     catalog.iter().find(|r| r.name == name)
@@ -16,13 +16,6 @@ fn placement(p: BlueprintPlacement) -> Placement {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-struct Placement {
-    x: f64,
-    y: f64,
-    rotation_radians: f64,
-}
-
 fn candidate_placements(
     structure: &OrganismStructure,
     resource: &BaseResource,
@@ -31,31 +24,53 @@ fn candidate_placements(
     catalog: &[BaseResource],
 ) -> Vec<Placement> {
     let mut out = vec![anchor];
-    if let Some((width, height)) = resource.shape.form.axis_aligned_dimensions() {
-        let clearance = 4.0e-8 * width.max(height).max(1.0);
-        out.extend([
-            Placement {
-                x: anchor.x + width + clearance,
-                y: anchor.y,
-                rotation_radians: anchor.rotation_radians,
-            },
-            Placement {
-                x: anchor.x - width - clearance,
-                y: anchor.y,
-                rotation_radians: anchor.rotation_radians,
-            },
-            Placement {
-                x: anchor.x,
-                y: anchor.y + height + clearance,
-                rotation_radians: anchor.rotation_radians,
-            },
-            Placement {
-                x: anchor.x,
-                y: anchor.y - height - clearance,
-                rotation_radians: anchor.rotation_radians,
-            },
-        ]);
-    }
+    let (width, height) = match &resource.shape.form {
+        Form::Rectangle { width, height } => (*width, *height),
+        Form::Polygon { vertices } => {
+            let (min_x, max_x, min_y, max_y) = vertices.iter().fold(
+                (
+                    f64::INFINITY,
+                    f64::NEG_INFINITY,
+                    f64::INFINITY,
+                    f64::NEG_INFINITY,
+                ),
+                |(min_x, max_x, min_y, max_y), (x, y)| {
+                    (min_x.min(*x), max_x.max(*x), min_y.min(*y), max_y.max(*y))
+                },
+            );
+            (max_x - min_x, max_y - min_y)
+        }
+        Form::RegularPolygon { radius, .. } => (radius * 2.0, radius * 2.0),
+        Form::Circle { radius } => (radius * 2.0, radius * 2.0),
+        Form::Line { length } => (*length, *length),
+        Form::Fluid { nominal_area } => {
+            let diameter = 2.0 * (nominal_area / std::f64::consts::PI).sqrt();
+            (diameter, diameter)
+        }
+    };
+    let clearance = 4.0e-8 * width.max(height).max(1.0);
+    out.extend([
+        Placement {
+            x: anchor.x + width + clearance,
+            y: anchor.y,
+            rotation_radians: anchor.rotation_radians,
+        },
+        Placement {
+            x: anchor.x - width - clearance,
+            y: anchor.y,
+            rotation_radians: anchor.rotation_radians,
+        },
+        Placement {
+            x: anchor.x,
+            y: anchor.y + height + clearance,
+            rotation_radians: anchor.rotation_radians,
+        },
+        Placement {
+            x: anchor.x,
+            y: anchor.y - height - clearance,
+            rotation_radians: anchor.rotation_radians,
+        },
+    ]);
 
     for &target in targets {
         let Some(unit) = structure.units.get(target) else {
@@ -90,20 +105,11 @@ fn candidate_placements(
                         for point in &points {
                             let base_x = tp.x - (point.x * c - point.y * s);
                             let base_y = tp.y - (point.x * s + point.y * c);
-                            let aligned = Placement {
+                            out.push(Placement {
                                 x: base_x,
                                 y: base_y,
                                 rotation_radians: rotation,
-                            };
-                            out.push(aligned);
-
-                            // Preserve the requested contact target while also
-                            // allowing a tiny physically valid separation. This
-                            // is the local divergence case: the inherited anchor
-                            // is not changed arbitrarily; the new constituent is
-                            // displaced along the actual contact normal just far
-                            // enough to clear strict-overlap validation while
-                            // remaining well inside COMBINE's contact tolerance.
+                            });
                             let normal_length = tp.normal_x.hypot(tp.normal_y);
                             if normal_length > 1e-12 {
                                 let nx = tp.normal_x / normal_length;
@@ -197,10 +203,6 @@ pub(crate) fn realize_material_with_context(
         let resource =
             resource(catalog, &material.parts[part].0).ok_or("invalid construction resource")?;
         let mut targets = neighbors(material, part, &assigned);
-        // External blueprint connections are placement constraints as well as
-        // final bond constraints. Feed the already-realized neighbor units into
-        // the same geometry search used for internal material bonds. This does
-        // not create a bond; COMBINE remains the sole admission authority.
         for group in external {
             for &target in group {
                 if !targets.contains(&target) {
@@ -209,15 +211,13 @@ pub(crate) fn realize_material_with_context(
             }
         }
         let mut placed = None;
-        for candidate_placement in candidate_placements(&trial, resource, anchor, &targets, catalog)
+        for candidate_placement in
+            candidate_placements(&trial, resource, anchor, &targets, catalog)
         {
             let mut candidate = trial.clone();
             let mut candidate_ledger = trial_ledger;
             let mut candidate_energy = trial_energy;
-            let mut unit = StructuralUnit::new(resource.name.clone(), candidate_placement);
-            if !unit.realize_default_geometry(catalog) {
-                continue;
-            }
+            let unit = StructuralUnit::new(resource.name.clone(), candidate_placement);
             let index = candidate.add_unit(unit);
             let mut candidate_assigned = assigned.clone();
             candidate_assigned[part] = Some(index);
