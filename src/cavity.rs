@@ -67,7 +67,10 @@ struct HalfEdge {
 }
 #[derive(Clone, Copy, Debug)]
 enum PieceGeometry {
-    Segment { a: Point, b: Point },
+    Segment {
+        a: Point,
+        b: Point,
+    },
     Arc {
         center: Point,
         radius: f64,
