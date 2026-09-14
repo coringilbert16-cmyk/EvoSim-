@@ -1,0 +1,54 @@
+name: Apply PR48 fixes
+
+on:
+  push:
+    branches:
+      - fix/pr48-ci
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply focused fixes and test
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('src/construction_realization.rs')
+          s = p.read_text()
+          old = '''        if assigned.iter().all(Option::is_some) {\n            return true;\n        }'''
+          new = '''        if assigned.iter().all(Option::is_some) {\n            return internal_bonds_are_committable(base, m, assigned, c);\n        }'''
+          if old not in s:
+              raise SystemExit('construction completion guard not found')
+          s = s.replace(old, new, 1)
+          marker = '''fn partial_configuration_valid(\n'''
+          helper = '''fn internal_bonds_are_committable(\n    s: &OrganismStructure,\n    m: &Material,\n    a: &[Option<usize>],\n    c: &[BaseResource],\n) -> bool {\n    let mut trial = s.clone();\n    for bond in &m.internal_bonds {\n        let (Some(x), Some(y)) = (a[bond.part_a], a[bond.part_b]) else {\n            return false;\n        };\n        if connect_units(&mut trial, x, y, c).is_none() {\n            return false;\n        }\n    }\n    true\n}\n\n'''
+          if marker not in s:
+              raise SystemExit('construction helper insertion point not found')
+          s = s.replace(marker, helper + marker, 1)
+          p.write_text(s)
+
+          p = Path('src/cavity.rs')
+          s = p.read_text()
+          old = '''        self.occupied_area > EPS\n            && self.qualifying_enclosed_area(structure, catalog) + EPS\n                >= self.occupied_area * MIN_CAVITY_AREA_FRACTION'''
+          new = '''        let qualifying = self.qualifying_enclosed_area(structure, catalog);\n        if self.occupied_area <= EPS {\n            return qualifying > EPS;\n        }\n        qualifying + EPS >= self.occupied_area * MIN_CAVITY_AREA_FRACTION'''
+          if old not in s:
+              raise SystemExit('cavity fraction guard not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+          cargo fmt --all
+          cargo test --all-targets
+          git add src/construction_realization.rs src/cavity.rs
+          git commit -m 'Fix PR48 physical construction and boundary-only cavity admission'
+          git push origin HEAD:fix/pr48-ci
+          git rm .github/workflows/apply-pr48-fixes.yml
+          git commit -m 'Remove temporary PR48 fix workflow'
+          git push origin HEAD:fix/pr48-ci
