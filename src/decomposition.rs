@@ -98,22 +98,11 @@ pub(crate) fn resolve_one_bond_with_ledger(
         return None;
     }
 
-    let before = body.energy_budget;
-    if !ledger.settle_decomposition(
-        &mut body.energy_budget,
-        target.bond_energy,
-        break_interaction_energy,
-        work,
-    ) {
-        body.energy_budget = before;
-        return None;
-    }
-    let net = body.energy_budget - before;
-
-    body.structure.break_matching_bond(target)?;
-    let released_material = if body.is_finished() {
+    let mut trial_structure = body.structure.clone();
+    trial_structure.break_matching_bond(target)?;
+    let released_material = if trial_structure.bonds.is_empty() {
         Some(
-            body.structure
+            trial_structure
                 .units
                 .iter()
                 .map(|unit| unit.material.clone())
@@ -122,6 +111,18 @@ pub(crate) fn resolve_one_bond_with_ledger(
     } else {
         None
     };
+
+    let before = body.energy_budget;
+    if !ledger.settle_decomposition(
+        &mut body.energy_budget,
+        target.bond_energy,
+        break_interaction_energy,
+        work,
+    ) {
+        return None;
+    }
+    let net = body.energy_budget - before;
+    body.structure = trial_structure;
     Some(DecompositionStep {
         net_energy: net,
         bond_energy: target.bond_energy,
