@@ -1,0 +1,25 @@
+name: Port spatial target change
+
+on:
+  push:
+    branches:
+      - tmp/spatial-target-port
+
+jobs:
+  port:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Cherry-pick audited spatial-target implementation
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git fetch origin 970e97f5a29a8db569a494553f3dbd3f9bb49155
+          git cherry-pick dabd34757ebcac95ad1399b58edec0eec3044fdb
+          git rm .github/workflows/port-spatial-target.yml
+          git commit -m 'Remove temporary spatial target port workflow'
+          git push origin HEAD:tmp/spatial-target-port
