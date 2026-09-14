@@ -13,8 +13,10 @@ mod boundary_contact;
 #[allow(clippy::manual_range_contains)]
 mod cavity;
 mod connection_geometry;
+mod construction_legacy;
 #[allow(clippy::useless_vec)]
 mod construction_realization;
+mod construction_runtime;
 mod contact;
 mod interface_geometry;
 #[allow(unused_variables)]
@@ -30,6 +32,7 @@ mod surface_geometry;
 mod combine;
 mod combine_runtime;
 mod decomposition;
+mod energy_ledger;
 
 // Organism genome, behavior, and lifecycle.
 mod decision;
@@ -40,6 +43,7 @@ mod movement;
 mod observation;
 mod perception;
 mod reproduction;
+#[path = "structural_blueprint_unified.rs"]
 #[allow(clippy::needless_range_loop, unused_variables)]
 mod structural_blueprint;
 mod transformation;
