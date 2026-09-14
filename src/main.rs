@@ -10,6 +10,7 @@ mod construction_authority;
 mod decision;
 mod decision_runtime;
 mod decomposition;
+mod energy_ledger;
 mod environment;
 mod environmental_materials;
 mod genome;
