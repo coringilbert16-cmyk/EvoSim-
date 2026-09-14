@@ -1,6 +1,6 @@
 use crate::decision::{ActionKind, OutcomeKind};
 use crate::decision_runtime::ActionCandidate;
-use crate::energy_ledger::EnergyLedgerAuthority;
+use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
 use crate::state::{ActiveTransformation, EnergyLedger, Environment, Organism, Simulation};
 
 fn water_field_amount(environment: &Environment, organism: &Organism) -> f64 {
@@ -40,20 +40,22 @@ fn settle_break_energy(
     work: f64,
     ledger: &mut EnergyLedger,
 ) -> bool {
-    let before = organism.usable_energy;
-    if !ledger.settle_break_holder(
-        &mut organism.usable_energy,
-        bond.bond_energy,
-        break_interaction_energy,
-        work,
-    ) {
-        organism.usable_energy = before;
+    let mut trial_structure = organism.structure.clone();
+    if trial_structure.break_matching_bond(bond).is_none() {
         return false;
     }
-    if organism.structure.break_matching_bond(bond).is_none() {
-        organism.usable_energy = before;
+    let net = bond.bond_energy + break_interaction_energy - work;
+    let tx = EnergyTransaction {
+        reason: EnergyReason::Break,
+        potential_released: break_interaction_energy.max(0.0),
+        usable_delta: net,
+        structural_delta: -bond.bond_energy,
+        heat_dissipated: work + (-break_interaction_energy).max(0.0),
+    };
+    if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
         return false;
     }
+    organism.structure = trial_structure;
     organism.add_transaction_stress(work);
     true
 }
