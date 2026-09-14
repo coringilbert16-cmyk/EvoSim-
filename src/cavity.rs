@@ -67,10 +67,7 @@ struct HalfEdge {
 }
 #[derive(Clone, Copy, Debug)]
 enum PieceGeometry {
-    Segment {
-        a: Point,
-        b: Point,
-    },
+    Segment { a: Point, b: Point },
     Arc {
         center: Point,
         radius: f64,
@@ -120,9 +117,8 @@ impl GeometryTopology {
         structure: &OrganismStructure,
         catalog: &[BaseResource],
     ) -> bool {
-        self.occupied_area > EPS
-            && self.qualifying_enclosed_area(structure, catalog) + EPS
-                >= self.occupied_area * MIN_CAVITY_AREA_FRACTION
+        self.qualifying_enclosed_area(structure, catalog) + EPS
+            >= self.occupied_area * MIN_CAVITY_AREA_FRACTION
     }
 }
 
