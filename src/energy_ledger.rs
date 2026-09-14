@@ -21,41 +21,26 @@ pub(crate) struct EnergyTransaction {
 }
 
 impl EnergyTransaction {
-    fn effective_potential_released(self) -> Option<f64> {
-        let released = match self.reason {
-            EnergyReason::Combine => {
-                // COMBINE's physical interaction is the source of the energy
-                // budget. The structural investment is the portion locked into
-                // the new bond; usable_delta is already net of that investment
-                // and work. Therefore the authoritative released amount is the
-                // complete interaction energy represented by the transaction.
-                self.usable_delta + self.structural_delta + self.heat_dissipated
-            }
-            _ => self.potential_released,
-        };
-        released.is_finite().then_some(released)
-    }
-
     pub(crate) fn balanced(self) -> bool {
-        let Some(released) = self.effective_potential_released() else {
-            return false;
-        };
-        self.usable_delta.is_finite()
+        self.potential_released.is_finite()
+            && self.usable_delta.is_finite()
             && self.structural_delta.is_finite()
             && self.heat_dissipated.is_finite()
-            && released >= 0.0
+            && self.potential_released >= 0.0
             && self.heat_dissipated >= 0.0
-            && (released - self.usable_delta - self.structural_delta - self.heat_dissipated).abs()
+            && (self.potential_released
+                - self.usable_delta
+                - self.structural_delta
+                - self.heat_dissipated)
+                .abs()
                 <= EPSILON
     }
 }
 
 /// Simulation-wide energy accounting infrastructure.
-///
-/// The ledger deliberately knows nothing about COMBINE, BREAK, reproduction,
-/// maintenance, or decomposition. Callers calculate the physical transaction
-/// and provide the holder that owns the usable-energy balance. This keeps the
-/// authority independent of every subsystem that needs to use it.
+/// Every subsystem calculates its physical transaction and submits the same
+/// transaction shape here. The ledger owns the accounting mutation; it does
+/// not contain subsystem-specific rules.
 pub(crate) trait EnergyLedgerAuthority {
     fn settle_transaction(&mut self, holder: &mut f64, transaction: EnergyTransaction) -> bool;
     fn transfer(&mut self, from: &mut f64, to: &mut f64, amount: f64) -> bool;
@@ -66,21 +51,16 @@ impl EnergyLedgerAuthority for EnergyLedger {
         if !holder.is_finite() || *holder < -EPSILON || !transaction.balanced() {
             return false;
         }
-        let potential_released = transaction
-            .effective_potential_released()
-            .expect("balanced transaction must have finite released energy");
         let next_holder = *holder + transaction.usable_delta;
         if !next_holder.is_finite() || next_holder < -EPSILON {
             return false;
         }
-
-        let next_released = self.total_potential_energy_released + potential_released;
+        let next_released = self.total_potential_energy_released + transaction.potential_released;
         let next_gained = self.total_usable_energy_gained + transaction.usable_delta.max(0.0);
         let next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
         if !next_released.is_finite() || !next_gained.is_finite() || !next_heat.is_finite() {
             return false;
         }
-
         *holder = next_holder.max(0.0);
         self.total_potential_energy_released = next_released;
         self.total_usable_energy_gained = next_gained;
@@ -115,27 +95,34 @@ mod tests {
     use super::*;
 
     #[test]
-    fn combine_transaction_balances() {
-        let tx = EnergyTransaction {
-            reason: EnergyReason::Combine,
-            potential_released: 5.0,
-            usable_delta: 2.0,
-            structural_delta: 2.0,
-            heat_dissipated: 1.0,
-        };
-        assert!(tx.balanced());
+    fn transaction_balances_without_reason_specific_accounting() {
+        for reason in [
+            EnergyReason::Combine,
+            EnergyReason::Break,
+            EnergyReason::Maintenance,
+            EnergyReason::Decomposition,
+            EnergyReason::Transfer,
+        ] {
+            let tx = EnergyTransaction {
+                reason,
+                potential_released: 5.0,
+                usable_delta: 2.0,
+                structural_delta: 2.0,
+                heat_dissipated: 1.0,
+            };
+            assert!(tx.balanced());
+        }
     }
 
     #[test]
-    fn combine_accounting_uses_complete_interaction_energy() {
+    fn settlement_uses_transaction_potential_directly() {
         let tx = EnergyTransaction {
             reason: EnergyReason::Combine,
-            potential_released: 2.0,
+            potential_released: 10.0,
             usable_delta: 4.0,
             structural_delta: 5.0,
             heat_dissipated: 1.0,
         };
-        assert!(tx.balanced());
         let mut ledger = EnergyLedger::default();
         let mut energy = 10.0;
         assert!(ledger.settle_transaction(&mut energy, tx));
@@ -144,41 +131,7 @@ mod tests {
     }
 
     #[test]
-    fn generic_settlement_is_conservative() {
-        let mut ledger = EnergyLedger::default();
-        let mut energy = 20.0;
-        let tx = EnergyTransaction {
-            reason: EnergyReason::Combine,
-            potential_released: 10.0,
-            usable_delta: 5.0,
-            structural_delta: 2.0,
-            heat_dissipated: 3.0,
-        };
-        assert!(ledger.settle_transaction(&mut energy, tx));
-        assert_eq!(energy, 25.0);
-        assert_eq!(ledger.total_potential_energy_released, 10.0);
-        assert_eq!(ledger.total_usable_energy_gained, 5.0);
-        assert_eq!(ledger.total_heat_dissipated, 3.0);
-    }
-
-    #[test]
-    fn generic_negative_delta_requires_holder_energy() {
-        let mut ledger = EnergyLedger::default();
-        let mut energy = 2.0;
-        let tx = EnergyTransaction {
-            reason: EnergyReason::Maintenance,
-            potential_released: 0.0,
-            usable_delta: -3.0,
-            structural_delta: 0.0,
-            heat_dissipated: 3.0,
-        };
-        assert!(!ledger.settle_transaction(&mut energy, tx));
-        assert_eq!(energy, 2.0);
-        assert_eq!(ledger.total_heat_dissipated, 0.0);
-    }
-
-    #[test]
-    fn failed_settlement_does_not_change_holder_or_ledger() {
+    fn failed_settlement_is_atomic() {
         let mut ledger = EnergyLedger::default();
         let mut energy = 1.0;
         let tx = EnergyTransaction {
