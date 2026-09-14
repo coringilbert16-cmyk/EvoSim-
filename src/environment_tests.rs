@@ -1,4 +1,3 @@
-use super::vents::{apply_vents, valid_vent_materials, Vent};
 use super::*;
 use crate::resources::{InternalBond, Material};
 use rand::SeedableRng;
