@@ -28,72 +28,206 @@ impl EnergyTransaction {
             && self.heat_dissipated.is_finite()
             && self.potential_released >= 0.0
             && self.heat_dissipated >= 0.0
-            && (self.potential_released - self.usable_delta - self.structural_delta - self.heat_dissipated).abs() <= EPSILON
+            && (self.potential_released
+                - self.usable_delta
+                - self.structural_delta
+                - self.heat_dissipated)
+                .abs()
+                <= EPSILON
     }
 }
 
 pub(crate) trait EnergyLedgerAuthority {
     fn settle_transaction(&mut self, transaction: EnergyTransaction) -> bool;
-    fn settle_combine_holder(&mut self, holder: &mut f64, interaction: f64, investment: f64, work: f64) -> bool;
-    fn settle_break_holder(&mut self, holder: &mut f64, bond_energy: f64, interaction: f64, work: f64) -> bool;
+    fn settle_combine_holder(
+        &mut self,
+        holder: &mut f64,
+        interaction: f64,
+        investment: f64,
+        work: f64,
+    ) -> bool;
+    fn settle_break_holder(
+        &mut self,
+        holder: &mut f64,
+        bond_energy: f64,
+        interaction: f64,
+        work: f64,
+    ) -> bool;
     fn settle_maintenance(&mut self, holder: &mut f64, paid: f64) -> bool;
-    fn settle_decomposition(&mut self, holder: &mut f64, bond_energy: f64, interaction: f64, work: f64) -> bool;
+    fn settle_decomposition(
+        &mut self,
+        holder: &mut f64,
+        bond_energy: f64,
+        interaction: f64,
+        work: f64,
+    ) -> bool;
     fn transfer(&mut self, from: &mut f64, to: &mut f64, amount: f64) -> bool;
 }
 
 impl EnergyLedgerAuthority for EnergyLedger {
     fn settle_transaction(&mut self, transaction: EnergyTransaction) -> bool {
-        if !transaction.balanced() { return false; }
-        if transaction.potential_released > 0.0 { self.total_potential_energy_released += transaction.potential_released; }
-        if transaction.usable_delta > 0.0 { self.total_usable_energy_gained += transaction.usable_delta; }
+        if !transaction.balanced() {
+            return false;
+        }
+        if transaction.potential_released > 0.0 {
+            self.total_potential_energy_released += transaction.potential_released;
+        }
+        if transaction.usable_delta > 0.0 {
+            self.total_usable_energy_gained += transaction.usable_delta;
+        }
         self.total_heat_dissipated += transaction.heat_dissipated;
-        self.total_potential_energy_released.is_finite() && self.total_usable_energy_gained.is_finite() && self.total_heat_dissipated.is_finite()
+        self.total_potential_energy_released.is_finite()
+            && self.total_usable_energy_gained.is_finite()
+            && self.total_heat_dissipated.is_finite()
     }
-    fn settle_combine_holder(&mut self, holder: &mut f64, interaction: f64, investment: f64, work: f64) -> bool {
-        if !holder.is_finite() || *holder < -EPSILON || !interaction.is_finite() || !investment.is_finite() || !work.is_finite() || investment < 0.0 || work < 0.0 { return false; }
+    fn settle_combine_holder(
+        &mut self,
+        holder: &mut f64,
+        interaction: f64,
+        investment: f64,
+        work: f64,
+    ) -> bool {
+        if !holder.is_finite()
+            || *holder < -EPSILON
+            || !interaction.is_finite()
+            || !investment.is_finite()
+            || !work.is_finite()
+            || investment < 0.0
+            || work < 0.0
+        {
+            return false;
+        }
         let net = interaction - investment - work;
         let next = *holder + net;
-        if !net.is_finite() || !next.is_finite() || next < -EPSILON { return false; }
-        let tx = EnergyTransaction { reason: EnergyReason::Combine, potential_released: interaction.max(0.0), usable_delta: net, structural_delta: investment, heat_dissipated: work + (-interaction).max(0.0) };
-        if !self.settle_transaction(tx) { return false; }
+        if !net.is_finite() || !next.is_finite() || next < -EPSILON {
+            return false;
+        }
+        let tx = EnergyTransaction {
+            reason: EnergyReason::Combine,
+            potential_released: interaction.max(0.0),
+            usable_delta: net,
+            structural_delta: investment,
+            heat_dissipated: work + (-interaction).max(0.0),
+        };
+        if !self.settle_transaction(tx) {
+            return false;
+        }
         *holder = next.max(0.0);
         true
     }
-    fn settle_break_holder(&mut self, holder: &mut f64, bond_energy: f64, interaction: f64, work: f64) -> bool {
-        if !holder.is_finite() || *holder < -EPSILON || !bond_energy.is_finite() || !interaction.is_finite() || !work.is_finite() || bond_energy < 0.0 || work < 0.0 { return false; }
+    fn settle_break_holder(
+        &mut self,
+        holder: &mut f64,
+        bond_energy: f64,
+        interaction: f64,
+        work: f64,
+    ) -> bool {
+        if !holder.is_finite()
+            || *holder < -EPSILON
+            || !bond_energy.is_finite()
+            || !interaction.is_finite()
+            || !work.is_finite()
+            || bond_energy < 0.0
+            || work < 0.0
+        {
+            return false;
+        }
         let net = bond_energy + interaction - work;
-        if *holder + EPSILON < (-net).max(0.0) { return false; }
+        if *holder + EPSILON < (-net).max(0.0) {
+            return false;
+        }
         let next = *holder + net;
-        if !next.is_finite() || next < -EPSILON { return false; }
-        let tx = EnergyTransaction { reason: EnergyReason::Break, potential_released: interaction.max(0.0), usable_delta: net, structural_delta: -bond_energy, heat_dissipated: work + (-interaction).max(0.0) };
-        if !self.settle_transaction(tx) { return false; }
+        if !next.is_finite() || next < -EPSILON {
+            return false;
+        }
+        let tx = EnergyTransaction {
+            reason: EnergyReason::Break,
+            potential_released: interaction.max(0.0),
+            usable_delta: net,
+            structural_delta: -bond_energy,
+            heat_dissipated: work + (-interaction).max(0.0),
+        };
+        if !self.settle_transaction(tx) {
+            return false;
+        }
         *holder = next.max(0.0);
         true
     }
     fn settle_maintenance(&mut self, holder: &mut f64, paid: f64) -> bool {
-        if !holder.is_finite() || *holder < -EPSILON || !paid.is_finite() || paid < 0.0 || *holder + EPSILON < paid { return false; }
+        if !holder.is_finite()
+            || *holder < -EPSILON
+            || !paid.is_finite()
+            || paid < 0.0
+            || *holder + EPSILON < paid
+        {
+            return false;
+        }
         let next = *holder - paid;
-        let tx = EnergyTransaction { reason: EnergyReason::Maintenance, potential_released: 0.0, usable_delta: -paid, structural_delta: 0.0, heat_dissipated: paid };
-        if !self.settle_transaction(tx) { return false; }
+        let tx = EnergyTransaction {
+            reason: EnergyReason::Maintenance,
+            potential_released: 0.0,
+            usable_delta: -paid,
+            structural_delta: 0.0,
+            heat_dissipated: paid,
+        };
+        if !self.settle_transaction(tx) {
+            return false;
+        }
         *holder = next.max(0.0);
         true
     }
-    fn settle_decomposition(&mut self, holder: &mut f64, bond_energy: f64, interaction: f64, work: f64) -> bool {
-        if !holder.is_finite() || *holder < -EPSILON || !bond_energy.is_finite() || !interaction.is_finite() || !work.is_finite() || bond_energy < 0.0 || work < 0.0 { return false; }
+    fn settle_decomposition(
+        &mut self,
+        holder: &mut f64,
+        bond_energy: f64,
+        interaction: f64,
+        work: f64,
+    ) -> bool {
+        if !holder.is_finite()
+            || *holder < -EPSILON
+            || !bond_energy.is_finite()
+            || !interaction.is_finite()
+            || !work.is_finite()
+            || bond_energy < 0.0
+            || work < 0.0
+        {
+            return false;
+        }
         let net = bond_energy + interaction - work;
-        if *holder + EPSILON < (-net).max(0.0) { return false; }
+        if *holder + EPSILON < (-net).max(0.0) {
+            return false;
+        }
         let next = *holder + net;
-        if !next.is_finite() || next < -EPSILON { return false; }
-        let tx = EnergyTransaction { reason: EnergyReason::Decomposition, potential_released: interaction.max(0.0), usable_delta: net, structural_delta: -bond_energy, heat_dissipated: work + (-interaction).max(0.0) };
-        if !self.settle_transaction(tx) { return false; }
+        if !next.is_finite() || next < -EPSILON {
+            return false;
+        }
+        let tx = EnergyTransaction {
+            reason: EnergyReason::Decomposition,
+            potential_released: interaction.max(0.0),
+            usable_delta: net,
+            structural_delta: -bond_energy,
+            heat_dissipated: work + (-interaction).max(0.0),
+        };
+        if !self.settle_transaction(tx) {
+            return false;
+        }
         *holder = next.max(0.0);
         true
     }
     fn transfer(&mut self, from: &mut f64, to: &mut f64, amount: f64) -> bool {
-        if !amount.is_finite() || amount < 0.0 || !from.is_finite() || !to.is_finite() || *from + EPSILON < amount { return false; }
+        if !amount.is_finite()
+            || amount < 0.0
+            || !from.is_finite()
+            || !to.is_finite()
+            || *from + EPSILON < amount
+        {
+            return false;
+        }
         let next_from = *from - amount;
         let next_to = *to + amount;
-        if next_from < -EPSILON || !next_to.is_finite() { return false; }
+        if next_from < -EPSILON || !next_to.is_finite() {
+            return false;
+        }
         *from = next_from.max(0.0);
         *to = next_to;
         true
@@ -106,7 +240,13 @@ mod tests {
 
     #[test]
     fn combine_transaction_balances() {
-        let tx = EnergyTransaction { reason: EnergyReason::Combine, potential_released: 5.0, usable_delta: 2.0, structural_delta: 2.0, heat_dissipated: 1.0 };
+        let tx = EnergyTransaction {
+            reason: EnergyReason::Combine,
+            potential_released: 5.0,
+            usable_delta: 2.0,
+            structural_delta: 2.0,
+            heat_dissipated: 1.0,
+        };
         assert!(tx.balanced());
     }
 

@@ -2,7 +2,10 @@
 //! Physics is evaluated by `combine`; this module selects a physical
 //! candidate, applies the returned result, mutates structure, and settles
 //! the actual energy holder through the unified ledger authority.
-use crate::combine::{bond_strength, eligible_candidates, required_investment, ExperimentalInteraction, FormationEvaluation};
+use crate::combine::{
+    bond_strength, eligible_candidates, required_investment, ExperimentalInteraction,
+    FormationEvaluation,
+};
 use crate::contact::ConnectionCompatibilityCache;
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::resources::{BaseResource, ConnectionSites, Material};
@@ -62,7 +65,11 @@ fn placement_for_fixed_connection(
     new_point: crate::resources::ConnectionPoint,
 ) -> Placement {
     let w = crate::contact::world_connection_point(existing_point, existing);
-    Placement { x: w.x - new_point.x, y: w.y - new_point.y, rotation_radians: 0.0 }
+    Placement {
+        x: w.x - new_point.x,
+        y: w.y - new_point.y,
+        rotation_radians: 0.0,
+    }
 }
 
 fn placement_for_continuous_new(
@@ -72,11 +79,20 @@ fn placement_for_continuous_new(
 ) -> Placement {
     let w = crate::contact::world_connection_point(existing_point, existing);
     let radius = new_shape.form.bounding_radius();
-    Placement { x: w.x + w.normal_x * radius, y: w.y + w.normal_y * radius, rotation_radians: 0.0 }
+    Placement {
+        x: w.x + w.normal_x * radius,
+        y: w.y + w.normal_y * radius,
+        rotation_radians: 0.0,
+    }
 }
 
 fn energy_requirement(investment: f64, work: f64, interaction: f64) -> Option<f64> {
-    if !investment.is_finite() || investment < 0.0 || !work.is_finite() || work < 0.0 || !interaction.is_finite() {
+    if !investment.is_finite()
+        || investment < 0.0
+        || !work.is_finite()
+        || work < 0.0
+        || !interaction.is_finite()
+    {
         return None;
     }
     let required = investment + work - interaction;
@@ -91,7 +107,10 @@ fn evaluate_candidate(
     catalog: &[BaseResource],
     water: f64,
 ) -> Option<(FormationEvaluation, ExperimentalInteraction, f64, f64, f64)> {
-    if candidate.distance > COMBINE_CONTACT_TOLERANCE || !candidate.available_a || !candidate.available_b {
+    if candidate.distance > COMBINE_CONTACT_TOLERANCE
+        || !candidate.available_a
+        || !candidate.available_b
+    {
         return None;
     }
     let a = structure.units.get(ua)?.properties(catalog)?;
@@ -110,15 +129,29 @@ fn form_bond(
     ledger: &mut EnergyLedger,
     energy: &mut f64,
 ) -> Option<CombineAttempt> {
-    let BondFormationRequest { unit_a: ua, unit_b: ub, endpoint_a, endpoint_b, investment, water } = request;
+    let BondFormationRequest {
+        unit_a: ua,
+        unit_b: ub,
+        endpoint_a,
+        endpoint_b,
+        investment,
+        water,
+    } = request;
     if ua >= structure.units.len() || ub >= structure.units.len() || ua == ub {
         return None;
     }
     let id_a = structure.physical_id(ua)?;
     let id_b = structure.physical_id(ub)?;
-    let candidate = crate::contact::connection_pair_candidates_cached(structure, ua, ub, catalog, cache)
-        .into_iter()
-        .find(|c| c.endpoint_a == endpoint_a && c.endpoint_b == endpoint_b && c.distance <= COMBINE_CONTACT_TOLERANCE && c.available_a && c.available_b)?;
+    let candidate =
+        crate::contact::connection_pair_candidates_cached(structure, ua, ub, catalog, cache)
+            .into_iter()
+            .find(|c| {
+                c.endpoint_a == endpoint_a
+                    && c.endpoint_b == endpoint_b
+                    && c.distance <= COMBINE_CONTACT_TOLERANCE
+                    && c.available_a
+                    && c.available_b
+            })?;
     let a = structure.units[ua].properties(catalog)?;
     let b = structure.units[ub].properties(catalog)?;
     let evaluation = crate::combine::evaluate_formation(candidate, a.cohesion, b.cohesion);
@@ -166,7 +199,11 @@ fn form_bond(
     })
 }
 
-fn physical_material_candidate(material: &Material, placement: Placement, catalog: &[BaseResource]) -> Option<StructuralUnit> {
+fn physical_material_candidate(
+    material: &Material,
+    placement: Placement,
+    catalog: &[BaseResource],
+) -> Option<StructuralUnit> {
     if !material.is_valid() || material.is_empty() || material.parts.is_empty() {
         return None;
     }
@@ -180,10 +217,25 @@ fn physical_material_candidate(material: &Material, placement: Placement, catalo
     Some(unit)
 }
 
-pub(crate) fn instantiate_one_unit(organism: &mut Organism, catalog: &[BaseResource]) -> Option<usize> {
+pub(crate) fn instantiate_one_unit(
+    organism: &mut Organism,
+    catalog: &[BaseResource],
+) -> Option<usize> {
     let material = organism.stored_material.materials.first()?.clone();
-    let (x, y) = organism.occupied_cells.first().map(|p| (p.x, p.y)).unwrap_or((0.0, 0.0));
-    let unit = physical_material_candidate(&material, Placement { x, y, rotation_radians: 0.0 }, catalog)?;
+    let (x, y) = organism
+        .occupied_cells
+        .first()
+        .map(|p| (p.x, p.y))
+        .unwrap_or((0.0, 0.0));
+    let unit = physical_material_candidate(
+        &material,
+        Placement {
+            x,
+            y,
+            rotation_radians: 0.0,
+        },
+        catalog,
+    )?;
     organism.stored_material.take_matching(&material)?;
     Some(organism.structure.add_unit(unit))
 }
@@ -198,23 +250,68 @@ pub(crate) fn try_combine_stored_unit(
     if !raw.is_valid() || raw.is_empty() {
         return None;
     }
-    let geometry_source = raw.parts.first().and_then(|(name, _)| environment.catalog.iter().find(|b| b.name == *name))?;
+    let geometry_source = raw
+        .parts
+        .first()
+        .and_then(|(name, _)| environment.catalog.iter().find(|b| b.name == *name))?;
     let water = water_field_amount(environment, organism);
     let mut best: Option<(usize, Placement, FormationEvaluation, f64)> = None;
     for ua in 0..organism.structure.units.len() {
-        let Some(ConnectionSites::Corners(existing)) = organism.structure.units[ua].connection_sites(&environment.catalog) else { continue; };
+        let Some(ConnectionSites::Corners(existing)) =
+            organism.structure.units[ua].connection_sites(&environment.catalog)
+        else {
+            continue;
+        };
         for &ep in &existing {
             let placements = match geometry_source.shape.connection_sites() {
-                ConnectionSites::Corners(new_sites) | ConnectionSites::Endpoints(new_sites) => new_sites.iter().map(|np| placement_for_fixed_connection(&organism.structure.units[ua], ep, *np)).collect::<Vec<_>>(),
-                ConnectionSites::Circumference { .. } | ConnectionSites::Undetermined => vec![placement_for_continuous_new(&organism.structure.units[ua], ep, &geometry_source.shape)],
+                ConnectionSites::Corners(new_sites) | ConnectionSites::Endpoints(new_sites) => {
+                    new_sites
+                        .iter()
+                        .map(|np| {
+                            placement_for_fixed_connection(&organism.structure.units[ua], ep, *np)
+                        })
+                        .collect::<Vec<_>>()
+                }
+                ConnectionSites::Circumference { .. } | ConnectionSites::Undetermined => {
+                    vec![placement_for_continuous_new(
+                        &organism.structure.units[ua],
+                        ep,
+                        &geometry_source.shape,
+                    )]
+                }
             };
             for placement in placements {
                 let mut hypothetical = organism.structure.clone();
-                let ub = hypothetical.add_unit(physical_material_candidate(&raw, placement, &environment.catalog)?);
-                for candidate in crate::contact::connection_pair_candidates_cached(&hypothetical, ua, ub, &environment.catalog, cache) {
-                    let Some((evaluation, _, _, _, required)) = evaluate_candidate(&hypothetical, ua, ub, candidate, &environment.catalog, water) else { continue; };
-                    if organism.usable_energy + EPSILON < required { continue; }
-                    if best.as_ref().map(|x| candidate.distance < x.3).unwrap_or(true) {
+                let ub = hypothetical.add_unit(physical_material_candidate(
+                    &raw,
+                    placement,
+                    &environment.catalog,
+                )?);
+                for candidate in crate::contact::connection_pair_candidates_cached(
+                    &hypothetical,
+                    ua,
+                    ub,
+                    &environment.catalog,
+                    cache,
+                ) {
+                    let Some((evaluation, _, _, _, required)) = evaluate_candidate(
+                        &hypothetical,
+                        ua,
+                        ub,
+                        candidate,
+                        &environment.catalog,
+                        water,
+                    ) else {
+                        continue;
+                    };
+                    if organism.usable_energy + EPSILON < required {
+                        continue;
+                    }
+                    if best
+                        .as_ref()
+                        .map(|x| candidate.distance < x.3)
+                        .unwrap_or(true)
+                    {
                         best = Some((ua, placement, evaluation, candidate.distance));
                     }
                 }
@@ -224,9 +321,27 @@ pub(crate) fn try_combine_stored_unit(
     let (ua, placement, evaluation, _) = best?;
     let ub = organism.structure.units.len();
     let mut hypothetical = organism.structure.clone();
-    hypothetical.add_unit(physical_material_candidate(&raw, placement, &environment.catalog)?);
+    hypothetical.add_unit(physical_material_candidate(
+        &raw,
+        placement,
+        &environment.catalog,
+    )?);
     let mut energy = organism.usable_energy;
-    let attempt = form_bond(&mut hypothetical, BondFormationRequest { unit_a: ua, unit_b: ub, endpoint_a: evaluation.candidate.endpoint_a, endpoint_b: evaluation.candidate.endpoint_b, investment: evaluation.threshold, water }, &environment.catalog, cache, ledger, &mut energy)?;
+    let attempt = form_bond(
+        &mut hypothetical,
+        BondFormationRequest {
+            unit_a: ua,
+            unit_b: ub,
+            endpoint_a: evaluation.candidate.endpoint_a,
+            endpoint_b: evaluation.candidate.endpoint_b,
+            investment: evaluation.threshold,
+            water,
+        },
+        &environment.catalog,
+        cache,
+        ledger,
+        &mut energy,
+    )?;
     organism.stored_material.take_matching(&raw)?;
     organism.structure = hypothetical;
     organism.usable_energy = energy;
@@ -254,9 +369,19 @@ pub(crate) fn try_combine(
     for ua in 0..organism.structure.units.len() {
         for ub in ua + 1..organism.structure.units.len() {
             for candidate in eligible_candidates(&organism.structure, ua, ub, catalog, cache) {
-                let Some((evaluation, _, _, _, required)) = evaluate_candidate(&organism.structure, ua, ub, candidate, catalog, water) else { continue; };
-                if organism.usable_energy + EPSILON < required { continue; }
-                if best.as_ref().map(|x| candidate.distance < x.3).unwrap_or(true) {
+                let Some((evaluation, _, _, _, required)) =
+                    evaluate_candidate(&organism.structure, ua, ub, candidate, catalog, water)
+                else {
+                    continue;
+                };
+                if organism.usable_energy + EPSILON < required {
+                    continue;
+                }
+                if best
+                    .as_ref()
+                    .map(|x| candidate.distance < x.3)
+                    .unwrap_or(true)
+                {
                     best = Some((ua, ub, evaluation, candidate.distance));
                 }
             }
@@ -264,7 +389,21 @@ pub(crate) fn try_combine(
     }
     let (ua, ub, evaluation, _) = best?;
     let mut energy = organism.usable_energy;
-    let attempt = form_bond(&mut organism.structure, BondFormationRequest { unit_a: ua, unit_b: ub, endpoint_a: evaluation.candidate.endpoint_a, endpoint_b: evaluation.candidate.endpoint_b, investment: evaluation.threshold, water }, catalog, cache, ledger, &mut energy)?;
+    let attempt = form_bond(
+        &mut organism.structure,
+        BondFormationRequest {
+            unit_a: ua,
+            unit_b: ub,
+            endpoint_a: evaluation.candidate.endpoint_a,
+            endpoint_b: evaluation.candidate.endpoint_b,
+            investment: evaluation.threshold,
+            water,
+        },
+        catalog,
+        cache,
+        ledger,
+        &mut energy,
+    )?;
     organism.usable_energy = energy;
     organism.add_transaction_stress(attempt.work_cost);
     Some(attempt)

@@ -20,7 +20,11 @@ impl DecomposingBody {
         if !energy_budget.is_finite() || energy_budget < 0.0 {
             return None;
         }
-        Some(Self { structure, energy_budget, position })
+        Some(Self {
+            structure,
+            energy_budget,
+            position,
+        })
     }
 
     pub(crate) fn is_finished(&self) -> bool {
@@ -58,21 +62,29 @@ pub(crate) fn resolve_one_bond_with_ledger(
     ledger: &mut EnergyLedger,
 ) -> Option<DecompositionStep> {
     let target = *body.structure.bonds.first()?;
-    let ia = body.structure.unit_index(target.endpoint_a.constituent_id)?;
-    let ib = body.structure.unit_index(target.endpoint_b.constituent_id)?;
-    let a = body.structure.units.get(ia)?.properties(&environment.catalog)?;
-    let b = body.structure.units.get(ib)?.properties(&environment.catalog)?;
-    let candidate = crate::contact::connection_pair_candidates(
-        &body.structure,
-        ia,
-        ib,
-        &environment.catalog,
-    )
-    .into_iter()
-    .find(|candidate| {
-        candidate.endpoint_a == target.endpoint_a.location
-            && candidate.endpoint_b == target.endpoint_b.location
-    })?;
+    let ia = body
+        .structure
+        .unit_index(target.endpoint_a.constituent_id)?;
+    let ib = body
+        .structure
+        .unit_index(target.endpoint_b.constituent_id)?;
+    let a = body
+        .structure
+        .units
+        .get(ia)?
+        .properties(&environment.catalog)?;
+    let b = body
+        .structure
+        .units
+        .get(ib)?
+        .properties(&environment.catalog)?;
+    let candidate =
+        crate::contact::connection_pair_candidates(&body.structure, ia, ib, &environment.catalog)
+            .into_iter()
+            .find(|candidate| {
+                candidate.endpoint_a == target.endpoint_a.location
+                    && candidate.endpoint_b == target.endpoint_b.location
+            })?;
     let interaction = experimental_interaction(
         a,
         b,

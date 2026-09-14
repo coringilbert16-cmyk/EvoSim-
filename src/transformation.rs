@@ -272,13 +272,7 @@ impl Simulation {
             );
             return;
         }
-        if !settle_break_energy(
-            organism,
-            target,
-            break_interaction_energy,
-            work,
-            ledger,
-        ) {
+        if !settle_break_energy(organism, target, break_interaction_energy, work, ledger) {
             organism.active_transformation_id = None;
             return;
         }
