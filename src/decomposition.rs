@@ -52,7 +52,7 @@ fn water_field_amount(environment: &Environment, position: &Position) -> f64 {
         .unwrap_or(0.0)
 }
 
-fn resolve_one_bond_with_ledger(
+pub(crate) fn resolve_one_bond_with_ledger(
     body: &mut DecomposingBody,
     environment: &Environment,
     ledger: &mut EnergyLedger,
