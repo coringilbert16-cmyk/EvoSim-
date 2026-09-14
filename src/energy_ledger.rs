@@ -58,10 +58,9 @@ impl EnergyLedgerAuthority for EnergyLedger {
             return false;
         }
 
-        let next_released = self.total_potential_energy_released
-            + transaction.potential_released;
-        let next_gained = self.total_usable_energy_gained
-            + transaction.usable_delta.max(0.0);
+        let next_released =
+            self.total_potential_energy_released + transaction.potential_released;
+        let next_gained = self.total_usable_energy_gained + transaction.usable_delta.max(0.0);
         let next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
         if !next_released.is_finite() || !next_gained.is_finite() || !next_heat.is_finite() {
             return false;
