@@ -1,36 +1,26 @@
-//! Shared construction boundary: geometry may search, COMBINE creates bonds.
-
 use crate::combine_runtime::combine_specific_pair;
-use crate::resources::{BaseResource, ConnectionSites, Material};
-use crate::state::EnergyLedger;
-use crate::structural_blueprint::{BlueprintElement, BlueprintPlacement};
-use crate::structure::{ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
+use crate::energy_ledger::EnergyLedger;
+use crate::resources::{BaseResource, ConnectionEndpoint, ConnectionSites, Material};
+use crate::structure::{OrganismStructure, StructuralUnit};
+use crate::structural_blueprint_unified::{BlueprintElement, BlueprintPlacement};
 
 fn resource<'a>(catalog: &'a [BaseResource], name: &str) -> Option<&'a BaseResource> {
     catalog.iter().find(|r| r.name == name)
 }
 
-fn endpoints(unit: &StructuralUnit, catalog: &[BaseResource]) -> Vec<ConnectionEndpoint> {
-    match unit.connection_sites(catalog) {
-        Some(ConnectionSites::Corners(points)) => (0..points.len())
-            .map(|i| ConnectionEndpoint::Corner { point_index: i })
-            .collect(),
-        Some(ConnectionSites::Endpoints(points)) => (0..points.len())
-            .map(|i| ConnectionEndpoint::LineEndpoint { point_index: i })
-            .collect(),
-        Some(ConnectionSites::Circumference { .. }) => {
-            vec![ConnectionEndpoint::Boundary { angle_radians: 0.0 }]
-        }
-        _ => Vec::new(),
+fn placement(p: BlueprintPlacement) -> Placement {
+    Placement {
+        x: p.x,
+        y: p.y,
+        rotation_radians: p.rotation_radians,
     }
 }
 
-fn placement(value: BlueprintPlacement) -> Placement {
-    Placement {
-        x: value.x,
-        y: value.y,
-        rotation_radians: value.rotation_radians,
-    }
+#[derive(Clone, Copy, Debug)]
+struct Placement {
+    x: f64,
+    y: f64,
+    rotation_radians: f64,
 }
 
 fn candidate_placements(
@@ -40,58 +30,31 @@ fn candidate_placements(
     targets: &[usize],
     catalog: &[BaseResource],
 ) -> Vec<Placement> {
-    let prototype = StructuralUnit::new(resource.name.clone(), anchor);
-    let _ = endpoints(&prototype, catalog);
     let mut out = vec![anchor];
-
-    if let Some(vertices) = resource.shape.form.polygon_vertices() {
-        let min_x = vertices
-            .iter()
-            .map(|(x, _)| *x)
-            .fold(f64::INFINITY, f64::min);
-        let max_x = vertices
-            .iter()
-            .map(|(x, _)| *x)
-            .fold(f64::NEG_INFINITY, f64::max);
-        let min_y = vertices
-            .iter()
-            .map(|(_, y)| *y)
-            .fold(f64::INFINITY, f64::min);
-        let max_y = vertices
-            .iter()
-            .map(|(_, y)| *y)
-            .fold(f64::NEG_INFINITY, f64::max);
-        let width = max_x - min_x;
-        let height = max_y - min_y;
-        // `units_strictly_overlap` rejects candidates that still overlap after
-        // shifting one shape inward by 1e-8 of the geometry scale. A smaller
-        // divergence can therefore be classified as overlap even though the
-        // raw shapes have a tiny gap.
+    if let Some((width, height)) = resource.shape.form.axis_aligned_dimensions() {
         let clearance = 4.0e-8 * width.max(height).max(1.0);
-        if width.is_finite() && width > 0.0 && height.is_finite() && height > 0.0 {
-            out.extend([
-                Placement {
-                    x: anchor.x + width + clearance,
-                    y: anchor.y,
-                    rotation_radians: anchor.rotation_radians,
-                },
-                Placement {
-                    x: anchor.x - width - clearance,
-                    y: anchor.y,
-                    rotation_radians: anchor.rotation_radians,
-                },
-                Placement {
-                    x: anchor.x,
-                    y: anchor.y + height + clearance,
-                    rotation_radians: anchor.rotation_radians,
-                },
-                Placement {
-                    x: anchor.x,
-                    y: anchor.y - height - clearance,
-                    rotation_radians: anchor.rotation_radians,
-                },
-            ]);
-        }
+        out.extend([
+            Placement {
+                x: anchor.x + width + clearance,
+                y: anchor.y,
+                rotation_radians: anchor.rotation_radians,
+            },
+            Placement {
+                x: anchor.x - width - clearance,
+                y: anchor.y,
+                rotation_radians: anchor.rotation_radians,
+            },
+            Placement {
+                x: anchor.x,
+                y: anchor.y + height + clearance,
+                rotation_radians: anchor.rotation_radians,
+            },
+            Placement {
+                x: anchor.x,
+                y: anchor.y - height - clearance,
+                rotation_radians: anchor.rotation_radians,
+            },
+        ]);
     }
 
     for &target in targets {
@@ -233,7 +196,18 @@ pub(crate) fn realize_material_with_context(
     for part in 0..material.parts.len() {
         let resource =
             resource(catalog, &material.parts[part].0).ok_or("invalid construction resource")?;
-        let targets = neighbors(material, part, &assigned);
+        let mut targets = neighbors(material, part, &assigned);
+        // External blueprint connections are placement constraints as well as
+        // final bond constraints. Feed the already-realized neighbor units into
+        // the same geometry search used for internal material bonds. This does
+        // not create a bond; COMBINE remains the sole admission authority.
+        for group in external {
+            for &target in group {
+                if !targets.contains(&target) {
+                    targets.push(target);
+                }
+            }
+        }
         let mut placed = None;
         for candidate_placement in candidate_placements(&trial, resource, anchor, &targets, catalog)
         {
