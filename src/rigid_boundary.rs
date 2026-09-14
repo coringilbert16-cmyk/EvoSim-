@@ -65,9 +65,17 @@ pub fn line_endpoint_alignment_rotations(
     if candidate_endpoint > 1 || target_endpoint > 1 {
         return Vec::new();
     }
-    let candidate_interior = if candidate_endpoint == 0 { 0.0 } else { std::f64::consts::PI };
+    let candidate_interior = if candidate_endpoint == 0 {
+        0.0
+    } else {
+        std::f64::consts::PI
+    };
     let target_interior = target_rotation
-        + if target_endpoint == 0 { 0.0 } else { std::f64::consts::PI };
+        + if target_endpoint == 0 {
+            0.0
+        } else {
+            std::f64::consts::PI
+        };
     let mut rotations = vec![
         target_interior + std::f64::consts::PI - candidate_interior,
         target_interior - candidate_interior,
@@ -164,14 +172,23 @@ mod tests {
     use std::f64::consts::PI;
 
     fn square() -> Shape {
-        Shape { form: Form::Rectangle { width: 2.0, height: 2.0 } }
+        Shape {
+            form: Form::Rectangle {
+                width: 2.0,
+                height: 2.0,
+            },
+        }
     }
     fn l_shape() -> Shape {
         Shape {
             form: Form::Polygon {
                 vertices: vec![
-                    (-1.0, -2.0), (1.0, -2.0), (1.0, 2.0),
-                    (0.0, 2.0), (0.0, 0.0), (-1.0, 0.0),
+                    (-1.0, -2.0),
+                    (1.0, -2.0),
+                    (1.0, 2.0),
+                    (0.0, 2.0),
+                    (0.0, 0.0),
+                    (-1.0, 0.0),
                 ],
             },
         }
@@ -223,8 +240,13 @@ mod tests {
         let p = world_vertex(
             &square(),
             0,
-            Placement { x: 10.0, y: 20.0, rotation_radians: PI / 2.0 },
-        ).unwrap();
+            Placement {
+                x: 10.0,
+                y: 20.0,
+                rotation_radians: PI / 2.0,
+            },
+        )
+        .unwrap();
         assert!((p.0 - 11.0).abs() < 1e-12);
         assert!((p.1 - 19.0).abs() < 1e-12);
     }
