@@ -95,7 +95,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
         let negative_interaction = (-interaction).max(0.0);
         self.settle_transaction(EnergyTransaction {
             reason: EnergyReason::Break,
-            potential_released: bond_energy + positive_interaction,
+            potential_released: positive_interaction,
             usable_delta: bond_energy + interaction - work,
             structural_delta: -bond_energy,
             heat_dissipated: work + negative_interaction,
@@ -130,7 +130,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
         let negative_interaction = (-interaction).max(0.0);
         self.settle_transaction(EnergyTransaction {
             reason: EnergyReason::Decomposition,
-            potential_released: bond_energy + positive_interaction,
+            potential_released: positive_interaction,
             usable_delta: bond_energy + interaction - work,
             structural_delta: -bond_energy,
             heat_dissipated: work + negative_interaction,
@@ -158,7 +158,7 @@ mod tests {
     fn break_transaction_balances() {
         let tx = EnergyTransaction {
             reason: EnergyReason::Break,
-            potential_released: 13.0,
+            potential_released: 3.0,
             usable_delta: 9.0,
             structural_delta: -10.0,
             heat_dissipated: 4.0,
@@ -170,7 +170,7 @@ mod tests {
     fn decomposition_keeps_net_energy_recoverable() {
         let tx = EnergyTransaction {
             reason: EnergyReason::Decomposition,
-            potential_released: 13.0,
+            potential_released: 3.0,
             usable_delta: 9.0,
             structural_delta: -10.0,
             heat_dissipated: 4.0,
