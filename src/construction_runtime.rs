@@ -1,9 +1,9 @@
 //! Shared construction boundary: geometry may search, COMBINE creates bonds.
 
 use crate::combine_runtime::combine_specific_pair;
-use crate::energy_ledger::EnergyLedger;
 use crate::resources::{BaseResource, ConnectionSites, Material};
-use crate::structural_blueprint::BlueprintElement;
+use crate::state::EnergyLedger;
+use crate::structural_blueprint::{BlueprintElement, BlueprintPlacement};
 use crate::structure::{ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
 
 fn resource<'a>(catalog: &'a [BaseResource], name: &str) -> Option<&'a BaseResource> {
@@ -22,6 +22,14 @@ fn endpoints(unit: &StructuralUnit, catalog: &[BaseResource]) -> Vec<ConnectionE
             vec![ConnectionEndpoint::Boundary { angle_radians: 0.0 }]
         }
         _ => Vec::new(),
+    }
+}
+
+fn placement(value: BlueprintPlacement) -> Placement {
+    Placement {
+        x: value.x,
+        y: value.y,
+        rotation_radians: value.rotation_radians,
     }
 }
 
@@ -100,6 +108,7 @@ pub(crate) fn realize_material_with_context(
     external: &[Vec<usize>],
 ) -> Result<(Vec<usize>, f64), String> {
     let material = &element.material;
+    let anchor = placement(element.placement);
     let mut trial = structure.clone();
     let mut trial_ledger = *ledger;
     let mut trial_energy = *energy;
@@ -111,13 +120,13 @@ pub(crate) fn realize_material_with_context(
             resource(catalog, &material.parts[part].0).ok_or("invalid construction resource")?;
         let targets = neighbors(material, part, &assigned);
         let mut placed = None;
-        for placement in
-            candidate_placements(&trial, resource, element.placement, &targets, catalog)
+        for candidate_placement in
+            candidate_placements(&trial, resource, anchor, &targets, catalog)
         {
             let mut candidate = trial.clone();
             let mut candidate_ledger = trial_ledger;
             let mut candidate_energy = trial_energy;
-            let mut unit = StructuralUnit::new(resource.name.clone(), placement);
+            let mut unit = StructuralUnit::new(resource.name.clone(), candidate_placement);
             if !unit.realize_default_geometry(catalog) {
                 continue;
             }
