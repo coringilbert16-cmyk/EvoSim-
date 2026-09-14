@@ -1,8 +1,8 @@
 use crate::combine_runtime::combine_specific_pair;
 use crate::resources::{BaseResource, ConnectionSites, Form, Material};
 use crate::state::EnergyLedger;
-use crate::structure::{ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
 use crate::structural_blueprint::{BlueprintElement, BlueprintPlacement};
+use crate::structure::{ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
 
 fn resource<'a>(catalog: &'a [BaseResource], name: &str) -> Option<&'a BaseResource> {
     catalog.iter().find(|r| r.name == name)
@@ -211,8 +211,7 @@ pub(crate) fn realize_material_with_context(
             }
         }
         let mut placed = None;
-        for candidate_placement in
-            candidate_placements(&trial, resource, anchor, &targets, catalog)
+        for candidate_placement in candidate_placements(&trial, resource, anchor, &targets, catalog)
         {
             let mut candidate = trial.clone();
             let mut candidate_ledger = trial_ledger;
