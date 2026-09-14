@@ -30,6 +30,7 @@ mod surface_geometry;
 mod combine;
 mod combine_runtime;
 mod decomposition;
+mod energy_ledger;
 
 // Organism genome, behavior, and lifecycle.
 mod decision;
