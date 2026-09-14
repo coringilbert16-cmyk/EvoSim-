@@ -67,11 +67,6 @@ fn candidate_placements(
             };
             match resource.shape.connection_sites() {
                 ConnectionSites::Corners(points) | ConnectionSites::Endpoints(points) => {
-                    // The inherited anchor is always tried first. When it is
-                    // physically impossible, allow the construction solver to
-                    // rotate the new rigid material around the target contact.
-                    // This preserves spatial intent without making the genome
-                    // an absolute placement constraint.
                     let rotations = [
                         anchor.rotation_radians,
                         anchor.rotation_radians + std::f64::consts::FRAC_PI_2,
@@ -80,7 +75,7 @@ fn candidate_placements(
                     ];
                     for rotation in rotations {
                         let (s, c) = rotation.sin_cos();
-                        for point in points {
+                        for point in &points {
                             out.push(Placement {
                                 x: tp.x - (point.x * c - point.y * s),
                                 y: tp.y - (point.x * s + point.y * c),
@@ -163,8 +158,7 @@ pub(crate) fn realize_material_with_context(
             resource(catalog, &material.parts[part].0).ok_or("invalid construction resource")?;
         let targets = neighbors(material, part, &assigned);
         let mut placed = None;
-        for candidate_placement in candidate_placements(&trial, resource, anchor, &targets, catalog)
-        {
+        for candidate_placement in candidate_placements(&trial, resource, anchor, &targets, catalog) {
             let mut candidate = trial.clone();
             let mut candidate_ledger = trial_ledger;
             let mut candidate_energy = trial_energy;
