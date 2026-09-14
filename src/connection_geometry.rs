@@ -8,27 +8,18 @@ pub enum ConnectionRegion {
     Boundary { center_x: f64, center_y: f64, radius: f64 },
     Fluid { center_x: f64, center_y: f64, effective_radius: f64 },
 }
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WorldConnectionPoint {
     pub x: f64,
     pub y: f64,
-    /// A corner or line endpoint has no unique surface normal. A zero vector
-    /// therefore means that facing is undefined rather than invented.
+    /// Zero means that this point feature has no unique physical normal.
     pub normal_x: f64,
     pub normal_y: f64,
 }
-
 pub fn transform_connection_point(point: ConnectionPoint, origin_x: f64, origin_y: f64, rotation_radians: f64) -> WorldConnectionPoint {
     let (s, c) = rotation_radians.sin_cos();
-    WorldConnectionPoint {
-        x: origin_x + point.x * c - point.y * s,
-        y: origin_y + point.x * s + point.y * c,
-        normal_x: 0.0,
-        normal_y: 0.0,
-    }
+    WorldConnectionPoint { x: origin_x + point.x * c - point.y * s, y: origin_y + point.x * s + point.y * c, normal_x: 0.0, normal_y: 0.0 }
 }
-
 pub fn transform_connection_regions(sites: &ConnectionSites, origin_x: f64, origin_y: f64, rotation_radians: f64, fluid_effective_radius: f64) -> Vec<ConnectionRegion> {
     match sites {
         ConnectionSites::Corners(points) | ConnectionSites::Endpoints(points) => points.iter().copied().map(|p| ConnectionRegion::Corner(transform_connection_point(p, origin_x, origin_y, rotation_radians))).collect(),
@@ -36,31 +27,17 @@ pub fn transform_connection_regions(sites: &ConnectionSites, origin_x: f64, orig
         ConnectionSites::Undetermined => vec![ConnectionRegion::Fluid { center_x: origin_x, center_y: origin_y, effective_radius: fluid_effective_radius.max(0.0) }],
     }
 }
-
 pub fn point_distance(a: WorldConnectionPoint, b: WorldConnectionPoint) -> f64 { (a.x - b.x).hypot(a.y - b.y) }
-
-/// Facing is only defined for a boundary feature with a physical normal.
-/// Discrete corners/endpoints intentionally have no invented normal.
-pub fn facing_compatibility(_a: WorldConnectionPoint, _b: WorldConnectionPoint) -> Option<f64> { None }
-
+/// Zero denotes undefined facing rather than an invented orientation.
+pub fn facing_compatibility(_a: WorldConnectionPoint, _b: WorldConnectionPoint) -> f64 { 0.0 }
 pub fn within_contact_tolerance(a: WorldConnectionPoint, b: WorldConnectionPoint, tolerance: f64) -> bool { point_distance(a, b) <= tolerance.max(0.0) }
-
 impl ConnectionRegion {
-    pub fn representative_point(self) -> Option<WorldConnectionPoint> {
-        match self { Self::Corner(p) => Some(p), Self::Boundary { .. } | Self::Fluid { .. } => None }
-    }
-    pub fn center(self) -> (f64, f64) {
-        match self {
-            Self::Corner(p) => (p.x, p.y),
-            Self::Boundary { center_x, center_y, .. } | Self::Fluid { center_x, center_y, .. } => (center_x, center_y),
-        }
-    }
+    pub fn representative_point(self) -> Option<WorldConnectionPoint> { match self { Self::Corner(p) => Some(p), Self::Boundary { .. } | Self::Fluid { .. } => None } }
+    pub fn center(self) -> (f64, f64) { match self { Self::Corner(p) => (p.x, p.y), Self::Boundary { center_x, center_y, .. } | Self::Fluid { center_x, center_y, .. } => (center_x, center_y) } }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::f64::consts::PI;
     fn cp(x: f64, y: f64) -> ConnectionPoint { ConnectionPoint { x, y, direction_radians: 0.0 } }
     #[test]
     fn transform_rotates_only_the_physical_point() {
@@ -78,7 +55,7 @@ mod tests {
     #[test]
     fn point_features_have_no_invented_facing_normal() {
         let a = transform_connection_point(cp(0.0, 0.0), 0.0, 0.0, 0.0);
-        assert_eq!(facing_compatibility(a, a), None);
+        assert_eq!(facing_compatibility(a, a), 0.0);
     }
     #[test]
     fn continuous_regions_have_no_fake_socket_identity() {
@@ -103,9 +80,5 @@ mod tests {
         let a = transform_connection_point(cp(0.0, 0.0), 0.0, 0.0, 0.0);
         let b = transform_connection_point(cp(0.0, 0.0), 1.0, 0.0, 0.0);
         assert!(!within_contact_tolerance(a, b, -1.0));
-    }
-    #[test]
-    fn imported_pi_remains_used_only_by_geometry_tests() {
-        assert!((PI - std::f64::consts::PI).abs() < f64::EPSILON);
     }
 }
