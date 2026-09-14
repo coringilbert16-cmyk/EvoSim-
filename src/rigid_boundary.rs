@@ -62,10 +62,7 @@ pub fn world_vertex(shape: &Shape, vertex: usize, placement: Placement) -> Optio
     let vertices = vertices(shape)?;
     let (x, y) = *vertices.get(vertex)?;
     let (s, c) = placement.rotation_radians.sin_cos();
-    Some((
-        placement.x + x * c - y * s,
-        placement.y + x * s + y * c,
-    ))
+    Some((placement.x + x * c - y * s, placement.y + x * s + y * c))
 }
 
 /// A boundary normal is meaningful along an edge. At a corner there is no
