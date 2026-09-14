@@ -4,6 +4,7 @@ use std::collections::HashSet;
 
 use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
 use crate::decision_runtime::{select_action, ActionCandidate, DecisionContext};
+use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::environment::{
     apply_vents, ActiveMaterialField, Vent, DEFAULT_CELL_SIZE, DEFAULT_DIFFUSION_FRACTION,
 };
@@ -130,12 +131,14 @@ impl Simulation {
             .field
             .diffuse_step(DEFAULT_DIFFUSION_FRACTION);
     }
+
     fn mature_structural_mass(organism: &Organism, environment: &Environment) -> f64 {
         organism
             .genome
             .structural_blueprint
             .structural_mass(&environment.catalog)
     }
+
     fn growth_fraction(organism: &Organism, environment: &Environment) -> f64 {
         let mature_mass = Self::mature_structural_mass(organism, environment);
         if !mature_mass.is_finite() || mature_mass <= 0.0 {
@@ -143,6 +146,7 @@ impl Simulation {
         }
         (organism.structural_mass(&environment.catalog) / mature_mass).max(0.0)
     }
+
     fn update_development_stage(organism: &mut Organism, environment: &Environment) {
         match organism.development_stage {
             DevelopmentStage::Offspring => {
@@ -158,6 +162,7 @@ impl Simulation {
             DevelopmentStage::Adult => {}
         }
     }
+
     fn current_needs(
         organism: &Organism,
         environment: &Environment,
@@ -172,6 +177,7 @@ impl Simulation {
             reproduction: organism.reproductive_readiness.clamp(0.0, 1.0),
         }
     }
+
     fn update_reproductive_readiness(
         organism: &mut Organism,
         environment: &Environment,
@@ -191,6 +197,7 @@ impl Simulation {
         organism.reproductive_readiness =
             (organism.reproductive_readiness + accumulation).clamp(0.0, 1.0)
     }
+
     fn acquisition_targets(organism: &Organism, environment: &Environment) -> Vec<usize> {
         let Some(position) = organism.occupied_cells.first() else {
             return Vec::new();
@@ -208,9 +215,11 @@ impl Simulation {
             Vec::new()
         }
     }
+
     fn acquisition_context_key(field_index: usize) -> String {
         format!("target:{field_index}")
     }
+
     fn action_eligibility(organism: &Organism, environment: &Environment) -> ActionEligibility {
         let can_build_from_storage = !organism.structure.units.is_empty()
             && organism.stored_material.count_unstructured() > 0;
@@ -226,6 +235,7 @@ impl Simulation {
             can_expel: false,
         }
     }
+
     fn decision_candidates(
         organism: &Organism,
         environment: &Environment,
@@ -279,6 +289,7 @@ impl Simulation {
         }
         candidates
     }
+
     fn acquire_target(
         organism: &mut Organism,
         environment: &mut Environment,
@@ -302,7 +313,8 @@ impl Simulation {
 
     fn recycle_dead_organism(
         environment: &mut Environment,
-        organism: &Organism,
+        organism: &mut Organism,
+        ledger: &mut EnergyLedger,
     ) -> Option<crate::decomposition::DecomposingBody> {
         let position = organism.occupied_cells.first().cloned()?;
         for material in organism.stored_material.materials.iter().cloned() {
@@ -313,34 +325,39 @@ impl Simulation {
                 environment.field.deposit(position.x, position.y, material);
             }
         }
-        crate::decomposition::DecomposingBody::new(
-            organism.structure.clone(),
-            organism.usable_energy,
-            position,
-        )
+        let mut body =
+            crate::decomposition::DecomposingBody::new(organism.structure.clone(), 0.0, position)?;
+        let energy = organism.usable_energy;
+        if !ledger.transfer(&mut organism.usable_energy, &mut body.energy_budget, energy) {
+            return None;
+        }
+        Some(body)
     }
 
     fn process_decomposing_bodies(&mut self) {
         let mut finished_indices = Vec::new();
         for index in 0..self.decomposing_bodies.len() {
-            let Some(step) = crate::decomposition::resolve_one_bond(
+            let Some(step) = crate::decomposition::resolve_one_bond_with_ledger(
                 &mut self.decomposing_bodies[index],
                 &self.environment,
+                &mut self.energy_ledger,
             ) else {
                 continue;
             };
-            self.energy_ledger.total_heat_dissipated += step.heat;
-            self.energy_ledger.total_potential_energy_released += step.bond_energy;
-            if step.break_interaction_energy > 0.0 {
-                self.energy_ledger.total_potential_energy_released += step.break_interaction_energy;
-            }
             if step.net_energy > 0.0 {
                 if let Some(organism_index) = crate::decomposition::harvestable_decomposition_energy(
                     &self.organisms,
                     &self.decomposing_bodies[index].position,
                 ) {
-                    self.organisms[organism_index].usable_energy += step.net_energy;
-                    self.energy_ledger.total_usable_energy_gained += step.net_energy;
+                    let amount = step
+                        .net_energy
+                        .min(self.decomposing_bodies[index].energy_budget);
+                    let (body, organism) = {
+                        let body = &mut self.decomposing_bodies[index].energy_budget;
+                        let organism = &mut self.organisms[organism_index].usable_energy;
+                        (body, organism)
+                    };
+                    let _ = self.energy_ledger.transfer(body, organism, amount);
                 }
             }
             if let Some(materials) = step.released_material {
@@ -441,6 +458,7 @@ impl Simulation {
                             organism,
                             environment,
                             &mut compatibility_cache,
+                            &mut self.energy_ledger,
                         )
                         .is_some();
                         crate::decision_runtime::record_outcome(
@@ -493,7 +511,12 @@ impl Simulation {
         let catalog = self.environment.catalog.clone();
         for id in reproduction_requests {
             if let Some(organism) = self.organisms.iter_mut().find(|o| o.id == id) {
-                let _ = crate::reproduction::begin_reproduction(organism, &mut self.rng, &catalog);
+                let _ = crate::reproduction::begin_reproduction(
+                    organism,
+                    &mut self.rng,
+                    &catalog,
+                    &mut self.energy_ledger,
+                );
             }
         }
         let mut offspring = Vec::new();
@@ -505,6 +528,8 @@ impl Simulation {
                         &mut organism.stored_material,
                         construction,
                         &catalog,
+                        &mut self.energy_ledger,
+                        &mut organism.usable_energy,
                     ) {
                         organism.add_transaction_stress(stress);
                     }
@@ -537,7 +562,11 @@ impl Simulation {
                 &mut self.energy_ledger,
             );
             if dead {
-                if let Some(body) = Self::recycle_dead_organism(&mut self.environment, &organism) {
+                if let Some(body) = Self::recycle_dead_organism(
+                    &mut self.environment,
+                    &mut organism,
+                    &mut self.energy_ledger,
+                ) {
                     self.decomposing_bodies.push(body);
                 }
             } else {
@@ -561,6 +590,7 @@ impl Simulation {
         organism.stress *= crate::state::STRESS_DECAY_PER_TICK;
         organism.apply_stress_damage(environment, ledger)
     }
+
     #[cfg(test)]
     pub(crate) fn total_material_in_system(&self) -> f64 {
         let mut total = self.environment.field.total_amount();

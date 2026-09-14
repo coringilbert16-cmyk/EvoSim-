@@ -1,5 +1,6 @@
 use crate::decision::{DecisionHistory, DecisionParameters};
 use crate::decomposition::DecomposingBody;
+use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
 use crate::environment::{ActiveMaterialField, Vent};
 use crate::genome::Genome;
 use crate::material_storage::MaterialStorage;
@@ -176,8 +177,21 @@ impl Organism {
             return;
         }
         let paid = self.usable_energy.min(demand).max(0.0);
-        self.usable_energy -= paid;
-        ledger.total_heat_dissipated += paid;
+        if paid <= 0.0 {
+            self.stress += demand;
+            return;
+        }
+        let tx = EnergyTransaction {
+            reason: EnergyReason::Maintenance,
+            potential_released: 0.0,
+            usable_delta: -paid,
+            structural_delta: 0.0,
+            heat_dissipated: paid,
+        };
+        if !ledger.settle_transaction(&mut self.usable_energy, tx) {
+            self.stress += demand;
+            return;
+        }
         let deficit = demand - paid;
         if deficit > 0.0 {
             self.stress += deficit

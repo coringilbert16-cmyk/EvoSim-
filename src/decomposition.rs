@@ -1,13 +1,16 @@
 use crate::combine::experimental_interaction;
+use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
 use crate::resources::Material;
-use crate::state::{Environment, Organism, Position};
+use crate::state::{EnergyLedger, Environment, Organism, Position};
 use crate::structure::OrganismStructure;
+
 #[derive(Clone, Debug)]
 pub(crate) struct DecomposingBody {
     pub(crate) structure: OrganismStructure,
     pub(crate) energy_budget: f64,
     pub(crate) position: Position,
 }
+
 impl DecomposingBody {
     pub(crate) fn new(
         structure: OrganismStructure,
@@ -23,10 +26,12 @@ impl DecomposingBody {
             position,
         })
     }
+
     pub(crate) fn is_finished(&self) -> bool {
         self.structure.bonds.is_empty()
     }
 }
+
 pub(crate) struct DecompositionStep {
     pub(crate) net_energy: f64,
     pub(crate) bond_energy: f64,
@@ -34,6 +39,7 @@ pub(crate) struct DecompositionStep {
     pub(crate) heat: f64,
     pub(crate) released_material: Option<Vec<Material>>,
 }
+
 fn water_field_amount(environment: &Environment, position: &Position) -> f64 {
     environment
         .field
@@ -49,9 +55,11 @@ fn water_field_amount(environment: &Environment, position: &Position) -> f64 {
         })
         .unwrap_or(0.0)
 }
-pub(crate) fn resolve_one_bond(
+
+pub(crate) fn resolve_one_bond_with_ledger(
     body: &mut DecomposingBody,
     environment: &Environment,
+    ledger: &mut EnergyLedger,
 ) -> Option<DecompositionStep> {
     let target = *body.structure.bonds.first()?;
     let ia = body
@@ -89,21 +97,12 @@ pub(crate) fn resolve_one_bond(
     if !work.is_finite() || work < 0.0 {
         return None;
     }
-    let net = target.bond_energy + break_interaction_energy - work;
-    if !net.is_finite() {
-        return None;
-    }
-    if net < 0.0 {
-        let deficit = -net;
-        if body.energy_budget + f64::EPSILON < deficit {
-            return None;
-        }
-        body.energy_budget -= deficit
-    }
-    body.structure.break_matching_bond(target)?;
-    let released_material = if body.is_finished() {
+
+    let mut trial_structure = body.structure.clone();
+    trial_structure.break_matching_bond(target)?;
+    let released_material = if trial_structure.bonds.is_empty() {
         Some(
-            body.structure
+            trial_structure
                 .units
                 .iter()
                 .map(|unit| unit.material.clone())
@@ -112,6 +111,21 @@ pub(crate) fn resolve_one_bond(
     } else {
         None
     };
+
+    let before = body.energy_budget;
+    let net = target.bond_energy + break_interaction_energy - work;
+    let transaction = EnergyTransaction {
+        reason: EnergyReason::Decomposition,
+        potential_released: break_interaction_energy.max(0.0),
+        usable_delta: net,
+        structural_delta: -target.bond_energy,
+        heat_dissipated: work + (-break_interaction_energy).max(0.0),
+    };
+    if !ledger.settle_transaction(&mut body.energy_budget, transaction) {
+        return None;
+    }
+    let net = body.energy_budget - before;
+    body.structure = trial_structure;
     Some(DecompositionStep {
         net_energy: net,
         bond_energy: target.bond_energy,
@@ -120,6 +134,7 @@ pub(crate) fn resolve_one_bond(
         released_material,
     })
 }
+
 pub(crate) fn harvestable_decomposition_energy(
     organisms: &[Organism],
     position: &Position,
@@ -136,11 +151,13 @@ pub(crate) fn harvestable_decomposition_energy(
         .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
         .map(|(index, _)| index)
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::genome::initial_genome;
     use crate::resources::default_catalog;
+
     #[test]
     fn retains_structure_budget_and_position() {
         let genome = initial_genome();
@@ -153,6 +170,7 @@ mod tests {
         assert_eq!(body.energy_budget, 4.0);
         assert_eq!(body.position, Position { x: 2.0, y: 3.0 })
     }
+
     #[test]
     fn zero_bond_structure_is_finished() {
         let genome = initial_genome();
