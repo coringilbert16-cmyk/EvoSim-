@@ -13,9 +13,9 @@ mod boundary_contact;
 #[allow(clippy::manual_range_contains)]
 mod cavity;
 mod connection_geometry;
+mod construction_legacy;
 #[allow(clippy::useless_vec)]
 mod construction_realization;
-mod construction_legacy;
 mod construction_runtime;
 mod contact;
 mod interface_geometry;
