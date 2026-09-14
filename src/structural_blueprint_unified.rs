@@ -71,11 +71,11 @@ impl BlueprintElement {
         if !self.material.is_valid() {
             return Err("material is invalid".into());
         }
-        if !self.placement.x.is_finite()
-            || !self.placement.y.is_finite()
-            || !self.placement.rotation_radians.is_finite()
-        {
-            return Err("placement contains a non-finite value".into());
+        if !self.placement.x.is_finite() || !self.placement.y.is_finite() {
+            return Err("blueprint placement must be finite".into());
+        }
+        if !self.placement.rotation_radians.is_finite() {
+            return Err("blueprint orientation must be finite".into());
         }
         Ok(())
     }
@@ -166,8 +166,7 @@ impl StructuralBlueprint {
         }
         let mut connection_seen = HashSet::new();
         for (i, e) in self.elements.iter().enumerate() {
-            e.validate()
-                .map_err(|error| format!("element {i}: {error}"))?;
+            e.validate().map_err(|error| format!("element {i}: {error}"))?;
         }
         for (i, c) in self.connections.iter().enumerate() {
             c.validate(self)
@@ -207,50 +206,31 @@ impl StructuralBlueprint {
         self.validate()?;
         let mut structure = OrganismStructure::new();
         let mut realized = HashMap::<usize, Vec<usize>>::new();
-        let mut attempted = vec![false; self.elements.len()];
-        let mut total_heat = 0.0;
-
-        // The first element is the only element allowed to bootstrap a new
-        // disconnected structure. Subsequent elements must attach through a
-        // blueprint connection and are constructed through the same runtime.
         let mut order = Vec::with_capacity(self.elements.len());
-        order.push(0);
-        attempted[0] = true;
-        while order.len() < self.elements.len() {
-            let mut best = None;
-            let mut best_neighbors = 0usize;
-            for index in 1..self.elements.len() {
-                if attempted[index] {
+        let mut visited = vec![false; self.elements.len()];
+        let mut queue = vec![0usize];
+        visited[0] = true;
+        while let Some(current) = queue.pop() {
+            order.push(current);
+            for connection in &self.connections {
+                let neighbor = if connection.element_a == current {
+                    connection.element_b
+                } else if connection.element_b == current {
+                    connection.element_a
+                } else {
                     continue;
-                }
-                let neighbors = self
-                    .connections
-                    .iter()
-                    .filter_map(|connection| {
-                        let neighbor = if connection.element_a == index {
-                            connection.element_b
-                        } else if connection.element_b == index {
-                            connection.element_a
-                        } else {
-                            return None;
-                        };
-                        realized.contains_key(&neighbor).then_some(neighbor)
-                    })
-                    .collect::<HashSet<_>>();
-                if !neighbors.is_empty() && (best.is_none() || neighbors.len() > best_neighbors) {
-                    best_neighbors = neighbors.len();
-                    best = Some(index);
+                };
+                if !visited[neighbor] {
+                    visited[neighbor] = true;
+                    queue.push(neighbor);
                 }
             }
-            let Some(index) = best else {
-                return Err(
-                    "blueprint realization stalled before all elements were constructed".into(),
-                );
-            };
-            attempted[index] = true;
-            order.push(index);
+        }
+        if order.len() != self.elements.len() {
+            return Err("blueprint realization stalled before all elements were constructed".into());
         }
 
+        let mut total_heat = 0.0;
         for index in order {
             let external = if index == 0 {
                 Vec::new()
@@ -269,7 +249,6 @@ impl StructuralBlueprint {
                     })
                     .collect::<Vec<_>>()
             };
-            let before = structure.clone();
             let (ids, heat) = crate::construction_runtime::realize_material_with_context(
                 &mut structure,
                 &self.elements[index],
@@ -278,16 +257,7 @@ impl StructuralBlueprint {
                 energy,
                 &external,
             )?;
-            if let Err(error) = validate_element_contact(
-                &structure,
-                &ids,
-                &external,
-                self.elements[index].placement,
-                catalog,
-            ) {
-                structure = before;
-                return Err(format!("element {index} realization invalid: {error}"));
-            }
+            validate_element_contact(&structure, &ids, &external, catalog)?;
             realized.insert(index, ids);
             total_heat += heat;
         }
@@ -361,16 +331,11 @@ fn validate_element_contact(
     structure: &OrganismStructure,
     ids: &[usize],
     neighbors: &[Vec<usize>],
-    placement: BlueprintPlacement,
     catalog: &[BaseResource],
 ) -> Result<(), String> {
     for &id in ids {
-        let unit = structure
-            .units
-            .get(id)
-            .ok_or_else(|| "realized material references a missing constituent".to_string())?;
-        if (unit.placement.rotation_radians - placement.rotation_radians).abs() > 1e-12 {
-            return Err("realized material does not preserve the prescribed element frame".into());
+        if structure.units.get(id).is_none() {
+            return Err("realized material references a missing constituent".to_string());
         }
     }
     for group in neighbors {
@@ -381,9 +346,7 @@ fn validate_element_contact(
                     .any(|candidate| candidate.distance <= 1e-9)
             })
         }) {
-            return Err(
-                "realized material has no physical contact with a prescribed neighbor".into(),
-            );
+            return Err("realized material has no physical contact with a prescribed neighbor".into());
         }
     }
     Ok(())
@@ -406,7 +369,6 @@ pub(crate) fn realize_connection_groups(
         .ok_or_else(|| "missing realized second blueprint element".to_string())?;
     let mut ledger = EnergyLedger::default();
     let mut energy = 1.0e12;
-    let mut total_work = 0.0;
     for &ua in a {
         for &ub in b {
             if let Some(attempt) = crate::combine_runtime::combine_specific_pair(
@@ -419,8 +381,7 @@ pub(crate) fn realize_connection_groups(
                 &mut ledger,
                 &mut energy,
             ) {
-                total_work += attempt.work_cost;
-                return Ok(total_work);
+                return Ok(attempt.work_cost);
             }
         }
     }
