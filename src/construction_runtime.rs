@@ -1,11 +1,10 @@
 //! Shared construction boundary: geometry may search, COMBINE creates bonds.
+
 use crate::combine_runtime::combine_specific_pair;
 use crate::energy_ledger::EnergyLedger;
 use crate::resources::{BaseResource, ConnectionSites, Material};
 use crate::structural_blueprint::BlueprintElement;
 use crate::structure::{ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
-
-const EPS: f64 = 1e-9;
 
 fn resource<'a>(catalog: &'a [BaseResource], name: &str) -> Option<&'a BaseResource> {
     catalog.iter().find(|r| r.name == name)
@@ -13,9 +12,15 @@ fn resource<'a>(catalog: &'a [BaseResource], name: &str) -> Option<&'a BaseResou
 
 fn endpoints(unit: &StructuralUnit, catalog: &[BaseResource]) -> Vec<ConnectionEndpoint> {
     match unit.connection_sites(catalog) {
-        Some(ConnectionSites::Corners(points)) => (0..points.len()).map(|i| ConnectionEndpoint::Corner { point_index: i }).collect(),
-        Some(ConnectionSites::Endpoints(points)) => (0..points.len()).map(|i| ConnectionEndpoint::LineEndpoint { point_index: i }).collect(),
-        Some(ConnectionSites::Circumference { .. }) => vec![ConnectionEndpoint::Boundary { angle_radians: 0.0 }],
+        Some(ConnectionSites::Corners(points)) => (0..points.len())
+            .map(|i| ConnectionEndpoint::Corner { point_index: i })
+            .collect(),
+        Some(ConnectionSites::Endpoints(points)) => (0..points.len())
+            .map(|i| ConnectionEndpoint::LineEndpoint { point_index: i })
+            .collect(),
+        Some(ConnectionSites::Circumference { .. }) => {
+            vec![ConnectionEndpoint::Boundary { angle_radians: 0.0 }]
+        }
         _ => Vec::new(),
     }
 }
@@ -31,11 +36,27 @@ fn candidate_placements(
     let locals = endpoints(&prototype, catalog);
     let mut out = vec![anchor];
     for &target in targets {
-        let Some(unit) = structure.units.get(target) else { continue };
+        let Some(unit) = structure.units.get(target) else {
+            continue;
+        };
         for te in endpoints(unit, catalog) {
-            let Some(tp) = te.world_point(unit, catalog) else { continue };
+            let Some(tp) = te.world_point(unit, catalog) else {
+                continue;
+            };
             for le in &locals {
-                let Some(lp) = le.world_point(&StructuralUnit::new(resource.name.clone(), Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }), catalog) else { continue };
+                let Some(lp) = le.world_point(
+                    &StructuralUnit::new(
+                        resource.name.clone(),
+                        Placement {
+                            x: 0.0,
+                            y: 0.0,
+                            rotation_radians: 0.0,
+                        },
+                    ),
+                    catalog,
+                ) else {
+                    continue;
+                };
                 let (s, c) = anchor.rotation_radians.sin_cos();
                 out.push(Placement {
                     x: tp.x - (lp.x * c - lp.y * s),
@@ -46,15 +67,28 @@ fn candidate_placements(
         }
     }
     out.sort_by(|a, b| {
-        (a.x - anchor.x).hypot(a.y - anchor.y).partial_cmp(&(b.x - anchor.x).hypot(b.y - anchor.y)).unwrap_or(std::cmp::Ordering::Equal)
+        (a.x - anchor.x)
+            .hypot(a.y - anchor.y)
+            .partial_cmp(&(b.x - anchor.x).hypot(b.y - anchor.y))
+            .unwrap_or(std::cmp::Ordering::Equal)
     });
     out
 }
 
 fn neighbors(material: &Material, part: usize, assigned: &[Option<usize>]) -> Vec<usize> {
-    material.internal_bonds.iter().filter_map(|b| {
-        if b.part_a == part { assigned[b.part_b] } else if b.part_b == part { assigned[b.part_a] } else { None }
-    }).collect()
+    material
+        .internal_bonds
+        .iter()
+        .filter_map(|b| {
+            if b.part_a == part {
+                assigned[b.part_b]
+            } else if b.part_b == part {
+                assigned[b.part_a]
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 pub(crate) fn realize_material_with_context(
@@ -73,30 +107,62 @@ pub(crate) fn realize_material_with_context(
     let mut heat = 0.0;
 
     for part in 0..material.parts.len() {
-        let resource = resource(catalog, &material.parts[part].0).ok_or("invalid construction resource")?;
+        let resource = resource(catalog, &material.parts[part].0)
+            .ok_or("invalid construction resource")?;
         let targets = neighbors(material, part, &assigned);
         let mut placed = None;
-        for placement in candidate_placements(&trial, resource, element.placement, &targets, catalog) {
+        for placement in
+            candidate_placements(&trial, resource, element.placement, &targets, catalog)
+        {
             let mut candidate = trial.clone();
             let mut candidate_ledger = trial_ledger;
             let mut candidate_energy = trial_energy;
             let mut unit = StructuralUnit::new(resource.name.clone(), placement);
-            if !unit.realize_default_geometry(catalog) { continue; }
+            if !unit.realize_default_geometry(catalog) {
+                continue;
+            }
             let index = candidate.add_unit(unit);
             let mut candidate_assigned = assigned.clone();
             candidate_assigned[part] = Some(index);
             let mut cache = crate::contact::ConnectionCompatibilityCache::new();
             let mut candidate_heat = 0.0;
             let mut ok = true;
-            for bond in material.internal_bonds.iter().filter(|b| b.part_a == part || b.part_b == part) {
-                let (Some(a), Some(b)) = (candidate_assigned[bond.part_a], candidate_assigned[bond.part_b]) else { continue };
-                match combine_specific_pair(&mut candidate, a, b, catalog, 0.0, &mut cache, &mut candidate_ledger, &mut candidate_energy) {
+            for bond in material
+                .internal_bonds
+                .iter()
+                .filter(|b| b.part_a == part || b.part_b == part)
+            {
+                let (Some(a), Some(b)) = (
+                    candidate_assigned[bond.part_a],
+                    candidate_assigned[bond.part_b],
+                ) else {
+                    continue;
+                };
+                match combine_specific_pair(
+                    &mut candidate,
+                    a,
+                    b,
+                    catalog,
+                    0.0,
+                    &mut cache,
+                    &mut candidate_ledger,
+                    &mut candidate_energy,
+                ) {
                     Some(attempt) => candidate_heat += attempt.work_cost,
-                    None => { ok = false; break; }
+                    None => {
+                        ok = false;
+                        break;
+                    }
                 }
             }
             if ok {
-                placed = Some((candidate, candidate_ledger, candidate_energy, index, candidate_heat));
+                placed = Some((
+                    candidate,
+                    candidate_ledger,
+                    candidate_energy,
+                    index,
+                    candidate_heat,
+                ));
                 break;
             }
         }
@@ -118,7 +184,16 @@ pub(crate) fn realize_material_with_context(
                 let mut candidate_ledger = trial_ledger;
                 let mut candidate_energy = trial_energy;
                 let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-                if let Some(attempt) = combine_specific_pair(&mut candidate, a, b, catalog, 0.0, &mut cache, &mut candidate_ledger, &mut candidate_energy) {
+                if let Some(attempt) = combine_specific_pair(
+                    &mut candidate,
+                    a,
+                    b,
+                    catalog,
+                    0.0,
+                    &mut cache,
+                    &mut candidate_ledger,
+                    &mut candidate_energy,
+                ) {
                     trial = candidate;
                     trial_ledger = candidate_ledger;
                     trial_energy = candidate_energy;
@@ -127,9 +202,13 @@ pub(crate) fn realize_material_with_context(
                     break;
                 }
             }
-            if formed { break; }
+            if formed {
+                break;
+            }
         }
-        if !formed { return Err("external blueprint connection could not be realized".into()); }
+        if !formed {
+            return Err("external blueprint connection could not be realized".into());
+        }
     }
 
     let ids = assigned.into_iter().flatten().collect::<Vec<_>>();
