@@ -166,7 +166,8 @@ impl StructuralBlueprint {
         }
         let mut connection_seen = HashSet::new();
         for (i, e) in self.elements.iter().enumerate() {
-            e.validate().map_err(|error| format!("element {i}: {error}"))?;
+            e.validate()
+                .map_err(|error| format!("element {i}: {error}"))?;
         }
         for (i, c) in self.connections.iter().enumerate() {
             c.validate(self)
@@ -227,7 +228,9 @@ impl StructuralBlueprint {
             }
         }
         if order.len() != self.elements.len() {
-            return Err("blueprint realization stalled before all elements were constructed".into());
+            return Err(
+                "blueprint realization stalled before all elements were constructed".into(),
+            );
         }
 
         let mut total_heat = 0.0;
@@ -346,7 +349,9 @@ fn validate_element_contact(
                     .any(|candidate| candidate.distance <= 1e-9)
             })
         }) {
-            return Err("realized material has no physical contact with a prescribed neighbor".into());
+            return Err(
+                "realized material has no physical contact with a prescribed neighbor".into(),
+            );
         }
     }
     Ok(())
