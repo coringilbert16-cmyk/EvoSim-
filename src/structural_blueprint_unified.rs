@@ -356,39 +356,3 @@ fn validate_element_contact(
     }
     Ok(())
 }
-
-/// Compatibility surface for callers that need to add an already-realized
-/// blueprint connection. This function performs the operation through COMBINE;
-/// it never constructs or admits a Bond directly.
-pub(crate) fn realize_connection_groups(
-    structure: &mut OrganismStructure,
-    realized: &HashMap<usize, Vec<usize>>,
-    connection: BlueprintConnection,
-    catalog: &[BaseResource],
-) -> Result<f64, String> {
-    let a = realized
-        .get(&connection.element_a)
-        .ok_or_else(|| "missing realized first blueprint element".to_string())?;
-    let b = realized
-        .get(&connection.element_b)
-        .ok_or_else(|| "missing realized second blueprint element".to_string())?;
-    let mut ledger = EnergyLedger::default();
-    let mut energy = 1.0e12;
-    for &ua in a {
-        for &ub in b {
-            if let Some(attempt) = crate::combine_runtime::combine_specific_pair(
-                structure,
-                ua,
-                ub,
-                catalog,
-                0.0,
-                &mut crate::contact::ConnectionCompatibilityCache::new(),
-                &mut ledger,
-                &mut energy,
-            ) {
-                return Ok(attempt.work_cost);
-            }
-        }
-    }
-    Err("no physically admissible endpoint pair for blueprint connection".into())
-}

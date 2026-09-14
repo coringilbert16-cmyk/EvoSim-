@@ -511,7 +511,12 @@ impl Simulation {
         let catalog = self.environment.catalog.clone();
         for id in reproduction_requests {
             if let Some(organism) = self.organisms.iter_mut().find(|o| o.id == id) {
-                let _ = crate::reproduction::begin_reproduction(organism, &mut self.rng, &catalog);
+                let _ = crate::reproduction::begin_reproduction(
+                    organism,
+                    &mut self.rng,
+                    &catalog,
+                    &mut self.energy_ledger,
+                );
             }
         }
         let mut offspring = Vec::new();
@@ -523,6 +528,8 @@ impl Simulation {
                         &mut organism.stored_material,
                         construction,
                         &catalog,
+                        &mut self.energy_ledger,
+                        &mut organism.usable_energy,
                     ) {
                         organism.add_transaction_stress(stress);
                     }
