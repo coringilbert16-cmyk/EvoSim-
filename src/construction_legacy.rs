@@ -13,7 +13,10 @@ pub(crate) fn realize_material(
 ) -> Result<Vec<usize>, String> {
     let mut ledger = EnergyLedger::default();
     let mut energy = 1_000_000.0;
-    Ok(realize_material_with_context(structure, element, catalog, &mut ledger, &mut energy, &[])?.0)
+    Ok(
+        realize_material_with_context(structure, element, catalog, &mut ledger, &mut energy, &[])?
+            .0,
+    )
 }
 
 pub(crate) fn realize_material_with_constraints(
@@ -25,6 +28,12 @@ pub(crate) fn realize_material_with_constraints(
     let mut ledger = EnergyLedger::default();
     let mut energy = 1_000_000.0;
     Ok(realize_material_with_context(
-        structure, element, catalog, &mut ledger, &mut energy, external,
-    )?.0)
+        structure,
+        element,
+        catalog,
+        &mut ledger,
+        &mut energy,
+        external,
+    )?
+    .0)
 }
