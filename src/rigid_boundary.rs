@@ -15,10 +15,6 @@ fn edge_angle(a: (f64, f64), b: (f64, f64)) -> Option<f64> {
     }
 }
 
-/// Return rigid-body rotations that align one vertex of `candidate` with one
-/// vertex of `target` while making one incident edge exactly collinear and
-/// opposite. Penetration is deliberately not decided here; the physical
-/// collision solver remains the final authority.
 pub fn corner_alignment_rotations(
     candidate: &Shape,
     candidate_vertex: usize,
@@ -58,6 +54,20 @@ pub fn corner_alignment_rotations(
     out
 }
 
+pub fn line_endpoint_alignment_rotations(
+    candidate_endpoint: usize,
+    target_endpoint: usize,
+    target_rotation: f64,
+) -> Vec<f64> {
+    if candidate_endpoint > 1 || target_endpoint > 1 {
+        return Vec::new();
+    }
+    let candidate_interior = if candidate_endpoint == 0 { 0.0 } else { std::f64::consts::PI };
+    let target_interior = target_rotation
+        + if target_endpoint == 0 { 0.0 } else { std::f64::consts::PI };
+    vec![target_interior + std::f64::consts::PI - candidate_interior]
+}
+
 pub fn world_vertex(shape: &Shape, vertex: usize, placement: Placement) -> Option<(f64, f64)> {
     let vertices = vertices(shape)?;
     let (x, y) = *vertices.get(vertex)?;
@@ -65,9 +75,6 @@ pub fn world_vertex(shape: &Shape, vertex: usize, placement: Placement) -> Optio
     Some((placement.x + x * c - y * s, placement.y + x * s + y * c))
 }
 
-/// A boundary normal is meaningful along an edge. At a corner there is no
-/// unique normal, so this helper intentionally returns edge directions only;
-/// contact/penetration determines whether the corner realization is valid.
 pub fn has_polygon_boundary(shape: &Shape) -> bool {
     matches!(
         shape.form,
@@ -94,6 +101,13 @@ mod tests {
         let rotations = corner_alignment_rotations(&square(), 0, &square(), 2, 0.0);
         assert!(rotations.iter().any(|r| (r - 0.0).abs() < 1e-10));
         assert!(rotations.iter().any(|r| (r - PI / 2.0).abs() < 1e-10));
+    }
+
+    #[test]
+    fn line_endpoint_alignment_is_rigid() {
+        let rotations = line_endpoint_alignment_rotations(0, 1, 0.0);
+        assert_eq!(rotations.len(), 1);
+        assert!((rotations[0] - 0.0).abs() < 1e-12);
     }
 
     #[test]
