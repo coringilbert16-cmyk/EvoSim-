@@ -21,14 +21,31 @@ pub(crate) struct EnergyTransaction {
 }
 
 impl EnergyTransaction {
+    fn effective_potential_released(self) -> Option<f64> {
+        let released = match self.reason {
+            EnergyReason::Combine => {
+                // COMBINE's physical interaction is the source of the energy
+                // budget. The structural investment is the portion locked into
+                // the new bond; usable_delta is already net of that investment
+                // and work. Therefore the authoritative released amount is the
+                // complete interaction energy represented by the transaction.
+                self.usable_delta + self.structural_delta + self.heat_dissipated
+            }
+            _ => self.potential_released,
+        };
+        released.is_finite().then_some(released)
+    }
+
     pub(crate) fn balanced(self) -> bool {
-        self.potential_released.is_finite()
-            && self.usable_delta.is_finite()
+        let Some(released) = self.effective_potential_released() else {
+            return false;
+        };
+        self.usable_delta.is_finite()
             && self.structural_delta.is_finite()
             && self.heat_dissipated.is_finite()
-            && self.potential_released >= 0.0
+            && released >= 0.0
             && self.heat_dissipated >= 0.0
-            && (self.potential_released
+            && (released
                 - self.usable_delta
                 - self.structural_delta
                 - self.heat_dissipated)
@@ -53,12 +70,13 @@ impl EnergyLedgerAuthority for EnergyLedger {
         if !holder.is_finite() || *holder < -EPSILON || !transaction.balanced() {
             return false;
         }
+        let potential_released = transaction.effective_potential_released().unwrap();
         let next_holder = *holder + transaction.usable_delta;
         if !next_holder.is_finite() || next_holder < -EPSILON {
             return false;
         }
 
-        let next_released = self.total_potential_energy_released + transaction.potential_released;
+        let next_released = self.total_potential_energy_released + potential_released;
         let next_gained = self.total_usable_energy_gained + transaction.usable_delta.max(0.0);
         let next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
         if !next_released.is_finite() || !next_gained.is_finite() || !next_heat.is_finite() {
@@ -108,6 +126,23 @@ mod tests {
             heat_dissipated: 1.0,
         };
         assert!(tx.balanced());
+    }
+
+    #[test]
+    fn combine_accounting_uses_complete_interaction_energy() {
+        let tx = EnergyTransaction {
+            reason: EnergyReason::Combine,
+            potential_released: 2.0,
+            usable_delta: 4.0,
+            structural_delta: 5.0,
+            heat_dissipated: 1.0,
+        };
+        assert!(tx.balanced());
+        let mut ledger = EnergyLedger::default();
+        let mut energy = 10.0;
+        assert!(ledger.settle_transaction(&mut energy, tx));
+        assert_eq!(energy, 14.0);
+        assert_eq!(ledger.total_potential_energy_released, 10.0);
     }
 
     #[test]
