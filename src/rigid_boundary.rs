@@ -65,17 +65,9 @@ pub fn line_endpoint_alignment_rotations(
     if candidate_endpoint > 1 || target_endpoint > 1 {
         return Vec::new();
     }
-    let candidate_interior = if candidate_endpoint == 0 {
-        0.0
-    } else {
-        std::f64::consts::PI
-    };
+    let candidate_interior = if candidate_endpoint == 0 { 0.0 } else { std::f64::consts::PI };
     let target_interior = target_rotation
-        + if target_endpoint == 0 {
-            0.0
-        } else {
-            std::f64::consts::PI
-        };
+        + if target_endpoint == 0 { 0.0 } else { std::f64::consts::PI };
     let mut rotations = vec![
         target_interior + std::f64::consts::PI - candidate_interior,
         target_interior - candidate_interior,
@@ -86,6 +78,61 @@ pub fn line_endpoint_alignment_rotations(
     rotations.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     rotations.dedup_by(|a, b| (*a - *b).abs() <= 1e-10);
     rotations
+}
+
+/// Returns the outward unit normal of the actual polygon boundary at a vertex.
+/// The result is derived exclusively from the two incident physical edges.
+pub fn corner_normal(shape: &Shape, vertex: usize) -> Option<(f64, f64)> {
+    let vertices = vertices(shape)?;
+    if vertices.len() < 3 || vertex >= vertices.len() {
+        return None;
+    }
+    let here = vertices[vertex];
+    let prev = vertices[(vertex + vertices.len() - 1) % vertices.len()];
+    let next = vertices[(vertex + 1) % vertices.len()];
+    let signed_area = vertices
+        .iter()
+        .enumerate()
+        .map(|(i, &(x0, y0))| {
+            let (x1, y1) = vertices[(i + 1) % vertices.len()];
+            x0 * y1 - y0 * x1
+        })
+        .sum::<f64>();
+    let ccw = signed_area >= 0.0;
+    let normals = |a: (f64, f64), b: (f64, f64)| {
+        let dx = b.0 - a.0;
+        let dy = b.1 - a.1;
+        let len = dx.hypot(dy);
+        if len <= f64::EPSILON {
+            None
+        } else if ccw {
+            Some((dy / len, -dx / len))
+        } else {
+            Some((-dy / len, dx / len))
+        }
+    };
+    let (nx0, ny0) = normals(prev, here)?;
+    let (nx1, ny1) = normals(here, next)?;
+    let nx = nx0 + nx1;
+    let ny = ny0 + ny1;
+    let len = nx.hypot(ny);
+    if len <= f64::EPSILON {
+        None
+    } else {
+        Some((nx / len, ny / len))
+    }
+}
+
+/// Returns the outward direction of a rigid line endpoint.
+pub fn line_endpoint_normal(shape: &Shape, endpoint: usize) -> Option<(f64, f64)> {
+    let Form::Line { .. } = shape.form else {
+        return None;
+    };
+    match endpoint {
+        0 => Some((-1.0, 0.0)),
+        1 => Some((1.0, 0.0)),
+        _ => None,
+    }
 }
 
 fn normalize_angle(angle: f64) -> f64 {
@@ -117,23 +164,14 @@ mod tests {
     use std::f64::consts::PI;
 
     fn square() -> Shape {
-        Shape {
-            form: Form::Rectangle {
-                width: 2.0,
-                height: 2.0,
-            },
-        }
+        Shape { form: Form::Rectangle { width: 2.0, height: 2.0 } }
     }
     fn l_shape() -> Shape {
         Shape {
             form: Form::Polygon {
                 vertices: vec![
-                    (-1.0, -2.0),
-                    (1.0, -2.0),
-                    (1.0, 2.0),
-                    (0.0, 2.0),
-                    (0.0, 0.0),
-                    (-1.0, 0.0),
+                    (-1.0, -2.0), (1.0, -2.0), (1.0, 2.0),
+                    (0.0, 2.0), (0.0, 0.0), (-1.0, 0.0),
                 ],
             },
         }
@@ -167,17 +205,26 @@ mod tests {
     }
 
     #[test]
+    fn l_inner_corner_normal_comes_from_incident_edges() {
+        let (nx, ny) = corner_normal(&l_shape(), 4).unwrap();
+        assert!((nx + 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
+        assert!((ny + 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn square_corner_normal_is_physical_bisector() {
+        let (nx, ny) = corner_normal(&square(), 0).unwrap();
+        assert!((nx + 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
+        assert!((ny + 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
+    }
+
+    #[test]
     fn world_vertex_applies_only_rigid_transform() {
         let p = world_vertex(
             &square(),
             0,
-            Placement {
-                x: 10.0,
-                y: 20.0,
-                rotation_radians: PI / 2.0,
-            },
-        )
-        .unwrap();
+            Placement { x: 10.0, y: 20.0, rotation_radians: PI / 2.0 },
+        ).unwrap();
         assert!((p.0 - 11.0).abs() < 1e-12);
         assert!((p.1 - 19.0).abs() < 1e-12);
     }
