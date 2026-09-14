@@ -94,40 +94,22 @@ fn candidate_placements(
             };
             match resource.shape.connection_sites() {
                 ConnectionSites::Corners(points) | ConnectionSites::Endpoints(points) => {
-                    let rotations = [
-                        anchor.rotation_radians,
-                        anchor.rotation_radians + std::f64::consts::FRAC_PI_2,
-                        anchor.rotation_radians + std::f64::consts::PI,
-                        anchor.rotation_radians + 3.0 * std::f64::consts::FRAC_PI_2,
-                    ];
-                    for rotation in rotations {
+                    let target_angle = tp.normal_y.atan2(tp.normal_x);
+                    for point in &points {
+                        // Put the candidate's connection point exactly on the
+                        // target point, with the candidate normal opposing the
+                        // target normal. This is a physical contact placement,
+                        // not an arbitrary positional offset.
+                        let rotation = target_angle - point.direction_radians
+                            + std::f64::consts::PI;
                         let (s, c) = rotation.sin_cos();
-                        for point in &points {
-                            let base_x = tp.x - (point.x * c - point.y * s);
-                            let base_y = tp.y - (point.x * s + point.y * c);
-                            out.push(Placement {
-                                x: base_x,
-                                y: base_y,
-                                rotation_radians: rotation,
-                            });
-                            let normal_length = tp.normal_x.hypot(tp.normal_y);
-                            if normal_length > 1e-12 {
-                                let nx = tp.normal_x / normal_length;
-                                let ny = tp.normal_y / normal_length;
-                                let clearance =
-                                    4.0e-8 * resource.shape.form.bounding_radius().max(1.0);
-                                out.push(Placement {
-                                    x: base_x + nx * clearance,
-                                    y: base_y + ny * clearance,
-                                    rotation_radians: rotation,
-                                });
-                                out.push(Placement {
-                                    x: base_x - nx * clearance,
-                                    y: base_y - ny * clearance,
-                                    rotation_radians: rotation,
-                                });
-                            }
-                        }
+                        let base_x = tp.x - (point.x * c - point.y * s);
+                        let base_y = tp.y - (point.x * s + point.y * c);
+                        out.push(Placement {
+                            x: base_x,
+                            y: base_y,
+                            rotation_radians: rotation,
+                        });
                     }
                 }
                 ConnectionSites::Circumference { .. } => {
