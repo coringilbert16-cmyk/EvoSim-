@@ -43,6 +43,7 @@ mod movement;
 mod observation;
 mod perception;
 mod reproduction;
+#[path = "structural_blueprint_unified.rs"]
 #[allow(clippy::needless_range_loop, unused_variables)]
 mod structural_blueprint;
 mod transformation;
