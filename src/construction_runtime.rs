@@ -63,27 +63,32 @@ fn candidate_placements(
             .fold(f64::NEG_INFINITY, f64::max);
         let width = max_x - min_x;
         let height = max_y - min_y;
-        let eps = 1e-9;
+        // `units_strictly_overlap` rejects candidates that still overlap after
+        // shifting one shape inward by 1e-8 of the geometry scale.  A smaller
+        // divergence can therefore be classified as overlap even though the
+        // raw shapes have a tiny gap. Keep the divergence minimal while making
+        // it larger than that physical-overlap tolerance.
+        let clearance = 4.0e-8 * width.max(height).max(1.0);
         if width.is_finite() && width > 0.0 && height.is_finite() && height > 0.0 {
             out.extend([
                 Placement {
-                    x: anchor.x + width + eps,
+                    x: anchor.x + width + clearance,
                     y: anchor.y,
                     rotation_radians: anchor.rotation_radians,
                 },
                 Placement {
-                    x: anchor.x - width - eps,
+                    x: anchor.x - width - clearance,
                     y: anchor.y,
                     rotation_radians: anchor.rotation_radians,
                 },
                 Placement {
                     x: anchor.x,
-                    y: anchor.y + height + eps,
+                    y: anchor.y + height + clearance,
                     rotation_radians: anchor.rotation_radians,
                 },
                 Placement {
                     x: anchor.x,
-                    y: anchor.y - height - eps,
+                    y: anchor.y - height - clearance,
                     rotation_radians: anchor.rotation_radians,
                 },
             ]);
