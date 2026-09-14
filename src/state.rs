@@ -1,6 +1,6 @@
 use crate::decision::{DecisionHistory, DecisionParameters};
 use crate::decomposition::DecomposingBody;
-use crate::energy_ledger::EnergyLedgerAuthority;
+use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
 use crate::environment::{ActiveMaterialField, Vent};
 use crate::genome::Genome;
 use crate::material_storage::MaterialStorage;
@@ -181,7 +181,14 @@ impl Organism {
             self.stress += demand;
             return;
         }
-        if !ledger.settle_maintenance(&mut self.usable_energy, paid) {
+        let tx = EnergyTransaction {
+            reason: EnergyReason::Maintenance,
+            potential_released: 0.0,
+            usable_delta: -paid,
+            structural_delta: 0.0,
+            heat_dissipated: paid,
+        };
+        if !ledger.settle_transaction(&mut self.usable_energy, tx) {
             self.stress += demand;
             return;
         }
