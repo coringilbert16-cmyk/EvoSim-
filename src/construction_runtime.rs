@@ -19,6 +19,10 @@ fn endpoints(unit: &StructuralUnit, catalog: &[BaseResource]) -> Vec<ConnectionE
             .map(|i| ConnectionEndpoint::LineEndpoint { point_index: i })
             .collect(),
         Some(ConnectionSites::Circumference { .. }) => {
+            // Continuous boundaries are represented by the contact solver. The
+            // construction search therefore supplies a small set of geometric
+            // seed placements rather than pretending a circle has one fixed
+            // boundary point.
             vec![ConnectionEndpoint::Boundary { angle_radians: 0.0 }]
         }
         _ => Vec::new(),
@@ -43,43 +47,77 @@ fn candidate_placements(
     let prototype = StructuralUnit::new(resource.name.clone(), anchor);
     let locals = endpoints(&prototype, catalog);
     let mut out = vec![anchor];
+
     for &target in targets {
         let Some(unit) = structure.units.get(target) else {
             continue;
         };
-        for te in endpoints(unit, catalog) {
+        let Some(sites) = unit.connection_sites(catalog) else {
+            continue;
+        };
+        let target_endpoints = match sites {
+            ConnectionSites::Corners(points) => (0..points.len())
+                .map(|i| ConnectionEndpoint::Corner { point_index: i })
+                .collect::<Vec<_>>(),
+            ConnectionSites::Endpoints(points) => (0..points.len())
+                .map(|i| ConnectionEndpoint::LineEndpoint { point_index: i })
+                .collect::<Vec<_>>(),
+            ConnectionSites::Circumference { .. } | ConnectionSites::Undetermined => Vec::new(),
+        };
+
+        for te in target_endpoints {
             let Some(tp) = te.world_point(unit, catalog) else {
                 continue;
             };
-            for le in &locals {
-                let Some(lp) = le.world_point(
-                    &StructuralUnit::new(
-                        resource.name.clone(),
-                        Placement {
-                            x: 0.0,
-                            y: 0.0,
-                            rotation_radians: 0.0,
-                        },
-                    ),
-                    catalog,
-                ) else {
-                    continue;
-                };
-                let (s, c) = anchor.rotation_radians.sin_cos();
-                out.push(Placement {
-                    x: tp.x - (lp.x * c - lp.y * s),
-                    y: tp.y - (lp.x * s + lp.y * c),
-                    rotation_radians: anchor.rotation_radians,
-                });
+            match resource.shape.connection_sites() {
+                ConnectionSites::Corners(points) | ConnectionSites::Endpoints(points) => {
+                    for point in points {
+                        let (s, c) = anchor.rotation_radians.sin_cos();
+                        out.push(Placement {
+                            x: tp.x - (point.x * c - point.y * s),
+                            y: tp.y - (point.x * s + point.y * c),
+                            rotation_radians: anchor.rotation_radians,
+                        });
+                    }
+                }
+                ConnectionSites::Circumference { .. } => {
+                    let radius = resource.shape.form.bounding_radius();
+                    let length = tp.normal_x.hypot(tp.normal_y);
+                    if length > 1e-12 && radius.is_finite() && radius > 0.0 {
+                        let nx = tp.normal_x / length;
+                        let ny = tp.normal_y / length;
+                        out.push(Placement {
+                            x: tp.x + nx * radius,
+                            y: tp.y + ny * radius,
+                            rotation_radians: anchor.rotation_radians,
+                        });
+                        out.push(Placement {
+                            x: tp.x - nx * radius,
+                            y: tp.y - ny * radius,
+                            rotation_radians: anchor.rotation_radians,
+                        });
+                    }
+                }
+                ConnectionSites::Undetermined => {}
             }
         }
     }
+
+    // Keep deterministic order while preferring candidates near the inherited
+    // frame. The actual COMBINE admission remains authoritative and may reject
+    // any geometrically invalid candidate.
     out.sort_by(|a, b| {
         (a.x - anchor.x)
             .hypot(a.y - anchor.y)
             .partial_cmp(&(b.x - anchor.x).hypot(b.y - anchor.y))
             .unwrap_or(std::cmp::Ordering::Equal)
     });
+    out.dedup_by(|a, b| {
+        (a.x - b.x).abs() <= 1e-10
+            && (a.y - b.y).abs() <= 1e-10
+            && (a.rotation_radians - b.rotation_radians).abs() <= 1e-10
+    });
+    let _ = locals;
     out
 }
 
@@ -120,8 +158,7 @@ pub(crate) fn realize_material_with_context(
             resource(catalog, &material.parts[part].0).ok_or("invalid construction resource")?;
         let targets = neighbors(material, part, &assigned);
         let mut placed = None;
-        for candidate_placement in candidate_placements(&trial, resource, anchor, &targets, catalog)
-        {
+        for candidate_placement in candidate_placements(&trial, resource, anchor, &targets, catalog) {
             let mut candidate = trial.clone();
             let mut candidate_ledger = trial_ledger;
             let mut candidate_energy = trial_energy;
