@@ -1,6 +1,8 @@
 use crate::decision::{ActionKind, OutcomeKind};
 use crate::decision_runtime::ActionCandidate;
+use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::state::{ActiveTransformation, EnergyLedger, Environment, Organism, Simulation};
+
 fn water_field_amount(environment: &Environment, organism: &Organism) -> f64 {
     organism
         .occupied_cells
@@ -17,6 +19,7 @@ fn water_field_amount(environment: &Environment, organism: &Organism) -> f64 {
         })
         .unwrap_or(0.0)
 }
+
 fn break_net_energy(bond_energy: f64, interaction_energy: f64, work_cost: f64) -> Option<f64> {
     if !bond_energy.is_finite()
         || bond_energy < 0.0
@@ -27,42 +30,34 @@ fn break_net_energy(bond_energy: f64, interaction_energy: f64, work_cost: f64) -
         return None;
     }
     let net = bond_energy + interaction_energy - work_cost;
-    if net.is_finite() {
-        Some(net)
-    } else {
-        None
-    }
+    net.is_finite().then_some(net)
 }
+
 fn settle_break_energy(
     organism: &mut Organism,
     bond: crate::structure::Bond,
     break_interaction_energy: f64,
-    net: f64,
     work: f64,
     ledger: &mut EnergyLedger,
 ) -> bool {
-    if net < 0.0 && organism.usable_energy + f64::EPSILON < -net {
+    let before = organism.usable_energy;
+    if !ledger.settle_break_holder(
+        &mut organism.usable_energy,
+        bond.bond_energy,
+        break_interaction_energy,
+        work,
+    ) {
+        organism.usable_energy = before;
         return false;
     }
     if organism.structure.break_matching_bond(bond).is_none() {
+        organism.usable_energy = before;
         return false;
     }
     organism.add_transaction_stress(work);
-    if work > 0.0 {
-        ledger.total_heat_dissipated += work
-    }
-    organism.usable_energy += net;
-    if bond.bond_energy > 0.0 {
-        ledger.total_potential_energy_released += bond.bond_energy;
-    }
-    if break_interaction_energy > 0.0 {
-        ledger.total_potential_energy_released += break_interaction_energy;
-    }
-    if net > 0.0 {
-        ledger.total_usable_energy_gained += net;
-    }
     true
 }
+
 pub(crate) fn resolve_stress_break(
     organism: &mut Organism,
     environment: &Environment,
@@ -136,15 +131,12 @@ pub(crate) fn resolve_stress_break(
     let Some(net) = break_net_energy(target.bond_energy, break_interaction_energy, work) else {
         return false;
     };
-    settle_break_energy(
-        organism,
-        target,
-        break_interaction_energy,
-        net,
-        work,
-        ledger,
-    )
+    if net < 0.0 && organism.usable_energy + f64::EPSILON < -net {
+        return false;
+    }
+    settle_break_energy(organism, target, break_interaction_energy, work, ledger)
 }
+
 impl Simulation {
     pub(crate) fn try_start_transformation(
         organism: &mut Organism,
@@ -187,6 +179,7 @@ impl Simulation {
         organism.active_transformation_id = Some(t.id);
         Some(t)
     }
+
     pub(crate) fn resolve_transformation(
         transformation: &ActiveTransformation,
         organism: &mut Organism,
@@ -262,12 +255,9 @@ impl Simulation {
             water_field_amount(environment, organism),
         );
         let break_interaction_energy = -formation_interaction.signed_value;
-        let net = match break_net_energy(target.bond_energy, break_interaction_energy, work) {
-            Some(x) => x,
-            None => {
-                organism.active_transformation_id = None;
-                return;
-            }
+        let Some(net) = break_net_energy(target.bond_energy, break_interaction_energy, work) else {
+            organism.active_transformation_id = None;
+            return;
         };
         if net < 0.0 && organism.usable_energy + f64::EPSILON < -net {
             organism.active_transformation_id = None;
@@ -282,23 +272,15 @@ impl Simulation {
             );
             return;
         }
-        if organism.structure.break_matching_bond(target).is_none() {
+        if !settle_break_energy(
+            organism,
+            target,
+            break_interaction_energy,
+            work,
+            ledger,
+        ) {
             organism.active_transformation_id = None;
             return;
-        }
-        organism.add_transaction_stress(work);
-        if work > 0.0 {
-            ledger.total_heat_dissipated += work
-        }
-        organism.usable_energy += net;
-        if target.bond_energy > 0.0 {
-            ledger.total_potential_energy_released += target.bond_energy;
-        }
-        if break_interaction_energy > 0.0 {
-            ledger.total_potential_energy_released += break_interaction_energy;
-        }
-        if net > 0.0 {
-            ledger.total_usable_energy_gained += net;
         }
         organism.active_transformation_id = None;
         let outcome = if net > f64::EPSILON {
@@ -328,6 +310,7 @@ impl Simulation {
         }
     }
 }
+
 pub(crate) fn break_work_cost(
     a: crate::resources::ResourceProperties,
     b: crate::resources::ResourceProperties,
@@ -335,6 +318,7 @@ pub(crate) fn break_work_cost(
 ) -> f64 {
     crate::combine::bond_strength(a, b) * complexity.max(0.0)
 }
+
 pub(crate) fn reinforce_memory_point(organism: &mut Organism, x: f64, y: f64, reinforcement: f64) {
     if let Some(point) = organism
         .memory
@@ -350,15 +334,18 @@ pub(crate) fn reinforce_memory_point(organism: &mut Organism, x: f64, y: f64, re
         })
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn break_net_energy_supports_all_three_signs() {
         assert!(break_net_energy(10.0, 5.0, 3.0).unwrap() > 0.0);
         assert_eq!(break_net_energy(10.0, 0.0, 10.0).unwrap(), 0.0);
         assert!(break_net_energy(10.0, -5.0, 6.0).unwrap() < 0.0)
     }
+
     #[test]
     fn invalid_break_energy_is_rejected() {
         assert!(break_net_energy(-1.0, 0.0, 1.0).is_none());
