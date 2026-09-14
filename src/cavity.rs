@@ -120,8 +120,9 @@ impl GeometryTopology {
         structure: &OrganismStructure,
         catalog: &[BaseResource],
     ) -> bool {
-        self.qualifying_enclosed_area(structure, catalog) + EPS
-            >= self.occupied_area * MIN_CAVITY_AREA_FRACTION
+        let qualifying_area = self.qualifying_enclosed_area(structure, catalog);
+        qualifying_area > EPS
+            && qualifying_area + EPS >= self.occupied_area * MIN_CAVITY_AREA_FRACTION
     }
 }
 
