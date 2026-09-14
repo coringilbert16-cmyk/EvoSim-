@@ -46,13 +46,14 @@ pub fn corner_alignment_rotations(
             .flatten()
         {
             for relative in [ta - ca, ta + std::f64::consts::PI - ca] {
-                let rotation = target_rotation + relative;
+                let rotation = normalize_angle(target_rotation + relative);
                 if !out.iter().any(|r: &f64| (r - rotation).abs() <= 1e-10) {
                     out.push(rotation);
                 }
             }
         }
     }
+    out.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     out
 }
 
