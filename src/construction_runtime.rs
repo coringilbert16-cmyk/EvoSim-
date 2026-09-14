@@ -64,10 +64,9 @@ fn candidate_placements(
         let width = max_x - min_x;
         let height = max_y - min_y;
         // `units_strictly_overlap` rejects candidates that still overlap after
-        // shifting one shape inward by 1e-8 of the geometry scale.  A smaller
+        // shifting one shape inward by 1e-8 of the geometry scale. A smaller
         // divergence can therefore be classified as overlap even though the
-        // raw shapes have a tiny gap. Keep the divergence minimal while making
-        // it larger than that physical-overlap tolerance.
+        // raw shapes have a tiny gap.
         let clearance = 4.0e-8 * width.max(height).max(1.0);
         if width.is_finite() && width > 0.0 && height.is_finite() && height > 0.0 {
             out.extend([
@@ -126,11 +125,39 @@ fn candidate_placements(
                     for rotation in rotations {
                         let (s, c) = rotation.sin_cos();
                         for point in &points {
-                            out.push(Placement {
-                                x: tp.x - (point.x * c - point.y * s),
-                                y: tp.y - (point.x * s + point.y * c),
+                            let base_x = tp.x - (point.x * c - point.y * s);
+                            let base_y = tp.y - (point.x * s + point.y * c);
+                            let aligned = Placement {
+                                x: base_x,
+                                y: base_y,
                                 rotation_radians: rotation,
-                            });
+                            };
+                            out.push(aligned);
+
+                            // Preserve the requested contact target while also
+                            // allowing a tiny physically valid separation. This
+                            // is the local divergence case: the inherited anchor
+                            // is not changed arbitrarily; the new constituent is
+                            // displaced along the actual contact normal just far
+                            // enough to clear strict-overlap validation while
+                            // remaining well inside COMBINE's contact tolerance.
+                            let normal_length = tp.normal_x.hypot(tp.normal_y);
+                            if normal_length > 1e-12 {
+                                let nx = tp.normal_x / normal_length;
+                                let ny = tp.normal_y / normal_length;
+                                let clearance = 4.0e-8
+                                    * resource.shape.form.bounding_radius().max(1.0);
+                                out.push(Placement {
+                                    x: base_x + nx * clearance,
+                                    y: base_y + ny * clearance,
+                                    rotation_radians: rotation,
+                                });
+                                out.push(Placement {
+                                    x: base_x - nx * clearance,
+                                    y: base_y - ny * clearance,
+                                    rotation_radians: rotation,
+                                });
+                            }
                         }
                     }
                 }
