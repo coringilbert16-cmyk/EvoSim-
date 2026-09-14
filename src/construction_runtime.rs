@@ -100,8 +100,8 @@ fn candidate_placements(
                         // target point, with the candidate normal opposing the
                         // target normal. This is a physical contact placement,
                         // not an arbitrary positional offset.
-                        let rotation = target_angle - point.direction_radians
-                            + std::f64::consts::PI;
+                        let rotation =
+                            target_angle - point.direction_radians + std::f64::consts::PI;
                         let (s, c) = rotation.sin_cos();
                         let base_x = tp.x - (point.x * c - point.y * s);
                         let base_y = tp.y - (point.x * s + point.y * c);
