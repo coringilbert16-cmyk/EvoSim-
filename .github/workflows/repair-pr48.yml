@@ -1,0 +1,49 @@
+name: Repair PR48
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.event.pull_request.head.ref == 'tmp/repair-pr48'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: implement/blueprint-soft-spatial-target
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Patch PR48 and run full tests
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/structure.rs')
+          s = p.read_text()
+          old = 'crate::material_geometry::placed_forms_overlap(&shifted, &pb, 0.0)'
+          new = 'crate::material_geometry::placed_forms_penetrate(&pa, &pb, 0.0)'
+          if s.count(old) != 1:
+              raise SystemExit(f'expected exactly one structure overlap check, found {s.count(old)}')
+          p.write_text(s.replace(old, new, 1))
+
+          p = Path('src/cavity.rs')
+          s = p.read_text()
+          old = '''        self.occupied_area > EPS\n            && self.qualifying_enclosed_area(structure, catalog) + EPS\n                >= self.occupied_area * MIN_CAVITY_AREA_FRACTION'''
+          new = '''        {\n            let structural_area = structure\n                .units\n                .iter()\n                .filter_map(|u| u.shape(catalog).and_then(|s| form_area(&s.form)))\n                .filter(|a| *a > EPS)\n                .sum::<f64>();\n            let reference_area = self.occupied_area.max(structural_area);\n            reference_area > EPS\n                && self.qualifying_enclosed_area(structure, catalog) + EPS\n                    >= reference_area * MIN_CAVITY_AREA_FRACTION\n        }'''
+          if s.count(old) != 1:
+              raise SystemExit(f'expected exactly one cavity threshold block, found {s.count(old)}')
+          p.write_text(s.replace(old, new, 1))
+          PY
+          cargo fmt --all
+          cargo test --all-targets
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/structure.rs src/cavity.rs
+          git diff --cached --check
+          git commit -m 'Fix physical contact and cavity threshold invariants'
+          git push origin HEAD:implement/blueprint-soft-spatial-target
