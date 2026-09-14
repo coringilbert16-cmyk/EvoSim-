@@ -1,17 +1,205 @@
 //! Continuous physical-boundary queries.
-use crate::resources::{Form,Shape};
-#[derive(Clone,Copy,Debug,PartialEq)]pub struct BoundaryPoint{pub x:f64,pub y:f64,pub normal_x:f64,pub normal_y:f64}
-fn normalized(x:f64,y:f64)->Option<(f64,f64)>{let length=x.hypot(y);if !length.is_finite()||length<=f64::EPSILON{None}else{Some((x/length,y/length))}}
-fn polygon_winding(vertices:&[(f64,f64)])->f64{vertices.iter().enumerate().map(|(i,&(ax,ay))|{let(bx,by)=vertices[(i+1)%vertices.len()];ax*by-ay*bx}).sum()}
-fn polygon_boundary_toward(vertices:&[(f64,f64)],target_x:f64,target_y:f64)->Option<BoundaryPoint>{if vertices.len()<3{return None}let(ux,uy)=normalized(target_x,target_y)?;let winding=polygon_winding(vertices);if winding.abs()<=1e-12{return None}let mut best=None;for i in 0..vertices.len(){let(ax,ay)=vertices[i];let(bx,by)=vertices[(i+1)%vertices.len()];let ex=bx-ax;let ey=by-ay;let denominator=ux*ey-uy*ex;if denominator.abs()<=1e-12{continue}let t=(ax*ey-ay*ex)/denominator;let s=(ax*uy-ay*ux)/denominator;if t<=1e-12||!(-1e-10..=1.0000000001).contains(&s){continue}let edge_length=ex.hypot(ey);if edge_length<=f64::EPSILON{continue}let sign=winding.signum();let point=BoundaryPoint{x:t*ux,y:t*uy,normal_x:sign*ey/edge_length,normal_y:-sign*ex/edge_length};if best.map_or(true,|(best_t,_)|t<best_t){best=Some((t,point))}}best.map(|(_,p)|p)}
-fn line_endpoint_toward(length:f64,target_x:f64,target_y:f64)->Option<BoundaryPoint>{let half=length/2.0;let candidates=[(-half,0.0,-1.0,0.0),(half,0.0,1.0,0.0)];let(ux,uy)=normalized(target_x,target_y)?;candidates.into_iter().min_by(|a,b|{let da=a.0*ux+a.1*uy;let db=b.0*ux+b.1*uy;db.partial_cmp(&da).unwrap_or(std::cmp::Ordering::Equal) }).map(|(x,y,nx,ny)|BoundaryPoint{x,y,normal_x:nx,normal_y:ny})}
-pub fn boundary_point_toward(shape:&Shape,target_x:f64,target_y:f64)->Option<BoundaryPoint>{match &shape.form{Form::Circle{radius}=>{let(ux,uy)=normalized(target_x,target_y)?;Some(BoundaryPoint{x:radius*ux,y:radius*uy,normal_x:ux,normal_y:uy})},Form::Line{length}=>line_endpoint_toward(*length,target_x,target_y),Form::Rectangle{..}|Form::RegularPolygon{..}|Form::Polygon{..}=>polygon_boundary_toward(shape.form.polygon_vertices()?.as_slice(),target_x,target_y),Form::Fluid{..}=>None}}
-pub fn segment_endpoints(x0:f64,y0:f64,x1:f64,y1:f64)->Option<(BoundaryPoint,BoundaryPoint)>{let dx=x1-x0;let dy=y1-y0;let(nx,ny)=normalized(dx,dy)?;Some((BoundaryPoint{x:x0,y:y0,normal_x:-nx,normal_y:-ny},BoundaryPoint{x:x1,y:y1,normal_x:nx,normal_y:ny}))}
-#[cfg(test)]mod tests{use super::*;fn circle()->Shape{Shape{form:Form::Circle{radius:2.0}}}
-#[test]fn circle_boundary_is_derived_from_requested_direction(){let p=boundary_point_toward(&circle(),3.0,4.0).unwrap();assert!((p.x-1.2).abs()<1e-12);assert!((p.y-1.6).abs()<1e-12);assert!((p.normal_x-0.6).abs()<1e-12);assert!((p.normal_y-0.8).abs()<1e-12)}
-#[test]fn polygon_boundary_uses_first_ray_intersection(){let s=Shape{form:Form::Rectangle{width:2.0,height:4.0}};let p=boundary_point_toward(&s,3.0,1.0).unwrap();assert!((p.x-1.0).abs()<1e-12);assert!((p.y-1.0/3.0).abs()<1e-12)}
-#[test]fn clockwise_polygon_still_produces_an_outward_normal(){let s=Shape{form:Form::Polygon{vertices:vec![(1.0,2.0),(1.0,-2.0),(-1.0,-2.0),(-1.0,2.0)]}};let p=boundary_point_toward(&s,3.0,1.0).unwrap();assert!(p.normal_x>0.99);assert!(p.normal_y.abs()<0.01)}
-#[test]fn line_returns_the_first_endpoint_in_requested_direction(){let s=Shape{form:Form::Line{length:4.0}};let p=boundary_point_toward(&s,-1.0,0.1).unwrap();assert_eq!(p.x,-2.0);let q=boundary_point_toward(&s,1.0,0.1).unwrap();assert_eq!(q.x,2.0)}
-#[test]fn zero_direction_does_not_invent_a_boundary_location(){assert!(boundary_point_toward(&circle(),0.0,0.0).is_none())}
-#[test]fn fluid_placeholder_has_no_boundary_until_realized_geometry_exists(){let s=Shape{form:Form::Fluid{nominal_area:0.5}};assert!(boundary_point_toward(&s,1.0,0.0).is_none())}
-#[test]fn segment_endpoints_are_distinct_physical_locations(){let(a,b)=segment_endpoints(-1.0,0.0,1.0,0.0).unwrap();assert_eq!(a.x,-1.0);assert_eq!(b.x,1.0);assert_eq!((a.normal_x,a.normal_y),(-1.0,0.0));assert_eq!((b.normal_x,b.normal_y),(1.0,0.0))}}
+use crate::resources::{Form, Shape};
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BoundaryPoint {
+    pub x: f64,
+    pub y: f64,
+    pub normal_x: f64,
+    pub normal_y: f64,
+}
+fn normalized(x: f64, y: f64) -> Option<(f64, f64)> {
+    let length = x.hypot(y);
+    if !length.is_finite() || length <= f64::EPSILON {
+        None
+    } else {
+        Some((x / length, y / length))
+    }
+}
+fn polygon_winding(vertices: &[(f64, f64)]) -> f64 {
+    vertices
+        .iter()
+        .enumerate()
+        .map(|(i, &(ax, ay))| {
+            let (bx, by) = vertices[(i + 1) % vertices.len()];
+            ax * by - ay * bx
+        })
+        .sum()
+}
+fn polygon_boundary_toward(
+    vertices: &[(f64, f64)],
+    target_x: f64,
+    target_y: f64,
+) -> Option<BoundaryPoint> {
+    if vertices.len() < 3 {
+        return None;
+    }
+    let (ux, uy) = normalized(target_x, target_y)?;
+    let winding = polygon_winding(vertices);
+    if winding.abs() <= 1e-12 {
+        return None;
+    }
+    let mut best = None;
+    for i in 0..vertices.len() {
+        let (ax, ay) = vertices[i];
+        let (bx, by) = vertices[(i + 1) % vertices.len()];
+        let ex = bx - ax;
+        let ey = by - ay;
+        let denominator = ux * ey - uy * ex;
+        if denominator.abs() <= 1e-12 {
+            continue;
+        }
+        let t = (ax * ey - ay * ex) / denominator;
+        let s = (ax * uy - ay * ux) / denominator;
+        if t <= 1e-12 || !(-1e-10..=1.0000000001).contains(&s) {
+            continue;
+        }
+        let edge_length = ex.hypot(ey);
+        if edge_length <= f64::EPSILON {
+            continue;
+        }
+        let sign = winding.signum();
+        let point = BoundaryPoint {
+            x: t * ux,
+            y: t * uy,
+            normal_x: sign * ey / edge_length,
+            normal_y: -sign * ex / edge_length,
+        };
+        if best.map_or(true, |(best_t, _)| t < best_t) {
+            best = Some((t, point))
+        }
+    }
+    best.map(|(_, p)| p)
+}
+fn line_endpoint_toward(length: f64, target_x: f64, target_y: f64) -> Option<BoundaryPoint> {
+    let half = length / 2.0;
+    let candidates = [(-half, 0.0, -1.0, 0.0), (half, 0.0, 1.0, 0.0)];
+    let (ux, uy) = normalized(target_x, target_y)?;
+    candidates
+        .into_iter()
+        .min_by(|a, b| {
+            let da = a.0 * ux + a.1 * uy;
+            let db = b.0 * ux + b.1 * uy;
+            db.partial_cmp(&da).unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|(x, y, nx, ny)| BoundaryPoint {
+            x,
+            y,
+            normal_x: nx,
+            normal_y: ny,
+        })
+}
+pub fn boundary_point_toward(shape: &Shape, target_x: f64, target_y: f64) -> Option<BoundaryPoint> {
+    match &shape.form {
+        Form::Circle { radius } => {
+            let (ux, uy) = normalized(target_x, target_y)?;
+            Some(BoundaryPoint {
+                x: radius * ux,
+                y: radius * uy,
+                normal_x: ux,
+                normal_y: uy,
+            })
+        }
+        Form::Line { length } => line_endpoint_toward(*length, target_x, target_y),
+        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
+            polygon_boundary_toward(
+                shape.form.polygon_vertices()?.as_slice(),
+                target_x,
+                target_y,
+            )
+        }
+        Form::Fluid { .. } => None,
+    }
+}
+pub fn segment_endpoints(
+    x0: f64,
+    y0: f64,
+    x1: f64,
+    y1: f64,
+) -> Option<(BoundaryPoint, BoundaryPoint)> {
+    let dx = x1 - x0;
+    let dy = y1 - y0;
+    let (nx, ny) = normalized(dx, dy)?;
+    Some((
+        BoundaryPoint {
+            x: x0,
+            y: y0,
+            normal_x: -nx,
+            normal_y: -ny,
+        },
+        BoundaryPoint {
+            x: x1,
+            y: y1,
+            normal_x: nx,
+            normal_y: ny,
+        },
+    ))
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn circle() -> Shape {
+        Shape {
+            form: Form::Circle { radius: 2.0 },
+        }
+    }
+    #[test]
+    fn circle_boundary_is_derived_from_requested_direction() {
+        let p = boundary_point_toward(&circle(), 3.0, 4.0).unwrap();
+        assert!((p.x - 1.2).abs() < 1e-12);
+        assert!((p.y - 1.6).abs() < 1e-12);
+        assert!((p.normal_x - 0.6).abs() < 1e-12);
+        assert!((p.normal_y - 0.8).abs() < 1e-12)
+    }
+    #[test]
+    fn polygon_boundary_uses_first_ray_intersection() {
+        let s = Shape {
+            form: Form::Rectangle {
+                width: 2.0,
+                height: 4.0,
+            },
+        };
+        let p = boundary_point_toward(&s, 3.0, 1.0).unwrap();
+        assert!((p.x - 1.0).abs() < 1e-12);
+        assert!((p.y - 1.0 / 3.0).abs() < 1e-12)
+    }
+    #[test]
+    fn clockwise_polygon_still_produces_an_outward_normal() {
+        let s = Shape {
+            form: Form::Polygon {
+                vertices: vec![(1.0, 2.0), (1.0, -2.0), (-1.0, -2.0), (-1.0, 2.0)],
+            },
+        };
+        let p = boundary_point_toward(&s, 3.0, 1.0).unwrap();
+        assert!(p.normal_x > 0.99);
+        assert!(p.normal_y.abs() < 0.01)
+    }
+    #[test]
+    fn line_returns_the_first_endpoint_in_requested_direction() {
+        let s = Shape {
+            form: Form::Line { length: 4.0 },
+        };
+        let p = boundary_point_toward(&s, -1.0, 0.1).unwrap();
+        assert_eq!(p.x, -2.0);
+        let q = boundary_point_toward(&s, 1.0, 0.1).unwrap();
+        assert_eq!(q.x, 2.0)
+    }
+    #[test]
+    fn zero_direction_does_not_invent_a_boundary_location() {
+        assert!(boundary_point_toward(&circle(), 0.0, 0.0).is_none())
+    }
+    #[test]
+    fn fluid_placeholder_has_no_boundary_until_realized_geometry_exists() {
+        let s = Shape {
+            form: Form::Fluid { nominal_area: 0.5 },
+        };
+        assert!(boundary_point_toward(&s, 1.0, 0.0).is_none())
+    }
+    #[test]
+    fn segment_endpoints_are_distinct_physical_locations() {
+        let (a, b) = segment_endpoints(-1.0, 0.0, 1.0, 0.0).unwrap();
+        assert_eq!(a.x, -1.0);
+        assert_eq!(b.x, 1.0);
+        assert_eq!((a.normal_x, a.normal_y), (-1.0, 0.0));
+        assert_eq!((b.normal_x, b.normal_y), (1.0, 0.0))
+    }
+}

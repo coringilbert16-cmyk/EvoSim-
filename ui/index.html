@@ -3,213 +3,365 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>EvoSim — Seed Microscope</title>
+  <title>EvoSim</title>
   <style>
-    :root { color-scheme: dark; --panel: #11161d; --line: #2b3440; --text: #e8edf2; --muted: #8e9aa8; }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #080b0f; color: var(--text); font: 12px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; }
-    #app { width: 100%; height: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 380px; }
-    #viewport { position: relative; min-width: 0; min-height: 0; background: #080b0f; }
-    #world { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
-    #world.dragging { cursor: grabbing; }
-    #hud { position: absolute; left: 12px; top: 10px; padding: 7px 9px; background: rgba(8,11,15,.88); border: 1px solid var(--line); pointer-events: none; white-space: pre; }
-    #diagnostics { min-width: 0; overflow: auto; background: var(--panel); border-left: 1px solid var(--line); padding: 10px; }
-    #diagnostics h1 { font-size: 13px; margin: 0 0 10px; }
-    #connection { color: var(--muted); margin-bottom: 10px; }
-    details { border: 1px solid var(--line); margin: 6px 0; background: #0d1218; }
-    summary { cursor: pointer; padding: 7px 8px; color: #cdd6df; user-select: none; }
-    .section { padding: 7px 9px 9px; border-top: 1px solid var(--line); }
-    .kv { display: grid; grid-template-columns: minmax(110px, 1fr) minmax(0, 1.5fr); gap: 3px 10px; }
-    .key { color: var(--muted); overflow-wrap: anywhere; }
-    .value { color: var(--text); overflow-wrap: anywhere; white-space: pre-wrap; }
-    pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); }
-    .physical-note { color: var(--muted); margin: 0 0 8px; }
-    @media (max-width: 900px) { #app { grid-template-columns: minmax(0, 1fr) 320px; } }
+    html, body { margin: 0; width: 100%; height: 100%; background: #f5f5f5; color: #111; font-family: sans-serif; overflow: hidden; }
+    #app { width: 100%; height: 100%; display: flex; flex-direction: column; }
+    header { padding: 10px 14px; background: #fff; border-bottom: 1px solid #bbb; }
+    #status { font-size: 14px; }
+    main { flex: 1; display: flex; align-items: center; justify-content: center; }
+    #world { width: min(90vw, 1000px); height: min(80vh, 700px); background: #fff; border: 1px solid #888; cursor: crosshair; touch-action: none; }
+    #world.panning { cursor: grabbing; }
   </style>
 </head>
 <body>
-<div id="app">
-  <section id="viewport">
-    <canvas id="world"></canvas>
-    <div id="hud">SEED MICROSCOPE\nwaiting for observation…</div>
-  </section>
-  <aside id="diagnostics">
-    <h1>SEED — DIAGNOSTICS</h1>
-    <div id="connection">Connecting…</div>
-    <div id="sections"></div>
-  </aside>
-</div>
-<script>
-(() => {
-  const canvas = document.getElementById('world');
-  const ctx = canvas.getContext('2d');
-  const hud = document.getElementById('hud');
-  const connection = document.getElementById('connection');
-  const sections = document.getElementById('sections');
+  <div id="app">
+    <header><div id="status">Connecting to EvoSim…</div></header>
+    <main><canvas id="world"></canvas></main>
+  </div>
+  <script>
+    // Browser-only camera transform. It owns view state, never simulation state.
+    class Camera {
+      constructor() { this.x = 0; this.y = 0; this.scale = 1; }
+      fitBounds(minX, maxX, minY, maxY, viewportWidth, viewportHeight, padding = 0.82) {
+        if (![minX, maxX, minY, maxY, viewportWidth, viewportHeight, padding].every(Number.isFinite)) return;
+        const width = Math.max(maxX - minX, 1e-9), height = Math.max(maxY - minY, 1e-9);
+        if (viewportWidth <= 0 || viewportHeight <= 0 || padding <= 0) return;
+        this.x = (minX + maxX) / 2; this.y = (minY + maxY) / 2;
+        this.scale = Math.min(viewportWidth / width, viewportHeight / height) * padding;
+      }
+      fitWorld(worldWidth, worldHeight, viewportWidth, viewportHeight, padding = 0.92) {
+        this.fitBounds(0, worldWidth, 0, worldHeight, viewportWidth, viewportHeight, padding);
+      }
+      worldToScreen(x, y, viewportWidth, viewportHeight) {
+        return { x: (x - this.x) * this.scale + viewportWidth / 2, y: (y - this.y) * this.scale + viewportHeight / 2 };
+      }
+      screenToWorld(x, y, viewportWidth, viewportHeight) {
+        return { x: (x - viewportWidth / 2) / this.scale + this.x, y: (y - viewportHeight / 2) / this.scale + this.y };
+      }
+      pan(dx, dy) { if (Number.isFinite(dx) && Number.isFinite(dy)) { this.x -= dx / this.scale; this.y -= dy / this.scale; } }
+      zoomAt(screenX, screenY, factor, viewportWidth, viewportHeight) {
+        if (!Number.isFinite(factor) || factor <= 0) return;
+        const before = this.screenToWorld(screenX, screenY, viewportWidth, viewportHeight);
+        this.scale *= factor;
+        const after = this.screenToWorld(screenX, screenY, viewportWidth, viewportHeight);
+        this.x += before.x - after.x; this.y += before.y - after.y;
+      }
+      centerOn(x, y) { if (Number.isFinite(x) && Number.isFinite(y)) { this.x = x; this.y = y; } }
+    }
 
-  const camera = { x: 500, y: 500, scale: 5, initialized: false };
-  let observation = null;
-  let dragging = false;
-  let lastPointer = null;
+    const status = document.getElementById('status');
+    const canvas = document.getElementById('world');
+    const ctx = canvas.getContext('2d');
+    const camera = new Camera();
+    const selectedIds = new Set();
+    let focusedOrganismId = null;
+    let observationLevel = 'World';
+    let observation = null;
+    let cameraInitialized = false;
+    let interaction = null;
+    let requestSerial = 0;
 
-  function resize() {
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-    canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    render();
-  }
-  window.addEventListener('resize', resize);
+    function resize() {
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = Math.max(1, Math.floor(rect.width * devicePixelRatio));
+      canvas.height = Math.max(1, Math.floor(rect.height * devicePixelRatio));
+      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+      if (!cameraInitialized && observation) fitCurrentObservation();
+      render();
+    }
+    function viewportSize() { return { width: canvas.clientWidth, height: canvas.clientHeight }; }
+    function payload() { return observation?.payload || null; }
+    function worldPayload() { return payload()?.World || null; }
+    function organismPayload() { return payload()?.Organism || null; }
+    function structurePayload() { return payload()?.Structure || null; }
 
-  function viewport() { return { w: canvas.clientWidth, h: canvas.clientHeight }; }
-  function screen(x, y) { const v = viewport(); return { x: (x - camera.x) * camera.scale + v.w / 2, y: (y - camera.y) * camera.scale + v.h / 2 }; }
-  function world(sx, sy) { const v = viewport(); return { x: (sx - v.w / 2) / camera.scale + camera.x, y: (sy - v.h / 2) / camera.scale + camera.y }; }
+    function formBounds(form, x, y, rotation = 0) {
+      if (!form || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+      let points = [];
+      if (form.Circle) {
+        const r = form.Circle.radius; points = [[-r, -r], [r, r]];
+      } else if (form.Rectangle) {
+        const w = form.Rectangle.width / 2, h = form.Rectangle.height / 2;
+        points = [[-w, -h], [-w, h], [w, -h], [w, h]];
+      } else if (form.RegularPolygon) {
+        const n = form.RegularPolygon.sides, r = form.RegularPolygon.radius;
+        for (let i = 0; i < n; i += 1) { const a = i * Math.PI * 2 / n; points.push([r * Math.cos(a), r * Math.sin(a)]); }
+      } else if (form.Polygon) {
+        points = form.Polygon.vertices || [];
+      } else {
+        return null; // Fluid has no authoritative finite boundary.
+      }
+      const c = Math.cos(rotation), s = Math.sin(rotation);
+      const transformed = points.map(([px, py]) => [x + px * c - py * s, y + px * s + py * c]);
+      return {
+        minX: Math.min(...transformed.map(p => p[0])), maxX: Math.max(...transformed.map(p => p[0])),
+        minY: Math.min(...transformed.map(p => p[1])), maxY: Math.max(...transformed.map(p => p[1]))
+      };
+    }
 
-  function formPath(form) {
-    if (!form) return false;
-    ctx.beginPath();
-    if (form.Circle) ctx.arc(0, 0, form.Circle.radius, 0, Math.PI * 2);
-    else if (form.Line) { const h = form.Line.length / 2; ctx.moveTo(-h, 0); ctx.lineTo(h, 0); }
-    else if (form.Rectangle) ctx.rect(-form.Rectangle.width / 2, -form.Rectangle.height / 2, form.Rectangle.width, form.Rectangle.height);
-    else if (form.RegularPolygon) {
-      const n = form.RegularPolygon.sides, r = form.RegularPolygon.radius;
-      for (let i = 0; i < n; i++) { const a = i * Math.PI * 2 / n, x = r * Math.cos(a), y = r * Math.sin(a); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
-      ctx.closePath();
-    } else if (form.Polygon) {
-      const pts = form.Polygon.vertices || [];
-      pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
-      ctx.closePath();
-    } else return false;
-    return true;
-  }
+    function fitCurrentObservation() {
+      const viewport = viewportSize();
+      if (observationLevel === 'World') {
+        const world = worldPayload();
+        if (world) camera.fitWorld(world.width || 1, world.height || 1, viewport.width, viewport.height);
+      } else if (observationLevel === 'Organism') {
+        const organism = organismPayload();
+        if (organism) camera.fitBounds(organism.min_x, organism.max_x, organism.min_y, organism.max_y, viewport.width, viewport.height);
+      } else {
+        const structure = structurePayload();
+        if (!structure || !structure.units?.length) return;
+        const bounds = structure.units.map(u => formBounds(u.form, u.placement?.x, u.placement?.y, u.placement?.rotation_radians || 0)).filter(Boolean);
+        if (!bounds.length) return;
+        camera.fitBounds(
+          Math.min(...bounds.map(b => b.minX)), Math.max(...bounds.map(b => b.maxX)),
+          Math.min(...bounds.map(b => b.minY)), Math.max(...bounds.map(b => b.maxY)),
+          viewport.width, viewport.height
+        );
+      }
+      cameraInitialized = true;
+    }
 
-  function drawForm(form, x, y, rotation, stroke = '#d9e1e8', fill = 'rgba(120,150,180,.18)') {
-    if (!form || !formPath(form)) return;
-    ctx.save();
-    ctx.translate(x, y); ctx.rotate(rotation || 0);
-    ctx.fillStyle = fill; ctx.strokeStyle = stroke; ctx.lineWidth = Math.max(.7, 1 / Math.max(camera.scale, 1));
-    ctx.fill(); ctx.stroke();
-    ctx.restore();
-  }
-
-  function drawField() {
-    for (const cell of observation.field || []) {
-      const p = screen(cell.x, cell.y);
-      const size = 25 * camera.scale;
-      if (p.x + size < 0 || p.y + size < 0 || p.x - size > canvas.clientWidth || p.y - size > canvas.clientHeight) continue;
-      ctx.save();
-      ctx.strokeStyle = 'rgba(120,150,180,.16)'; ctx.lineWidth = 1;
-      ctx.strokeRect(p.x - size / 2, p.y - size / 2, size, size);
-      ctx.fillStyle = 'rgba(120,150,180,.08)'; ctx.fillRect(p.x - size / 2, p.y - size / 2, size, size);
-      ctx.fillStyle = '#aeb9c5'; ctx.font = '10px ui-monospace, monospace';
-      const labels = (cell.materials || []).map(m => m.parts.map(p => `${p[0]}:${p[1]}`).join('+'));
-      ctx.fillText(labels.join(' | '), p.x - size / 2 + 3, p.y + 3);
+    function drawForm(form, x, y, rotation = 0) {
+      if (!form) return;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(rotation); ctx.beginPath();
+      if (form.Circle) {
+        ctx.arc(0, 0, form.Circle.radius, 0, Math.PI * 2);
+      } else if (form.Rectangle) {
+        ctx.rect(-form.Rectangle.width / 2, -form.Rectangle.height / 2, form.Rectangle.width, form.Rectangle.height);
+      } else if (form.RegularPolygon) {
+        const n = form.RegularPolygon.sides, r = form.RegularPolygon.radius;
+        for (let i = 0; i < n; i += 1) { const a = i * Math.PI * 2 / n, px = r * Math.cos(a), py = r * Math.sin(a); if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
+        ctx.closePath();
+      } else if (form.Polygon) {
+        const vertices = form.Polygon.vertices || [];
+        for (let i = 0; i < vertices.length; i += 1) { const [px, py] = vertices[i]; if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
+        ctx.closePath();
+      } else {
+        ctx.restore(); return; // Do not invent a boundary for Fluid.
+      }
+      ctx.fillStyle = '#d9e2ec';
+      ctx.strokeStyle = '#17202a';
+      ctx.lineWidth = Math.max(1 / Math.max(camera.scale, 1e-9), 0.75);
+      ctx.fill();
+      ctx.stroke();
       ctx.restore();
     }
-  }
 
-  function drawEnvironmentMarkers() {
-    for (const p of observation.vents || []) {
-      const s = screen(p.x, p.y); ctx.save(); ctx.strokeStyle = '#a9b4bf'; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(s.x - 5, s.y); ctx.lineTo(s.x + 5, s.y); ctx.moveTo(s.x, s.y - 5); ctx.lineTo(s.x, s.y + 5); ctx.stroke(); ctx.restore();
+    function drawObservedPart(part, viewport) {
+      const point = camera.worldToScreen(part.x, part.y, viewport.width, viewport.height);
+      ctx.save(); ctx.translate(point.x, point.y); ctx.scale(camera.scale, camera.scale);
+      drawForm(part.form, 0, 0, part.rotation_radians); ctx.restore();
     }
-    for (const p of observation.decomposing_bodies || []) {
-      const s = screen(p.x, p.y); ctx.save(); ctx.strokeStyle = '#8b949e'; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.arc(s.x, s.y, 7, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+    function drawSelectionBounds(organism, viewport, pad = 3) {
+      if (!selectedIds.has(organism.id)) return;
+      const a = camera.worldToScreen(organism.min_x, organism.min_y, viewport.width, viewport.height);
+      const b = camera.worldToScreen(organism.max_x, organism.max_y, viewport.width, viewport.height);
+      ctx.save();
+      ctx.strokeStyle = '#d14';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(a.x - pad, a.y - pad, b.x - a.x + pad * 2, b.y - a.y + pad * 2);
+      ctx.restore();
     }
-  }
-
-  function drawSeed() {
-    const units = observation.structure?.units || [];
-    const bonds = observation.structure?.bonds || [];
-    ctx.save(); ctx.strokeStyle = 'rgba(235,242,248,.8)'; ctx.lineWidth = Math.max(1, Math.min(3, camera.scale * .08));
-    for (const bond of bonds) {
-      if (!bond.endpoint_a || !bond.endpoint_b) continue;
-      const a = screen(bond.endpoint_a.x, bond.endpoint_a.y), b = screen(bond.endpoint_b.x, bond.endpoint_b.y);
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-    }
-    ctx.restore();
-    for (const unit of units) {
-      const p = screen(unit.x, unit.y);
-      drawForm(unit.form, p.x, p.y, unit.rotation_radians);
-    }
-  }
-
-  function render() {
-    const w = canvas.clientWidth, h = canvas.clientHeight;
-    ctx.clearRect(0, 0, w, h);
-    if (!observation) return;
-    drawField(); drawEnvironmentMarkers(); drawSeed();
-    const seedPos = observation.seed.occupied_cells?.[0];
-    if (seedPos) {
-      const p = screen(seedPos.x, seedPos.y);
-      ctx.save(); ctx.strokeStyle = '#f0f4f8'; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.arc(p.x, p.y, 8, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
-    }
-    hud.textContent = `SEED MICROSCOPE\nTICK ${observation.tick}  |  ${observation.running ? 'RUNNING' : 'PAUSED'}  |  ${observation.ticks_per_second} TPS`;
-  }
-
-  function value(v) {
-    if (typeof v === 'number') return Number.isFinite(v) ? String(Math.round(v * 1e6) / 1e6) : String(v);
-    if (typeof v === 'string' || typeof v === 'boolean' || v === null) return String(v);
-    return JSON.stringify(v, null, 2);
-  }
-  function kv(entries) {
-    const div = document.createElement('div'); div.className = 'kv';
-    for (const [k, v] of entries) { const a = document.createElement('div'); a.className = 'key'; a.textContent = k; const b = document.createElement('div'); b.className = 'value'; b.textContent = value(v); div.append(a, b); }
-    return div;
-  }
-  function section(title, entries, open = false) {
-    const d = document.createElement('details'); d.open = open; const s = document.createElement('summary'); s.textContent = title; const body = document.createElement('div'); body.className = 'section'; body.appendChild(kv(entries)); d.append(s, body); sections.appendChild(d);
-  }
-  function rawSection(title, data, open = false) {
-    const d = document.createElement('details'); d.open = open; const s = document.createElement('summary'); s.textContent = title; const body = document.createElement('div'); body.className = 'section'; const pre = document.createElement('pre'); pre.textContent = JSON.stringify(data, null, 2); body.appendChild(pre); d.append(s, body); sections.appendChild(d);
-  }
-
-  function renderDiagnostics() {
-    sections.replaceChildren();
-    if (!observation) return;
-    const seed = observation.seed;
-    connection.textContent = `Observation tick ${observation.tick} · seed ${seed.id}`;
-    section('Identity', [['id', seed.id], ['position', seed.occupied_cells?.[0]], ['age', seed.age], ['development_stage', seed.development_stage]], true);
-    section('Physical state', [['unit_count', observation.structure.units.length], ['bond_count', observation.structure.bonds.length], ['stored_material', seed.stored_material], ['active_transformation_id', seed.active_transformation_id], ['reproductive_construction', seed.reproductive_construction]], true);
-    section('Energy / stress', [['usable_energy', seed.usable_energy], ['stress', seed.stress], ['stress_threshold', seed.stress_threshold], ['energy_ledger', observation.energy_ledger]], true);
-    section('Genome', [['genome', seed.genome]], false);
-    section('Perception / sensing', [['resource_sense', seed.resource_sense]], false);
-    section('Memory', [['memory', seed.memory]], false);
-    section('Decision history', [['decision_history', seed.decision_history]], false);
-    section('Reproduction', [['reproductive_readiness', seed.reproductive_readiness], ['reproductive_construction', seed.reproductive_construction]], false);
-    section('Active transformations', [['transformations', observation.active_transformations]], false);
-    section('Environment', [['world_width', observation.world_width], ['world_height', observation.world_height], ['field_cells_with_material', observation.field.length], ['vents', observation.vents], ['decomposing_bodies', observation.decomposing_bodies]], false);
-    rawSection('Raw seed state', seed, false);
-  }
-
-  async function observe() {
-    try {
-      const response = await fetch('/observation/seed', { cache: 'no-store' });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      observation = await response.json();
-      if (!camera.initialized) {
-        const p = observation.seed.occupied_cells?.[0];
-        if (p) { camera.x = p.x; camera.y = p.y; }
-        camera.initialized = true;
+    function renderWorld() {
+      const world = worldPayload(), viewport = viewportSize(); if (!world) return;
+      for (const organism of world.organisms || []) {
+        for (const part of organism.silhouette || []) drawObservedPart(part, viewport);
+        drawSelectionBounds(organism, viewport);
       }
-      renderDiagnostics(); render();
-      connection.style.color = '';
-    } catch (error) {
-      connection.textContent = `Observation error: ${error.message}`;
-      connection.style.color = '#d88';
     }
-  }
+    function renderOrganism() {
+      const organism = organismPayload(), viewport = viewportSize(); if (!organism) return;
+      for (const part of organism.silhouette || []) drawObservedPart(part, viewport);
+      drawSelectionBounds(organism, viewport, 5);
+    }
+    function renderStructure() {
+      const structure = structurePayload(), viewport = viewportSize(); if (!structure) return;
+      ctx.save();
+      ctx.strokeStyle = '#17202a';
+      ctx.lineWidth = Math.max(1, Math.min(4, camera.scale * 0.08));
+      for (const bond of structure.bonds || []) {
+        if (!bond.endpoint_a || !bond.endpoint_b) continue;
+        const a = camera.worldToScreen(bond.endpoint_a.x, bond.endpoint_a.y, viewport.width, viewport.height);
+        const b = camera.worldToScreen(bond.endpoint_b.x, bond.endpoint_b.y, viewport.width, viewport.height);
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+      ctx.restore();
+      for (const unit of structure.units || []) {
+        if (!unit.form || !unit.placement) continue;
+        const point = camera.worldToScreen(unit.placement.x, unit.placement.y, viewport.width, viewport.height);
+        ctx.save(); ctx.translate(point.x, point.y); ctx.scale(camera.scale, camera.scale);
+        drawForm(unit.form, 0, 0, unit.placement.rotation_radians); ctx.restore();
+      }
+    }
+    function drawSelectionRectangle() {
+      if (!interaction?.selecting) return;
+      const x = Math.min(interaction.startX, interaction.currentX), y = Math.min(interaction.startY, interaction.currentY);
+      const width = Math.abs(interaction.currentX - interaction.startX), height = Math.abs(interaction.currentY - interaction.startY);
+      ctx.save(); ctx.setLineDash([5, 4]); ctx.strokeStyle = '#555'; ctx.lineWidth = 1; ctx.strokeRect(x, y, width, height); ctx.restore();
+    }
+    function render() {
+      const viewport = viewportSize();
+      ctx.clearRect(0, 0, viewport.width, viewport.height);
+      if (!observation) return;
+      if (!cameraInitialized) fitCurrentObservation();
+      if (observationLevel === 'World') renderWorld();
+      else if (observationLevel === 'Organism') renderOrganism();
+      else if (observationLevel === 'Structure') renderStructure();
+      drawSelectionRectangle(); updateStatus();
+    }
+    function selectedIndex() { return focusedOrganismId == null ? -1 : [...selectedIds].indexOf(focusedOrganismId); }
+    function updateStatus() {
+      if (observationLevel === 'World') {
+        const world = worldPayload(); status.textContent = `Observing World — ${world?.organisms?.length || 0} organisms — ${selectedIds.size} selected`;
+      } else if (observationLevel === 'Organism') {
+        const organism = organismPayload(); status.textContent = `Observing Organism — ${organism?.id || focusedOrganismId || 'unknown'} — ${organism?.unit_count || 0} units — ${organism?.bond_count || 0} bonds`;
+      } else {
+        const structure = structurePayload(), index = selectedIndex();
+        const cycle = selectedIds.size > 1 ? ` — [${index + 1}/${selectedIds.size}]` : '';
+        status.textContent = `Observing Structure — ${structure?.id || focusedOrganismId || 'unknown'} — ${structure?.units?.length || 0} units — ${structure?.bonds?.length || 0} bonds${cycle}`;
+      }
+    }
+    function canvasPoint(event) { const rect = canvas.getBoundingClientRect(); return { x: event.clientX - rect.left, y: event.clientY - rect.top }; }
+    function organismAtScreenPoint(x, y) {
+      const world = worldPayload(); if (!world) return null;
+      const viewport = viewportSize(), point = camera.screenToWorld(x, y, viewport.width, viewport.height);
+      for (let i = (world.organisms?.length || 0) - 1; i >= 0; i -= 1) {
+        const organism = world.organisms[i];
+        if (point.x >= organism.min_x && point.x <= organism.max_x && point.y >= organism.min_y && point.y <= organism.max_y) return organism;
+      }
+      return null;
+    }
+    function organismsInScreenRect(startX, startY, endX, endY) {
+      const world = worldPayload(); if (!world) return [];
+      const viewport = viewportSize(), a = camera.screenToWorld(startX, startY, viewport.width, viewport.height), b = camera.screenToWorld(endX, endY, viewport.width, viewport.height);
+      const minX = Math.min(a.x, b.x), maxX = Math.max(a.x, b.x), minY = Math.min(a.y, b.y), maxY = Math.max(a.y, b.y);
+      return (world.organisms || []).filter(o => o.max_x >= minX && o.min_x <= maxX && o.max_y >= minY && o.min_y <= maxY);
+    }
+    function centerSelection() {
+      const world = worldPayload(); if (!world || !selectedIds.size) return;
+      const selected = (world.organisms || []).filter(o => selectedIds.has(o.id)); if (!selected.length) return;
+      const center = selected.reduce((sum, o) => ({ x: sum.x + (o.min_x + o.max_x) / 2, y: sum.y + (o.min_y + o.max_y) / 2 }), { x: 0, y: 0 });
+      camera.centerOn(center.x / selected.length, center.y / selected.length);
+    }
+    function finishWorldSelection(point) {
+      if (!interaction || !interaction.selecting) return;
+      const moved = Math.hypot(point.x - interaction.startX, point.y - interaction.startY);
+      if (moved < 5) {
+        const organism = organismAtScreenPoint(point.x, point.y);
+        if (organism) { selectedIds.clear(); selectedIds.add(organism.id); focusedOrganismId = organism.id; centerSelection(); }
+        else { selectedIds.clear(); focusedOrganismId = null; }
+      } else {
+        const organisms = organismsInScreenRect(interaction.startX, interaction.startY, point.x, point.y);
+        selectedIds.clear(); for (const organism of organisms) selectedIds.add(organism.id);
+        focusedOrganismId = organisms.length === 1 ? organisms[0].id : null;
+        centerSelection();
+      }
+      interaction = null; render();
+    }
 
-  canvas.addEventListener('pointerdown', e => { dragging = true; lastPointer = { x: e.clientX, y: e.clientY }; canvas.classList.add('dragging'); canvas.setPointerCapture(e.pointerId); });
-  canvas.addEventListener('pointermove', e => { if (!dragging) return; camera.x -= (e.clientX - lastPointer.x) / camera.scale; camera.y -= (e.clientY - lastPointer.y) / camera.scale; lastPointer = { x: e.clientX, y: e.clientY }; render(); });
-  canvas.addEventListener('pointerup', e => { dragging = false; lastPointer = null; canvas.classList.remove('dragging'); canvas.releasePointerCapture(e.pointerId); });
-  canvas.addEventListener('wheel', e => { e.preventDefault(); const before = world(e.offsetX, e.offsetY); camera.scale = Math.min(100, Math.max(.1, camera.scale * (e.deltaY < 0 ? 1.12 : .89))); const after = world(e.offsetX, e.offsetY); camera.x += before.x - after.x; camera.y += before.y - after.y; render(); }, { passive: false });
+    async function loadObservation(level, organismId = null) {
+      const serial = ++requestSerial;
+      const levelChanged = observationLevel !== level;
+      let url = '/observation/world';
+      if (level === 'Organism' && organismId != null) url = `/observation/organism/${encodeURIComponent(organismId)}`;
+      if (level === 'Structure' && organismId != null) url = `/observation/structure/${encodeURIComponent(organismId)}`;
+      try {
+        const response = await fetch(url, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const next = await response.json();
+        if (serial !== requestSerial) return;
+        observation = next; observationLevel = level;
+        if (levelChanged) cameraInitialized = false;
+        render();
+      } catch (_) {
+        if (serial === requestSerial) status.textContent = 'Observation unavailable — retrying…';
+      }
+    }
+    async function enterOrganismLevel(id) { if (id == null) return; focusedOrganismId = id; selectedIds.add(id); await loadObservation('Organism', id); }
+    async function enterStructureLevel(id) { if (id == null) return; focusedOrganismId = id; selectedIds.add(id); await loadObservation('Structure', id); }
+    async function returnToWorld() { focusedOrganismId = null; observationLevel = 'World'; cameraInitialized = false; await loadObservation('World'); centerSelection(); render(); }
+    async function returnToOrganism() { if (focusedOrganismId == null) return; await loadObservation('Organism', focusedOrganismId); }
+    async function cycleFocused(delta) {
+      const ids = [...selectedIds]; if (ids.length < 2) return;
+      let index = ids.indexOf(focusedOrganismId); if (index < 0) index = 0;
+      index = (index + delta + ids.length) % ids.length;
+      focusedOrganismId = ids[index];
+      cameraInitialized = false;
+      await loadObservation('Structure', focusedOrganismId);
+    }
 
-  resize();
-  observe();
-  setInterval(observe, 100);
-})();
-</script>
+    canvas.addEventListener('dblclick', async event => {
+      const point = canvasPoint(event);
+      if (observationLevel === 'World') {
+        const organism = organismAtScreenPoint(point.x, point.y); if (organism) await enterOrganismLevel(organism.id);
+      } else if (observationLevel === 'Organism') {
+        await enterStructureLevel(focusedOrganismId);
+      }
+    });
+    canvas.addEventListener('wheel', event => {
+      event.preventDefault(); const point = canvasPoint(event), viewport = viewportSize();
+      camera.zoomAt(point.x, point.y, Math.exp(-event.deltaY * 0.001), viewport.width, viewport.height); render();
+    }, { passive: false });
+    canvas.addEventListener('pointerdown', event => {
+      event.preventDefault();
+      if (event.button === 1) {
+        canvas.setPointerCapture(event.pointerId);
+        interaction = { pointerId: event.pointerId, panning: true, lastX: event.clientX, lastY: event.clientY };
+        canvas.classList.add('panning');
+        return;
+      }
+      if (event.button !== 0 || observationLevel !== 'World') return;
+      const point = canvasPoint(event);
+      canvas.setPointerCapture(event.pointerId);
+      interaction = { pointerId: event.pointerId, selecting: true, startX: point.x, startY: point.y, currentX: point.x, currentY: point.y };
+    });
+    canvas.addEventListener('pointermove', event => {
+      if (!interaction || interaction.pointerId !== event.pointerId) return;
+      event.preventDefault();
+      if (interaction.panning) {
+        camera.pan(event.clientX - interaction.lastX, event.clientY - interaction.lastY);
+        interaction.lastX = event.clientX; interaction.lastY = event.clientY; render();
+      } else if (interaction.selecting) {
+        const point = canvasPoint(event); interaction.currentX = point.x; interaction.currentY = point.y; render();
+      }
+    });
+    function endPointer(event) {
+      if (!interaction || interaction.pointerId !== event.pointerId) return;
+      event.preventDefault();
+      if (interaction.panning) { interaction = null; canvas.classList.remove('panning'); }
+      else if (interaction.selecting) finishWorldSelection(canvasPoint(event));
+      if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+    }
+    canvas.addEventListener('pointerup', endPointer);
+    canvas.addEventListener('pointercancel', event => {
+      if (interaction?.pointerId === event.pointerId) interaction = null;
+      canvas.classList.remove('panning'); render();
+    });
+    canvas.addEventListener('lostpointercapture', event => {
+      // Do not pre-empt pointerup. Browsers can report capture loss as part of
+      // the normal release sequence; pointercancel is the authoritative abort.
+      if (interaction?.pointerId === event.pointerId) {
+        canvas.classList.remove('panning');
+      }
+    });
+
+    window.addEventListener('keydown', async event => {
+      if (event.key === 'Escape') {
+        if (observationLevel === 'Structure') await returnToOrganism();
+        else if (observationLevel === 'Organism') await returnToWorld();
+      } else if (observationLevel === 'Structure' && (event.key === '[' || event.key === ']')) {
+        await cycleFocused(event.key === ']' ? 1 : -1);
+      }
+    });
+
+    window.addEventListener('resize', resize);
+    resize();
+    loadObservation('World');
+    setInterval(() => {
+      if (observationLevel === 'World') loadObservation('World');
+      else if (focusedOrganismId != null) loadObservation(observationLevel, focusedOrganismId);
+    }, 250);
+  </script>
 </body>
 </html>

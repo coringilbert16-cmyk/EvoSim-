@@ -6,7 +6,10 @@ use crate::resources::Material;
 /// legacy aggregate operation that can represent fractional material and must
 /// not be used for organism-facing physical transfer. Structured material is
 /// never fractionally extracted here.
-pub(crate) fn take_whole_unstructured(material: &mut Material, requested: usize) -> Option<Material> {
+pub(crate) fn take_whole_unstructured(
+    material: &mut Material,
+    requested: usize,
+) -> Option<Material> {
     if requested == 0 || material.has_internal_structure() || material.is_empty() {
         return None;
     }
@@ -107,7 +110,10 @@ mod tests {
     fn refuses_structured_material() {
         let mut material = Material {
             parts: vec![("Carbon".to_string(), 1.0), ("Nitrogen".to_string(), 1.0)],
-            internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
+            internal_bonds: vec![InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
         };
         assert!(take_whole_unstructured(&mut material, 1).is_none());
         assert_eq!(material.total_amount(), 2.0);

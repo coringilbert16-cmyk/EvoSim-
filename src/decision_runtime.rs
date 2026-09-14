@@ -254,7 +254,11 @@ mod tests {
             },
         ];
         let mut history = DecisionHistory::default();
-        history.record(ActionKind::Break, Some("bond:0".into()), OutcomeKind::Harmful);
+        history.record(
+            ActionKind::Break,
+            Some("bond:0".into()),
+            OutcomeKind::Harmful,
+        );
 
         assert_eq!(
             select_action(context, &history, &candidates),

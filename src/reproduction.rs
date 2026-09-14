@@ -1,46 +1,367 @@
 //! Physical reproduction lifecycle.
-use rand_chacha::ChaCha8Rng;
-use std::collections::{HashMap, HashSet};
 use crate::material_storage::MaterialStorage;
 use crate::resources::{BaseResource, Material};
 use crate::state::{DevelopmentStage, Organism, ReproductiveConstruction, ResourceSense};
 use crate::structure::OrganismStructure;
-use crate::genome_core_constructor::MutationEffect;
+use rand_chacha::ChaCha8Rng;
+use std::collections::{HashMap, HashSet};
+const JUVENILE_MATURE_MASS_FRACTION: f64 = 0.40;
 
-const JUVENILE_MATURE_MASS_FRACTION:f64=0.40;
-const MAX_CORE_CONSTRUCTION_ATTEMPTS:usize=3;
-
-pub(crate)enum ReproductionStart {
-    Started,
-    NotStarted,
-    DevelopmentalFailure { recycled_material: MaterialStorage },
+fn assemble_blueprint_material(
+    remaining: &mut MaterialStorage,
+    target: &Material,
+) -> Option<Material> {
+    for (name, amount) in &target.parts {
+        if (*amount - 1.0).abs() > f64::EPSILON {
+            return None;
+        }
+        remaining.take_one_unstructured_named(name)?;
+    }
+    Some(Material {
+        parts: target.parts.clone(),
+        internal_bonds: target.internal_bonds.clone(),
+    })
+}
+fn frontier(
+    blueprint: &crate::structural_blueprint::StructuralBlueprint,
+    realized: &HashMap<usize, Vec<usize>>,
+    allowed: &HashSet<usize>,
+) -> Vec<usize> {
+    allowed
+        .iter()
+        .copied()
+        .filter(|index| {
+            !realized.contains_key(index)
+                && blueprint.connections.iter().any(|c| {
+                    (c.element_a == *index && realized.contains_key(&c.element_b))
+                        || (c.element_b == *index && realized.contains_key(&c.element_a))
+                })
+        })
+        .collect()
+}
+fn realized_mapping(elements: &[usize], groups: &[Vec<usize>]) -> HashMap<usize, Vec<usize>> {
+    elements
+        .iter()
+        .copied()
+        .zip(groups.iter().cloned())
+        .collect()
+}
+fn juvenile_target_set(
+    blueprint: &crate::structural_blueprint::StructuralBlueprint,
+    catalog: &[BaseResource],
+) -> Option<HashSet<usize>> {
+    if !blueprint.is_valid() {
+        return None;
+    }
+    let core = blueprint
+        .core_elements
+        .iter()
+        .copied()
+        .collect::<HashSet<_>>();
+    let mature_mass = blueprint.structural_mass(catalog);
+    let target_mass = mature_mass * JUVENILE_MATURE_MASS_FRACTION;
+    let mut selected = core.clone();
+    let mut current_mass = selected
+        .iter()
+        .map(|&i| blueprint.elements[i].material.mass(catalog))
+        .sum::<f64>();
+    while current_mass + f64::EPSILON < target_mass {
+        let realized = selected
+            .iter()
+            .copied()
+            .map(|i| (i, Vec::new()))
+            .collect::<HashMap<_, _>>();
+        let candidates = frontier(blueprint, &realized, &all_indices(blueprint));
+        let next = candidates.into_iter().min_by_key(|&i| i)?;
+        selected.insert(next);
+        current_mass += blueprint.elements[next].material.mass(catalog);
+    }
+    Some(selected)
+}
+fn all_indices(blueprint: &crate::structural_blueprint::StructuralBlueprint) -> HashSet<usize> {
+    (0..blueprint.elements.len()).collect()
 }
 
-pub(crate)enum ConstructionAdvance {
-    Progress { remaining: MaterialStorage, blueprint_index: usize, stress: f64, structure_indices: Vec<usize> },
-    WaitingForMaterial,
-    WaitingForEnergy,
-    DevelopmentalFailure,
+fn add_blueprint_element(
+    structure: &mut OrganismStructure,
+    realized: &HashMap<usize, Vec<usize>>,
+    blueprint_index: usize,
+    blueprint: &crate::structural_blueprint::StructuralBlueprint,
+    catalog: &[BaseResource],
+) -> Option<(Vec<usize>, f64)> {
+    let element = &blueprint.elements[blueprint_index];
+    let mut candidate_structure = structure.clone();
+    let new_indices = crate::construction_realization::realize_material(
+        &mut candidate_structure,
+        element,
+        catalog,
+    )
+    .ok()?;
+    let mut added_stress = 0.0;
+    for connection in &blueprint.connections {
+        let other = if connection.element_a == blueprint_index {
+            Some(connection.element_b)
+        } else if connection.element_b == blueprint_index {
+            Some(connection.element_a)
+        } else {
+            None
+        };
+        let Some(other) = other else { continue };
+        let Some(other_indices) = realized.get(&other) else {
+            continue;
+        };
+        let groups = HashMap::from([
+            (blueprint_index, new_indices.clone()),
+            (other, other_indices.clone()),
+        ]);
+        added_stress += crate::structural_blueprint::realize_connection_groups(
+            &mut candidate_structure,
+            &groups,
+            *connection,
+            catalog,
+        )
+        .ok()?;
+    }
+    *structure = candidate_structure;
+    Some((new_indices, added_stress))
+}
+fn construct_any_frontier_element(
+    stored_material: &MaterialStorage,
+    structure: &mut OrganismStructure,
+    realized: &HashMap<usize, Vec<usize>>,
+    allowed: &HashSet<usize>,
+    blueprint: &crate::structural_blueprint::StructuralBlueprint,
+    catalog: &[BaseResource],
+) -> Option<(usize, MaterialStorage, f64, Vec<usize>)> {
+    let mut candidates = frontier(blueprint, realized, allowed);
+    candidates.sort_unstable();
+    for blueprint_index in candidates {
+        let mut remaining = stored_material.clone();
+        let Some(_material) = assemble_blueprint_material(
+            &mut remaining,
+            &blueprint.elements[blueprint_index].material,
+        ) else {
+            continue;
+        };
+        let mut candidate_structure = structure.clone();
+        let Some((indices, stress)) = add_blueprint_element(
+            &mut candidate_structure,
+            realized,
+            blueprint_index,
+            blueprint,
+            catalog,
+        ) else {
+            continue;
+        };
+        *structure = candidate_structure;
+        return Some((blueprint_index, remaining, stress, indices));
+    }
+    None
 }
 
-fn assemble_blueprint_material(remaining:&mut MaterialStorage,target:&Material)->Option<Material>{for(name,amount)in &target.parts{if(*amount-1.0).abs()>f64::EPSILON{return None}remaining.take_one_unstructured_named(name)?;}Some(Material{parts:target.parts.clone(),internal_bonds:target.internal_bonds.clone()})}
-fn assemble_core_material(remaining:&MaterialStorage,blueprint:&crate::structural_blueprint::StructuralBlueprint)->Option<(MaterialStorage,MaterialStorage)>{let mut trial=remaining.clone();let mut consumed=MaterialStorage::default();for &index in &blueprint.core_elements{let material=assemble_blueprint_material(&mut trial,&blueprint.elements[index].material)?;if !consumed.store(material){return None;}}Some((trial,consumed))}
-fn frontier(blueprint:&crate::structural_blueprint::StructuralBlueprint,realized:&HashMap<usize,Vec<usize>>,allowed:&HashSet<usize>)->Vec<usize>{let mut result=allowed.iter().copied().filter(|index|{!realized.contains_key(index)&&blueprint.connections.iter().any(|c|(c.element_a==*index&&realized.contains_key(&c.element_b))||(c.element_b==*index&&realized.contains_key(&c.element_a)))}).collect::<Vec<_>>();result.sort_unstable();result}
-fn realized_mapping(elements:&[usize],groups:&[Vec<usize>])->HashMap<usize,Vec<usize>>{elements.iter().copied().zip(groups.iter().cloned()).collect()}
-fn juvenile_target_set(blueprint:&crate::structural_blueprint::StructuralBlueprint,catalog:&[BaseResource])->Option<HashSet<usize>>{if !blueprint.is_valid(){return None}let core=blueprint.core_elements.iter().copied().collect::<HashSet<_>>();let mature_mass=blueprint.structural_mass(catalog);let target_mass=mature_mass*JUVENILE_MATURE_MASS_FRACTION;let mut selected=core.clone();let mut current_mass=selected.iter().map(|&i|blueprint.elements[i].material.mass(catalog)).sum::<f64>();while current_mass+f64::EPSILON<target_mass{let realized=selected.iter().copied().map(|i|(i,Vec::new())).collect::<HashMap<_,_>>();let candidates=frontier(blueprint,&realized,&all_indices(blueprint));let next=candidates.into_iter().min_by_key(|&i|i)?;selected.insert(next);current_mass+=blueprint.elements[next].material.mass(catalog);}Some(selected)}
-fn all_indices(blueprint:&crate::structural_blueprint::StructuralBlueprint)->HashSet<usize>{(0..blueprint.elements.len()).collect()}
+pub(crate) fn begin_reproduction(
+    parent: &mut Organism,
+    rng: &mut ChaCha8Rng,
+    catalog: &[BaseResource],
+) -> bool {
+    if !matches!(parent.development_stage, DevelopmentStage::Adult)
+        || parent.reproductive_readiness < 1.0 - f64::EPSILON
+        || parent.reproductive_construction.is_some()
+    {
+        return false;
+    }
+    let mut child_genome = parent.genome.clone();
+    child_genome.mutate(rng);
+    let blueprint = &child_genome.structural_blueprint;
+    let Some(target_set) = juvenile_target_set(blueprint, catalog) else {
+        return false;
+    };
+    let core = blueprint
+        .core_elements
+        .iter()
+        .copied()
+        .collect::<HashSet<_>>();
+    let mut remaining = parent.stored_material.clone();
+    let mut structure = OrganismStructure::new();
+    let mut realized = HashMap::new();
+    let mut realized_elements = Vec::new();
+    let mut realized_groups = Vec::new();
+    let mut initial_stress = 0.0;
+    while realized.len() < core.len() {
+        let result = construct_any_frontier_element(
+            &remaining,
+            &mut structure,
+            &realized,
+            &core,
+            blueprint,
+            catalog,
+        )
+        .or_else(|| {
+            for &candidate in &core {
+                let mut trial_remaining = remaining.clone();
+                let Some(_material) = assemble_blueprint_material(
+                    &mut trial_remaining,
+                    &blueprint.elements[candidate].material,
+                ) else {
+                    continue;
+                };
+                let mut trial_structure = structure.clone();
+                let empty = HashMap::new();
+                let Some((new_indices, stress)) = add_blueprint_element(
+                    &mut trial_structure,
+                    &empty,
+                    candidate,
+                    blueprint,
+                    catalog,
+                ) else {
+                    continue;
+                };
+                structure = trial_structure;
+                return Some((candidate, trial_remaining, stress, new_indices));
+            }
+            None
+        });
+        let Some((index, next_remaining, stress, indices)) = result else {
+            return false;
+        };
+        remaining = next_remaining;
+        realized.insert(index, indices.clone());
+        realized_elements.push(index);
+        realized_groups.push(indices);
+        initial_stress += stress;
+    }
+    parent.stored_material = remaining;
+    parent.reproductive_readiness = 0.0;
+    parent.add_transaction_stress(initial_stress);
+    parent.reproductive_construction = Some(ReproductiveConstruction {
+        committed_material: MaterialStorage::default(),
+        developing_structure: structure,
+        child_genome,
+        target_elements: target_set.into_iter().collect(),
+        realized_elements,
+        realized_constituent_groups: realized_groups,
+        pending_stress: 0.0,
+    });
+    true
+}
 
-fn add_blueprint_element(structure:&mut OrganismStructure,realized:&HashMap<usize,Vec<usize>>,blueprint_index:usize,blueprint:&crate::structural_blueprint::StructuralBlueprint,catalog:&[BaseResource])->Option<(Vec<usize>,f64)>{let element=&blueprint.elements[blueprint_index];let mut candidate_structure=structure.clone();let new_indices=crate::construction_realization::realize_material(&mut candidate_structure,element,catalog).ok()?;let mut added_stress=0.0;for connection in &blueprint.connections{let other=if connection.element_a==blueprint_index{Some(connection.element_b)}else if connection.element_b==blueprint_index{Some(connection.element_a)}else{None};let Some(other)=other else{continue};let Some(other_indices)=realized.get(&other)else{continue};let groups=HashMap::from([(blueprint_index,new_indices.clone()),(other,other_indices.clone())]);added_stress+=crate::structural_blueprint::realize_connection_groups(&mut candidate_structure,&groups,*connection,catalog).ok()?;}*structure=candidate_structure;Some((new_indices,added_stress))}
-fn construct_any_frontier_element(stored_material:&MaterialStorage,structure:&mut OrganismStructure,realized:&HashMap<usize,Vec<usize>>,allowed:&HashSet<usize>,blueprint:&crate::structural_blueprint::StructuralBlueprint,catalog:&[BaseResource],energy:&mut f64,water:f64)->ConstructionAdvance{let candidates=frontier(blueprint,realized,allowed);if candidates.is_empty(){return ConstructionAdvance::DevelopmentalFailure}let mut physically_valid=false;let mut energy_blocked=false;for blueprint_index in candidates{let mut candidate_structure=structure.clone();let Some((indices,stress))=add_blueprint_element(&mut candidate_structure,realized,blueprint_index,blueprint,catalog)else{continue};physically_valid=true;let mut remaining=stored_material.clone();if assemble_blueprint_material(&mut remaining,&blueprint.elements[blueprint_index].material).is_none(){continue}let mut candidate_energy=*energy;match crate::construction_authority::commit_candidate_structure(structure,&candidate_structure,catalog,&mut candidate_energy,water){Ok(committed)=>{*energy=candidate_energy;*structure=committed;return ConstructionAdvance::Progress{remaining,blueprint_index,stress,structure_indices:indices}},Err(_)=>{energy_blocked=true}}}if physically_valid&&energy_blocked{ConstructionAdvance::WaitingForEnergy}else if physically_valid{ConstructionAdvance::WaitingForMaterial}else{ConstructionAdvance::DevelopmentalFailure}}
+pub(crate) fn advance_construction(
+    stored_material: &mut MaterialStorage,
+    construction: &mut ReproductiveConstruction,
+    catalog: &[BaseResource],
+) -> Option<f64> {
+    let blueprint = &construction.child_genome.structural_blueprint;
+    let target = construction
+        .target_elements
+        .iter()
+        .copied()
+        .collect::<HashSet<_>>();
+    let realized = realized_mapping(
+        &construction.realized_elements,
+        &construction.realized_constituent_groups,
+    );
+    if realized.len() >= target.len() {
+        return None;
+    }
+    let (index, remaining, stress, indices) = construct_any_frontier_element(
+        stored_material,
+        &mut construction.developing_structure,
+        &realized,
+        &target,
+        blueprint,
+        catalog,
+    )?;
+    *stored_material = remaining;
+    construction.realized_elements.push(index);
+    construction.realized_constituent_groups.push(indices);
+    Some(stress)
+}
 
-pub(crate)fn begin_reproduction(parent:&mut Organism,rng:&mut ChaCha8Rng,catalog:&[BaseResource],water:f64)->ReproductionStart{if !matches!(parent.development_stage,DevelopmentStage::Adult)||parent.reproductive_readiness<1.0-f64::EPSILON||parent.reproductive_construction.is_some(){return ReproductionStart::NotStarted}let mut child_genome=parent.genome.clone();child_genome.mutate(rng);let blueprint=&child_genome.structural_blueprint;let Some(target_set)=juvenile_target_set(blueprint,catalog)else{return ReproductionStart::NotStarted};if assemble_core_material(&parent.stored_material,blueprint).is_none(){return ReproductionStart::NotStarted}let mutation=MutationEffect::sample(rng,child_genome.structural_mutation_probability(),crate::genome_core_constructor::MAX_MUTATION_SCORE_SHIFT);let mut remaining=parent.stored_material.clone();for attempt in 0..MAX_CORE_CONSTRUCTION_ATTEMPTS{let Some((next_remaining,consumed))=assemble_core_material(&remaining,blueprint)else{break};let result=crate::genome_core_builder::construct_genome_core_with_mutation(blueprint,catalog,rng,mutation);match result{Ok(core)=>{let mut candidate_energy=parent.usable_energy;let Ok(committed_core)=crate::construction_authority::commit_candidate_structure(&OrganismStructure::new(),&core.structure,catalog,&mut candidate_energy,water)else{remaining=next_remaining;for material in consumed.materials{let _=remaining.store(material);}if attempt+1<MAX_CORE_CONSTRUCTION_ATTEMPTS{continue}else{break}};parent.stored_material=next_remaining;parent.usable_energy=candidate_energy;parent.reproductive_readiness=0.0;let realized_elements=core.mapping.elements.iter().map(|element|element.blueprint_element_index).collect::<Vec<_>>();let realized_groups=core.mapping.elements.iter().map(|element|element.structure_unit_indices.clone()).collect::<Vec<_>>();let mut target_elements=target_set.iter().copied().collect::<Vec<_>>();target_elements.sort_unstable();parent.reproductive_construction=Some(ReproductiveConstruction{committed_material:MaterialStorage::default(),developing_structure:committed_core,child_genome,target_elements,realized_elements,realized_constituent_groups:realized_groups,pending_stress:0.0});return ReproductionStart::Started},Err(crate::genome_core_builder::GenomeCoreConstructionFailure::DevelopmentalFailure{..})|Err(crate::genome_core_builder::GenomeCoreConstructionFailure::InvalidBlueprint(_))=>{remaining=next_remaining;for material in consumed.materials{let _=remaining.store(material);}if attempt+1<MAX_CORE_CONSTRUCTION_ATTEMPTS{continue}}}}parent.stored_material=remaining;parent.reproductive_readiness=0.0;ReproductionStart::DevelopmentalFailure{recycled_material:MaterialStorage::default()}}
+pub(crate) fn finish_reproduction(parent: &mut Organism, child_id: String) -> Option<Organism> {
+    let construction = parent.reproductive_construction.take()?;
+    let target = construction
+        .target_elements
+        .iter()
+        .copied()
+        .collect::<HashSet<_>>();
+    let realized = construction
+        .realized_elements
+        .iter()
+        .copied()
+        .collect::<HashSet<_>>();
+    if realized != target || !construction.committed_material.is_empty() {
+        parent.reproductive_construction = Some(construction);
+        return None;
+    }
+    let position = match parent.occupied_cells.first().cloned() {
+        Some(p) => p,
+        None => {
+            parent.reproductive_construction = Some(construction);
+            return None;
+        }
+    };
+    Some(Organism {
+        id: child_id,
+        occupied_cells: vec![position],
+        genome: construction.child_genome,
+        resource_sense: ResourceSense {
+            sensed_resources: Vec::new(),
+            direction_x: 0.0,
+            direction_y: 0.0,
+            direction_strength: 0.0,
+        },
+        memory: Vec::new(),
+        decision_history: crate::decision::DecisionHistory::default(),
+        usable_energy: 0.0,
+        stress: 0.0,
+        stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
+        stored_material: MaterialStorage::default(),
+        development_stage: DevelopmentStage::Juvenile,
+        age: 0,
+        reproductive_readiness: 0.0,
+        active_transformation_id: None,
+        reproductive_construction: None,
+        structure: construction.developing_structure,
+    })
+}
 
-fn recycle_failed_construction(stored_material:&mut MaterialStorage,construction:ReproductiveConstruction){for unit in construction.developing_structure.units{assert!(stored_material.store(unit.material),"failed developmental material must remain physically recoverable");}}
-
-pub(crate)fn advance_construction(stored_material:&mut MaterialStorage,construction:&mut ReproductiveConstruction,catalog:&[BaseResource],energy:&mut f64,water:f64)->ConstructionAdvance{let blueprint=&construction.child_genome.structural_blueprint;let target=construction.target_elements.iter().copied().collect::<HashSet<_>>();let realized=realized_mapping(&construction.realized_elements,&construction.realized_constituent_groups);if realized.len()>=target.len(){return ConstructionAdvance::WaitingForMaterial}construct_any_frontier_element(stored_material,&mut construction.developing_structure,&realized,&target,blueprint,catalog,energy,water)}
-
-pub(crate)fn fail_reproduction(parent:&mut Organism)->bool{let Some(construction)=parent.reproductive_construction.take()else{return false};recycle_failed_construction(&mut parent.stored_material,construction);true}
-
-pub(crate)fn finish_reproduction(parent:&mut Organism,child_id:String)->Option<Organism>{let construction=parent.reproductive_construction.take()?;let target=construction.target_elements.iter().copied().collect::<HashSet<_>>();let realized=construction.realized_elements.iter().copied().collect::<HashSet<_>>();if realized!=target||!construction.committed_material.is_empty(){parent.reproductive_construction=Some(construction);return None}let position=match parent.occupied_cells.first().cloned(){Some(p)=>p,None=>{parent.reproductive_construction=Some(construction);return None}};Some(Organism{id:child_id,occupied_cells:vec![position],genome:construction.child_genome,resource_sense:ResourceSense{sensed_resources:Vec::new(),direction_x:0.0,direction_y:0.0,direction_strength:0.0},memory:Vec::new(),decision_history:crate::decision::DecisionHistory::default(),usable_energy:0.0,stress:0.0,stress_threshold:crate::state::INITIAL_STRESS_THRESHOLD,stored_material:MaterialStorage::default(),development_stage:DevelopmentStage::Juvenile,age:0,reproductive_readiness:0.0,active_transformation_id:None,reproductive_construction:None,structure:construction.developing_structure})}
-
-#[cfg(test)]mod tests{use super::*;use crate::genome::initial_genome;use crate::resources::default_catalog;#[test]fn reproduction_target_contains_the_entire_genome_core(){let genome=initial_genome();let target=juvenile_target_set(&genome.structural_blueprint,&default_catalog()).unwrap();assert!(genome.structural_blueprint.core_elements.iter().all(|index|target.contains(index)));}#[test]fn reproduction_target_is_at_least_forty_percent_of_mature_mass(){let genome=initial_genome();let target=juvenile_target_set(&genome.structural_blueprint,&default_catalog()).unwrap();let mature=genome.structural_blueprint.structural_mass(&default_catalog());let realized=target.iter().map(|&i|genome.structural_blueprint.elements[i].material.mass(&default_catalog())).sum::<f64>();assert!(realized+f64::EPSILON>=mature*JUVENILE_MATURE_MASS_FRACTION);}#[test]fn realized_mapping_preserves_constituent_groups(){let mapping=realized_mapping(&[17,3,42],&[vec![0,1],vec![2],vec![3,4]]);assert_eq!(mapping.get(&17),Some(&vec![0,1]));assert_eq!(mapping.get(&3),Some(&vec![2]));assert_eq!(mapping.get(&42),Some(&vec![3,4]));}}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::genome::initial_genome;
+    use crate::resources::default_catalog;
+    #[test]
+    fn reproduction_target_contains_the_entire_genome_core() {
+        let genome = initial_genome();
+        let target = juvenile_target_set(&genome.structural_blueprint, &default_catalog()).unwrap();
+        assert!(genome
+            .structural_blueprint
+            .core_elements
+            .iter()
+            .all(|index| target.contains(index)));
+    }
+    #[test]
+    fn reproduction_target_is_at_least_forty_percent_of_mature_mass() {
+        let genome = initial_genome();
+        let target = juvenile_target_set(&genome.structural_blueprint, &default_catalog()).unwrap();
+        let mature = genome
+            .structural_blueprint
+            .structural_mass(&default_catalog());
+        let realized = target
+            .iter()
+            .map(|&i| {
+                genome.structural_blueprint.elements[i]
+                    .material
+                    .mass(&default_catalog())
+            })
+            .sum::<f64>();
+        assert!(realized + f64::EPSILON >= mature * JUVENILE_MATURE_MASS_FRACTION);
+    }
+    #[test]
+    fn realized_mapping_preserves_constituent_groups() {
+        let mapping = realized_mapping(&[17, 3, 42], &[vec![0, 1], vec![2], vec![3, 4]]);
+        assert_eq!(mapping.get(&17), Some(&vec![0, 1]));
+        assert_eq!(mapping.get(&3), Some(&vec![2]));
+        assert_eq!(mapping.get(&42), Some(&vec![3, 4]));
+    }
+}

@@ -1,25 +1,279 @@
 //! Physical organism/environment boundary contact.
-use crate::material_geometry::{PhysicalMaterialInstance,PlacedMaterialPart};
+use crate::material_geometry::{PhysicalMaterialInstance, PlacedMaterialPart};
 use crate::organism_geometry::OrganismBodyGeometry;
 use crate::resources::Form;
 use crate::structure::Placement;
-#[derive(Clone,Copy,Debug,PartialEq,Eq)]pub struct BoundaryContact{pub organism_unit_index:usize,pub material_part_index:usize}
-fn world_polygon(part:&PlacedMaterialPart)->Option<Vec<(f64,f64)>>{part.form.polygon_vertices().map(|v|v.into_iter().map(|(x,y)|{let(s,c)=part.placement.rotation_radians.sin_cos();(part.placement.x+x*c-y*s,part.placement.y+x*s+y*c)}).collect())}
-fn line_segment(part:&PlacedMaterialPart)->Option<((f64,f64),(f64,f64))>{let Form::Line{length}=part.form else{return None};let h=length/2.0;let(s,c)=part.placement.rotation_radians.sin_cos();Some(((part.placement.x-h*c,part.placement.y-h*s),(part.placement.x+h*c,part.placement.y+h*s)))}
-fn point_segment_distance(px:f64,py:f64,ax:f64,ay:f64,bx:f64,by:f64)->f64{let dx=bx-ax;let dy=by-ay;let ls=dx*dx+dy*dy;if ls<=f64::EPSILON{return(px-ax).hypot(py-ay)}let t=(((px-ax)*dx+(py-ay)*dy)/ls).clamp(0.0,1.0);(px-(ax+t*dx)).hypot(py-(ay+t*dy))}
-fn orientation(ax:f64,ay:f64,bx:f64,by:f64,cx:f64,cy:f64)->f64{(bx-ax)*(cy-ay)-(by-ay)*(cx-ax)}
-fn on_segment(ax:f64,ay:f64,bx:f64,by:f64,px:f64,py:f64,t:f64)->bool{px>=ax.min(bx)-t&&px<=ax.max(bx)+t&&py>=ay.min(by)-t&&py<=ay.max(by)+t}
-fn segments_intersect(a:(f64,f64),b:(f64,f64),c:(f64,f64),d:(f64,f64),tolerance:f64)->bool{let o1=orientation(a.0,a.1,b.0,b.1,c.0,c.1);let o2=orientation(a.0,a.1,b.0,b.1,d.0,d.1);let o3=orientation(c.0,c.1,d.0,d.1,a.0,a.1);let o4=orientation(c.0,c.1,d.0,d.1,b.0,b.1);let eps=tolerance.max(1e-12);((o1>eps&&o2< -eps)||(o1< -eps&&o2>eps))&&((o3>eps&&o4< -eps)||(o3< -eps&&o4>eps))||(o1.abs()<=eps&&on_segment(a.0,a.1,b.0,b.1,c.0,c.1,tolerance))||(o2.abs()<=eps&&on_segment(a.0,a.1,b.0,b.1,d.0,d.1,tolerance))||(o3.abs()<=eps&&on_segment(c.0,c.1,d.0,d.1,a.0,a.1,tolerance))||(o4.abs()<=eps&&on_segment(c.0,c.1,d.0,d.1,b.0,b.1,tolerance))}
-fn circle_circle_boundary_contact(a:&PlacedMaterialPart,ar:f64,b:&PlacedMaterialPart,br:f64,tolerance:f64)->bool{let d=(a.placement.x-b.placement.x).hypot(a.placement.y-b.placement.y);d>=(ar-br).abs()-tolerance&&d<=ar+br+tolerance}
-fn circle_polygon_boundary_contact(circle:&PlacedMaterialPart,radius:f64,polygon:&PlacedMaterialPart,tolerance:f64)->bool{let Some(v)=world_polygon(polygon)else{return false};let cx=circle.placement.x;let cy=circle.placement.y;v.iter().enumerate().any(|(i,&a)|{let b=v[(i+1)%v.len()];let d=point_segment_distance(cx,cy,a.0,a.1,b.0,b.1);let da=(cx-a.0).hypot(cy-a.1);let db=(cx-b.0).hypot(cy-b.1);let eps=tolerance.max(1e-12);d<=radius+eps&&da.max(db)>=radius-eps})}
-fn line_circle_boundary_contact(line:&PlacedMaterialPart,circle:&PlacedMaterialPart,radius:f64,tolerance:f64)->bool{let Some((a,b))=line_segment(line)else{return false};let d=point_segment_distance(circle.placement.x,circle.placement.y,a.0,a.1,b.0,b.1);let da=(circle.placement.x-a.0).hypot(circle.placement.y-a.1);let db=(circle.placement.x-b.0).hypot(circle.placement.y-b.1);let eps=tolerance.max(1e-12);d<=radius+eps&&da.max(db)>=radius-eps}
-fn line_polygon_boundary_contact(line:&PlacedMaterialPart,polygon:&PlacedMaterialPart,tolerance:f64)->bool{let Some((a,b))=line_segment(line)else{return false};let Some(v)=world_polygon(polygon)else{return false};v.iter().enumerate().any(|(i,&p)|segments_intersect(a,b,p,v[(i+1)%v.len()],tolerance))}
-fn polygon_polygon_boundary_contact(a:&PlacedMaterialPart,b:&PlacedMaterialPart,tolerance:f64)->bool{let(Some(av),Some(bv))=(world_polygon(a),world_polygon(b))else{return false};av.iter().enumerate().any(|(i,&a1)|{let a2=av[(i+1)%av.len()];bv.iter().enumerate().any(|(j,&b1)|segments_intersect(a1,a2,b1,bv[(j+1)%bv.len()],tolerance))})}
-fn placed_form_boundaries_intersect(a:&PlacedMaterialPart,b:&PlacedMaterialPart,tolerance:f64)->bool{if tolerance<0.0{return false}match(&a.form,&b.form){(Form::Circle{radius:ar},Form::Circle{radius:br})=>circle_circle_boundary_contact(a,*ar,b,*br,tolerance),(Form::Circle{radius},Form::Line{..})=>line_circle_boundary_contact(b,a,*radius,tolerance),(Form::Line{..},Form::Circle{radius})=>line_circle_boundary_contact(a,b,*radius,tolerance),(Form::Circle{radius},_)=>circle_polygon_boundary_contact(a,*radius,b,tolerance),(_,Form::Circle{radius})=>circle_polygon_boundary_contact(b,*radius,a,tolerance),(Form::Line{..},_)=>line_polygon_boundary_contact(a,b,tolerance),(_,Form::Line{..})=>line_polygon_boundary_contact(b,a,tolerance),(Form::Fluid{..},_)|(_,Form::Fluid{..})=>false,_=>polygon_polygon_boundary_contact(a,b,tolerance)}}
-pub fn boundary_contacts(body:&OrganismBodyGeometry,material:&PhysicalMaterialInstance,tolerance:f64)->Vec<BoundaryContact>{let mut contacts=Vec::new();for body_part in &body.parts{let organism_part=PlacedMaterialPart{part_index:body_part.unit_index,form:body_part.form.clone(),placement:Placement{x:body_part.x,y:body_part.y,rotation_radians:body_part.rotation_radians}};for material_part in &material.geometry.parts{if placed_form_boundaries_intersect(&organism_part,material_part,tolerance){contacts.push(BoundaryContact{organism_unit_index:body_part.unit_index,material_part_index:material_part.part_index})}}}contacts}
-#[cfg(test)]mod tests{use super::*;use crate::material_geometry::PhysicalMaterialInstance;use crate::resources::Material;use crate::structure::{OrganismStructure,StructuralUnit};fn body_at(x:f64,y:f64)->OrganismBodyGeometry{let c=crate::resources::default_catalog();let mut s=OrganismStructure::new();let mut unit=StructuralUnit::new("Carbon",Placement{x,y,rotation_radians:0.0});assert!(unit.realize_default_geometry(&c));s.add_unit(unit);OrganismBodyGeometry::from_structure(&s,&c).unwrap()}fn material_at(name:&str,x:f64,y:f64)->PhysicalMaterialInstance{let c=crate::resources::default_catalog();PhysicalMaterialInstance::new(Material::free_base(name,1.0),&[Placement{x,y,rotation_radians:0.0}],&c).unwrap()}
-#[test]fn touching_rigid_boundaries_create_an_interface(){let body=body_at(0.0,0.0);let material=material_at("Hydrogen",0.6,0.0);assert_eq!(boundary_contacts(&body,&material,0.0).len(),1)}
-#[test]fn intersecting_rigid_boundaries_create_an_interface(){let body=body_at(0.0,0.0);let material=material_at("Hydrogen",0.3,0.0);assert_eq!(boundary_contacts(&body,&material,0.0).len(),1)}
-#[test]fn separated_rigid_boundaries_have_no_interface(){let body=body_at(0.0,0.0);let material=material_at("Hydrogen",1000.0,0.0);assert!(boundary_contacts(&body,&material,0.0).is_empty())}
-#[test]fn line_boundary_contact_is_detected(){let line=PlacedMaterialPart{part_index:0,form:Form::Line{length:2.0},placement:Placement{x:0.0,y:0.0,rotation_radians:0.0}};let circle=PlacedMaterialPart{part_index:0,form:Form::Circle{radius:0.5},placement:Placement{x:1.5,y:0.0,rotation_radians:0.0}};assert!(line_circle_boundary_contact(&line,&circle,0.5,0.0))}
-#[test]fn water_uses_real_circle_boundary(){let body=body_at(0.0,0.0);let radius=(crate::resources::NOMINAL_UNIT_AREA/std::f64::consts::PI).sqrt();let material=material_at("Water",0.438_691+radius,0.0);assert_eq!(boundary_contacts(&body,&material,0.0).len(),1)}}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BoundaryContact {
+    pub organism_unit_index: usize,
+    pub material_part_index: usize,
+}
+fn world_polygon(part: &PlacedMaterialPart) -> Option<Vec<(f64, f64)>> {
+    part.form.polygon_vertices().map(|v| {
+        v.into_iter()
+            .map(|(x, y)| {
+                let (s, c) = part.placement.rotation_radians.sin_cos();
+                (
+                    part.placement.x + x * c - y * s,
+                    part.placement.y + x * s + y * c,
+                )
+            })
+            .collect()
+    })
+}
+fn line_segment(part: &PlacedMaterialPart) -> Option<((f64, f64), (f64, f64))> {
+    let Form::Line { length } = part.form else {
+        return None;
+    };
+    let h = length / 2.0;
+    let (s, c) = part.placement.rotation_radians.sin_cos();
+    Some((
+        (part.placement.x - h * c, part.placement.y - h * s),
+        (part.placement.x + h * c, part.placement.y + h * s),
+    ))
+}
+fn point_segment_distance(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
+    let dx = bx - ax;
+    let dy = by - ay;
+    let ls = dx * dx + dy * dy;
+    if ls <= f64::EPSILON {
+        return (px - ax).hypot(py - ay);
+    }
+    let t = (((px - ax) * dx + (py - ay) * dy) / ls).clamp(0.0, 1.0);
+    (px - (ax + t * dx)).hypot(py - (ay + t * dy))
+}
+fn orientation(ax: f64, ay: f64, bx: f64, by: f64, cx: f64, cy: f64) -> f64 {
+    (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+}
+fn on_segment(ax: f64, ay: f64, bx: f64, by: f64, px: f64, py: f64, t: f64) -> bool {
+    px >= ax.min(bx) - t && px <= ax.max(bx) + t && py >= ay.min(by) - t && py <= ay.max(by) + t
+}
+fn segments_intersect(
+    a: (f64, f64),
+    b: (f64, f64),
+    c: (f64, f64),
+    d: (f64, f64),
+    tolerance: f64,
+) -> bool {
+    let o1 = orientation(a.0, a.1, b.0, b.1, c.0, c.1);
+    let o2 = orientation(a.0, a.1, b.0, b.1, d.0, d.1);
+    let o3 = orientation(c.0, c.1, d.0, d.1, a.0, a.1);
+    let o4 = orientation(c.0, c.1, d.0, d.1, b.0, b.1);
+    let eps = tolerance.max(1e-12);
+    ((o1 > eps && o2 < -eps) || (o1 < -eps && o2 > eps))
+        && ((o3 > eps && o4 < -eps) || (o3 < -eps && o4 > eps))
+        || (o1.abs() <= eps && on_segment(a.0, a.1, b.0, b.1, c.0, c.1, tolerance))
+        || (o2.abs() <= eps && on_segment(a.0, a.1, b.0, b.1, d.0, d.1, tolerance))
+        || (o3.abs() <= eps && on_segment(c.0, c.1, d.0, d.1, a.0, a.1, tolerance))
+        || (o4.abs() <= eps && on_segment(c.0, c.1, d.0, d.1, b.0, b.1, tolerance))
+}
+fn circle_circle_boundary_contact(
+    a: &PlacedMaterialPart,
+    ar: f64,
+    b: &PlacedMaterialPart,
+    br: f64,
+    tolerance: f64,
+) -> bool {
+    let d = (a.placement.x - b.placement.x).hypot(a.placement.y - b.placement.y);
+    d >= (ar - br).abs() - tolerance && d <= ar + br + tolerance
+}
+fn circle_polygon_boundary_contact(
+    circle: &PlacedMaterialPart,
+    radius: f64,
+    polygon: &PlacedMaterialPart,
+    tolerance: f64,
+) -> bool {
+    let Some(v) = world_polygon(polygon) else {
+        return false;
+    };
+    let cx = circle.placement.x;
+    let cy = circle.placement.y;
+    v.iter().enumerate().any(|(i, &a)| {
+        let b = v[(i + 1) % v.len()];
+        let d = point_segment_distance(cx, cy, a.0, a.1, b.0, b.1);
+        let da = (cx - a.0).hypot(cy - a.1);
+        let db = (cx - b.0).hypot(cy - b.1);
+        let eps = tolerance.max(1e-12);
+        d <= radius + eps && da.max(db) >= radius - eps
+    })
+}
+fn line_circle_boundary_contact(
+    line: &PlacedMaterialPart,
+    circle: &PlacedMaterialPart,
+    radius: f64,
+    tolerance: f64,
+) -> bool {
+    let Some((a, b)) = line_segment(line) else {
+        return false;
+    };
+    let d = point_segment_distance(circle.placement.x, circle.placement.y, a.0, a.1, b.0, b.1);
+    let da = (circle.placement.x - a.0).hypot(circle.placement.y - a.1);
+    let db = (circle.placement.x - b.0).hypot(circle.placement.y - b.1);
+    let eps = tolerance.max(1e-12);
+    d <= radius + eps && da.max(db) >= radius - eps
+}
+fn line_polygon_boundary_contact(
+    line: &PlacedMaterialPart,
+    polygon: &PlacedMaterialPart,
+    tolerance: f64,
+) -> bool {
+    let Some((a, b)) = line_segment(line) else {
+        return false;
+    };
+    let Some(v) = world_polygon(polygon) else {
+        return false;
+    };
+    v.iter()
+        .enumerate()
+        .any(|(i, &p)| segments_intersect(a, b, p, v[(i + 1) % v.len()], tolerance))
+}
+fn polygon_polygon_boundary_contact(
+    a: &PlacedMaterialPart,
+    b: &PlacedMaterialPart,
+    tolerance: f64,
+) -> bool {
+    let (Some(av), Some(bv)) = (world_polygon(a), world_polygon(b)) else {
+        return false;
+    };
+    av.iter().enumerate().any(|(i, &a1)| {
+        let a2 = av[(i + 1) % av.len()];
+        bv.iter()
+            .enumerate()
+            .any(|(j, &b1)| segments_intersect(a1, a2, b1, bv[(j + 1) % bv.len()], tolerance))
+    })
+}
+fn placed_form_boundaries_intersect(
+    a: &PlacedMaterialPart,
+    b: &PlacedMaterialPart,
+    tolerance: f64,
+) -> bool {
+    if tolerance < 0.0 {
+        return false;
+    }
+    match (&a.form, &b.form) {
+        (Form::Circle { radius: ar }, Form::Circle { radius: br }) => {
+            circle_circle_boundary_contact(a, *ar, b, *br, tolerance)
+        }
+        (Form::Circle { radius }, Form::Line { .. }) => {
+            line_circle_boundary_contact(b, a, *radius, tolerance)
+        }
+        (Form::Line { .. }, Form::Circle { radius }) => {
+            line_circle_boundary_contact(a, b, *radius, tolerance)
+        }
+        (Form::Circle { radius }, _) => circle_polygon_boundary_contact(a, *radius, b, tolerance),
+        (_, Form::Circle { radius }) => circle_polygon_boundary_contact(b, *radius, a, tolerance),
+        (Form::Line { .. }, _) => line_polygon_boundary_contact(a, b, tolerance),
+        (_, Form::Line { .. }) => line_polygon_boundary_contact(b, a, tolerance),
+        (Form::Fluid { .. }, _) | (_, Form::Fluid { .. }) => false,
+        _ => polygon_polygon_boundary_contact(a, b, tolerance),
+    }
+}
+pub fn boundary_contacts(
+    body: &OrganismBodyGeometry,
+    material: &PhysicalMaterialInstance,
+    tolerance: f64,
+) -> Vec<BoundaryContact> {
+    let mut contacts = Vec::new();
+    for body_part in &body.parts {
+        let organism_part = PlacedMaterialPart {
+            part_index: body_part.unit_index,
+            form: body_part.form.clone(),
+            placement: Placement {
+                x: body_part.x,
+                y: body_part.y,
+                rotation_radians: body_part.rotation_radians,
+            },
+        };
+        for material_part in &material.geometry.parts {
+            if placed_form_boundaries_intersect(&organism_part, material_part, tolerance) {
+                contacts.push(BoundaryContact {
+                    organism_unit_index: body_part.unit_index,
+                    material_part_index: material_part.part_index,
+                })
+            }
+        }
+    }
+    contacts
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::material_geometry::PhysicalMaterialInstance;
+    use crate::resources::Material;
+    use crate::structure::{OrganismStructure, StructuralUnit};
+    fn body_at(x: f64, y: f64) -> OrganismBodyGeometry {
+        let c = crate::resources::default_catalog();
+        let mut s = OrganismStructure::new();
+        let mut unit = StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x,
+                y,
+                rotation_radians: 0.0,
+            },
+        );
+        assert!(unit.realize_default_geometry(&c));
+        s.add_unit(unit);
+        OrganismBodyGeometry::from_structure(&s, &c).unwrap()
+    }
+    fn material_at(name: &str, x: f64, y: f64) -> PhysicalMaterialInstance {
+        let c = crate::resources::default_catalog();
+        PhysicalMaterialInstance::new(
+            Material::free_base(name, 1.0),
+            &[Placement {
+                x,
+                y,
+                rotation_radians: 0.0,
+            }],
+            &c,
+        )
+        .unwrap()
+    }
+    #[test]
+    fn touching_rigid_boundaries_create_an_interface() {
+        let body = body_at(0.0, 0.0);
+        let material = material_at("Hydrogen", 0.6, 0.0);
+        assert_eq!(boundary_contacts(&body, &material, 0.0).len(), 1)
+    }
+    #[test]
+    fn intersecting_rigid_boundaries_create_an_interface() {
+        let body = body_at(0.0, 0.0);
+        let material = material_at("Hydrogen", 0.3, 0.0);
+        assert_eq!(boundary_contacts(&body, &material, 0.0).len(), 1)
+    }
+    #[test]
+    fn separated_rigid_boundaries_have_no_interface() {
+        let body = body_at(0.0, 0.0);
+        let material = material_at("Hydrogen", 1000.0, 0.0);
+        assert!(boundary_contacts(&body, &material, 0.0).is_empty())
+    }
+    #[test]
+    fn line_boundary_contact_is_detected() {
+        let line = PlacedMaterialPart {
+            part_index: 0,
+            form: Form::Line { length: 2.0 },
+            placement: Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        };
+        let circle = PlacedMaterialPart {
+            part_index: 0,
+            form: Form::Circle { radius: 0.5 },
+            placement: Placement {
+                x: 1.5,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        };
+        assert!(line_circle_boundary_contact(&line, &circle, 0.5, 0.0))
+    }
+    #[test]
+    fn water_uses_real_circle_boundary() {
+        let body = body_at(0.0, 0.0);
+        let radius = (crate::resources::NOMINAL_UNIT_AREA / std::f64::consts::PI).sqrt();
+        let material = material_at("Water", 0.438_691 + radius, 0.0);
+        assert_eq!(boundary_contacts(&body, &material, 0.0).len(), 1)
+    }
+}
