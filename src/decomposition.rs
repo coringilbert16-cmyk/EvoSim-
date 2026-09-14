@@ -1,5 +1,5 @@
 use crate::combine::experimental_interaction;
-use crate::energy_ledger::EnergyLedgerAuthority;
+use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
 use crate::resources::Material;
 use crate::state::{EnergyLedger, Environment, Organism, Position};
 use crate::structure::OrganismStructure;
@@ -113,12 +113,15 @@ pub(crate) fn resolve_one_bond_with_ledger(
     };
 
     let before = body.energy_budget;
-    if !ledger.settle_decomposition(
-        &mut body.energy_budget,
-        target.bond_energy,
-        break_interaction_energy,
-        work,
-    ) {
+    let net = target.bond_energy + break_interaction_energy - work;
+    let transaction = EnergyTransaction {
+        reason: EnergyReason::Decomposition,
+        potential_released: break_interaction_energy.max(0.0),
+        usable_delta: net,
+        structural_delta: -target.bond_energy,
+        heat_dissipated: work + (-break_interaction_energy).max(0.0),
+    };
+    if !ledger.settle_transaction(&mut body.energy_budget, transaction) {
         return None;
     }
     let net = body.energy_budget - before;
