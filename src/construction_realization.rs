@@ -344,11 +344,18 @@ fn partial_configuration_valid(
     a: &[Option<usize>],
     c: &[BaseResource],
 ) -> bool {
+    let mut trial = s.clone();
     for bond in &m.internal_bonds {
         let (Some(x), Some(y)) = (a[bond.part_a], a[bond.part_b]) else {
             continue;
         };
-        if !internal_contact_exists(s, x, y, c) {
+        if !internal_contact_exists(&trial, x, y, c) {
+            return false;
+        }
+        // Construction validity must use the same authoritative COMBINE
+        // admission path that commit_material will use. Mere physical contact
+        // is necessary but is not sufficient for a realizable bond.
+        if connect_units(&mut trial, x, y, c).is_none() {
             return false;
         }
     }
