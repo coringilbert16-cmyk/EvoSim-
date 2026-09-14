@@ -78,8 +78,8 @@ fn candidate_placements(
                                 continue;
                             };
                             out.push(Placement {
-                                x: tp.0 - local.0,
-                                y: tp.1 - local.1,
+                                x: tp.x - local.0,
+                                y: tp.y - local.1,
                                 rotation_radians: rotation,
                             });
                         }
@@ -108,8 +108,8 @@ fn candidate_placements(
                             let lx = candidate_endpoint_x * c;
                             let ly = candidate_endpoint_x * s;
                             out.push(Placement {
-                                x: tp.0 - lx,
-                                y: tp.1 - ly,
+                                x: tp.x - lx,
+                                y: tp.y - ly,
                                 rotation_radians: rotation,
                             });
                         }
