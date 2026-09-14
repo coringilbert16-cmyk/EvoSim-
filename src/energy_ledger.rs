@@ -37,6 +37,10 @@ impl EnergyTransaction {
     }
 }
 
+/// Simulation-wide energy accounting infrastructure.
+/// Every subsystem calculates its physical transaction and submits the same
+/// transaction shape here. The ledger owns the accounting mutation; it does
+/// not contain subsystem-specific rules.
 pub(crate) trait EnergyLedgerAuthority {
     fn settle_transaction(&mut self, holder: &mut f64, transaction: EnergyTransaction) -> bool;
     fn transfer(&mut self, from: &mut f64, to: &mut f64, amount: f64) -> bool;
