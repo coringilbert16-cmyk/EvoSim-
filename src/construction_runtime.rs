@@ -107,8 +107,8 @@ pub(crate) fn realize_material_with_context(
     let mut heat = 0.0;
 
     for part in 0..material.parts.len() {
-        let resource = resource(catalog, &material.parts[part].0)
-            .ok_or("invalid construction resource")?;
+        let resource =
+            resource(catalog, &material.parts[part].0).ok_or("invalid construction resource")?;
         let targets = neighbors(material, part, &assigned);
         let mut placed = None;
         for placement in
