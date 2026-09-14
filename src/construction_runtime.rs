@@ -216,7 +216,10 @@ pub(crate) fn realize_material_with_context(
             let mut candidate = trial.clone();
             let mut candidate_ledger = trial_ledger;
             let mut candidate_energy = trial_energy;
-            let unit = StructuralUnit::new(resource.name.clone(), candidate_placement);
+            let mut unit = StructuralUnit::new(resource.name.clone(), candidate_placement);
+            if !unit.realize_default_geometry(catalog) {
+                continue;
+            }
             let index = candidate.add_unit(unit);
             let mut candidate_assigned = assigned.clone();
             candidate_assigned[part] = Some(index);
