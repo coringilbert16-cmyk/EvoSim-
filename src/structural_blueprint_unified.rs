@@ -166,7 +166,8 @@ impl StructuralBlueprint {
         }
         let mut connection_seen = HashSet::new();
         for (i, e) in self.elements.iter().enumerate() {
-            e.validate().map_err(|error| format!("element {i}: {error}"))?;
+            e.validate()
+                .map_err(|error| format!("element {i}: {error}"))?;
         }
         for (i, c) in self.connections.iter().enumerate() {
             c.validate(self)
@@ -236,15 +237,15 @@ impl StructuralBlueprint {
                         realized.contains_key(&neighbor).then_some(neighbor)
                     })
                     .collect::<HashSet<_>>();
-                if !neighbors.is_empty()
-                    && (best.is_none() || neighbors.len() > best_neighbors)
-                {
+                if !neighbors.is_empty() && (best.is_none() || neighbors.len() > best_neighbors) {
                     best_neighbors = neighbors.len();
                     best = Some(index);
                 }
             }
             let Some(index) = best else {
-                return Err("blueprint realization stalled before all elements were constructed".into());
+                return Err(
+                    "blueprint realization stalled before all elements were constructed".into(),
+                );
             };
             attempted[index] = true;
             order.push(index);
@@ -380,7 +381,9 @@ fn validate_element_contact(
                     .any(|candidate| candidate.distance <= 1e-9)
             })
         }) {
-            return Err("realized material has no physical contact with a prescribed neighbor".into());
+            return Err(
+                "realized material has no physical contact with a prescribed neighbor".into(),
+            );
         }
     }
     Ok(())

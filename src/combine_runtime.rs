@@ -142,17 +142,16 @@ fn form_bond(
     }
     let id_a = structure.physical_id(ua)?;
     let id_b = structure.physical_id(ub)?;
-    let candidate = crate::contact::connection_pair_candidates_cached(
-        structure, ua, ub, catalog, cache,
-    )
-    .into_iter()
-    .find(|c| {
-        c.endpoint_a == endpoint_a
-            && c.endpoint_b == endpoint_b
-            && c.distance <= COMBINE_CONTACT_TOLERANCE
-            && c.available_a
-            && c.available_b
-    })?;
+    let candidate =
+        crate::contact::connection_pair_candidates_cached(structure, ua, ub, catalog, cache)
+            .into_iter()
+            .find(|c| {
+                c.endpoint_a == endpoint_a
+                    && c.endpoint_b == endpoint_b
+                    && c.distance <= COMBINE_CONTACT_TOLERANCE
+                    && c.available_a
+                    && c.available_b
+            })?;
     let a = structure.units[ua].properties(catalog)?;
     let b = structure.units[ub].properties(catalog)?;
     let evaluation = crate::combine::evaluate_formation(candidate, a.cohesion, b.cohesion);
@@ -278,7 +277,9 @@ pub(crate) fn try_combine_stored_unit(
                 ConnectionSites::Corners(new_sites) | ConnectionSites::Endpoints(new_sites) => {
                     new_sites
                         .iter()
-                        .map(|np| placement_for_fixed_connection(&organism.structure.units[ua], ep, *np))
+                        .map(|np| {
+                            placement_for_fixed_connection(&organism.structure.units[ua], ep, *np)
+                        })
                         .collect::<Vec<_>>()
                 }
                 ConnectionSites::Circumference { .. } | ConnectionSites::Undetermined => {
@@ -311,13 +312,7 @@ pub(crate) fn try_combine_stored_unit(
                         &environment.catalog,
                         water,
                     ) {
-                        candidates.push((
-                            ua,
-                            placement,
-                            evaluation,
-                            candidate.distance,
-                            required,
-                        ));
+                        candidates.push((ua, placement, evaluation, candidate.distance, required));
                     }
                 }
             }
