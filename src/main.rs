@@ -26,6 +26,7 @@ mod organism_geometry;
 mod permeability;
 mod physical_geometry;
 mod physical_interface;
+mod rigid_boundary;
 mod surface_geometry;
 
 // Material transformation and bonding.
