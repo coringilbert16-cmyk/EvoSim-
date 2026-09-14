@@ -132,17 +132,6 @@ pub(crate) fn resolve_one_bond_with_ledger(
     })
 }
 
-/// Compatibility wrapper for the existing simulation caller.
-/// The simulation-level caller must be migrated to `resolve_one_bond_with_ledger`;
-/// this wrapper keeps the branch buildable during the staged migration.
-pub(crate) fn resolve_one_bond(
-    body: &mut DecomposingBody,
-    environment: &Environment,
-) -> Option<DecompositionStep> {
-    let mut ledger = EnergyLedger::default();
-    resolve_one_bond_with_ledger(body, environment, &mut ledger)
-}
-
 pub(crate) fn harvestable_decomposition_energy(
     organisms: &[Organism],
     position: &Position,
