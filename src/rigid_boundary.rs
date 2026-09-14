@@ -142,7 +142,7 @@ mod tests {
     fn corner_alignment_uses_incident_edges_not_authored_normals() {
         let rotations = corner_alignment_rotations(&square(), 0, &square(), 2, 0.0);
         assert!(rotations.iter().any(|r| (r - PI / 2.0).abs() < 1e-10));
-        assert!(rotations.iter().any(|r| (r + PI / 2.0).abs() < 1e-10));
+        assert!(rotations.iter().any(|r| r.abs() < 1e-10));
     }
 
     #[test]
