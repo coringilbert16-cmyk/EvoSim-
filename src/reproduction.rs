@@ -1,4 +1,6 @@
 //! Physical reproduction lifecycle.
+//! Construction is evaluated through the shared construction runtime so every
+//! internal and external bond admission uses COMBINE and the shared ledger.
 use crate::material_storage::MaterialStorage;
 use crate::resources::{BaseResource, Material};
 use crate::state::{
