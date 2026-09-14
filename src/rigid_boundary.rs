@@ -1,16 +1,32 @@
 use crate::resources::{Form, Shape};
 use crate::structure::Placement;
 
-fn vertices(shape: &Shape) -> Option<Vec<(f64, f64)>> { shape.form.polygon_vertices() }
+fn vertices(shape: &Shape) -> Option<Vec<(f64, f64)>> {
+    shape.form.polygon_vertices()
+}
 fn edge_angle(a: (f64, f64), b: (f64, f64)) -> Option<f64> {
     let dx = b.0 - a.0;
     let dy = b.1 - a.1;
-    if dx.hypot(dy) <= f64::EPSILON { None } else { Some(dy.atan2(dx)) }
+    if dx.hypot(dy) <= f64::EPSILON {
+        None
+    } else {
+        Some(dy.atan2(dx))
+    }
 }
 
-pub fn corner_alignment_rotations(candidate: &Shape, candidate_vertex: usize, target: &Shape, target_vertex: usize, target_rotation: f64) -> Vec<f64> {
-    let (Some(cv), Some(tv)) = (vertices(candidate), vertices(target)) else { return Vec::new(); };
-    if cv.len() < 3 || tv.len() < 3 || candidate_vertex >= cv.len() || target_vertex >= tv.len() { return Vec::new(); }
+pub fn corner_alignment_rotations(
+    candidate: &Shape,
+    candidate_vertex: usize,
+    target: &Shape,
+    target_vertex: usize,
+    target_rotation: f64,
+) -> Vec<f64> {
+    let (Some(cv), Some(tv)) = (vertices(candidate), vertices(target)) else {
+        return Vec::new();
+    };
+    if cv.len() < 3 || tv.len() < 3 || candidate_vertex >= cv.len() || target_vertex >= tv.len() {
+        return Vec::new();
+    }
     let ci = candidate_vertex;
     let ti = target_vertex;
     let c_prev = cv[(ci + cv.len() - 1) % cv.len()];
@@ -20,22 +36,48 @@ pub fn corner_alignment_rotations(candidate: &Shape, candidate_vertex: usize, ta
     let t_here = tv[ti];
     let t_next = tv[(ti + 1) % tv.len()];
     let mut out = Vec::new();
-    for ca in [edge_angle(c_prev, c_here), edge_angle(c_here, c_next)].into_iter().flatten() {
-        for ta in [edge_angle(t_prev, t_here), edge_angle(t_here, t_next)].into_iter().flatten() {
+    for ca in [edge_angle(c_prev, c_here), edge_angle(c_here, c_next)]
+        .into_iter()
+        .flatten()
+    {
+        for ta in [edge_angle(t_prev, t_here), edge_angle(t_here, t_next)]
+            .into_iter()
+            .flatten()
+        {
             for relative in [ta - ca, ta + std::f64::consts::PI - ca] {
                 let rotation = target_rotation + relative;
-                if !out.iter().any(|r: &f64| (r - rotation).abs() <= 1e-10) { out.push(rotation); }
+                if !out.iter().any(|r: &f64| (r - rotation).abs() <= 1e-10) {
+                    out.push(rotation);
+                }
             }
         }
     }
     out
 }
 
-pub fn line_endpoint_alignment_rotations(candidate_endpoint: usize, target_endpoint: usize, target_rotation: f64) -> Vec<f64> {
-    if candidate_endpoint > 1 || target_endpoint > 1 { return Vec::new(); }
-    let candidate_interior = if candidate_endpoint == 0 { 0.0 } else { std::f64::consts::PI };
-    let target_interior = target_rotation + if target_endpoint == 0 { 0.0 } else { std::f64::consts::PI };
-    vec![target_interior + std::f64::consts::PI - candidate_interior, target_interior - candidate_interior]
+pub fn line_endpoint_alignment_rotations(
+    candidate_endpoint: usize,
+    target_endpoint: usize,
+    target_rotation: f64,
+) -> Vec<f64> {
+    if candidate_endpoint > 1 || target_endpoint > 1 {
+        return Vec::new();
+    }
+    let candidate_interior = if candidate_endpoint == 0 {
+        0.0
+    } else {
+        std::f64::consts::PI
+    };
+    let target_interior = target_rotation
+        + if target_endpoint == 0 {
+            0.0
+        } else {
+            std::f64::consts::PI
+        };
+    vec![
+        target_interior + std::f64::consts::PI - candidate_interior,
+        target_interior - candidate_interior,
+    ]
 }
 
 pub fn world_vertex(shape: &Shape, vertex: usize, placement: Placement) -> Option<(f64, f64)> {
@@ -46,14 +88,24 @@ pub fn world_vertex(shape: &Shape, vertex: usize, placement: Placement) -> Optio
 }
 
 pub fn has_polygon_boundary(shape: &Shape) -> bool {
-    matches!(shape.form, Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. })
+    matches!(
+        shape.form,
+        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. }
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::f64::consts::PI;
-    fn square() -> Shape { Shape { form: Form::Rectangle { width: 2.0, height: 2.0 } } }
+    fn square() -> Shape {
+        Shape {
+            form: Form::Rectangle {
+                width: 2.0,
+                height: 2.0,
+            },
+        }
+    }
     #[test]
     fn corner_alignment_uses_incident_edges_not_authored_normals() {
         let rotations = corner_alignment_rotations(&square(), 0, &square(), 2, 0.0);
@@ -69,7 +121,16 @@ mod tests {
     }
     #[test]
     fn world_vertex_applies_only_rigid_transform() {
-        let p = world_vertex(&square(), 0, Placement { x: 10.0, y: 20.0, rotation_radians: PI / 2.0 }).unwrap();
+        let p = world_vertex(
+            &square(),
+            0,
+            Placement {
+                x: 10.0,
+                y: 20.0,
+                rotation_radians: PI / 2.0,
+            },
+        )
+        .unwrap();
         assert!((p.0 - 1.0).abs() < 1e-12);
         assert!((p.1 - 19.0).abs() < 1e-12);
     }
