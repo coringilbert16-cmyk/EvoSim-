@@ -1,8 +1,8 @@
 //! Compatibility wrappers for non-simulation callers.
 
 use crate::construction_runtime::realize_material_with_context;
-use crate::energy_ledger::EnergyLedger;
 use crate::resources::BaseResource;
+use crate::state::EnergyLedger;
 use crate::structural_blueprint::BlueprintElement;
 use crate::structure::OrganismStructure;
 
