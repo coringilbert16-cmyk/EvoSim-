@@ -1,21 +1,11 @@
 //! Connection relationships over physical boundaries.
 //! Continuous boundaries intentionally have no socket indices.
+use crate::math::directional_compatibility;
 use crate::resources::{ConnectionPoint, ConnectionSites};
-
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum ConnectionRegion {
-    Corner(WorldConnectionPoint),
-    Boundary { center_x: f64, center_y: f64, radius: f64 },
-    Fluid { center_x: f64, center_y: f64, effective_radius: f64 },
-}
+pub enum ConnectionRegion { Corner(WorldConnectionPoint), Boundary { center_x: f64, center_y: f64, radius: f64 }, Fluid { center_x: f64, center_y: f64, effective_radius: f64 } }
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct WorldConnectionPoint {
-    pub x: f64,
-    pub y: f64,
-    /// Zero means that this point feature has no unique physical normal.
-    pub normal_x: f64,
-    pub normal_y: f64,
-}
+pub struct WorldConnectionPoint { pub x: f64, pub y: f64, pub normal_x: f64, pub normal_y: f64 }
 pub fn transform_connection_point(point: ConnectionPoint, origin_x: f64, origin_y: f64, rotation_radians: f64) -> WorldConnectionPoint {
     let (s, c) = rotation_radians.sin_cos();
     WorldConnectionPoint { x: origin_x + point.x * c - point.y * s, y: origin_y + point.x * s + point.y * c, normal_x: 0.0, normal_y: 0.0 }
@@ -28,8 +18,13 @@ pub fn transform_connection_regions(sites: &ConnectionSites, origin_x: f64, orig
     }
 }
 pub fn point_distance(a: WorldConnectionPoint, b: WorldConnectionPoint) -> f64 { (a.x - b.x).hypot(a.y - b.y) }
-/// Zero denotes undefined facing rather than an invented orientation.
-pub fn facing_compatibility(_a: WorldConnectionPoint, _b: WorldConnectionPoint) -> f64 { 0.0 }
+/// A point feature has no unique normal. Returning maximum compatibility means
+/// facing does not constrain a corner/endpoint; physical contact and overlap do.
+pub fn facing_compatibility(a: WorldConnectionPoint, b: WorldConnectionPoint) -> f64 {
+    let al = a.normal_x.hypot(a.normal_y);
+    let bl = b.normal_x.hypot(b.normal_y);
+    if al <= f64::EPSILON || bl <= f64::EPSILON { 1.0 } else { directional_compatibility(a.normal_x, a.normal_y, -b.normal_x, -b.normal_y) }
+}
 pub fn within_contact_tolerance(a: WorldConnectionPoint, b: WorldConnectionPoint, tolerance: f64) -> bool { point_distance(a, b) <= tolerance.max(0.0) }
 impl ConnectionRegion {
     pub fn representative_point(self) -> Option<WorldConnectionPoint> { match self { Self::Corner(p) => Some(p), Self::Boundary { .. } | Self::Fluid { .. } => None } }
@@ -55,7 +50,7 @@ mod tests {
     #[test]
     fn point_features_have_no_invented_facing_normal() {
         let a = transform_connection_point(cp(0.0, 0.0), 0.0, 0.0, 0.0);
-        assert_eq!(facing_compatibility(a, a), 0.0);
+        assert_eq!(facing_compatibility(a, a), 1.0);
     }
     #[test]
     fn continuous_regions_have_no_fake_socket_identity() {
