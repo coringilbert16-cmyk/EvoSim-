@@ -28,6 +28,8 @@ mod tests {
         assert_eq!(structure.units.len(), blueprint.elements.len());
         assert_eq!(structure.bonds.len(), blueprint.connections.len());
 
+        // The inherited position is a construction preference; the realization
+        // remains responsible for choosing a physically valid arrangement.
         for element in &blueprint.elements {
             let target = element.placement;
             let closest = structure
