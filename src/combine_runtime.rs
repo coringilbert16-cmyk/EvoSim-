@@ -7,7 +7,7 @@ use crate::combine::{
     FormationEvaluation,
 };
 use crate::contact::ConnectionCompatibilityCache;
-use crate::energy_ledger::EnergyLedgerAuthority;
+use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
 use crate::resources::{BaseResource, ConnectionSites, Material};
 use crate::state::{EnergyLedger, Environment, Organism};
 use crate::structure::{BondEndpoint, ConnectionEndpoint, Placement, StructuralUnit};
@@ -176,7 +176,14 @@ fn form_bond(
     crate::contact::try_add_bond(&mut trial_structure, bond, catalog).ok()?;
 
     let before = *energy;
-    if !ledger.settle_combine_holder(energy, interaction.signed_value, investment, work) {
+    let transaction = EnergyTransaction {
+        reason: EnergyReason::Combine,
+        potential_released: investment,
+        usable_delta: interaction.signed_value - investment - work,
+        structural_delta: investment,
+        heat_dissipated: work,
+    };
+    if !ledger.settle_transaction(energy, transaction) {
         *energy = before;
         return None;
     }
