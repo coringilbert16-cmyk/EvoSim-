@@ -21,13 +21,22 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git fetch origin 970e97f5a29a8db569a494553f3dbd3f9bb49155
           if ! git cherry-pick dabd34757ebcac95ad1399b58edec0eec3044fdb; then
-            git checkout --theirs -- src/construction_realization.rs
-            git add src/construction_realization.rs
+            git checkout --theirs -- .
+            git add -A
             git cherry-pick --continue
           fi
           cargo fmt --all -- --check
-          cargo test --all-targets
+          cargo test --all-targets 2>&1 | tee /tmp/test.log
           git rm .github/workflows/port-spatial-target.yml
           git commit -m 'Remove temporary spatial target port workflow'
           git push origin HEAD:tmp/spatial-target-port
+      - name: Publish failure log
+        if: failure()
+        run: |
+          if [ -f /tmp/test.log ]; then
+            cp /tmp/test.log test-port-failure.log
+            git add test-port-failure.log
+            git commit -m 'Record temporary spatial-target port test failure'
+            git push origin HEAD:tmp/spatial-target-port
+          fi
 # retrigger
