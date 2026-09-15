@@ -18,7 +18,10 @@ mod integration_tests {
     #[test]
     fn fresh_organism_is_a_physically_realized_juvenile() {
         let o = Simulation::create_initial_organism();
-        let blueprint = &o.genome.juvenile_blueprint;
+        let blueprint = o
+            .genome
+            .developmental_construction_target(&crate::resources::default_catalog())
+            .unwrap();
         let expected_constituents = blueprint
             .elements
             .iter()
@@ -49,8 +52,12 @@ mod integration_tests {
     fn seed_retains_a_distinct_mature_developmental_target() {
         let o = Simulation::create_initial_organism();
         let c = &crate::resources::default_catalog();
-        let juvenile = o.genome.juvenile_blueprint.structural_mass(c);
-        let mature = o.genome.structural_blueprint.structural_mass(c);
+        let juvenile = o
+            .genome
+            .developmental_construction_target(c)
+            .unwrap()
+            .structural_mass(c);
+        let mature = o.genome.mature_construction_target().unwrap().structural_mass(c);
         assert!(mature > juvenile);
         assert!(o.structural_mass(c) < mature * 0.90);
         assert!(matches!(o.development_stage, DevelopmentStage::Juvenile));
