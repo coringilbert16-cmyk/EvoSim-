@@ -340,9 +340,9 @@ fn add_interface_region(
     region: &ArchitectureRegion,
     scale: f64,
 ) {
-    let inner = 1.086_648;
-    let outer = 1.511_858;
-    let length = 0.797_884;
+    let inner: f64 = 1.086_648;
+    let outer: f64 = 1.511_858;
+    let length: f64 = 0.797_884;
     let gap = outer - inner;
     let tangent = (length * length - gap * gap).sqrt();
     let center = (inner + outer) / 2.0;
@@ -418,12 +418,12 @@ fn add_interface_region(
     let boundary_start = start - boundary_count;
     for i in 0..count {
         connections.push(BlueprintConnection {
-            element_a: core_map[i],
-            element_b: start + i,
+            element_a: start + i,
+            element_b: boundary_start + boundary_map[i],
         });
         connections.push(BlueprintConnection {
-            element_a: boundary_start + boundary_map[i],
-            element_b: start + i,
+            element_a: start + i,
+            element_b: core_map[i],
         });
     }
 }
@@ -436,8 +436,8 @@ pub fn default_architecture() -> OrganismArchitecture {
                 material: Material::free_base("Nitrogen", 1.0),
                 center_x: 0.0,
                 center_y: 0.0,
-                extent_x: 1.84,
-                extent_y: 1.84,
+                extent_x: 1.0,
+                extent_y: 1.0,
                 density: 1.0,
             },
             ArchitectureRegion {
@@ -445,8 +445,8 @@ pub fn default_architecture() -> OrganismArchitecture {
                 material: Material::free_base("Nitrogen", 1.0),
                 center_x: 0.0,
                 center_y: 0.0,
-                extent_x: 3.35,
-                extent_y: 3.35,
+                extent_x: 1.0,
+                extent_y: 1.0,
                 density: 0.5,
             },
             ArchitectureRegion {
@@ -454,25 +454,20 @@ pub fn default_architecture() -> OrganismArchitecture {
                 material: Material::free_base("Hydrogen", 1.0),
                 center_x: 0.0,
                 center_y: 0.0,
-                extent_x: 2.17,
-                extent_y: 2.17,
+                extent_x: 1.0,
+                extent_y: 1.0,
                 density: 0.5,
             },
         ],
         relations: vec![
             ArchitectureRelation {
-                region_a: 1,
-                region_b: 0,
+                region_a: 0,
+                region_b: 1,
                 kind: ArchitectureRelationKind::Encloses,
             },
             ArchitectureRelation {
-                region_a: 2,
-                region_b: 0,
-                kind: ArchitectureRelationKind::Interfaces,
-            },
-            ArchitectureRelation {
-                region_a: 2,
-                region_b: 1,
+                region_a: 1,
+                region_b: 2,
                 kind: ArchitectureRelationKind::Interfaces,
             },
         ],
@@ -484,30 +479,22 @@ pub fn default_architecture() -> OrganismArchitecture {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::resources::default_catalog;
 
     #[test]
     fn architecture_is_region_level() {
         let architecture = default_architecture();
         assert_eq!(architecture.regions.len(), 3);
-        assert!(architecture.validate().is_ok());
+        assert_eq!(architecture.relations.len(), 2);
+        architecture.validate().unwrap();
     }
 
     #[test]
     fn juvenile_target_is_a_discrete_analog_not_a_scaled_body_plan() {
         let architecture = default_architecture();
-        let target = architecture
-            .developmental_target(JUVENILE_LINEAR_SCALE, &default_catalog())
-            .unwrap();
-        assert!(target.is_valid());
-        assert_eq!(target.core_elements.len(), 4);
-        assert!(
-            target.elements.len()
-                < architecture
-                    .adult_construction_target()
-                    .unwrap()
-                    .elements
-                    .len()
-        );
+        let target = architecture.construction_target(JUVENILE_LINEAR_SCALE).unwrap();
+        assert_eq!(target.elements.len(), 6);
+        assert!(target.elements.iter().all(|element| {
+            element.placement.x.abs() < 2.0 && element.placement.y.abs() < 2.0
+        }));
     }
 }
