@@ -153,7 +153,11 @@ pub(crate) fn begin_reproduction(
         return false;
     }
     let target_set = all_indices(blueprint);
-    let core = blueprint.core_elements.iter().copied().collect::<HashSet<_>>();
+    let core = blueprint
+        .core_elements
+        .iter()
+        .copied()
+        .collect::<HashSet<_>>();
 
     let mut remaining = parent.stored_material.clone();
     let Some(reserved_material) = remaining.take_one_unstructured_named(JUVENILE_RESERVE_MATERIAL)
