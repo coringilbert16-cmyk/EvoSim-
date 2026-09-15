@@ -17,7 +17,10 @@ pub struct JuvenileViabilityRequirements {
 
 impl Default for JuvenileViabilityRequirements {
     fn default() -> Self {
-        Self { require_sealed_genome_cavity: true, require_extra_structure: true }
+        Self {
+            require_sealed_genome_cavity: true,
+            require_extra_structure: true,
+        }
     }
 }
 
@@ -31,11 +34,17 @@ pub fn validate_realized_juvenile(
     core_units: &[usize],
     requirements: JuvenileViabilityRequirements,
 ) -> Result<(), String> {
-    if core_units.is_empty() { return Err("juvenile has no physical genome-core anchor".into()); }
+    if core_units.is_empty() {
+        return Err("juvenile has no physical genome-core anchor".into());
+    }
     if requirements.require_sealed_genome_cavity {
         let cavity = analyze_genome_cavity(structure, catalog, core_units)?
-            .ok_or_else(|| "juvenile genome cavity is not sealed and sufficiently large".to_string())?;
-        if !cavity.qualifies() { return Err("juvenile genome cavity is below the minimum capacity".into()); }
+            .ok_or_else(|| {
+                "juvenile genome cavity is not sealed and sufficiently large".to_string()
+            })?;
+        if !cavity.qualifies() {
+            return Err("juvenile genome cavity is below the minimum capacity".into());
+        }
     }
     if requirements.require_extra_structure && structure.units.len() <= core_units.len() {
         return Err("juvenile has no realized structure outside its genome core".into());
@@ -54,7 +63,13 @@ mod tests {
         let genome = initial_genome();
         let catalog = default_catalog();
         let structure = genome.juvenile_blueprint.realize(&catalog).unwrap();
-        validate_realized_juvenile(&structure, &catalog, &genome.juvenile_blueprint.core_elements, JuvenileViabilityRequirements::default()).unwrap();
+        validate_realized_juvenile(
+            &structure,
+            &catalog,
+            &genome.juvenile_blueprint.core_elements,
+            JuvenileViabilityRequirements::default(),
+        )
+        .unwrap();
     }
 
     #[test]
@@ -63,6 +78,12 @@ mod tests {
         let catalog = default_catalog();
         let mut structure = genome.juvenile_blueprint.realize(&catalog).unwrap();
         structure.bonds.clear();
-        assert!(validate_realized_juvenile(&structure, &catalog, &genome.juvenile_blueprint.core_elements, JuvenileViabilityRequirements::default()).is_err());
+        assert!(validate_realized_juvenile(
+            &structure,
+            &catalog,
+            &genome.juvenile_blueprint.core_elements,
+            JuvenileViabilityRequirements::default(),
+        )
+        .is_err());
     }
 }
