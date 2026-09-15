@@ -10,6 +10,7 @@ mod structure;
 
 // Active physical geometry authority stack. These modules query realized rigid
 // geometry; they do not define a second catalog-shaped physical representation.
+mod cavity;
 mod connection_geometry;
 mod construction_runtime;
 mod contact;
@@ -18,7 +19,6 @@ mod organism_geometry;
 mod physical_geometry;
 mod rigid_boundary;
 mod surface_geometry;
-mod cavity;
 
 // Material transformation and bonding.
 mod combine;
