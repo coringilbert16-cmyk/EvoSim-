@@ -136,9 +136,7 @@ impl OrganismArchitecture {
                     return Ok(target)
                 }
                 Ok(_) => last_error = format!("scale {scale:.2} failed juvenile viability"),
-                Err(error) => {
-                    last_error = format!("scale {scale:.2} failed realization: {error}")
-                }
+                Err(error) => last_error = format!("scale {scale:.2} failed realization: {error}"),
             }
         }
         Err(last_error)
@@ -179,11 +177,8 @@ impl OrganismArchitecture {
             &self.regions[interface],
             scale,
         );
-        let target = StructuralBlueprint::with_core_elements(
-            elements,
-            connections,
-            vec![0, 1, 2, 3],
-        );
+        let target =
+            StructuralBlueprint::with_core_elements(elements, connections, vec![0, 1, 2, 3]);
         target.validate()?;
         Ok(target)
     }
@@ -313,26 +308,10 @@ fn add_boundary_region(
     let positions = [
         (sx - half_segment, sy + offset, 0.0),
         (sx + half_segment, sy + offset, 0.0),
-        (
-            sx - offset,
-            sy - half_segment,
-            std::f64::consts::FRAC_PI_2,
-        ),
-        (
-            sx - offset,
-            sy + half_segment,
-            std::f64::consts::FRAC_PI_2,
-        ),
-        (
-            sx + offset,
-            sy - half_segment,
-            std::f64::consts::FRAC_PI_2,
-        ),
-        (
-            sx + offset,
-            sy + half_segment,
-            std::f64::consts::FRAC_PI_2,
-        ),
+        (sx - offset, sy - half_segment, std::f64::consts::FRAC_PI_2),
+        (sx - offset, sy + half_segment, std::f64::consts::FRAC_PI_2),
+        (sx + offset, sy - half_segment, std::f64::consts::FRAC_PI_2),
+        (sx + offset, sy + half_segment, std::f64::consts::FRAC_PI_2),
         (sx - half_segment, sy - offset, 0.0),
         (sx + half_segment, sy - offset, 0.0),
     ];
