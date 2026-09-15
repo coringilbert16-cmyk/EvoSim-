@@ -73,7 +73,9 @@ impl Form {
             Form::Polygon { vertices } => {
                 vertices.len() >= 3 && vertices.iter().all(|(x, y)| x.is_finite() && y.is_finite())
             }
-            Form::Fluid { nominal_area } => nominal_area.is_finite() && *nominal_area > 0.0,
+            Form::Fluid { nominal_area } => {
+                nominal_area.is_finite() && nominal_area.to_owned() > 0.0
+            }
         }
     }
 
@@ -86,7 +88,7 @@ impl Form {
                 Some(vec![(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)])
             }
             Form::RegularPolygon { sides, radius } => {
-                let n = *sides as usize;
+                let n = sides.to_owned() as usize;
                 Some(
                     (0..n)
                         .map(|k| {
@@ -117,27 +119,6 @@ impl Form {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
-pub struct ConnectionPoint {
-    pub x: f64,
-    pub y: f64,
-    pub direction_radians: f64,
-}
-
-impl ConnectionPoint {
-    pub fn is_valid(&self) -> bool {
-        self.x.is_finite() && self.y.is_finite() && self.direction_radians.is_finite()
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub enum ConnectionSites {
-    Corners(Vec<ConnectionPoint>),
-    Endpoints(Vec<ConnectionPoint>),
-    Circumference { radius: f64 },
-    Undetermined,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Shape {
     pub form: Form,
@@ -146,42 +127,6 @@ pub struct Shape {
 impl Shape {
     pub fn is_valid(&self) -> bool {
         self.form.is_valid()
-    }
-
-    pub fn connection_sites(&self) -> ConnectionSites {
-        match &self.form {
-            Form::Circle { radius } => ConnectionSites::Circumference { radius: *radius },
-            Form::Line { length } => {
-                let half = *length / 2.0;
-                ConnectionSites::Endpoints(vec![
-                    ConnectionPoint {
-                        x: -half,
-                        y: 0.0,
-                        direction_radians: std::f64::consts::PI,
-                    },
-                    ConnectionPoint {
-                        x: half,
-                        y: 0.0,
-                        direction_radians: 0.0,
-                    },
-                ])
-            }
-            Form::Fluid { .. } => ConnectionSites::Undetermined,
-            other => {
-                let vertices = other
-                    .polygon_vertices()
-                    .expect("rigid non-Circle/Line/Fluid forms always resolve to a vertex list");
-                let points = vertices
-                    .into_iter()
-                    .map(|(x, y)| ConnectionPoint {
-                        x,
-                        y,
-                        direction_radians: y.atan2(x),
-                    })
-                    .collect();
-                ConnectionSites::Corners(points)
-            }
-        }
     }
 }
 
@@ -640,7 +585,7 @@ mod shape_tests {
                 }
                 Form::RegularPolygon { sides, .. } => assert_eq!(
                     resource.shape.form.polygon_vertices().unwrap().len(),
-                    *sides as usize
+                    sides.to_owned() as usize
                 ),
                 Form::Polygon { vertices } => assert_eq!(
                     resource.shape.form.polygon_vertices().unwrap().len(),
@@ -680,106 +625,6 @@ mod shape_tests {
     }
 
     #[test]
-    fn line_has_exactly_two_endpoint_connection_points() {
-        let hydrogen = default_catalog()
-            .into_iter()
-            .find(|r| r.name == "Hydrogen")
-            .unwrap();
-        let ConnectionSites::Endpoints(points) = hydrogen.shape.connection_sites() else {
-            panic!("hydrogen is not an endpoint geometry")
-        };
-        assert_eq!(points.len(), 2);
-        assert!(points[0].x < points[1].x);
-        assert!(points.iter().all(ConnectionPoint::is_valid));
-    }
-
-    #[test]
-    fn water_is_fluid_but_has_circle_default_geometry() {
-        let water = default_catalog()
-            .into_iter()
-            .find(|r| r.name == "Water")
-            .unwrap();
-        assert_eq!(water.physical_state, PhysicalState::Fluid);
-        assert!(matches!(water.shape.form, Form::Circle { .. }));
-        assert!(
-            matches!(water.shape.connection_sites(), ConnectionSites::Circumference { radius } if radius > 0.0)
-        );
-    }
-
-    #[test]
-    fn every_polygonal_resource_has_one_connection_point_per_corner() {
-        for resource in default_catalog() {
-            let expected = match &resource.shape.form {
-                Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. } => continue,
-                Form::Rectangle { .. } => 4,
-                Form::RegularPolygon { sides, .. } => *sides as usize,
-                Form::Polygon { vertices } => vertices.len(),
-            };
-            match resource.shape.connection_sites() {
-                ConnectionSites::Corners(points) => assert_eq!(points.len(), expected),
-                other => panic!("unexpected connection sites: {other:?}"),
-            }
-        }
-    }
-
-    #[test]
-    fn polygon_connection_points_correspond_to_actual_vertices() {
-        for resource in default_catalog() {
-            let Some(vertices) = resource.shape.form.polygon_vertices() else {
-                continue;
-            };
-            let ConnectionSites::Corners(points) = resource.shape.connection_sites() else {
-                panic!("not corners")
-            };
-            assert_eq!(points.len(), vertices.len());
-            for (point, vertex) in points.iter().zip(vertices.iter()) {
-                assert_eq!((point.x, point.y), *vertex);
-            }
-        }
-    }
-
-    #[test]
-    fn connection_points_are_valid_where_present() {
-        for resource in default_catalog() {
-            match resource.shape.connection_sites() {
-                ConnectionSites::Corners(points) | ConnectionSites::Endpoints(points) => {
-                    for cp in points {
-                        assert!(cp.is_valid());
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-
-    #[test]
-    fn circle_has_no_finite_connection_point_list() {
-        let circle_resources: Vec<_> = default_catalog()
-            .into_iter()
-            .filter(|r| matches!(r.shape.form, Form::Circle { .. }))
-            .collect();
-        assert_eq!(circle_resources.len(), 1);
-        for resource in circle_resources {
-            assert!(
-                matches!(resource.shape.connection_sites(), ConnectionSites::Circumference { radius } if radius > 0.0)
-            );
-        }
-    }
-
-    #[test]
-    fn connection_point_has_no_independent_strength_field() {
-        let ConnectionPoint {
-            x: _,
-            y: _,
-            direction_radians: _,
-        } = ConnectionPoint {
-            x: 0.0,
-            y: 0.0,
-            direction_radians: 0.0,
-        };
-    }
-
-    #[test]
     fn every_base_resource_unit_has_the_same_nominal_area() {
         fn polygon_area(vertices: &[(f64, f64)]) -> f64 {
             let mut sum = 0.0;
@@ -794,7 +639,7 @@ mod shape_tests {
         for resource in default_catalog() {
             let area = match &resource.shape.form {
                 Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-                Form::Fluid { nominal_area } => *nominal_area,
+                Form::Fluid { nominal_area } => nominal_area.to_owned(),
                 Form::Line { .. } => continue,
                 other => polygon_area(&other.polygon_vertices().unwrap()),
             };
@@ -837,10 +682,6 @@ mod shape_tests {
             assert_eq!(restored.name, resource.name);
             assert_eq!(restored.shape.form, resource.shape.form);
             assert_eq!(restored.physical_state, resource.physical_state);
-            assert_eq!(
-                restored.shape.connection_sites(),
-                resource.shape.connection_sites()
-            );
         }
     }
 }
