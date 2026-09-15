@@ -6,64 +6,64 @@
 [1m[92m      Adding[0m tower-http v0.6.11 [1m[33m(available: v0.7.1)[0m
 [1m[92m Downloading[0m crates ...
 [1m[92m  Downloaded[0m atomic-waker v1.1.2
-[1m[92m  Downloaded[0m futures-task v0.3.34
-[1m[92m  Downloaded[0m tower-layer v0.3.3
-[1m[92m  Downloaded[0m tower-service v0.3.3
-[1m[92m  Downloaded[0m sync_wrapper v1.0.2
-[1m[92m  Downloaded[0m cfg-if v1.0.4
-[1m[92m  Downloaded[0m tokio-macros v2.7.2
-[1m[92m  Downloaded[0m form_urlencoded v1.2.2
-[1m[92m  Downloaded[0m httpdate v1.0.3
-[1m[92m  Downloaded[0m rand_chacha v0.3.1
+[1m[92m  Downloaded[0m hyper-util v0.1.20
+[1m[92m  Downloaded[0m mio v1.2.3
 [1m[92m  Downloaded[0m futures-core v0.3.34
-[1m[92m  Downloaded[0m http-body v1.1.0
-[1m[92m  Downloaded[0m itoa v1.0.18
-[1m[92m  Downloaded[0m percent-encoding v2.3.2
-[1m[92m  Downloaded[0m scopeguard v1.2.0
-[1m[92m  Downloaded[0m errno v0.3.14
-[1m[92m  Downloaded[0m axum-core v0.5.6
-[1m[92m  Downloaded[0m serde_path_to_error v0.1.20
-[1m[92m  Downloaded[0m mime v0.3.17
-[1m[92m  Downloaded[0m serde_urlencoded v0.7.1
+[1m[92m  Downloaded[0m lock_api v0.4.14
+[1m[92m  Downloaded[0m cfg-if v1.0.4
+[1m[92m  Downloaded[0m httpdate v1.0.3
+[1m[92m  Downloaded[0m futures-util v0.3.34
+[1m[92m  Downloaded[0m httparse v1.10.1
 [1m[92m  Downloaded[0m http-body-util v0.1.5
-[1m[92m  Downloaded[0m quote v1.0.47
-[1m[92m  Downloaded[0m slab v0.4.12
-[1m[92m  Downloaded[0m smallvec v1.16.1
+[1m[92m  Downloaded[0m axum v0.8.9
+[1m[92m  Downloaded[0m axum-core v0.5.6
+[1m[92m  Downloaded[0m futures-channel v0.3.34
+[1m[92m  Downloaded[0m log v0.4.34
+[1m[92m  Downloaded[0m itoa v1.0.18
+[1m[92m  Downloaded[0m errno v0.3.14
+[1m[92m  Downloaded[0m tower-service v0.3.3
 [1m[92m  Downloaded[0m zmij v1.0.23
 [1m[92m  Downloaded[0m pin-project-lite v0.2.17
-[1m[92m  Downloaded[0m ppv-lite86 v0.2.21
-[1m[92m  Downloaded[0m signal-hook-registry v1.4.8
-[1m[92m  Downloaded[0m getrandom v0.2.17
-[1m[92m  Downloaded[0m rand_core v0.6.4
-[1m[92m  Downloaded[0m lock_api v0.4.14
-[1m[92m  Downloaded[0m axum v0.8.9
-[1m[92m  Downloaded[0m bitflags v2.13.2
-[1m[92m  Downloaded[0m futures-channel v0.3.34
-[1m[92m  Downloaded[0m once_cell v1.21.4
-[1m[92m  Downloaded[0m matchit v0.8.4
-[1m[92m  Downloaded[0m parking_lot_core v0.9.12
-[1m[92m  Downloaded[0m httparse v1.10.1
-[1m[92m  Downloaded[0m parking_lot v0.12.5
-[1m[92m  Downloaded[0m bytes v1.12.1
-[1m[92m  Downloaded[0m serde_derive v1.0.229
-[1m[92m  Downloaded[0m socket2 v0.6.5
-[1m[92m  Downloaded[0m serde_core v1.0.229
-[1m[92m  Downloaded[0m proc-macro2 v1.0.107
-[1m[92m  Downloaded[0m tracing-core v0.1.36
-[1m[92m  Downloaded[0m ryu v1.0.23
-[1m[92m  Downloaded[0m log v0.4.34
-[1m[92m  Downloaded[0m unicode-ident v1.0.24
 [1m[92m  Downloaded[0m rand v0.8.8
-[1m[92m  Downloaded[0m serde v1.0.229
-[1m[92m  Downloaded[0m mio v1.2.3
-[1m[92m  Downloaded[0m memchr v2.8.3
-[1m[92m  Downloaded[0m http v1.5.0
-[1m[92m  Downloaded[0m hyper-util v0.1.20
-[1m[92m  Downloaded[0m tower v0.5.3
-[1m[92m  Downloaded[0m tower-http v0.6.11
-[1m[92m  Downloaded[0m futures-util v0.3.34
 [1m[92m  Downloaded[0m hyper v1.11.1
+[1m[92m  Downloaded[0m mime v0.3.17
+[1m[92m  Downloaded[0m slab v0.4.12
 [1m[92m  Downloaded[0m serde_json v1.0.151
+[1m[92m  Downloaded[0m serde_path_to_error v0.1.20
+[1m[92m  Downloaded[0m signal-hook-registry v1.4.8
+[1m[92m  Downloaded[0m futures-task v0.3.34
+[1m[92m  Downloaded[0m http v1.5.0
+[1m[92m  Downloaded[0m http-body v1.1.0
+[1m[92m  Downloaded[0m form_urlencoded v1.2.2
+[1m[92m  Downloaded[0m ppv-lite86 v0.2.21
+[1m[92m  Downloaded[0m rand_chacha v0.3.1
+[1m[92m  Downloaded[0m ryu v1.0.23
+[1m[92m  Downloaded[0m serde_urlencoded v0.7.1
+[1m[92m  Downloaded[0m scopeguard v1.2.0
+[1m[92m  Downloaded[0m percent-encoding v2.3.2
+[1m[92m  Downloaded[0m bytes v1.12.1
+[1m[92m  Downloaded[0m memchr v2.8.3
+[1m[92m  Downloaded[0m parking_lot v0.12.5
+[1m[92m  Downloaded[0m serde_derive v1.0.229
+[1m[92m  Downloaded[0m tower-http v0.6.11
+[1m[92m  Downloaded[0m bitflags v2.13.2
+[1m[92m  Downloaded[0m getrandom v0.2.17
+[1m[92m  Downloaded[0m sync_wrapper v1.0.2
+[1m[92m  Downloaded[0m tower-layer v0.3.3
+[1m[92m  Downloaded[0m tracing-core v0.1.36
+[1m[92m  Downloaded[0m matchit v0.8.4
+[1m[92m  Downloaded[0m once_cell v1.21.4
+[1m[92m  Downloaded[0m smallvec v1.16.1
+[1m[92m  Downloaded[0m rand_core v0.6.4
+[1m[92m  Downloaded[0m tokio-macros v2.7.2
+[1m[92m  Downloaded[0m serde_core v1.0.229
+[1m[92m  Downloaded[0m unicode-ident v1.0.24
+[1m[92m  Downloaded[0m parking_lot_core v0.9.12
+[1m[92m  Downloaded[0m proc-macro2 v1.0.107
+[1m[92m  Downloaded[0m socket2 v0.6.5
+[1m[92m  Downloaded[0m quote v1.0.47
+[1m[92m  Downloaded[0m serde v1.0.229
+[1m[92m  Downloaded[0m tower v0.5.3
 [1m[92m  Downloaded[0m zerocopy v0.8.57
 [1m[92m  Downloaded[0m syn v3.0.5
 [1m[92m  Downloaded[0m tracing v0.1.44
@@ -71,61 +71,61 @@
 [1m[92m  Downloaded[0m tokio v1.53.1
 [1m[92m   Compiling[0m libc v0.2.189
 [1m[92m   Compiling[0m proc-macro2 v1.0.107
-[1m[92m   Compiling[0m unicode-ident v1.0.24
 [1m[92m   Compiling[0m quote v1.0.47
+[1m[92m   Compiling[0m unicode-ident v1.0.24
 [1m[92m    Checking[0m itoa v1.0.18
 [1m[92m    Checking[0m cfg-if v1.0.4
-[1m[92m    Checking[0m pin-project-lite v0.2.17
 [1m[92m    Checking[0m bytes v1.12.1
+[1m[92m    Checking[0m pin-project-lite v0.2.17
 [1m[92m   Compiling[0m parking_lot_core v0.9.12
 [1m[92m    Checking[0m futures-core v0.3.34
 [1m[92m    Checking[0m http v1.5.0
+[1m[92m    Checking[0m scopeguard v1.2.0
 [1m[92m   Compiling[0m serde_core v1.0.229
 [1m[92m    Checking[0m smallvec v1.16.1
-[1m[92m    Checking[0m scopeguard v1.2.0
 [1m[92m    Checking[0m lock_api v0.4.14
 [1m[92m    Checking[0m http-body v1.1.0
 [1m[92m   Compiling[0m syn v3.0.5
-[1m[92m   Compiling[0m zerocopy v0.8.57
-[1m[92m    Checking[0m errno v0.3.14
-[1m[92m    Checking[0m parking_lot v0.12.5
-[1m[92m    Checking[0m signal-hook-registry v1.4.8
-[1m[92m    Checking[0m mio v1.2.3
-[1m[92m    Checking[0m socket2 v0.6.5
 [1m[92m    Checking[0m once_cell v1.21.4
-[1m[92m   Compiling[0m httparse v1.10.1
 [1m[92m    Checking[0m tower-service v0.3.3
+[1m[92m    Checking[0m errno v0.3.14
+[1m[92m    Checking[0m signal-hook-registry v1.4.8
+[1m[92m    Checking[0m parking_lot v0.12.5
+[1m[92m    Checking[0m socket2 v0.6.5
+[1m[92m    Checking[0m mio v1.2.3
+[1m[92m   Compiling[0m httparse v1.10.1
+[1m[92m   Compiling[0m zerocopy v0.8.57
 [1m[92m    Checking[0m tracing-core v0.1.36
+[1m[92m   Compiling[0m serde v1.0.229
 [1m[92m    Checking[0m log v0.4.34
 [1m[92m   Compiling[0m zmij v1.0.23
-[1m[92m   Compiling[0m serde v1.0.229
 [1m[92m    Checking[0m tower-layer v0.3.3
 [1m[92m    Checking[0m tracing v0.1.44
 [1m[92m    Checking[0m getrandom v0.2.17
 [1m[92m    Checking[0m futures-channel v0.3.34
 [1m[92m    Checking[0m slab v0.4.12
-[1m[92m    Checking[0m sync_wrapper v1.0.2
-[1m[92m    Checking[0m httpdate v1.0.3
-[1m[92m    Checking[0m percent-encoding v2.3.2
 [1m[92m   Compiling[0m serde_json v1.0.151
-[1m[92m    Checking[0m futures-task v0.3.34
+[1m[92m    Checking[0m percent-encoding v2.3.2
+[1m[92m    Checking[0m httpdate v1.0.3
 [1m[92m    Checking[0m atomic-waker v1.1.2
-[1m[92m    Checking[0m futures-util v0.3.34
+[1m[92m    Checking[0m sync_wrapper v1.0.2
+[1m[92m    Checking[0m futures-task v0.3.34
 [1m[92m    Checking[0m form_urlencoded v1.2.2
 [1m[92m    Checking[0m rand_core v0.6.4
+[1m[92m    Checking[0m futures-util v0.3.34
 [1m[92m    Checking[0m http-body-util v0.1.5
 [1m[92m    Checking[0m mime v0.3.17
-[1m[92m    Checking[0m ryu v1.0.23
 [1m[92m    Checking[0m memchr v2.8.3
-[1m[92m    Checking[0m axum-core v0.5.6
 [1m[92m   Compiling[0m tokio-macros v2.7.2
 [1m[92m   Compiling[0m serde_derive v1.0.229
+[1m[92m    Checking[0m ryu v1.0.23
 [1m[92m    Checking[0m tokio v1.53.1
+[1m[92m    Checking[0m axum-core v0.5.6
 [1m[92m    Checking[0m ppv-lite86 v0.2.21
 [1m[92m    Checking[0m rand_chacha v0.3.1
 [1m[92m    Checking[0m serde_path_to_error v0.1.20
-[1m[92m    Checking[0m bitflags v2.13.2
 [1m[92m    Checking[0m matchit v0.8.4
+[1m[92m    Checking[0m bitflags v2.13.2
 [1m[92m    Checking[0m tower-http v0.6.11
 [1m[92m    Checking[0m rand v0.8.8
 [1m[92m    Checking[0m serde_urlencoded v0.7.1
@@ -144,14 +144,568 @@
     [1m[94m= [0m[1mnote[0m: `-D clippy::inconsistent-digit-grouping` implied by `-D warnings`
     [1m[94m= [0m[1mhelp[0m: to override `-D warnings` add `#[allow(clippy::inconsistent_digit_grouping)]`
 
-[1m[91merror[E0689][0m[1m: can't call method `sqrt` on ambiguous numeric type `{float}`[0m
-   [1m[94m--> [0msrc/genome.rs:319:49
-    [1m[94m|[0m
-[1m[94m319[0m [1m[94m|[0m     let tangent = (length * length - gap * gap).sqrt();
-    [1m[94m|[0m                                                 [1m[91m^^^^[0m
+[1m[91merror[0m[1m: method `total_amount` is never used[0m
+  [1m[94m--> [0msrc/environment.rs:31:12
+   [1m[94m|[0m
+[1m[94m24[0m [1m[94m|[0m impl FieldCell {
+   [1m[94m|[0m [1m[94m--------------[0m [1m[94mmethod in this implementation[0m
+[1m[94m...[0m
+[1m[94m31[0m [1m[94m|[0m     pub fn total_amount(&self) -> f64 {
+   [1m[94m|[0m            [1m[91m^^^^^^^^^^^^[0m
+   [1m[94m|[0m
+   [1m[94m= [0m[1mnote[0m: `-D dead-code` implied by `-D warnings`
+   [1m[94m= [0m[1mhelp[0m: to override `-D warnings` add `#[expect(dead_code)]` or `#[allow(dead_code)]`
 
-[1mFor more information about this error, try `rustc --explain E0689`.[0m
-[1m[91merror[0m: could not compile `evosim` (bin "evosim") due to 2 previous errors
+[1m[91merror[0m[1m: methods `take_at`, `take_at_index`, `total_material`, and `total_amount` are never used[0m
+   [1m[94m--> [0msrc/environment.rs:197:12
+    [1m[94m|[0m
+[1m[94m 58[0m [1m[94m|[0m impl ActiveMaterialField {
+    [1m[94m|[0m [1m[94m------------------------[0m [1m[94mmethods in this implementation[0m
+[1m[94m...[0m
+[1m[94m197[0m [1m[94m|[0m     pub fn take_at(
+    [1m[94m|[0m            [1m[91m^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m208[0m [1m[94m|[0m     pub fn take_at_index(
+    [1m[94m|[0m            [1m[91m^^^^^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m307[0m [1m[94m|[0m     pub fn total_material(&self) -> Vec<(String, f64)> {
+    [1m[94m|[0m            [1m[91m^^^^^^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m321[0m [1m[94m|[0m     pub fn total_amount(&self) -> f64 {
+    [1m[94m|[0m            [1m[91m^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: constant `ENVIRONMENTAL_COMPOUND_COUNT` is never used[0m
+ [1m[94m--> [0msrc/environmental_materials.rs:9:18
+  [1m[94m|[0m
+[1m[94m9[0m [1m[94m|[0m pub(crate) const ENVIRONMENTAL_COMPOUND_COUNT: usize = 12;
+  [1m[94m|[0m                  [1m[91m^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: methods `total_amount`, `peek_one_unstructured`, `take_unstructured`, and `count_structured` are never used[0m
+  [1m[94m--> [0msrc/material_storage.rs:18:19
+   [1m[94m|[0m
+[1m[94m14[0m [1m[94m|[0m impl MaterialStorage {
+   [1m[94m|[0m [1m[94m--------------------[0m [1m[94mmethods in this implementation[0m
+[1m[94m...[0m
+[1m[94m18[0m [1m[94m|[0m     pub(crate) fn total_amount(&self) -> f64 {
+   [1m[94m|[0m                   [1m[91m^^^^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m42[0m [1m[94m|[0m     pub(crate) fn peek_one_unstructured(&self) -> Option<Material> {
+   [1m[94m|[0m                   [1m[91m^^^^^^^^^^^^^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m67[0m [1m[94m|[0m     pub(crate) fn take_unstructured(&mut self, count: usize) -> Option<Vec<Material>> {
+   [1m[94m|[0m                   [1m[91m^^^^^^^^^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m88[0m [1m[94m|[0m     pub(crate) fn count_structured(&self) -> usize {
+   [1m[94m|[0m                   [1m[91m^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: methods `potential_energy`, `can_break`, and `take` are never used[0m
+   [1m[94m--> [0msrc/resources.rs:228:12
+    [1m[94m|[0m
+[1m[94m191[0m [1m[94m|[0m impl Material {
+    [1m[94m|[0m [1m[94m-------------[0m [1m[94mmethods in this implementation[0m
+[1m[94m...[0m
+[1m[94m228[0m [1m[94m|[0m     pub fn potential_energy(&self, catalog: &[BaseResource]) -> f64 {
+    [1m[94m|[0m            [1m[91m^^^^^^^^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m243[0m [1m[94m|[0m     pub fn can_break(&self) -> bool {
+    [1m[94m|[0m            [1m[91m^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m294[0m [1m[94m|[0m     pub fn take(&mut self, amount: f64) -> Option<Material> {
+    [1m[94m|[0m            [1m[91m^^^^[0m
+
+[1m[91merror[0m[1m: function `combine_work_cost` is never used[0m
+   [1m[94m--> [0msrc/resources.rs:360:8
+    [1m[94m|[0m
+[1m[94m360[0m [1m[94m|[0m pub fn combine_work_cost(material: &Material, catalog: &[BaseResource], water_field: f64) -> f64 {
+    [1m[94m|[0m        [1m[91m^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `fresh_energy` is never used[0m
+   [1m[94m--> [0msrc/resources.rs:530:8
+    [1m[94m|[0m
+[1m[94m530[0m [1m[94m|[0m pub fn fresh_energy(catalog: &[BaseResource], name: &str, amount: f64) -> f64 {
+    [1m[94m|[0m        [1m[91m^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: methods `physical_constituent_ids` and `connected_components` are never used[0m
+   [1m[94m--> [0msrc/structure.rs:448:12
+    [1m[94m|[0m
+[1m[94m422[0m [1m[94m|[0m impl PhysicalConstituentGraph {
+    [1m[94m|[0m [1m[94m-----------------------------[0m [1m[94mmethods in this implementation[0m
+[1m[94m...[0m
+[1m[94m448[0m [1m[94m|[0m     pub fn physical_constituent_ids(&self) -> Vec<PhysicalConstituentId> {
+    [1m[94m|[0m            [1m[91m^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m480[0m [1m[94m|[0m     pub fn connected_components(&self) -> Vec<Vec<usize>> {
+    [1m[94m|[0m            [1m[91m^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: constant `EPS` is never used[0m
+ [1m[94m--> [0msrc/cavity.rs:8:7
+  [1m[94m|[0m
+[1m[94m8[0m [1m[94m|[0m const EPS: f64 = 1e-8;
+  [1m[94m|[0m       [1m[91m^^^[0m
+
+[1m[91merror[0m[1m: constant `NODE_TOLERANCE` is never used[0m
+ [1m[94m--> [0msrc/cavity.rs:9:7
+  [1m[94m|[0m
+[1m[94m9[0m [1m[94m|[0m const NODE_TOLERANCE: f64 = 1e-7;
+  [1m[94m|[0m       [1m[91m^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: struct `Point` is never constructed[0m
+  [1m[94m--> [0msrc/cavity.rs:12:8
+   [1m[94m|[0m
+[1m[94m12[0m [1m[94m|[0m struct Point {
+   [1m[94m|[0m        [1m[91m^^^^^[0m
+
+[1m[91merror[0m[1m: methods `add`, `sub`, `scale`, `cross`, `dot`, and `norm` are never used[0m
+  [1m[94m--> [0msrc/cavity.rs:18:8
+   [1m[94m|[0m
+[1m[94m17[0m [1m[94m|[0m impl Point {
+   [1m[94m|[0m [1m[94m----------[0m [1m[94mmethods in this implementation[0m
+[1m[94m18[0m [1m[94m|[0m     fn add(self, other: Self) -> Self {
+   [1m[94m|[0m        [1m[91m^^^[0m
+[1m[94m...[0m
+[1m[94m25[0m [1m[94m|[0m     fn sub(self, other: Self) -> Self {
+   [1m[94m|[0m        [1m[91m^^^[0m
+[1m[94m...[0m
+[1m[94m32[0m [1m[94m|[0m     fn scale(self, factor: f64) -> Self {
+   [1m[94m|[0m        [1m[91m^^^^^[0m
+[1m[94m...[0m
+[1m[94m39[0m [1m[94m|[0m     fn cross(self, other: Self) -> f64 {
+   [1m[94m|[0m        [1m[91m^^^^^[0m
+[1m[94m...[0m
+[1m[94m43[0m [1m[94m|[0m     fn dot(self, other: Self) -> f64 {
+   [1m[94m|[0m        [1m[91m^^^[0m
+[1m[94m...[0m
+[1m[94m47[0m [1m[94m|[0m     fn norm(self) -> f64 {
+   [1m[94m|[0m        [1m[91m^^^^[0m
+
+[1m[91merror[0m[1m: struct `Edge` is never constructed[0m
+  [1m[94m--> [0msrc/cavity.rs:53:8
+   [1m[94m|[0m
+[1m[94m53[0m [1m[94m|[0m struct Edge {
+   [1m[94m|[0m        [1m[91m^^^^[0m
+
+[1m[91merror[0m[1m: struct `GenomeCavity` is never constructed[0m
+  [1m[94m--> [0msrc/cavity.rs:59:12
+   [1m[94m|[0m
+[1m[94m59[0m [1m[94m|[0m pub struct GenomeCavity {
+   [1m[94m|[0m            [1m[91m^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: method `qualifies` is never used[0m
+  [1m[94m--> [0msrc/cavity.rs:66:12
+   [1m[94m|[0m
+[1m[94m65[0m [1m[94m|[0m impl GenomeCavity {
+   [1m[94m|[0m [1m[94m-----------------[0m [1m[94mmethod in this implementation[0m
+[1m[94m66[0m [1m[94m|[0m     pub fn qualifies(&self) -> bool {
+   [1m[94m|[0m            [1m[91m^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `minimum_genome_cavity_area` is never used[0m
+  [1m[94m--> [0msrc/cavity.rs:74:8
+   [1m[94m|[0m
+[1m[94m74[0m [1m[94m|[0m pub fn minimum_genome_cavity_area(catalog: &[BaseResource]) -> Result<f64, String> {
+   [1m[94m|[0m        [1m[91m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `analyze_genome_cavity` is never used[0m
+  [1m[94m--> [0msrc/cavity.rs:90:8
+   [1m[94m|[0m
+[1m[94m90[0m [1m[94m|[0m pub fn analyze_genome_cavity(
+   [1m[94m|[0m        [1m[91m^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `boundary_bonds_are_sealed` is never used[0m
+   [1m[94m--> [0msrc/cavity.rs:243:4
+    [1m[94m|[0m
+[1m[94m243[0m [1m[94m|[0m fn boundary_bonds_are_sealed(
+    [1m[94m|[0m    [1m[91m^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `polygon_edges_touch` is never used[0m
+   [1m[94m--> [0msrc/cavity.rs:270:4
+    [1m[94m|[0m
+[1m[94m270[0m [1m[94m|[0m fn polygon_edges_touch(a: &[Point], b: &[Point]) -> bool {
+    [1m[94m|[0m    [1m[91m^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `intern` is never used[0m
+   [1m[94m--> [0msrc/cavity.rs:285:4
+    [1m[94m|[0m
+[1m[94m285[0m [1m[94m|[0m fn intern(point: Point, points: &mut Vec<Point>, index: &mut HashMap<(i64, i64), usize>) -> usize {
+    [1m[94m|[0m    [1m[91m^^^^^^[0m
+
+[1m[91merror[0m[1m: function `transformed_polygon` is never used[0m
+   [1m[94m--> [0msrc/cavity.rs:301:4
+    [1m[94m|[0m
+[1m[94m301[0m [1m[94m|[0m fn transformed_polygon(form: &Form, placement: Placement) -> Option<Vec<Point>> {
+    [1m[94m|[0m    [1m[91m^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `form_area` is never used[0m
+   [1m[94m--> [0msrc/cavity.rs:317:4
+    [1m[94m|[0m
+[1m[94m317[0m [1m[94m|[0m fn form_area(form: &Form) -> Option<f64> {
+    [1m[94m|[0m    [1m[91m^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `point_in_polygon` is never used[0m
+   [1m[94m--> [0msrc/cavity.rs:339:4
+    [1m[94m|[0m
+[1m[94m339[0m [1m[94m|[0m fn point_in_polygon(point: Point, polygon: &[Point]) -> bool {
+    [1m[94m|[0m    [1m[91m^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `segment_in_polygon_boundary` is never used[0m
+   [1m[94m--> [0msrc/cavity.rs:353:4
+    [1m[94m|[0m
+[1m[94m353[0m [1m[94m|[0m fn segment_in_polygon_boundary(a: Point, b: Point, polygon: &[Point]) -> bool {
+    [1m[94m|[0m    [1m[91m^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `rigid_endpoint_facing` is never used[0m
+   [1m[94m--> [0msrc/connection_geometry.rs:111:8
+    [1m[94m|[0m
+[1m[94m111[0m [1m[94m|[0m pub fn rigid_endpoint_facing(
+    [1m[94m|[0m        [1m[91m^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `within_contact_tolerance` is never used[0m
+   [1m[94m--> [0msrc/connection_geometry.rs:136:8
+    [1m[94m|[0m
+[1m[94m136[0m [1m[94m|[0m pub fn within_contact_tolerance(
+    [1m[94m|[0m        [1m[91m^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `realize_material` is never used[0m
+   [1m[94m--> [0msrc/construction_runtime.rs:330:15
+    [1m[94m|[0m
+[1m[94m330[0m [1m[94m|[0m pub(crate) fn realize_material(
+    [1m[94m|[0m               [1m[91m^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `contacting_connection_pair_candidates` is never used[0m
+   [1m[94m--> [0msrc/contact.rs:234:8
+    [1m[94m|[0m
+[1m[94m234[0m [1m[94m|[0m pub fn contacting_connection_pair_candidates(
+    [1m[94m|[0m        [1m[91m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: struct `MaterialGeometry` is never constructed[0m
+  [1m[94m--> [0msrc/material_geometry.rs:13:12
+   [1m[94m|[0m
+[1m[94m13[0m [1m[94m|[0m pub struct MaterialGeometry {
+   [1m[94m|[0m            [1m[91m^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: struct `PhysicalMaterialInstance` is never constructed[0m
+  [1m[94m--> [0msrc/material_geometry.rs:22:12
+   [1m[94m|[0m
+[1m[94m22[0m [1m[94m|[0m pub struct PhysicalMaterialInstance {
+   [1m[94m|[0m            [1m[91m^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: associated function `new` is never used[0m
+  [1m[94m--> [0msrc/material_geometry.rs:28:12
+   [1m[94m|[0m
+[1m[94m27[0m [1m[94m|[0m impl PhysicalMaterialInstance {
+   [1m[94m|[0m [1m[94m-----------------------------[0m [1m[94massociated function in this implementation[0m
+[1m[94m28[0m [1m[94m|[0m     pub fn new(
+   [1m[94m|[0m            [1m[91m^^^[0m
+
+[1m[91merror[0m[1m: associated items `new` and `bounding_box_contains` are never used[0m
+  [1m[94m--> [0msrc/material_geometry.rs:41:12
+   [1m[94m|[0m
+[1m[94m40[0m [1m[94m|[0m impl MaterialGeometry {
+   [1m[94m|[0m [1m[94m---------------------[0m [1m[94massociated items in this implementation[0m
+[1m[94m41[0m [1m[94m|[0m     pub fn new(
+   [1m[94m|[0m            [1m[91m^^^[0m
+[1m[94m...[0m
+[1m[94m90[0m [1m[94m|[0m     pub fn bounding_box_contains(&self, x: f64, y: f64) -> bool {
+   [1m[94m|[0m            [1m[91m^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `placed_forms_penetrate` is never used[0m
+   [1m[94m--> [0msrc/material_geometry.rs:144:8
+    [1m[94m|[0m
+[1m[94m144[0m [1m[94m|[0m pub fn placed_forms_penetrate(
+    [1m[94m|[0m        [1m[91m^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `circle_line_penetration` is never used[0m
+   [1m[94m--> [0msrc/material_geometry.rs:213:4
+    [1m[94m|[0m
+[1m[94m213[0m [1m[94m|[0m fn circle_line_penetration(
+    [1m[94m|[0m    [1m[91m^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `circle_polygon_penetration` is never used[0m
+   [1m[94m--> [0msrc/material_geometry.rs:313:4
+    [1m[94m|[0m
+[1m[94m313[0m [1m[94m|[0m fn circle_polygon_penetration(
+    [1m[94m|[0m    [1m[91m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `polygons_penetrate` is never used[0m
+   [1m[94m--> [0msrc/material_geometry.rs:353:4
+    [1m[94m|[0m
+[1m[94m353[0m [1m[94m|[0m fn polygons_penetrate(a: &PlacedMaterialPart, b: &PlacedMaterialPart, tolerance: f64) -> bool {
+    [1m[94m|[0m    [1m[91m^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: methods `bounding_box_contains` and `bounding_radius_about` are never used[0m
+  [1m[94m--> [0msrc/organism_geometry.rs:79:12
+   [1m[94m|[0m
+[1m[94m28[0m [1m[94m|[0m impl OrganismBodyGeometry {
+   [1m[94m|[0m [1m[94m-------------------------[0m [1m[94mmethods in this implementation[0m
+[1m[94m...[0m
+[1m[94m79[0m [1m[94m|[0m     pub fn bounding_box_contains(&self, x: f64, y: f64) -> bool {
+   [1m[94m|[0m            [1m[91m^^^^^^^^^^^^^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m83[0m [1m[94m|[0m     pub fn bounding_radius_about(&self, x: f64, y: f64) -> f64 {
+   [1m[94m|[0m            [1m[91m^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: method `replace` is never used[0m
+  [1m[94m--> [0msrc/physical_geometry.rs:36:12
+   [1m[94m|[0m
+[1m[94m21[0m [1m[94m|[0m impl PhysicalGeometry {
+   [1m[94m|[0m [1m[94m---------------------[0m [1m[94mmethod in this implementation[0m
+[1m[94m...[0m
+[1m[94m36[0m [1m[94m|[0m     pub fn replace(&mut self, shape: Shape) -> bool {
+   [1m[94m|[0m            [1m[91m^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `segment_endpoints` is never used[0m
+   [1m[94m--> [0msrc/surface_geometry.rs:113:8
+    [1m[94m|[0m
+[1m[94m113[0m [1m[94m|[0m pub fn segment_endpoints(
+    [1m[94m|[0m        [1m[91m^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: struct `MaterialIdentityKey` is never constructed[0m
+  [1m[94m--> [0msrc/combine.rs:81:8
+   [1m[94m|[0m
+[1m[94m81[0m [1m[94m|[0m struct MaterialIdentityKey {
+   [1m[94m|[0m        [1m[91m^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: associated function `from_material` is never used[0m
+  [1m[94m--> [0msrc/combine.rs:86:8
+   [1m[94m|[0m
+[1m[94m85[0m [1m[94m|[0m impl MaterialIdentityKey {
+   [1m[94m|[0m [1m[94m------------------------[0m [1m[94massociated function in this implementation[0m
+[1m[94m86[0m [1m[94m|[0m     fn from_material(material: &Material) -> Self {
+   [1m[94m|[0m        [1m[91m^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: struct `MaterialRecipeKey` is never constructed[0m
+   [1m[94m--> [0msrc/combine.rs:106:12
+    [1m[94m|[0m
+[1m[94m106[0m [1m[94m|[0m pub struct MaterialRecipeKey {
+    [1m[94m|[0m            [1m[91m^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: associated functions `from_material` and `from_inputs` are never used[0m
+   [1m[94m--> [0msrc/combine.rs:110:12
+    [1m[94m|[0m
+[1m[94m109[0m [1m[94m|[0m impl MaterialRecipeKey {
+    [1m[94m|[0m [1m[94m----------------------[0m [1m[94massociated functions in this implementation[0m
+[1m[94m110[0m [1m[94m|[0m     pub fn from_material(material: &Material) -> Self {
+    [1m[94m|[0m            [1m[91m^^^^^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m115[0m [1m[94m|[0m     pub fn from_inputs(inputs: &[Material]) -> Self {
+    [1m[94m|[0m            [1m[91m^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: struct `CombineCache` is never constructed[0m
+   [1m[94m--> [0msrc/combine.rs:129:12
+    [1m[94m|[0m
+[1m[94m129[0m [1m[94m|[0m pub struct CombineCache {
+    [1m[94m|[0m            [1m[91m^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: associated items `new`, `combine`, `len`, `is_empty`, and `clear` are never used[0m
+   [1m[94m--> [0msrc/combine.rs:133:12
+    [1m[94m|[0m
+[1m[94m132[0m [1m[94m|[0m impl CombineCache {
+    [1m[94m|[0m [1m[94m-----------------[0m [1m[94massociated items in this implementation[0m
+[1m[94m133[0m [1m[94m|[0m     pub fn new() -> Self {
+    [1m[94m|[0m            [1m[91m^^^[0m
+[1m[94m...[0m
+[1m[94m136[0m [1m[94m|[0m     pub fn combine(&mut self, inputs: &[Material]) -> Material {
+    [1m[94m|[0m            [1m[91m^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m145[0m [1m[94m|[0m     pub fn len(&self) -> usize {
+    [1m[94m|[0m            [1m[91m^^^[0m
+[1m[94m...[0m
+[1m[94m148[0m [1m[94m|[0m     pub fn is_empty(&self) -> bool {
+    [1m[94m|[0m            [1m[91m^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m151[0m [1m[94m|[0m     pub fn clear(&mut self) {
+    [1m[94m|[0m            [1m[91m^^^^^[0m
+
+[1m[91merror[0m[1m: function `evaluate_candidates` is never used[0m
+   [1m[94m--> [0msrc/combine.rs:206:8
+    [1m[94m|[0m
+[1m[94m206[0m [1m[94m|[0m pub fn evaluate_candidates(
+    [1m[94m|[0m        [1m[91m^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `instantiate_one_unit` is never used[0m
+   [1m[94m--> [0msrc/combine_runtime.rs:199:15
+    [1m[94m|[0m
+[1m[94m199[0m [1m[94m|[0m pub(crate) fn instantiate_one_unit(
+    [1m[94m|[0m               [1m[91m^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: method `is_finished` is never used[0m
+  [1m[94m--> [0msrc/decomposition.rs:30:19
+   [1m[94m|[0m
+[1m[94m14[0m [1m[94m|[0m impl DecomposingBody {
+   [1m[94m|[0m [1m[94m--------------------[0m [1m[94mmethod in this implementation[0m
+[1m[94m...[0m
+[1m[94m30[0m [1m[94m|[0m     pub(crate) fn is_finished(&self) -> bool {
+   [1m[94m|[0m                   [1m[91m^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: fields `bond_energy`, `break_interaction_energy`, and `heat` are never read[0m
+  [1m[94m--> [0msrc/decomposition.rs:37:16
+   [1m[94m|[0m
+[1m[94m35[0m [1m[94m|[0m pub(crate) struct DecompositionStep {
+   [1m[94m|[0m                   [1m[94m-----------------[0m [1m[94mfields in this struct[0m
+[1m[94m36[0m [1m[94m|[0m     pub(crate) net_energy: f64,
+[1m[94m37[0m [1m[94m|[0m     pub(crate) bond_energy: f64,
+   [1m[94m|[0m                [1m[91m^^^^^^^^^^^[0m
+[1m[94m38[0m [1m[94m|[0m     pub(crate) break_interaction_energy: f64,
+   [1m[94m|[0m                [1m[91m^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[1m[94m39[0m [1m[94m|[0m     pub(crate) heat: f64,
+   [1m[94m|[0m                [1m[91m^^^^[0m
+
+[1m[91merror[0m[1m: variant `Transfer` is never constructed[0m
+  [1m[94m--> [0msrc/energy_ledger.rs:11:5
+   [1m[94m|[0m
+[1m[94m 6[0m [1m[94m|[0m pub(crate) enum EnergyReason {
+   [1m[94m|[0m                 [1m[94m------------[0m [1m[94mvariant in this enum[0m
+[1m[94m...[0m
+[1m[94m11[0m [1m[94m|[0m     Transfer,
+   [1m[94m|[0m     [1m[91m^^^^^^^^[0m
+   [1m[94m|[0m
+   [1m[94m= [0m[1mnote[0m: `EnergyReason` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+[1m[91merror[0m[1m: method `has_knowledge` is never used[0m
+   [1m[94m--> [0msrc/decision.rs:109:12
+    [1m[94m|[0m
+[1m[94m 59[0m [1m[94m|[0m impl DecisionHistory {
+    [1m[94m|[0m [1m[94m--------------------[0m [1m[94mmethod in this implementation[0m
+[1m[94m...[0m
+[1m[94m109[0m [1m[94m|[0m     pub fn has_knowledge(&self, action: ActionKind, context_key: Option<&str>) -> bool {
+    [1m[94m|[0m            [1m[91m^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: method `contains` is never used[0m
+   [1m[94m--> [0msrc/decision.rs:123:12
+    [1m[94m|[0m
+[1m[94m122[0m [1m[94m|[0m impl CurrentNeeds {
+    [1m[94m|[0m [1m[94m-----------------[0m [1m[94mmethod in this implementation[0m
+[1m[94m123[0m [1m[94m|[0m     pub fn contains(self, need: NeedKind) -> bool {
+    [1m[94m|[0m            [1m[91m^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `approve_action` is never used[0m
+   [1m[94m--> [0msrc/decision.rs:191:8
+    [1m[94m|[0m
+[1m[94m191[0m [1m[94m|[0m pub fn approve_action(
+    [1m[94m|[0m        [1m[91m^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `outcome_is_known` is never used[0m
+   [1m[94m--> [0msrc/decision.rs:216:8
+    [1m[94m|[0m
+[1m[94m216[0m [1m[94m|[0m pub fn outcome_is_known(
+    [1m[94m|[0m        [1m[91m^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `known_outcome` is never used[0m
+  [1m[94m--> [0msrc/decision_runtime.rs:91:8
+   [1m[94m|[0m
+[1m[94m91[0m [1m[94m|[0m pub fn known_outcome(
+   [1m[94m|[0m        [1m[91m^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: methods `processing_efficiency` and `reproductive_investment` are never used[0m
+  [1m[94m--> [0msrc/genome.rs:62:12
+   [1m[94m|[0m
+[1m[94m27[0m [1m[94m|[0m impl Genome {
+   [1m[94m|[0m [1m[94m-----------[0m [1m[94mmethods in this implementation[0m
+[1m[94m...[0m
+[1m[94m62[0m [1m[94m|[0m     pub fn processing_efficiency(&self) -> f64 {
+   [1m[94m|[0m            [1m[91m^^^^^^^^^^^^^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m70[0m [1m[94m|[0m     pub fn reproductive_investment(&self) -> f64 {
+   [1m[94m|[0m            [1m[91m^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: associated items `new` and `total_material_amount` are never used[0m
+   [1m[94m--> [0msrc/structural_blueprint_unified.rs:117:12
+    [1m[94m|[0m
+[1m[94m116[0m [1m[94m|[0m impl StructuralBlueprint {
+    [1m[94m|[0m [1m[94m------------------------[0m [1m[94massociated items in this implementation[0m
+[1m[94m117[0m [1m[94m|[0m     pub fn new(elements: Vec<BlueprintElement>, connections: Vec<BlueprintConnection>) -> Self {
+    [1m[94m|[0m            [1m[91m^^^[0m
+[1m[94m...[0m
+[1m[94m318[0m [1m[94m|[0m     pub fn total_material_amount(&self) -> f64 {
+    [1m[94m|[0m            [1m[91m^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `signed_exponential` is never used[0m
+  [1m[94m--> [0msrc/math.rs:26:8
+   [1m[94m|[0m
+[1m[94m26[0m [1m[94m|[0m pub fn signed_exponential(x: f64) -> f64 {
+   [1m[94m|[0m        [1m[91m^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `circle_overlap_area` is never used[0m
+  [1m[94m--> [0msrc/math.rs:52:8
+   [1m[94m|[0m
+[1m[94m52[0m [1m[94m|[0m pub fn circle_overlap_area(r1: f64, r2: f64, distance: f64) -> f64 {
+   [1m[94m|[0m        [1m[91m^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: constant `COMBINE_PROCESSING_RATE` is never used[0m
+  [1m[94m--> [0msrc/state.rs:75:18
+   [1m[94m|[0m
+[1m[94m75[0m [1m[94m|[0m pub(crate) const COMBINE_PROCESSING_RATE: usize = 1;
+   [1m[94m|[0m                  [1m[91m^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: constant `BREAK_PROCESSING_RATE` is never used[0m
+  [1m[94m--> [0msrc/state.rs:76:18
+   [1m[94m|[0m
+[1m[94m76[0m [1m[94m|[0m pub(crate) const BREAK_PROCESSING_RATE: usize = 1;
+   [1m[94m|[0m                  [1m[91m^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: methods `potential_energy`, `can_break`, and `take` are never used[0m
+   [1m[94m--> [0msrc/resources.rs:228:12
+    [1m[94m|[0m
+[1m[94m191[0m [1m[94m|[0m impl Material {
+    [1m[94m|[0m [1m[94m-------------[0m [1m[94mmethods in this implementation[0m
+[1m[94m...[0m
+[1m[94m228[0m [1m[94m|[0m     pub fn potential_energy(&self, catalog: &[BaseResource]) -> f64 {
+    [1m[94m|[0m            [1m[91m^^^^^^^^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m243[0m [1m[94m|[0m     pub fn can_break(&self) -> bool {
+    [1m[94m|[0m            [1m[91m^^^^^^^^^[0m
+[1m[94m...[0m
+[1m[94m294[0m [1m[94m|[0m     pub fn take(&mut self, amount: f64) -> Option<Material> {
+    [1m[94m|[0m            [1m[91m^^^^[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mnote[0m: `-D dead-code` implied by `-D warnings`
+    [1m[94m= [0m[1mhelp[0m: to override `-D warnings` add `#[expect(dead_code)]` or `#[allow(dead_code)]`
+
+[1m[91merror[0m[1m: field `boundary_units` is never read[0m
+  [1m[94m--> [0msrc/cavity.rs:61:9
+   [1m[94m|[0m
+[1m[94m59[0m [1m[94m|[0m pub struct GenomeCavity {
+   [1m[94m|[0m            [1m[94m------------[0m [1m[94mfield in this struct[0m
+[1m[94m60[0m [1m[94m|[0m     pub area: f64,
+[1m[94m61[0m [1m[94m|[0m     pub boundary_units: Vec<usize>,
+   [1m[94m|[0m         [1m[91m^^^^^^^^^^^^^^[0m
+   [1m[94m|[0m
+   [1m[94m= [0m[1mnote[0m: `GenomeCavity` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+[1m[91merror[0m[1m: associated function `from_material` is never used[0m
+   [1m[94m--> [0msrc/combine.rs:110:12
+    [1m[94m|[0m
+[1m[94m109[0m [1m[94m|[0m impl MaterialRecipeKey {
+    [1m[94m|[0m [1m[94m----------------------[0m [1m[94massociated function in this implementation[0m
+[1m[94m110[0m [1m[94m|[0m     pub fn from_material(material: &Material) -> Self {
+    [1m[94m|[0m            [1m[91m^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: method `total_material_amount` is never used[0m
+   [1m[94m--> [0msrc/structural_blueprint_unified.rs:318:12
+    [1m[94m|[0m
+[1m[94m116[0m [1m[94m|[0m impl StructuralBlueprint {
+    [1m[94m|[0m [1m[94m------------------------[0m [1m[94mmethod in this implementation[0m
+[1m[94m...[0m
+[1m[94m318[0m [1m[94m|[0m     pub fn total_material_amount(&self) -> f64 {
+    [1m[94m|[0m            [1m[91m^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: very complex type used. Consider factoring parts into `type` definitions[0m
+   [1m[94m--> [0msrc/construction_runtime.rs:213:6
+    [1m[94m|[0m
+[1m[94m213[0m [1m[94m|[0m   ) -> Option<(
+    [1m[94m|[0m [1m[91m ______^[0m
+[1m[94m214[0m [1m[94m|[0m [1m[91m|[0m     OrganismStructure,
+[1m[94m215[0m [1m[94m|[0m [1m[91m|[0m     EnergyLedger,
+[1m[94m216[0m [1m[94m|[0m [1m[91m|[0m     f64,
+[1m[94m217[0m [1m[94m|[0m [1m[91m|[0m     Vec<Option<usize>>,
+[1m[94m218[0m [1m[94m|[0m [1m[91m|[0m     f64,
+[1m[94m219[0m [1m[94m|[0m [1m[91m|[0m )> {
+    [1m[94m|[0m [1m[91m|__^[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mhelp[0m: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#type_complexity
+    [1m[94m= [0m[1mnote[0m: `-D clippy::type-complexity` implied by `-D warnings`
+    [1m[94m= [0m[1mhelp[0m: to override `-D warnings` add `#[allow(clippy::type_complexity)]`
+
+[1m[91merror[0m: could not compile `evosim` (bin "evosim" test) due to 23 previous errors
 [1m[33mwarning[0m: build failed, waiting for other jobs to finish...
-[1m[91merror[0m: could not compile `evosim` (bin "evosim" test) due to 2 previous errors
+[1m[91merror[0m: could not compile `evosim` (bin "evosim") due to 63 previous errors
 status=101
