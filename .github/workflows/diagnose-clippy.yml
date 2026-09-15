@@ -13,6 +13,18 @@ jobs:
         with:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
+      - name: Format source
+        run: cargo fmt --all
+      - name: Commit formatting
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src
+          git commit -m "chore: format juvenile architecture [skip ci]"
+          git push origin HEAD:audit/unity-cleanup
       - name: Run Clippy diagnostics
         run: |
           set +e
@@ -24,5 +36,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add CLIPPY_DIAGNOSTIC.txt
-          git commit -m "Diagnose Clippy failure" || exit 0
+          git commit -m "Diagnose Clippy failure [skip ci]" || exit 0
           git push origin HEAD:audit/unity-cleanup
