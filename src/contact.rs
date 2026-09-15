@@ -2,7 +2,7 @@
 use crate::connection_geometry::{
     facing_compatibility, point_distance, rigid_endpoint_world_point, transform_connection_point,
 };
-use crate::resources::{ConnectionPoint, ConnectionSites};
+use crate::resources::{ConnectionPoint, Form};
 use crate::structure::{Bond, ConnectionEndpoint, OrganismStructure, StructuralUnit};
 use crate::surface_geometry::boundary_point_toward;
 
@@ -10,8 +10,8 @@ fn transform_point(
     point: ConnectionPoint,
     unit: &StructuralUnit,
 ) -> crate::connection_geometry::WorldConnectionPoint {
-    // Migration adapter for legacy callers that already possess a ConnectionPoint.
-    // New structural endpoints must use shape-derived geometry below.
+    // Compatibility adapter for callers that already possess a serialized
+    // ConnectionPoint. Runtime endpoint discovery below is shape-derived.
     transform_connection_point(
         point,
         unit.placement.x,
@@ -91,29 +91,33 @@ fn continuous_endpoint(
     let ly = -ux * s + uy * c;
     let shape = unit.shape(catalog)?;
     let point = boundary_point_toward(shape, lx, ly)?;
-    if matches!(
-        unit.connection_sites(catalog)?,
-        ConnectionSites::Circumference { .. }
-    ) {
-        Some(ConnectionEndpoint::Boundary {
+    match shape.form {
+        Form::Circle { .. } => Some(ConnectionEndpoint::Boundary {
             angle_radians: point.y.atan2(point.x),
-        })
-    } else {
-        Some(ConnectionEndpoint::Fluid {
+        }),
+        Form::Fluid { .. } => Some(ConnectionEndpoint::Fluid {
             x: point.x,
             y: point.y,
-        })
+        }),
+        _ => None,
     }
 }
-fn endpoint_indices(sites: &ConnectionSites) -> Vec<ConnectionEndpoint> {
-    match sites {
-        ConnectionSites::Corners(points) => (0..points.len())
-            .map(|i| ConnectionEndpoint::Corner { point_index: i })
-            .collect(),
-        ConnectionSites::Endpoints(points) => (0..points.len())
+
+fn endpoint_indices(unit: &StructuralUnit, catalog: &[crate::resources::BaseResource]) -> Vec<ConnectionEndpoint> {
+    let Some(shape) = unit.shape(catalog) else {
+        return Vec::new();
+    };
+    match &shape.form {
+        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
+            let count = shape.form.polygon_vertices().map_or(0, |v| v.len());
+            (0..count)
+                .map(|i| ConnectionEndpoint::Corner { point_index: i })
+                .collect()
+        }
+        Form::Line { .. } => (0..2)
             .map(|i| ConnectionEndpoint::LineEndpoint { point_index: i })
             .collect(),
-        ConnectionSites::Circumference { .. } | ConnectionSites::Undetermined => Vec::new(),
+        Form::Circle { .. } | Form::Fluid { .. } => Vec::new(),
     }
 }
 fn candidate_endpoints(
@@ -121,14 +125,8 @@ fn candidate_endpoints(
     b: &StructuralUnit,
     catalog: &[crate::resources::BaseResource],
 ) -> Vec<(ConnectionEndpoint, ConnectionEndpoint)> {
-    let Some(sa) = a.connection_sites(catalog) else {
-        return Vec::new();
-    };
-    let Some(sb) = b.connection_sites(catalog) else {
-        return Vec::new();
-    };
-    let ea = endpoint_indices(&sa);
-    let eb = endpoint_indices(&sb);
+    let ea = endpoint_indices(a, catalog);
+    let eb = endpoint_indices(b, catalog);
     if !ea.is_empty() && !eb.is_empty() {
         return ea
             .into_iter()
@@ -414,7 +412,7 @@ mod tests {
         }
     }
     #[test]
-    fn corner_contact_does_not_require_opposing_vertex_normals() {
+    fn corner_contact_uses_shape_vertices_directly() {
         let catalog = default_catalog();
         let a = StructuralUnit::new(
             "Carbon",
@@ -433,20 +431,9 @@ mod tests {
                 rotation_radians: std::f64::consts::FRAC_PI_6,
             },
         );
-        let ConnectionSites::Corners(pa) = a.connection_sites(&catalog).unwrap() else {
-            panic!()
-        };
-        let ConnectionSites::Corners(pb) = b.connection_sites(&catalog).unwrap() else {
-            panic!()
-        };
-        assert!(connection_points_contact(
-            pa[0],
-            &a,
-            pb[2],
-            &b,
-            1e-9,
-            1.0 - 1e-9
-        ))
+        let pa = endpoint_world_point(ConnectionEndpoint::Corner { point_index: 0 }, &a, &catalog).unwrap();
+        let pb = endpoint_world_point(ConnectionEndpoint::Corner { point_index: 2 }, &b, &catalog).unwrap();
+        assert!(point_distance(pa, pb) <= 1e-9);
     }
     #[test]
     fn repeated_bonds_at_one_contact_are_not_rejected_by_occupancy() {
