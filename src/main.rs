@@ -14,6 +14,7 @@ mod cavity;
 mod connection_geometry;
 mod construction_runtime;
 mod contact;
+mod juvenile;
 mod material_geometry;
 mod organism_geometry;
 mod physical_geometry;
