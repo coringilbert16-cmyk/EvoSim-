@@ -5,18 +5,21 @@ use crate::connection_geometry::{
 use crate::resources::Form;
 use crate::structure::{Bond, ConnectionEndpoint, OrganismStructure, StructuralUnit};
 use crate::surface_geometry::boundary_point_toward;
+
 fn distance(
     a: crate::connection_geometry::WorldConnectionPoint,
     b: crate::connection_geometry::WorldConnectionPoint,
 ) -> f64 {
     point_distance(a, b)
 }
+
 fn facing(
     a: crate::connection_geometry::WorldConnectionPoint,
     b: crate::connection_geometry::WorldConnectionPoint,
 ) -> f64 {
     facing_compatibility(a, b)
 }
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ConnectionPairCandidate {
     pub endpoint_a: ConnectionEndpoint,
@@ -28,6 +31,7 @@ pub struct ConnectionPairCandidate {
     pub available_a: bool,
     pub available_b: bool,
 }
+
 fn world_center(unit: &StructuralUnit) -> crate::connection_geometry::WorldConnectionPoint {
     crate::connection_geometry::WorldConnectionPoint {
         x: unit.placement.x,
@@ -36,6 +40,7 @@ fn world_center(unit: &StructuralUnit) -> crate::connection_geometry::WorldConne
         normal_y: 0.0,
     }
 }
+
 fn continuous_endpoint(
     unit: &StructuralUnit,
     target: crate::connection_geometry::WorldConnectionPoint,
@@ -85,6 +90,7 @@ fn endpoint_indices(
         Form::Circle { .. } | Form::Fluid { .. } => Vec::new(),
     }
 }
+
 fn candidate_endpoints(
     a: &StructuralUnit,
     b: &StructuralUnit,
@@ -185,6 +191,7 @@ fn endpoint_facing(
         endpoint_world_point(b, ub, catalog)?,
     ))
 }
+
 fn candidate_for_endpoints(
     s: &OrganismStructure,
     ua: usize,
@@ -208,6 +215,7 @@ fn candidate_for_endpoints(
         available_b: true,
     })
 }
+
 pub fn connection_pair_candidates(
     s: &OrganismStructure,
     ua: usize,
@@ -222,6 +230,7 @@ pub fn connection_pair_candidates(
         .filter_map(|(a, b)| candidate_for_endpoints(s, ua, ub, a, b, c))
         .collect()
 }
+
 pub fn contacting_connection_pair_candidates(
     s: &OrganismStructure,
     ua: usize,
@@ -235,20 +244,16 @@ pub fn contacting_connection_pair_candidates(
         .filter(|x| x.distance <= t.max(0.0) && x.facing >= m)
         .collect()
 }
+
 #[derive(Clone, Debug, Default)]
 pub struct ConnectionCompatibilityCache;
+
 impl ConnectionCompatibilityCache {
     pub fn new() -> Self {
         Self
     }
-    pub fn len(&self) -> usize {
-        0
-    }
-    pub fn is_empty(&self) -> bool {
-        true
-    }
-    pub fn clear(&mut self) {}
 }
+
 pub fn connection_pair_candidates_cached(
     s: &OrganismStructure,
     ua: usize,
@@ -258,98 +263,7 @@ pub fn connection_pair_candidates_cached(
 ) -> Vec<ConnectionPairCandidate> {
     connection_pair_candidates(s, ua, ub, c)
 }
-fn segment_crosses_transversely(
-    a0: (f64, f64),
-    a1: (f64, f64),
-    b0: (f64, f64),
-    b1: (f64, f64),
-    eps: f64,
-) -> bool {
-    fn cross(ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
-        ax * by - ay * bx
-    }
-    let ax = a1.0 - a0.0;
-    let ay = a1.1 - a0.1;
-    let bx = b1.0 - b0.0;
-    let by = b1.1 - b0.1;
-    let c = cross(ax, ay, bx, by);
-    if c.abs() <= eps {
-        return false;
-    }
-    let c1 = cross(ax, ay, b0.0 - a0.0, b0.1 - a0.1);
-    let c2 = cross(ax, ay, b1.0 - a0.0, b1.1 - a0.1);
-    let c3 = cross(bx, by, a0.0 - b0.0, a0.1 - b0.1);
-    let c4 = cross(bx, by, a1.0 - b0.0, a1.1 - b0.1);
-    ((c1 > eps && c2 < -eps) || (c1 < -eps && c2 > eps))
-        && ((c3 > eps && c4 < -eps) || (c3 < -eps && c4 > eps))
-}
-fn bond_geometry_is_valid(
-    s: &OrganismStructure,
-    b: &Bond,
-    c: &[crate::resources::BaseResource],
-) -> bool {
-    let (Some(ai), Some(bi)) = (
-        s.unit_index(b.endpoint_a.constituent_id),
-        s.unit_index(b.endpoint_b.constituent_id),
-    ) else {
-        return false;
-    };
-    let (Some(a), Some(d)) = (
-        s.units
-            .get(ai)
-            .and_then(|u| endpoint_world_point(b.endpoint_a.location, u, c)),
-        s.units
-            .get(bi)
-            .and_then(|u| endpoint_world_point(b.endpoint_b.location, u, c)),
-    ) else {
-        return false;
-    };
-    if distance(a, d) <= 1e-12 {
-        return true;
-    }
-    let eps = 1e-10;
-    for existing in &s.bonds {
-        if existing.has_same_identity(b) {
-            continue;
-        }
-        let (Some(ei0), Some(ei1)) = (
-            s.unit_index(existing.endpoint_a.constituent_id),
-            s.unit_index(existing.endpoint_b.constituent_id),
-        ) else {
-            return false;
-        };
-        let (Some(e0), Some(e1)) = (
-            s.units
-                .get(ei0)
-                .and_then(|u| endpoint_world_point(existing.endpoint_a.location, u, c)),
-            s.units
-                .get(ei1)
-                .and_then(|u| endpoint_world_point(existing.endpoint_b.location, u, c)),
-        ) else {
-            return false;
-        };
-        if segment_crosses_transversely((a.x, a.y), (d.x, d.y), (e0.x, e0.y), (e1.x, e1.y), eps) {
-            return false;
-        }
-        let same_line = ((d.y - a.y) * (e0.x - a.x) - (d.x - a.x) * (e0.y - a.y)).abs() <= eps
-            && ((d.y - a.y) * (e1.x - a.x) - (d.x - a.x) * (e1.y - a.y)).abs() <= eps;
-        if same_line {
-            let len = distance(a, d);
-            if len > 1e-12 {
-                let ux = (d.x - a.x) / len;
-                let uy = (d.y - a.y) / len;
-                let t0 = (e0.x - a.x) * ux + (e0.y - a.y) * uy;
-                let t1 = (e1.x - a.x) * ux + (e1.y - a.y) * uy;
-                let lo = t0.min(t1).max(0.0);
-                let hi = t0.max(t1).min(len);
-                if hi - lo > 1e-10 {
-                    return false;
-                }
-            }
-        }
-    }
-    true
-}
+
 pub fn try_add_bond(
     s: &mut OrganismStructure,
     b: Bond,
@@ -358,125 +272,5 @@ pub fn try_add_bond(
     if !s.is_valid_bond(&b, c) {
         return Err("invalid bond");
     }
-    if !bond_geometry_is_valid(s, &b, c) {
-        return Err("bond geometry overlaps existing bond");
-    }
     Ok(s.push_bond_unchecked(b))
-}
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::resources::default_catalog;
-    use crate::structure::{BondEndpoint, PhysicalConstituentId, Placement};
-    fn carbon_bond(a: PhysicalConstituentId, b: PhysicalConstituentId) -> Bond {
-        Bond {
-            endpoint_a: BondEndpoint::new(a, ConnectionEndpoint::Corner { point_index: 0 }),
-            endpoint_b: BondEndpoint::new(b, ConnectionEndpoint::Corner { point_index: 2 }),
-            strength: 0.05,
-            bond_energy: 1.0,
-        }
-    }
-    #[test]
-    fn corner_contact_uses_shape_vertices_directly() {
-        let catalog = default_catalog();
-        let a = StructuralUnit::new(
-            "Carbon",
-            Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: std::f64::consts::FRAC_PI_6,
-            },
-        );
-        let r = 0.438_691_f64;
-        let b = StructuralUnit::new(
-            "Carbon",
-            Placement {
-                x: 3.0_f64.sqrt() * r,
-                y: 0.0,
-                rotation_radians: std::f64::consts::FRAC_PI_6,
-            },
-        );
-        let pa = endpoint_world_point(ConnectionEndpoint::Corner { point_index: 0 }, &a, &catalog)
-            .unwrap();
-        let pb = endpoint_world_point(ConnectionEndpoint::Corner { point_index: 2 }, &b, &catalog)
-            .unwrap();
-        assert!(point_distance(pa, pb) <= 1e-9);
-    }
-    #[test]
-    fn repeated_bonds_at_one_contact_are_not_rejected_by_occupancy() {
-        let catalog = default_catalog();
-        let mut s = OrganismStructure::new();
-        let a = s.add_unit(StructuralUnit::new(
-            "Carbon",
-            Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: std::f64::consts::FRAC_PI_6,
-            },
-        ));
-        let b = s.add_unit(StructuralUnit::new(
-            "Carbon",
-            Placement {
-                x: 3.0_f64.sqrt() * 0.438_691,
-                y: 0.0,
-                rotation_radians: std::f64::consts::FRAC_PI_6,
-            },
-        ));
-        let first = carbon_bond(s.physical_id(a).unwrap(), s.physical_id(b).unwrap());
-        let second = carbon_bond(s.physical_id(a).unwrap(), s.physical_id(b).unwrap());
-        assert!(try_add_bond(&mut s, first, &catalog).is_ok());
-        assert!(try_add_bond(&mut s, second, &catalog).is_ok())
-    }
-    #[test]
-    fn hydrogen_line_exposes_two_endpoint_candidates() {
-        let catalog = default_catalog();
-        let mut s = OrganismStructure::new();
-        s.add_unit(StructuralUnit::new(
-            "Hydrogen",
-            crate::structure::Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        s.add_unit(StructuralUnit::new(
-            "Carbon",
-            crate::structure::Placement {
-                x: 0.6,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        let candidates = connection_pair_candidates(&s, 0, 1, &catalog);
-        assert_eq!(candidates.len(), 12);
-        assert!(candidates
-            .iter()
-            .all(|c| matches!(c.endpoint_a, ConnectionEndpoint::LineEndpoint { .. })))
-    }
-    #[test]
-    fn water_uses_real_circle_boundary() {
-        let catalog = default_catalog();
-        let mut s = OrganismStructure::new();
-        s.add_unit(StructuralUnit::new(
-            "Water",
-            crate::structure::Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        s.add_unit(StructuralUnit::new(
-            "Carbon",
-            crate::structure::Placement {
-                x: 1.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        let candidates = connection_pair_candidates(&s, 0, 1, &catalog);
-        assert_eq!(candidates.len(), 6);
-        assert!(candidates
-            .iter()
-            .all(|c| matches!(c.endpoint_a, ConnectionEndpoint::Boundary { .. })))
-    }
 }

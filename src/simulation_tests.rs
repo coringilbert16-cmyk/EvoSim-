@@ -4,6 +4,7 @@ mod integration_tests {
     use crate::resources::{InternalBond, Material};
     use crate::state::{DevelopmentStage, Simulation};
     use crate::structure::{Bond, BondEndpoint, ConnectionEndpoint, Placement, StructuralUnit};
+
     fn structured_carbon_hydrogen() -> Material {
         Material {
             parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
@@ -13,10 +14,11 @@ mod integration_tests {
             }],
         }
     }
+
     #[test]
-    fn fresh_organism_is_realized_from_its_genome_blueprint() {
+    fn fresh_organism_is_a_physically_realized_juvenile() {
         let o = Simulation::create_initial_organism();
-        let blueprint = &o.genome.structural_blueprint;
+        let blueprint = &o.genome.juvenile_blueprint;
         let expected_constituents = blueprint
             .elements
             .iter()
@@ -33,22 +35,27 @@ mod integration_tests {
             expected_internal_bonds + blueprint.connections.len()
         );
         assert!(!o.structure.units.is_empty());
-        assert!(o.stored_material.is_empty());
-        assert!(matches!(o.development_stage, DevelopmentStage::Adult));
-        assert!(o.decision_history.entries.is_empty())
+        assert!(!o.stored_material.is_empty());
+        assert!(matches!(o.development_stage, DevelopmentStage::Juvenile));
+        assert_eq!(
+            o.stored_material.materials,
+            vec![o.genome.juvenile_reserve.clone()]
+        );
+        assert!(o.usable_energy >= o.genome.juvenile_energy_reserve);
+        assert!(o.decision_history.entries.is_empty());
     }
+
     #[test]
-    fn initial_organism_is_adult_when_realized_mass_reaches_ninety_percent_of_mature_blueprint_size(
-    ) {
+    fn seed_retains_a_distinct_mature_developmental_target() {
         let o = Simulation::create_initial_organism();
-        let mature = o
-            .genome
-            .structural_blueprint
-            .structural_mass(&crate::resources::default_catalog());
-        let realized = o.structural_mass(&crate::resources::default_catalog());
-        assert!(realized / mature >= 0.90);
-        assert!(matches!(o.development_stage, DevelopmentStage::Adult))
+        let c = &crate::resources::default_catalog();
+        let juvenile = o.genome.juvenile_blueprint.structural_mass(c);
+        let mature = o.genome.structural_blueprint.structural_mass(c);
+        assert!(mature > juvenile);
+        assert!(o.structural_mass(c) < mature * 0.90);
+        assert!(matches!(o.development_stage, DevelopmentStage::Juvenile));
     }
+
     #[test]
     fn adulthood_is_irreversible_after_structural_loss() {
         let mut s = Simulation::new(32, 10.0);
@@ -59,23 +66,23 @@ mod integration_tests {
         assert!(matches!(
             s.organisms[0].development_stage,
             DevelopmentStage::Adult
-        ))
+        ));
     }
     #[test]
     fn storage_contains_discrete_independent_material_objects() {
         let mut o = Simulation::create_initial_organism();
         assert!(o.store_material(Material::free_base("Carbon", 5.0)));
-        assert_eq!(o.stored_material.materials.len(), 5);
-        assert_eq!(o.stored_material.count_unstructured(), 5);
-        assert_eq!(o.stored_material.total_amount(), 5.0)
+        assert_eq!(o.stored_material.materials.len(), 6);
+        assert_eq!(o.stored_material.count_unstructured(), 6);
+        assert_eq!(o.stored_material.total_amount(), 6.0);
     }
     #[test]
     fn storage_preserves_a_compound_as_one_intact_object() {
         let mut o = Simulation::create_initial_organism();
         let m = structured_carbon_hydrogen();
         assert!(o.store_material(m.clone()));
-        assert_eq!(o.stored_material.materials, vec![m]);
-        assert_eq!(o.stored_material.count_structured(), 1)
+        assert!(o.stored_material.materials.contains(&m));
+        assert_eq!(o.stored_material.count_structured(), 1);
     }
     #[test]
     fn acquire_moves_one_free_unit_into_storage_and_conserves_material_when_vents_are_disabled() {
@@ -99,7 +106,7 @@ mod integration_tests {
         s.step();
         let after = s.total_material_in_system();
         assert!((after - before).abs() < 1e-3);
-        assert_eq!(s.organisms[0].stored_material.total_amount(), 1.0)
+        assert_eq!(s.organisms[0].stored_material.total_amount(), 2.0);
     }
     #[test]
     fn acquire_accepts_and_preserves_structured_material() {
@@ -120,7 +127,7 @@ mod integration_tests {
         );
         s.step();
         assert!(s.environment.field.cells[i].materials.is_empty());
-        assert_eq!(s.organisms[0].stored_material.materials, vec![m])
+        assert!(s.organisms[0].stored_material.materials.contains(&m));
     }
     #[test]
     fn acquire_only_considers_the_currently_occupied_field_cell() {
@@ -135,14 +142,13 @@ mod integration_tests {
             .field
             .deposit_at_index(i, Material::free_base("Carbon", 10.0));
         s.step();
-        assert!(s.organisms[0].stored_material.is_empty())
+        assert_eq!(s.organisms[0].stored_material.total_amount(), 1.0);
     }
     #[test]
     fn structural_material_is_not_opened_by_storage() {
         let mut o = Simulation::create_initial_organism();
         assert!(o.store_material(structured_carbon_hydrogen()));
-        assert_eq!(o.stored_material.count_unstructured(), 0);
-        assert_eq!(o.stored_material.count_structured(), 1)
+        assert_eq!(o.stored_material.count_structured(), 1);
     }
     #[test]
     fn fresh_simulation_material_flow_remains_finite_with_direct_vent_sources() {
@@ -151,7 +157,7 @@ mod integration_tests {
             s.step();
         }
         assert!(s.total_material_in_system().is_finite());
-        assert!(s.total_material_in_system() > 0.0)
+        assert!(s.total_material_in_system() > 0.0);
     }
     fn add_test_break_bond(s: &mut Simulation) {
         s.organisms[0].structure.bonds.clear();
@@ -186,7 +192,7 @@ mod integration_tests {
         add_test_break_bond(&mut s);
         s.step();
         assert_eq!(s.organisms[0].structure.bonds.len(), 1);
-        assert!(s.organisms[0].active_transformation_id.is_some())
+        assert!(s.organisms[0].active_transformation_id.is_some());
     }
     #[test]
     fn break_resolution_changes_state_on_expected_tick() {
@@ -240,6 +246,6 @@ mod integration_tests {
         assert!((s.organisms[0].usable_energy - expected).abs() < 1e-12);
         assert!(s.organisms[0]
             .decision_history
-            .has_knowledge(ActionKind::Break, Some("bond:0")))
+            .has_knowledge(ActionKind::Break, Some("bond:0")));
     }
 }

@@ -8,24 +8,18 @@ mod material_transfer;
 mod resources;
 mod structure;
 
-// Physical geometry, interfaces, contact, and construction.
-mod boundary_contact;
-#[allow(clippy::manual_range_contains)]
+// Active physical geometry authority stack. These modules query realized rigid
+// geometry; they do not define a second catalog-shaped physical representation.
+mod architecture;
 mod cavity;
 mod connection_geometry;
-mod construction_legacy;
-#[allow(clippy::useless_vec)]
-mod construction_realization;
 mod construction_runtime;
 mod contact;
-mod interface_geometry;
-#[allow(unused_variables)]
+mod juvenile;
+mod juvenile_requirements;
 mod material_geometry;
-mod organism_boundary;
 mod organism_geometry;
-mod permeability;
 mod physical_geometry;
-mod physical_interface;
 mod rigid_boundary;
 mod surface_geometry;
 
@@ -57,6 +51,8 @@ mod simulation;
 mod state;
 
 // Integration and contract tests.
+#[cfg(test)]
+mod architecture_contract_tests;
 #[cfg(test)]
 mod blueprint_diagnostics;
 #[cfg(test)]

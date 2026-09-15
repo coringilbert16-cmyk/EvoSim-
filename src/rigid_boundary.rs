@@ -154,13 +154,6 @@ pub fn world_vertex(shape: &Shape, vertex: usize, placement: Placement) -> Optio
     Some((placement.x + x * c - y * s, placement.y + x * s + y * c))
 }
 
-pub fn has_polygon_boundary(shape: &Shape) -> bool {
-    matches!(
-        shape.form,
-        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. }
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

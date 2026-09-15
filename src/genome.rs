@@ -2,10 +2,13 @@ use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 
+use crate::architecture::{default_architecture, OrganismArchitecture, JUVENILE_LINEAR_SCALE};
 use crate::resources::Material;
-use crate::structural_blueprint::{
-    BlueprintConnection, BlueprintElement, BlueprintPlacement, StructuralBlueprint,
-};
+use crate::structural_blueprint::StructuralBlueprint;
+
+fn empty_blueprint() -> StructuralBlueprint {
+    StructuralBlueprint::new(Vec::new(), Vec::new())
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TraitDef {
@@ -18,8 +21,19 @@ pub struct TraitDef {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Genome {
     pub traits: Vec<TraitDef>,
-    #[serde(default = "default_structural_blueprint")]
+    #[serde(default = "default_juvenile_reserve")]
+    pub juvenile_reserve: Material,
+    #[serde(default = "default_juvenile_energy_reserve")]
+    pub juvenile_energy_reserve: f64,
+    /// Sole inherited structural authority. Region-level intent only; no physical bonds or constituent coordinates.
+    #[serde(default = "default_architecture")]
+    pub architecture: OrganismArchitecture,
+    /// Transitional runtime cache derived exclusively from architecture. Not serialized or biological state.
+    #[serde(skip, default = "empty_blueprint")]
     pub structural_blueprint: StructuralBlueprint,
+    /// Transitional runtime target cache for old lifecycle call sites. Derived, not inherited body-plan state.
+    #[serde(skip, default = "empty_blueprint")]
+    pub juvenile_blueprint: StructuralBlueprint,
 }
 
 impl Genome {
@@ -70,9 +84,27 @@ impl Genome {
             .clamp(0.15, 1.0)
     }
 
+    pub fn mature_construction_target(&self) -> Result<StructuralBlueprint, String> {
+        self.architecture.adult_construction_target()
+    }
+    pub fn developmental_construction_target(
+        &self,
+        catalog: &[crate::resources::BaseResource],
+    ) -> Result<StructuralBlueprint, String> {
+        self.architecture
+            .developmental_target(JUVENILE_LINEAR_SCALE, catalog)
+    }
+
+    fn refresh_construction_caches(&mut self) -> Result<(), String> {
+        self.structural_blueprint = self.mature_construction_target()?;
+        self.juvenile_blueprint =
+            self.developmental_construction_target(&crate::resources::default_catalog())?;
+        Ok(())
+    }
+
     pub fn mutate(&mut self, rng: &mut ChaCha8Rng) {
-        let mut mutation_probability_sum = 0.0;
-        let mut mutation_sigma_sum = 0.0;
+        let mut probability_sum = 0.0;
+        let mut sigma_sum = 0.0;
         for t in &mut self.traits {
             if rng.gen::<f64>() < t.mutation_probability.clamp(1e-6, 0.25) {
                 t.value += rng.gen_range(-1.0..1.0) * t.mutation_sigma.max(0.0);
@@ -81,38 +113,52 @@ impl Genome {
                 t.mutation_probability =
                     (t.mutation_probability * rng.gen_range(0.5..1.5)).clamp(1e-6, 0.1);
             }
-            mutation_probability_sum += t.mutation_probability;
-            mutation_sigma_sum += t.mutation_sigma.max(0.0);
+            probability_sum += t.mutation_probability;
+            sigma_sum += t.mutation_sigma.max(0.0);
         }
         let count = self.traits.len().max(1) as f64;
-        let structural_probability = (mutation_probability_sum / count).clamp(1e-6, 0.25);
-        let structural_sigma = (mutation_sigma_sum / count).clamp(1e-6, 1.0);
-        self.mutate_structural_blueprint(rng, structural_probability, structural_sigma);
+        self.mutate_architecture(
+            rng,
+            (probability_sum / count).clamp(1e-6, 0.25),
+            (sigma_sum / count).clamp(1e-6, 1.0),
+        );
     }
 
-    fn mutate_structural_blueprint(
+    fn mutate_architecture(
         &mut self,
         rng: &mut ChaCha8Rng,
         mutation_probability: f64,
         mutation_sigma: f64,
     ) {
-        let original = self.structural_blueprint.clone();
+        let original = self.architecture.clone();
+        let original_adult = self.structural_blueprint.clone();
+        let original_juvenile = self.juvenile_blueprint.clone();
         let probability = mutation_probability.clamp(0.0, 1.0);
         let sigma = mutation_sigma.max(0.0);
-        for element in &mut self.structural_blueprint.elements {
+        for region in &mut self.architecture.regions {
             if rng.gen::<f64>() >= probability {
                 continue;
             }
-            element.placement.x += rng.gen_range(-1.0..1.0) * sigma;
-            element.placement.y += rng.gen_range(-1.0..1.0) * sigma;
-            element.placement.rotation_radians += rng.gen_range(-1.0..1.0) * sigma;
+            region.center_x += rng.gen_range(-1.0..1.0) * sigma;
+            region.center_y += rng.gen_range(-1.0..1.0) * sigma;
+            let factor = (1.0 + rng.gen_range(-1.0..1.0) * sigma * 0.1).max(0.01);
+            region.extent_x *= factor;
+            region.extent_y *= factor;
         }
-        if !self.structural_blueprint.is_valid() {
-            self.structural_blueprint = original;
+        if self.architecture.validate().is_err() || self.refresh_construction_caches().is_err() {
+            self.architecture = original;
+            self.structural_blueprint = original_adult;
+            self.juvenile_blueprint = original_juvenile;
         }
     }
 }
 
+fn default_juvenile_reserve() -> Material {
+    Material::free_base("Hydrogen", 1.0)
+}
+fn default_juvenile_energy_reserve() -> f64 {
+    16.0
+}
 fn trait_def(name: &str, value: f64, sigma: f64) -> TraitDef {
     TraitDef {
         name: name.into(),
@@ -122,76 +168,9 @@ fn trait_def(name: &str, value: f64, sigma: f64) -> TraitDef {
     }
 }
 
-fn seed_wall_material() -> Material {
-    Material {
-        parts: vec![("Nitrogen".into(), 1.0)],
-        internal_bonds: Vec::new(),
-    }
-}
-
-fn default_structural_blueprint() -> StructuralBlueprint {
-    let half_wall = 1.511_858 / 2.0;
-    let half_thickness = 0.330_719 / 2.0;
-    let center_offset = half_wall + half_thickness;
-    StructuralBlueprint::with_core_elements(
-        vec![
-            BlueprintElement {
-                material: seed_wall_material(),
-                placement: BlueprintPlacement {
-                    x: 0.0,
-                    y: center_offset,
-                    rotation_radians: 0.0,
-                },
-            },
-            BlueprintElement {
-                material: seed_wall_material(),
-                placement: BlueprintPlacement {
-                    x: -center_offset,
-                    y: 0.0,
-                    rotation_radians: std::f64::consts::FRAC_PI_2,
-                },
-            },
-            BlueprintElement {
-                material: seed_wall_material(),
-                placement: BlueprintPlacement {
-                    x: center_offset,
-                    y: 0.0,
-                    rotation_radians: std::f64::consts::FRAC_PI_2,
-                },
-            },
-            BlueprintElement {
-                material: seed_wall_material(),
-                placement: BlueprintPlacement {
-                    x: 0.0,
-                    y: -center_offset,
-                    rotation_radians: 0.0,
-                },
-            },
-        ],
-        vec![
-            BlueprintConnection {
-                element_a: 0,
-                element_b: 1,
-            },
-            BlueprintConnection {
-                element_a: 0,
-                element_b: 2,
-            },
-            BlueprintConnection {
-                element_a: 1,
-                element_b: 3,
-            },
-            BlueprintConnection {
-                element_a: 2,
-                element_b: 3,
-            },
-        ],
-        vec![0],
-    )
-}
-
 pub fn initial_genome() -> Genome {
-    Genome {
+    let architecture = default_architecture();
+    let mut genome = Genome {
         traits: vec![
             trait_def("memory_strength", 0.5, 0.05),
             trait_def("perception_radius", 100.0, 1.0),
@@ -205,8 +184,16 @@ pub fn initial_genome() -> Genome {
             trait_def("movement_efficiency", 0.8, 0.05),
             trait_def("reproductive_investment", 0.5, 0.05),
         ],
-        structural_blueprint: default_structural_blueprint(),
-    }
+        juvenile_reserve: default_juvenile_reserve(),
+        juvenile_energy_reserve: default_juvenile_energy_reserve(),
+        architecture,
+        structural_blueprint: empty_blueprint(),
+        juvenile_blueprint: empty_blueprint(),
+    };
+    genome
+        .refresh_construction_caches()
+        .expect("default architecture must produce construction targets");
+    genome
 }
 
 #[cfg(test)]
@@ -214,56 +201,39 @@ mod tests {
     use super::*;
     use crate::resources::default_catalog;
     use rand::SeedableRng;
-
     #[test]
-    fn seed_blueprint_has_a_four_wall_genome_bearing_phenotype() {
-        let g = initial_genome();
-        let b = &g.structural_blueprint;
-        assert_eq!(b.elements.len(), 4);
-        assert_eq!(b.connections.len(), 4);
-        assert_eq!(b.core_elements, vec![0]);
-        assert!(b.validate().is_ok());
-        assert!(b.is_connected());
-        assert!(b
-            .elements
-            .iter()
-            .all(|element| element.material.parts.len() == 1));
-        assert!(b.realize(&default_catalog()).is_ok());
+    fn genome_architecture_is_the_serialized_structural_authority() {
+        let genome = initial_genome();
+        assert!(genome.architecture.validate().is_ok());
+        assert_eq!(genome.architecture.regions.len(), 3);
     }
-
     #[test]
-    fn seed_blueprint_is_connected() {
-        assert!(initial_genome().structural_blueprint.is_connected());
+    fn construction_targets_are_derived_from_architecture() {
+        let genome = initial_genome();
+        let catalog = default_catalog();
+        assert!(genome.mature_construction_target().unwrap().is_valid());
+        assert!(genome
+            .developmental_construction_target(&catalog)
+            .unwrap()
+            .is_valid());
     }
-
     #[test]
-    fn seed_genome_core_is_connected() {
-        let b = &initial_genome().structural_blueprint;
-        assert_eq!(b.core_elements, vec![0]);
-        assert!(b.core_elements.iter().all(|&i| i < b.elements.len()));
-    }
-
-    #[test]
-    fn structural_mutation_is_heritable_and_preserves_blueprint_validity() {
+    fn structural_mutation_rolls_back_architecture_and_derived_targets() {
         let mut genome = initial_genome();
-        let before = genome.structural_blueprint.clone();
+        let before_architecture = genome.architecture.clone();
+        let before_adult = genome.structural_blueprint.clone();
+        let before_juvenile = genome.juvenile_blueprint.clone();
         let mut rng = ChaCha8Rng::seed_from_u64(7);
-        genome.mutate_structural_blueprint(&mut rng, 1.0, 0.05);
-        assert!(genome.structural_blueprint.is_valid());
-        assert_ne!(genome.structural_blueprint, before);
-        assert_eq!(genome.structural_blueprint.connections, before.connections);
-        assert_eq!(
-            genome.structural_blueprint.core_elements,
-            before.core_elements
-        );
+        genome.mutate_architecture(&mut rng, 1.0, f64::INFINITY);
+        assert_eq!(genome.architecture, before_architecture);
+        assert_eq!(genome.structural_blueprint, before_adult);
+        assert_eq!(genome.juvenile_blueprint, before_juvenile);
     }
-
     #[test]
-    fn invalid_structural_mutation_is_rejected_transactionally() {
-        let mut genome = initial_genome();
-        let before = genome.structural_blueprint.clone();
-        let mut rng = ChaCha8Rng::seed_from_u64(7);
-        genome.mutate_structural_blueprint(&mut rng, 1.0, f64::INFINITY);
-        assert_eq!(genome.structural_blueprint, before);
+    fn reserves_remain_genome_defined() {
+        let genome = initial_genome();
+        assert!(genome.juvenile_reserve.is_valid());
+        assert_eq!(genome.juvenile_reserve.total_amount(), 1.0);
+        assert!(genome.juvenile_energy_reserve.is_finite() && genome.juvenile_energy_reserve > 0.0);
     }
 }

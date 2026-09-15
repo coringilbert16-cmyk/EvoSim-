@@ -1,0 +1,6 @@
+status=0
+--- guard output ---
+COMBINE architecture guards passed.
+--- direct Bond matches ---
+--- direct bond admission matches ---
+--- capacity matches ---

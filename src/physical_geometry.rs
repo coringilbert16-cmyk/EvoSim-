@@ -11,11 +11,11 @@ impl PartialEq for Shape {
 ///
 /// A rigid constituent may translate and rotate through `Placement`, but its
 /// local shape cannot be replaced, deformed, or resized after realization.
-/// The resource catalog is the authority for that local shape; this value is
-/// only the realized physical instance of it.
+/// The resource catalog is the authority for construction-time default shape;
+/// this value is the realized physical instance of it.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct PhysicalGeometry {
-    pub shape: Shape,
+    shape: Shape,
 }
 
 impl PhysicalGeometry {
@@ -31,14 +31,8 @@ impl PhysicalGeometry {
         &self.shape
     }
 
-    /// Return the realized immutable form.
-    pub fn form(&self) -> &crate::resources::Form {
-        &self.shape.form
-    }
-
-    /// Rigid geometry cannot be replaced. This method is retained temporarily
-    /// as a migration guard for existing callers: only an identical shape is
-    /// accepted, and the stored geometry is never mutated.
+    /// Rigid geometry cannot be replaced. This compatibility method accepts
+    /// only an identical shape and never mutates the realized geometry.
     pub fn replace(&mut self, shape: Shape) -> bool {
         self.shape == shape
     }
