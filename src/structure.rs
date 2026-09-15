@@ -236,13 +236,23 @@ impl ConnectionEndpoint {
                 .map(ConnectionRegion::Corner)
             }
             Self::Boundary { .. } => {
-                let crate::resources::Form::Circle { radius } = unit.shape(catalog)?.form else { return None; };
-                Some(ConnectionRegion::Boundary { center_x: unit.placement.x, center_y: unit.placement.y, radius })
+                let crate::resources::Form::Circle { radius } = unit.shape(catalog)?.form else {
+                    return None;
+                };
+                Some(ConnectionRegion::Boundary {
+                    center_x: unit.placement.x,
+                    center_y: unit.placement.y,
+                    radius,
+                })
             }
             Self::Fluid { .. } => {
                 let radius = unit.shape(catalog)?.form.bounding_radius();
-                Some(ConnectionRegion::Fluid { center_x: unit.placement.x, center_y: unit.placement.y, effective_radius: radius })
-            },
+                Some(ConnectionRegion::Fluid {
+                    center_x: unit.placement.x,
+                    center_y: unit.placement.y,
+                    effective_radius: radius,
+                })
+            }
         }
     }
     pub fn world_point(
@@ -272,7 +282,9 @@ impl ConnectionEndpoint {
                 )
             }
             Self::Boundary { angle_radians } => {
-                let crate::resources::Form::Circle { radius } = unit.shape(catalog)?.form else { return None; };
+                let crate::resources::Form::Circle { radius } = unit.shape(catalog)?.form else {
+                    return None;
+                };
                 let (nx, ny) = (angle_radians.cos(), angle_radians.sin());
                 Some(crate::connection_geometry::transform_derived_point(
                     radius * nx,

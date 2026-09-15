@@ -612,19 +612,12 @@ mod shape_tests {
     }
 
     #[test]
-
     #[test]
-
     #[test]
-
     #[test]
-
     #[test]
-
     #[test]
-
     #[test]
-
     #[test]
     fn every_base_resource_unit_has_the_same_nominal_area() {
         fn polygon_area(vertices: &[(f64, f64)]) -> f64 {

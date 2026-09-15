@@ -232,13 +232,9 @@ mod tests {
     }
 
     #[test]
-
     #[test]
-
     #[test]
-
     #[test]
-
     #[test]
     fn continuous_regions_have_no_fake_socket_identity() {
         let b = ConnectionRegion::Boundary {
@@ -258,11 +254,20 @@ mod tests {
     }
 
     #[test]
-
     #[test]
     fn negative_tolerance_does_not_create_contact() {
-        let a = WorldConnectionPoint { x: 0.0, y: 0.0, normal_x: 1.0, normal_y: 0.0 };
-        let b = WorldConnectionPoint { x: 1.0, y: 0.0, normal_x: -1.0, normal_y: 0.0 };
+        let a = WorldConnectionPoint {
+            x: 0.0,
+            y: 0.0,
+            normal_x: 1.0,
+            normal_y: 0.0,
+        };
+        let b = WorldConnectionPoint {
+            x: 1.0,
+            y: 0.0,
+            normal_x: -1.0,
+            normal_y: 0.0,
+        };
         assert!(!within_contact_tolerance(a, b, -1.0));
     }
 }
