@@ -1,7 +1,6 @@
 //! Physical reproduction lifecycle.
 //! Construction is evaluated through the shared construction runtime so every
 //! internal and external bond admission uses COMBINE and the shared ledger.
-use crate::energy_ledger::EnergyLedger;
 use crate::juvenile::JUVENILE_INITIAL_ENERGY_RESERVE;
 use crate::juvenile_requirements::{
     validate_realized_juvenile, JuvenileViabilityRequirements,
@@ -9,8 +8,7 @@ use crate::juvenile_requirements::{
 use crate::material_storage::MaterialStorage;
 use crate::resources::{BaseResource, Material};
 use crate::state::{
-    DevelopmentStage, EnergyLedger as StateEnergyLedger, Organism, ReproductiveConstruction,
-    ResourceSense,
+    DevelopmentStage, EnergyLedger, Organism, ReproductiveConstruction, ResourceSense,
 };
 use crate::structure::OrganismStructure;
 use rand_chacha::ChaCha8Rng;
@@ -72,7 +70,7 @@ fn add_blueprint_element(
     blueprint_index: usize,
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     catalog: &[BaseResource],
-    ledger: &mut StateEnergyLedger,
+    ledger: &mut EnergyLedger,
     energy: &mut f64,
 ) -> Option<(Vec<usize>, f64)> {
     let element = &blueprint.elements[blueprint_index];
@@ -103,16 +101,17 @@ fn construct_any_frontier_element(
     allowed: &HashSet<usize>,
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     catalog: &[BaseResource],
-    ledger: &mut StateEnergyLedger,
+    ledger: &mut EnergyLedger,
     energy: &mut f64,
 ) -> Option<(usize, MaterialStorage, f64, Vec<usize>)> {
     let mut candidates = frontier(blueprint, realized, allowed);
     candidates.sort_unstable();
     for blueprint_index in candidates {
         let mut remaining = stored_material.clone();
-        let Some(_material) =
-            assemble_blueprint_material(&mut remaining, &blueprint.elements[blueprint_index].material)
-        else {
+        let Some(_material) = assemble_blueprint_material(
+            &mut remaining,
+            &blueprint.elements[blueprint_index].material,
+        ) else {
             continue;
         };
         let mut candidate_structure = structure.clone();
@@ -141,7 +140,7 @@ pub(crate) fn begin_reproduction(
     parent: &mut Organism,
     rng: &mut ChaCha8Rng,
     catalog: &[BaseResource],
-    ledger: &mut StateEnergyLedger,
+    ledger: &mut EnergyLedger,
 ) -> bool {
     if !matches!(parent.development_stage, DevelopmentStage::Adult)
         || parent.reproductive_readiness < 1.0 - f64::EPSILON
@@ -157,7 +156,6 @@ pub(crate) fn begin_reproduction(
         return false;
     }
     let target_set = all_indices(blueprint);
-    let core = blueprint.core_elements.iter().copied().collect::<HashSet<_>>();
 
     let mut remaining = parent.stored_material.clone();
     let Some(reserved_material) =
@@ -174,19 +172,22 @@ pub(crate) fn begin_reproduction(
     let mut trial_ledger = *ledger;
     let mut trial_energy = parent.usable_energy;
 
-    while realized.len() < core.len() {
+    while realized.len() < target_set.len() {
         let result = construct_any_frontier_element(
             &remaining,
             &mut structure,
             &realized,
-            &core,
+            &target_set,
             blueprint,
             catalog,
             &mut trial_ledger,
             &mut trial_energy,
         )
         .or_else(|| {
-            for &candidate in &core {
+            if !realized.is_empty() {
+                return None;
+            }
+            for &candidate in &target_set {
                 let mut trial_remaining = remaining.clone();
                 let Some(_material) = assemble_blueprint_material(
                     &mut trial_remaining,
@@ -226,40 +227,12 @@ pub(crate) fn begin_reproduction(
         initial_stress += stress;
     }
 
-    let realized_mapping = realized_mapping(&realized_elements, &realized_groups);
-    while realized.len() < target_set.len() {
-        let Some((index, next_remaining, stress, indices)) = construct_any_frontier_element(
-            &remaining,
-            &mut structure,
-            &realized_mapping,
-            &target_set,
-            blueprint,
-            catalog,
-            &mut trial_ledger,
-            &mut trial_energy,
-        ) else {
-            return false;
-        };
-        remaining = next_remaining;
-        realized_elements.push(index);
-        realized_groups.push(indices);
-        initial_stress += stress;
-        let _ = realized_mapping(&realized_elements, &realized_groups);
-        if realized_elements.len() >= target_set.len() {
-            break;
-        }
-    }
-
-    let realized_mapping = realized_mapping(&realized_elements, &realized_groups);
-    if realized_mapping.len() != target_set.len() {
-        return false;
-    }
-
     parent.stored_material = remaining;
     parent.usable_energy = trial_energy;
     *ledger = trial_ledger;
     parent.reproductive_readiness = 0.0;
     parent.add_transaction_stress(initial_stress);
+
     let mut committed_material = MaterialStorage::default();
     if !committed_material.store(reserved_material) {
         return false;
@@ -280,7 +253,7 @@ pub(crate) fn advance_construction(
     stored_material: &mut MaterialStorage,
     construction: &mut ReproductiveConstruction,
     catalog: &[BaseResource],
-    ledger: &mut StateEnergyLedger,
+    ledger: &mut EnergyLedger,
     energy: &mut f64,
 ) -> Option<f64> {
     let blueprint = &construction.child_genome.juvenile_blueprint;
@@ -333,23 +306,33 @@ pub(crate) fn finish_reproduction(
         parent.reproductive_construction = Some(construction);
         return None;
     }
-    if construction.committed_material.count_unstructured() != 1
-        || construction
-            .committed_material
-            .take_one_unstructured_named(JUVENILE_RESERVE_MATERIAL)
-            .is_none()
-    {
+    let reserve = construction
+        .committed_material
+        .materials
+        .iter()
+        .find(|material| {
+            !material.has_internal_structure()
+                && material.parts.len() == 1
+                && material.parts[0].0 == JUVENILE_RESERVE_MATERIAL
+                && (material.parts[0].1 - 1.0).abs() <= f64::EPSILON
+        })
+        .cloned();
+    let Some(reserve) = reserve else {
         parent.reproductive_construction = Some(construction);
         return None;
-    }
+    };
 
-    validate_realized_juvenile(
+    if validate_realized_juvenile(
         &construction.developing_structure,
         catalog,
         &construction.child_genome.juvenile_blueprint.core_elements,
         JuvenileViabilityRequirements::default(),
     )
-    .ok()?;
+    .is_err()
+    {
+        parent.reproductive_construction = Some(construction);
+        return None;
+    }
 
     let parent_position = match parent.occupied_cells.first().cloned() {
         Some(p) => p,
@@ -385,15 +368,9 @@ pub(crate) fn finish_reproduction(
         return None;
     }
 
-    let mut child_material = construction.committed_material;
-    let reserve = child_material
-        .take_one_unstructured_named(JUVENILE_RESERVE_MATERIAL)?;
     let mut stored_material = MaterialStorage::default();
     if !stored_material.store(reserve) {
-        parent.reproductive_construction = Some(ReproductiveConstruction {
-            committed_material: child_material,
-            ..construction
-        });
+        parent.reproductive_construction = Some(construction);
         return None;
     }
 
