@@ -1,22 +1,17 @@
 //! Physical contact and structural connection candidates.
-use crate::connection_geometry::{
-    facing_compatibility, point_distance, rigid_endpoint_world_point,
-};
+use crate::connection_geometry::{facing_compatibility, point_distance, rigid_endpoint_world_point};
 use crate::resources::Form;
-use crate::structure::{ConnectionEndpoint, OrganismStructure, StructuralUnit};
+use crate::structure::{Bond, ConnectionEndpoint, OrganismStructure, StructuralUnit};
 use crate::surface_geometry::boundary_point_toward;
-fn distance(
-    a: crate::connection_geometry::WorldConnectionPoint,
-    b: crate::connection_geometry::WorldConnectionPoint,
-) -> f64 {
+
+fn distance(a: crate::connection_geometry::WorldConnectionPoint, b: crate::connection_geometry::WorldConnectionPoint) -> f64 {
     point_distance(a, b)
 }
-fn facing(
-    a: crate::connection_geometry::WorldConnectionPoint,
-    b: crate::connection_geometry::WorldConnectionPoint,
-) -> f64 {
+
+fn facing(a: crate::connection_geometry::WorldConnectionPoint, b: crate::connection_geometry::WorldConnectionPoint) -> f64 {
     facing_compatibility(a, b)
 }
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ConnectionPairCandidate {
     pub endpoint_a: ConnectionEndpoint,
@@ -28,6 +23,7 @@ pub struct ConnectionPairCandidate {
     pub available_a: bool,
     pub available_b: bool,
 }
+
 fn world_center(unit: &StructuralUnit) -> crate::connection_geometry::WorldConnectionPoint {
     crate::connection_geometry::WorldConnectionPoint {
         x: unit.placement.x,
@@ -36,6 +32,7 @@ fn world_center(unit: &StructuralUnit) -> crate::connection_geometry::WorldConne
         normal_y: 0.0,
     }
 }
+
 fn continuous_endpoint(
     unit: &StructuralUnit,
     target: crate::connection_geometry::WorldConnectionPoint,
@@ -85,6 +82,7 @@ fn endpoint_indices(
         Form::Circle { .. } | Form::Fluid { .. } => Vec::new(),
     }
 }
+
 fn candidate_endpoints(
     a: &StructuralUnit,
     b: &StructuralUnit,
@@ -185,6 +183,7 @@ fn endpoint_facing(
         endpoint_world_point(b, ub, catalog)?,
     ))
 }
+
 fn candidate_for_endpoints(
     s: &OrganismStructure,
     ua: usize,
@@ -208,6 +207,7 @@ fn candidate_for_endpoints(
         available_b: true,
     })
 }
+
 pub fn connection_pair_candidates(
     s: &OrganismStructure,
     ua: usize,
@@ -222,6 +222,7 @@ pub fn connection_pair_candidates(
         .filter_map(|(a, b)| candidate_for_endpoints(s, ua, ub, a, b, c))
         .collect()
 }
+
 pub fn contacting_connection_pair_candidates(
     s: &OrganismStructure,
     ua: usize,
@@ -235,13 +236,16 @@ pub fn contacting_connection_pair_candidates(
         .filter(|x| x.distance <= t.max(0.0) && x.facing >= m)
         .collect()
 }
+
 #[derive(Clone, Debug, Default)]
 pub struct ConnectionCompatibilityCache;
+
 impl ConnectionCompatibilityCache {
     pub fn new() -> Self {
         Self
     }
 }
+
 pub fn connection_pair_candidates_cached(
     s: &OrganismStructure,
     ua: usize,
@@ -250,4 +254,15 @@ pub fn connection_pair_candidates_cached(
     _cache: &mut ConnectionCompatibilityCache,
 ) -> Vec<ConnectionPairCandidate> {
     connection_pair_candidates(s, ua, ub, c)
+}
+
+pub fn try_add_bond(
+    s: &mut OrganismStructure,
+    b: Bond,
+    c: &[crate::resources::BaseResource],
+) -> Result<usize, &'static str> {
+    if !s.is_valid_bond(&b, c) {
+        return Err("invalid bond");
+    }
+    Ok(s.push_bond_unchecked(b))
 }
