@@ -130,9 +130,7 @@ impl OrganismArchitecture {
                     return Ok(target);
                 }
                 Ok(_) => last_error = format!("scale {scale:.2} failed juvenile viability"),
-                Err(error) => {
-                    last_error = format!("scale {scale:.2} failed realization: {error}")
-                }
+                Err(error) => last_error = format!("scale {scale:.2} failed realization: {error}"),
             }
         }
         Err(last_error)
@@ -388,8 +386,6 @@ mod tests {
         let architecture = default_architecture();
         let target = architecture.construction_target().unwrap();
         assert_eq!(target.elements.len(), 16);
-        assert!(target.elements.iter().all(|element| {
-            element.placement.x.abs() < 2.0 && element.placement.y.abs() < 2.0
-        }));
+        assert!(target.elements.iter().all(|element| { element.placement.x.abs() < 2.0 && element.placement.y.abs() < 2.0 }));
     }
 }
