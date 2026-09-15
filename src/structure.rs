@@ -237,32 +237,28 @@ impl ConnectionEndpoint {
         catalog: &[BaseResource],
     ) -> Option<ConnectionRegion> {
         match self {
-            Self::Corner { point_index } => match unit.connection_sites(catalog)? {
-                ConnectionSites::Corners(points) => points.get(point_index).copied().map(|p| {
-                    ConnectionRegion::Corner(
-                        crate::connection_geometry::transform_connection_point(
-                            p,
-                            unit.placement.x,
-                            unit.placement.y,
-                            unit.placement.rotation_radians,
-                        ),
-                    )
-                }),
-                _ => None,
-            },
-            Self::LineEndpoint { point_index } => match unit.connection_sites(catalog)? {
-                ConnectionSites::Endpoints(points) => points.get(point_index).copied().map(|p| {
-                    ConnectionRegion::Corner(
-                        crate::connection_geometry::transform_connection_point(
-                            p,
-                            unit.placement.x,
-                            unit.placement.y,
-                            unit.placement.rotation_radians,
-                        ),
-                    )
-                }),
-                _ => None,
-            },
+            Self::Corner { point_index } => {
+                let shape = unit.shape(catalog)?;
+                crate::connection_geometry::transform_polygon_vertex(
+                    shape,
+                    point_index,
+                    unit.placement.x,
+                    unit.placement.y,
+                    unit.placement.rotation_radians,
+                )
+                .map(ConnectionRegion::Corner)
+            }
+            Self::LineEndpoint { point_index } => {
+                let shape = unit.shape(catalog)?;
+                crate::connection_geometry::transform_line_endpoint(
+                    shape,
+                    point_index,
+                    unit.placement.x,
+                    unit.placement.y,
+                    unit.placement.rotation_radians,
+                )
+                .map(ConnectionRegion::Corner)
+            }
             Self::Boundary { .. } => match unit.connection_sites(catalog)? {
                 ConnectionSites::Circumference { radius } => Some(ConnectionRegion::Boundary {
                     center_x: unit.placement.x,
@@ -289,29 +285,25 @@ impl ConnectionEndpoint {
         unit: &StructuralUnit,
         catalog: &[BaseResource],
     ) -> Option<WorldConnectionPoint> {
-        let (local_x, local_y, normal_x, normal_y) = match self {
+        match self {
             Self::Corner { point_index } => {
-                let ConnectionSites::Corners(points) = unit.connection_sites(catalog)? else {
-                    return None;
-                };
-                let p = *points.get(point_index)?;
-                (
-                    p.x,
-                    p.y,
-                    p.direction_radians.cos(),
-                    p.direction_radians.sin(),
+                let shape = unit.shape(catalog)?;
+                crate::connection_geometry::transform_polygon_vertex(
+                    shape,
+                    point_index,
+                    unit.placement.x,
+                    unit.placement.y,
+                    unit.placement.rotation_radians,
                 )
             }
             Self::LineEndpoint { point_index } => {
-                let ConnectionSites::Endpoints(points) = unit.connection_sites(catalog)? else {
-                    return None;
-                };
-                let p = *points.get(point_index)?;
-                (
-                    p.x,
-                    p.y,
-                    p.direction_radians.cos(),
-                    p.direction_radians.sin(),
+                let shape = unit.shape(catalog)?;
+                crate::connection_geometry::transform_line_endpoint(
+                    shape,
+                    point_index,
+                    unit.placement.x,
+                    unit.placement.y,
+                    unit.placement.rotation_radians,
                 )
             }
             Self::Boundary { angle_radians } => {
@@ -320,17 +312,28 @@ impl ConnectionEndpoint {
                     return None;
                 };
                 let (nx, ny) = (angle_radians.cos(), angle_radians.sin());
-                (radius * nx, radius * ny, nx, ny)
+                crate::connection_geometry::transform_derived_point(
+                    radius * nx,
+                    radius * ny,
+                    nx,
+                    ny,
+                    unit.placement.x,
+                    unit.placement.y,
+                    unit.placement.rotation_radians,
+                )
+                .into()
             }
-            Self::Fluid { x, y } => (x, y, 0.0, 0.0),
-        };
-        let (s, c) = unit.placement.rotation_radians.sin_cos();
-        Some(WorldConnectionPoint {
-            x: unit.placement.x + local_x * c - local_y * s,
-            y: unit.placement.y + local_x * s + local_y * c,
-            normal_x: normal_x * c - normal_y * s,
-            normal_y: normal_x * s + normal_y * c,
-        })
+            Self::Fluid { x, y } => crate::connection_geometry::transform_derived_point(
+                x,
+                y,
+                0.0,
+                0.0,
+                unit.placement.x,
+                unit.placement.y,
+                unit.placement.rotation_radians,
+            )
+            .into(),
+        }
     }
     pub fn same_location(self, other: Self) -> bool {
         match (self, other) {
@@ -778,7 +781,7 @@ mod tests {
     }
     #[test]
     fn legacy_structural_material_wrapper_deserializes() {
-        let encoded = r#"{"physical_id":0,"material":{"material":{"parts":[["Carbon",1.0]],"internal_bonds":[]}},"placement":{"x":0.0,"y":0.0,"rotation_radians":0.0}}"#;
+        let encoded = r#"{\"physical_id\":0,\"material\":{\"material\":{\"parts\":[[\"Carbon\",1.0]],\"internal_bonds\":[]}},\"placement\":{\"x\":0.0,\"y\":0.0,\"rotation_radians\":0.0}}"#;
         let decoded: StructuralUnit = serde_json::from_str(encoded).unwrap();
         assert_eq!(decoded.material, Material::free_base("Carbon", 1.0));
         assert!(decoded.geometry.is_none());
