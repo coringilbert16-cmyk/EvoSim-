@@ -18,6 +18,7 @@ mod organism_geometry;
 mod physical_geometry;
 mod rigid_boundary;
 mod surface_geometry;
+mod cavity;
 
 // Material transformation and bonding.
 mod combine;
