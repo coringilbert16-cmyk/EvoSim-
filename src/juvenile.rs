@@ -6,9 +6,7 @@
 use crate::combine_runtime::combine_specific_pair;
 use crate::contact::ConnectionCompatibilityCache;
 use crate::genome::Genome;
-use crate::juvenile_requirements::{
-    validate_realized_juvenile, JuvenileViabilityRequirements,
-};
+use crate::juvenile_requirements::{validate_realized_juvenile, JuvenileViabilityRequirements};
 use crate::resources::BaseResource;
 use crate::state::EnergyLedger;
 use crate::structural_blueprint::StructuralBlueprint;
@@ -87,7 +85,9 @@ fn realize_declared_units(
         )
         .ok_or_else(|| "juvenile construction target contains invalid material".to_string())?;
         if !unit.realize_default_geometry(catalog) {
-            return Err("juvenile construction target contains unrealizable material geometry".into());
+            return Err(
+                "juvenile construction target contains unrealizable material geometry".into(),
+            );
         }
         structure.add_unit(unit);
     }
@@ -141,9 +141,9 @@ mod tests {
     #[test]
     fn nonpositive_reserve_is_rejected() {
         let genome = initial_genome();
-        let target = genome.developmental_construction_target(&default_catalog()).unwrap();
-        assert!(
-            realize_initial_with_reserve(&target, &default_catalog(), 0.0).is_err()
-        );
+        let target = genome
+            .developmental_construction_target(&default_catalog())
+            .unwrap();
+        assert!(realize_initial_with_reserve(&target, &default_catalog(), 0.0).is_err());
     }
 }
