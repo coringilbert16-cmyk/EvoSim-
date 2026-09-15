@@ -6,6 +6,8 @@ use crate::architecture::{default_architecture, OrganismArchitecture};
 use crate::resources::Material;
 use crate::structural_blueprint::StructuralBlueprint;
 
+fn empty_blueprint() -> StructuralBlueprint { StructuralBlueprint::new(Vec::new(), Vec::new()) }
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TraitDef {
     pub name: String,
@@ -27,12 +29,12 @@ pub struct Genome {
     pub architecture: OrganismArchitecture,
     /// Transitional runtime construction cache derived exclusively from
     /// `architecture`. It is not serialized and is never biological state.
-    #[serde(skip)]
+    #[serde(skip, default = "empty_blueprint")]
     pub structural_blueprint: StructuralBlueprint,
     /// Transitional runtime target cache for old lifecycle call sites. It is
     /// derived from `architecture` and is not serialized or inherited as an
     /// independent body plan. New code must request a developmental target.
-    #[serde(skip)]
+    #[serde(skip, default = "empty_blueprint")]
     pub juvenile_blueprint: StructuralBlueprint,
 }
 
@@ -76,6 +78,8 @@ impl Genome {
 
     fn mutate_architecture(&mut self, rng: &mut ChaCha8Rng, mutation_probability: f64, mutation_sigma: f64) {
         let original = self.architecture.clone();
+        let original_adult = self.structural_blueprint.clone();
+        let original_juvenile = self.juvenile_blueprint.clone();
         let probability = mutation_probability.clamp(0.0, 1.0);
         let sigma = mutation_sigma.max(0.0);
         for region in &mut self.architecture.regions {
@@ -86,7 +90,11 @@ impl Genome {
             region.extent_x *= factor;
             region.extent_y *= factor;
         }
-        if self.architecture.validate().is_err() || self.refresh_construction_caches().is_err() { self.architecture = original; let _ = self.refresh_construction_caches(); }
+        if self.architecture.validate().is_err() || self.refresh_construction_caches().is_err() {
+            self.architecture = original;
+            self.structural_blueprint = original_adult;
+            self.juvenile_blueprint = original_juvenile;
+        }
     }
 }
 
@@ -108,8 +116,8 @@ pub fn initial_genome() -> Genome {
         juvenile_reserve: default_juvenile_reserve(),
         juvenile_energy_reserve: default_juvenile_energy_reserve(),
         architecture,
-        structural_blueprint: StructuralBlueprint::new(Vec::new(), Vec::new()),
-        juvenile_blueprint: StructuralBlueprint::new(Vec::new(), Vec::new()),
+        structural_blueprint: empty_blueprint(),
+        juvenile_blueprint: empty_blueprint(),
     };
     genome.refresh_construction_caches().expect("default architecture must produce construction targets");
     genome
