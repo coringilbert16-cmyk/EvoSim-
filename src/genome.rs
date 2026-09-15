@@ -186,6 +186,7 @@ pub fn initial_genome() -> Genome {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::SeedableRng;
 
     #[test]
     fn genome_architecture_is_the_serialized_structural_authority() {
