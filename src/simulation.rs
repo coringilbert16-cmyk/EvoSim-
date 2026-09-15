@@ -78,11 +78,14 @@ impl Simulation {
     pub(crate) fn create_initial_organism() -> Organism {
         let genome = initial_genome();
         let catalog = crate::resources::default_catalog();
+        let juvenile_target = genome
+            .developmental_construction_target(&catalog)
+            .expect("initial architecture must produce a viable juvenile target");
         let (structure, _construction_ledger, initial_energy) =
-            realize_initial(&genome.juvenile_blueprint, &catalog)
-                .expect("initial juvenile blueprint must be physically realizable");
+            realize_initial(&juvenile_target, &catalog)
+                .expect("initial juvenile target must be physically realizable");
         let mut stored_material = crate::material_storage::MaterialStorage::default();
-        assert!(stored_material.store(crate::resources::Material::free_base("Hydrogen", 1.0)));
+        assert!(stored_material.store(genome.juvenile_reserve.clone()));
         Organism {
             id: "1".into(),
             occupied_cells: vec![Position { x: 500.0, y: 500.0 }],
@@ -123,8 +126,10 @@ impl Simulation {
     fn mature_structural_mass(organism: &Organism, environment: &Environment) -> f64 {
         organism
             .genome
-            .structural_blueprint
-            .structural_mass(&environment.catalog)
+            .mature_construction_target()
+            .ok()
+            .map(|target| target.structural_mass(&environment.catalog))
+            .unwrap_or(0.0)
     }
 
     fn growth_fraction(organism: &Organism, environment: &Environment) -> f64 {
