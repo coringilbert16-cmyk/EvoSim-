@@ -35,30 +35,55 @@ impl Genome {
             .map(|t| t.value)
             .unwrap_or(default)
     }
-    pub fn mass_affinity(&self) -> f64 { self.trait_value("mass_affinity", 0.0).clamp(-1.0, 1.0) }
+
+    pub fn mass_affinity(&self) -> f64 {
+        self.trait_value("mass_affinity", 0.0).clamp(-1.0, 1.0)
+    }
+
     pub fn potential_energy_affinity(&self) -> f64 {
-        self.trait_value("potential_energy_affinity", 0.0).clamp(-1.0, 1.0)
+        self.trait_value("potential_energy_affinity", 0.0)
+            .clamp(-1.0, 1.0)
     }
+
     pub fn reactivity_affinity(&self) -> f64 {
-        self.trait_value("reactivity_affinity", 0.0).clamp(-1.0, 1.0)
+        self.trait_value("reactivity_affinity", 0.0)
+            .clamp(-1.0, 1.0)
     }
+
     pub fn cohesion_affinity(&self) -> f64 {
         self.trait_value("cohesion_affinity", 0.0).clamp(-1.0, 1.0)
     }
-    pub fn memory_strength(&self) -> f64 { self.trait_value("memory_strength", 0.5).clamp(0.0, 1.0) }
-    pub fn perception_radius(&self) -> f64 { self.trait_value("perception_radius", 100.0).max(0.0) }
-    pub fn sensory_resolution(&self) -> f64 { self.trait_value("sensory_resolution", 0.5).clamp(0.0, 1.0) }
+
+    pub fn memory_strength(&self) -> f64 {
+        self.trait_value("memory_strength", 0.5).clamp(0.0, 1.0)
+    }
+
+    pub fn perception_radius(&self) -> f64 {
+        self.trait_value("perception_radius", 100.0).max(0.0)
+    }
+
+    pub fn sensory_resolution(&self) -> f64 {
+        self.trait_value("sensory_resolution", 0.5).clamp(0.0, 1.0)
+    }
+
     pub fn directional_resolution(&self) -> f64 {
-        self.trait_value("directional_resolution", 1.0).clamp(0.0, 1.0)
+        self.trait_value("directional_resolution", 1.0)
+            .clamp(0.0, 1.0)
     }
+
     pub fn processing_efficiency(&self) -> f64 {
-        self.trait_value("processing_efficiency", 0.8).clamp(0.05, 1.0)
+        self.trait_value("processing_efficiency", 0.8)
+            .clamp(0.05, 1.0)
     }
+
     pub fn movement_efficiency(&self) -> f64 {
-        self.trait_value("movement_efficiency", 0.8).clamp(0.05, 1.0)
+        self.trait_value("movement_efficiency", 0.8)
+            .clamp(0.05, 1.0)
     }
+
     pub fn reproductive_investment(&self) -> f64 {
-        self.trait_value("reproductive_investment", 0.5).clamp(0.15, 1.0)
+        self.trait_value("reproductive_investment", 0.5)
+            .clamp(0.15, 1.0)
     }
 
     pub fn mature_construction_target(&self) -> Result<StructuralBlueprint, String> {
@@ -123,7 +148,11 @@ impl Genome {
 fn default_juvenile_reserve() -> Material {
     Material::free_base("Hydrogen", 1.0)
 }
-fn default_juvenile_energy_reserve() -> f64 { 16.0 }
+
+fn default_juvenile_energy_reserve() -> f64 {
+    16.0
+}
+
 fn trait_def(name: &str, value: f64, sigma: f64) -> TraitDef {
     TraitDef {
         name: name.into(),
@@ -171,7 +200,10 @@ mod tests {
         let genome = initial_genome();
         let catalog = crate::resources::default_catalog();
         assert!(genome.mature_construction_target().unwrap().is_valid());
-        assert!(genome.developmental_construction_target(&catalog).unwrap().is_valid());
+        assert!(genome
+            .developmental_construction_target(&catalog)
+            .unwrap()
+            .is_valid());
     }
 
     #[test]
