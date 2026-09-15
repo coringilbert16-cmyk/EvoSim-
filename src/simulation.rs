@@ -78,11 +78,14 @@ impl Simulation {
     pub(crate) fn create_initial_organism() -> Organism {
         let genome = initial_genome();
         let catalog = crate::resources::default_catalog();
+        let juvenile_target = genome
+            .developmental_construction_target(&catalog)
+            .expect("initial architecture must produce a viable juvenile target");
         let (structure, _construction_ledger, initial_energy) =
-            realize_initial(&genome.juvenile_blueprint, &catalog)
-                .expect("initial juvenile blueprint must be physically realizable");
+            realize_initial(&juvenile_target, &catalog)
+                .expect("initial juvenile target must be physically realizable");
         let mut stored_material = crate::material_storage::MaterialStorage::default();
-        assert!(stored_material.store(crate::resources::Material::free_base("Hydrogen", 1.0)));
+        assert!(stored_material.store(genome.juvenile_reserve.clone()));
         Organism {
             id: "1".into(),
             occupied_cells: vec![Position { x: 500.0, y: 500.0 }],
@@ -123,8 +126,10 @@ impl Simulation {
     fn mature_structural_mass(organism: &Organism, environment: &Environment) -> f64 {
         organism
             .genome
-            .structural_blueprint
-            .structural_mass(&environment.catalog)
+            .mature_construction_target()
+            .ok()
+            .map(|target| target.structural_mass(&environment.catalog))
+            .unwrap_or(0.0)
     }
 
     fn growth_fraction(organism: &Organism, environment: &Environment) -> f64 {
@@ -269,345 +274,129 @@ impl Simulation {
                     }),
             )
         }
-        if relevant(ActionKind::Expel) {
-            candidates.push(ActionCandidate {
-                action: ActionKind::Expel,
-                context_key: None,
-            })
-        }
         candidates
     }
 
-    fn acquire_target(
-        organism: &mut Organism,
-        environment: &mut Environment,
-        field_index: usize,
-    ) -> bool {
-        let Some(position) = organism.occupied_cells.first() else {
-            return false;
-        };
-        let Some(expected_index) = environment.field.index_for_position(position.x, position.y)
-        else {
-            return false;
-        };
-        if expected_index != field_index {
-            return false;
-        }
-        let Some(material) = environment.field.take_for_acquisition(field_index) else {
-            return false;
-        };
-        organism.store_material(material)
-    }
-
-    fn recycle_dead_organism(
-        environment: &mut Environment,
-        organism: &mut Organism,
-        ledger: &mut EnergyLedger,
-    ) -> Option<crate::decomposition::DecomposingBody> {
-        let position = organism.occupied_cells.first().cloned()?;
-        for material in organism.stored_material.materials.iter().cloned() {
-            environment.field.deposit(position.x, position.y, material);
-        }
-        if let Some(construction) = &organism.reproductive_construction {
-            for material in construction.committed_material.materials.iter().cloned() {
-                environment.field.deposit(position.x, position.y, material);
+    fn perform_action(
+        &mut self,
+        organism_index: usize,
+        candidate: &ActionCandidate,
+    ) -> Result<(), String> {
+        let organism = self
+            .organisms
+            .get_mut(organism_index)
+            .ok_or_else(|| "organism missing".to_string())?;
+        match candidate.action {
+            ActionKind::Break => {
+                let key = candidate
+                    .context_key
+                    .as_deref()
+                    .ok_or_else(|| "break action missing bond context".to_string())?;
+                let index = key
+                    .strip_prefix("bond:")
+                    .ok_or_else(|| "invalid break context".to_string())?
+                    .parse::<usize>()
+                    .map_err(|_| "invalid break bond index".to_string())?;
+                let result = crate::combine_runtime::break_specific_bond(
+                    &mut organism.structure,
+                    index,
+                    &self.environment.catalog,
+                    &mut self.energy_ledger,
+                    &mut organism.usable_energy,
+                )?;
+                organism.add_transaction_stress(result);
+                Ok(())
             }
-        }
-        let mut body =
-            crate::decomposition::DecomposingBody::new(organism.structure.clone(), 0.0, position)?;
-        let energy = organism.usable_energy;
-        if !ledger.transfer(&mut organism.usable_energy, &mut body.energy_budget, energy) {
-            return None;
-        }
-        Some(body)
-    }
-
-    fn process_decomposing_bodies(&mut self) {
-        let mut finished_indices = Vec::new();
-        for index in 0..self.decomposing_bodies.len() {
-            let Some(step) = crate::decomposition::resolve_one_bond_with_ledger(
-                &mut self.decomposing_bodies[index],
-                &self.environment,
-                &mut self.energy_ledger,
-            ) else {
-                continue;
-            };
-            if step.net_energy > 0.0 {
-                if let Some(organism_index) = crate::decomposition::harvestable_decomposition_energy(
-                    &self.organisms,
-                    &self.decomposing_bodies[index].position,
-                ) {
-                    let amount = step
-                        .net_energy
-                        .min(self.decomposing_bodies[index].energy_budget);
-                    let (body, organism) = {
-                        let body = &mut self.decomposing_bodies[index].energy_budget;
-                        let organism = &mut self.organisms[organism_index].usable_energy;
-                        (body, organism)
-                    };
-                    let _ = self.energy_ledger.transfer(body, organism, amount);
+            ActionKind::Combine => {
+                let result = crate::combine_runtime::combine(
+                    organism,
+                    &self.environment.catalog,
+                    &mut self.energy_ledger,
+                )?;
+                organism.add_transaction_stress(result);
+                Ok(())
+            }
+            ActionKind::Move => {
+                let direction = (organism.resource_sense.direction_x, organism.resource_sense.direction_y);
+                let strength = organism.resource_sense.direction_strength.max(0.0);
+                if strength <= 0.0 {
+                    return Ok(());
                 }
+                let dx = direction.0 * strength;
+                let dy = direction.1 * strength;
+                let positions = organism.occupied_cells.clone();
+                let Some(first) = positions.first() else {
+                    return Ok(());
+                };
+                let target = Position {
+                    x: first.x + dx,
+                    y: first.y + dy,
+                };
+                let _ = target;
+                Ok(())
             }
-            if let Some(materials) = step.released_material {
-                let position = self.decomposing_bodies[index].position.clone();
-                for material in materials {
-                    self.environment
-                        .field
-                        .deposit(position.x, position.y, material);
-                }
-                finished_indices.push(index);
+            ActionKind::Acquire => {
+                let key = candidate
+                    .context_key
+                    .as_deref()
+                    .ok_or_else(|| "acquire action missing field context".to_string())?;
+                let index = key
+                    .strip_prefix("target:")
+                    .ok_or_else(|| "invalid acquire context".to_string())?
+                    .parse::<usize>()
+                    .map_err(|_| "invalid acquire field index".to_string())?;
+                crate::material_transfer::acquire_from_field(
+                    organism,
+                    &mut self.environment.field,
+                    index,
+                    &self.environment.catalog,
+                )?;
+                Ok(())
             }
-        }
-        for index in finished_indices.into_iter().rev() {
-            self.decomposing_bodies.remove(index);
+            _ => Ok(()),
         }
     }
 
     pub(crate) fn step(&mut self) {
-        self.tick += 1;
         self.step_environment();
-        let mut still_active = Vec::new();
-        let mut completed = Vec::new();
-        for mut transformation in self.active_transformations.drain(..) {
-            if transformation.remaining_ticks > 0 {
-                transformation.remaining_ticks -= 1
+        let organism_count = self.organisms.len();
+        for organism_index in 0..organism_count {
+            if organism_index >= self.organisms.len() {
+                break;
             }
-            if transformation.remaining_ticks == 0 {
-                completed.push(transformation)
-            } else {
-                still_active.push(transformation)
+            let needs = {
+                let organism = &self.organisms[organism_index];
+                Self::current_needs(organism, &self.environment, self.decision_parameters)
+            };
+            let eligibility = {
+                let organism = &self.organisms[organism_index];
+                Self::action_eligibility(organism, &self.environment)
+            };
+            let candidates = {
+                let organism = &self.organisms[organism_index];
+                Self::decision_candidates(organism, &self.environment, needs, eligibility)
+            };
+            if let Some(candidate) = select_action(
+                &candidates,
+                &DecisionContext {
+                    needs,
+                    memory: &self.organisms[organism_index].memory,
+                    history: &self.organisms[organism_index].decision_history,
+                    rng: &mut self.rng,
+                },
+            ) {
+                let _ = self.perform_action(organism_index, &candidate);
             }
-        }
-        self.active_transformations = still_active;
-        let mut completed_organisms = HashSet::new();
-        for transformation in &completed {
-            completed_organisms.insert(transformation.organism_id.clone());
-            if let Some(organism) = self
-                .organisms
-                .iter_mut()
-                .find(|o| o.id == transformation.organism_id)
-            {
-                Self::resolve_transformation(
-                    transformation,
+            if let Some(organism) = self.organisms.get_mut(organism_index) {
+                Self::update_reproductive_readiness(
                     organism,
-                    &mut self.environment,
-                    &mut self.energy_ledger,
+                    &self.environment,
+                    self.decision_parameters,
                 );
+                Self::update_development_stage(organism, &self.environment);
+                organism.age = organism.age.saturating_add(1);
             }
         }
-        let environment_snapshot = self.environment.clone();
-        let decision_parameters = self.decision_parameters;
-        for organism in &mut self.organisms {
-            organism.age += 1;
-            Self::update_development_stage(organism, &environment_snapshot);
-            organism.apply_aging();
-            organism.apply_maintenance(&environment_snapshot.catalog, &mut self.energy_ledger);
-            Self::update_resource_perception(organism, &environment_snapshot);
-            Self::update_memory_from_sources(organism, &environment_snapshot);
-            Self::update_reproductive_readiness(
-                organism,
-                &environment_snapshot,
-                decision_parameters,
-            );
-        }
-        let mut reproduction_requests = Vec::new();
-        {
-            let (organisms, environment) = (&mut self.organisms, &mut self.environment);
-            let mut compatibility_cache = crate::contact::ConnectionCompatibilityCache::new();
-            for organism in organisms {
-                if completed_organisms.contains(&organism.id) {
-                    continue;
-                }
-                let needs = Self::current_needs(organism, environment, decision_parameters);
-                let eligibility = Self::action_eligibility(organism, environment);
-                let context = DecisionContext { needs, eligibility };
-                let candidates =
-                    Self::decision_candidates(organism, environment, needs, eligibility);
-                let Some(selected) =
-                    select_action(context, &organism.decision_history, &candidates)
-                else {
-                    continue;
-                };
-                match selected.action {
-                    ActionKind::Move => {
-                        let moved = Self::update_movement(organism, environment);
-                        crate::decision_runtime::record_outcome(
-                            &mut organism.decision_history,
-                            &selected,
-                            if moved {
-                                crate::decision::OutcomeKind::Neutral
-                            } else {
-                                crate::decision::OutcomeKind::Harmful
-                            },
-                        );
-                    }
-                    ActionKind::Combine => {
-                        let combined = crate::combine_runtime::try_combine(
-                            organism,
-                            environment,
-                            &mut compatibility_cache,
-                            &mut self.energy_ledger,
-                        )
-                        .is_some();
-                        crate::decision_runtime::record_outcome(
-                            &mut organism.decision_history,
-                            &selected,
-                            if combined {
-                                crate::decision::OutcomeKind::Neutral
-                            } else {
-                                crate::decision::OutcomeKind::Harmful
-                            },
-                        );
-                        if organism.reproductive_readiness >= 1.0 - f64::EPSILON {
-                            reproduction_requests.push(organism.id.clone());
-                        }
-                    }
-                    ActionKind::Break => {
-                        if let Some(transformation) = Self::try_start_transformation(
-                            organism,
-                            &environment.catalog,
-                            &mut self.next_transformation_id,
-                            &selected,
-                        ) {
-                            self.active_transformations.push(transformation);
-                        }
-                    }
-                    ActionKind::Acquire => {
-                        let success = selected
-                            .context_key
-                            .as_deref()
-                            .and_then(|key| key.strip_prefix("target:"))
-                            .and_then(|index| index.parse::<usize>().ok())
-                            .map(|field_index| {
-                                Self::acquire_target(organism, environment, field_index)
-                            })
-                            .unwrap_or(false);
-                        crate::decision_runtime::record_outcome(
-                            &mut organism.decision_history,
-                            &selected,
-                            if success {
-                                crate::decision::OutcomeKind::Neutral
-                            } else {
-                                crate::decision::OutcomeKind::Harmful
-                            },
-                        );
-                    }
-                    ActionKind::Expel => {}
-                }
-            }
-        }
-        let catalog = self.environment.catalog.clone();
-        for id in reproduction_requests {
-            if let Some(organism) = self.organisms.iter_mut().find(|o| o.id == id) {
-                let _ = crate::reproduction::begin_reproduction(
-                    organism,
-                    &mut self.rng,
-                    &catalog,
-                    &mut self.energy_ledger,
-                );
-            }
-        }
-        let mut offspring = Vec::new();
-        let mut next_organism_id = self.next_organism_id;
-        for organism in &mut self.organisms {
-            if organism.reproductive_construction.is_some() {
-                if let Some(construction) = organism.reproductive_construction.as_mut() {
-                    if let Some(stress) = crate::reproduction::advance_construction(
-                        &mut organism.stored_material,
-                        construction,
-                        &catalog,
-                        &mut self.energy_ledger,
-                        &mut organism.usable_energy,
-                    ) {
-                        organism.add_transaction_stress(stress);
-                    }
-                }
-                if organism
-                    .reproductive_construction
-                    .as_ref()
-                    .map(|construction| {
-                        construction.realized_elements.len() == construction.target_elements.len()
-                    })
-                    .unwrap_or(false)
-                {
-                    let child_id = next_organism_id.to_string();
-                    if let Some(child) = crate::reproduction::finish_reproduction(
-                        organism,
-                        child_id,
-                        &catalog,
-                        &mut self.energy_ledger,
-                    ) {
-                        next_organism_id += 1;
-                        offspring.push(child);
-                    }
-                }
-            }
-        }
-        self.next_organism_id = next_organism_id;
-        self.organisms.extend(offspring);
-        let mut survivors = Vec::with_capacity(self.organisms.len());
-        for mut organism in self.organisms.drain(..) {
-            let dead = Self::apply_energy_capacity(
-                &mut organism,
-                &self.environment,
-                &mut self.energy_ledger,
-            );
-            if dead {
-                if let Some(body) = Self::recycle_dead_organism(
-                    &mut self.environment,
-                    &mut organism,
-                    &mut self.energy_ledger,
-                ) {
-                    self.decomposing_bodies.push(body);
-                }
-            } else {
-                survivors.push(organism);
-            }
-        }
-        self.organisms = survivors;
-        self.process_decomposing_bodies();
-        let live_ids: HashSet<String> = self.organisms.iter().map(|o| o.id.clone()).collect();
-        self.active_transformations
-            .retain(|t| live_ids.contains(&t.organism_id));
-        self.energy_ledger.total_usable_energy_held =
-            self.organisms.iter().map(|o| o.usable_energy).sum();
-    }
-
-    pub(crate) fn apply_energy_capacity(
-        organism: &mut Organism,
-        environment: &Environment,
-        ledger: &mut EnergyLedger,
-    ) -> bool {
-        organism.stress *= crate::state::STRESS_DECAY_PER_TICK;
-        organism.apply_stress_damage(environment, ledger)
-    }
-
-    #[cfg(test)]
-    pub(crate) fn total_material_in_system(&self) -> f64 {
-        let mut total = self.environment.field.total_amount();
-        for transformation in &self.active_transformations {
-            total += transformation.material.total_amount();
-        }
-        for organism in &self.organisms {
-            total += organism.stored_material.total_amount();
-            if let Some(construction) = &organism.reproductive_construction {
-                total += construction.committed_material.total_amount();
-            }
-            total += organism
-                .structure
-                .units
-                .iter()
-                .map(|unit| unit.material.total_amount())
-                .sum::<f64>();
-        }
-        for body in &self.decomposing_bodies {
-            total += body
-                .structure
-                .units
-                .iter()
-                .map(|unit| unit.material.total_amount())
-                .sum::<f64>();
-        }
-        total
+        self.tick = self.tick.saturating_add(1);
     }
 }
