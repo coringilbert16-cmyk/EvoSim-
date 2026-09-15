@@ -76,8 +76,8 @@ pub fn minimum_genome_cavity_area(catalog: &[BaseResource]) -> Result<f64, Strin
         .iter()
         .find(|resource| resource.name == "Carbon")
         .ok_or_else(|| "catalog has no Carbon resource".to_string())?;
-    let area = form_area(&carbon.shape.form)
-        .ok_or_else(|| "Carbon has no finite 2D area".to_string())?;
+    let area =
+        form_area(&carbon.shape.form).ok_or_else(|| "Carbon has no finite 2D area".to_string())?;
     let minimum = 3.0 * area;
     if !minimum.is_finite() || minimum <= 0.0 {
         return Err("invalid Carbon cavity reference area".into());
@@ -209,7 +209,10 @@ pub fn analyze_genome_cavity(
             }
             .scale(NODE_TOLERANCE * 10.0),
         );
-        if polygons.iter().any(|(_, polygon)| point_in_polygon(sample, polygon)) {
+        if polygons
+            .iter()
+            .any(|(_, polygon)| point_in_polygon(sample, polygon))
+        {
             continue;
         }
         let boundary_units = face
@@ -279,11 +282,7 @@ fn polygon_edges_touch(a: &[Point], b: &[Point]) -> bool {
     })
 }
 
-fn intern(
-    point: Point,
-    points: &mut Vec<Point>,
-    index: &mut HashMap<(i64, i64), usize>,
-) -> usize {
+fn intern(point: Point, points: &mut Vec<Point>, index: &mut HashMap<(i64, i64), usize>) -> usize {
     let key = (
         (point.x / NODE_TOLERANCE).round() as i64,
         (point.y / NODE_TOLERANCE).round() as i64,
@@ -319,9 +318,9 @@ fn form_area(form: &Form) -> Option<f64> {
     match form {
         Form::Circle { radius } => Some(std::f64::consts::PI * radius * radius),
         Form::Rectangle { width, height } => Some(width * height),
-        Form::RegularPolygon { sides, radius } if *sides >= 3 => Some(
-            0.5 * *sides as f64 * radius * radius * (TAU / *sides as f64).sin(),
-        ),
+        Form::RegularPolygon { sides, radius } if *sides >= 3 => {
+            Some(0.5 * *sides as f64 * radius * radius * (TAU / *sides as f64).sin())
+        }
         Form::Polygon { vertices } if vertices.len() >= 3 => Some(
             (0..vertices.len())
                 .map(|i| {
@@ -399,14 +398,12 @@ mod tests {
         let genome = initial_genome();
         let mut structure = genome.structural_blueprint.realize(&catalog).unwrap();
         structure.bonds.clear();
-        assert!(
-            analyze_genome_cavity(
-                &structure,
-                &catalog,
-                &genome.structural_blueprint.core_elements,
-            )
-            .unwrap()
-            .is_none()
-        );
+        assert!(analyze_genome_cavity(
+            &structure,
+            &catalog,
+            &genome.structural_blueprint.core_elements,
+        )
+        .unwrap()
+        .is_none());
     }
 }
