@@ -312,7 +312,7 @@ impl ConnectionEndpoint {
                     return None;
                 };
                 let (nx, ny) = (angle_radians.cos(), angle_radians.sin());
-                crate::connection_geometry::transform_derived_point(
+                Some(crate::connection_geometry::transform_derived_point(
                     radius * nx,
                     radius * ny,
                     nx,
@@ -320,10 +320,9 @@ impl ConnectionEndpoint {
                     unit.placement.x,
                     unit.placement.y,
                     unit.placement.rotation_radians,
-                )
-                .into()
+                ))
             }
-            Self::Fluid { x, y } => crate::connection_geometry::transform_derived_point(
+            Self::Fluid { x, y } => Some(crate::connection_geometry::transform_derived_point(
                 x,
                 y,
                 0.0,
@@ -331,8 +330,7 @@ impl ConnectionEndpoint {
                 unit.placement.x,
                 unit.placement.y,
                 unit.placement.rotation_radians,
-            )
-            .into(),
+            )),
         }
     }
     pub fn same_location(self, other: Self) -> bool {
