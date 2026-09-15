@@ -30,6 +30,12 @@ impl PhysicalGeometry {
     pub fn shape(&self) -> &Shape {
         &self.shape
     }
+
+    /// Rigid geometry cannot be replaced. This compatibility method accepts
+    /// only an identical shape and never mutates the realized geometry.
+    pub fn replace(&mut self, shape: Shape) -> bool {
+        self.shape == shape
+    }
 }
 
 #[cfg(test)]
@@ -42,6 +48,28 @@ mod tests {
             form: crate::resources::Form::Circle { radius: 1.0 },
         };
         let geometry = PhysicalGeometry::from_default(&default_shape);
+        assert_eq!(geometry.shape(), &default_shape);
+    }
+
+    #[test]
+    fn different_shape_cannot_replace_rigid_geometry() {
+        let default_shape = Shape {
+            form: crate::resources::Form::Circle { radius: 1.0 },
+        };
+        let mut geometry = PhysicalGeometry::from_default(&default_shape);
+        assert!(!geometry.replace(Shape {
+            form: crate::resources::Form::Circle { radius: 2.0 },
+        }));
+        assert_eq!(geometry.shape(), &default_shape);
+    }
+
+    #[test]
+    fn identical_shape_is_a_no_op() {
+        let default_shape = Shape {
+            form: crate::resources::Form::Circle { radius: 1.0 },
+        };
+        let mut geometry = PhysicalGeometry::from_default(&default_shape);
+        assert!(geometry.replace(default_shape.clone()));
         assert_eq!(geometry.shape(), &default_shape);
     }
 }
