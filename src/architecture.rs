@@ -91,7 +91,7 @@ impl OrganismArchitecture {
     }
 
     pub fn adult_construction_target(&self) -> Result<StructuralBlueprint, String> {
-        self.construction_target()
+        self.construction_target(self.target_scale.clamp(JUVENILE_LINEAR_SCALE, 1.0))
     }
 
     pub fn developmental_target(
@@ -115,8 +115,7 @@ impl OrganismArchitecture {
         candidates.dedup_by(|a, b| (*a - *b).abs() < 1e-12);
         let mut last_error = "no viable developmental target".to_string();
         for scale in candidates {
-            let _ = scale;
-            let target = self.construction_target()?;
+            let target = self.construction_target(scale)?;
             match target.realize(catalog) {
                 Ok(structure)
                     if crate::juvenile_requirements::validate_realized_juvenile(
@@ -136,7 +135,7 @@ impl OrganismArchitecture {
         Err(last_error)
     }
 
-    fn construction_target(&self) -> Result<StructuralBlueprint, String> {
+    fn construction_target(&self, scale: f64) -> Result<StructuralBlueprint, String> {
         self.validate()?;
         let core = &self.regions[self.genome_region];
         if !matches!(core.role, ArchitectureRole::GenomeCore) {
@@ -155,8 +154,8 @@ impl OrganismArchitecture {
         let mut elements = Vec::new();
         let mut connections = Vec::new();
         add_core(&mut elements, &mut connections, core);
-        add_boundary(&mut elements, &mut connections, boundary);
-        add_interface(&mut elements, &mut connections, interface);
+        add_boundary(&mut elements, &mut connections, boundary, scale);
+        add_interface(&mut elements, &mut connections, interface, scale);
         let target =
             StructuralBlueprint::with_core_elements(elements, connections, vec![0, 1, 2, 3]);
         target.validate()?;
@@ -205,13 +204,14 @@ fn add_boundary(
     elements: &mut Vec<BlueprintElement>,
     connections: &mut Vec<BlueprintConnection>,
     region: &ArchitectureRegion,
+    scale: f64,
 ) {
     let hs = 1.511_858 / 2.0;
     let off = 1.677_2175;
     let start = elements.len();
     let x = region.center_x;
     let y = region.center_y;
-    let count = ((8.0 * region.density).round() as usize).clamp(4, 8);
+    let count = ((8.0 * region.density * scale).round() as usize).clamp(4, 8);
     let positions = if count <= 4 {
         vec![
             (x, y + off, 0.0),
@@ -263,6 +263,7 @@ fn add_interface(
     elements: &mut Vec<BlueprintElement>,
     connections: &mut Vec<BlueprintConnection>,
     region: &ArchitectureRegion,
+    scale: f64,
 ) {
     let inner = 1.086_648;
     let outer = 1.511_858;
@@ -303,7 +304,7 @@ fn add_interface(
             },
         });
     }
-    let boundary_count = ((8.0 * region.density).round() as usize).clamp(4, 8);
+    let boundary_count = ((8.0 * region.density * scale).round() as usize).clamp(4, 8);
     let boundary_start = start - boundary_count;
     let maps = if boundary_count == 4 {
         [0, 1, 2, 3]
@@ -384,7 +385,7 @@ mod tests {
     #[test]
     fn juvenile_target_is_a_discrete_analog_not_a_scaled_body_plan() {
         let architecture = default_architecture();
-        let target = architecture.construction_target().unwrap();
+        let target = architecture.construction_target(1.0).unwrap();
         assert_eq!(target.elements.len(), 16);
         assert!(target
             .elements
