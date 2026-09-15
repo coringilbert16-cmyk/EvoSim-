@@ -11,11 +11,11 @@ impl PartialEq for Shape {
 ///
 /// A rigid constituent may translate and rotate through `Placement`, but its
 /// local shape cannot be replaced, deformed, or resized after realization.
-/// The resource catalog is the authority for that local shape; this value is
-/// only the realized physical instance of it.
+/// Construction creates this value; all physical consumers read it through
+/// `shape()`.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct PhysicalGeometry {
-    pub shape: Shape,
+    shape: Shape,
 }
 
 impl PhysicalGeometry {
@@ -29,18 +29,6 @@ impl PhysicalGeometry {
     /// Return the realized immutable shape.
     pub fn shape(&self) -> &Shape {
         &self.shape
-    }
-
-    /// Return the realized immutable form.
-    pub fn form(&self) -> &crate::resources::Form {
-        &self.shape.form
-    }
-
-    /// Rigid geometry cannot be replaced. This method is retained temporarily
-    /// as a migration guard for existing callers: only an identical shape is
-    /// accepted, and the stored geometry is never mutated.
-    pub fn replace(&mut self, shape: Shape) -> bool {
-        self.shape == shape
     }
 }
 
@@ -58,24 +46,11 @@ mod tests {
     }
 
     #[test]
-    fn different_shape_cannot_replace_rigid_geometry() {
+    fn realized_shape_is_read_only_through_the_geometry_api() {
         let default_shape = Shape {
             form: crate::resources::Form::Circle { radius: 1.0 },
         };
-        let mut geometry = PhysicalGeometry::from_default(&default_shape);
-        assert!(!geometry.replace(Shape {
-            form: crate::resources::Form::Circle { radius: 2.0 },
-        }));
-        assert_eq!(geometry.shape(), &default_shape);
-    }
-
-    #[test]
-    fn identical_shape_is_a_no_op() {
-        let default_shape = Shape {
-            form: crate::resources::Form::Circle { radius: 1.0 },
-        };
-        let mut geometry = PhysicalGeometry::from_default(&default_shape);
-        assert!(geometry.replace(default_shape.clone()));
+        let geometry = PhysicalGeometry::from_default(&default_shape);
         assert_eq!(geometry.shape(), &default_shape);
     }
 }
