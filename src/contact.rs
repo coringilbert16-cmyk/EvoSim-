@@ -3,7 +3,7 @@ use crate::connection_geometry::{
     facing_compatibility, point_distance, rigid_endpoint_world_point,
 };
 use crate::resources::Form;
-use crate::structure::{Bond, ConnectionEndpoint, OrganismStructure, StructuralUnit};
+use crate::structure::{ConnectionEndpoint, OrganismStructure, StructuralUnit};
 use crate::surface_geometry::boundary_point_toward;
 fn distance(
     a: crate::connection_geometry::WorldConnectionPoint,
