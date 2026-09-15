@@ -48,9 +48,6 @@ pub fn transform_derived_point(
     }
 }
 
-/// Transform a point whose normal is supplied by the legacy serialized connection
-/// metadata. This is retained solely for migration compatibility.
-
 /// Derive and transform a rigid polygon vertex using the actual shape boundary.
 pub fn transform_polygon_vertex(
     shape: &Shape,
