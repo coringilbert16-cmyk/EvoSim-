@@ -33,9 +33,7 @@ impl OrganismArchitecture {
         for relation in &self.relations { if relation.region_a >= self.regions.len() || relation.region_b >= self.regions.len() || relation.region_a == relation.region_b { return Err("architecture relation is invalid".into()); } }
         Ok(())
     }
-
     pub fn adult_construction_target(&self) -> Result<StructuralBlueprint, String> { self.construction_target(1.0) }
-
     pub fn developmental_target(&self, requested_scale: f64, catalog: &[crate::resources::BaseResource]) -> Result<StructuralBlueprint, String> {
         self.validate()?;
         let requested = requested_scale.clamp(JUVENILE_LINEAR_SCALE, 1.0);
@@ -55,7 +53,6 @@ impl OrganismArchitecture {
         }
         Err(last_error)
     }
-
     fn construction_target(&self, scale: f64) -> Result<StructuralBlueprint, String> {
         self.validate()?;
         let core = self.regions.get(self.genome_region).ok_or("missing genome region")?;
@@ -97,7 +94,7 @@ fn add_boundary_region(elements: &mut Vec<BlueprintElement>, connections: &mut V
 }
 
 fn add_interface_region(elements: &mut Vec<BlueprintElement>, connections: &mut Vec<BlueprintConnection>, region: &ArchitectureRegion, scale: f64) {
-    let inner = 1.086_648; let outer = 1.511_858; let length = 0.797_884; let gap = outer - inner; let tangent = (length * length - gap * gap).sqrt(); let center = (inner + outer) / 2.0; let sx = region.center_x * scale; let sy = region.center_y * scale; let start = elements.len();
+    let inner = 1.086_648; let outer = 1.511_858; let length: f64 = 0.797_884; let gap = outer - inner; let tangent = (length * length - gap * gap).sqrt(); let center = (inner + outer) / 2.0; let sx = region.center_x * scale; let sy = region.center_y * scale; let start = elements.len();
     let count = ((4.0 * region.density * scale.sqrt()).round() as usize).clamp(2, 4);
     let cardinal = [
         BlueprintElement { material: region.material.clone(), placement: BlueprintPlacement { x: sx, y: sy + center, rotation_radians: gap.atan2(-tangent) } }, BlueprintElement { material: region.material.clone(), placement: BlueprintPlacement { x: sx + center, y: sy, rotation_radians: tangent.atan2(gap) } }, BlueprintElement { material: region.material.clone(), placement: BlueprintPlacement { x: sx, y: sy - center, rotation_radians: (-gap).atan2(tangent) } }, BlueprintElement { material: region.material.clone(), placement: BlueprintPlacement { x: sx - center, y: sy, rotation_radians: (-tangent).atan2(-gap) } },
