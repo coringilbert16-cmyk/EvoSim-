@@ -8,7 +8,7 @@ use crate::combine::{
 };
 use crate::contact::ConnectionCompatibilityCache;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
-use crate::resources::{BaseResource, ConnectionSites, Material};
+use crate::resources::{BaseResource, Material};
 use crate::state::{EnergyLedger, Environment, Organism};
 use crate::structure::{BondEndpoint, ConnectionEndpoint, Placement, StructuralUnit};
 
@@ -57,33 +57,6 @@ fn water_field_amount(environment: &Environment, organism: &Organism) -> f64 {
                 .sum()
         })
         .unwrap_or(0.0)
-}
-
-fn placement_for_fixed_connection(
-    existing: &crate::structure::StructuralUnit,
-    existing_point: crate::resources::ConnectionPoint,
-    new_point: crate::resources::ConnectionPoint,
-) -> Placement {
-    let w = crate::contact::world_connection_point(existing_point, existing);
-    Placement {
-        x: w.x - new_point.x,
-        y: w.y - new_point.y,
-        rotation_radians: 0.0,
-    }
-}
-
-fn placement_for_continuous_new(
-    existing: &crate::structure::StructuralUnit,
-    existing_point: crate::resources::ConnectionPoint,
-    new_shape: &crate::resources::Shape,
-) -> Placement {
-    let w = crate::contact::world_connection_point(existing_point, existing);
-    let radius = new_shape.form.bounding_radius();
-    Placement {
-        x: w.x + w.normal_x * radius,
-        y: w.y + w.normal_y * radius,
-        rotation_radians: 0.0,
-    }
 }
 
 fn energy_requirement(investment: f64, work: f64, interaction: f64) -> Option<f64> {
@@ -159,10 +132,7 @@ fn form_bond(
         return None;
     }
     let (interaction, work, threshold) = required_investment(a, b, evaluation, water).ok()?;
-    if (threshold - investment).abs() > EPSILON {
-        return None;
-    }
-    if interaction.signed_value < 0.0 {
+    if (threshold - investment).abs() > EPSILON || interaction.signed_value < 0.0 {
         return None;
     }
     let strength = bond_strength(a, b);
@@ -177,7 +147,6 @@ fn form_bond(
         bond_energy: investment,
     };
     crate::contact::try_add_bond(&mut trial_structure, bond, catalog).ok()?;
-
     let before = *energy;
     let transaction = EnergyTransaction {
         reason: EnergyReason::Combine,
@@ -266,54 +235,41 @@ pub(crate) fn try_combine_stored_unit(
         .and_then(|(name, _)| environment.catalog.iter().find(|b| b.name == *name))?;
     let water = water_field_amount(environment, organism);
     let mut candidates = Vec::new();
+
+    // Stored-material COMBINE uses the same actual-boundary rigid placement
+    // solver as blueprint construction. Connection-site normals and authored
+    // clearance/radius heuristics are deliberately not used to place it.
     for ua in 0..organism.structure.units.len() {
-        let existing_sites = organism.structure.units[ua].connection_sites(&environment.catalog)?;
-        let existing_points = match existing_sites {
-            ConnectionSites::Corners(points) | ConnectionSites::Endpoints(points) => points,
-            ConnectionSites::Circumference { .. } | ConnectionSites::Undetermined => Vec::new(),
-        };
-        for ep in existing_points {
-            let placements = match geometry_source.shape.connection_sites() {
-                ConnectionSites::Corners(new_sites) | ConnectionSites::Endpoints(new_sites) => {
-                    new_sites
-                        .iter()
-                        .map(|np| {
-                            placement_for_fixed_connection(&organism.structure.units[ua], ep, *np)
-                        })
-                        .collect::<Vec<_>>()
-                }
-                ConnectionSites::Circumference { .. } | ConnectionSites::Undetermined => {
-                    vec![placement_for_continuous_new(
-                        &organism.structure.units[ua],
-                        ep,
-                        &geometry_source.shape,
-                    )]
-                }
-            };
-            for placement in placements {
-                let mut hypothetical = organism.structure.clone();
-                let ub = hypothetical.add_unit(physical_material_candidate(
-                    &raw,
-                    placement,
-                    &environment.catalog,
-                )?);
-                for candidate in crate::contact::connection_pair_candidates_cached(
+        let anchor = organism.structure.units[ua].placement;
+        for placement in crate::construction_runtime::candidate_placements(
+            &organism.structure,
+            geometry_source,
+            anchor,
+            &[ua],
+            &environment.catalog,
+        ) {
+            let mut hypothetical = organism.structure.clone();
+            let ub = hypothetical.add_unit(physical_material_candidate(
+                &raw,
+                placement,
+                &environment.catalog,
+            )?);
+            for candidate in crate::contact::connection_pair_candidates_cached(
+                &hypothetical,
+                ua,
+                ub,
+                &environment.catalog,
+                cache,
+            ) {
+                if let Some((evaluation, _, _, _, required)) = evaluate_candidate(
                     &hypothetical,
                     ua,
                     ub,
+                    candidate,
                     &environment.catalog,
-                    cache,
+                    water,
                 ) {
-                    if let Some((evaluation, _, _, _, required)) = evaluate_candidate(
-                        &hypothetical,
-                        ua,
-                        ub,
-                        candidate,
-                        &environment.catalog,
-                        water,
-                    ) {
-                        candidates.push((ua, placement, evaluation, candidate.distance, required));
-                    }
+                    candidates.push((ua, placement, evaluation, candidate.distance, required));
                 }
             }
         }
@@ -381,7 +337,6 @@ pub(crate) fn combine_specific_pair(
         })
         .collect::<Vec<_>>();
     candidates.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
-
     for (evaluation, _, required) in candidates {
         if *energy + EPSILON < required {
             continue;
