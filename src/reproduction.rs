@@ -2,9 +2,7 @@
 //! Construction is evaluated through the shared construction runtime so every
 //! internal and external bond admission uses COMBINE and the shared ledger.
 use crate::juvenile::JUVENILE_INITIAL_ENERGY_RESERVE;
-use crate::juvenile_requirements::{
-    validate_realized_juvenile, JuvenileViabilityRequirements,
-};
+use crate::juvenile_requirements::{validate_realized_juvenile, JuvenileViabilityRequirements};
 use crate::material_storage::MaterialStorage;
 use crate::resources::{BaseResource, Material};
 use crate::state::{
@@ -58,9 +56,7 @@ fn realized_mapping(elements: &[usize], groups: &[Vec<usize>]) -> HashMap<usize,
         .collect()
 }
 
-fn all_indices(
-    blueprint: &crate::structural_blueprint::StructuralBlueprint,
-) -> HashSet<usize> {
+fn all_indices(blueprint: &crate::structural_blueprint::StructuralBlueprint) -> HashSet<usize> {
     (0..blueprint.elements.len()).collect()
 }
 
@@ -158,8 +154,7 @@ pub(crate) fn begin_reproduction(
     let target_set = all_indices(blueprint);
 
     let mut remaining = parent.stored_material.clone();
-    let Some(reserved_material) =
-        remaining.take_one_unstructured_named(JUVENILE_RESERVE_MATERIAL)
+    let Some(reserved_material) = remaining.take_one_unstructured_named(JUVENILE_RESERVE_MATERIAL)
     else {
         return false;
     };
@@ -341,12 +336,10 @@ pub(crate) fn finish_reproduction(
             return None;
         }
     };
-    let parent_radius = crate::organism_geometry::OrganismBodyGeometry::from_structure(
-        &parent.structure,
-        catalog,
-    )
-    .map(|geometry| geometry.bounding_radius_about(0.0, 0.0))
-    .unwrap_or(1.0);
+    let parent_radius =
+        crate::organism_geometry::OrganismBodyGeometry::from_structure(&parent.structure, catalog)
+            .map(|geometry| geometry.bounding_radius_about(0.0, 0.0))
+            .unwrap_or(1.0);
     let child_radius = crate::organism_geometry::OrganismBodyGeometry::from_structure(
         &construction.developing_structure,
         catalog,
