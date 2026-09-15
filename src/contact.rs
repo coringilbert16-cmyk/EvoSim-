@@ -91,7 +91,7 @@ fn continuous_endpoint(
     let ly = -ux * s + uy * c;
     let shape = unit.shape(catalog)?;
     let point = boundary_point_toward(shape, lx, ly)?;
-    match shape.form {
+    match &shape.form {
         Form::Circle { .. } => Some(ConnectionEndpoint::Boundary {
             angle_radians: point.y.atan2(point.x),
         }),
@@ -103,10 +103,7 @@ fn continuous_endpoint(
     }
 }
 
-fn endpoint_indices(
-    unit: &StructuralUnit,
-    catalog: &[crate::resources::BaseResource],
-) -> Vec<ConnectionEndpoint> {
+fn endpoint_indices(unit: &StructuralUnit, catalog: &[crate::resources::BaseResource]) -> Vec<ConnectionEndpoint> {
     let Some(shape) = unit.shape(catalog) else {
         return Vec::new();
     };
@@ -434,10 +431,8 @@ mod tests {
                 rotation_radians: std::f64::consts::FRAC_PI_6,
             },
         );
-        let pa = endpoint_world_point(ConnectionEndpoint::Corner { point_index: 0 }, &a, &catalog)
-            .unwrap();
-        let pb = endpoint_world_point(ConnectionEndpoint::Corner { point_index: 2 }, &b, &catalog)
-            .unwrap();
+        let pa = endpoint_world_point(ConnectionEndpoint::Corner { point_index: 0 }, &a, &catalog).unwrap();
+        let pb = endpoint_world_point(ConnectionEndpoint::Corner { point_index: 2 }, &b, &catalog).unwrap();
         assert!(point_distance(pa, pb) <= 1e-9);
     }
     #[test]
