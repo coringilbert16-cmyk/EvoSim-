@@ -103,7 +103,10 @@ fn continuous_endpoint(
     }
 }
 
-fn endpoint_indices(unit: &StructuralUnit, catalog: &[crate::resources::BaseResource]) -> Vec<ConnectionEndpoint> {
+fn endpoint_indices(
+    unit: &StructuralUnit,
+    catalog: &[crate::resources::BaseResource],
+) -> Vec<ConnectionEndpoint> {
     let Some(shape) = unit.shape(catalog) else {
         return Vec::new();
     };
@@ -431,8 +434,10 @@ mod tests {
                 rotation_radians: std::f64::consts::FRAC_PI_6,
             },
         );
-        let pa = endpoint_world_point(ConnectionEndpoint::Corner { point_index: 0 }, &a, &catalog).unwrap();
-        let pb = endpoint_world_point(ConnectionEndpoint::Corner { point_index: 2 }, &b, &catalog).unwrap();
+        let pa = endpoint_world_point(ConnectionEndpoint::Corner { point_index: 0 }, &a, &catalog)
+            .unwrap();
+        let pb = endpoint_world_point(ConnectionEndpoint::Corner { point_index: 2 }, &b, &catalog)
+            .unwrap();
         assert!(point_distance(pa, pb) <= 1e-9);
     }
     #[test]
