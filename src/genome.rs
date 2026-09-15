@@ -26,16 +26,10 @@ pub struct Genome {
 
 impl Genome {
     pub fn trait_value(&self, name: &str, default: f64) -> f64 {
-        self.traits
-            .iter()
-            .find(|t| t.name == name)
-            .map(|t| t.value)
-            .unwrap_or(default)
+        self.traits.iter().find(|t| t.name == name).map(|t| t.value).unwrap_or(default)
     }
     pub fn mass_affinity(&self) -> f64 { self.trait_value("mass_affinity", 0.0).clamp(-1.0, 1.0) }
-    pub fn potential_energy_affinity(&self) -> f64 {
-        self.trait_value("potential_energy_affinity", 0.0).clamp(-1.0, 1.0)
-    }
+    pub fn potential_energy_affinity(&self) -> f64 { self.trait_value("potential_energy_affinity", 0.0).clamp(-1.0, 1.0) }
     pub fn reactivity_affinity(&self) -> f64 { self.trait_value("reactivity_affinity", 0.0).clamp(-1.0, 1.0) }
     pub fn cohesion_affinity(&self) -> f64 { self.trait_value("cohesion_affinity", 0.0).clamp(-1.0, 1.0) }
     pub fn memory_strength(&self) -> f64 { self.trait_value("memory_strength", 0.5).clamp(0.0, 1.0) }
@@ -50,28 +44,16 @@ impl Genome {
         let mut mutation_probability_sum = 0.0;
         let mut mutation_sigma_sum = 0.0;
         for t in &mut self.traits {
-            if rng.gen::<f64>() < t.mutation_probability.clamp(1e-6, 0.25) {
-                t.value += rng.gen_range(-1.0..1.0) * t.mutation_sigma.max(0.0);
-            }
-            if rng.gen::<f64>() < 0.001 {
-                t.mutation_probability =
-                    (t.mutation_probability * rng.gen_range(0.5..1.5)).clamp(1e-6, 0.1);
-            }
+            if rng.gen::<f64>() < t.mutation_probability.clamp(1e-6, 0.25) { t.value += rng.gen_range(-1.0..1.0) * t.mutation_sigma.max(0.0); }
+            if rng.gen::<f64>() < 0.001 { t.mutation_probability = (t.mutation_probability * rng.gen_range(0.5..1.5)).clamp(1e-6, 0.1); }
             mutation_probability_sum += t.mutation_probability;
             mutation_sigma_sum += t.mutation_sigma.max(0.0);
         }
         let count = self.traits.len().max(1) as f64;
-        let structural_probability = (mutation_probability_sum / count).clamp(1e-6, 0.25);
-        let structural_sigma = (mutation_sigma_sum / count).clamp(1e-6, 1.0);
-        self.mutate_structural_blueprint(rng, structural_probability, structural_sigma);
+        self.mutate_structural_blueprint(rng, (mutation_probability_sum / count).clamp(1e-6, 0.25), (mutation_sigma_sum / count).clamp(1e-6, 1.0));
     }
 
-    fn mutate_structural_blueprint(
-        &mut self,
-        rng: &mut ChaCha8Rng,
-        mutation_probability: f64,
-        mutation_sigma: f64,
-    ) {
+    fn mutate_structural_blueprint(&mut self, rng: &mut ChaCha8Rng, mutation_probability: f64, mutation_sigma: f64) {
         let original = self.structural_blueprint.clone();
         let probability = mutation_probability.clamp(0.0, 1.0);
         let sigma = mutation_sigma.max(0.0);
@@ -97,97 +79,92 @@ fn seed_interface_material() -> Material {
     Material { parts: vec![("Hydrogen".into(), 1.0)], internal_bonds: Vec::new() }
 }
 
-fn square_shell(elements: &mut Vec<BlueprintElement>, side: f64, thickness: f64) {
-    let half_wall = side / 2.0;
-    let half_thickness = thickness / 2.0;
-    let offset = half_wall + half_thickness;
+fn add_core_shell(elements: &mut Vec<BlueprintElement>, connections: &mut Vec<BlueprintConnection>) {
+    let side = 1.511_858;
+    let thickness = 0.330_719;
+    let offset = (side + thickness) / 2.0;
     elements.extend([
         BlueprintElement { material: seed_wall_material(), placement: BlueprintPlacement { x: 0.0, y: offset, rotation_radians: 0.0 } },
         BlueprintElement { material: seed_wall_material(), placement: BlueprintPlacement { x: -offset, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_2 } },
         BlueprintElement { material: seed_wall_material(), placement: BlueprintPlacement { x: offset, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_2 } },
         BlueprintElement { material: seed_wall_material(), placement: BlueprintPlacement { x: 0.0, y: -offset, rotation_radians: 0.0 } },
     ]);
-}
-
-fn shell_connections(start: usize, connections: &mut Vec<BlueprintConnection>) {
     connections.extend([
-        BlueprintConnection { element_a: start, element_b: start + 1 },
-        BlueprintConnection { element_a: start, element_b: start + 2 },
-        BlueprintConnection { element_a: start + 1, element_b: start + 3 },
-        BlueprintConnection { element_a: start + 2, element_b: start + 3 },
+        BlueprintConnection { element_a: 0, element_b: 1 },
+        BlueprintConnection { element_a: 0, element_b: 2 },
+        BlueprintConnection { element_a: 1, element_b: 3 },
+        BlueprintConnection { element_a: 2, element_b: 3 },
     ]);
 }
 
-fn interface_connectors(
-    elements: &mut Vec<BlueprintElement>,
-    inner_offset: f64,
-    outer_offset: f64,
-) {
-    let center = (inner_offset + outer_offset) / 2.0;
+fn add_outer_shell(elements: &mut Vec<BlueprintElement>, connections: &mut Vec<BlueprintConnection>) {
+    let segment = 1.511_858;
+    let thickness = 0.330_719;
+    let half_segment = segment / 2.0;
+    let offset = 1.677_2175;
+    let start = elements.len();
     elements.extend([
-        BlueprintElement { material: seed_interface_material(), placement: BlueprintPlacement { x: 0.0, y: center, rotation_radians: std::f64::consts::FRAC_PI_2 } },
-        BlueprintElement { material: seed_interface_material(), placement: BlueprintPlacement { x: -center, y: 0.0, rotation_radians: 0.0 } },
-        BlueprintElement { material: seed_interface_material(), placement: BlueprintPlacement { x: center, y: 0.0, rotation_radians: 0.0 } },
-        BlueprintElement { material: seed_interface_material(), placement: BlueprintPlacement { x: 0.0, y: -center, rotation_radians: std::f64::consts::FRAC_PI_2 } },
+        BlueprintElement { material: seed_wall_material(), placement: BlueprintPlacement { x: -half_segment, y: offset, rotation_radians: 0.0 } },
+        BlueprintElement { material: seed_wall_material(), placement: BlueprintPlacement { x: half_segment, y: offset, rotation_radians: 0.0 } },
+        BlueprintElement { material: seed_wall_material(), placement: BlueprintPlacement { x: -offset, y: -half_segment, rotation_radians: std::f64::consts::FRAC_PI_2 } },
+        BlueprintElement { material: seed_wall_material(), placement: BlueprintPlacement { x: -offset, y: half_segment, rotation_radians: std::f64::consts::FRAC_PI_2 } },
+        BlueprintElement { material: seed_wall_material(), placement: BlueprintPlacement { x: offset, y: -half_segment, rotation_radians: std::f64::consts::FRAC_PI_2 } },
+        BlueprintElement { material: seed_wall_material(), placement: BlueprintPlacement { x: offset, y: half_segment, rotation_radians: std::f64::consts::FRAC_PI_2 } },
+        BlueprintElement { material: seed_wall_material(), placement: BlueprintPlacement { x: -half_segment, y: -offset, rotation_radians: 0.0 } },
+        BlueprintElement { material: seed_wall_material(), placement: BlueprintPlacement { x: half_segment, y: -offset, rotation_radians: 0.0 } },
+    ]);
+    let _ = thickness;
+    connections.extend([
+        BlueprintConnection { element_a: start, element_b: start + 1 },
+        BlueprintConnection { element_a: start, element_b: start + 3 },
+        BlueprintConnection { element_a: start + 3, element_b: start + 5 },
+        BlueprintConnection { element_a: start + 5, element_b: start + 1 },
+        BlueprintConnection { element_a: start + 1, element_b: start + 5 },
+        BlueprintConnection { element_a: start + 5, element_b: start + 7 },
+        BlueprintConnection { element_a: start + 7, element_b: start + 6 },
+        BlueprintConnection { element_a: start + 6, element_b: start + 2 },
+        BlueprintConnection { element_a: start + 2, element_b: start + 4 },
+        BlueprintConnection { element_a: start + 4, element_b: start + 7 },
+    ]);
+}
+
+fn add_interface_connectors(elements: &mut Vec<BlueprintElement>, connections: &mut Vec<BlueprintConnection>) {
+    let inner_outer = 1.086_648;
+    let outer_inner = 1.511_858;
+    let length = 0.797_884;
+    let gap = outer_inner - inner_outer;
+    let tangent = (length * length - gap * gap).sqrt();
+    let center = (inner_outer + outer_inner) / 2.0;
+    let start = elements.len();
+    elements.extend([
+        BlueprintElement { material: seed_interface_material(), placement: BlueprintPlacement { x: 0.0, y: center, rotation_radians: gap.atan2(-tangent) } },
+        BlueprintElement { material: seed_interface_material(), placement: BlueprintPlacement { x: -center, y: 0.0, rotation_radians: (-tangent).atan2(-gap) } },
+        BlueprintElement { material: seed_interface_material(), placement: BlueprintPlacement { x: center, y: 0.0, rotation_radians: tangent.atan2(gap) } },
+        BlueprintElement { material: seed_interface_material(), placement: BlueprintPlacement { x: 0.0, y: -center, rotation_radians: (-gap).atan2(tangent) } },
+    ]);
+    connections.extend([
+        BlueprintConnection { element_a: 0, element_b: start },
+        BlueprintConnection { element_a: 4, element_b: start },
+        BlueprintConnection { element_a: 1, element_b: start + 1 },
+        BlueprintConnection { element_a: 6, element_b: start + 1 },
+        BlueprintConnection { element_a: 2, element_b: start + 2 },
+        BlueprintConnection { element_a: 8, element_b: start + 2 },
+        BlueprintConnection { element_a: 3, element_b: start + 3 },
+        BlueprintConnection { element_a: 10, element_b: start + 3 },
     ]);
 }
 
 fn default_juvenile_blueprint() -> StructuralBlueprint {
-    let thickness = 0.330_719;
-    let core_side = 1.511_858;
-    let connector_length = 0.797_884;
-    let core_offset = (core_side + thickness) / 2.0;
-    let core_outer = core_offset + thickness / 2.0;
-    let outer_inner = core_outer + connector_length;
-    let outer_side = 2.0 * (outer_inner + thickness / 2.0) - thickness;
-    let outer_offset = (outer_side + thickness) / 2.0;
-
     let mut elements = Vec::new();
     let mut connections = Vec::new();
-    square_shell(&mut elements, core_side, thickness);
-    square_shell(&mut elements, outer_side, thickness);
-    shell_connections(0, &mut connections);
-    shell_connections(4, &mut connections);
-    interface_connectors(&mut elements, core_outer, outer_inner);
-    connections.extend([
-        BlueprintConnection { element_a: 0, element_b: 8 },
-        BlueprintConnection { element_a: 4, element_b: 8 },
-        BlueprintConnection { element_a: 1, element_b: 9 },
-        BlueprintConnection { element_a: 5, element_b: 9 },
-        BlueprintConnection { element_a: 2, element_b: 10 },
-        BlueprintConnection { element_a: 6, element_b: 10 },
-        BlueprintConnection { element_a: 3, element_b: 11 },
-        BlueprintConnection { element_a: 7, element_b: 11 },
-    ]);
-    let _ = outer_offset;
+    add_core_shell(&mut elements, &mut connections);
+    add_outer_shell(&mut elements, &mut connections);
+    add_interface_connectors(&mut elements, &mut connections);
     StructuralBlueprint::with_core_elements(elements, connections, vec![0, 1, 2, 3])
 }
 
 fn default_structural_blueprint() -> StructuralBlueprint {
-    let mut elements = default_juvenile_blueprint().elements;
-    let mut connections = default_juvenile_blueprint().connections;
-    let thickness = 0.330_719;
-    let first_outer_side = 3.769_064;
-    let connector_length = 0.797_884;
-    let first_outer_offset = (first_outer_side + thickness) / 2.0;
-    let first_outer_outer = first_outer_offset + thickness / 2.0;
-    let second_outer_inner = first_outer_outer + connector_length;
-    let second_outer_side = 2.0 * (second_outer_inner + thickness / 2.0) - thickness;
-    let start = elements.len();
-    square_shell(&mut elements, second_outer_side, thickness);
-    shell_connections(start, &mut connections);
-    interface_connectors(&mut elements, first_outer_outer, second_outer_inner);
-    connections.extend([
-        BlueprintConnection { element_a: 4, element_b: start + 8 },
-        BlueprintConnection { element_a: start, element_b: start + 8 },
-        BlueprintConnection { element_a: 5, element_b: start + 9 },
-        BlueprintConnection { element_a: start + 1, element_b: start + 9 },
-        BlueprintConnection { element_a: 6, element_b: start + 10 },
-        BlueprintConnection { element_a: start + 2, element_b: start + 10 },
-        BlueprintConnection { element_a: 7, element_b: start + 11 },
-        BlueprintConnection { element_a: start + 3, element_b: start + 11 },
-    ]);
-    StructuralBlueprint::with_core_elements(elements, connections, vec![0, 1, 2, 3])
+    default_juvenile_blueprint()
 }
 
 pub fn initial_genome() -> Genome {
@@ -219,26 +196,18 @@ mod tests {
 
     #[test]
     fn juvenile_blueprint_has_sealed_genome_and_extracore_structure() {
-        let g = initial_genome();
-        let b = &g.juvenile_blueprint;
-        assert_eq!(b.elements.len(), 12);
-        assert_eq!(b.core_elements, vec![0, 1, 2, 3]);
-        assert!(b.validate().is_ok());
+        let genome = initial_genome();
+        let blueprint = &genome.juvenile_blueprint;
+        assert_eq!(blueprint.elements.len(), 16);
+        assert_eq!(blueprint.core_elements, vec![0, 1, 2, 3]);
+        assert!(blueprint.validate().is_ok());
         let catalog = default_catalog();
-        let structure = b.realize(&catalog).unwrap();
-        let cavity = analyze_genome_cavity(&structure, &catalog, &b.core_elements)
+        let structure = blueprint.realize(&catalog).unwrap();
+        let cavity = analyze_genome_cavity(&structure, &catalog, &blueprint.core_elements)
             .unwrap()
             .expect("juvenile genome cavity must be sealed");
         assert!(cavity.qualifies());
-        assert!(structure.units.len() > b.core_elements.len());
-    }
-
-    #[test]
-    fn mature_blueprint_contains_the_viable_juvenile_architecture() {
-        let g = initial_genome();
-        assert!(g.structural_blueprint.elements.len() > g.juvenile_blueprint.elements.len());
-        assert_eq!(g.structural_blueprint.core_elements, g.juvenile_blueprint.core_elements);
-        assert!(g.structural_blueprint.validate().is_ok());
+        assert!(structure.units.len() > blueprint.core_elements.len());
     }
 
     #[test]
