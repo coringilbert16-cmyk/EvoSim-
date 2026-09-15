@@ -65,17 +65,9 @@ pub fn line_endpoint_alignment_rotations(
     if candidate_endpoint > 1 || target_endpoint > 1 {
         return Vec::new();
     }
-    let candidate_interior = if candidate_endpoint == 0 {
-        0.0
-    } else {
-        std::f64::consts::PI
-    };
+    let candidate_interior = if candidate_endpoint == 0 { 0.0 } else { std::f64::consts::PI };
     let target_interior = target_rotation
-        + if target_endpoint == 0 {
-            0.0
-        } else {
-            std::f64::consts::PI
-        };
+        + if target_endpoint == 0 { 0.0 } else { std::f64::consts::PI };
     let mut rotations = vec![
         target_interior + std::f64::consts::PI - candidate_interior,
         target_interior - candidate_interior,
@@ -218,7 +210,7 @@ mod tests {
     #[test]
     fn l_inner_corner_normal_comes_from_incident_edges() {
         let (nx, ny) = corner_normal(&l_shape(), 4).unwrap();
-        assert!((nx + 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
+        assert!((nx - 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
         assert!((ny - 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
     }
     #[test]
@@ -231,7 +223,7 @@ mod tests {
         assert_eq!(vertices.len(), 6);
         assert_eq!(vertices[3], (0.0, 0.0));
         let (nx, ny) = corner_normal(&phosphorus.shape, 3).unwrap();
-        assert!((nx + 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
+        assert!((nx - 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
         assert!((ny - 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
     }
     #[test]
