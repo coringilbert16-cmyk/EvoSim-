@@ -7,42 +7,40 @@ impl PartialEq for Shape {
     }
 }
 
-/// The geometry an individual physical constituent currently occupies.
+/// The immutable physical geometry of one realized constituent.
 ///
-/// Resource catalog geometry remains immutable. This value is per physical
-/// constituent and is therefore the only place where a realized object's
-/// geometry may diverge from its resource's default geometry.
+/// A rigid constituent may translate and rotate through `Placement`, but its
+/// local shape cannot be replaced, deformed, or resized after realization.
+/// The resource catalog is the authority for that local shape; this value is
+/// only the realized physical instance of it.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct PhysicalGeometry {
     pub shape: Shape,
 }
 
 impl PhysicalGeometry {
-    /// Start a physical constituent at the resource's immutable default shape.
+    /// Start a physical constituent from its resource's immutable default shape.
     pub fn from_default(shape: &Shape) -> Self {
         Self {
             shape: shape.clone(),
         }
     }
 
-    /// Return the currently realized shape.
+    /// Return the realized immutable shape.
     pub fn shape(&self) -> &Shape {
         &self.shape
     }
 
-    /// Return the currently realized form.
+    /// Return the realized immutable form.
     pub fn form(&self) -> &crate::resources::Form {
         &self.shape.form
     }
 
-    /// Replace the realized geometry after a physical interaction has
-    /// produced a new valid configuration.
+    /// Rigid geometry cannot be replaced. This method is retained temporarily
+    /// as a migration guard for existing callers: only an identical shape is
+    /// accepted, and the stored geometry is never mutated.
     pub fn replace(&mut self, shape: Shape) -> bool {
-        if !shape.is_valid() {
-            return false;
-        }
-        self.shape = shape;
-        true
+        self.shape == shape
     }
 }
 
@@ -60,14 +58,24 @@ mod tests {
     }
 
     #[test]
-    fn invalid_replacement_is_rejected_without_mutation() {
+    fn different_shape_cannot_replace_rigid_geometry() {
         let default_shape = Shape {
             form: crate::resources::Form::Circle { radius: 1.0 },
         };
         let mut geometry = PhysicalGeometry::from_default(&default_shape);
         assert!(!geometry.replace(Shape {
-            form: crate::resources::Form::Circle { radius: 0.0 },
+            form: crate::resources::Form::Circle { radius: 2.0 },
         }));
+        assert_eq!(geometry.shape(), &default_shape);
+    }
+
+    #[test]
+    fn identical_shape_is_a_no_op() {
+        let default_shape = Shape {
+            form: crate::resources::Form::Circle { radius: 1.0 },
+        };
+        let mut geometry = PhysicalGeometry::from_default(&default_shape);
+        assert!(geometry.replace(default_shape.clone()));
         assert_eq!(geometry.shape(), &default_shape);
     }
 }
