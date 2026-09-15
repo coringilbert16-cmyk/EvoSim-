@@ -48,11 +48,8 @@ pub fn transform_derived_point(
     }
 }
 
-/// Transform a point using its stored normal.
-///
-/// Kept temporarily for serialization/migration compatibility. New physical
-/// geometry code must use `transform_derived_point` with normals obtained from
-/// the actual realized shape boundary.
+/// Transform a point whose normal is supplied by the legacy serialized connection
+/// metadata. This is retained solely for migration compatibility.
 pub fn transform_connection_point(
     point: ConnectionPoint,
     origin_x: f64,
@@ -120,6 +117,58 @@ pub fn transform_line_endpoint(
         origin_y,
         rotation_radians,
     ))
+}
+
+/// Return the physical world-space connection point for a rigid boundary vertex.
+///
+/// This function is deliberately keyed by the realized shape and vertex index,
+/// not by connection metadata. It is the preferred endpoint API for rigid shapes.
+pub fn rigid_endpoint_world_point(
+    shape: &Shape,
+    vertex: usize,
+    origin_x: f64,
+    origin_y: f64,
+    rotation_radians: f64,
+) -> Option<WorldConnectionPoint> {
+    if matches!(shape.form, crate::resources::Form::Line { .. }) {
+        transform_line_endpoint(shape, vertex, origin_x, origin_y, rotation_radians)
+    } else {
+        transform_polygon_vertex(shape, vertex, origin_x, origin_y, rotation_radians)
+    }
+}
+
+/// Geometry-derived facing for two rigid endpoints.
+///
+/// The normals come exclusively from the realized shape boundaries. No authored
+/// connection direction, bond angle, socket capacity, or radial approximation is
+/// consulted here.
+pub fn rigid_endpoint_facing(
+    shape_a: &Shape,
+    vertex_a: usize,
+    origin_a_x: f64,
+    origin_a_y: f64,
+    rotation_a: f64,
+    shape_b: &Shape,
+    vertex_b: usize,
+    origin_b_x: f64,
+    origin_b_y: f64,
+    rotation_b: f64,
+) -> Option<f64> {
+    let a = rigid_endpoint_world_point(
+        shape_a,
+        vertex_a,
+        origin_a_x,
+        origin_a_y,
+        rotation_a,
+    )?;
+    let b = rigid_endpoint_world_point(
+        shape_b,
+        vertex_b,
+        origin_b_x,
+        origin_b_y,
+        rotation_b,
+    )?;
+    Some(facing_compatibility(a, b))
 }
 
 pub fn transform_connection_regions(
@@ -241,6 +290,17 @@ mod tests {
         let r = transform_line_endpoint(&shape, 1, 0.0, 0.0, 0.0).unwrap();
         assert_eq!((r.x, r.y), (1.0, 0.0));
         assert_eq!((r.normal_x, r.normal_y), (1.0, 0.0));
+    }
+
+    #[test]
+    fn rigid_endpoint_facing_uses_shape_geometry() {
+        let a = square();
+        let b = square();
+        let facing = rigid_endpoint_facing(
+            &a, 0, 0.0, 0.0, 0.0, &b, 2, 2.0, 0.0, 0.0,
+        )
+        .unwrap();
+        assert!((facing - 1.0).abs() < 1e-12);
     }
 
     #[test]
