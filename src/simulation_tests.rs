@@ -57,7 +57,11 @@ mod integration_tests {
             .developmental_construction_target(c)
             .unwrap()
             .structural_mass(c);
-        let mature = o.genome.mature_construction_target().unwrap().structural_mass(c);
+        let mature = o
+            .genome
+            .mature_construction_target()
+            .unwrap()
+            .structural_mass(c);
         assert!(mature > juvenile);
         assert!(o.structural_mass(c) < mature * 0.90);
         assert!(matches!(o.development_stage, DevelopmentStage::Juvenile));
