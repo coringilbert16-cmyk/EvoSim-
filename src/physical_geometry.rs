@@ -15,7 +15,7 @@ impl PartialEq for Shape {
 /// this value is the realized physical instance of it.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct PhysicalGeometry {
-    pub shape: Shape,
+    shape: Shape,
 }
 
 impl PhysicalGeometry {
