@@ -314,8 +314,8 @@ fn add_interface_connectors(
 ) {
     let inner_outer = 1.086_648;
     let outer_inner = 1.511_858;
-    let length = 0.797_884;
-    let gap = outer_inner - inner_outer;
+    let length: f64 = 0.797_884;
+    let gap: f64 = outer_inner - inner_outer;
     let tangent = (length * length - gap * gap).sqrt();
     let center = (inner_outer + outer_inner) / 2.0;
     let start = elements.len();
