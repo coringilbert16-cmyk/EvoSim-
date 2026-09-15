@@ -10,10 +10,10 @@ use crate::combine_runtime::combine_specific_pair;
 use crate::contact::ConnectionCompatibilityCache;
 use crate::energy_ledger::EnergyLedger;
 use crate::resources::BaseResource;
-use crate::state::JUVENILE_INITIAL_ENERGY_RESERVE;
 use crate::structure::{OrganismStructure, StructuralUnit};
 use crate::structural_blueprint::StructuralBlueprint;
 
+pub(crate) const JUVENILE_INITIAL_ENERGY_RESERVE: f64 = 16.0;
 const TRIAL_ENERGY: f64 = 1.0e12;
 const EPS: f64 = 1e-8;
 
@@ -29,12 +29,8 @@ pub(crate) fn realize_initial(
     }
 
     let base = realize_declared_units(blueprint, catalog)?;
-    let (required_initial_energy, _) = form_declared_bonds(
-        base.clone(),
-        blueprint,
-        catalog,
-        TRIAL_ENERGY,
-    )?;
+    let (required_initial_energy, _) =
+        form_declared_bonds(base.clone(), blueprint, catalog, TRIAL_ENERGY)?;
     let initial_energy = required_initial_energy + JUVENILE_INITIAL_ENERGY_RESERVE;
     let (structure, ledger, remaining) =
         form_declared_bonds(base, blueprint, catalog, initial_energy)?;
