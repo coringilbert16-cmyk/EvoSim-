@@ -74,7 +74,7 @@ impl Form {
                 vertices.len() >= 3 && vertices.iter().all(|(x, y)| x.is_finite() && y.is_finite())
             }
             Form::Fluid { nominal_area } => {
-                nominal_area.is_finite() && nominal_area.to_owned() > 0.0
+                nominal_area.is_finite() && *nominal_area > 0.0
             }
         }
     }

@@ -1,4 +1,4 @@
-use crate::resources::{default_catalog, Form, Shape};
+use crate::resources::{Form, Shape};
 use crate::structure::Placement;
 
 fn vertices(shape: &Shape) -> Option<Vec<(f64, f64)>> {
@@ -164,6 +164,7 @@ pub fn has_polygon_boundary(shape: &Shape) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::resources::default_catalog;
     use std::f64::consts::PI;
     fn square() -> Shape {
         Shape {
