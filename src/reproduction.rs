@@ -1,6 +1,7 @@
 //! Physical reproduction lifecycle.
 //! Construction is evaluated through the shared construction runtime so every
 //! internal and external bond admission uses COMBINE and the shared ledger.
+use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::juvenile::JUVENILE_INITIAL_ENERGY_RESERVE;
 use crate::juvenile_requirements::{validate_realized_juvenile, JuvenileViabilityRequirements};
 use crate::material_storage::MaterialStorage;
