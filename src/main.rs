@@ -13,13 +13,10 @@ mod structure;
 mod connection_geometry;
 mod construction_runtime;
 mod contact;
-mod interface_geometry;
 mod material_geometry;
-mod organism_boundary;
 mod organism_geometry;
 mod permeability;
 mod physical_geometry;
-mod physical_interface;
 mod rigid_boundary;
 mod surface_geometry;
 
