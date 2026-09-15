@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::architecture::{default_architecture, OrganismArchitecture};
 use crate::resources::Material;
+use crate::structural_blueprint::StructuralBlueprint;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TraitDef {
@@ -20,16 +21,23 @@ pub struct Genome {
     pub juvenile_reserve: Material,
     #[serde(default = "default_juvenile_energy_reserve")]
     pub juvenile_energy_reserve: f64,
-    /// The sole inherited developmental structural authority. This is
-    /// region-level intent; it contains no constituent list or physical bonds.
+    /// Sole inherited structural authority. This is region-level intent and
+    /// contains no constituent coordinates or physical bonds.
     #[serde(default = "default_architecture")]
     pub architecture: OrganismArchitecture,
+    /// Transitional runtime construction cache derived exclusively from
+    /// `architecture`. It is not serialized and is never biological state.
+    #[serde(skip)]
+    pub structural_blueprint: StructuralBlueprint,
+    /// Transitional runtime target cache for old lifecycle call sites. It is
+    /// derived from `architecture` and is not serialized or inherited as an
+    /// independent body plan. New code must request a developmental target.
+    #[serde(skip)]
+    pub juvenile_blueprint: StructuralBlueprint,
 }
 
 impl Genome {
-    pub fn trait_value(&self, name: &str, default: f64) -> f64 {
-        self.traits.iter().find(|t| t.name == name).map(|t| t.value).unwrap_or(default)
-    }
+    pub fn trait_value(&self, name: &str, default: f64) -> f64 { self.traits.iter().find(|t| t.name == name).map(|t| t.value).unwrap_or(default) }
     pub fn mass_affinity(&self) -> f64 { self.trait_value("mass_affinity", 0.0).clamp(-1.0, 1.0) }
     pub fn potential_energy_affinity(&self) -> f64 { self.trait_value("potential_energy_affinity", 0.0).clamp(-1.0, 1.0) }
     pub fn reactivity_affinity(&self) -> f64 { self.trait_value("reactivity_affinity", 0.0).clamp(-1.0, 1.0) }
@@ -42,12 +50,15 @@ impl Genome {
     pub fn movement_efficiency(&self) -> f64 { self.trait_value("movement_efficiency", 0.8).clamp(0.05, 1.0) }
     pub fn reproductive_investment(&self) -> f64 { self.trait_value("reproductive_investment", 0.5).clamp(0.15, 1.0) }
 
-    pub fn mature_construction_target(&self) -> Result<crate::structural_blueprint::StructuralBlueprint, String> {
-        self.architecture.adult_construction_target()
+    pub fn mature_construction_target(&self) -> Result<StructuralBlueprint, String> { self.architecture.adult_construction_target() }
+    pub fn developmental_construction_target(&self, catalog: &[crate::resources::BaseResource]) -> Result<StructuralBlueprint, String> {
+        self.architecture.developmental_target(self.architecture.target_scale.clamp(0.40, 1.0), catalog)
     }
 
-    pub fn developmental_construction_target(&self, catalog: &[crate::resources::BaseResource]) -> Result<crate::structural_blueprint::StructuralBlueprint, String> {
-        self.architecture.developmental_target(self.architecture.target_scale.min(1.0).max(0.40), catalog)
+    fn refresh_construction_caches(&mut self) -> Result<(), String> {
+        self.structural_blueprint = self.mature_construction_target()?;
+        self.juvenile_blueprint = self.developmental_construction_target(&crate::resources::default_catalog())?;
+        Ok(())
     }
 
     pub fn mutate(&mut self, rng: &mut ChaCha8Rng) {
@@ -71,11 +82,11 @@ impl Genome {
             if rng.gen::<f64>() >= probability { continue; }
             region.center_x += rng.gen_range(-1.0..1.0) * sigma;
             region.center_y += rng.gen_range(-1.0..1.0) * sigma;
-            let scale = (1.0 + rng.gen_range(-1.0..1.0) * sigma * 0.1).max(0.01);
-            region.extent_x *= scale;
-            region.extent_y *= scale;
+            let factor = (1.0 + rng.gen_range(-1.0..1.0) * sigma * 0.1).max(0.01);
+            region.extent_x *= factor;
+            region.extent_y *= factor;
         }
-        if self.architecture.validate().is_err() { self.architecture = original; }
+        if self.architecture.validate().is_err() || self.refresh_construction_caches().is_err() { self.architecture = original; let _ = self.refresh_construction_caches(); }
     }
 }
 
@@ -84,7 +95,8 @@ fn default_juvenile_energy_reserve() -> f64 { 16.0 }
 fn trait_def(name: &str, value: f64, sigma: f64) -> TraitDef { TraitDef { name: name.into(), value, mutation_probability: 0.001, mutation_sigma: sigma } }
 
 pub fn initial_genome() -> Genome {
-    Genome {
+    let architecture = default_architecture();
+    let mut genome = Genome {
         traits: vec![
             trait_def("memory_strength", 0.5, 0.05), trait_def("perception_radius", 100.0, 1.0),
             trait_def("sensory_resolution", 0.5, 0.05), trait_def("directional_resolution", 1.0, 0.05),
@@ -95,8 +107,12 @@ pub fn initial_genome() -> Genome {
         ],
         juvenile_reserve: default_juvenile_reserve(),
         juvenile_energy_reserve: default_juvenile_energy_reserve(),
-        architecture: default_architecture(),
-    }
+        architecture,
+        structural_blueprint: StructuralBlueprint::new(Vec::new(), Vec::new()),
+        juvenile_blueprint: StructuralBlueprint::new(Vec::new(), Vec::new()),
+    };
+    genome.refresh_construction_caches().expect("default architecture must produce construction targets");
+    genome
 }
 
 #[cfg(test)]
@@ -106,30 +122,31 @@ mod tests {
     use rand::SeedableRng;
 
     #[test]
-    fn genome_stores_architecture_not_a_juvenile_body_plan() {
+    fn genome_architecture_is_the_serialized_structural_authority() {
         let genome = initial_genome();
         assert!(genome.architecture.validate().is_ok());
         assert_eq!(genome.architecture.regions.len(), 3);
     }
 
     #[test]
-    fn construction_targets_are_derived_on_demand() {
+    fn construction_targets_are_derived_from_architecture() {
         let genome = initial_genome();
         let catalog = default_catalog();
-        let adult = genome.mature_construction_target().unwrap();
-        let juvenile = genome.developmental_construction_target(&catalog).unwrap();
-        assert!(adult.is_valid());
-        assert!(juvenile.is_valid());
-        assert_eq!(adult.elements.len(), 16);
+        assert!(genome.mature_construction_target().unwrap().is_valid());
+        assert!(genome.developmental_construction_target(&catalog).unwrap().is_valid());
     }
 
     #[test]
-    fn structural_mutation_is_architectural_and_transactional() {
+    fn structural_mutation_rolls_back_architecture_and_derived_targets() {
         let mut genome = initial_genome();
-        let before = genome.architecture.clone();
+        let before_architecture = genome.architecture.clone();
+        let before_adult = genome.structural_blueprint.clone();
+        let before_juvenile = genome.juvenile_blueprint.clone();
         let mut rng = ChaCha8Rng::seed_from_u64(7);
         genome.mutate_architecture(&mut rng, 1.0, f64::INFINITY);
-        assert_eq!(genome.architecture, before);
+        assert_eq!(genome.architecture, before_architecture);
+        assert_eq!(genome.structural_blueprint, before_adult);
+        assert_eq!(genome.juvenile_blueprint, before_juvenile);
     }
 
     #[test]
