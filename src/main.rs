@@ -52,6 +52,8 @@ mod state;
 
 // Integration and contract tests.
 #[cfg(test)]
+mod architecture_contract_tests;
+#[cfg(test)]
 mod blueprint_diagnostics;
 #[cfg(test)]
 mod blueprint_spatial_target_tests;
