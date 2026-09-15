@@ -1,11 +1,14 @@
 //! Deterministic construction of one valid juvenile realization.
 //!
-//! The default genome supplies one known-good blueprint for initialization. It
-//! is not the definition of juvenile viability; viability is checked against
-//! the realized physical structure.
+//! The genome owns architectural intent. This module asks the genome for a
+//! developmental construction target, realizes it physically, and validates
+//! the resulting structure against the juvenile viability contract.
 use crate::combine_runtime::combine_specific_pair;
 use crate::contact::ConnectionCompatibilityCache;
-use crate::juvenile_requirements::{validate_realized_juvenile, JuvenileViabilityRequirements};
+use crate::genome::Genome;
+use crate::juvenile_requirements::{
+    validate_realized_juvenile, JuvenileViabilityRequirements,
+};
 use crate::resources::BaseResource;
 use crate::state::EnergyLedger;
 use crate::structural_blueprint::StructuralBlueprint;
@@ -15,6 +18,18 @@ pub(crate) const JUVENILE_INITIAL_ENERGY_RESERVE: f64 = 16.0;
 const TRIAL_ENERGY: f64 = 1.0e12;
 const EPS: f64 = 1e-8;
 
+/// Realize the juvenile target generated from inherited architecture.
+pub(crate) fn realize_initial_for_genome(
+    genome: &Genome,
+    catalog: &[BaseResource],
+) -> Result<(OrganismStructure, EnergyLedger, f64), String> {
+    let target = genome.developmental_construction_target(catalog)?;
+    realize_initial_with_reserve(&target, catalog, genome.juvenile_energy_reserve)
+}
+
+/// Compatibility entry point for callers that already hold a concrete
+/// developmental target. The target is still only a construction artifact;
+/// physical structure remains authoritative after realization.
 pub(crate) fn realize_initial(
     blueprint: &StructuralBlueprint,
     catalog: &[BaseResource],
@@ -28,10 +43,10 @@ pub(crate) fn realize_initial_with_reserve(
     reserve_energy: f64,
 ) -> Result<(OrganismStructure, EnergyLedger, f64), String> {
     if !blueprint.is_valid() {
-        return Err("juvenile blueprint is invalid".into());
+        return Err("juvenile construction target is invalid".into());
     }
     if blueprint.core_elements.is_empty() {
-        return Err("juvenile blueprint has no genome core".into());
+        return Err("juvenile construction target has no genome core".into());
     }
     if !reserve_energy.is_finite() || reserve_energy <= 0.0 {
         return Err("juvenile energy reserve must be finite and positive".into());
@@ -70,9 +85,9 @@ fn realize_declared_units(
                 rotation_radians: element.placement.rotation_radians,
             },
         )
-        .ok_or_else(|| "juvenile blueprint contains invalid material".to_string())?;
+        .ok_or_else(|| "juvenile construction target contains invalid material".to_string())?;
         if !unit.realize_default_geometry(catalog) {
-            return Err("juvenile blueprint contains unrealizable material geometry".into());
+            return Err("juvenile construction target contains unrealizable material geometry".into());
         }
         structure.add_unit(unit);
     }
@@ -100,7 +115,7 @@ fn form_declared_bonds(
         )
         .ok_or_else(|| {
             format!(
-                "juvenile blueprint bond could not be realized: {}-{}",
+                "juvenile construction target bond could not be realized: {}-{}",
                 connection.element_a, connection.element_b
             )
         })?;
@@ -113,21 +128,22 @@ mod tests {
     use super::*;
     use crate::genome::initial_genome;
     use crate::resources::default_catalog;
+
     #[test]
-    fn juvenile_initialization_is_a_valid_physical_realization() {
-        let c = default_catalog();
-        let g = initial_genome();
-        let (s, _, e) =
-            realize_initial_with_reserve(&g.juvenile_blueprint, &c, g.juvenile_energy_reserve)
-                .unwrap();
-        assert_eq!(s.bonds.len(), g.juvenile_blueprint.connections.len());
-        assert!(e >= g.juvenile_energy_reserve - EPS);
+    fn juvenile_initialization_is_generated_from_genome_architecture() {
+        let catalog = default_catalog();
+        let genome = initial_genome();
+        let (structure, _, energy) = realize_initial_for_genome(&genome, &catalog).unwrap();
+        assert!(!structure.units.is_empty());
+        assert!(energy >= genome.juvenile_energy_reserve - EPS);
     }
+
     #[test]
     fn nonpositive_reserve_is_rejected() {
-        let g = initial_genome();
+        let genome = initial_genome();
+        let target = genome.developmental_construction_target(&default_catalog()).unwrap();
         assert!(
-            realize_initial_with_reserve(&g.juvenile_blueprint, &default_catalog(), 0.0).is_err()
+            realize_initial_with_reserve(&target, &default_catalog(), 0.0).is_err()
         );
     }
 }
