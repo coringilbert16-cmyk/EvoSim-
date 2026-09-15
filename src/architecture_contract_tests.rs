@@ -1,0 +1,17 @@
+#[cfg(test)]
+mod tests {
+    use crate::architecture::{default_architecture, JUVENILE_LINEAR_SCALE};
+    use crate::resources::default_catalog;
+
+    #[test]
+    fn developmental_realization_can_use_fewer_discrete_regions_than_maturity() {
+        let architecture = default_architecture();
+        let catalog = default_catalog();
+        let adult = architecture.adult_construction_target().unwrap();
+        let juvenile = architecture
+            .developmental_target(JUVENILE_LINEAR_SCALE, &catalog)
+            .unwrap();
+        assert!(juvenile.elements.len() <= adult.elements.len());
+        assert_eq!(juvenile.core_elements.len(), adult.core_elements.len());
+    }
+}
