@@ -1,6 +1,6 @@
 use crate::connection_geometry::{ConnectionRegion, WorldConnectionPoint};
 use crate::physical_geometry::PhysicalGeometry;
-use crate::resources::{BaseResource, ConnectionPoint, ConnectionSites, Material};
+use crate::resources::{BaseResource, Material};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashSet;
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
@@ -76,25 +76,6 @@ impl StructuralUnit {
             return None;
         }
         catalog.iter().find(|base| base.name == *name)
-    }
-    pub fn connection_sites(&self, catalog: &[BaseResource]) -> Option<ConnectionSites> {
-        if let Some(geometry) = &self.geometry {
-            return Some(geometry.shape().connection_sites());
-        }
-        if !self.material.has_internal_structure() {
-            let [(name, amount)] = self.material.parts.as_slice() else {
-                return None;
-            };
-            if (*amount - 1.0).abs() > f64::EPSILON {
-                return None;
-            }
-            return catalog
-                .iter()
-                .find(|base| base.name == *name)
-                .map(|base| base.shape.connection_sites());
-        }
-        self.external_geometry_resource(catalog)
-            .map(|base| base.shape.connection_sites())
     }
     pub fn shape<'a>(&'a self, catalog: &'a [BaseResource]) -> Option<&'a crate::resources::Shape> {
         if let Some(geometry) = &self.geometry {
@@ -184,11 +165,6 @@ impl<'de> Deserialize<'de> for StructuralUnit {
         })
     }
 }
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct ConnectionSiteRef {
-    pub unit_index: usize,
-    pub point_index: usize,
-}
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 pub enum ConnectionEndpoint {
     Corner { point_index: usize },
@@ -259,24 +235,13 @@ impl ConnectionEndpoint {
                 )
                 .map(ConnectionRegion::Corner)
             }
-            Self::Boundary { .. } => match unit.connection_sites(catalog)? {
-                ConnectionSites::Circumference { radius } => Some(ConnectionRegion::Boundary {
-                    center_x: unit.placement.x,
-                    center_y: unit.placement.y,
-                    radius,
-                }),
-                _ => None,
-            },
-            Self::Fluid { .. } => match unit.connection_sites(catalog)? {
-                ConnectionSites::Undetermined => {
-                    let radius = unit.shape(catalog)?.form.bounding_radius();
-                    Some(ConnectionRegion::Fluid {
-                        center_x: unit.placement.x,
-                        center_y: unit.placement.y,
-                        effective_radius: radius,
-                    })
-                }
-                _ => None,
+            Self::Boundary { .. } => {
+                let crate::resources::Form::Circle { radius } = unit.shape(catalog)?.form else { return None; };
+                Some(ConnectionRegion::Boundary { center_x: unit.placement.x, center_y: unit.placement.y, radius })
+            }
+            Self::Fluid { .. } => {
+                let radius = unit.shape(catalog)?.form.bounding_radius();
+                Some(ConnectionRegion::Fluid { center_x: unit.placement.x, center_y: unit.placement.y, effective_radius: radius })
             },
         }
     }
@@ -307,10 +272,7 @@ impl ConnectionEndpoint {
                 )
             }
             Self::Boundary { angle_radians } => {
-                let ConnectionSites::Circumference { radius } = unit.connection_sites(catalog)?
-                else {
-                    return None;
-                };
+                let crate::resources::Form::Circle { radius } = unit.shape(catalog)?.form else { return None; };
                 let (nx, ny) = (angle_radians.cos(), angle_radians.sin());
                 Some(crate::connection_geometry::transform_derived_point(
                     radius * nx,
@@ -573,35 +535,6 @@ impl PhysicalConstituentGraph {
         let strength = crate::combine::bond_strength(pa, pb);
         strength.is_finite() && (0.0..=1.0).contains(&strength)
     }
-    pub fn connection_site(
-        &self,
-        s: ConnectionSiteRef,
-        c: &[BaseResource],
-    ) -> Option<ConnectionPoint> {
-        match self.units.get(s.unit_index)?.connection_sites(c)? {
-            ConnectionSites::Corners(p) => p.get(s.point_index).copied(),
-            ConnectionSites::Endpoints(p) => p.get(s.point_index).copied(),
-            _ => None,
-        }
-    }
-    pub fn available_connection_sites(&self, c: &[BaseResource]) -> Vec<ConnectionSiteRef> {
-        let mut out = Vec::new();
-        for i in 0..self.units.len() {
-            match self.units[i].connection_sites(c) {
-                Some(ConnectionSites::Corners(points))
-                | Some(ConnectionSites::Endpoints(points)) => {
-                    for j in 0..points.len() {
-                        out.push(ConnectionSiteRef {
-                            unit_index: i,
-                            point_index: j,
-                        })
-                    }
-                }
-                _ => {}
-            }
-        }
-        out
-    }
     pub fn connected_components(&self) -> Vec<Vec<usize>> {
         let mut adjacency = vec![Vec::<usize>::new(); self.units.len()];
         for b in &self.bonds {
@@ -636,17 +569,6 @@ impl PhysicalConstituentGraph {
             out.push(component)
         }
         out
-    }
-    pub fn component_connection_sites(
-        &self,
-        component: &[usize],
-        catalog: &[BaseResource],
-    ) -> Vec<ConnectionSiteRef> {
-        let set: HashSet<usize> = component.iter().copied().collect();
-        self.available_connection_sites(catalog)
-            .into_iter()
-            .filter(|s| set.contains(&s.unit_index))
-            .collect()
     }
     pub fn connection_load(
         &self,

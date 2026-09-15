@@ -1,24 +1,10 @@
 //! Physical contact and structural connection candidates.
 use crate::connection_geometry::{
-    facing_compatibility, point_distance, rigid_endpoint_world_point, transform_connection_point,
+    facing_compatibility, point_distance, rigid_endpoint_world_point,
 };
-use crate::resources::{ConnectionPoint, Form};
+use crate::resources::Form;
 use crate::structure::{Bond, ConnectionEndpoint, OrganismStructure, StructuralUnit};
 use crate::surface_geometry::boundary_point_toward;
-
-fn transform_point(
-    point: ConnectionPoint,
-    unit: &StructuralUnit,
-) -> crate::connection_geometry::WorldConnectionPoint {
-    // Compatibility adapter for callers that already possess a serialized
-    // ConnectionPoint. Runtime endpoint discovery below is shape-derived.
-    transform_connection_point(
-        point,
-        unit.placement.x,
-        unit.placement.y,
-        unit.placement.rotation_radians,
-    )
-}
 fn distance(
     a: crate::connection_geometry::WorldConnectionPoint,
     b: crate::connection_geometry::WorldConnectionPoint,
@@ -30,30 +16,6 @@ fn facing(
     b: crate::connection_geometry::WorldConnectionPoint,
 ) -> f64 {
     facing_compatibility(a, b)
-}
-pub fn world_connection_point(
-    point: ConnectionPoint,
-    unit: &StructuralUnit,
-) -> crate::connection_geometry::WorldConnectionPoint {
-    transform_point(point, unit)
-}
-pub fn connection_points_contact(
-    a: ConnectionPoint,
-    unit_a: &StructuralUnit,
-    b: ConnectionPoint,
-    unit_b: &StructuralUnit,
-    tolerance: f64,
-    _min_facing: f64,
-) -> bool {
-    distance(transform_point(a, unit_a), transform_point(b, unit_b)) <= tolerance.max(0.0)
-}
-pub fn connection_point_distance(
-    a: ConnectionPoint,
-    unit_a: &StructuralUnit,
-    b: ConnectionPoint,
-    unit_b: &StructuralUnit,
-) -> f64 {
-    distance(transform_point(a, unit_a), transform_point(b, unit_b))
 }
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ConnectionPairCandidate {
