@@ -604,7 +604,7 @@ mod tests {
     }
     #[test]
     fn legacy_structural_material_wrapper_deserializes() {
-        let encoded = r#"{\"physical_id\":0,\"material\":{\"material\":{\"parts\":[[\"Carbon\",1.0]],\"internal_bonds\":[]}},\"placement\":{\"x\":0.0,\"y\":0.0,\"rotation_radians\":0.0}}"#;
+        let encoded = r#"{"physical_id":0,"material":{"material":{"parts":[["Carbon",1.0]],"internal_bonds":[]}},"placement":{"x":0.0,"y":0.0,"rotation_radians":0.0}}"#;
         let decoded: StructuralUnit = serde_json::from_str(encoded).unwrap();
         assert_eq!(decoded.material, Material::free_base("Carbon", 1.0));
         assert!(decoded.geometry.is_none());
