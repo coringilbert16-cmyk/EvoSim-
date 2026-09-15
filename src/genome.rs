@@ -112,9 +112,8 @@ impl Genome {
 
     fn refresh_construction_caches(&mut self) -> Result<(), String> {
         self.structural_blueprint = self.mature_construction_target()?;
-        self.juvenile_blueprint = self.developmental_construction_target(
-            &crate::resources::default_catalog(),
-        )?;
+        self.juvenile_blueprint =
+            self.developmental_construction_target(&crate::resources::default_catalog())?;
         Ok(())
     }
 
