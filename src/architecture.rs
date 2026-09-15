@@ -1,8 +1,4 @@
-//! Inherited organism architecture.
-//!
-//! The genome stores region-level developmental intent. Exact constituents and
-//! bonds are generated only as transient construction candidates and are then
-//! realized by the physical construction solver.
+//! Genome-owned region-level architectural intent and discrete construction targets.
 use crate::resources::Material;
 use crate::structural_blueprint::{
     BlueprintConnection, BlueprintElement, BlueprintPlacement, StructuralBlueprint,
@@ -80,14 +76,8 @@ impl OrganismArchitecture {
                 return Err("architecture relation is invalid".into());
             }
         }
-        if !self
-            .regions
-            .iter()
-            .any(|r| matches!(r.role, ArchitectureRole::StructuralBoundary))
-            || !self
-                .regions
-                .iter()
-                .any(|r| matches!(r.role, ArchitectureRole::Interface))
+        if !self.regions.iter().any(|r| matches!(r.role, ArchitectureRole::StructuralBoundary))
+            || !self.regions.iter().any(|r| matches!(r.role, ArchitectureRole::Interface))
         {
             return Err("architecture requires boundary and interface regions".into());
         }
@@ -95,7 +85,7 @@ impl OrganismArchitecture {
     }
 
     pub fn adult_construction_target(&self) -> Result<StructuralBlueprint, String> {
-        self.construction_target(1.0)
+        self.construction_target()
     }
 
     pub fn developmental_target(
@@ -105,13 +95,9 @@ impl OrganismArchitecture {
     ) -> Result<StructuralBlueprint, String> {
         self.validate()?;
         let requested = requested_scale.clamp(JUVENILE_LINEAR_SCALE, 1.0);
-        // Rigid constituents cannot be continuously shrunk. Search discrete
-        // realizations around the requested scale and keep the nearest viable one.
-        let mut candidates = Vec::new();
-        for step in 0..=12 {
-            candidates.push((requested + step as f64 * 0.05).min(1.0));
-        }
+        let mut candidates = vec![requested];
         for step in 1..=12 {
+            candidates.push((requested + step as f64 * 0.05).min(1.0));
             candidates.push((requested - step as f64 * 0.05).max(JUVENILE_LINEAR_SCALE));
         }
         candidates.sort_by(|a, b| {
@@ -123,7 +109,8 @@ impl OrganismArchitecture {
         candidates.dedup_by(|a, b| (*a - *b).abs() < 1e-12);
         let mut last_error = "no viable developmental target".to_string();
         for scale in candidates {
-            let target = self.construction_target(scale)?;
+            let _ = scale;
+            let target = self.construction_target()?;
             match target.realize(catalog) {
                 Ok(structure)
                     if crate::juvenile_requirements::validate_realized_juvenile(
@@ -132,20 +119,15 @@ impl OrganismArchitecture {
                         &target.core_elements,
                         crate::juvenile_requirements::JuvenileViabilityRequirements::default(),
                     )
-                    .is_ok() =>
-                {
-                    return Ok(target);
-                }
+                    .is_ok() => return Ok(target),
                 Ok(_) => last_error = format!("scale {scale:.2} failed juvenile viability"),
-                Err(error) => {
-                    last_error = format!("scale {scale:.2} failed realization: {error}")
-                }
+                Err(error) => last_error = format!("scale {scale:.2} failed realization: {error}"),
             }
         }
         Err(last_error)
     }
 
-    fn construction_target(&self, _scale: f64) -> Result<StructuralBlueprint, String> {
+    fn construction_target(&self) -> Result<StructuralBlueprint, String> {
         self.validate()?;
         let core = &self.regions[self.genome_region];
         if !matches!(core.role, ArchitectureRole::GenomeCore) {
@@ -166,8 +148,7 @@ impl OrganismArchitecture {
         add_core(&mut elements, &mut connections, core);
         add_boundary(&mut elements, &mut connections, boundary);
         add_interface(&mut elements, &mut connections, interface);
-        let target =
-            StructuralBlueprint::with_core_elements(elements, connections, vec![0, 1, 2, 3]);
+        let target = StructuralBlueprint::with_core_elements(elements, connections, vec![0, 1, 2, 3]);
         target.validate()?;
         Ok(target)
     }
@@ -179,28 +160,19 @@ fn add_core(
     region: &ArchitectureRegion,
 ) {
     let d = (1.511_858 + 0.330_719) / 2.0;
-    let x = region.center_x;
-    let y = region.center_y;
-    for (px, py, r) in [
-        (x, y + d, 0.0),
-        (x - d, y, std::f64::consts::FRAC_PI_2),
-        (x + d, y, std::f64::consts::FRAC_PI_2),
-        (x, y - d, 0.0),
+    for (x, y, rotation_radians) in [
+        (region.center_x, region.center_y + d, 0.0),
+        (region.center_x - d, region.center_y, std::f64::consts::FRAC_PI_2),
+        (region.center_x + d, region.center_y, std::f64::consts::FRAC_PI_2),
+        (region.center_x, region.center_y - d, 0.0),
     ] {
         elements.push(BlueprintElement {
             material: region.material.clone(),
-            placement: BlueprintPlacement {
-                x: px,
-                y: py,
-                rotation_radians: r,
-            },
+            placement: BlueprintPlacement { x, y, rotation_radians },
         });
     }
     for (a, b) in [(0, 1), (0, 2), (1, 3), (2, 3)] {
-        connections.push(BlueprintConnection {
-            element_a: a,
-            element_b: b,
-        });
+        connections.push(BlueprintConnection { element_a: a, element_b: b });
     }
 }
 
@@ -215,56 +187,46 @@ fn add_boundary(
     let x = region.center_x;
     let y = region.center_y;
     let count = ((8.0 * region.density).round() as usize).clamp(4, 8);
-    if count <= 4 {
-        for (px, py, r) in [
+    let positions = if count <= 4 {
+        vec![
             (x, y + off, 0.0),
             (x + off, y, std::f64::consts::FRAC_PI_2),
             (x, y - off, 0.0),
             (x - off, y, std::f64::consts::FRAC_PI_2),
-        ] {
-            elements.push(BlueprintElement {
-                material: region.material.clone(),
-                placement: BlueprintPlacement {
-                    x: px,
-                    y: py,
-                    rotation_radians: r,
-                },
-            });
-        }
+        ]
+    } else {
+        vec![
+            (x - hs, y + off, 0.0),
+            (x + hs, y + off, 0.0),
+            (x - off, y - hs, std::f64::consts::FRAC_PI_2),
+            (x - off, y + hs, std::f64::consts::FRAC_PI_2),
+            (x + off, y - hs, std::f64::consts::FRAC_PI_2),
+            (x + off, y + hs, std::f64::consts::FRAC_PI_2),
+            (x - hs, y - off, 0.0),
+            (x + hs, y - off, 0.0),
+        ]
+    };
+    for (x, y, rotation_radians) in positions {
+        elements.push(BlueprintElement {
+            material: region.material.clone(),
+            placement: BlueprintPlacement { x, y, rotation_radians },
+        });
+    }
+    if count <= 4 {
         for i in 0..4 {
             connections.push(BlueprintConnection {
                 element_a: start + i,
                 element_b: start + (i + 1) % 4,
             });
         }
-        return;
-    }
-    let p = [
-        (x - hs, y + off, 0.0),
-        (x + hs, y + off, 0.0),
-        (x - off, y - hs, std::f64::consts::FRAC_PI_2),
-        (x - off, y + hs, std::f64::consts::FRAC_PI_2),
-        (x + off, y - hs, std::f64::consts::FRAC_PI_2),
-        (x + off, y + hs, std::f64::consts::FRAC_PI_2),
-        (x - hs, y - off, 0.0),
-        (x + hs, y - off, 0.0),
-    ];
-    for (px, py, r) in p {
-        elements.push(BlueprintElement {
-            material: region.material.clone(),
-            placement: BlueprintPlacement {
-                x: px,
-                y: py,
-                rotation_radians: r,
-            },
-        });
-    }
-    let ring = [0, 1, 5, 4, 7, 6, 2, 3];
-    for i in 0..8 {
-        connections.push(BlueprintConnection {
-            element_a: start + ring[i],
-            element_b: start + ring[(i + 1) % 8],
-        });
+    } else {
+        let ring = [0, 1, 5, 4, 7, 6, 2, 3];
+        for i in 0..8 {
+            connections.push(BlueprintConnection {
+                element_a: start + ring[i],
+                element_b: start + ring[(i + 1) % 8],
+            });
+        }
     }
 }
 
@@ -279,32 +241,22 @@ fn add_interface(
     let gap = outer - inner;
     let tangent = (length * length - gap * gap).sqrt();
     let center = (inner + outer) / 2.0;
-    let x = region.center_x;
-    let y = region.center_y;
     let start = elements.len();
     let p = [
-        (x, y + center, gap.atan2(-tangent)),
-        (x - center, y, (-tangent).atan2(-gap)),
-        (x + center, y, tangent.atan2(gap)),
-        (x, y - center, (-gap).atan2(tangent)),
+        (region.center_x, region.center_y + center, gap.atan2(-tangent)),
+        (region.center_x - center, region.center_y, (-tangent).atan2(-gap)),
+        (region.center_x + center, region.center_y, tangent.atan2(gap)),
+        (region.center_x, region.center_y - center, (-gap).atan2(tangent)),
     ];
-    for (px, py, r) in p {
+    for (x, y, rotation_radians) in p {
         elements.push(BlueprintElement {
             material: region.material.clone(),
-            placement: BlueprintPlacement {
-                x: px,
-                y: py,
-                rotation_radians: r,
-            },
+            placement: BlueprintPlacement { x, y, rotation_radians },
         });
     }
     let boundary_count = ((8.0 * region.density).round() as usize).clamp(4, 8);
     let boundary_start = start - boundary_count;
-    let maps = if boundary_count == 4 {
-        [0, 1, 2, 3]
-    } else {
-        [0, 2, 4, 6]
-    };
+    let maps = if boundary_count == 4 { [0, 1, 2, 3] } else { [0, 2, 4, 6] };
     for i in 0..4 {
         connections.push(BlueprintConnection {
             element_a: start + i,
@@ -312,7 +264,7 @@ fn add_interface(
         });
         connections.push(BlueprintConnection {
             element_a: start + i,
-            element_b: [0, 1, 2, 3][i],
+            element_b: i,
         });
     }
 }
@@ -371,19 +323,19 @@ mod tests {
 
     #[test]
     fn architecture_is_region_level() {
-        let a = default_architecture();
-        assert!(a.validate().is_ok());
-        assert_eq!(a.regions.len(), 3);
+        let architecture = default_architecture();
+        assert!(architecture.validate().is_ok());
+        assert_eq!(architecture.regions.len(), 3);
     }
 
     #[test]
     fn juvenile_target_is_a_discrete_analog_not_a_scaled_body_plan() {
-        let a = default_architecture();
-        let t = a.construction_target(JUVENILE_LINEAR_SCALE).unwrap();
-        assert_eq!(t.elements.len(), 16);
-        assert!(t
+        let architecture = default_architecture();
+        let target = architecture.construction_target().unwrap();
+        assert_eq!(target.elements.len(), 16);
+        assert!(target
             .elements
             .iter()
-            .all(|e| e.placement.x.abs() < 2.0 && e.placement.y.abs() < 2.0));
+            .all(|element| element.placement.x.abs() < 2.0 && element.placement.y.abs() < 2.0));
     }
 }
