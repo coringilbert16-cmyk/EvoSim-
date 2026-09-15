@@ -13,6 +13,7 @@ mod tests {
         let juvenile = architecture
             .developmental_target(JUVENILE_LINEAR_SCALE, &catalog)
             .unwrap();
+        assert!(adult.is_connected());
         assert!(juvenile.elements.len() < adult.elements.len());
         assert_eq!(juvenile.core_elements.len(), adult.core_elements.len());
         assert!(juvenile.is_connected());
