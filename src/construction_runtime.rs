@@ -96,7 +96,7 @@ pub(crate) fn candidate_placements(
                     if !matches!(target_shape.form, Form::Line { .. }) {
                         continue;
                     }
-                    let half = *candidate_length / 2.0;
+                    let half = candidate_length.to_owned() / 2.0;
                     for candidate_index in 0..2 {
                         let candidate_endpoint_x = if candidate_index == 0 { -half } else { half };
                         for rotation in crate::rigid_boundary::line_endpoint_alignment_rotations(

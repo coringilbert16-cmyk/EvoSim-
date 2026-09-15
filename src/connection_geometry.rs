@@ -184,7 +184,7 @@ impl ConnectionRegion {
 mod tests {
     use super::*;
     use crate::resources::{Form, Shape};
-    use std::f64::consts::{FRAC_PI_2, PI};
+    use std::f64::consts::FRAC_PI_2;
 
     fn square() -> Shape {
         Shape {
@@ -232,10 +232,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
-    #[test]
-    #[test]
-    #[test]
     fn continuous_regions_have_no_fake_socket_identity() {
         let b = ConnectionRegion::Boundary {
             center_x: 1.0,
@@ -253,7 +249,6 @@ mod tests {
         assert_eq!(f.center(), (4.0, 5.0));
     }
 
-    #[test]
     #[test]
     fn negative_tolerance_does_not_create_contact() {
         let a = WorldConnectionPoint {

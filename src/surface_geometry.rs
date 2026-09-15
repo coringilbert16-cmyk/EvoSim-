@@ -99,7 +99,7 @@ pub fn boundary_point_toward(shape: &Shape, target_x: f64, target_y: f64) -> Opt
                 normal_y: uy,
             })
         }
-        Form::Line { length } => line_endpoint_toward(*length, target_x, target_y),
+        Form::Line { length } => line_endpoint_toward(length.to_owned(), target_x, target_y),
         Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
             polygon_boundary_toward(
                 shape.form.polygon_vertices()?.as_slice(),

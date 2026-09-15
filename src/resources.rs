@@ -73,7 +73,7 @@ impl Form {
             Form::Polygon { vertices } => {
                 vertices.len() >= 3 && vertices.iter().all(|(x, y)| x.is_finite() && y.is_finite())
             }
-            Form::Fluid { nominal_area } => nominal_area.is_finite() && *nominal_area > 0.0,
+            Form::Fluid { nominal_area } => nominal_area.is_finite() && nominal_area.to_owned() > 0.0,
         }
     }
 
@@ -86,7 +86,7 @@ impl Form {
                 Some(vec![(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)])
             }
             Form::RegularPolygon { sides, radius } => {
-                let n = *sides as usize;
+                let n = sides.to_owned() as usize;
                 Some(
                     (0..n)
                         .map(|k| {
@@ -114,6 +114,17 @@ impl Form {
                 .fold(0.0_f64, f64::max),
             Form::Fluid { nominal_area } => (nominal_area / std::f64::consts::PI).sqrt(),
         }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Shape {
+    pub form: Form,
+}
+
+impl Shape {
+    pub fn is_valid(&self) -> bool {
+        self.form.is_valid()
     }
 }
 
@@ -572,7 +583,7 @@ mod shape_tests {
                 }
                 Form::RegularPolygon { sides, .. } => assert_eq!(
                     resource.shape.form.polygon_vertices().unwrap().len(),
-                    *sides as usize
+                    sides.to_owned() as usize
                 ),
                 Form::Polygon { vertices } => assert_eq!(
                     resource.shape.form.polygon_vertices().unwrap().len(),
@@ -626,7 +637,7 @@ mod shape_tests {
         for resource in default_catalog() {
             let area = match &resource.shape.form {
                 Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-                Form::Fluid { nominal_area } => *nominal_area,
+                Form::Fluid { nominal_area } => nominal_area.to_owned(),
                 Form::Line { .. } => continue,
                 other => polygon_area(&other.polygon_vertices().unwrap()),
             };
