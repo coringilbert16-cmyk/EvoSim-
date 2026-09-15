@@ -26,6 +26,16 @@ jobs:
           git add --all
           git commit -m "Repair final geometry migration"
           git push origin "HEAD:${{ github.head_ref }}"
+      - name: Correct L normal regression expectations
+        if: hashFiles('scripts/fix_l_normals.py') != ''
+        run: |
+          python3 scripts/fix_l_normals.py
+          rm scripts/fix_l_normals.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+          git commit -m "Correct L normal regression expectations"
+          git push origin "HEAD:${{ github.head_ref }}"
       - name: Normalize Rust formatting
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         run: |
