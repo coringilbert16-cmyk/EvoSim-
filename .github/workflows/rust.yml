@@ -16,26 +16,6 @@ jobs:
         with:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
-      - name: Apply one-authority geometry migration
-        if: hashFiles('scripts/migrate_geometry_authority.py') != ''
-        run: |
-          python3 scripts/migrate_geometry_authority.py
-          rm scripts/migrate_geometry_authority.py
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add --all
-          git commit -m "Remove legacy connection-site geometry authority"
-          git push origin "HEAD:${{ github.head_ref }}"
-      - name: Finalize geometry authority audit
-        if: hashFiles('scripts/cleanup_geometry_migration.py') != ''
-        run: |
-          python3 scripts/cleanup_geometry_migration.py
-          rm scripts/cleanup_geometry_migration.py
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add --all
-          git commit -m "Finalize geometry authority audit"
-          git push origin "HEAD:${{ github.head_ref }}"
       - name: Normalize Rust formatting
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         run: |
