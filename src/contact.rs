@@ -1,14 +1,22 @@
 //! Physical contact and structural connection candidates.
-use crate::connection_geometry::{facing_compatibility, point_distance, rigid_endpoint_world_point};
+use crate::connection_geometry::{
+    facing_compatibility, point_distance, rigid_endpoint_world_point,
+};
 use crate::resources::Form;
 use crate::structure::{Bond, ConnectionEndpoint, OrganismStructure, StructuralUnit};
 use crate::surface_geometry::boundary_point_toward;
 
-fn distance(a: crate::connection_geometry::WorldConnectionPoint, b: crate::connection_geometry::WorldConnectionPoint) -> f64 {
+fn distance(
+    a: crate::connection_geometry::WorldConnectionPoint,
+    b: crate::connection_geometry::WorldConnectionPoint,
+) -> f64 {
     point_distance(a, b)
 }
 
-fn facing(a: crate::connection_geometry::WorldConnectionPoint, b: crate::connection_geometry::WorldConnectionPoint) -> f64 {
+fn facing(
+    a: crate::connection_geometry::WorldConnectionPoint,
+    b: crate::connection_geometry::WorldConnectionPoint,
+) -> f64 {
     facing_compatibility(a, b)
 }
 
