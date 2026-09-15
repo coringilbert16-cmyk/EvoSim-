@@ -7,7 +7,7 @@ fn vertices(shape: &Shape) -> Option<Vec<(f64, f64)>> {
 
 fn edge_angle(a: (f64, f64), b: (f64, f64)) -> Option<f64> {
     let dx = b.0 - a.0;
-    let dy = b.1 - a.0;
+    let dy = b.1 - a.1;
     if dx.hypot(dy) <= f64::EPSILON {
         None
     } else {
