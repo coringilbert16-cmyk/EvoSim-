@@ -210,25 +210,18 @@ fn solve_parts(
     catalog: &[BaseResource],
     external: &[Vec<usize>],
     heat: f64,
-) -> Option<(OrganismStructure, EnergyLedger, f64, Vec<Option<usize>>, f64)> {
+) -> Option<(
+    OrganismStructure,
+    EnergyLedger,
+    f64,
+    Vec<Option<usize>>,
+    f64,
+)> {
     if part == material.parts.len() {
         let (structure, ledger, energy, heat) = solve_external_groups(
-            0,
-            structure,
-            ledger,
-            energy,
-            assigned,
-            external,
-            catalog,
-            heat,
+            0, structure, ledger, energy, assigned, external, catalog, heat,
         )?;
-        return Some((
-            structure,
-            ledger,
-            energy,
-            assigned.to_vec(),
-            heat,
-        ));
+        return Some((structure, ledger, energy, assigned.to_vec(), heat));
     }
 
     let resource = resource(catalog, &material.parts[part].0)?;
@@ -241,13 +234,8 @@ fn solve_parts(
         }
     }
 
-    for candidate_placement in candidate_placements(
-        structure,
-        resource,
-        anchor,
-        &targets,
-        catalog,
-    ) {
+    for candidate_placement in candidate_placements(structure, resource, anchor, &targets, catalog)
+    {
         let mut candidate = structure.clone();
         let mut candidate_ledger = *ledger;
         let mut candidate_energy = energy;
@@ -328,16 +316,7 @@ pub(crate) fn realize_material_with_context(
 
     let assigned = vec![None; material.parts.len()];
     let Some((trial, trial_ledger, trial_energy, assigned, heat)) = solve_parts(
-        0,
-        structure,
-        ledger,
-        *energy,
-        &assigned,
-        material,
-        anchor,
-        catalog,
-        external,
-        0.0,
+        0, structure, ledger, *energy, &assigned, material, anchor, catalog, external, 0.0,
     ) else {
         return Err("construction placement could not satisfy physical constraints".into());
     };
