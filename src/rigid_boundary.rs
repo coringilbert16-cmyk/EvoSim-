@@ -1,4 +1,4 @@
-use crate::resources::{Form, Shape};
+use crate::resources::{default_catalog, Form, Shape};
 use crate::structure::Placement;
 
 fn vertices(shape: &Shape) -> Option<Vec<(f64, f64)>> {
@@ -218,6 +218,19 @@ mod tests {
     #[test]
     fn l_inner_corner_normal_comes_from_incident_edges() {
         let (nx, ny) = corner_normal(&l_shape(), 4).unwrap();
+        assert!((nx + 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
+        assert!((ny - 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
+    }
+    #[test]
+    fn catalog_phosphorus_l_has_a_real_interior_corner() {
+        let phosphorus = default_catalog()
+            .into_iter()
+            .find(|resource| resource.name == "Phosphorus")
+            .expect("default catalog must contain Phosphorus");
+        let vertices = phosphorus.shape.form.polygon_vertices().unwrap();
+        assert_eq!(vertices.len(), 6);
+        assert_eq!(vertices[3], (0.0, 0.0));
+        let (nx, ny) = corner_normal(&phosphorus.shape, 3).unwrap();
         assert!((nx + 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
         assert!((ny - 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
     }
