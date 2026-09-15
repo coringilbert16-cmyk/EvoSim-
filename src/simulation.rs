@@ -531,9 +531,12 @@ impl Simulation {
                     .unwrap_or(false)
                 {
                     let child_id = next_organism_id.to_string();
-                    if let Some(child) =
-                        crate::reproduction::finish_reproduction(organism, child_id)
-                    {
+                    if let Some(child) = crate::reproduction::finish_reproduction(
+                        organism,
+                        child_id,
+                        &catalog,
+                        &mut self.energy_ledger,
+                    ) {
                         next_organism_id += 1;
                         offspring.push(child);
                     }
