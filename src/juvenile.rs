@@ -8,9 +8,7 @@
 use crate::combine_runtime::combine_specific_pair;
 use crate::contact::ConnectionCompatibilityCache;
 use crate::energy_ledger::EnergyLedger;
-use crate::juvenile_requirements::{
-    validate_realized_juvenile, JuvenileViabilityRequirements,
-};
+use crate::juvenile_requirements::{validate_realized_juvenile, JuvenileViabilityRequirements};
 use crate::resources::BaseResource;
 use crate::structural_blueprint::StructuralBlueprint;
 use crate::structure::{OrganismStructure, StructuralUnit};
