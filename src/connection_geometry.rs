@@ -154,20 +154,8 @@ pub fn rigid_endpoint_facing(
     origin_b_y: f64,
     rotation_b: f64,
 ) -> Option<f64> {
-    let a = rigid_endpoint_world_point(
-        shape_a,
-        vertex_a,
-        origin_a_x,
-        origin_a_y,
-        rotation_a,
-    )?;
-    let b = rigid_endpoint_world_point(
-        shape_b,
-        vertex_b,
-        origin_b_x,
-        origin_b_y,
-        rotation_b,
-    )?;
+    let a = rigid_endpoint_world_point(shape_a, vertex_a, origin_a_x, origin_a_y, rotation_a)?;
+    let b = rigid_endpoint_world_point(shape_b, vertex_b, origin_b_x, origin_b_y, rotation_b)?;
     Some(facing_compatibility(a, b))
 }
 
@@ -296,10 +284,7 @@ mod tests {
     fn rigid_endpoint_facing_uses_shape_geometry() {
         let a = square();
         let b = square();
-        let facing = rigid_endpoint_facing(
-            &a, 0, 0.0, 0.0, 0.0, &b, 2, 2.0, 0.0, 0.0,
-        )
-        .unwrap();
+        let facing = rigid_endpoint_facing(&a, 0, 0.0, 0.0, 0.0, &b, 2, 2.0, 0.0, 0.0).unwrap();
         assert!((facing - 1.0).abs() < 1e-12);
     }
 
