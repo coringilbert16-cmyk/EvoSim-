@@ -6,64 +6,64 @@
 [1m[92m      Adding[0m tower-http v0.6.11 [1m[33m(available: v0.7.1)[0m
 [1m[92m Downloading[0m crates ...
 [1m[92m  Downloaded[0m cfg-if v1.0.4
-[1m[92m  Downloaded[0m axum-core v0.5.6
-[1m[92m  Downloaded[0m atomic-waker v1.1.2
-[1m[92m  Downloaded[0m percent-encoding v2.3.2
-[1m[92m  Downloaded[0m axum v0.8.9
-[1m[92m  Downloaded[0m itoa v1.0.18
-[1m[92m  Downloaded[0m sync_wrapper v1.0.2
-[1m[92m  Downloaded[0m form_urlencoded v1.2.2
-[1m[92m  Downloaded[0m futures-core v0.3.34
-[1m[92m  Downloaded[0m mime v0.3.17
-[1m[92m  Downloaded[0m scopeguard v1.2.0
-[1m[92m  Downloaded[0m tower-layer v0.3.3
-[1m[92m  Downloaded[0m tower-service v0.3.3
-[1m[92m  Downloaded[0m tokio-macros v2.7.2
-[1m[92m  Downloaded[0m http-body v1.1.0
-[1m[92m  Downloaded[0m rand_chacha v0.3.1
-[1m[92m  Downloaded[0m serde_urlencoded v0.7.1
 [1m[92m  Downloaded[0m errno v0.3.14
-[1m[92m  Downloaded[0m getrandom v0.2.17
-[1m[92m  Downloaded[0m futures-task v0.3.34
-[1m[92m  Downloaded[0m slab v0.4.12
-[1m[92m  Downloaded[0m httpdate v1.0.3
-[1m[92m  Downloaded[0m rand_core v0.6.4
-[1m[92m  Downloaded[0m serde_path_to_error v0.1.20
-[1m[92m  Downloaded[0m signal-hook-registry v1.4.8
-[1m[92m  Downloaded[0m smallvec v1.16.1
-[1m[92m  Downloaded[0m proc-macro2 v1.0.107
+[1m[92m  Downloaded[0m form_urlencoded v1.2.2
 [1m[92m  Downloaded[0m bitflags v2.13.2
-[1m[92m  Downloaded[0m zmij v1.0.23
-[1m[92m  Downloaded[0m lock_api v0.4.14
+[1m[92m  Downloaded[0m atomic-waker v1.1.2
+[1m[92m  Downloaded[0m axum-core v0.5.6
+[1m[92m  Downloaded[0m futures-channel v0.3.34
+[1m[92m  Downloaded[0m tokio-macros v2.7.2
+[1m[92m  Downloaded[0m scopeguard v1.2.0
+[1m[92m  Downloaded[0m rand_chacha v0.3.1
+[1m[92m  Downloaded[0m httpdate v1.0.3
+[1m[92m  Downloaded[0m percent-encoding v2.3.2
+[1m[92m  Downloaded[0m http-body v1.1.0
+[1m[92m  Downloaded[0m serde_urlencoded v0.7.1
+[1m[92m  Downloaded[0m futures-core v0.3.34
+[1m[92m  Downloaded[0m tower-layer v0.3.3
+[1m[92m  Downloaded[0m futures-task v0.3.34
+[1m[92m  Downloaded[0m sync_wrapper v1.0.2
+[1m[92m  Downloaded[0m mime v0.3.17
+[1m[92m  Downloaded[0m tower-service v0.3.3
+[1m[92m  Downloaded[0m bytes v1.12.1
+[1m[92m  Downloaded[0m ppv-lite86 v0.2.21
 [1m[92m  Downloaded[0m pin-project-lite v0.2.17
-[1m[92m  Downloaded[0m quote v1.0.47
+[1m[92m  Downloaded[0m rand_core v0.6.4
+[1m[92m  Downloaded[0m signal-hook-registry v1.4.8
+[1m[92m  Downloaded[0m itoa v1.0.18
+[1m[92m  Downloaded[0m lock_api v0.4.14
+[1m[92m  Downloaded[0m http-body-util v0.1.5
+[1m[92m  Downloaded[0m serde_path_to_error v0.1.20
+[1m[92m  Downloaded[0m smallvec v1.16.1
+[1m[92m  Downloaded[0m zmij v1.0.23
+[1m[92m  Downloaded[0m parking_lot v0.12.5
+[1m[92m  Downloaded[0m slab v0.4.12
 [1m[92m  Downloaded[0m httparse v1.10.1
 [1m[92m  Downloaded[0m matchit v0.8.4
-[1m[92m  Downloaded[0m once_cell v1.21.4
-[1m[92m  Downloaded[0m ppv-lite86 v0.2.21
-[1m[92m  Downloaded[0m futures-channel v0.3.34
-[1m[92m  Downloaded[0m http-body-util v0.1.5
+[1m[92m  Downloaded[0m quote v1.0.47
 [1m[92m  Downloaded[0m parking_lot_core v0.9.12
-[1m[92m  Downloaded[0m socket2 v0.6.5
-[1m[92m  Downloaded[0m parking_lot v0.12.5
-[1m[92m  Downloaded[0m bytes v1.12.1
-[1m[92m  Downloaded[0m serde_core v1.0.229
-[1m[92m  Downloaded[0m unicode-ident v1.0.24
-[1m[92m  Downloaded[0m serde_derive v1.0.229
+[1m[92m  Downloaded[0m getrandom v0.2.17
 [1m[92m  Downloaded[0m log v0.4.34
 [1m[92m  Downloaded[0m ryu v1.0.23
+[1m[92m  Downloaded[0m serde_derive v1.0.229
+[1m[92m  Downloaded[0m once_cell v1.21.4
+[1m[92m  Downloaded[0m proc-macro2 v1.0.107
 [1m[92m  Downloaded[0m tracing-core v0.1.36
+[1m[92m  Downloaded[0m unicode-ident v1.0.24
+[1m[92m  Downloaded[0m serde_core v1.0.229
+[1m[92m  Downloaded[0m socket2 v0.6.5
 [1m[92m  Downloaded[0m rand v0.8.8
-[1m[92m  Downloaded[0m memchr v2.8.3
 [1m[92m  Downloaded[0m serde v1.0.229
+[1m[92m  Downloaded[0m memchr v2.8.3
 [1m[92m  Downloaded[0m http v1.5.0
 [1m[92m  Downloaded[0m hyper-util v0.1.20
 [1m[92m  Downloaded[0m mio v1.2.3
 [1m[92m  Downloaded[0m tower v0.5.3
-[1m[92m  Downloaded[0m tower-http v0.6.11
+[1m[92m  Downloaded[0m axum v0.8.9
 [1m[92m  Downloaded[0m futures-util v0.3.34
 [1m[92m  Downloaded[0m hyper v1.11.1
 [1m[92m  Downloaded[0m serde_json v1.0.151
+[1m[92m  Downloaded[0m tower-http v0.6.11
 [1m[92m  Downloaded[0m zerocopy v0.8.57
 [1m[92m  Downloaded[0m syn v3.0.5
 [1m[92m  Downloaded[0m tracing v0.1.44
@@ -75,59 +75,59 @@
 [1m[92m   Compiling[0m unicode-ident v1.0.24
 [1m[92m    Checking[0m cfg-if v1.0.4
 [1m[92m    Checking[0m itoa v1.0.18
-[1m[92m    Checking[0m pin-project-lite v0.2.17
 [1m[92m    Checking[0m bytes v1.12.1
+[1m[92m    Checking[0m pin-project-lite v0.2.17
 [1m[92m   Compiling[0m parking_lot_core v0.9.12
 [1m[92m    Checking[0m futures-core v0.3.34
+[1m[92m   Compiling[0m serde_core v1.0.229
 [1m[92m    Checking[0m http v1.5.0
 [1m[92m    Checking[0m scopeguard v1.2.0
-[1m[92m    Checking[0m smallvec v1.16.1
-[1m[92m   Compiling[0m serde_core v1.0.229
-[1m[92m    Checking[0m lock_api v0.4.14
-[1m[92m    Checking[0m http-body v1.1.0
-[1m[92m    Checking[0m once_cell v1.21.4
-[1m[92m    Checking[0m errno v0.3.14
 [1m[92m   Compiling[0m syn v3.0.5
-[1m[92m    Checking[0m parking_lot v0.12.5
+[1m[92m    Checking[0m smallvec v1.16.1
+[1m[92m    Checking[0m lock_api v0.4.14
+[1m[92m    Checking[0m errno v0.3.14
 [1m[92m    Checking[0m signal-hook-registry v1.4.8
+[1m[92m    Checking[0m parking_lot v0.12.5
 [1m[92m    Checking[0m mio v1.2.3
 [1m[92m    Checking[0m socket2 v0.6.5
-[1m[92m    Checking[0m tower-service v0.3.3
+[1m[92m    Checking[0m http-body v1.1.0
 [1m[92m   Compiling[0m httparse v1.10.1
 [1m[92m   Compiling[0m zerocopy v0.8.57
+[1m[92m    Checking[0m tower-service v0.3.3
+[1m[92m    Checking[0m once_cell v1.21.4
 [1m[92m    Checking[0m tracing-core v0.1.36
-[1m[92m   Compiling[0m serde v1.0.229
-[1m[92m    Checking[0m tower-layer v0.3.3
 [1m[92m   Compiling[0m zmij v1.0.23
 [1m[92m    Checking[0m log v0.4.34
+[1m[92m    Checking[0m tower-layer v0.3.3
+[1m[92m   Compiling[0m serde v1.0.229
 [1m[92m    Checking[0m tracing v0.1.44
 [1m[92m    Checking[0m getrandom v0.2.17
 [1m[92m    Checking[0m futures-channel v0.3.34
-[1m[92m    Checking[0m slab v0.4.12
-[1m[92m    Checking[0m percent-encoding v2.3.2
-[1m[92m   Compiling[0m serde_json v1.0.151
 [1m[92m    Checking[0m httpdate v1.0.3
-[1m[92m    Checking[0m atomic-waker v1.1.2
+[1m[92m    Checking[0m slab v0.4.12
+[1m[92m   Compiling[0m serde_json v1.0.151
 [1m[92m    Checking[0m futures-task v0.3.34
+[1m[92m    Checking[0m atomic-waker v1.1.2
 [1m[92m    Checking[0m sync_wrapper v1.0.2
-[1m[92m    Checking[0m form_urlencoded v1.2.2
+[1m[92m    Checking[0m percent-encoding v2.3.2
 [1m[92m    Checking[0m futures-util v0.3.34
+[1m[92m    Checking[0m form_urlencoded v1.2.2
 [1m[92m    Checking[0m rand_core v0.6.4
 [1m[92m    Checking[0m http-body-util v0.1.5
+[1m[92m    Checking[0m ryu v1.0.23
 [1m[92m    Checking[0m mime v0.3.17
 [1m[92m    Checking[0m memchr v2.8.3
-[1m[92m    Checking[0m ryu v1.0.23
-[1m[92m    Checking[0m axum-core v0.5.6
-[1m[92m    Checking[0m serde_path_to_error v0.1.20
 [1m[92m   Compiling[0m tokio-macros v2.7.2
 [1m[92m   Compiling[0m serde_derive v1.0.229
 [1m[92m    Checking[0m tokio v1.53.1
-[1m[92m    Checking[0m bitflags v2.13.2
-[1m[92m    Checking[0m matchit v0.8.4
-[1m[92m    Checking[0m tower-http v0.6.11
+[1m[92m    Checking[0m axum-core v0.5.6
 [1m[92m    Checking[0m ppv-lite86 v0.2.21
 [1m[92m    Checking[0m rand_chacha v0.3.1
+[1m[92m    Checking[0m serde_path_to_error v0.1.20
+[1m[92m    Checking[0m matchit v0.8.4
+[1m[92m    Checking[0m bitflags v2.13.2
 [1m[92m    Checking[0m rand v0.8.8
+[1m[92m    Checking[0m tower-http v0.6.11
 [1m[92m    Checking[0m serde_urlencoded v0.7.1
 [1m[92m    Checking[0m hyper v1.11.1
 [1m[92m    Checking[0m tower v0.5.3
@@ -333,6 +333,116 @@
 [1m[94m113[0m [1m[94m|[0m pub fn segment_endpoints(
     [1m[94m|[0m        [1m[91m^^^^^^^^^^^^^^^^^[0m
 
+[1m[91merror[0m[1m: constant `EPS` is never used[0m
+ [1m[94m--> [0msrc/cavity.rs:8:7
+  [1m[94m|[0m
+[1m[94m8[0m [1m[94m|[0m const EPS: f64 = 1e-8;
+  [1m[94m|[0m       [1m[91m^^^[0m
+
+[1m[91merror[0m[1m: constant `NODE_TOLERANCE` is never used[0m
+ [1m[94m--> [0msrc/cavity.rs:9:7
+  [1m[94m|[0m
+[1m[94m9[0m [1m[94m|[0m const NODE_TOLERANCE: f64 = 1e-7;
+  [1m[94m|[0m       [1m[91m^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: struct `Point` is never constructed[0m
+  [1m[94m--> [0msrc/cavity.rs:12:8
+   [1m[94m|[0m
+[1m[94m12[0m [1m[94m|[0m struct Point { x: f64, y: f64 }
+   [1m[94m|[0m        [1m[91m^^^^^[0m
+
+[1m[91merror[0m[1m: methods `add`, `sub`, `scale`, `cross`, `dot`, and `norm` are never used[0m
+  [1m[94m--> [0msrc/cavity.rs:14:8
+   [1m[94m|[0m
+[1m[94m13[0m [1m[94m|[0m impl Point {
+   [1m[94m|[0m [1m[94m----------[0m [1m[94mmethods in this implementation[0m
+[1m[94m14[0m [1m[94m|[0m     fn add(self, o: Self) -> Self { Self { x: self.x + o.x, y: self.y + o.y } }
+   [1m[94m|[0m        [1m[91m^^^[0m
+[1m[94m15[0m [1m[94m|[0m     fn sub(self, o: Self) -> Self { Self { x: self.x - o.x, y: self.y - o.y } }
+   [1m[94m|[0m        [1m[91m^^^[0m
+[1m[94m16[0m [1m[94m|[0m     fn scale(self, s: f64) -> Self { Self { x: self.x * s, y: self.y * s } }
+   [1m[94m|[0m        [1m[91m^^^^^[0m
+[1m[94m17[0m [1m[94m|[0m     fn cross(self, o: Self) -> f64 { self.x * o.y - self.y * o.x }
+   [1m[94m|[0m        [1m[91m^^^^^[0m
+[1m[94m18[0m [1m[94m|[0m     fn dot(self, o: Self) -> f64 { self.x * o.x + self.y * o.y }
+   [1m[94m|[0m        [1m[91m^^^[0m
+[1m[94m19[0m [1m[94m|[0m     fn norm(self) -> f64 { self.dot(self).sqrt() }
+   [1m[94m|[0m        [1m[91m^^^^[0m
+
+[1m[91merror[0m[1m: struct `Edge` is never constructed[0m
+  [1m[94m--> [0msrc/cavity.rs:23:8
+   [1m[94m|[0m
+[1m[94m23[0m [1m[94m|[0m struct Edge { from: usize, to: usize }
+   [1m[94m|[0m        [1m[91m^^^^[0m
+
+[1m[91merror[0m[1m: struct `GenomeCavity` is never constructed[0m
+  [1m[94m--> [0msrc/cavity.rs:26:12
+   [1m[94m|[0m
+[1m[94m26[0m [1m[94m|[0m pub struct GenomeCavity {
+   [1m[94m|[0m            [1m[91m^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: method `qualifies` is never used[0m
+  [1m[94m--> [0msrc/cavity.rs:32:12
+   [1m[94m|[0m
+[1m[94m31[0m [1m[94m|[0m impl GenomeCavity {
+   [1m[94m|[0m [1m[94m-----------------[0m [1m[94mmethod in this implementation[0m
+[1m[94m32[0m [1m[94m|[0m     pub fn qualifies(&self) -> bool { self.area > self.minimum_area + EPS }
+   [1m[94m|[0m            [1m[91m^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `minimum_genome_cavity_area` is never used[0m
+  [1m[94m--> [0msrc/cavity.rs:38:8
+   [1m[94m|[0m
+[1m[94m38[0m [1m[94m|[0m pub fn minimum_genome_cavity_area(catalog: &[BaseResource]) -> Result<f64, String> {
+   [1m[94m|[0m        [1m[91m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `analyze_genome_cavity` is never used[0m
+  [1m[94m--> [0msrc/cavity.rs:50:8
+   [1m[94m|[0m
+[1m[94m50[0m [1m[94m|[0m pub fn analyze_genome_cavity(
+   [1m[94m|[0m        [1m[91m^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `boundary_bonds_are_sealed` is never used[0m
+   [1m[94m--> [0msrc/cavity.rs:133:4
+    [1m[94m|[0m
+[1m[94m133[0m [1m[94m|[0m fn boundary_bonds_are_sealed(structure: &OrganismStructure, polygons: &[(usize, Vec<Point>)]) -> bool {
+    [1m[94m|[0m    [1m[91m^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `polygon_edges_touch` is never used[0m
+   [1m[94m--> [0msrc/cavity.rs:152:4
+    [1m[94m|[0m
+[1m[94m152[0m [1m[94m|[0m fn polygon_edges_touch(a: &[Point], b: &[Point]) -> bool {
+    [1m[94m|[0m    [1m[91m^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `intern` is never used[0m
+   [1m[94m--> [0msrc/cavity.rs:165:4
+    [1m[94m|[0m
+[1m[94m165[0m [1m[94m|[0m fn intern(point: Point, points: &mut Vec<Point>, index: &mut HashMap<(i64, i64), usize>) -> usize {
+    [1m[94m|[0m    [1m[91m^^^^^^[0m
+
+[1m[91merror[0m[1m: function `transformed_polygon` is never used[0m
+   [1m[94m--> [0msrc/cavity.rs:170:4
+    [1m[94m|[0m
+[1m[94m170[0m [1m[94m|[0m fn transformed_polygon(form: &Form, placement: Placement) -> Option<Vec<Point>> {
+    [1m[94m|[0m    [1m[91m^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `form_area` is never used[0m
+   [1m[94m--> [0msrc/cavity.rs:174:4
+    [1m[94m|[0m
+[1m[94m174[0m [1m[94m|[0m fn form_area(form: &Form) -> Option<f64> {
+    [1m[94m|[0m    [1m[91m^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `point_in_polygon` is never used[0m
+   [1m[94m--> [0msrc/cavity.rs:184:4
+    [1m[94m|[0m
+[1m[94m184[0m [1m[94m|[0m fn point_in_polygon(point: Point, polygon: &[Point]) -> bool {
+    [1m[94m|[0m    [1m[91m^^^^^^^^^^^^^^^^[0m
+
+[1m[91merror[0m[1m: function `segment_in_polygon_boundary` is never used[0m
+   [1m[94m--> [0msrc/cavity.rs:192:4
+    [1m[94m|[0m
+[1m[94m192[0m [1m[94m|[0m fn segment_in_polygon_boundary(a: Point, b: Point, polygon: &[Point]) -> bool {
+    [1m[94m|[0m    [1m[91m^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
 [1m[91merror[0m[1m: struct `MaterialIdentityKey` is never constructed[0m
   [1m[94m--> [0msrc/combine.rs:81:8
    [1m[94m|[0m
@@ -471,15 +581,15 @@
    [1m[94m|[0m        [1m[91m^^^^^^^^^^^^^[0m
 
 [1m[91merror[0m[1m: methods `processing_efficiency` and `reproductive_investment` are never used[0m
-  [1m[94m--> [0msrc/genome.rs:60:12
+  [1m[94m--> [0msrc/genome.rs:37:12
    [1m[94m|[0m
 [1m[94m25[0m [1m[94m|[0m impl Genome {
    [1m[94m|[0m [1m[94m-----------[0m [1m[94mmethods in this implementation[0m
 [1m[94m...[0m
-[1m[94m60[0m [1m[94m|[0m     pub fn processing_efficiency(&self) -> f64 {
+[1m[94m37[0m [1m[94m|[0m     pub fn processing_efficiency(&self) -> f64 { self.trait_value("processing_efficiency", 0.8).clamp(0.05, 1.0) }
    [1m[94m|[0m            [1m[91m^^^^^^^^^^^^^^^^^^^^^[0m
-[1m[94m...[0m
-[1m[94m68[0m [1m[94m|[0m     pub fn reproductive_investment(&self) -> f64 {
+[1m[94m38[0m [1m[94m|[0m     pub fn movement_efficiency(&self) -> f64 { self.trait_value("movement_efficiency", 0.8).clamp(0.05, 1.0) }
+[1m[94m39[0m [1m[94m|[0m     pub fn reproductive_investment(&self) -> f64 { self.trait_value("reproductive_investment", 0.5).clamp(0.15, 1.0) }
    [1m[94m|[0m            [1m[91m^^^^^^^^^^^^^^^^^^^^^^^[0m
 
 [1m[91merror[0m[1m: associated items `new` and `total_material_amount` are never used[0m
@@ -535,6 +645,17 @@
     [1m[94m= [0m[1mnote[0m: `-D dead-code` implied by `-D warnings`
     [1m[94m= [0m[1mhelp[0m: to override `-D warnings` add `#[expect(dead_code)]` or `#[allow(dead_code)]`
 
+[1m[91merror[0m[1m: field `boundary_units` is never read[0m
+  [1m[94m--> [0msrc/cavity.rs:28:9
+   [1m[94m|[0m
+[1m[94m26[0m [1m[94m|[0m pub struct GenomeCavity {
+   [1m[94m|[0m            [1m[94m------------[0m [1m[94mfield in this struct[0m
+[1m[94m27[0m [1m[94m|[0m     pub area: f64,
+[1m[94m28[0m [1m[94m|[0m     pub boundary_units: Vec<usize>,
+   [1m[94m|[0m         [1m[91m^^^^^^^^^^^^^^[0m
+   [1m[94m|[0m
+   [1m[94m= [0m[1mnote[0m: `GenomeCavity` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
 [1m[91merror[0m[1m: associated function `from_material` is never used[0m
    [1m[94m--> [0msrc/combine.rs:110:12
     [1m[94m|[0m
@@ -569,7 +690,7 @@
     [1m[94m= [0m[1mnote[0m: `-D clippy::type-complexity` implied by `-D warnings`
     [1m[94m= [0m[1mhelp[0m: to override `-D warnings` add `#[allow(clippy::type_complexity)]`
 
-[1m[91merror[0m: could not compile `evosim` (bin "evosim" test) due to 21 previous errors
+[1m[91merror[0m: could not compile `evosim` (bin "evosim" test) due to 22 previous errors
 [1m[33mwarning[0m: build failed, waiting for other jobs to finish...
-[1m[91merror[0m: could not compile `evosim` (bin "evosim") due to 46 previous errors
+[1m[91merror[0m: could not compile `evosim` (bin "evosim") due to 62 previous errors
 status=101
