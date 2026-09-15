@@ -15,7 +15,16 @@ pub(crate) const JUVENILE_INITIAL_ENERGY_RESERVE: f64 = 16.0;
 const TRIAL_ENERGY: f64 = 1.0e12;
 const EPS: f64 = 1e-8;
 
+/// Compatibility wrapper for callers that still use the original initial-
+/// condition API. New lifecycle code should use `realize_initial_with_reserve`.
 pub(crate) fn realize_initial(
+    blueprint: &StructuralBlueprint,
+    catalog: &[BaseResource],
+) -> Result<(OrganismStructure, EnergyLedger, f64), String> {
+    realize_initial_with_reserve(blueprint, catalog, JUVENILE_INITIAL_ENERGY_RESERVE)
+}
+
+pub(crate) fn realize_initial_with_reserve(
     blueprint: &StructuralBlueprint,
     catalog: &[BaseResource],
     reserve_energy: f64,
@@ -23,7 +32,6 @@ pub(crate) fn realize_initial(
     if !blueprint.is_valid() { return Err("juvenile blueprint is invalid".into()); }
     if blueprint.core_elements.is_empty() { return Err("juvenile blueprint has no genome core".into()); }
     if !reserve_energy.is_finite() || reserve_energy <= 0.0 { return Err("juvenile energy reserve must be finite and positive".into()); }
-
     let base = realize_declared_units(blueprint, catalog)?;
     let (required_initial_energy, _) = form_declared_bonds(base.clone(), blueprint, catalog, TRIAL_ENERGY)?;
     let initial_energy = required_initial_energy + reserve_energy;
@@ -44,8 +52,7 @@ fn realize_declared_units(blueprint: &StructuralBlueprint, catalog: &[BaseResour
 }
 
 fn form_declared_bonds(mut structure: OrganismStructure, blueprint: &StructuralBlueprint, catalog: &[BaseResource], mut energy: f64) -> Result<(OrganismStructure, EnergyLedger, f64), String> {
-    let mut ledger = EnergyLedger::default();
-    let mut cache = ConnectionCompatibilityCache::new();
+    let mut ledger = EnergyLedger::default(); let mut cache = ConnectionCompatibilityCache::new();
     for connection in &blueprint.connections {
         combine_specific_pair(&mut structure, connection.element_a, connection.element_b, catalog, 0.0, &mut cache, &mut ledger, &mut energy)
             .ok_or_else(|| format!("juvenile blueprint bond could not be realized: {}-{}", connection.element_a, connection.element_b))?;
@@ -55,19 +62,7 @@ fn form_declared_bonds(mut structure: OrganismStructure, blueprint: &StructuralB
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::genome::initial_genome;
-    use crate::resources::default_catalog;
-    #[test]
-    fn juvenile_initialization_is_a_valid_physical_realization() {
-        let catalog = default_catalog(); let genome = initial_genome();
-        let (structure, _ledger, energy) = realize_initial(&genome.juvenile_blueprint, &catalog, genome.juvenile_energy_reserve).unwrap();
-        assert_eq!(structure.bonds.len(), genome.juvenile_blueprint.connections.len());
-        assert!(energy >= genome.juvenile_energy_reserve - EPS);
-    }
-    #[test]
-    fn nonpositive_reserve_is_rejected() {
-        let genome = initial_genome();
-        assert!(realize_initial(&genome.juvenile_blueprint, &default_catalog(), 0.0).is_err());
-    }
+    use super::*; use crate::genome::initial_genome; use crate::resources::default_catalog;
+    #[test] fn juvenile_initialization_is_a_valid_physical_realization() { let c=default_catalog(); let g=initial_genome(); let (s,_,e)=realize_initial_with_reserve(&g.juvenile_blueprint,&c,g.juvenile_energy_reserve).unwrap(); assert_eq!(s.bonds.len(),g.juvenile_blueprint.connections.len()); assert!(e>=g.juvenile_energy_reserve-EPS); }
+    #[test] fn nonpositive_reserve_is_rejected() { let g=initial_genome(); assert!(realize_initial_with_reserve(&g.juvenile_blueprint,&default_catalog(),0.0).is_err()); }
 }
