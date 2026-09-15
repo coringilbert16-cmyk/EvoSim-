@@ -1,4 +1,4 @@
-use crate::connection_geometry::{ConnectionRegion, WorldConnectionPoint};
+use crate::connection_geometry::WorldConnectionPoint;
 use crate::physical_geometry::PhysicalGeometry;
 use crate::resources::{BaseResource, Material};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -38,16 +38,6 @@ impl StructuralUnit {
             placement,
             geometry: None,
         })
-    }
-    pub fn resource_name(&self) -> Option<&str> {
-        let [(name, amount)] = self.material.parts.as_slice() else {
-            return None;
-        };
-        if self.material.internal_bonds.is_empty() && (*amount - 1.0).abs() <= f64::EPSILON {
-            Some(name.as_str())
-        } else {
-            None
-        }
     }
     pub fn properties(
         &self,
@@ -95,18 +85,6 @@ impl StructuralUnit {
         }
         self.external_geometry_resource(catalog)
             .map(|base| &base.shape)
-    }
-    pub fn replace_geometry(&mut self, shape: crate::resources::Shape) -> bool {
-        if !shape.is_valid() {
-            return false;
-        }
-        match &mut self.geometry {
-            Some(geometry) => geometry.replace(shape),
-            None => {
-                self.geometry = Some(PhysicalGeometry::from_default(&shape));
-                true
-            }
-        }
     }
     pub fn realize_default_geometry(&mut self, catalog: &[BaseResource]) -> bool {
         if self.geometry.is_some() {
@@ -207,54 +185,6 @@ impl<'de> Deserialize<'de> for BondEndpoint {
     }
 }
 impl ConnectionEndpoint {
-    pub fn region(
-        self,
-        unit: &StructuralUnit,
-        catalog: &[BaseResource],
-    ) -> Option<ConnectionRegion> {
-        match self {
-            Self::Corner { point_index } => {
-                let shape = unit.shape(catalog)?;
-                crate::connection_geometry::transform_polygon_vertex(
-                    shape,
-                    point_index,
-                    unit.placement.x,
-                    unit.placement.y,
-                    unit.placement.rotation_radians,
-                )
-                .map(ConnectionRegion::Corner)
-            }
-            Self::LineEndpoint { point_index } => {
-                let shape = unit.shape(catalog)?;
-                crate::connection_geometry::transform_line_endpoint(
-                    shape,
-                    point_index,
-                    unit.placement.x,
-                    unit.placement.y,
-                    unit.placement.rotation_radians,
-                )
-                .map(ConnectionRegion::Corner)
-            }
-            Self::Boundary { .. } => {
-                let crate::resources::Form::Circle { radius } = unit.shape(catalog)?.form else {
-                    return None;
-                };
-                Some(ConnectionRegion::Boundary {
-                    center_x: unit.placement.x,
-                    center_y: unit.placement.y,
-                    radius,
-                })
-            }
-            Self::Fluid { .. } => {
-                let radius = unit.shape(catalog)?.form.bounding_radius();
-                Some(ConnectionRegion::Fluid {
-                    center_x: unit.placement.x,
-                    center_y: unit.placement.y,
-                    effective_radius: radius,
-                })
-            }
-        }
-    }
     pub fn world_point(
         self,
         unit: &StructuralUnit,
@@ -597,15 +527,6 @@ impl PhysicalConstituentGraph {
             .map(|b| crate::combine::experimental_bond_strength(b.bond_energy))
             .sum()
     }
-    pub fn connection_count(&self, u: usize, location: ConnectionEndpoint) -> usize {
-        let Some(id) = self.physical_id(u) else {
-            return 0;
-        };
-        self.bonds
-            .iter()
-            .filter(|b| b.touches(id, location))
-            .count()
-    }
     pub fn break_bond(&mut self, i: usize) -> Option<Bond> {
         if i < self.bonds.len() {
             Some(self.bonds.remove(i))
@@ -616,36 +537,6 @@ impl PhysicalConstituentGraph {
     pub fn break_matching_bond(&mut self, t: Bond) -> Option<Bond> {
         let i = self.bonds.iter().position(|b| b.has_same_identity(&t))?;
         self.break_bond(i)
-    }
-    pub fn disconnect_point(&mut self, u: usize, location: ConnectionEndpoint) -> Vec<Bond> {
-        let Some(id) = self.physical_id(u) else {
-            return Vec::new();
-        };
-        let mut out = Vec::new();
-        let mut i = 0;
-        while i < self.bonds.len() {
-            if self.bonds[i].touches(id, location) {
-                out.push(self.bonds.remove(i))
-            } else {
-                i += 1
-            }
-        }
-        out
-    }
-    pub fn loaded_points(&self) -> Vec<(usize, ConnectionEndpoint)> {
-        let mut out: Vec<(usize, ConnectionEndpoint)> = Vec::new();
-        for b in &self.bonds {
-            for e in [b.endpoint_a, b.endpoint_b] {
-                if let Some(u) = self.unit_index(e.constituent_id) {
-                    if !out.iter().any(|(i, p): &(usize, ConnectionEndpoint)| {
-                        *i == u && p.same_location(e.location)
-                    }) {
-                        out.push((u, e.location))
-                    }
-                }
-            }
-        }
-        out
     }
 }
 pub type OrganismStructure = PhysicalConstituentGraph;
@@ -713,7 +604,7 @@ mod tests {
     }
     #[test]
     fn legacy_structural_material_wrapper_deserializes() {
-        let encoded = r#"{"physical_id":0,"material":{"material":{"parts":[["Carbon",1.0]],"internal_bonds":[]}},"placement":{"x":0.0,"y":0.0,"rotation_radians":0.0}}"#;
+        let encoded = r#"{\"physical_id\":0,\"material\":{\"material\":{\"parts\":[[\"Carbon\",1.0]],\"internal_bonds\":[]}},\"placement\":{\"x\":0.0,\"y\":0.0,\"rotation_radians\":0.0}}"#;
         let decoded: StructuralUnit = serde_json::from_str(encoded).unwrap();
         assert_eq!(decoded.material, Material::free_base("Carbon", 1.0));
         assert!(decoded.geometry.is_none());
