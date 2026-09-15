@@ -15,7 +15,6 @@ mod construction_runtime;
 mod contact;
 mod material_geometry;
 mod organism_geometry;
-mod permeability;
 mod physical_geometry;
 mod rigid_boundary;
 mod surface_geometry;
