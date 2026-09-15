@@ -265,11 +265,11 @@ fn add_interface(
     region: &ArchitectureRegion,
     scale: f64,
 ) {
-    let inner = 1.086_648;
-    let outer = 1.511_858;
-    let length = 0.797_884;
+    let inner: f64 = 1.086_648;
+    let outer: f64 = 1.511_858;
+    let length: f64 = 0.797_884;
     let gap = outer - inner;
-    let tangent = (length * length - gap * gap).sqrt();
+    let tangent: f64 = (length * length - gap * gap).sqrt();
     let center = (inner + outer) / 2.0;
     let start = elements.len();
     let p = [
