@@ -76,8 +76,14 @@ impl OrganismArchitecture {
                 return Err("architecture relation is invalid".into());
             }
         }
-        if !self.regions.iter().any(|r| matches!(r.role, ArchitectureRole::StructuralBoundary))
-            || !self.regions.iter().any(|r| matches!(r.role, ArchitectureRole::Interface))
+        if !self
+            .regions
+            .iter()
+            .any(|r| matches!(r.role, ArchitectureRole::StructuralBoundary))
+            || !self
+                .regions
+                .iter()
+                .any(|r| matches!(r.role, ArchitectureRole::Interface))
         {
             return Err("architecture requires boundary and interface regions".into());
         }
@@ -119,9 +125,14 @@ impl OrganismArchitecture {
                         &target.core_elements,
                         crate::juvenile_requirements::JuvenileViabilityRequirements::default(),
                     )
-                    .is_ok() => return Ok(target),
+                    .is_ok() =>
+                {
+                    return Ok(target);
+                }
                 Ok(_) => last_error = format!("scale {scale:.2} failed juvenile viability"),
-                Err(error) => last_error = format!("scale {scale:.2} failed realization: {error}"),
+                Err(error) => {
+                    last_error = format!("scale {scale:.2} failed realization: {error}")
+                }
             }
         }
         Err(last_error)
@@ -148,7 +159,11 @@ impl OrganismArchitecture {
         add_core(&mut elements, &mut connections, core);
         add_boundary(&mut elements, &mut connections, boundary);
         add_interface(&mut elements, &mut connections, interface);
-        let target = StructuralBlueprint::with_core_elements(elements, connections, vec![0, 1, 2, 3]);
+        let target = StructuralBlueprint::with_core_elements(
+            elements,
+            connections,
+            vec![0, 1, 2, 3],
+        );
         target.validate()?;
         Ok(target)
     }
@@ -162,17 +177,32 @@ fn add_core(
     let d = (1.511_858 + 0.330_719) / 2.0;
     for (x, y, rotation_radians) in [
         (region.center_x, region.center_y + d, 0.0),
-        (region.center_x - d, region.center_y, std::f64::consts::FRAC_PI_2),
-        (region.center_x + d, region.center_y, std::f64::consts::FRAC_PI_2),
+        (
+            region.center_x - d,
+            region.center_y,
+            std::f64::consts::FRAC_PI_2,
+        ),
+        (
+            region.center_x + d,
+            region.center_y,
+            std::f64::consts::FRAC_PI_2,
+        ),
         (region.center_x, region.center_y - d, 0.0),
     ] {
         elements.push(BlueprintElement {
             material: region.material.clone(),
-            placement: BlueprintPlacement { x, y, rotation_radians },
+            placement: BlueprintPlacement {
+                x,
+                y,
+                rotation_radians,
+            },
         });
     }
     for (a, b) in [(0, 1), (0, 2), (1, 3), (2, 3)] {
-        connections.push(BlueprintConnection { element_a: a, element_b: b });
+        connections.push(BlueprintConnection {
+            element_a: a,
+            element_b: b,
+        });
     }
 }
 
@@ -209,7 +239,11 @@ fn add_boundary(
     for (x, y, rotation_radians) in positions {
         elements.push(BlueprintElement {
             material: region.material.clone(),
-            placement: BlueprintPlacement { x, y, rotation_radians },
+            placement: BlueprintPlacement {
+                x,
+                y,
+                rotation_radians,
+            },
         });
     }
     if count <= 4 {
@@ -243,20 +277,44 @@ fn add_interface(
     let center = (inner + outer) / 2.0;
     let start = elements.len();
     let p = [
-        (region.center_x, region.center_y + center, gap.atan2(-tangent)),
-        (region.center_x - center, region.center_y, (-tangent).atan2(-gap)),
-        (region.center_x + center, region.center_y, tangent.atan2(gap)),
-        (region.center_x, region.center_y - center, (-gap).atan2(tangent)),
+        (
+            region.center_x,
+            region.center_y + center,
+            gap.atan2(-tangent),
+        ),
+        (
+            region.center_x - center,
+            region.center_y,
+            (-tangent).atan2(-gap),
+        ),
+        (
+            region.center_x + center,
+            region.center_y,
+            tangent.atan2(gap),
+        ),
+        (
+            region.center_x,
+            region.center_y - center,
+            (-gap).atan2(tangent),
+        ),
     ];
     for (x, y, rotation_radians) in p {
         elements.push(BlueprintElement {
             material: region.material.clone(),
-            placement: BlueprintPlacement { x, y, rotation_radians },
+            placement: BlueprintPlacement {
+                x,
+                y,
+                rotation_radians,
+            },
         });
     }
     let boundary_count = ((8.0 * region.density).round() as usize).clamp(4, 8);
     let boundary_start = start - boundary_count;
-    let maps = if boundary_count == 4 { [0, 1, 2, 3] } else { [0, 2, 4, 6] };
+    let maps = if boundary_count == 4 {
+        [0, 1, 2, 3]
+    } else {
+        [0, 2, 4, 6]
+    };
     for i in 0..4 {
         connections.push(BlueprintConnection {
             element_a: start + i,
@@ -333,9 +391,8 @@ mod tests {
         let architecture = default_architecture();
         let target = architecture.construction_target().unwrap();
         assert_eq!(target.elements.len(), 16);
-        assert!(target
-            .elements
-            .iter()
-            .all(|element| element.placement.x.abs() < 2.0 && element.placement.y.abs() < 2.0));
+        assert!(target.elements.iter().all(|element| {
+            element.placement.x.abs() < 2.0 && element.placement.y.abs() < 2.0
+        }));
     }
 }
