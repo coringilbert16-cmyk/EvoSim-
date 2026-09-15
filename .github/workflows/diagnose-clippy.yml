@@ -17,16 +17,156 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          path = Path("src/genome.rs")
-          text = path.read_text()
-          replacements = {
-              "let length = 0.797_884;": "let length: f64 = 0.797_884;",
-              "let gap = outer_inner - inner_outer;": "let gap: f64 = outer_inner - inner_outer;",
-          }
-          for old, new in replacements.items():
-              if old in text:
-                  text = text.replace(old, new, 1)
-          path.write_text(text)
+
+          state = Path("src/state.rs")
+          text = state.read_text()
+          marker = "pub(crate) const MIN_STRESS_THRESHOLD: f64 = 5.0;"
+          addition = marker + "\npub(crate) const JUVENILE_INITIAL_ENERGY_RESERVE: f64 = 16.0;"
+          if "JUVENILE_INITIAL_ENERGY_RESERVE" not in text:
+              if marker not in text:
+                  raise SystemExit("state constant marker not found")
+              text = text.replace(marker, addition, 1)
+          old_struct = """pub(crate) struct ReproductiveConstruction {
+    pub(crate) committed_material: MaterialStorage,
+    pub(crate) developing_structure: OrganismStructure,
+    pub(crate) child_genome: Genome,
+    #[serde(default)]
+    pub(crate) target_elements: Vec<usize>,"""
+          new_struct = """pub(crate) struct ReproductiveConstruction {
+    pub(crate) committed_material: MaterialStorage,
+    pub(crate) reserved_material: MaterialStorage,
+    pub(crate) reserved_energy: f64,
+    pub(crate) developing_structure: OrganismStructure,
+    pub(crate) child_genome: Genome,
+    #[serde(default)]
+    pub(crate) target_elements: Vec<usize>,"""
+          if old_struct in text:
+              text = text.replace(old_struct, new_struct, 1)
+          elif "pub(crate) reserved_material: MaterialStorage" not in text:
+              raise SystemExit("reproductive construction marker not found")
+          state.write_text(text)
+
+          simulation = Path("src/simulation.rs")
+          text = simulation.read_text()
+          old = """        let structure = genome
+            .structural_blueprint
+            .realize(&catalog)
+            .expect("initial structural blueprint must be realizable");
+        let mature_mass = genome
+            .structural_blueprint
+            .structural_mass(&catalog)
+            .max(f64::EPSILON);
+        let realized_mass: f64 = structure
+            .units
+            .iter()
+            .map(|unit| unit.material.mass(&catalog))
+            .sum();
+        let development_stage = if realized_mass / mature_mass >= ADULTHOOD_GROWTH_FRACTION {
+            DevelopmentStage::Adult
+        } else {
+            DevelopmentStage::Juvenile
+        };"""
+          new = """        let structure = genome
+            .juvenile_blueprint
+            .realize(&catalog)
+            .expect("initial juvenile blueprint must be realizable");
+        crate::cavity::analyze_genome_cavity(
+            &structure,
+            &catalog,
+            &genome.juvenile_blueprint.core_elements,
+        )
+        .expect("initial juvenile core geometry must be analyzable")
+        .filter(|cavity| cavity.qualifies())
+        .expect("initial juvenile genome cavity must be sealed and large enough");
+        let mut stored_material = crate::material_storage::MaterialStorage::default();
+        assert!(stored_material.store(crate::resources::Material {
+            parts: vec![("Hydrogen".into(), 1.0)],
+            internal_bonds: Vec::new(),
+        }));
+        let development_stage = DevelopmentStage::Juvenile;"""
+          if old not in text:
+              raise SystemExit("initial organism block not found")
+          text = text.replace(old, new, 1)
+          text = text.replace("            usable_energy: 0.0,", "            usable_energy: crate::state::JUVENILE_INITIAL_ENERGY_RESERVE,", 1)
+          text = text.replace("            stored_material: crate::material_storage::MaterialStorage::default(),", "            stored_material,", 1)
+          simulation.write_text(text)
+
+          reproduction = Path("src/reproduction.rs")
+          text = reproduction.read_text()
+          text = text.replace("const JUVENILE_MATURE_MASS_FRACTION: f64 = 0.40;\n", "", 1)
+          start = text.index("fn juvenile_target_set(")
+          end = text.index("fn all_indices(", start)
+          replacement = """fn juvenile_target_set(
+    blueprint: &crate::structural_blueprint::StructuralBlueprint,
+    _catalog: &[BaseResource],
+) -> Option<HashSet<usize>> {
+    if !blueprint.is_valid() {
+        return None;
+    }
+    Some(all_indices(blueprint))
+}
+"""
+          text = text[:start] + replacement + text[end:]
+          text = text.replace(
+              "let blueprint = &child_genome.structural_blueprint;",
+              "let blueprint = &child_genome.juvenile_blueprint;",
+              1,
+          )
+          text = text.replace(
+              "let blueprint = &construction.child_genome.structural_blueprint;",
+              "let blueprint = &construction.child_genome.juvenile_blueprint;",
+              1,
+          )
+          old_remaining = """    let mut remaining = parent.stored_material.clone();
+    let mut structure = OrganismStructure::new();"""
+          new_remaining = """    let reserve_target = Material {
+        parts: vec![("Hydrogen".into(), 1.0)],
+        internal_bonds: Vec::new(),
+    };
+    let mut remaining = parent.stored_material.clone();
+    let Some(reserved_material_unit) = remaining.take_matching(&reserve_target) else {
+        return false;
+    };
+    if parent.usable_energy < crate::state::JUVENILE_INITIAL_ENERGY_RESERVE {
+        return false;
+    }
+    let mut reserved_material = MaterialStorage::default();
+    assert!(reserved_material.store(reserved_material_unit));
+    let mut structure = OrganismStructure::new();"""
+          if old_remaining not in text:
+              raise SystemExit("reproduction material initialization block not found")
+          text = text.replace(old_remaining, new_remaining, 1)
+          text = text.replace(
+              "    let mut trial_energy = parent.usable_energy;",
+              "    let mut trial_energy = parent.usable_energy - crate::state::JUVENILE_INITIAL_ENERGY_RESERVE;",
+              1,
+          )
+          old_literal = """    parent.reproductive_construction = Some(ReproductiveConstruction {
+        committed_material: MaterialStorage::default(),
+        developing_structure: structure,"""
+          new_literal = """    parent.reproductive_construction = Some(ReproductiveConstruction {
+        committed_material: MaterialStorage::default(),
+        reserved_material,
+        reserved_energy: crate::state::JUVENILE_INITIAL_ENERGY_RESERVE,
+        developing_structure: structure,"""
+          if old_literal not in text:
+              raise SystemExit("reproductive construction literal not found")
+          text = text.replace(old_literal, new_literal, 1)
+          text = text.replace("        usable_energy: 0.0,\n", "        usable_energy: construction.reserved_energy,\n", 1)
+          text = text.replace("        stored_material: MaterialStorage::default(),\n", "        stored_material: construction.reserved_material,\n", 1)
+          text = text.replace(
+              "        let target = juvenile_target_set(&genome.structural_blueprint, &default_catalog()).unwrap();",
+              "        let target = juvenile_target_set(&genome.juvenile_blueprint, &default_catalog()).unwrap();",
+          )
+          text = text.replace(
+              "        assert!(realized + f64::EPSILON >= mature * JUVENILE_MATURE_MASS_FRACTION);",
+              "        assert!(target.len() == genome.juvenile_blueprint.elements.len());",
+          )
+          text = text.replace(
+              "        let mature = genome\n            .structural_blueprint\n            .structural_mass(&default_catalog());\n        let realized = target\n            .iter()\n            .map(|&i| {\n                genome.structural_blueprint.elements[i]\n                    .material\n                    .mass(&default_catalog())\n            })\n            .sum::<f64>();\n",
+              "",
+          )
+          reproduction.write_text(text)
           PY
       - name: Format source
         run: cargo fmt --all
@@ -38,7 +178,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src
-          git commit -m "fix: type juvenile connector geometry [skip ci]"
+          git commit -m "feat: establish viable juvenile construction" || exit 1
           git push origin HEAD:audit/unity-cleanup
       - name: Run Clippy diagnostics
         run: |
