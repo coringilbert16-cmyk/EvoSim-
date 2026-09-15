@@ -1,14 +1,17 @@
 //! Physical contact and structural connection candidates.
 use crate::connection_geometry::{
-    facing_compatibility, point_distance, transform_connection_point,
+    facing_compatibility, point_distance, rigid_endpoint_world_point, transform_connection_point,
 };
 use crate::resources::{ConnectionPoint, ConnectionSites};
 use crate::structure::{Bond, ConnectionEndpoint, OrganismStructure, StructuralUnit};
 use crate::surface_geometry::boundary_point_toward;
+
 fn transform_point(
     point: ConnectionPoint,
     unit: &StructuralUnit,
 ) -> crate::connection_geometry::WorldConnectionPoint {
+    // Migration adapter for legacy callers that already possess a ConnectionPoint.
+    // New structural endpoints must use shape-derived geometry below.
     transform_connection_point(
         point,
         unit.placement.x,
@@ -136,7 +139,7 @@ fn candidate_endpoints(
         return ea
             .into_iter()
             .filter_map(|x| {
-                let wp = x.world_point(a, catalog)?;
+                let wp = endpoint_world_point(x, a, catalog)?;
                 continuous_endpoint(b, wp, catalog).map(|y| (x, y))
             })
             .collect();
@@ -145,7 +148,7 @@ fn candidate_endpoints(
         return eb
             .into_iter()
             .filter_map(|y| {
-                let wp = y.world_point(b, catalog)?;
+                let wp = endpoint_world_point(y, b, catalog)?;
                 continuous_endpoint(a, wp, catalog).map(|x| (x, y))
             })
             .collect();
@@ -158,6 +161,55 @@ fn candidate_endpoints(
         _ => Vec::new(),
     }
 }
+
+fn endpoint_world_point(
+    endpoint: ConnectionEndpoint,
+    unit: &StructuralUnit,
+    catalog: &[crate::resources::BaseResource],
+) -> Option<crate::connection_geometry::WorldConnectionPoint> {
+    let shape = unit.shape(catalog)?;
+    match endpoint {
+        ConnectionEndpoint::Corner { point_index }
+        | ConnectionEndpoint::LineEndpoint { point_index } => rigid_endpoint_world_point(
+            shape,
+            point_index,
+            unit.placement.x,
+            unit.placement.y,
+            unit.placement.rotation_radians,
+        ),
+        ConnectionEndpoint::Boundary { angle_radians } => {
+            let radius = shape.form.bounding_radius();
+            let (s, c) = angle_radians.sin_cos();
+            Some(crate::connection_geometry::transform_derived_point(
+                radius * c,
+                radius * s,
+                c,
+                s,
+                unit.placement.x,
+                unit.placement.y,
+                unit.placement.rotation_radians,
+            ))
+        }
+        ConnectionEndpoint::Fluid { x, y } => {
+            let len = x.hypot(y);
+            let (nx, ny) = if len > 1e-12 {
+                (x / len, y / len)
+            } else {
+                (0.0, 0.0)
+            };
+            Some(crate::connection_geometry::transform_derived_point(
+                x,
+                y,
+                nx,
+                ny,
+                unit.placement.x,
+                unit.placement.y,
+                unit.placement.rotation_radians,
+            ))
+        }
+    }
+}
+
 fn endpoint_facing(
     a: ConnectionEndpoint,
     b: ConnectionEndpoint,
@@ -165,16 +217,10 @@ fn endpoint_facing(
     ub: &StructuralUnit,
     catalog: &[crate::resources::BaseResource],
 ) -> Option<f64> {
-    if matches!(a, ConnectionEndpoint::Fluid { .. })
-        || matches!(b, ConnectionEndpoint::Fluid { .. })
-    {
-        Some(1.0)
-    } else {
-        Some(facing(
-            a.world_point(ua, catalog)?,
-            b.world_point(ub, catalog)?,
-        ))
-    }
+    Some(facing(
+        endpoint_world_point(a, ua, catalog)?,
+        endpoint_world_point(b, ub, catalog)?,
+    ))
 }
 fn candidate_for_endpoints(
     s: &OrganismStructure,
@@ -186,8 +232,8 @@ fn candidate_for_endpoints(
 ) -> Option<ConnectionPairCandidate> {
     let au = s.units.get(ua)?;
     let bu = s.units.get(ub)?;
-    let wa = a.world_point(au, c)?;
-    let wb = b.world_point(bu, c)?;
+    let wa = endpoint_world_point(a, au, c)?;
+    let wb = endpoint_world_point(b, bu, c)?;
     Some(ConnectionPairCandidate {
         endpoint_a: a,
         endpoint_b: b,
@@ -288,10 +334,10 @@ fn bond_geometry_is_valid(
     let (Some(a), Some(d)) = (
         s.units
             .get(ai)
-            .and_then(|u| b.endpoint_a.location.world_point(u, c)),
+            .and_then(|u| endpoint_world_point(b.endpoint_a.location, u, c)),
         s.units
             .get(bi)
-            .and_then(|u| b.endpoint_b.location.world_point(u, c)),
+            .and_then(|u| endpoint_world_point(b.endpoint_b.location, u, c)),
     ) else {
         return false;
     };
@@ -312,10 +358,10 @@ fn bond_geometry_is_valid(
         let (Some(e0), Some(e1)) = (
             s.units
                 .get(ei0)
-                .and_then(|u| existing.endpoint_a.location.world_point(u, c)),
+                .and_then(|u| endpoint_world_point(existing.endpoint_a.location, u, c)),
             s.units
                 .get(ei1)
-                .and_then(|u| existing.endpoint_b.location.world_point(u, c)),
+                .and_then(|u| endpoint_world_point(existing.endpoint_b.location, u, c)),
         ) else {
             return false;
         };
