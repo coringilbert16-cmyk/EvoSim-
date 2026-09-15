@@ -119,6 +119,7 @@ impl OrganismArchitecture {
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
         candidates.dedup_by(|a, b| (*a - *b).abs() < 1e-12);
+
         let mut last_error = "no viable developmental target".to_string();
         for scale in candidates {
             let target = self.construction_target(scale)?;
@@ -135,7 +136,9 @@ impl OrganismArchitecture {
                     return Ok(target)
                 }
                 Ok(_) => last_error = format!("scale {scale:.2} failed juvenile viability"),
-                Err(error) => last_error = format!("scale {scale:.2} failed realization: {error}"),
+                Err(error) => {
+                    last_error = format!("scale {scale:.2} failed realization: {error}")
+                }
             }
         }
         Err(last_error)
@@ -160,17 +163,27 @@ impl OrganismArchitecture {
             .iter()
             .position(|r| matches!(r.role, ArchitectureRole::Interface))
             .ok_or("architecture requires an interface")?;
+
         let mut elements = Vec::new();
         let mut connections = Vec::new();
         add_core_region(&mut elements, &mut connections, core);
-        add_boundary_region(&mut elements, &mut connections, &self.regions[boundary], scale);
+        add_boundary_region(
+            &mut elements,
+            &mut connections,
+            &self.regions[boundary],
+            scale,
+        );
         add_interface_region(
             &mut elements,
             &mut connections,
             &self.regions[interface],
             scale,
         );
-        let target = StructuralBlueprint::with_core_elements(elements, connections, vec![0, 1, 2, 3]);
+        let target = StructuralBlueprint::with_core_elements(
+            elements,
+            connections,
+            vec![0, 1, 2, 3],
+        );
         target.validate()?;
         Ok(target)
     }
@@ -187,26 +200,54 @@ fn add_core_region(
     elements.extend([
         BlueprintElement {
             material: region.material.clone(),
-            placement: BlueprintPlacement { x: sx, y: sy + offset, rotation_radians: 0.0 },
+            placement: BlueprintPlacement {
+                x: sx,
+                y: sy + offset,
+                rotation_radians: 0.0,
+            },
         },
         BlueprintElement {
             material: region.material.clone(),
-            placement: BlueprintPlacement { x: sx - offset, y: sy, rotation_radians: std::f64::consts::FRAC_PI_2 },
+            placement: BlueprintPlacement {
+                x: sx - offset,
+                y: sy,
+                rotation_radians: std::f64::consts::FRAC_PI_2,
+            },
         },
         BlueprintElement {
             material: region.material.clone(),
-            placement: BlueprintPlacement { x: sx + offset, y: sy, rotation_radians: std::f64::consts::FRAC_PI_2 },
+            placement: BlueprintPlacement {
+                x: sx + offset,
+                y: sy,
+                rotation_radians: std::f64::consts::FRAC_PI_2,
+            },
         },
         BlueprintElement {
             material: region.material.clone(),
-            placement: BlueprintPlacement { x: sx, y: sy - offset, rotation_radians: 0.0 },
+            placement: BlueprintPlacement {
+                x: sx,
+                y: sy - offset,
+                rotation_radians: 0.0,
+            },
         },
     ]);
     connections.extend([
-        BlueprintConnection { element_a: 0, element_b: 1 },
-        BlueprintConnection { element_a: 0, element_b: 2 },
-        BlueprintConnection { element_a: 1, element_b: 3 },
-        BlueprintConnection { element_a: 2, element_b: 3 },
+        BlueprintConnection {
+            element_a: 0,
+            element_b: 1,
+        },
+        BlueprintConnection {
+            element_a: 0,
+            element_b: 2,
+        },
+        BlueprintConnection {
+            element_a: 1,
+            element_b: 3,
+        },
+        BlueprintConnection {
+            element_a: 2,
+            element_b: 3,
+        },
     ]);
 }
 
@@ -221,15 +262,28 @@ fn add_boundary_region(
     let sx = region.center_x;
     let sy = region.center_y;
     let start = elements.len();
-    let count = if scale < 0.75 { 1 } else { ((8.0 * region.density).round() as usize).clamp(4, 8) };
+    let count = if scale < 0.75 {
+        1
+    } else {
+        ((8.0 * region.density).round() as usize).clamp(4, 8)
+    };
+
     if count == 1 {
         elements.push(BlueprintElement {
             material: region.material.clone(),
-            placement: BlueprintPlacement { x: sx, y: sy + offset, rotation_radians: 0.0 },
+            placement: BlueprintPlacement {
+                x: sx,
+                y: sy + offset,
+                rotation_radians: 0.0,
+            },
         });
-        connections.push(BlueprintConnection { element_a: 0, element_b: start });
+        connections.push(BlueprintConnection {
+            element_a: 0,
+            element_b: start,
+        });
         return;
     }
+
     if count <= 4 {
         let positions = [
             (sx, sy + offset, 0.0),
@@ -238,27 +292,66 @@ fn add_boundary_region(
             (sx - offset, sy, std::f64::consts::FRAC_PI_2),
         ];
         for (x, y, rotation_radians) in positions {
-            elements.push(BlueprintElement { material: region.material.clone(), placement: BlueprintPlacement { x, y, rotation_radians } });
+            elements.push(BlueprintElement {
+                material: region.material.clone(),
+                placement: BlueprintPlacement {
+                    x,
+                    y,
+                    rotation_radians,
+                },
+            });
         }
         for i in 0..4 {
-            connections.push(BlueprintConnection { element_a: start + i, element_b: start + (i + 1) % 4 });
+            connections.push(BlueprintConnection {
+                element_a: start + i,
+                element_b: start + (i + 1) % 4,
+            });
         }
         return;
     }
+
     let positions = [
-        (sx - half_segment, sy + offset, 0.0), (sx + half_segment, sy + offset, 0.0),
-        (sx - offset, sy - half_segment, std::f64::consts::FRAC_PI_2),
-        (sx - offset, sy + half_segment, std::f64::consts::FRAC_PI_2),
-        (sx + offset, sy - half_segment, std::f64::consts::FRAC_PI_2),
-        (sx + offset, sy + half_segment, std::f64::consts::FRAC_PI_2),
-        (sx - half_segment, sy - offset, 0.0), (sx + half_segment, sy - offset, 0.0),
+        (sx - half_segment, sy + offset, 0.0),
+        (sx + half_segment, sy + offset, 0.0),
+        (
+            sx - offset,
+            sy - half_segment,
+            std::f64::consts::FRAC_PI_2,
+        ),
+        (
+            sx - offset,
+            sy + half_segment,
+            std::f64::consts::FRAC_PI_2,
+        ),
+        (
+            sx + offset,
+            sy - half_segment,
+            std::f64::consts::FRAC_PI_2,
+        ),
+        (
+            sx + offset,
+            sy + half_segment,
+            std::f64::consts::FRAC_PI_2,
+        ),
+        (sx - half_segment, sy - offset, 0.0),
+        (sx + half_segment, sy - offset, 0.0),
     ];
     for (x, y, rotation_radians) in positions {
-        elements.push(BlueprintElement { material: region.material.clone(), placement: BlueprintPlacement { x, y, rotation_radians } });
+        elements.push(BlueprintElement {
+            material: region.material.clone(),
+            placement: BlueprintPlacement {
+                x,
+                y,
+                rotation_radians,
+            },
+        });
     }
     let ring = [0, 1, 5, 4, 7, 6, 2, 3];
     for i in 0..8 {
-        connections.push(BlueprintConnection { element_a: start + ring[i], element_b: start + ring[(i + 1) % 8] });
+        connections.push(BlueprintConnection {
+            element_a: start + ring[i],
+            element_b: start + ring[(i + 1) % 8],
+        });
     }
 }
 
@@ -277,39 +370,132 @@ fn add_interface_region(
     let sx = region.center_x;
     let sy = region.center_y;
     let start = elements.len();
-    let count = if scale < 0.75 { 1 } else { ((4.0 * region.density).round() as usize).clamp(2, 4) };
+    let count = if scale < 0.75 {
+        1
+    } else {
+        ((4.0 * region.density).round() as usize).clamp(2, 4)
+    };
     let cardinal = [
-        BlueprintElement { material: region.material.clone(), placement: BlueprintPlacement { x: sx, y: sy + center, rotation_radians: gap.atan2(-tangent) } },
-        BlueprintElement { material: region.material.clone(), placement: BlueprintPlacement { x: sx - center, y: sy, rotation_radians: (-tangent).atan2(-gap) } },
-        BlueprintElement { material: region.material.clone(), placement: BlueprintPlacement { x: sx + center, y: sy, rotation_radians: tangent.atan2(gap) } },
-        BlueprintElement { material: region.material.clone(), placement: BlueprintPlacement { x: sx, y: sy - center, rotation_radians: (-gap).atan2(tangent) } },
+        BlueprintElement {
+            material: region.material.clone(),
+            placement: BlueprintPlacement {
+                x: sx,
+                y: sy + center,
+                rotation_radians: gap.atan2(-tangent),
+            },
+        },
+        BlueprintElement {
+            material: region.material.clone(),
+            placement: BlueprintPlacement {
+                x: sx - center,
+                y: sy,
+                rotation_radians: (-tangent).atan2(-gap),
+            },
+        },
+        BlueprintElement {
+            material: region.material.clone(),
+            placement: BlueprintPlacement {
+                x: sx + center,
+                y: sy,
+                rotation_radians: tangent.atan2(gap),
+            },
+        },
+        BlueprintElement {
+            material: region.material.clone(),
+            placement: BlueprintPlacement {
+                x: sx,
+                y: sy - center,
+                rotation_radians: (-gap).atan2(tangent),
+            },
+        },
     ];
-    let selected = match count { 1 => vec![cardinal[0].clone()], 2 => vec![cardinal[0].clone(), cardinal[3].clone()], 3 => cardinal[..3].to_vec(), _ => cardinal.to_vec() };
+    let selected = match count {
+        1 => vec![cardinal[0].clone()],
+        2 => vec![cardinal[0].clone(), cardinal[3].clone()],
+        3 => cardinal[..3].to_vec(),
+        _ => cardinal.to_vec(),
+    };
     elements.extend(selected);
-    let boundary_count = if scale < 0.75 { 1 } else { ((8.0 * region.density).round() as usize).clamp(4, 8) };
-    let core_map = match count { 1 => vec![0], 2 => vec![0, 3], 3 => vec![0, 1, 2], _ => vec![0, 1, 2, 3] };
+
+    let boundary_count = if scale < 0.75 {
+        1
+    } else {
+        ((8.0 * region.density).round() as usize).clamp(4, 8)
+    };
+    let core_map = match count {
+        1 => vec![0],
+        2 => vec![0, 3],
+        3 => vec![0, 1, 2],
+        _ => vec![0, 1, 2, 3],
+    };
     let boundary_map = match (count, boundary_count) {
-        (1, 1) => vec![0], (2, 4) => vec![0, 2], (3, 4) => vec![0, 1, 2],
-        (4, 4) => vec![0, 1, 2, 3], (4, 8) => vec![0, 2, 4, 6], _ => vec![0],
+        (1, 1) => vec![0],
+        (2, 4) => vec![0, 2],
+        (3, 4) => vec![0, 1, 2],
+        (4, 4) => vec![0, 1, 2, 3],
+        (4, 8) => vec![0, 2, 4, 6],
+        _ => vec![0],
     };
     let boundary_start = start - boundary_count;
     for i in 0..count {
-        connections.push(BlueprintConnection { element_a: core_map[i], element_b: start + i });
-        connections.push(BlueprintConnection { element_a: boundary_start + boundary_map[i], element_b: start + i });
+        connections.push(BlueprintConnection {
+            element_a: core_map[i],
+            element_b: start + i,
+        });
+        connections.push(BlueprintConnection {
+            element_a: boundary_start + boundary_map[i],
+            element_b: start + i,
+        });
     }
 }
 
 pub fn default_architecture() -> OrganismArchitecture {
     OrganismArchitecture {
         regions: vec![
-            ArchitectureRegion { role: ArchitectureRole::GenomeCore, material: Material::free_base("Nitrogen", 1.0), center_x: 0.0, center_y: 0.0, extent_x: 1.84, extent_y: 1.84, density: 1.0 },
-            ArchitectureRegion { role: ArchitectureRole::StructuralBoundary, material: Material::free_base("Nitrogen", 1.0), center_x: 0.0, center_y: 0.0, extent_x: 3.35, extent_y: 3.35, density: 0.5 },
-            ArchitectureRegion { role: ArchitectureRole::Interface, material: Material::free_base("Hydrogen", 1.0), center_x: 0.0, center_y: 0.0, extent_x: 2.17, extent_y: 2.17, density: 0.5 },
+            ArchitectureRegion {
+                role: ArchitectureRole::GenomeCore,
+                material: Material::free_base("Nitrogen", 1.0),
+                center_x: 0.0,
+                center_y: 0.0,
+                extent_x: 1.84,
+                extent_y: 1.84,
+                density: 1.0,
+            },
+            ArchitectureRegion {
+                role: ArchitectureRole::StructuralBoundary,
+                material: Material::free_base("Nitrogen", 1.0),
+                center_x: 0.0,
+                center_y: 0.0,
+                extent_x: 3.35,
+                extent_y: 3.35,
+                density: 0.5,
+            },
+            ArchitectureRegion {
+                role: ArchitectureRole::Interface,
+                material: Material::free_base("Hydrogen", 1.0),
+                center_x: 0.0,
+                center_y: 0.0,
+                extent_x: 2.17,
+                extent_y: 2.17,
+                density: 0.5,
+            },
         ],
         relations: vec![
-            ArchitectureRelation { region_a: 1, region_b: 0, kind: ArchitectureRelationKind::Encloses },
-            ArchitectureRelation { region_a: 2, region_b: 0, kind: ArchitectureRelationKind::Interfaces },
-            ArchitectureRelation { region_a: 2, region_b: 1, kind: ArchitectureRelationKind::Interfaces },
+            ArchitectureRelation {
+                region_a: 1,
+                region_b: 0,
+                kind: ArchitectureRelationKind::Encloses,
+            },
+            ArchitectureRelation {
+                region_a: 2,
+                region_b: 0,
+                kind: ArchitectureRelationKind::Interfaces,
+            },
+            ArchitectureRelation {
+                region_a: 2,
+                region_b: 1,
+                kind: ArchitectureRelationKind::Interfaces,
+            },
         ],
         genome_region: 0,
         target_scale: 1.0,
@@ -336,6 +522,13 @@ mod tests {
             .unwrap();
         assert!(target.is_valid());
         assert_eq!(target.core_elements.len(), 4);
-        assert!(target.elements.len() < architecture.adult_construction_target().unwrap().elements.len());
+        assert!(
+            target.elements.len()
+                < architecture
+                    .adult_construction_target()
+                    .unwrap()
+                    .elements
+                    .len()
+        );
     }
 }
