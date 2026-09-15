@@ -101,9 +101,9 @@ pub fn transform_line_endpoint(
         return None;
     };
     let x = if endpoint == 0 {
-        -*length / 2.0
+        -length / 2.0
     } else if endpoint == 1 {
-        *length / 2.0
+        length / 2.0
     } else {
         return None;
     };
