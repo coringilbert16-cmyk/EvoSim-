@@ -152,6 +152,7 @@ pub(crate) fn begin_reproduction(
         return false;
     }
     let target_set = all_indices(blueprint);
+    let core = blueprint.core_elements.iter().copied().collect::<HashSet<_>>();
 
     let mut remaining = parent.stored_material.clone();
     let Some(reserved_material) = remaining.take_one_unstructured_named(JUVENILE_RESERVE_MATERIAL)
@@ -167,12 +168,12 @@ pub(crate) fn begin_reproduction(
     let mut trial_ledger = *ledger;
     let mut trial_energy = parent.usable_energy;
 
-    while realized.len() < target_set.len() {
+    while realized.len() < core.len() {
         let result = construct_any_frontier_element(
             &remaining,
             &mut structure,
             &realized,
-            &target_set,
+            &core,
             blueprint,
             catalog,
             &mut trial_ledger,
@@ -182,7 +183,9 @@ pub(crate) fn begin_reproduction(
             if !realized.is_empty() {
                 return None;
             }
-            for &candidate in &target_set {
+            let mut candidates = core.iter().copied().collect::<Vec<_>>();
+            candidates.sort_unstable();
+            for candidate in candidates {
                 let mut trial_remaining = remaining.clone();
                 let Some(_material) = assemble_blueprint_material(
                     &mut trial_remaining,
