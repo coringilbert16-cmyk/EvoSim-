@@ -5,65 +5,65 @@
 [1m[92m      Adding[0m rand_chacha v0.3.1 [1m[33m(available: v0.10.0)[0m
 [1m[92m      Adding[0m tower-http v0.6.11 [1m[33m(available: v0.7.1)[0m
 [1m[92m Downloading[0m crates ...
-[1m[92m  Downloaded[0m futures-task v0.3.34
-[1m[92m  Downloaded[0m percent-encoding v2.3.2
-[1m[92m  Downloaded[0m tower-service v0.3.3
 [1m[92m  Downloaded[0m atomic-waker v1.1.2
-[1m[92m  Downloaded[0m cfg-if v1.0.4
-[1m[92m  Downloaded[0m futures-core v0.3.34
-[1m[92m  Downloaded[0m futures-util v0.3.34
-[1m[92m  Downloaded[0m http-body v1.1.0
-[1m[92m  Downloaded[0m mime v0.3.17
-[1m[92m  Downloaded[0m futures-channel v0.3.34
-[1m[92m  Downloaded[0m getrandom v0.2.17
-[1m[92m  Downloaded[0m itoa v1.0.18
-[1m[92m  Downloaded[0m pin-project-lite v0.2.17
-[1m[92m  Downloaded[0m serde_path_to_error v0.1.20
-[1m[92m  Downloaded[0m smallvec v1.16.1
+[1m[92m  Downloaded[0m futures-task v0.3.34
+[1m[92m  Downloaded[0m tower-layer v0.3.3
+[1m[92m  Downloaded[0m tower-service v0.3.3
 [1m[92m  Downloaded[0m sync_wrapper v1.0.2
-[1m[92m  Downloaded[0m axum v0.8.9
-[1m[92m  Downloaded[0m axum-core v0.5.6
-[1m[92m  Downloaded[0m http-body-util v0.1.5
-[1m[92m  Downloaded[0m httparse v1.10.1
-[1m[92m  Downloaded[0m lock_api v0.4.14
-[1m[92m  Downloaded[0m matchit v0.8.4
-[1m[92m  Downloaded[0m parking_lot_core v0.9.12
-[1m[92m  Downloaded[0m quote v1.0.47
-[1m[92m  Downloaded[0m signal-hook-registry v1.4.8
+[1m[92m  Downloaded[0m cfg-if v1.0.4
+[1m[92m  Downloaded[0m tokio-macros v2.7.2
+[1m[92m  Downloaded[0m form_urlencoded v1.2.2
 [1m[92m  Downloaded[0m httpdate v1.0.3
 [1m[92m  Downloaded[0m rand_chacha v0.3.1
-[1m[92m  Downloaded[0m bytes v1.12.1
-[1m[92m  Downloaded[0m http v1.5.0
-[1m[92m  Downloaded[0m log v0.4.34
-[1m[92m  Downloaded[0m memchr v2.8.3
-[1m[92m  Downloaded[0m ppv-lite86 v0.2.21
-[1m[92m  Downloaded[0m tokio-macros v2.7.2
-[1m[92m  Downloaded[0m tower-layer v0.3.3
-[1m[92m  Downloaded[0m tracing-core v0.1.36
+[1m[92m  Downloaded[0m futures-core v0.3.34
+[1m[92m  Downloaded[0m http-body v1.1.0
+[1m[92m  Downloaded[0m itoa v1.0.18
+[1m[92m  Downloaded[0m percent-encoding v2.3.2
+[1m[92m  Downloaded[0m scopeguard v1.2.0
 [1m[92m  Downloaded[0m errno v0.3.14
-[1m[92m  Downloaded[0m form_urlencoded v1.2.2
-[1m[92m  Downloaded[0m rand v0.8.8
+[1m[92m  Downloaded[0m axum-core v0.5.6
+[1m[92m  Downloaded[0m serde_path_to_error v0.1.20
+[1m[92m  Downloaded[0m mime v0.3.17
+[1m[92m  Downloaded[0m serde_urlencoded v0.7.1
+[1m[92m  Downloaded[0m http-body-util v0.1.5
+[1m[92m  Downloaded[0m quote v1.0.47
+[1m[92m  Downloaded[0m slab v0.4.12
+[1m[92m  Downloaded[0m smallvec v1.16.1
+[1m[92m  Downloaded[0m zmij v1.0.23
+[1m[92m  Downloaded[0m pin-project-lite v0.2.17
+[1m[92m  Downloaded[0m ppv-lite86 v0.2.21
+[1m[92m  Downloaded[0m signal-hook-registry v1.4.8
+[1m[92m  Downloaded[0m getrandom v0.2.17
 [1m[92m  Downloaded[0m rand_core v0.6.4
+[1m[92m  Downloaded[0m lock_api v0.4.14
+[1m[92m  Downloaded[0m axum v0.8.9
+[1m[92m  Downloaded[0m bitflags v2.13.2
+[1m[92m  Downloaded[0m futures-channel v0.3.34
+[1m[92m  Downloaded[0m once_cell v1.21.4
+[1m[92m  Downloaded[0m matchit v0.8.4
+[1m[92m  Downloaded[0m parking_lot_core v0.9.12
+[1m[92m  Downloaded[0m httparse v1.10.1
+[1m[92m  Downloaded[0m parking_lot v0.12.5
+[1m[92m  Downloaded[0m bytes v1.12.1
 [1m[92m  Downloaded[0m serde_derive v1.0.229
 [1m[92m  Downloaded[0m socket2 v0.6.5
-[1m[92m  Downloaded[0m bitflags v2.13.2
-[1m[92m  Downloaded[0m hyper-util v0.1.20
-[1m[92m  Downloaded[0m once_cell v1.21.4
-[1m[92m  Downloaded[0m parking_lot v0.12.5
-[1m[92m  Downloaded[0m proc-macro2 v1.0.107
-[1m[92m  Downloaded[0m scopeguard v1.2.0
 [1m[92m  Downloaded[0m serde_core v1.0.229
-[1m[92m  Downloaded[0m zmij v1.0.23
-[1m[92m  Downloaded[0m mio v1.2.3
-[1m[92m  Downloaded[0m serde v1.0.229
-[1m[92m  Downloaded[0m serde_json v1.0.151
-[1m[92m  Downloaded[0m serde_urlencoded v0.7.1
-[1m[92m  Downloaded[0m slab v0.4.12
-[1m[92m  Downloaded[0m tower v0.5.3
+[1m[92m  Downloaded[0m proc-macro2 v1.0.107
+[1m[92m  Downloaded[0m tracing-core v0.1.36
 [1m[92m  Downloaded[0m ryu v1.0.23
-[1m[92m  Downloaded[0m tower-http v0.6.11
+[1m[92m  Downloaded[0m log v0.4.34
 [1m[92m  Downloaded[0m unicode-ident v1.0.24
+[1m[92m  Downloaded[0m rand v0.8.8
+[1m[92m  Downloaded[0m serde v1.0.229
+[1m[92m  Downloaded[0m mio v1.2.3
+[1m[92m  Downloaded[0m memchr v2.8.3
+[1m[92m  Downloaded[0m http v1.5.0
+[1m[92m  Downloaded[0m hyper-util v0.1.20
+[1m[92m  Downloaded[0m tower v0.5.3
+[1m[92m  Downloaded[0m tower-http v0.6.11
+[1m[92m  Downloaded[0m futures-util v0.3.34
 [1m[92m  Downloaded[0m hyper v1.11.1
+[1m[92m  Downloaded[0m serde_json v1.0.151
 [1m[92m  Downloaded[0m zerocopy v0.8.57
 [1m[92m  Downloaded[0m syn v3.0.5
 [1m[92m  Downloaded[0m tracing v0.1.44
@@ -71,52 +71,52 @@
 [1m[92m  Downloaded[0m tokio v1.53.1
 [1m[92m   Compiling[0m libc v0.2.189
 [1m[92m   Compiling[0m proc-macro2 v1.0.107
-[1m[92m   Compiling[0m quote v1.0.47
 [1m[92m   Compiling[0m unicode-ident v1.0.24
-[1m[92m    Checking[0m cfg-if v1.0.4
+[1m[92m   Compiling[0m quote v1.0.47
 [1m[92m    Checking[0m itoa v1.0.18
+[1m[92m    Checking[0m cfg-if v1.0.4
 [1m[92m    Checking[0m pin-project-lite v0.2.17
 [1m[92m    Checking[0m bytes v1.12.1
 [1m[92m   Compiling[0m parking_lot_core v0.9.12
 [1m[92m    Checking[0m futures-core v0.3.34
-[1m[92m    Checking[0m scopeguard v1.2.0
 [1m[92m    Checking[0m http v1.5.0
-[1m[92m    Checking[0m smallvec v1.16.1
 [1m[92m   Compiling[0m serde_core v1.0.229
-[1m[92m   Compiling[0m syn v3.0.5
+[1m[92m    Checking[0m smallvec v1.16.1
+[1m[92m    Checking[0m scopeguard v1.2.0
 [1m[92m    Checking[0m lock_api v0.4.14
 [1m[92m    Checking[0m http-body v1.1.0
+[1m[92m   Compiling[0m syn v3.0.5
 [1m[92m   Compiling[0m zerocopy v0.8.57
 [1m[92m    Checking[0m errno v0.3.14
 [1m[92m    Checking[0m parking_lot v0.12.5
 [1m[92m    Checking[0m signal-hook-registry v1.4.8
 [1m[92m    Checking[0m mio v1.2.3
 [1m[92m    Checking[0m socket2 v0.6.5
-[1m[92m    Checking[0m tower-service v0.3.3
 [1m[92m    Checking[0m once_cell v1.21.4
 [1m[92m   Compiling[0m httparse v1.10.1
+[1m[92m    Checking[0m tower-service v0.3.3
 [1m[92m    Checking[0m tracing-core v0.1.36
-[1m[92m   Compiling[0m zmij v1.0.23
-[1m[92m    Checking[0m tower-layer v0.3.3
 [1m[92m    Checking[0m log v0.4.34
+[1m[92m   Compiling[0m zmij v1.0.23
 [1m[92m   Compiling[0m serde v1.0.229
+[1m[92m    Checking[0m tower-layer v0.3.3
 [1m[92m    Checking[0m tracing v0.1.44
 [1m[92m    Checking[0m getrandom v0.2.17
 [1m[92m    Checking[0m futures-channel v0.3.34
-[1m[92m    Checking[0m futures-task v0.3.34
-[1m[92m    Checking[0m sync_wrapper v1.0.2
-[1m[92m    Checking[0m atomic-waker v1.1.2
-[1m[92m    Checking[0m percent-encoding v2.3.2
 [1m[92m    Checking[0m slab v0.4.12
-[1m[92m   Compiling[0m serde_json v1.0.151
+[1m[92m    Checking[0m sync_wrapper v1.0.2
 [1m[92m    Checking[0m httpdate v1.0.3
+[1m[92m    Checking[0m percent-encoding v2.3.2
+[1m[92m   Compiling[0m serde_json v1.0.151
+[1m[92m    Checking[0m futures-task v0.3.34
+[1m[92m    Checking[0m atomic-waker v1.1.2
 [1m[92m    Checking[0m futures-util v0.3.34
 [1m[92m    Checking[0m form_urlencoded v1.2.2
 [1m[92m    Checking[0m rand_core v0.6.4
 [1m[92m    Checking[0m http-body-util v0.1.5
-[1m[92m    Checking[0m memchr v2.8.3
-[1m[92m    Checking[0m ryu v1.0.23
 [1m[92m    Checking[0m mime v0.3.17
+[1m[92m    Checking[0m ryu v1.0.23
+[1m[92m    Checking[0m memchr v2.8.3
 [1m[92m    Checking[0m axum-core v0.5.6
 [1m[92m   Compiling[0m tokio-macros v2.7.2
 [1m[92m   Compiling[0m serde_derive v1.0.229
@@ -124,8 +124,8 @@
 [1m[92m    Checking[0m ppv-lite86 v0.2.21
 [1m[92m    Checking[0m rand_chacha v0.3.1
 [1m[92m    Checking[0m serde_path_to_error v0.1.20
-[1m[92m    Checking[0m matchit v0.8.4
 [1m[92m    Checking[0m bitflags v2.13.2
+[1m[92m    Checking[0m matchit v0.8.4
 [1m[92m    Checking[0m tower-http v0.6.11
 [1m[92m    Checking[0m rand v0.8.8
 [1m[92m    Checking[0m serde_urlencoded v0.7.1
@@ -135,9 +135,9 @@
 [1m[92m    Checking[0m axum v0.8.9
 [1m[92m    Checking[0m evosim v0.1.0 (/home/runner/work/EvoSim-/EvoSim-)
 [1m[91merror[0m[1m: digits grouped inconsistently by underscores[0m
-   [1m[94m--> [0msrc/genome.rs:100:18
+   [1m[94m--> [0msrc/genome.rs:207:18
     [1m[94m|[0m
-[1m[94m100[0m [1m[94m|[0m     let offset = 1.677_2175;
+[1m[94m207[0m [1m[94m|[0m     let offset = 1.677_2175;
     [1m[94m|[0m                  [1m[91m^^^^^^^^^^[0m [1m[91mhelp: consider: `1.677_217_5`[0m
     [1m[94m|[0m
     [1m[94m= [0m[1mhelp[0m: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#inconsistent_digit_grouping
@@ -145,9 +145,9 @@
     [1m[94m= [0m[1mhelp[0m: to override `-D warnings` add `#[allow(clippy::inconsistent_digit_grouping)]`
 
 [1m[91merror[E0689][0m[1m: can't call method `sqrt` on ambiguous numeric type `{float}`[0m
-   [1m[94m--> [0msrc/genome.rs:129:49
+   [1m[94m--> [0msrc/genome.rs:319:49
     [1m[94m|[0m
-[1m[94m129[0m [1m[94m|[0m     let tangent = (length * length - gap * gap).sqrt();
+[1m[94m319[0m [1m[94m|[0m     let tangent = (length * length - gap * gap).sqrt();
     [1m[94m|[0m                                                 [1m[91m^^^^[0m
 
 [1mFor more information about this error, try `rustc --explain E0689`.[0m
