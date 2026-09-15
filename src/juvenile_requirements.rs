@@ -38,10 +38,9 @@ pub fn validate_realized_juvenile(
         return Err("juvenile has no physical genome-core anchor".into());
     }
     if requirements.require_sealed_genome_cavity {
-        let cavity = analyze_genome_cavity(structure, catalog, core_units)?
-            .ok_or_else(|| {
-                "juvenile genome cavity is not sealed and sufficiently large".to_string()
-            })?;
+        let cavity = analyze_genome_cavity(structure, catalog, core_units)?.ok_or_else(|| {
+            "juvenile genome cavity is not sealed and sufficiently large".to_string()
+        })?;
         if !cavity.qualifies() {
             return Err("juvenile genome cavity is below the minimum capacity".into());
         }
