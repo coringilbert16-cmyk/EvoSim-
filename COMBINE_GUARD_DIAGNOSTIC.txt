@@ -1,6 +1,6 @@
-status=1
+status=0
 --- guard output ---
-ERROR: contact::try_add_bond() authority is missing
+COMBINE architecture guards passed.
 --- direct Bond matches ---
 --- direct bond admission matches ---
 --- capacity matches ---
