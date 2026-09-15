@@ -19,11 +19,14 @@ jobs:
           from pathlib import Path
           path = Path("src/genome.rs")
           text = path.read_text()
-          old = "let length = 0.797_884;"
-          new = "let length = 0.797_884_f64;"
-          if old not in text:
-              raise SystemExit("expected connector length literal not found")
-          path.write_text(text.replace(old, new, 1))
+          replacements = {
+              "let length = 0.797_884;": "let length: f64 = 0.797_884;",
+              "let gap = outer_inner - inner_outer;": "let gap: f64 = outer_inner - inner_outer;",
+          }
+          for old, new in replacements.items():
+              if old in text:
+                  text = text.replace(old, new, 1)
+          path.write_text(text)
           PY
       - name: Format source
         run: cargo fmt --all
