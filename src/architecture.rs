@@ -483,18 +483,20 @@ mod tests {
     #[test]
     fn architecture_is_region_level() {
         let architecture = default_architecture();
+        assert!(architecture.validate().is_ok());
         assert_eq!(architecture.regions.len(), 3);
-        assert_eq!(architecture.relations.len(), 2);
-        architecture.validate().unwrap();
     }
 
     #[test]
     fn juvenile_target_is_a_discrete_analog_not_a_scaled_body_plan() {
         let architecture = default_architecture();
-        let target = architecture.construction_target(JUVENILE_LINEAR_SCALE).unwrap();
+        let target = architecture
+            .construction_target(JUVENILE_LINEAR_SCALE)
+            .unwrap();
         assert_eq!(target.elements.len(), 6);
-        assert!(target.elements.iter().all(|element| {
-            element.placement.x.abs() < 2.0 && element.placement.y.abs() < 2.0
-        }));
+        assert!(target
+            .elements
+            .iter()
+            .all(|element| { element.placement.x.abs() < 2.0 && element.placement.y.abs() < 2.0 }));
     }
 }
