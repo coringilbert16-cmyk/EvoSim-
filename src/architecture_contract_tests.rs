@@ -8,6 +8,8 @@ mod tests {
         let architecture = default_architecture();
         let catalog = default_catalog();
         let adult = architecture.adult_construction_target().unwrap();
+        // Juvenile realization is allowed to use fewer rigid constituents while
+        // preserving the same genome-core architectural requirement.
         let juvenile = architecture
             .developmental_target(JUVENILE_LINEAR_SCALE, &catalog)
             .unwrap();
