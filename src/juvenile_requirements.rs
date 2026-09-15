@@ -1,7 +1,7 @@
 //! Viability requirements for a physically realized juvenile.
 //!
 //! These requirements deliberately do not define a canonical body plan. A
-//! juvenile blueprint is one possible realization chosen by a genome; the
+//! juvenile target is one possible realization chosen by a genome; the
 //! realized physical structure must satisfy the viability contract regardless
 //! of how many pieces or what arrangement produced it.
 
@@ -26,8 +26,7 @@ impl Default for JuvenileViabilityRequirements {
 
 /// Validate juvenile viability from authoritative realized geometry and graph.
 /// This does not require any fixed piece count, material recipe, shape, or
-/// topology. The default genome's four-piece Nitrogen cavity is only one
-/// possible realization.
+/// topology. The default genome's realization is only one possible realization.
 pub fn validate_realized_juvenile(
     structure: &OrganismStructure,
     catalog: &[BaseResource],
@@ -61,11 +60,12 @@ mod tests {
     fn viability_does_not_depend_on_default_piece_count() {
         let genome = initial_genome();
         let catalog = default_catalog();
-        let structure = genome.juvenile_blueprint.realize(&catalog).unwrap();
+        let blueprint = genome.developmental_construction_target(&catalog).unwrap();
+        let structure = blueprint.realize(&catalog).unwrap();
         validate_realized_juvenile(
             &structure,
             &catalog,
-            &genome.juvenile_blueprint.core_elements,
+            &blueprint.core_elements,
             JuvenileViabilityRequirements::default(),
         )
         .unwrap();
@@ -75,12 +75,13 @@ mod tests {
     fn unsealed_genome_fails_viability() {
         let genome = initial_genome();
         let catalog = default_catalog();
-        let mut structure = genome.juvenile_blueprint.realize(&catalog).unwrap();
+        let blueprint = genome.developmental_construction_target(&catalog).unwrap();
+        let mut structure = blueprint.realize(&catalog).unwrap();
         structure.bonds.clear();
         assert!(validate_realized_juvenile(
             &structure,
             &catalog,
-            &genome.juvenile_blueprint.core_elements,
+            &blueprint.core_elements,
             JuvenileViabilityRequirements::default(),
         )
         .is_err());
