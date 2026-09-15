@@ -176,7 +176,7 @@ pub fn placed_forms_penetrate(
         (polygon, Form::Circle { radius }) => {
             circle_polygon_penetration(b, *radius, a, polygon, tolerance)
         }
-        (Form::Line { .. }, polygon) | (polygon, Form::Line { .. }) => {
+        (Form::Line { .. }, _) | (_, Form::Line { .. }) => {
             // Lines have no area, so crossing/contact is not a finite-area
             // penetration. Their existing contact predicate handles them.
             false
