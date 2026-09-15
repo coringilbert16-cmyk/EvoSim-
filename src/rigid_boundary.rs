@@ -7,7 +7,7 @@ fn vertices(shape: &Shape) -> Option<Vec<(f64, f64)>> {
 
 fn edge_angle(a: (f64, f64), b: (f64, f64)) -> Option<f64> {
     let dx = b.0 - a.0;
-    let dy = b.1 - a.1;
+    let dy = b.1 - a.0;
     if dx.hypot(dy) <= f64::EPSILON {
         None
     } else {
@@ -152,13 +152,6 @@ pub fn world_vertex(shape: &Shape, vertex: usize, placement: Placement) -> Optio
     let (x, y) = *vertices.get(vertex)?;
     let (s, c) = placement.rotation_radians.sin_cos();
     Some((placement.x + x * c - y * s, placement.y + x * s + y * c))
-}
-
-pub fn has_polygon_boundary(shape: &Shape) -> bool {
-    matches!(
-        shape.form,
-        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. }
-    )
 }
 
 #[cfg(test)]
