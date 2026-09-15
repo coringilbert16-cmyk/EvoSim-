@@ -70,11 +70,9 @@ impl Genome {
 fn trait_def(name: &str, value: f64, sigma: f64) -> TraitDef {
     TraitDef { name: name.into(), value, mutation_probability: 0.001, mutation_sigma: sigma }
 }
-
 fn seed_wall_material() -> Material {
     Material { parts: vec![("Nitrogen".into(), 1.0)], internal_bonds: Vec::new() }
 }
-
 fn seed_interface_material() -> Material {
     Material { parts: vec![("Hydrogen".into(), 1.0)], internal_bonds: Vec::new() }
 }
@@ -98,9 +96,7 @@ fn add_core_shell(elements: &mut Vec<BlueprintElement>, connections: &mut Vec<Bl
 }
 
 fn add_outer_shell(elements: &mut Vec<BlueprintElement>, connections: &mut Vec<BlueprintConnection>) {
-    let segment = 1.511_858;
-    let thickness = 0.330_719;
-    let half_segment = segment / 2.0;
+    let half_segment = 1.511_858 / 2.0;
     let offset = 1.677_2175;
     let start = elements.len();
     elements.extend([
@@ -113,18 +109,15 @@ fn add_outer_shell(elements: &mut Vec<BlueprintElement>, connections: &mut Vec<B
         BlueprintElement { material: seed_wall_material(), placement: BlueprintPlacement { x: -half_segment, y: -offset, rotation_radians: 0.0 } },
         BlueprintElement { material: seed_wall_material(), placement: BlueprintPlacement { x: half_segment, y: -offset, rotation_radians: 0.0 } },
     ]);
-    let _ = thickness;
     connections.extend([
         BlueprintConnection { element_a: start, element_b: start + 1 },
-        BlueprintConnection { element_a: start, element_b: start + 3 },
-        BlueprintConnection { element_a: start + 3, element_b: start + 5 },
-        BlueprintConnection { element_a: start + 5, element_b: start + 1 },
         BlueprintConnection { element_a: start + 1, element_b: start + 5 },
-        BlueprintConnection { element_a: start + 5, element_b: start + 7 },
+        BlueprintConnection { element_a: start + 5, element_b: start + 4 },
+        BlueprintConnection { element_a: start + 4, element_b: start + 7 },
         BlueprintConnection { element_a: start + 7, element_b: start + 6 },
         BlueprintConnection { element_a: start + 6, element_b: start + 2 },
-        BlueprintConnection { element_a: start + 2, element_b: start + 4 },
-        BlueprintConnection { element_a: start + 4, element_b: start + 7 },
+        BlueprintConnection { element_a: start + 2, element_b: start + 3 },
+        BlueprintConnection { element_a: start + 3, element_b: start },
     ]);
 }
 
@@ -163,9 +156,7 @@ fn default_juvenile_blueprint() -> StructuralBlueprint {
     StructuralBlueprint::with_core_elements(elements, connections, vec![0, 1, 2, 3])
 }
 
-fn default_structural_blueprint() -> StructuralBlueprint {
-    default_juvenile_blueprint()
-}
+fn default_structural_blueprint() -> StructuralBlueprint { default_juvenile_blueprint() }
 
 pub fn initial_genome() -> Genome {
     Genome {
