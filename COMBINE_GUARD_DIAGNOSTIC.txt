@@ -1,0 +1,6 @@
+status=1
+--- guard output ---
+ERROR: contact::try_add_bond() authority is missing
+--- direct Bond matches ---
+--- direct bond admission matches ---
+--- capacity matches ---
