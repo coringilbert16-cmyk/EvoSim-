@@ -62,53 +62,24 @@ pub(crate) fn realize_initial_with_reserve(
         return Err("juvenile construction produced an invalid energy requirement".into());
     }
 
-    let initial_energy = required_initial_energy + reserve_energy;
     let mut ledger = EnergyLedger::default();
+    let mut energy = required_initial_energy + reserve_energy;
     let (structure, _) = blueprint
-        .realize_with_context(catalog, &mut ledger, &mut { initial_energy })
+        .realize_with_context(catalog, &mut ledger, &mut energy)
         .map_err(|error| format!("juvenile construction target could not be realized: {error}"))?;
-    let remaining = {
-        let mut rerun_energy = initial_energy;
-        let mut rerun_ledger = EnergyLedger::default();
-        let (structure, _) = blueprint
-            .realize_with_context(catalog, &mut rerun_ledger, &mut rerun_energy)
-            .map_err(|error| {
-                format!("juvenile construction target could not be realized: {error}")
-            })?;
-        if !rerun_energy.is_finite() {
-            return Err("juvenile construction produced non-finite remaining energy".into());
-        }
-        if rerun_energy + EPS < reserve_energy {
-            return Err(format!(
-                "juvenile initialization could not preserve its reserve: remaining={rerun_energy}"
-            ));
-        }
-        return validate_and_return(
-            structure,
-            rerun_ledger,
-            rerun_energy,
-            blueprint,
-            catalog,
-        );
-    };
-    let _ = (&structure, &ledger, remaining);
-    unreachable!()
-}
 
-fn validate_and_return(
-    structure: OrganismStructure,
-    ledger: EnergyLedger,
-    remaining: f64,
-    blueprint: &StructuralBlueprint,
-    catalog: &[BaseResource],
-) -> Result<(OrganismStructure, EnergyLedger, f64), String> {
+    if !energy.is_finite() || energy + EPS < reserve_energy {
+        return Err(format!(
+            "juvenile initialization could not preserve its reserve: remaining={energy}"
+        ));
+    }
     validate_realized_juvenile(
         &structure,
         catalog,
         &blueprint.core_elements,
         JuvenileViabilityRequirements::default(),
     )?;
-    Ok((structure, ledger, remaining))
+    Ok((structure, ledger, energy))
 }
 
 #[cfg(test)]
