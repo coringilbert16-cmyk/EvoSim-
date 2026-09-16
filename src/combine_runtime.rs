@@ -8,9 +8,8 @@ use crate::combine::{
 };
 use crate::contact::ConnectionCompatibilityCache;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
-use crate::state::{EnergyLedger, Environment, Organism};
 use crate::resources::{BaseResource, Material};
-use crate::state::Organism as _;
+use crate::state::{EnergyLedger, Environment, Organism};
 use crate::structure::{BondEndpoint, ConnectionEndpoint, Placement, StructuralUnit};
 
 const EPSILON: f64 = 1e-12;
@@ -194,7 +193,8 @@ fn physical_material_candidate(
     if (*amount - 1.0).abs() > EPSILON {
         return None;
     }
-    let mut unit = StructuralUnit::from_material(Material::free_base(name.clone(), 1.0), placement)?;
+    let mut unit =
+        StructuralUnit::from_material(Material::free_base(name.clone(), 1.0), placement)?;
     if !unit.realize_default_geometry(catalog) {
         return None;
     }
@@ -312,10 +312,7 @@ pub(crate) fn try_combine_stored_unit(
                 }
             }
         }
-        candidates.sort_by(|a, b| {
-            a.4.partial_cmp(&b.4)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        candidates.sort_by(|a, b| a.4.partial_cmp(&b.4).unwrap_or(std::cmp::Ordering::Equal));
         for (ua, part_index, origin, evaluation, _, required) in candidates {
             if organism.usable_energy + EPSILON < required {
                 continue;
