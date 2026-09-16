@@ -308,30 +308,136 @@ It must be an actual physically realized organism.
 
 # 14. Material Acquisition
 
-The existing environment-grid acquisition mechanism is valid as an environmental mechanism.
+ACQUIRE is a physical environmental interaction and ownership-transfer mechanism.
 
-However, acquisition of **physical materials**, especially composite materials, requires further integration with physical geometry.
+The environment is a physical material system. The active field may contain individual resources, bonded composites, larger connected structures, loose material, fluid material, and other physical arrangements that emerge from the underlying resource and material rules.
 
 The authoritative acquisition rule is:
 
-> A resource is acquired only when the resource is fully within the organism's outer boundary.
+> A resource or physical material is acquired only when the material being acquired is fully within the organism's outer boundary.
 
-This applies to both base and composite resources.
+This applies to both base and composite material.
 
-Acquired material must retain its physical structure.
+ACQUIRE must not be treated as a mechanism that converts an abstract composition into a newly invented physical object.
 
-If a composite material is acquired, the organism must not silently flatten it into unrelated independent resource units merely because the environmental representation was convenient.
+If a composite material already physically exists in the environment, ACQUIRE transfers that existing physical material rather than reconstructing it from its composition.
 
-The acquired material must preserve:
+The acquired material must preserve, where applicable:
 
 - constituents,
+- quantities,
+- internal relationships,
 - bonds,
 - geometry,
-- and physical relationships.
+- relative placement,
+- orientation,
+- physical state,
+- and other information required to preserve its physical identity.
 
-The existing grid-cell system may continue to serve as the environment's spatial mechanism, but physical-material acquisition must ultimately respect actual containment.
+ACQUIRE does **not** create new internal bonds merely because material crossed the environment/organism boundary. Restoration of bonds that already existed in the acquired material is not a new COMBINE event and must not incur a new COMBINE energy transaction.
 
-# 15. Material Storage
+The environment-grid system may remain the spatial mechanism used to locate candidate material, but the grid is not itself the ultimate authority for physical geometry. Physical-material acquisition must respect actual containment and the physical realization of the material being transferred.
+
+## 14.1 The Active Field Is a Physical Material Layer
+
+The active field is not merely a collection of independent resource quantities.
+
+It is the environment's spatially organized physical-material layer.
+
+Its contents may be analogous, at different scales and configurations, to:
+
+- bedrock,
+- rocks,
+- rock fragments,
+- soil,
+- sediment,
+- loose deposits,
+- accumulated material,
+- and fluid material.
+
+These are **emergent descriptions**, not fundamental environmental object types.
+
+The implementation must not introduce hard-coded `Rock`, `Bedrock`, `Soil`, `Sediment`, `Food`, `Waste`, or equivalent ecological categories merely to represent these arrangements.
+
+A large environmental formation may be represented as a physically connected structure, while smaller fragments may exist as separate structures. The underlying constituents and physical relationships remain authoritative in either case.
+
+## 14.2 Environmental Physical Authority
+
+While material exists in the environment, the environment owns its physical realization.
+
+A physically existing composite is therefore not permitted to collapse into composition-only state if doing so would lose information required to determine later physical interactions.
+
+The governing rule is:
+
+> **A physical material object does not lose its physical identity merely because it changes location or ownership.**
+
+When material crosses from the environment into an organism, the transfer changes ownership; it does not require reconstruction of the material's existing physical structure.
+
+## 14.3 Composition Does Not Invent Geometry
+
+Knowing that an environmental material contains particular constituents is not sufficient authorization to choose a particular physical arrangement for that material instance.
+
+For example, knowing that a material contains Carbon, Methane, and Water does not authorize ACQUIRE to arbitrarily choose their relative positions or orientations.
+
+If a physically existing material instance has no authoritative physical realization, ACQUIRE must not silently invent one merely to complete the transfer.
+
+Physical realization must instead come from an authoritative physical process.
+
+## 14.4 Environmental Structures and Scale
+
+The active field must support physical structures ranging from individual resource units to large connected formations.
+
+There is no authored environmental size corresponding to a category such as rock or soil.
+
+Scale emerges from physical arrangement, connectivity, quantity, geometry, and environmental processes.
+
+Performance-oriented aggregation is permitted only when it preserves enough information to produce the physical interactions that the simulation needs to calculate.
+
+An optimization must not become a second physical authority.
+
+## 14.5 Environmental Fragmentation and Accumulation
+
+Environmental material may fragment into smaller physical structures and may accumulate into larger structures through established physical processes.
+
+BREAK may participate in physical fragmentation where its rules permit.
+
+Movement, deposition, cohesion, geometry, and other established environmental interactions may produce accumulation.
+
+Neither process requires conversion into a special environmental resource type.
+
+## 14.6 Rigid and Fluid Environmental Material
+
+Environmental material retains the physical-state rules of its constituents.
+
+Rigid material retains its established geometry and interacts through actual geometry and connection points.
+
+Fluid material retains its fluid behavior.
+
+Water remains a fluid resource with a default circular representation; the representation is not an authored rigid solid shape.
+
+## 14.7 No Environmental Biological Roles
+
+Environmental material has no inherent biological purpose.
+
+There is no fundamental distinction between food, construction material, waste, nutrient, obstacle, shelter, or useful/unused resource.
+
+The same physical material may be used differently by different organisms.
+
+Its biological significance emerges from organism behavior and physical interaction rather than from an environmental role flag.
+
+# 15. Environmental Material Transfer and Vents
+
+Vents are environmental transfer mechanisms, not separate environmental storage compartments.
+
+Where vents are present, they redistribute material within the environment according to the established environmental process.
+
+Vents are not inherently biased toward bonded or unbonded material and do not classify material according to biological usefulness.
+
+Material emerging through a vent may therefore include individual resources, composite material, bonded structures, or mixtures of materials according to the actual environmental process.
+
+No obsolete deep-reservoir model is part of EvoSim.
+
+# 16. Material Storage
 
 Material storage is physical material storage.
 
@@ -351,9 +457,9 @@ Stored material must be available to both:
 
 There are no special exclusions where the established rules say all stored material is available.
 
-The physical storage system must eventually bridge the environmental/grid representation and the actual physical material representation.
+The storage system must preserve an acquired physical material instance rather than reducing it to composition-only state.
 
-# 16. BREAK
+# 17. BREAK
 
 BREAK is a fundamental physical operation.
 
@@ -370,6 +476,7 @@ It is required for:
 - maintenance,
 - creating necessary space,
 - removing unnecessary structure,
+- fragmentation,
 - and eventual decomposition.
 
 A physical structure may need to be broken before it can be rearranged into a configuration that better matches its blueprint.
@@ -380,7 +487,7 @@ Therefore:
 
 It is not inherently destructive from the organism's perspective.
 
-# 17. COMBINE
+# 18. COMBINE
 
 COMBINE is the corresponding fundamental construction operation.
 
@@ -400,7 +507,7 @@ The constructor must not simply declare a bond because the blueprint requests on
 
 The physical realization must actually be valid.
 
-# 18. Construction and Backtracking
+# 19. Construction and Backtracking
 
 The construction system must be capable of finding physically valid realizations.
 
@@ -414,7 +521,7 @@ The objective is:
 
 > Find a physically valid realization consistent with the intended blueprint and already-realized neighborhood.
 
-# 19. The Blueprint
+# 20. The Blueprint
 
 The blueprint is the organism's structural target.
 
@@ -435,7 +542,7 @@ The physical structure may temporarily differ from the blueprint during:
 
 The blueprint must not be confused with a hard-coded body-plan category.
 
-# 20. Juvenile Blueprint Construction
+# 21. Juvenile Blueprint Construction
 
 The juvenile is generated from the adult blueprint.
 
@@ -452,7 +559,7 @@ To construct the initial juvenile:
 
 The exact realization mechanism remains an implementation question to be resolved through the existing construction architecture rather than through invention of a new biological rule.
 
-# 21. Juvenile's Blueprint After Birth
+# 22. Juvenile's Blueprint After Birth
 
 Once the juvenile is born, it possesses the **100% adult blueprint**.
 
@@ -462,7 +569,7 @@ The juvenile therefore knows, through its blueprint, what adult structure it is 
 
 Growth is the process by which physical realization moves toward that adult blueprint.
 
-# 22. Growth Is Not a Decision
+# 23. Growth Is Not a Decision
 
 **GROW is not an action that an organism chooses.**
 
@@ -487,7 +594,7 @@ Therefore:
 >
 > **The physical operations necessary to accomplish growth may be selected through the organism's decision process.**
 
-# 23. Growth Uses Both BREAK and COMBINE
+# 24. Growth Uses Both BREAK and COMBINE
 
 Growth must not be reduced to COMBINE.
 
@@ -512,7 +619,7 @@ This is fundamentally different from:
 
 > "Growth = repeatedly call COMBINE."
 
-# 24. Juvenile Requirements
+# 25. Juvenile Requirements
 
 The juvenile's fundamental requirements are:
 
@@ -527,7 +634,7 @@ The organism does not need an invented "growth motivation" variable.
 
 The physical/developmental state itself determines what remains necessary to reach the blueprint.
 
-# 25. Adulthood
+# 26. Adulthood
 
 Adulthood is determined by **blueprint realization**.
 
@@ -546,7 +653,7 @@ The existing `>= 90%` implementation is acceptable and does not need to be chang
 
 The important authority is blueprint match.
 
-# 26. No Age-Based Lifecycle
+# 27. No Age-Based Lifecycle
 
 Age-based lifecycle mechanics are not part of EvoSim.
 
@@ -565,7 +672,7 @@ Age-based lifecycle mechanisms should be removed rather than repurposed as hidde
 
 If a future implementation needs elapsed time for a separately approved purpose, that purpose must be explicitly defined and approved.
 
-# 27. Adult Transition
+# 28. Adult Transition
 
 Once the organism reaches adulthood through the established blueprint-match requirement:
 
@@ -575,7 +682,7 @@ Once the organism reaches adulthood through the established blueprint-match requ
 
 There is no separate invented reproductive-readiness accumulation stage between adulthood and reproduction.
 
-# 28. Reproduction
+# 29. Reproduction
 
 Reproduction is physically related to construction but is distinct from ordinary juvenile growth.
 
@@ -587,7 +694,7 @@ The genome is constructed first from that anchor.
 
 The offspring is then constructed within/through the adult's physical reproductive process until the juvenile satisfies the established birth requirements.
 
-# 29. Reproductive Juvenile Target
+# 30. Reproductive Juvenile Target
 
 The juvenile must reach:
 
@@ -602,7 +709,7 @@ The constructor is responsible for finding the closest physically valid realizat
 
 The detailed visual/functional similarity system remains subject to the previously established design and must not be replaced with an invented metric.
 
-# 30. Juvenile Separation
+# 31. Juvenile Separation
 
 Once the juvenile satisfies the established birth requirements, it separates from the adult and becomes a new life.
 
@@ -612,7 +719,7 @@ The juvenile's physical structure at birth is therefore the reduced realization.
 
 Its blueprint is the full adult target.
 
-# 31. Maintenance
+# 32. Maintenance
 
 An organism must maintain sufficient usable energy to continue operating.
 
@@ -624,7 +731,7 @@ It must therefore be treated as a provisional implementation rather than a perma
 
 No new maintenance formula should be substituted without approval.
 
-# 32. Heat Stress
+# 33. Heat Stress
 
 Every energy transaction produces some heat stress.
 
@@ -638,7 +745,7 @@ Heat stress is therefore a consequence of energy transactions rather than an unr
 
 The energy ledger and the organism's stress state must ultimately be connected so that energy transactions cannot silently bypass heat-stress consequences.
 
-# 33. Stress Dissipation
+# 34. Stress Dissipation
 
 Accumulated stress can dissipate over time.
 
@@ -646,7 +753,7 @@ The existing stress-decay mechanism may remain as implementation infrastructure 
 
 The exact implementation must not be treated as a newly invented biological law simply because a current constant exists in code.
 
-# 34. Stress Thresholds
+# 35. Stress Thresholds
 
 When accumulated stress reaches the current stress threshold:
 
@@ -659,7 +766,7 @@ This establishes the intended cascading failure behavior.
 
 The lowered threshold is part of the established damage model.
 
-# 35. Stress Damage Selection
+# 36. Stress Damage Selection
 
 Stress damage has an important physical distinction.
 
@@ -673,7 +780,7 @@ This ordering is authoritative.
 
 The current "weakest bond" implementation is therefore not equivalent to the intended rule.
 
-# 36. Genome Damage
+# 37. Genome Damage
 
 Genome damage occurs only after the organism's non-genome structural bonds have been exhausted through stress damage.
 
@@ -692,7 +799,7 @@ Therefore:
 
 The physical damage ordering can be implemented independently while the capability semantics remain pending.
 
-# 37. Death
+# 38. Death
 
 Death occurs when the organism can no longer remain a viable organism.
 
@@ -709,7 +816,7 @@ There is no maximum-age lifecycle.
 
 There is no artificial "old age" death mechanism.
 
-# 38. Dead Organisms Remain Physical Material
+# 39. Dead Organisms Remain Physical Material
 
 When an organism dies, it becomes resource/material rather than simply disappearing.
 
@@ -719,7 +826,7 @@ Death does not automatically transform all material into an abstract raw-resourc
 
 The carcass remains physical material and can undergo decomposition.
 
-# 39. Decomposition
+# 40. Decomposition
 
 Decomposition physically dismantles dead organism structure.
 
@@ -729,7 +836,7 @@ The precise long-term ecological rules governing every possible material transfo
 
 Where those rules have not been specified, they must not be invented.
 
-# 40. Colonies and Cooperation
+# 41. Colonies and Cooperation
 
 Colonies must emerge from actual organism interactions.
 
@@ -743,7 +850,7 @@ The established neighbor concept is behavior-based rather than simple physical p
 
 Two organisms are considered neighbors in the relevant cooperative sense when they are simultaneously enacting at least two distinct cooperative behaviors.
 
-# 41. No Universal Storage or Energy Battery
+# 42. No Universal Storage or Energy Battery
 
 There must not be a universal genome trait that simply provides:
 
@@ -757,7 +864,7 @@ Physical geometry should determine available space and storage wherever that is 
 
 Cavities and actual structure should provide the physical basis for storage and energy handling.
 
-# 42. Movement, Perception, and Memory
+# 43. Movement, Perception, and Memory
 
 Movement, perception, directional resolution, memory, and related systems are legitimate simulation infrastructure.
 
@@ -773,28 +880,108 @@ They must not become hidden authorities for:
 
 Behavioral systems and physical developmental systems must remain conceptually distinct.
 
-# 43. Environment
+# 44. Environment
 
-The environment is a physical resource system.
+The environment is a **single physical material system**.
 
-The established environment architecture includes the distinction between:
+The obsolete deep-reservoir/two-compartment model is not part of EvoSim and must not be treated as an environmental authority.
 
-- a reservoir,
-- and an active ecological field.
+The active field is the environment's spatially organized physical-material layer. It may contain individual resources, bonded composites, larger connected structures, loose material, fluid material, accumulated material, fragmented material, and other configurations produced by established physical and environmental processes.
 
-Vents transfer material from the reservoir into the active field.
+The active field may therefore contain material in arrangements analogous to:
 
-Vents are not inherently biased toward bonded or unbonded material.
+- bedrock,
+- rocks,
+- rock fragments,
+- soil,
+- sediment,
+- loose deposits,
+- accumulated formations,
+- and fluid material.
 
-They draw nearby reservoir material and expel it according to the established environmental mechanism.
+These are emergent physical descriptions, not authored environmental object categories.
 
-Bonded material can settle into the reservoir.
+The environment must not introduce special fundamental types such as `Rock`, `Bedrock`, `Soil`, `Sediment`, `Food`, or `Waste` merely to represent these arrangements.
 
-Waste remains physical material and may be redistributed, transformed, or eventually re-enter the reservoir according to rules that have been explicitly established.
+## 44.1 Environmental Physical Authority
 
-Where environmental rules remain unfinished, implementation must stop at the known boundary rather than inventing the missing rule.
+While material exists in the environment, the environment owns its physical realization.
 
-# 44. Material Transformation
+A physically existing composite must retain the information necessary to determine its later physical interactions, including its composition, internal relationships, geometry, and bonds where applicable.
+
+The governing rule is:
+
+> **A physical material object does not lose its physical identity merely because it changes location or ownership.**
+
+The active field is therefore not merely a numerical resource distribution.
+
+## 44.2 Environmental Structures
+
+Environmental material may exist as individual resource units, small composites, large connected structures, or other physical configurations.
+
+There is no fixed environmental category or scale corresponding to "rock," "soil," "sediment," or "bedrock."
+
+Large formations and small fragments are configurations of the same underlying resources and material rules.
+
+## 44.3 Composition Does Not Invent Geometry
+
+Composition alone does not authorize the simulation to choose a physical arrangement for a particular environmental material instance.
+
+If a composite physically exists in the active field, its existing physical realization is authoritative.
+
+If an implementation has only composition and no authoritative physical realization, it must not silently invent one solely to make ACQUIRE or another transfer operation possible.
+
+Physical realization must come from an authoritative physical process.
+
+## 44.4 Environmental Fragmentation and Accumulation
+
+Environmental material may fragment, move, settle, accumulate, and otherwise change physical arrangement according to established environmental and physical rules.
+
+BREAK may participate in physical fragmentation where its rules permit.
+
+Accumulation does not require a special `soil`, `sediment`, or `rock` state.
+
+The resulting structure emerges from composition, geometry, connectivity, physical state, cohesion, quantity, movement, deposition, and other established mechanisms.
+
+## 44.5 Rigid and Fluid Material
+
+Rigid environmental material retains its established geometry and interacts through actual geometry and connection points.
+
+Fluid environmental material retains its fluid behavior.
+
+Water remains a fluid resource with a default circular representation; the representation does not make it a rigid circular solid.
+
+## 44.6 Environmental Material Has No Biological Role
+
+Environmental material is not inherently food, construction material, waste, nutrient, obstacle, shelter, useful material, or useless material.
+
+The same material may be used differently by different organisms.
+
+Biological significance emerges from organism behavior and physical interaction rather than from an environmental role flag.
+
+## 44.7 Spatial Representation and Performance
+
+The active field may use grids, cells, aggregates, or other computational structures for performance.
+
+These are spatial implementation mechanisms, not independent physical authorities.
+
+An aggregate representation is valid only when it preserves enough information to determine the physical interactions that must be simulated at that scale.
+
+The governing principle remains:
+
+> **Calculate the minimum amount of information necessary to produce the desired emergent behavior.**
+
+## 44.8 Vents
+
+Where vents are present, they are environmental transfer mechanisms rather than separate storage compartments.
+
+Vents do not classify material according to biological usefulness and are not inherently biased toward bonded or unbonded material.
+
+They redistribute material according to the established environmental process.
+
+No obsolete deep-reservoir model is part of EvoSim.
+
+# 45. Material Transformation
 
 BREAK and COMBINE are physical transformations.
 
@@ -804,7 +991,7 @@ The resource/material system must permit a meaningful distribution of energetic 
 
 The existing material model should remain grounded in constituent potential energy and actual physical transformation.
 
-# 45. Complexity
+# 46. Complexity
 
 The current complexity hypothesis is:
 
@@ -818,7 +1005,7 @@ The current two-component duration is:
 
 These are project-level established parameters/hypotheses and should not be silently replaced.
 
-# 46. Physical Construction Authority
+# 47. Physical Construction Authority
 
 The intended construction architecture is:
 
@@ -852,7 +1039,7 @@ Owns the actual:
 
 The physical graph is the final authority for what actually exists.
 
-# 47. No Duplicate Structural Authorities
+# 48. No Duplicate Structural Authorities
 
 EvoSim should not have multiple competing systems independently deciding what the same physical bond or structure means.
 
@@ -865,7 +1052,7 @@ In particular:
 
 The migration toward a unified construction path must continue in this direction.
 
-# 48. Decision System
+# 49. Decision System
 
 The organism decision system remains appropriate for choosing among legitimate actions where a choice is actually required.
 
@@ -889,7 +1076,7 @@ The distinction is:
 >
 > **BREAK, COMBINE, ACQUIRE, and related operations are mechanisms that may be selected to accomplish it.**
 
-# 49. Experimental vs Authoritative Rules
+# 50. Experimental vs Authoritative Rules
 
 Not every existing implementation value is automatically a permanent EvoSim rule.
 
@@ -917,7 +1104,7 @@ A technical mechanism that supports the simulation but does not define biologica
 
 This distinction must be maintained throughout development.
 
-# 50. What Must Never Be Introduced Without Approval
+# 51. What Must Never Be Introduced Without Approval
 
 The following are specifically prohibited unless explicitly approved:
 
@@ -941,9 +1128,10 @@ The following are specifically prohibited unless explicitly approved:
 - new thresholds,
 - new resource properties,
 - new lifecycle transitions,
+- obsolete reservoir-based environmental authority,
 - or any other mechanism not already approved.
 
-# 51. Handling Ambiguity
+# 52. Handling Ambiguity
 
 When implementation encounters a requirement that this document does not settle:
 
@@ -959,7 +1147,7 @@ The correct development process is:
 
 The absence of a specification is not permission to create one.
 
-# 52. Implementation Priority
+# 53. Implementation Priority
 
 The immediate architectural objective is to make one initialized cell capable of progressing through the actual physical lifecycle without violating the established rules:
 
@@ -969,7 +1157,7 @@ The system should be developed toward this objective incrementally.
 
 The priority is not adding more species, behaviors, visual effects, or complexity before this fundamental loop works.
 
-# 53. Development Standard
+# 54. Development Standard
 
 Every significant implementation change should be evaluated against four questions:
 
@@ -989,7 +1177,7 @@ If yes, identify it as such and migrate it carefully.
 
 If yes, stop at the boundary and obtain approval.
 
-# 54. Final Authority
+# 55. Final Authority
 
 The project owner's explicitly approved design decisions are the final authority for EvoSim.
 
@@ -1003,7 +1191,7 @@ A convenient implementation is not authority merely because it is easier to code
 
 The purpose of the migration is to make the implementation conform to the intended EvoSim model—not to redefine the model around whatever mechanisms happen to exist in the repository.
 
-# 55. Non-Negotiable Principle
+# 56. Non-Negotiable Principle
 
 The central rule for future development is:
 
