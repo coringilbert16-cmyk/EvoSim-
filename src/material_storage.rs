@@ -73,7 +73,8 @@ impl MaterialStorage {
         placements: Vec<Placement>,
         catalog: &[crate::resources::BaseResource],
     ) -> bool {
-        let Some(instance) = PhysicalMaterial::realized(material.clone(), placements, catalog) else {
+        let Some(instance) = PhysicalMaterial::realized(material.clone(), placements, catalog)
+        else {
             return false;
         };
         if material.parts.is_empty() || !material.is_valid() || !Self::is_discrete(&material) {
@@ -93,6 +94,18 @@ impl MaterialStorage {
             .iter()
             .find(|material| !material.has_internal_structure() && !material.is_empty())
             .cloned()
+    }
+
+    /// Return a clone of the physical realization without consuming storage.
+    pub(crate) fn peek_matching_physical(&self, target: &Material) -> Option<PhysicalMaterial> {
+        let index = self
+            .materials
+            .iter()
+            .position(|material| material == target && !material.is_empty())?;
+        self.physical_instances
+            .get(index)
+            .and_then(Clone::clone)
+            .or_else(|| Some(PhysicalMaterial::logical(target.clone())))
     }
 
     pub(crate) fn take_one_unstructured_named(&mut self, name: &str) -> Option<Material> {
