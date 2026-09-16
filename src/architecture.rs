@@ -163,17 +163,39 @@ impl OrganismArchitecture {
 
 fn add_anchor(
     elements: &mut Vec<BlueprintElement>,
-    _connections: &mut Vec<BlueprintConnection>,
+    connections: &mut Vec<BlueprintConnection>,
     region: &ArchitectureRegion,
 ) {
-    elements.push(BlueprintElement {
-        material: region.material.clone(),
-        placement: BlueprintPlacement {
-            x: region.center_x,
-            y: region.center_y,
-            rotation_radians: 0.0,
-        },
-    });
+    let d = (1.511_858 + 0.330_719) / 2.0;
+    for (x, y, rotation_radians) in [
+        (region.center_x, region.center_y + d, 0.0),
+        (
+            region.center_x - d,
+            region.center_y,
+            std::f64::consts::FRAC_PI_2,
+        ),
+        (
+            region.center_x + d,
+            region.center_y,
+            std::f64::consts::FRAC_PI_2,
+        ),
+        (region.center_x, region.center_y - d, 0.0),
+    ] {
+        elements.push(BlueprintElement {
+            material: region.material.clone(),
+            placement: BlueprintPlacement {
+                x,
+                y,
+                rotation_radians,
+            },
+        });
+    }
+    for (a, b) in [(0, 1), (0, 2), (1, 3), (2, 3)] {
+        connections.push(BlueprintConnection {
+            element_a: a,
+            element_b: b,
+        });
+    }
 }
 
 fn add_boundary(
@@ -362,7 +384,7 @@ mod tests {
     fn juvenile_target_is_a_discrete_analog_not_a_scaled_body_plan() {
         let architecture = default_architecture();
         let target = architecture.construction_target(1.0).unwrap();
-        assert_eq!(target.elements.len(), 12);
+        assert_eq!(target.elements.len(), 16);
         assert!(target
             .elements
             .iter()
