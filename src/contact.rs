@@ -147,13 +147,19 @@ fn endpoint_world_point(
             unit.placement.rotation_radians,
         ),
         ConnectionEndpoint::Boundary { angle_radians } => {
-            let radius = shape.form.bounding_radius();
             let (s, c) = angle_radians.sin_cos();
+            let point = boundary_point_toward(shape, c, s)?;
+            let len = point.0.hypot(point.1);
+            let (nx, ny) = if len > 1e-12 {
+                (point.0 / len, point.1 / len)
+            } else {
+                (c, s)
+            };
             Some(crate::connection_geometry::transform_derived_point(
-                radius * c,
-                radius * s,
-                c,
-                s,
+                point.0,
+                point.1,
+                nx,
+                ny,
                 unit.placement.x,
                 unit.placement.y,
                 unit.placement.rotation_radians,
@@ -259,18 +265,45 @@ pub fn connection_pair_candidates_cached(
     ua: usize,
     ub: usize,
     c: &[crate::resources::BaseResource],
-    _cache: &mut ConnectionCompatibilityCache,
+    cache: &mut ConnectionCompatibilityCache,
 ) -> Vec<ConnectionPairCandidate> {
+    let _ = cache;
     connection_pair_candidates(s, ua, ub, c)
 }
 
 pub fn try_add_bond(
     s: &mut OrganismStructure,
-    b: Bond,
+    ua: usize,
+    ub: usize,
     c: &[crate::resources::BaseResource],
-) -> Result<usize, &'static str> {
-    if !s.is_valid_bond(&b, c) {
-        return Err("invalid bond");
+    t: f64,
+    m: f64,
+    cache: &mut ConnectionCompatibilityCache,
+) -> Option<ConnectionPairCandidate> {
+    let candidate = contacting_connection_pair_candidates(s, ua, ub, c, t, m)
+        .into_iter()
+        .max_by(|a, b| {
+            a.facing
+                .partial_cmp(&b.facing)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| {
+                    b.distance
+                        .partial_cmp(&a.distance)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+        })?;
+    if s.bonds.iter().any(|bond| {
+        (bond.a.constituent_id == s.units[ua].physical_id
+            && bond.b.constituent_id == s.units[ub].physical_id)
+            || (bond.a.constituent_id == s.units[ub].physical_id
+                && bond.b.constituent_id == s.units[ua].physical_id)
+    }) {
+        return None;
     }
-    Ok(s.push_bond_unchecked(b))
+    s.add_bond(Bond {
+        a: crate::structure::BondEndpoint::new(s.units[ua].physical_id, candidate.endpoint_a),
+        b: crate::structure::BondEndpoint::new(s.units[ub].physical_id, candidate.endpoint_b),
+    });
+    let _ = cache;
+    Some(candidate)
 }
