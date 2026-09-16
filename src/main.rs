@@ -6,6 +6,7 @@ mod environmental_materials;
 mod material_storage;
 mod material_transfer;
 mod physical_material;
+mod material_restoration;
 mod resources;
 mod structure;
 mod structure_authority;
