@@ -1,5 +1,5 @@
 use crate::resources::Shape;
-use crate::structure::StructuralUnit;
+use crate::structure::{ConnectionEndpoint, StructuralUnit};
 use serde::{Deserialize, Serialize};
 
 impl PartialEq for Shape {
@@ -96,6 +96,21 @@ mod tests {
             },
         );
         assert!(unit.realized_shape().is_none());
+    }
+
+    #[test]
+    fn unrealized_constituent_has_no_physical_endpoint() {
+        let unit = StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        assert!(ConnectionEndpoint::Corner { point_index: 0 }
+            .world_point(&unit)
+            .is_none());
     }
 
     #[test]
