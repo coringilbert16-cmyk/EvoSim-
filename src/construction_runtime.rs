@@ -28,7 +28,7 @@ pub(crate) fn candidate_placements(
         let Some(unit) = structure.units.get(target) else {
             continue;
         };
-        let Some(target_shape) = unit.shape(catalog) else {
+        let Some(target_shape) = unit.realized_shape() else {
             continue;
         };
         let target_endpoints: Vec<ConnectionEndpoint> = match &target_shape.form {
