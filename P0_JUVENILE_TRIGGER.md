@@ -1,1 +1,1 @@
-Temporary CI trigger for anchor-first blueprint realization test.
+Temporary CI trigger for targeted construction diagnostics.
