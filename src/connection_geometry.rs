@@ -1,22 +1,7 @@
-//! Geometry helpers and physical connection-region representation.
+//! Rigid geometry helpers for realized physical connection points.
 //! Continuous boundaries intentionally have no socket indices.
 use crate::math::directional_compatibility;
 use crate::resources::Shape;
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum ConnectionRegion {
-    Corner(WorldConnectionPoint),
-    Boundary {
-        center_x: f64,
-        center_y: f64,
-        radius: f64,
-    },
-    Fluid {
-        center_x: f64,
-        center_y: f64,
-        effective_radius: f64,
-    },
-}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WorldConnectionPoint {
@@ -156,27 +141,6 @@ pub fn within_contact_tolerance(
     point_distance(a, b) <= tolerance.max(0.0)
 }
 
-impl ConnectionRegion {
-    pub fn representative_point(self) -> Option<WorldConnectionPoint> {
-        match self {
-            Self::Corner(p) => Some(p),
-            Self::Boundary { .. } | Self::Fluid { .. } => None,
-        }
-    }
-
-    pub fn center(self) -> (f64, f64) {
-        match self {
-            Self::Corner(p) => (p.x, p.y),
-            Self::Boundary {
-                center_x, center_y, ..
-            }
-            | Self::Fluid {
-                center_x, center_y, ..
-            } => (center_x, center_y),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -226,24 +190,6 @@ mod tests {
         let b = square();
         let facing = rigid_endpoint_facing(&a, 0, 0.0, 0.0, 0.0, &b, 2, 2.0, 0.0, 0.0).unwrap();
         assert!((facing - 1.0).abs() < 1e-12);
-    }
-
-    #[test]
-    fn continuous_regions_have_no_fake_socket_identity() {
-        let b = ConnectionRegion::Boundary {
-            center_x: 1.0,
-            center_y: 2.0,
-            radius: 3.0,
-        };
-        let f = ConnectionRegion::Fluid {
-            center_x: 4.0,
-            center_y: 5.0,
-            effective_radius: 6.0,
-        };
-        assert!(b.representative_point().is_none());
-        assert!(f.representative_point().is_none());
-        assert_eq!(b.center(), (1.0, 2.0));
-        assert_eq!(f.center(), (4.0, 5.0));
     }
 
     #[test]

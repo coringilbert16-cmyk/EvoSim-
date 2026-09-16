@@ -9,6 +9,7 @@ use crate::environment::{
     apply_vents, ActiveMaterialField, Vent, DEFAULT_CELL_SIZE, DEFAULT_DIFFUSION_FRACTION,
 };
 use crate::genome::initial_genome;
+use crate::juvenile::realize_initial;
 use crate::state::{
     DevelopmentStage, EnergyLedger, Environment, Organism, Position, ResourceSense, Simulation,
 };
@@ -77,24 +78,14 @@ impl Simulation {
     pub(crate) fn create_initial_organism() -> Organism {
         let genome = initial_genome();
         let catalog = crate::resources::default_catalog();
-        let structure = genome
-            .structural_blueprint
-            .realize(&catalog)
-            .expect("initial structural blueprint must be realizable");
-        let mature_mass = genome
-            .structural_blueprint
-            .structural_mass(&catalog)
-            .max(f64::EPSILON);
-        let realized_mass: f64 = structure
-            .units
-            .iter()
-            .map(|unit| unit.material.mass(&catalog))
-            .sum();
-        let development_stage = if realized_mass / mature_mass >= ADULTHOOD_GROWTH_FRACTION {
-            DevelopmentStage::Adult
-        } else {
-            DevelopmentStage::Juvenile
-        };
+        let juvenile_target = genome
+            .developmental_construction_target(&catalog)
+            .expect("initial architecture must produce a viable juvenile target");
+        let (structure, _construction_ledger, initial_energy) =
+            realize_initial(&juvenile_target, &catalog)
+                .expect("initial juvenile target must be physically realizable");
+        let mut stored_material = crate::material_storage::MaterialStorage::default();
+        assert!(stored_material.store(genome.juvenile_reserve.clone()));
         Organism {
             id: "1".into(),
             occupied_cells: vec![Position { x: 500.0, y: 500.0 }],
@@ -107,12 +98,12 @@ impl Simulation {
             },
             memory: Vec::new(),
             decision_history: crate::decision::DecisionHistory::default(),
-            usable_energy: 0.0,
+            usable_energy: initial_energy,
             stress: 0.0,
             stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
-            stored_material: crate::material_storage::MaterialStorage::default(),
+            stored_material,
             structure,
-            development_stage,
+            development_stage: DevelopmentStage::Juvenile,
             age: 0,
             reproductive_readiness: 0.0,
             active_transformation_id: None,
@@ -135,8 +126,10 @@ impl Simulation {
     fn mature_structural_mass(organism: &Organism, environment: &Environment) -> f64 {
         organism
             .genome
-            .structural_blueprint
-            .structural_mass(&environment.catalog)
+            .mature_construction_target()
+            .ok()
+            .map(|target| target.structural_mass(&environment.catalog))
+            .unwrap_or(0.0)
     }
 
     fn growth_fraction(organism: &Organism, environment: &Environment) -> f64 {
@@ -543,9 +536,12 @@ impl Simulation {
                     .unwrap_or(false)
                 {
                     let child_id = next_organism_id.to_string();
-                    if let Some(child) =
-                        crate::reproduction::finish_reproduction(organism, child_id)
-                    {
+                    if let Some(child) = crate::reproduction::finish_reproduction(
+                        organism,
+                        child_id,
+                        &catalog,
+                        &mut self.energy_ledger,
+                    ) {
                         next_organism_id += 1;
                         offspring.push(child);
                     }

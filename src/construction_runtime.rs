@@ -7,6 +7,7 @@ use crate::structure::{ConnectionEndpoint, OrganismStructure, Placement, Structu
 fn resource<'a>(catalog: &'a [BaseResource], name: &str) -> Option<&'a BaseResource> {
     catalog.iter().find(|r| r.name == name)
 }
+
 fn placement(p: BlueprintPlacement) -> Placement {
     Placement {
         x: p.x,
@@ -59,6 +60,29 @@ pub(crate) fn candidate_placements(
                         continue;
                     };
                     for candidate_index in 0..candidate_count {
+                        if let (Some(candidate_normal), Some(target_normal)) = (
+                            crate::rigid_boundary::corner_normal(&resource.shape, candidate_index),
+                            crate::rigid_boundary::corner_normal(target_shape, target_index),
+                        ) {
+                            let candidate_angle = candidate_normal.1.atan2(candidate_normal.0);
+                            let target_angle = target_normal.1.atan2(target_normal.0);
+                            let rotation = target_angle + std::f64::consts::PI - candidate_angle;
+                            if let Some(local) = crate::rigid_boundary::world_vertex(
+                                &resource.shape,
+                                candidate_index,
+                                Placement {
+                                    x: 0.0,
+                                    y: 0.0,
+                                    rotation_radians: rotation,
+                                },
+                            ) {
+                                out.push(Placement {
+                                    x: tp.x - local.0,
+                                    y: tp.y - local.1,
+                                    rotation_radians: rotation,
+                                });
+                            }
+                        }
                         for rotation in crate::rigid_boundary::corner_alignment_rotations(
                             &resource.shape,
                             candidate_index,
@@ -89,6 +113,41 @@ pub(crate) fn candidate_placements(
                     Form::Line {
                         length: candidate_length,
                     },
+                    ConnectionEndpoint::Corner {
+                        point_index: target_index,
+                    },
+                ) => {
+                    let Some(target_normal) =
+                        crate::rigid_boundary::corner_normal(target_shape, target_index)
+                    else {
+                        continue;
+                    };
+                    let target_normal_angle = target_normal.1.atan2(target_normal.0);
+                    let half = *candidate_length / 2.0;
+                    for candidate_index in 0..2 {
+                        let candidate_normal = crate::rigid_boundary::line_endpoint_normal(
+                            &resource.shape,
+                            candidate_index,
+                        )
+                        .unwrap();
+                        let candidate_normal_angle = candidate_normal.1.atan2(candidate_normal.0);
+                        let rotation =
+                            target_normal_angle + std::f64::consts::PI - candidate_normal_angle;
+                        let local_x = if candidate_index == 0 { -half } else { half };
+                        let (s, c) = rotation.sin_cos();
+                        let lx = local_x * c;
+                        let ly = local_x * s;
+                        out.push(Placement {
+                            x: tp.x - lx,
+                            y: tp.y - ly,
+                            rotation_radians: rotation,
+                        });
+                    }
+                }
+                (
+                    Form::Line {
+                        length: candidate_length,
+                    },
                     ConnectionEndpoint::LineEndpoint {
                         point_index: target_index,
                     },
@@ -96,7 +155,7 @@ pub(crate) fn candidate_placements(
                     if !matches!(target_shape.form, Form::Line { .. }) {
                         continue;
                     }
-                    let half = candidate_length.to_owned() / 2.0;
+                    let half = *candidate_length / 2.0;
                     for candidate_index in 0..2 {
                         let candidate_endpoint_x = if candidate_index == 0 { -half } else { half };
                         for rotation in crate::rigid_boundary::line_endpoint_alignment_rotations(
@@ -149,6 +208,155 @@ fn neighbors(material: &Material, part: usize, assigned: &[Option<usize>]) -> Ve
         .collect()
 }
 
+fn solve_external_groups(
+    group_index: usize,
+    structure: &OrganismStructure,
+    ledger: &EnergyLedger,
+    energy: f64,
+    assigned: &[Option<usize>],
+    external: &[Vec<usize>],
+    catalog: &[BaseResource],
+    heat: f64,
+) -> Option<(OrganismStructure, EnergyLedger, f64, f64)> {
+    let Some(group) = external.get(group_index) else {
+        return Some((structure.clone(), *ledger, energy, heat));
+    };
+
+    for &new_id in assigned.iter().flatten() {
+        for &target in group {
+            let mut candidate = structure.clone();
+            let mut candidate_ledger = *ledger;
+            let mut candidate_energy = energy;
+            let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+            let Some(attempt) = combine_specific_pair(
+                &mut candidate,
+                new_id,
+                target,
+                catalog,
+                0.0,
+                &mut cache,
+                &mut candidate_ledger,
+                &mut candidate_energy,
+            ) else {
+                continue;
+            };
+            if let Some(result) = solve_external_groups(
+                group_index + 1,
+                &candidate,
+                &candidate_ledger,
+                candidate_energy,
+                assigned,
+                external,
+                catalog,
+                heat + attempt.work_cost,
+            ) {
+                return Some(result);
+            }
+        }
+    }
+    None
+}
+
+fn solve_parts(
+    part: usize,
+    structure: &OrganismStructure,
+    ledger: &EnergyLedger,
+    energy: f64,
+    assigned: &[Option<usize>],
+    material: &Material,
+    anchor: Placement,
+    catalog: &[BaseResource],
+    external: &[Vec<usize>],
+    heat: f64,
+) -> Option<(
+    OrganismStructure,
+    EnergyLedger,
+    f64,
+    Vec<Option<usize>>,
+    f64,
+)> {
+    if part == material.parts.len() {
+        let (structure, ledger, energy, heat) = solve_external_groups(
+            0, structure, ledger, energy, assigned, external, catalog, heat,
+        )?;
+        return Some((structure, ledger, energy, assigned.to_vec(), heat));
+    }
+
+    let resource = resource(catalog, &material.parts[part].0)?;
+    let mut targets = neighbors(material, part, assigned);
+    for group in external {
+        for &target in group {
+            if !targets.contains(&target) {
+                targets.push(target);
+            }
+        }
+    }
+
+    for candidate_placement in candidate_placements(structure, resource, anchor, &targets, catalog) {
+        let mut candidate = structure.clone();
+        let mut candidate_ledger = *ledger;
+        let mut candidate_energy = energy;
+        let mut unit = StructuralUnit::new(resource.name.clone(), candidate_placement);
+        if !unit.realize_default_geometry(catalog) {
+            continue;
+        }
+        let index = candidate.add_unit(unit);
+        let mut candidate_assigned = assigned.to_vec();
+        candidate_assigned[part] = Some(index);
+        let mut candidate_heat = heat;
+        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+        let mut ok = true;
+
+        for bond in material
+            .internal_bonds
+            .iter()
+            .filter(|b| b.part_a == part || b.part_b == part)
+        {
+            let (Some(a), Some(b)) = (
+                candidate_assigned[bond.part_a],
+                candidate_assigned[bond.part_b],
+            ) else {
+                continue;
+            };
+            match combine_specific_pair(
+                &mut candidate,
+                a,
+                b,
+                catalog,
+                0.0,
+                &mut cache,
+                &mut candidate_ledger,
+                &mut candidate_energy,
+            ) {
+                Some(attempt) => candidate_heat += attempt.work_cost,
+                None => {
+                    ok = false;
+                    break;
+                }
+            }
+        }
+        if !ok {
+            continue;
+        }
+
+        if let Some(result) = solve_parts(
+            part + 1,
+            &candidate,
+            &candidate_ledger,
+            candidate_energy,
+            &candidate_assigned,
+            material,
+            anchor,
+            catalog,
+            external,
+            candidate_heat,
+        ) {
+            return Some(result);
+        }
+    }
+    None
+}
+
 pub(crate) fn realize_material_with_context(
     structure: &mut OrganismStructure,
     element: &BlueprintElement,
@@ -159,105 +367,30 @@ pub(crate) fn realize_material_with_context(
 ) -> Result<(Vec<usize>, f64), String> {
     let material = &element.material;
     let anchor = placement(element.placement);
-    let mut trial = structure.clone();
-    let mut trial_ledger = *ledger;
-    let mut trial_energy = *energy;
-    let mut assigned = vec![None; material.parts.len()];
-    let mut heat = 0.0;
-    for part in 0..material.parts.len() {
-        let resource =
-            resource(catalog, &material.parts[part].0).ok_or("invalid construction resource")?;
-        let mut targets = neighbors(material, part, &assigned);
-        for group in external {
-            for &target in group {
-                if !targets.contains(&target) {
-                    targets.push(target);
-                }
-            }
-        }
-        let mut placed = None;
-        for candidate_placement in candidate_placements(&trial, resource, anchor, &targets, catalog)
-        {
-            let mut candidate = trial.clone();
-            let mut candidate_ledger = trial_ledger;
-            let mut candidate_energy = trial_energy;
-            let mut unit = StructuralUnit::new(resource.name.clone(), candidate_placement);
-            if !unit.realize_default_geometry(catalog) {
-                continue;
-            }
-            let index = candidate.add_unit(unit);
-            let mut candidate_assigned = assigned.clone();
-            candidate_assigned[part] = Some(index);
-            let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-            let mut candidate_heat = 0.0;
-            let mut ok = true;
-            for bond in material
-                .internal_bonds
-                .iter()
-                .filter(|b| b.part_a == part || b.part_b == part)
-            {
-                let (Some(a), Some(b)) = (
-                    candidate_assigned[bond.part_a],
-                    candidate_assigned[bond.part_b],
-                ) else {
-                    continue;
-                };
-                match combine_specific_pair(
-                    &mut candidate,
-                    a,
-                    b,
-                    catalog,
-                    0.0,
-                    &mut cache,
-                    &mut candidate_ledger,
-                    &mut candidate_energy,
-                ) {
-                    Some(attempt) => candidate_heat += attempt.work_cost,
-                    None => {
-                        ok = false;
-                        break;
-                    }
-                }
-            }
-            if ok {
-                for group in external {
-                    let mut formed = false;
-                    for &target in group {
-                        if let Some(attempt) = combine_specific_pair(
-                            &mut candidate,
-                            index,
-                            target,
-                            catalog,
-                            0.0,
-                            &mut cache,
-                            &mut candidate_ledger,
-                            &mut candidate_energy,
-                        ) {
-                            candidate_heat += attempt.work_cost;
-                            formed = true;
-                            break;
-                        }
-                    }
-                    if !formed {
-                        ok = false;
-                        break;
-                    }
-                }
-            }
-            if ok {
-                trial = candidate;
-                trial_ledger = candidate_ledger;
-                trial_energy = candidate_energy;
-                assigned = candidate_assigned;
-                heat = candidate_heat;
-                placed = Some(index);
-                break;
-            }
-        }
-        if placed.is_none() {
-            return Err("construction placement could not satisfy physical constraints".into());
-        }
+    if material.parts.is_empty() {
+        return Err("construction material must contain at least one constituent".into());
     }
+
+    let assigned = vec![None; material.parts.len()];
+    let Some((trial, trial_ledger, trial_energy, assigned, heat)) = solve_parts(
+        0, structure, ledger, *energy, &assigned, material, anchor, catalog, external, 0.0,
+    ) else {
+        let resource_name = material
+            .parts
+            .first()
+            .map(|(name, _)| name.as_str())
+            .unwrap_or("<none>");
+        let targets = external.iter().flatten().copied().collect::<Vec<_>>();
+        let candidate_count = resource(catalog, resource_name)
+            .map(|resource| {
+                candidate_placements(structure, resource, anchor, &targets, catalog).len()
+            })
+            .unwrap_or(0);
+        return Err(format!(
+            "construction placement could not satisfy physical constraints (material={resource_name}, external_targets={targets:?}, candidate_placements={candidate_count})"
+        ));
+    };
+
     *structure = trial;
     *ledger = trial_ledger;
     *energy = trial_energy;

@@ -45,13 +45,6 @@ impl MaterialStorage {
             .find(|material| !material.has_internal_structure() && !material.is_empty())
             .cloned()
     }
-    pub(crate) fn take_one_unstructured(&mut self) -> Option<Material> {
-        let index = self
-            .materials
-            .iter()
-            .position(|material| !material.has_internal_structure() && !material.is_empty())?;
-        Some(self.materials.swap_remove(index))
-    }
     pub(crate) fn take_one_unstructured_named(&mut self, name: &str) -> Option<Material> {
         let index = self.materials.iter().position(|material| {
             !material.has_internal_structure()

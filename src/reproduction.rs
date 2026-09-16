@@ -1,6 +1,7 @@
-//! Physical reproduction lifecycle.
-//! Construction is evaluated through the shared construction runtime so every
-//! internal and external bond admission uses COMBINE and the shared ledger.
+//! Physical reproduction lifecycle. Offspring construction uses the shared
+//! construction runtime so every bond admission passes through COMBINE.
+use crate::energy_ledger::EnergyLedgerAuthority;
+use crate::juvenile_requirements::{validate_realized_juvenile, JuvenileViabilityRequirements};
 use crate::material_storage::MaterialStorage;
 use crate::resources::{BaseResource, Material};
 use crate::state::{
@@ -9,23 +10,27 @@ use crate::state::{
 use crate::structure::OrganismStructure;
 use rand_chacha::ChaCha8Rng;
 use std::collections::{HashMap, HashSet};
-const JUVENILE_MATURE_MASS_FRACTION: f64 = 0.40;
 
 fn assemble_blueprint_material(
     remaining: &mut MaterialStorage,
     target: &Material,
 ) -> Option<Material> {
+    if !target.is_valid() || target.parts.is_empty() {
+        return None;
+    }
+    let mut trial = remaining.clone();
     for (name, amount) in &target.parts {
-        if (*amount - 1.0).abs() > f64::EPSILON {
+        if !amount.is_finite() || *amount <= 0.0 || amount.fract().abs() > f64::EPSILON {
             return None;
         }
-        remaining.take_one_unstructured_named(name)?;
+        for _ in 0..(*amount as usize) {
+            trial.take_one_unstructured_named(name)?;
+        }
     }
-    Some(Material {
-        parts: target.parts.clone(),
-        internal_bonds: target.internal_bonds.clone(),
-    })
+    *remaining = trial;
+    Some(target.clone())
 }
+
 fn frontier(
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     realized: &HashMap<usize, Vec<usize>>,
@@ -49,38 +54,6 @@ fn realized_mapping(elements: &[usize], groups: &[Vec<usize>]) -> HashMap<usize,
         .copied()
         .zip(groups.iter().cloned())
         .collect()
-}
-fn juvenile_target_set(
-    blueprint: &crate::structural_blueprint::StructuralBlueprint,
-    catalog: &[BaseResource],
-) -> Option<HashSet<usize>> {
-    if !blueprint.is_valid() {
-        return None;
-    }
-    let core = blueprint
-        .core_elements
-        .iter()
-        .copied()
-        .collect::<HashSet<_>>();
-    let mature_mass = blueprint.structural_mass(catalog);
-    let target_mass = mature_mass * JUVENILE_MATURE_MASS_FRACTION;
-    let mut selected = core.clone();
-    let mut current_mass = selected
-        .iter()
-        .map(|&i| blueprint.elements[i].material.mass(catalog))
-        .sum::<f64>();
-    while current_mass + f64::EPSILON < target_mass {
-        let realized = selected
-            .iter()
-            .copied()
-            .map(|i| (i, Vec::new()))
-            .collect::<HashMap<_, _>>();
-        let candidates = frontier(blueprint, &realized, &all_indices(blueprint));
-        let next = candidates.into_iter().min_by_key(|&i| i)?;
-        selected.insert(next);
-        current_mass += blueprint.elements[next].material.mass(catalog);
-    }
-    Some(selected)
 }
 fn all_indices(blueprint: &crate::structural_blueprint::StructuralBlueprint) -> HashSet<usize> {
     (0..blueprint.elements.len()).collect()
@@ -130,12 +103,14 @@ fn construct_any_frontier_element(
     candidates.sort_unstable();
     for blueprint_index in candidates {
         let mut remaining = stored_material.clone();
-        let Some(_material) = assemble_blueprint_material(
+        if assemble_blueprint_material(
             &mut remaining,
             &blueprint.elements[blueprint_index].material,
-        ) else {
+        )
+        .is_none()
+        {
             continue;
-        };
+        }
         let mut candidate_structure = structure.clone();
         let mut candidate_ledger = *ledger;
         let mut candidate_energy = *energy;
@@ -172,16 +147,31 @@ pub(crate) fn begin_reproduction(
     }
     let mut child_genome = parent.genome.clone();
     child_genome.mutate(rng);
-    let blueprint = &child_genome.structural_blueprint;
-    let Some(target_set) = juvenile_target_set(blueprint, catalog) else {
-        return false;
+    let blueprint = match child_genome.developmental_construction_target(catalog) {
+        Ok(target) => target,
+        Err(_) => return false,
     };
+    if !blueprint.is_valid()
+        || blueprint.core_elements.is_empty()
+        || !child_genome.juvenile_energy_reserve.is_finite()
+        || child_genome.juvenile_energy_reserve <= 0.0
+    {
+        return false;
+    }
+    let target_set = all_indices(&blueprint);
     let core = blueprint
         .core_elements
         .iter()
         .copied()
         .collect::<HashSet<_>>();
     let mut remaining = parent.stored_material.clone();
+    let Some(reserved_material) = remaining.take_matching(&child_genome.juvenile_reserve) else {
+        return false;
+    };
+    let mut committed_material = MaterialStorage::default();
+    if !committed_material.store(reserved_material.clone()) {
+        return false;
+    }
     let mut structure = OrganismStructure::new();
     let mut realized = HashMap::new();
     let mut realized_elements = Vec::new();
@@ -195,20 +185,27 @@ pub(crate) fn begin_reproduction(
             &mut structure,
             &realized,
             &core,
-            blueprint,
+            &blueprint,
             catalog,
             &mut trial_ledger,
             &mut trial_energy,
         )
         .or_else(|| {
-            for &candidate in &core {
+            if !realized.is_empty() {
+                return None;
+            }
+            let mut candidates = core.iter().copied().collect::<Vec<_>>();
+            candidates.sort_unstable();
+            for candidate in candidates {
                 let mut trial_remaining = remaining.clone();
-                let Some(_material) = assemble_blueprint_material(
+                if assemble_blueprint_material(
                     &mut trial_remaining,
                     &blueprint.elements[candidate].material,
-                ) else {
+                )
+                .is_none()
+                {
                     continue;
-                };
+                }
                 let mut trial_structure = structure.clone();
                 let mut candidate_ledger = trial_ledger;
                 let mut candidate_energy = trial_energy;
@@ -217,7 +214,7 @@ pub(crate) fn begin_reproduction(
                     &mut trial_structure,
                     &empty,
                     candidate,
-                    blueprint,
+                    &blueprint,
                     catalog,
                     &mut candidate_ledger,
                     &mut candidate_energy,
@@ -246,7 +243,7 @@ pub(crate) fn begin_reproduction(
     parent.reproductive_readiness = 0.0;
     parent.add_transaction_stress(initial_stress);
     parent.reproductive_construction = Some(ReproductiveConstruction {
-        committed_material: MaterialStorage::default(),
+        committed_material,
         developing_structure: structure,
         child_genome,
         target_elements: target_set.into_iter().collect(),
@@ -264,7 +261,10 @@ pub(crate) fn advance_construction(
     ledger: &mut EnergyLedger,
     energy: &mut f64,
 ) -> Option<f64> {
-    let blueprint = &construction.child_genome.structural_blueprint;
+    let blueprint = construction
+        .child_genome
+        .developmental_construction_target(catalog)
+        .ok()?;
     let target = construction
         .target_elements
         .iter()
@@ -282,7 +282,7 @@ pub(crate) fn advance_construction(
         &mut construction.developing_structure,
         &realized,
         &target,
-        blueprint,
+        &blueprint,
         catalog,
         ledger,
         energy,
@@ -293,7 +293,12 @@ pub(crate) fn advance_construction(
     Some(stress)
 }
 
-pub(crate) fn finish_reproduction(parent: &mut Organism, child_id: String) -> Option<Organism> {
+pub(crate) fn finish_reproduction(
+    parent: &mut Organism,
+    child_id: String,
+    catalog: &[BaseResource],
+    ledger: &mut EnergyLedger,
+) -> Option<Organism> {
     let construction = parent.reproductive_construction.take()?;
     let target = construction
         .target_elements
@@ -305,20 +310,76 @@ pub(crate) fn finish_reproduction(parent: &mut Organism, child_id: String) -> Op
         .iter()
         .copied()
         .collect::<HashSet<_>>();
-    if realized != target || !construction.committed_material.is_empty() {
+    if realized != target {
         parent.reproductive_construction = Some(construction);
         return None;
     }
-    let position = match parent.occupied_cells.first().cloned() {
+    let reserve = construction
+        .committed_material
+        .materials
+        .iter()
+        .find(|m| **m == construction.child_genome.juvenile_reserve)
+        .cloned();
+    let Some(reserve) = reserve else {
+        parent.reproductive_construction = Some(construction);
+        return None;
+    };
+    let blueprint = match construction
+        .child_genome
+        .developmental_construction_target(catalog)
+    {
+        Ok(value) => value,
+        Err(_) => {
+            parent.reproductive_construction = Some(construction);
+            return None;
+        }
+    };
+    if validate_realized_juvenile(
+        &construction.developing_structure,
+        catalog,
+        &blueprint.core_elements,
+        JuvenileViabilityRequirements::default(),
+    )
+    .is_err()
+    {
+        parent.reproductive_construction = Some(construction);
+        return None;
+    }
+    let parent_position = match parent.occupied_cells.first().cloned() {
         Some(p) => p,
         None => {
             parent.reproductive_construction = Some(construction);
             return None;
         }
     };
+    let parent_radius =
+        crate::organism_geometry::OrganismBodyGeometry::from_structure(&parent.structure, catalog)
+            .map(|g| g.bounding_radius_about(0.0, 0.0))
+            .unwrap_or(1.0);
+    let child_radius = crate::organism_geometry::OrganismBodyGeometry::from_structure(
+        &construction.developing_structure,
+        catalog,
+    )
+    .map(|g| g.bounding_radius_about(0.0, 0.0))
+    .unwrap_or(1.0);
+    let child_position = crate::state::Position {
+        x: parent_position.x + parent_radius.max(1.0) + child_radius.max(1.0) + 1.0,
+        y: parent_position.y,
+    };
+    let mut child_energy = 0.0;
+    let reserve_energy = construction.child_genome.juvenile_energy_reserve;
+    if !ledger.transfer(&mut parent.usable_energy, &mut child_energy, reserve_energy) {
+        parent.reproductive_construction = Some(construction);
+        return None;
+    }
+    let mut stored_material = MaterialStorage::default();
+    if !stored_material.store(reserve) {
+        parent.reproductive_construction = Some(construction);
+        return None;
+    }
     Some(Organism {
         id: child_id,
-        occupied_cells: vec![position],
+        occupied_cells: vec![child_position],
         genome: construction.child_genome,
         resource_sense: ResourceSense {
             sensed_resources: Vec::new(),
@@ -328,10 +389,10 @@ pub(crate) fn finish_reproduction(parent: &mut Organism, child_id: String) -> Op
         },
         memory: Vec::new(),
         decision_history: crate::decision::DecisionHistory::default(),
-        usable_energy: 0.0,
+        usable_energy: child_energy,
         stress: 0.0,
         stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
-        stored_material: MaterialStorage::default(),
+        stored_material,
         development_stage: DevelopmentStage::Juvenile,
         age: 0,
         reproductive_readiness: 0.0,
@@ -347,37 +408,40 @@ mod tests {
     use crate::genome::initial_genome;
     use crate::resources::default_catalog;
     #[test]
-    fn reproduction_target_contains_the_entire_genome_core() {
-        let genome = initial_genome();
-        let target = juvenile_target_set(&genome.structural_blueprint, &default_catalog()).unwrap();
-        assert!(genome
-            .structural_blueprint
-            .core_elements
-            .iter()
-            .all(|index| target.contains(index)));
-    }
-    #[test]
-    fn reproduction_target_is_at_least_forty_percent_of_mature_mass() {
-        let genome = initial_genome();
-        let target = juvenile_target_set(&genome.structural_blueprint, &default_catalog()).unwrap();
-        let mature = genome
-            .structural_blueprint
-            .structural_mass(&default_catalog());
-        let realized = target
-            .iter()
-            .map(|&i| {
-                genome.structural_blueprint.elements[i]
-                    .material
-                    .mass(&default_catalog())
-            })
-            .sum::<f64>();
-        assert!(realized + f64::EPSILON >= mature * JUVENILE_MATURE_MASS_FRACTION);
+    fn reproduction_target_is_derived_from_architecture() {
+        let g = initial_genome();
+        let target = g
+            .developmental_construction_target(&default_catalog())
+            .unwrap();
+        let indices = all_indices(&target);
+        assert_eq!(indices.len(), target.elements.len());
+        assert!(target.core_elements.iter().all(|i| indices.contains(i)));
     }
     #[test]
     fn realized_mapping_preserves_constituent_groups() {
-        let mapping = realized_mapping(&[17, 3, 42], &[vec![0, 1], vec![2], vec![3, 4]]);
-        assert_eq!(mapping.get(&17), Some(&vec![0, 1]));
-        assert_eq!(mapping.get(&3), Some(&vec![2]));
-        assert_eq!(mapping.get(&42), Some(&vec![3, 4]));
+        let m = realized_mapping(&[17, 3, 42], &[vec![0, 1], vec![2], vec![3, 4]]);
+        assert_eq!(m.get(&17), Some(&vec![0, 1]));
+        assert_eq!(m.get(&3), Some(&vec![2]));
+        assert_eq!(m.get(&42), Some(&vec![3, 4]));
+    }
+    #[test]
+    fn reserve_requirement_is_genome_defined() {
+        let mut s = MaterialStorage::default();
+        let g = initial_genome();
+        assert!(s.store(g.juvenile_reserve.clone()));
+        assert!(s.take_matching(&g.juvenile_reserve).is_some());
+        assert!(g.juvenile_energy_reserve > 0.0);
+    }
+    #[test]
+    fn multi_part_material_assembly_is_transactional() {
+        let mut s = MaterialStorage::default();
+        s.store(Material::free_base("Carbon", 1.0));
+        s.store(Material::free_base("Hydrogen", 1.0));
+        let target = Material {
+            parts: vec![("Carbon".into(), 1.0), ("Nitrogen".into(), 1.0)],
+            internal_bonds: Vec::new(),
+        };
+        assert!(assemble_blueprint_material(&mut s, &target).is_none());
+        assert_eq!(s.count_unstructured(), 2);
     }
 }

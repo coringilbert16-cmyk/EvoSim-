@@ -19,11 +19,11 @@ mod tests {
 
     #[test]
     fn ancestral_seed_realizes_its_inherited_spatial_targets() {
-        let blueprint = initial_genome().structural_blueprint;
+        let blueprint = initial_genome().mature_construction_target().unwrap();
         let catalog = default_catalog();
         let structure = blueprint
             .realize(&catalog)
-            .expect("ancestral blueprint must have a physical realization");
+            .expect("ancestral architecture must have a physical realization");
 
         assert_eq!(structure.units.len(), blueprint.elements.len());
         assert_eq!(structure.bonds.len(), blueprint.connections.len());

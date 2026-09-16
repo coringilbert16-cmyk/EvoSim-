@@ -209,8 +209,8 @@ impl StructuralBlueprint {
         let mut realized = HashMap::<usize, Vec<usize>>::new();
         let mut order = Vec::with_capacity(self.elements.len());
         let mut visited = vec![false; self.elements.len()];
-        let mut queue = vec![0usize];
-        visited[0] = true;
+        let mut queue = vec![self.core_elements[0]];
+        visited[self.core_elements[0]] = true;
         while let Some(current) = queue.pop() {
             order.push(current);
             for connection in &self.connections {
@@ -235,8 +235,24 @@ impl StructuralBlueprint {
 
         let mut total_heat = 0.0;
         for index in order {
-            let external = if index == 0 {
-                Vec::new()
+            let external = if self.core_elements.contains(&index) {
+                if index == self.core_elements[0] {
+                    Vec::new()
+                } else {
+                    self.connections
+                        .iter()
+                        .filter_map(|connection| {
+                            let neighbor = if connection.element_a == index {
+                                connection.element_b
+                            } else if connection.element_b == index {
+                                connection.element_a
+                            } else {
+                                return None;
+                            };
+                            realized.get(&neighbor).cloned()
+                        })
+                        .collect::<Vec<_>>()
+                }
             } else {
                 self.connections
                     .iter()
@@ -259,8 +275,10 @@ impl StructuralBlueprint {
                 ledger,
                 energy,
                 &external,
-            )?;
-            validate_element_contact(&structure, &ids, &external, catalog)?;
+            )
+            .map_err(|error| format!("element {index} construction failed: {error}"))?;
+            validate_element_contact(&structure, &ids, &external, catalog)
+                .map_err(|error| format!("element {index} contact validation failed: {error}"))?;
             realized.insert(index, ids);
             total_heat += heat;
         }
@@ -352,7 +370,7 @@ fn validate_element_contact(
                 })
             })
             .fold(f64::INFINITY, f64::min);
-        if min_distance > 1.0 {
+        if min_distance > 1e-9 {
             return Err(format!(
                 "realized material has no physical contact with a prescribed neighbor (minimum endpoint distance: {min_distance})"
             ));

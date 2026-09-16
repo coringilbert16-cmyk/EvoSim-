@@ -161,10 +161,8 @@ mod tests {
     #[test]
     fn retains_structure_budget_and_position() {
         let genome = initial_genome();
-        let structure = genome
-            .structural_blueprint
-            .realize(&default_catalog())
-            .unwrap();
+        let blueprint = genome.mature_construction_target().unwrap();
+        let structure = blueprint.realize(&default_catalog()).unwrap();
         let body = DecomposingBody::new(structure, 4.0, Position { x: 2.0, y: 3.0 }).unwrap();
         assert!(!body.structure.units.is_empty());
         assert_eq!(body.energy_budget, 4.0);
@@ -174,10 +172,8 @@ mod tests {
     #[test]
     fn zero_bond_structure_is_finished() {
         let genome = initial_genome();
-        let mut structure = genome
-            .structural_blueprint
-            .realize(&default_catalog())
-            .unwrap();
+        let blueprint = genome.mature_construction_target().unwrap();
+        let mut structure = blueprint.realize(&default_catalog()).unwrap();
         structure.bonds.clear();
         let body = DecomposingBody::new(structure, 0.0, Position { x: 0.0, y: 0.0 }).unwrap();
         assert!(body.is_finished())
