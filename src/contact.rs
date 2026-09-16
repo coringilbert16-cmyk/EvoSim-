@@ -149,15 +149,15 @@ fn endpoint_world_point(
         ConnectionEndpoint::Boundary { angle_radians } => {
             let (s, c) = angle_radians.sin_cos();
             let point = boundary_point_toward(shape, c, s)?;
-            let len = point.0.hypot(point.1);
+            let len = point.x.hypot(point.y);
             let (nx, ny) = if len > 1e-12 {
-                (point.0 / len, point.1 / len)
+                (point.x / len, point.y / len)
             } else {
                 (c, s)
             };
             Some(crate::connection_geometry::transform_derived_point(
-                point.0,
-                point.1,
+                point.x,
+                point.y,
                 nx,
                 ny,
                 unit.placement.x,
