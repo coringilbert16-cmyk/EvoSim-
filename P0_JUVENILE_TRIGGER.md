@@ -1,1 +1,1 @@
-Temporary CI trigger after closest-valid-realization search update; remove after verification.
+Temporary CI trigger for construction diagnostics; remove after verification.
