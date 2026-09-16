@@ -1,1 +1,1 @@
-Temporary CI trigger for targeted construction diagnostics.
+Temporary CI trigger for zero-displacement blueprint realization test.
