@@ -322,16 +322,6 @@ pub(crate) fn finish_reproduction(
         parent.reproductive_construction = Some(construction);
         return None;
     };
-    let blueprint = match construction
-        .child_genome
-        .developmental_construction_target(catalog)
-    {
-        Ok(value) => value,
-        Err(_) => {
-            parent.reproductive_construction = Some(construction);
-            return None;
-        }
-    };
     if validate_realized_juvenile(
         &construction.developing_structure,
         catalog,
