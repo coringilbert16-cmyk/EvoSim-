@@ -67,7 +67,7 @@ impl MaterialStorage {
     /// Store a material whose physical constituent placements are already
     /// known. Storage transfers the realization; it never creates or changes
     /// internal bonds.
-    pub(crate) fn store_physical(
+    pub(crate fn store_physical(
         &mut self,
         material: Material,
         placements: Vec<Placement>,
@@ -135,10 +135,7 @@ impl MaterialStorage {
 
     /// Remove one intact material and return its pre-existing physical
     /// realization, if one was supplied at storage time.
-    pub(crate) fn take_matching_physical(
-        &mut self,
-        target: &Material,
-    ) -> Option<PhysicalMaterial> {
+    pub(crate) fn take_matching_physical(&mut self, target: &Material) -> Option<PhysicalMaterial> {
         let index = self
             .materials
             .iter()
