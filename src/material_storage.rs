@@ -7,6 +7,7 @@ use crate::physical_material::PhysicalMaterial;
 use crate::resources::Material;
 use crate::structure::Placement;
 use serde::{Deserialize, Serialize};
+
 const MATERIAL_EPSILON: f64 = 1e-12;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
@@ -228,11 +229,21 @@ mod tests {
         let mut storage = MaterialStorage::default();
         let m = compound();
         let placements = vec![
-            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-            Placement { x: 1.0, y: 0.0, rotation_radians: 0.25 },
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            Placement {
+                x: 1.0,
+                y: 0.0,
+                rotation_radians: 0.25,
+            },
         ];
         assert!(storage.store_physical(m.clone(), placements.clone(), &catalog()));
-        let restored = storage.take_matching_physical(&m).expect("stored instance");
+        let restored = storage
+            .take_matching_physical(&m)
+            .expect("stored instance");
         assert_eq!(restored.material, m);
         assert_eq!(restored.placements, Some(placements));
     }
