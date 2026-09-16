@@ -27,8 +27,6 @@ pub struct BlueprintPlacement {
 pub struct StructuralBlueprint {
     pub elements: Vec<BlueprintElement>,
     pub connections: Vec<BlueprintConnection>,
-    /// Construction anchors identify where realization may begin. They are
-    /// not a biological genome definition and do not identify the genome.
     #[serde(default = "default_anchor_elements")]
     pub anchor_elements: Vec<usize>,
 }
@@ -198,24 +196,106 @@ impl StructuralBlueprint {
         energy: &mut f64,
     ) -> Result<(OrganismStructure, f64), String> {
         self.validate()?;
+
+        // First try the authored spatial realization directly. This is the
+        // zero-displacement solution and therefore must be preferred whenever
+        // COMBINE can admit all declared connections at those positions.
+        let mut direct_structure = OrganismStructure::new();
+        let mut direct_ledger = *ledger;
+        let mut direct_energy = *energy;
+        let mut direct_realized = HashMap::<usize, Vec<usize>>::new();
+        let mut direct_heat = 0.0;
+        let mut direct_ok = true;
+        for index in 0..self.elements.len() {
+            match crate::construction_runtime::realize_material_with_context(
+                &mut direct_structure,
+                &self.elements[index],
+                catalog,
+                &mut direct_ledger,
+                &mut direct_energy,
+                &[],
+            ) {
+                Ok((ids, heat)) => {
+                    direct_realized.insert(index, ids);
+                    direct_heat += heat;
+                }
+                Err(_) => {
+                    direct_ok = false;
+                    break;
+                }
+            }
+        }
+        if direct_ok {
+            for connection in &self.connections {
+                let mut connected = false;
+                'pair: for &a in direct_realized
+                    .get(&connection.element_a)
+                    .into_iter()
+                    .flatten()
+                {
+                    for &b in direct_realized
+                        .get(&connection.element_b)
+                        .into_iter()
+                        .flatten()
+                    {
+                        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+                        if let Some(attempt) = crate::combine_runtime::combine_specific_pair(
+                            &mut direct_structure,
+                            a,
+                            b,
+                            catalog,
+                            0.0,
+                            &mut cache,
+                            &mut direct_ledger,
+                            &mut direct_energy,
+                        ) {
+                            direct_heat += attempt.work_cost;
+                            connected = true;
+                            break 'pair;
+                        }
+                    }
+                }
+                if !connected {
+                    direct_ok = false;
+                    break;
+                }
+            }
+        }
+        if direct_ok {
+            *ledger = direct_ledger;
+            *energy = direct_energy;
+            return Ok((direct_structure, direct_heat));
+        }
+
+        // If the inherited layout cannot be admitted as-is, fall back to the
+        // construction solver. It can move a realization to a physically valid
+        // alternative while retaining the blueprint as the spatial target.
         let mut structure = OrganismStructure::new();
         let mut realized = HashMap::<usize, Vec<usize>>::new();
-
-        // Construction begins with every declared anchor, then follows the
-        // blueprint's authored element order. This keeps the intended spatial
-        // layout available to the solver before dependent interface elements
-        // are realized, while still letting COMBINE/backtracking choose the
-        // actual physical endpoints and placements.
         let mut order = Vec::with_capacity(self.elements.len());
-        let mut included = vec![false; self.elements.len()];
-        for &anchor in &self.anchor_elements {
-            order.push(anchor);
-            included[anchor] = true;
-        }
-        for index in 0..self.elements.len() {
-            if !included[index] {
-                order.push(index);
+        let mut visited = vec![false; self.elements.len()];
+        let mut queue = vec![self.anchor_elements[0]];
+        visited[self.anchor_elements[0]] = true;
+        while let Some(current) = queue.pop() {
+            order.push(current);
+            for connection in &self.connections {
+                let neighbor = if connection.element_a == current {
+                    connection.element_b
+                } else if connection.element_b == current {
+                    connection.element_a
+                } else {
+                    continue;
+                };
+                if !visited[neighbor] {
+                    visited[neighbor] = true;
+                    queue.push(neighbor);
+                }
             }
+        }
+        if order.len() != self.elements.len() {
+            return Err(
+                "blueprint realization stalled before all elements were constructed".into(),
+            );
         }
 
         let mut total_heat = 0.0;
