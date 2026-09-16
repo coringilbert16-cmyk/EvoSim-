@@ -9,7 +9,7 @@ pub const JUVENILE_LINEAR_SCALE: f64 = 0.40;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum ArchitectureRole {
-    GenomeCore,
+    ConstructionAnchor,
     StructuralBoundary,
     Interface,
 }
@@ -42,14 +42,14 @@ pub struct ArchitectureRelation {
 pub struct OrganismArchitecture {
     pub regions: Vec<ArchitectureRegion>,
     pub relations: Vec<ArchitectureRelation>,
-    pub genome_region: usize,
+    pub anchor_region: usize,
     pub target_scale: f64,
 }
 
 impl OrganismArchitecture {
     pub fn validate(&self) -> Result<(), String> {
-        if self.regions.is_empty() || self.genome_region >= self.regions.len() {
-            return Err("architecture has no valid genome region".into());
+        if self.regions.is_empty() || self.anchor_region >= self.regions.len() {
+            return Err("architecture has no valid construction anchor region".into());
         }
         if !self.target_scale.is_finite() || self.target_scale <= 0.0 {
             return Err("architecture target scale must be positive and finite".into());
@@ -87,6 +87,12 @@ impl OrganismArchitecture {
         {
             return Err("architecture requires boundary and interface regions".into());
         }
+        if !matches!(
+            self.regions[self.anchor_region].role,
+            ArchitectureRole::ConstructionAnchor
+        ) {
+            return Err("anchor_region must identify ConstructionAnchor".into());
+        }
         Ok(())
     }
 
@@ -121,7 +127,6 @@ impl OrganismArchitecture {
                     if crate::juvenile_requirements::validate_realized_juvenile(
                         &structure,
                         catalog,
-                        &target.core_elements,
                         crate::juvenile_requirements::JuvenileViabilityRequirements::default(),
                     )
                     .is_ok() =>
@@ -137,10 +142,7 @@ impl OrganismArchitecture {
 
     fn construction_target(&self, scale: f64) -> Result<StructuralBlueprint, String> {
         self.validate()?;
-        let core = &self.regions[self.genome_region];
-        if !matches!(core.role, ArchitectureRole::GenomeCore) {
-            return Err("genome_region must identify GenomeCore".into());
-        }
+        let anchor = &self.regions[self.anchor_region];
         let boundary = self
             .regions
             .iter()
@@ -153,17 +155,16 @@ impl OrganismArchitecture {
             .ok_or("architecture requires an interface")?;
         let mut elements = Vec::new();
         let mut connections = Vec::new();
-        add_core(&mut elements, &mut connections, core);
+        add_anchor(&mut elements, &mut connections, anchor);
         add_boundary(&mut elements, &mut connections, boundary, scale);
         add_interface(&mut elements, &mut connections, interface, scale);
-        let target =
-            StructuralBlueprint::with_core_elements(elements, connections, vec![0, 1, 2, 3]);
+        let target = StructuralBlueprint::with_anchor_elements(elements, connections, vec![0]);
         target.validate()?;
         Ok(target)
     }
 }
 
-fn add_core(
+fn add_anchor(
     elements: &mut Vec<BlueprintElement>,
     connections: &mut Vec<BlueprintConnection>,
     region: &ArchitectureRegion,
@@ -327,7 +328,7 @@ pub fn default_architecture() -> OrganismArchitecture {
     OrganismArchitecture {
         regions: vec![
             ArchitectureRegion {
-                role: ArchitectureRole::GenomeCore,
+                role: ArchitectureRole::ConstructionAnchor,
                 material: Material::free_base("Nitrogen", 1.0),
                 center_x: 0.0,
                 center_y: 0.0,
@@ -366,7 +367,7 @@ pub fn default_architecture() -> OrganismArchitecture {
                 kind: ArchitectureRelationKind::Interfaces,
             },
         ],
-        genome_region: 0,
+        anchor_region: 0,
         target_scale: 1.0,
     }
 }
@@ -391,5 +392,6 @@ mod tests {
             .elements
             .iter()
             .all(|element| { element.placement.x.abs() < 2.0 && element.placement.y.abs() < 2.0 }));
+        assert_eq!(target.anchor_elements, vec![0]);
     }
 }

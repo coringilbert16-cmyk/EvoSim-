@@ -140,7 +140,6 @@ pub(crate) fn begin_reproduction(
     ledger: &mut EnergyLedger,
 ) -> bool {
     if !matches!(parent.development_stage, DevelopmentStage::Adult)
-        || parent.reproductive_readiness < 1.0 - f64::EPSILON
         || parent.reproductive_construction.is_some()
     {
         return false;
@@ -152,15 +151,15 @@ pub(crate) fn begin_reproduction(
         Err(_) => return false,
     };
     if !blueprint.is_valid()
-        || blueprint.core_elements.is_empty()
+        || blueprint.anchor_elements.is_empty()
         || !child_genome.juvenile_energy_reserve.is_finite()
         || child_genome.juvenile_energy_reserve <= 0.0
     {
         return false;
     }
     let target_set = all_indices(&blueprint);
-    let core = blueprint
-        .core_elements
+    let anchors = blueprint
+        .anchor_elements
         .iter()
         .copied()
         .collect::<HashSet<_>>();
@@ -179,12 +178,12 @@ pub(crate) fn begin_reproduction(
     let mut initial_stress = 0.0;
     let mut trial_ledger = *ledger;
     let mut trial_energy = parent.usable_energy;
-    while realized.len() < core.len() {
+    while realized.len() < anchors.len() {
         let result = construct_any_frontier_element(
             &remaining,
             &mut structure,
             &realized,
-            &core,
+            &anchors,
             &blueprint,
             catalog,
             &mut trial_ledger,
@@ -194,7 +193,7 @@ pub(crate) fn begin_reproduction(
             if !realized.is_empty() {
                 return None;
             }
-            let mut candidates = core.iter().copied().collect::<Vec<_>>();
+            let mut candidates = anchors.iter().copied().collect::<Vec<_>>();
             candidates.sort_unstable();
             for candidate in candidates {
                 let mut trial_remaining = remaining.clone();
@@ -240,7 +239,6 @@ pub(crate) fn begin_reproduction(
     parent.stored_material = remaining;
     parent.usable_energy = trial_energy;
     *ledger = trial_ledger;
-    parent.reproductive_readiness = 0.0;
     parent.add_transaction_stress(initial_stress);
     parent.reproductive_construction = Some(ReproductiveConstruction {
         committed_material,
@@ -324,20 +322,9 @@ pub(crate) fn finish_reproduction(
         parent.reproductive_construction = Some(construction);
         return None;
     };
-    let blueprint = match construction
-        .child_genome
-        .developmental_construction_target(catalog)
-    {
-        Ok(value) => value,
-        Err(_) => {
-            parent.reproductive_construction = Some(construction);
-            return None;
-        }
-    };
     if validate_realized_juvenile(
         &construction.developing_structure,
         catalog,
-        &blueprint.core_elements,
         JuvenileViabilityRequirements::default(),
     )
     .is_err()
@@ -394,8 +381,6 @@ pub(crate) fn finish_reproduction(
         stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
         stored_material,
         development_stage: DevelopmentStage::Juvenile,
-        age: 0,
-        reproductive_readiness: 0.0,
         active_transformation_id: None,
         reproductive_construction: None,
         structure: construction.developing_structure,
@@ -415,7 +400,7 @@ mod tests {
             .unwrap();
         let indices = all_indices(&target);
         assert_eq!(indices.len(), target.elements.len());
-        assert!(target.core_elements.iter().all(|i| indices.contains(i)));
+        assert!(target.anchor_elements.iter().all(|i| indices.contains(i)));
     }
     #[test]
     fn realized_mapping_preserves_constituent_groups() {

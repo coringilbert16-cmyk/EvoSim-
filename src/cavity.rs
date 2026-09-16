@@ -85,35 +85,29 @@ pub fn minimum_genome_cavity_area(catalog: &[BaseResource]) -> Result<f64, Strin
     Ok(minimum)
 }
 
-/// Analyze only realized core geometry. A cavity is valid only when its
-/// boundary is physically sealed by bonds between the core constituents.
+/// Analyze the realized physical structure for a sealed cavity large enough
+/// for the established three-Carbon reference. No predefined subset of units
+/// is treated as the genome; the qualifying cavity itself is the physical
+/// genome criterion.
 pub fn analyze_genome_cavity(
     structure: &OrganismStructure,
     catalog: &[BaseResource],
-    core_units: &[usize],
 ) -> Result<Option<GenomeCavity>, String> {
-    if core_units.is_empty() {
-        return Ok(None);
-    }
     let minimum_area = minimum_genome_cavity_area(catalog)?;
     let mut polygons = Vec::<(usize, Vec<Point>)>::new();
-    for &index in core_units {
-        let unit = structure
-            .units
-            .get(index)
-            .ok_or_else(|| format!("genome core references missing unit {index}"))?;
-        let geometry = unit
-            .geometry
-            .as_ref()
-            .ok_or_else(|| format!("genome core unit {index} has no realized geometry"))?;
-        let polygon = transformed_polygon(&geometry.shape().form, unit.placement)
-            .ok_or_else(|| format!("genome core unit {index} has unsupported cavity geometry"))?;
+    for (index, unit) in structure.units.iter().enumerate() {
+        let Some(geometry) = unit.geometry.as_ref() else {
+            continue;
+        };
+        let Some(polygon) = transformed_polygon(&geometry.shape().form, unit.placement) else {
+            continue;
+        };
         if polygon.len() < 3 {
-            return Err(format!("genome core unit {index} has no closed boundary"));
+            continue;
         }
         polygons.push((index, polygon));
     }
-    if !boundary_bonds_are_sealed(structure, &polygons) {
+    if polygons.is_empty() || !boundary_bonds_are_sealed(structure, &polygons) {
         return Ok(None);
     }
 
@@ -378,28 +372,27 @@ mod tests {
     }
 
     #[test]
-    fn seed_core_exceeds_three_joined_carbon_reference() {
+    fn realized_structure_cavity_qualifies_without_a_predefined_core() {
         let catalog = default_catalog();
         let genome = initial_genome();
         let blueprint = genome.mature_construction_target().unwrap();
         let structure = blueprint.realize(&catalog).unwrap();
-        let cavity = analyze_genome_cavity(&structure, &catalog, &blueprint.core_elements)
+        let cavity = analyze_genome_cavity(&structure, &catalog)
             .unwrap()
-            .expect("seed core must be sealed");
+            .expect("realized structure must contain a sealed qualifying cavity");
         assert!(cavity.qualifies(), "cavity={cavity:?}");
+        assert!(!cavity.boundary_units.is_empty());
     }
 
     #[test]
-    fn unbonded_core_is_not_a_genome() {
+    fn unbonded_structure_is_not_a_genome() {
         let catalog = default_catalog();
         let genome = initial_genome();
         let blueprint = genome.mature_construction_target().unwrap();
         let mut structure = blueprint.realize(&catalog).unwrap();
         structure.bonds.clear();
-        assert!(
-            analyze_genome_cavity(&structure, &catalog, &blueprint.core_elements)
-                .unwrap()
-                .is_none()
-        );
+        assert!(analyze_genome_cavity(&structure, &catalog)
+            .unwrap()
+            .is_none());
     }
 }

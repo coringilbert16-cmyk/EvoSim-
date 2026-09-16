@@ -26,26 +26,31 @@ impl Default for JuvenileViabilityRequirements {
 
 /// Validate juvenile viability from authoritative realized geometry and graph.
 /// This does not require any fixed piece count, material recipe, shape, or
-/// topology. The default genome's realization is only one possible realization.
+/// topology. The genome is identified by the realized physical cavity rather
+/// than by a predefined set of constituents.
 pub fn validate_realized_juvenile(
     structure: &OrganismStructure,
     catalog: &[BaseResource],
-    core_units: &[usize],
     requirements: JuvenileViabilityRequirements,
 ) -> Result<(), String> {
-    if core_units.is_empty() {
-        return Err("juvenile has no physical genome-core anchor".into());
-    }
-    if requirements.require_sealed_genome_cavity {
-        let cavity = analyze_genome_cavity(structure, catalog, core_units)?.ok_or_else(|| {
+    let cavity = if requirements.require_sealed_genome_cavity {
+        Some(analyze_genome_cavity(structure, catalog)?.ok_or_else(|| {
             "juvenile genome cavity is not sealed and sufficiently large".to_string()
-        })?;
-        if !cavity.qualifies() {
-            return Err("juvenile genome cavity is below the minimum capacity".into());
+        })?)
+    } else {
+        analyze_genome_cavity(structure, catalog)?
+    };
+
+    if requirements.require_extra_structure {
+        let boundary_count = cavity
+            .as_ref()
+            .map(|value| value.boundary_units.len())
+            .unwrap_or(0);
+        if structure.units.len() <= boundary_count {
+            return Err(
+                "juvenile has no realized structure outside its genome cavity boundary".into(),
+            );
         }
-    }
-    if requirements.require_extra_structure && structure.units.len() <= core_units.len() {
-        return Err("juvenile has no realized structure outside its genome core".into());
     }
     Ok(())
 }
@@ -57,7 +62,7 @@ mod tests {
     use crate::resources::default_catalog;
 
     #[test]
-    fn viability_does_not_depend_on_default_piece_count() {
+    fn viability_does_not_depend_on_a_predefined_piece_count_or_core() {
         let genome = initial_genome();
         let catalog = default_catalog();
         let blueprint = genome.developmental_construction_target(&catalog).unwrap();
@@ -65,7 +70,6 @@ mod tests {
         validate_realized_juvenile(
             &structure,
             &catalog,
-            &blueprint.core_elements,
             JuvenileViabilityRequirements::default(),
         )
         .unwrap();
@@ -81,7 +85,6 @@ mod tests {
         assert!(validate_realized_juvenile(
             &structure,
             &catalog,
-            &blueprint.core_elements,
             JuvenileViabilityRequirements::default(),
         )
         .is_err());

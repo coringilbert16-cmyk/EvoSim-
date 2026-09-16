@@ -110,6 +110,50 @@ pub(crate) fn candidate_placements(
                     }
                 }
                 (
+                    Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
+                    ConnectionEndpoint::LineEndpoint {
+                        point_index: target_index,
+                    },
+                ) => {
+                    let Some(candidate_count) =
+                        resource.shape.form.polygon_vertices().map(|v| v.len())
+                    else {
+                        continue;
+                    };
+                    let Some(target_normal) =
+                        crate::rigid_boundary::line_endpoint_normal(target_shape, target_index)
+                    else {
+                        continue;
+                    };
+                    let target_normal_angle = target_normal.1.atan2(target_normal.0);
+                    for candidate_index in 0..candidate_count {
+                        let Some(candidate_normal) =
+                            crate::rigid_boundary::corner_normal(&resource.shape, candidate_index)
+                        else {
+                            continue;
+                        };
+                        let candidate_normal_angle = candidate_normal.1.atan2(candidate_normal.0);
+                        let rotation =
+                            target_normal_angle + std::f64::consts::PI - candidate_normal_angle;
+                        let Some(local) = crate::rigid_boundary::world_vertex(
+                            &resource.shape,
+                            candidate_index,
+                            Placement {
+                                x: 0.0,
+                                y: 0.0,
+                                rotation_radians: rotation,
+                            },
+                        ) else {
+                            continue;
+                        };
+                        out.push(Placement {
+                            x: tp.x - local.0,
+                            y: tp.y - local.1,
+                            rotation_radians: rotation,
+                        });
+                    }
+                }
+                (
                     Form::Line {
                         length: candidate_length,
                     },
@@ -292,7 +336,8 @@ fn solve_parts(
         }
     }
 
-    for candidate_placement in candidate_placements(structure, resource, anchor, &targets, catalog) {
+    for candidate_placement in candidate_placements(structure, resource, anchor, &targets, catalog)
+    {
         let mut candidate = structure.clone();
         let mut candidate_ledger = *ledger;
         let mut candidate_energy = energy;

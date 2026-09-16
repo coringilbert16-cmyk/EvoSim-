@@ -13,7 +13,7 @@ use crate::state::{EnergyLedger, Environment, Organism};
 use crate::structure::{BondEndpoint, ConnectionEndpoint, Placement, StructuralUnit};
 
 const EPSILON: f64 = 1e-12;
-const COMBINE_CONTACT_TOLERANCE: f64 = 1.0;
+pub(crate) const COMBINE_CONTACT_TOLERANCE: f64 = 1.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct CombineAttempt {

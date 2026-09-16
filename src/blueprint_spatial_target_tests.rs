@@ -39,9 +39,11 @@ mod tests {
                 .fold(f64::INFINITY, f64::min);
             assert!(
                 closest < 1e-6,
-                "realized structure lost the inherited spatial target at ({}, {})",
+                "realized structure lost the inherited spatial target at ({}, {}); units={:?}; bonds={:?}",
                 target.x,
-                target.y
+                target.y,
+                structure.units.iter().map(|u| (u.placement.x, u.placement.y, u.placement.rotation_radians)).collect::<Vec<_>>(),
+                structure.bonds
             );
         }
     }

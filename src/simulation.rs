@@ -104,8 +104,6 @@ impl Simulation {
             stored_material,
             structure,
             development_stage: DevelopmentStage::Juvenile,
-            age: 0,
-            reproductive_readiness: 0.0,
             active_transformation_id: None,
             reproductive_construction: None,
         }
@@ -167,28 +165,12 @@ impl Simulation {
         let _ = environment;
         CurrentNeeds {
             survival,
-            reproduction: organism.reproductive_readiness.clamp(0.0, 1.0),
+            reproduction: if matches!(organism.development_stage, DevelopmentStage::Adult) {
+                1.0
+            } else {
+                0.0
+            },
         }
-    }
-
-    fn update_reproductive_readiness(
-        organism: &mut Organism,
-        environment: &Environment,
-        parameters: DecisionParameters,
-    ) {
-        if !matches!(organism.development_stage, DevelopmentStage::Adult) {
-            return;
-        }
-        let mature_mass = Self::mature_structural_mass(organism, environment).max(f64::EPSILON);
-        let maturity =
-            (organism.structural_mass(&environment.catalog) / mature_mass).clamp(0.0, 1.0);
-        let reproduction_reserve = parameters.reproduction_reserve.max(f64::EPSILON);
-        let energy_readiness = (organism.usable_energy / reproduction_reserve).clamp(0.0, 1.0);
-        let accumulation =
-            (maturity * energy_readiness * parameters.reproduction_accumulation_rate.max(0.0))
-                .clamp(0.0, 1.0);
-        organism.reproductive_readiness =
-            (organism.reproductive_readiness + accumulation).clamp(0.0, 1.0)
     }
 
     fn acquisition_targets(organism: &Organism, environment: &Environment) -> Vec<usize> {
@@ -403,17 +385,10 @@ impl Simulation {
         let environment_snapshot = self.environment.clone();
         let decision_parameters = self.decision_parameters;
         for organism in &mut self.organisms {
-            organism.age += 1;
             Self::update_development_stage(organism, &environment_snapshot);
-            organism.apply_aging();
             organism.apply_maintenance(&environment_snapshot.catalog, &mut self.energy_ledger);
             Self::update_resource_perception(organism, &environment_snapshot);
             Self::update_memory_from_sources(organism, &environment_snapshot);
-            Self::update_reproductive_readiness(
-                organism,
-                &environment_snapshot,
-                decision_parameters,
-            );
         }
         let mut reproduction_requests = Vec::new();
         {
@@ -463,7 +438,7 @@ impl Simulation {
                                 crate::decision::OutcomeKind::Harmful
                             },
                         );
-                        if organism.reproductive_readiness >= 1.0 - f64::EPSILON {
+                        if matches!(organism.development_stage, DevelopmentStage::Adult) {
                             reproduction_requests.push(organism.id.clone());
                         }
                     }

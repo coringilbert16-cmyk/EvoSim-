@@ -11,7 +11,7 @@ use crate::structure::OrganismStructure;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::{HashMap, HashSet};
 
-fn default_core_elements() -> Vec<usize> {
+fn default_anchor_elements() -> Vec<usize> {
     vec![0]
 }
 
@@ -27,8 +27,8 @@ pub struct BlueprintPlacement {
 pub struct StructuralBlueprint {
     pub elements: Vec<BlueprintElement>,
     pub connections: Vec<BlueprintConnection>,
-    #[serde(default = "default_core_elements")]
-    pub core_elements: Vec<usize>,
+    #[serde(default = "default_anchor_elements")]
+    pub anchor_elements: Vec<usize>,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -118,19 +118,19 @@ impl StructuralBlueprint {
         Self {
             elements,
             connections: Self::canonical_connections(connections),
-            core_elements: default_core_elements(),
+            anchor_elements: default_anchor_elements(),
         }
     }
 
-    pub fn with_core_elements(
+    pub fn with_anchor_elements(
         elements: Vec<BlueprintElement>,
         connections: Vec<BlueprintConnection>,
-        core_elements: Vec<usize>,
+        anchor_elements: Vec<usize>,
     ) -> Self {
         Self {
             elements,
             connections: Self::canonical_connections(connections),
-            core_elements,
+            anchor_elements,
         }
     }
 
@@ -151,18 +151,18 @@ impl StructuralBlueprint {
         if self.elements.is_empty() {
             return Err("blueprint must contain at least one element".into());
         }
-        if self.core_elements.is_empty() {
-            return Err("blueprint must define a genome core".into());
+        if self.anchor_elements.is_empty() {
+            return Err("blueprint must define at least one construction anchor".into());
         }
-        let mut core_seen = vec![false; self.elements.len()];
-        for &index in &self.core_elements {
+        let mut anchor_seen = vec![false; self.elements.len()];
+        for &index in &self.anchor_elements {
             if index >= self.elements.len() {
-                return Err("genome core references a missing element".into());
+                return Err("construction anchor references a missing element".into());
             }
-            if core_seen[index] {
-                return Err("genome core contains a duplicate element".into());
+            if anchor_seen[index] {
+                return Err("construction anchors contain a duplicate element".into());
             }
-            core_seen[index] = true;
+            anchor_seen[index] = true;
         }
         let mut connection_seen = HashSet::new();
         for (i, e) in self.elements.iter().enumerate() {
@@ -179,15 +179,9 @@ impl StructuralBlueprint {
         if self.elements.len() > 1 && !self.is_connected() {
             return Err("multi-element blueprint must be connected".into());
         }
-        if self.core_elements.len() > 1 && !self.core_is_connected() {
-            return Err("genome core must be connected".into());
-        }
         Ok(())
     }
 
-    /// Non-persistent physical preview. It uses a private trial energy budget
-    /// solely so COMBINE can evaluate its real admission rules. No simulation
-    /// ledger, organism energy, or structure is mutated by this method.
     pub fn realize(&self, catalog: &[BaseResource]) -> Result<OrganismStructure, String> {
         let mut ledger = EnergyLedger::default();
         let mut preview_energy = 1.0e12;
@@ -195,9 +189,6 @@ impl StructuralBlueprint {
             .map(|(structure, _)| structure)
     }
 
-    /// Actual blueprint realization. All elements share one energy holder and
-    /// one ledger; each material's internal and external bonds are admitted by
-    /// the same COMBINE runtime.
     pub fn realize_with_context(
         &self,
         catalog: &[BaseResource],
@@ -205,12 +196,86 @@ impl StructuralBlueprint {
         energy: &mut f64,
     ) -> Result<(OrganismStructure, f64), String> {
         self.validate()?;
+
+        // First try the authored spatial realization directly. This is the
+        // zero-displacement solution and therefore must be preferred whenever
+        // COMBINE can admit all declared connections at those positions.
+        let mut direct_structure = OrganismStructure::new();
+        let mut direct_ledger = *ledger;
+        let mut direct_energy = *energy;
+        let mut direct_realized = HashMap::<usize, Vec<usize>>::new();
+        let mut direct_heat = 0.0;
+        let mut direct_ok = true;
+        for index in 0..self.elements.len() {
+            match crate::construction_runtime::realize_material_with_context(
+                &mut direct_structure,
+                &self.elements[index],
+                catalog,
+                &mut direct_ledger,
+                &mut direct_energy,
+                &[],
+            ) {
+                Ok((ids, heat)) => {
+                    direct_realized.insert(index, ids);
+                    direct_heat += heat;
+                }
+                Err(_) => {
+                    direct_ok = false;
+                    break;
+                }
+            }
+        }
+        if direct_ok {
+            for connection in &self.connections {
+                let mut connected = false;
+                'pair: for &a in direct_realized
+                    .get(&connection.element_a)
+                    .into_iter()
+                    .flatten()
+                {
+                    for &b in direct_realized
+                        .get(&connection.element_b)
+                        .into_iter()
+                        .flatten()
+                    {
+                        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+                        if let Some(attempt) = crate::combine_runtime::combine_specific_pair(
+                            &mut direct_structure,
+                            a,
+                            b,
+                            catalog,
+                            0.0,
+                            &mut cache,
+                            &mut direct_ledger,
+                            &mut direct_energy,
+                        ) {
+                            direct_heat += attempt.work_cost;
+                            connected = true;
+                            break 'pair;
+                        }
+                    }
+                }
+                if !connected {
+                    direct_ok = false;
+                    break;
+                }
+            }
+        }
+        if direct_ok {
+            *ledger = direct_ledger;
+            *energy = direct_energy;
+            return Ok((direct_structure, direct_heat));
+        }
+
+        // If the inherited layout cannot be admitted as-is, fall back to the
+        // construction solver. It can move a realization to a physically valid
+        // alternative while retaining the blueprint as the spatial target.
         let mut structure = OrganismStructure::new();
         let mut realized = HashMap::<usize, Vec<usize>>::new();
         let mut order = Vec::with_capacity(self.elements.len());
         let mut visited = vec![false; self.elements.len()];
-        let mut queue = vec![self.core_elements[0]];
-        visited[self.core_elements[0]] = true;
+        let mut queue = vec![self.anchor_elements[0]];
+        visited[self.anchor_elements[0]] = true;
         while let Some(current) = queue.pop() {
             order.push(current);
             for connection in &self.connections {
@@ -235,39 +300,20 @@ impl StructuralBlueprint {
 
         let mut total_heat = 0.0;
         for index in order {
-            let external = if self.core_elements.contains(&index) {
-                if index == self.core_elements[0] {
-                    Vec::new()
-                } else {
-                    self.connections
-                        .iter()
-                        .filter_map(|connection| {
-                            let neighbor = if connection.element_a == index {
-                                connection.element_b
-                            } else if connection.element_b == index {
-                                connection.element_a
-                            } else {
-                                return None;
-                            };
-                            realized.get(&neighbor).cloned()
-                        })
-                        .collect::<Vec<_>>()
-                }
-            } else {
-                self.connections
-                    .iter()
-                    .filter_map(|connection| {
-                        let neighbor = if connection.element_a == index {
-                            connection.element_b
-                        } else if connection.element_b == index {
-                            connection.element_a
-                        } else {
-                            return None;
-                        };
-                        realized.get(&neighbor).cloned()
-                    })
-                    .collect::<Vec<_>>()
-            };
+            let external = self
+                .connections
+                .iter()
+                .filter_map(|connection| {
+                    let neighbor = if connection.element_a == index {
+                        connection.element_b
+                    } else if connection.element_b == index {
+                        connection.element_a
+                    } else {
+                        return None;
+                    };
+                    realized.get(&neighbor).cloned()
+                })
+                .collect::<Vec<_>>();
             let (ids, heat) = crate::construction_runtime::realize_material_with_context(
                 &mut structure,
                 &self.elements[index],
@@ -311,28 +357,6 @@ impl StructuralBlueprint {
         visited.into_iter().all(|visited| visited)
     }
 
-    fn core_is_connected(&self) -> bool {
-        let core = self.core_elements.iter().copied().collect::<HashSet<_>>();
-        let mut visited = HashSet::new();
-        let mut stack = vec![self.core_elements[0]];
-        visited.insert(self.core_elements[0]);
-        while let Some(current) = stack.pop() {
-            for connection in &self.connections {
-                let next = if connection.element_a == current {
-                    connection.element_b
-                } else if connection.element_b == current {
-                    connection.element_a
-                } else {
-                    continue;
-                };
-                if core.contains(&next) && visited.insert(next) {
-                    stack.push(next);
-                }
-            }
-        }
-        visited.len() == core.len()
-    }
-
     pub fn total_material_amount(&self) -> f64 {
         self.elements
             .iter()
@@ -370,7 +394,7 @@ fn validate_element_contact(
                 })
             })
             .fold(f64::INFINITY, f64::min);
-        if min_distance > 1e-9 {
+        if min_distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE {
             return Err(format!(
                 "realized material has no physical contact with a prescribed neighbor (minimum endpoint distance: {min_distance})"
             ));
