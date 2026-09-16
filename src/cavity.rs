@@ -96,12 +96,12 @@ pub fn analyze_genome_cavity(
     let minimum_area = minimum_genome_cavity_area(catalog)?;
     let mut polygons = Vec::<(usize, Vec<Point>)>::new();
     for (index, unit) in structure.units.iter().enumerate() {
-        let geometry = unit
-            .geometry
-            .as_ref()
-            .ok_or_else(|| format!("realized unit {index} has no geometry"))?;
-        let polygon = transformed_polygon(&geometry.shape().form, unit.placement)
-            .ok_or_else(|| format!("realized unit {index} has unsupported cavity geometry"))?;
+        let Some(geometry) = unit.geometry.as_ref() else {
+            continue;
+        };
+        let Some(polygon) = transformed_polygon(&geometry.shape().form, unit.placement) else {
+            continue;
+        };
         if polygon.len() < 3 {
             continue;
         }
