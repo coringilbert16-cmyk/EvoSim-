@@ -172,22 +172,27 @@ mod integration_tests {
     }
     fn add_test_break_bond(s: &mut Simulation) {
         s.organisms[0].structure.bonds.clear();
-        let a = s.organisms[0].structure.add_unit(StructuralUnit::new(
+        let catalog = &s.environment.catalog;
+        let mut a_unit = StructuralUnit::new(
             "Carbon",
             Placement {
                 x: 500.0,
                 y: 500.0,
                 rotation_radians: 0.0,
             },
-        ));
-        let b = s.organisms[0].structure.add_unit(StructuralUnit::new(
+        );
+        assert!(a_unit.realize_default_geometry(catalog));
+        let a = s.organisms[0].structure.add_unit(a_unit);
+        let mut b_unit = StructuralUnit::new(
             "Methane",
             Placement {
                 x: 501.0,
                 y: 500.0,
                 rotation_radians: 0.0,
             },
-        ));
+        );
+        assert!(b_unit.realize_default_geometry(catalog));
+        let b = s.organisms[0].structure.add_unit(b_unit);
         let id_a = s.organisms[0].structure.physical_id(a).unwrap();
         let id_b = s.organisms[0].structure.physical_id(b).unwrap();
         s.organisms[0].structure.push_bond_unchecked(Bond {
