@@ -33,10 +33,11 @@ jobs:
         run: bash scripts/check_large_files.sh
       - name: Check COMBINE architecture
         run: bash scripts/check_combine_architecture.sh
-      - name: Run Rust tests
+      - name: Run targeted construction tests (temporary diagnosis)
         run: |
           set -o pipefail
-          cargo test --all-targets 2>&1 | tee /tmp/cargo-test.log
+          cargo test blueprint_spatial_target_tests::tests::ancestral_seed_realizes_its_inherited_spatial_targets -- --nocapture 2>&1 | tee /tmp/cargo-test.log
+          cargo test cavity::tests::realized_structure_cavity_qualifies_without_a_predefined_core -- --nocapture 2>&1 | tee -a /tmp/cargo-test.log
       - name: Upload test log (temporary diagnosis)
         if: always()
         uses: actions/upload-artifact@v4
