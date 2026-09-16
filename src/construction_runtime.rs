@@ -87,7 +87,9 @@ pub(crate) fn candidate_placements(
                     }
                 }
                 (
-                    Form::Line { length: candidate_length },
+                    Form::Line {
+                        length: candidate_length,
+                    },
                     ConnectionEndpoint::Corner {
                         point_index: target_index,
                     },
@@ -100,9 +102,11 @@ pub(crate) fn candidate_placements(
                     let target_normal_angle = target_normal.1.atan2(target_normal.0);
                     let half = *candidate_length / 2.0;
                     for candidate_index in 0..2 {
-                        let candidate_normal =
-                            crate::rigid_boundary::line_endpoint_normal(&resource.shape, candidate_index)
-                                .unwrap();
+                        let candidate_normal = crate::rigid_boundary::line_endpoint_normal(
+                            &resource.shape,
+                            candidate_index,
+                        )
+                        .unwrap();
                         let candidate_normal_angle = candidate_normal.1.atan2(candidate_normal.0);
                         let rotation = target_normal_angle + std::f64::consts::PI
                             - candidate_normal_angle;
@@ -118,7 +122,9 @@ pub(crate) fn candidate_placements(
                     }
                 }
                 (
-                    Form::Line { length: candidate_length },
+                    Form::Line {
+                        length: candidate_length,
+                    },
                     ConnectionEndpoint::LineEndpoint {
                         point_index: target_index,
                     },
