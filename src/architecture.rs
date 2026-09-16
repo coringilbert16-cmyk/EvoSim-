@@ -87,7 +87,10 @@ impl OrganismArchitecture {
         {
             return Err("architecture requires boundary and interface regions".into());
         }
-        if !matches!(self.regions[self.anchor_region].role, ArchitectureRole::ConstructionAnchor) {
+        if !matches!(
+            self.regions[self.anchor_region].role,
+            ArchitectureRole::ConstructionAnchor
+        ) {
             return Err("anchor_region must identify ConstructionAnchor".into());
         }
         Ok(())

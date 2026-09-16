@@ -34,10 +34,9 @@ pub fn validate_realized_juvenile(
     requirements: JuvenileViabilityRequirements,
 ) -> Result<(), String> {
     let cavity = if requirements.require_sealed_genome_cavity {
-        Some(
-            analyze_genome_cavity(structure, catalog)?
-                .ok_or_else(|| "juvenile genome cavity is not sealed and sufficiently large".to_string())?,
-        )
+        Some(analyze_genome_cavity(structure, catalog)?.ok_or_else(|| {
+            "juvenile genome cavity is not sealed and sufficiently large".to_string()
+        })?)
     } else {
         analyze_genome_cavity(structure, catalog)?
     };
@@ -48,7 +47,9 @@ pub fn validate_realized_juvenile(
             .map(|value| value.boundary_units.len())
             .unwrap_or(0);
         if structure.units.len() <= boundary_count {
-            return Err("juvenile has no realized structure outside its genome cavity boundary".into());
+            return Err(
+                "juvenile has no realized structure outside its genome cavity boundary".into(),
+            );
         }
     }
     Ok(())
