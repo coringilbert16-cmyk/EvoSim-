@@ -3,10 +3,10 @@
 // Core environment, resources, and physical material/structure.
 mod environment;
 mod environmental_materials;
+mod material_restoration;
 mod material_storage;
 mod material_transfer;
 mod physical_material;
-mod material_restoration;
 mod resources;
 mod structure;
 mod structure_authority;
