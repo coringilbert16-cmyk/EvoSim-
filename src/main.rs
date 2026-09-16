@@ -7,6 +7,7 @@ mod material_storage;
 mod material_transfer;
 mod resources;
 mod structure;
+mod structure_authority;
 
 // Active physical geometry authority stack. These modules query realized rigid
 // geometry; they do not define a second catalog-shaped physical representation.
