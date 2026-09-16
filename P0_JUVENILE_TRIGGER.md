@@ -1,1 +1,1 @@
-Temporary CI trigger after unified juvenile realization migration; remove after verification.
+Temporary CI trigger after rigid polygon-to-line endpoint candidate fix; remove after verification.
