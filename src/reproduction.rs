@@ -140,7 +140,6 @@ pub(crate) fn begin_reproduction(
     ledger: &mut EnergyLedger,
 ) -> bool {
     if !matches!(parent.development_stage, DevelopmentStage::Adult)
-        || parent.reproductive_readiness < 1.0 - f64::EPSILON
         || parent.reproductive_construction.is_some()
     {
         return false;
@@ -240,7 +239,6 @@ pub(crate) fn begin_reproduction(
     parent.stored_material = remaining;
     parent.usable_energy = trial_energy;
     *ledger = trial_ledger;
-    parent.reproductive_readiness = 0.0;
     parent.add_transaction_stress(initial_stress);
     parent.reproductive_construction = Some(ReproductiveConstruction {
         committed_material,
@@ -394,8 +392,6 @@ pub(crate) fn finish_reproduction(
         stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
         stored_material,
         development_stage: DevelopmentStage::Juvenile,
-        age: 0,
-        reproductive_readiness: 0.0,
         active_transformation_id: None,
         reproductive_construction: None,
         structure: construction.developing_structure,
