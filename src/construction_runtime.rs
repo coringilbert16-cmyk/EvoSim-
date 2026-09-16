@@ -312,20 +312,18 @@ fn solve_parts(
     catalog: &[BaseResource],
     external: &[Vec<usize>],
     heat: f64,
-    score: f64,
 ) -> Option<(
     OrganismStructure,
     EnergyLedger,
     f64,
     Vec<Option<usize>>,
     f64,
-    f64,
 )> {
     if part == material.parts.len() {
         let (structure, ledger, energy, heat) = solve_external_groups(
             0, structure, ledger, energy, assigned, external, catalog, heat,
         )?;
-        return Some((structure, ledger, energy, assigned.to_vec(), heat, score));
+        return Some((structure, ledger, energy, assigned.to_vec(), heat));
     }
 
     let resource = resource(catalog, &material.parts[part].0)?;
@@ -338,25 +336,8 @@ fn solve_parts(
         }
     }
 
-    let mut best = None;
     for candidate_placement in candidate_placements(structure, resource, anchor, &targets, catalog)
     {
-        let placement_score =
-            (candidate_placement.x - anchor.x).hypot(candidate_placement.y - anchor.y);
-        let candidate_score = score + placement_score;
-        if best.as_ref().is_some_and(
-            |result: &(
-                OrganismStructure,
-                EnergyLedger,
-                f64,
-                Vec<Option<usize>>,
-                f64,
-                f64,
-            )| { candidate_score >= result.5 },
-        ) {
-            continue;
-        }
-
         let mut candidate = structure.clone();
         let mut candidate_ledger = *ledger;
         let mut candidate_energy = energy;
@@ -414,14 +395,11 @@ fn solve_parts(
             catalog,
             external,
             candidate_heat,
-            candidate_score,
         ) {
-            if best.as_ref().is_none_or(|current| result.5 < current.5) {
-                best = Some(result);
-            }
+            return Some(result);
         }
     }
-    best
+    None
 }
 
 pub(crate) fn realize_material_with_context(
@@ -439,8 +417,8 @@ pub(crate) fn realize_material_with_context(
     }
 
     let assigned = vec![None; material.parts.len()];
-    let Some((trial, trial_ledger, trial_energy, assigned, heat, _score)) = solve_parts(
-        0, structure, ledger, *energy, &assigned, material, anchor, catalog, external, 0.0, 0.0,
+    let Some((trial, trial_ledger, trial_energy, assigned, heat)) = solve_parts(
+        0, structure, ledger, *energy, &assigned, material, anchor, catalog, external, 0.0,
     ) else {
         let resource_name = material
             .parts
