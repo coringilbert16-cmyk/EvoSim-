@@ -10,9 +10,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct PhysicalMaterial {
     pub(crate) material: Material,
-    /// One world-relative placement per material constituent, in `parts` order.
-    /// `None` means the material has not yet supplied a physical realization;
-    /// restoration must refuse to invent one.
+    /// One placement per material constituent, in `parts` order. Placements
+    /// are relative to the material's part-0 origin; they are transformed into
+    /// world placement only when the material is restored into a structure.
+    /// `None` means no physical realization was supplied and restoration must
+    /// refuse to invent one.
     pub(crate) placements: Option<Vec<Placement>>,
 }
 
@@ -29,14 +31,19 @@ impl PhysicalMaterial {
         placements: Vec<Placement>,
         catalog: &[BaseResource],
     ) -> Option<Self> {
-        if !material.is_valid() || material.parts.is_empty() || placements.len() != material.parts.len() {
+        if !material.is_valid()
+            || material.parts.is_empty()
+            || placements.len() != material.parts.len()
+        {
             return None;
         }
         for (index, placement) in placements.iter().enumerate() {
             if !placement.x.is_finite()
                 || !placement.y.is_finite()
                 || !placement.rotation_radians.is_finite()
-                || catalog.iter().all(|resource| resource.name != material.parts[index].0)
+                || catalog
+                    .iter()
+                    .all(|resource| resource.name != material.parts[index].0)
             {
                 return None;
             }
