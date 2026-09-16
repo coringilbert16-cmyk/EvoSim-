@@ -1,0 +1,179 @@
+name: P0 Authority Cleanup
+
+on:
+  push:
+    branches: [p0-authority-cleanup]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Remove prohibited lifecycle authorities
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          def replace_exact(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected exactly one match, found {count}: {old!r}")
+              p.write_text(text.replace(old, new))
+
+          # state.rs: age and reproductive-readiness are not organism state.
+          replace_exact(
+              "src/state.rs",
+              "    pub(crate) development_stage: DevelopmentStage,\n    pub(crate) age: u64,\n    #[serde(default)]\n    pub(crate) reproductive_readiness: f64,\n    pub(crate) active_transformation_id: Option<u64>,",
+              "    pub(crate) development_stage: DevelopmentStage,\n    pub(crate) active_transformation_id: Option<u64>,",
+          )
+          replace_exact(
+              "src/state.rs",
+              "pub(crate) const STRESS_THRESHOLD_DECAY: f64 = 0.90;\npub(crate) const AGING_STRESS_THRESHOLD_DECAY: f64 = 0.9999;\npub(crate) const MAINTENANCE_ENERGY_PER_MASS: f64 = 0.001;",
+              "pub(crate) const STRESS_THRESHOLD_DECAY: f64 = 0.90;\npub(crate) const MAINTENANCE_ENERGY_PER_MASS: f64 = 0.001;",
+          )
+          aging = re.compile(r"    pub\(crate\) fn apply_aging\(&mut self\) \{.*?\n    \}\n", re.S)
+          p = Path("src/state.rs")
+          text = p.read_text()
+          text, count = aging.subn("", text)
+          if count != 1:
+              raise SystemExit(f"src/state.rs: expected one apply_aging method, found {count}")
+          p.write_text(text)
+
+          # decision.rs: reproduction is a direct adult priority, not an accumulating readiness state.
+          p = Path("src/decision.rs")
+          text = p.read_text()
+          old = '''    /// Usable energy at which a mature organism has full energetic readiness
+    /// for reproduction.
+    pub reproduction_reserve: f64,
+    /// Fraction of reproductive readiness accumulated per tick under fully
+    /// mature, fully energy-ready conditions.
+    pub reproduction_accumulation_rate: f64,
+'''
+          if text.count(old) != 1:
+              raise SystemExit("decision.rs: reproduction readiness parameter block mismatch")
+          text = text.replace(old, "")
+          old = '''            survival_reserve: 1.0,
+            reproduction_reserve: 16.0,
+            reproduction_accumulation_rate: 0.01,
+'''
+          if text.count(old) != 1:
+              raise SystemExit("decision.rs: reproduction readiness defaults mismatch")
+          text = text.replace(old, "            survival_reserve: 1.0,\n")
+          p.write_text(text)
+
+          # simulation.rs: adulthood remains blueprint-driven; adulthood immediately creates reproduction pressure.
+          p = Path("src/simulation.rs")
+          text = p.read_text()
+          text = text.replace("            age: 0,\n            reproductive_readiness: 0.0,\n", "")
+          if "age: 0" in text or "reproductive_readiness: 0.0" in text:
+              raise SystemExit("simulation.rs: lifecycle fields remain in initializer")
+          old = '''        CurrentNeeds {
+            survival,
+            reproduction: organism.reproductive_readiness.clamp(0.0, 1.0),
+        }
+    }
+
+    fn update_reproductive_readiness(
+        organism: &mut Organism,
+        environment: &Environment,
+        parameters: DecisionParameters,
+    ) {
+        if !matches!(organism.development_stage, DevelopmentStage::Adult) {
+            return;
+        }
+        let mature_mass = Self::mature_structural_mass(organism, environment).max(f64::EPSILON);
+        let maturity =
+            (organism.structural_mass(&environment.catalog) / mature_mass).clamp(0.0, 1.0);
+        let reproduction_reserve = parameters.reproduction_reserve.max(f64::EPSILON);
+        let energy_readiness = (organism.usable_energy / reproduction_reserve).clamp(0.0, 1.0);
+        let accumulation =
+            (maturity * energy_readiness * parameters.reproduction_accumulation_rate.max(0.0))
+                .clamp(0.0, 1.0);
+        organism.reproductive_readiness =
+            (organism.reproductive_readiness + accumulation).clamp(0.0, 1.0)
+    }
+'''
+          new = '''        CurrentNeeds {
+            survival,
+            reproduction: if matches!(organism.development_stage, DevelopmentStage::Adult) {
+                1.0
+            } else {
+                0.0
+            },
+        }
+    }
+'''
+          if text.count(old) != 1:
+              raise SystemExit("simulation.rs: current needs/readiness block mismatch")
+          text = text.replace(old, new)
+          text = text.replace("            organism.age += 1;\n", "")
+          text = text.replace("            organism.apply_aging();\n", "")
+          call = '''            Self::update_reproductive_readiness(
+                organism,
+                &environment_snapshot,
+                decision_parameters,
+            );
+'''
+          if text.count(call) != 1:
+              raise SystemExit("simulation.rs: readiness call mismatch")
+          text = text.replace(call, "")
+          if "update_reproductive_readiness" in text or "reproductive_readiness" in text or "apply_aging" in text or "organism.age" in text:
+              raise SystemExit("simulation.rs: prohibited lifecycle authority remains")
+          p.write_text(text)
+
+          # reproduction.rs: adult status itself opens reproduction; no readiness gate/reset.
+          p = Path("src/reproduction.rs")
+          text = p.read_text()
+          old = '''    if !matches!(parent.development_stage, DevelopmentStage::Adult)
+        || parent.reproductive_readiness < 1.0 - f64::EPSILON
+        || parent.reproductive_construction.is_some()
+    {
+'''
+          new = '''    if !matches!(parent.development_stage, DevelopmentStage::Adult)
+        || parent.reproductive_construction.is_some()
+    {
+'''
+          if text.count(old) != 1:
+              raise SystemExit("reproduction.rs: readiness gate mismatch")
+          text = text.replace(old, new)
+          old = "    parent.reproductive_readiness = 0.0;\n"
+          if text.count(old) != 1:
+              raise SystemExit("reproduction.rs: readiness reset mismatch")
+          text = text.replace(old, "")
+          text = text.replace("        age: 0,\n        reproductive_readiness: 0.0,\n", "")
+          if "reproductive_readiness" in text or "age: 0" in text:
+              raise SystemExit("reproduction.rs: prohibited lifecycle fields remain")
+          p.write_text(text)
+
+      - name: Verify prohibited lifecycle authorities are gone
+        run: |
+          ! grep -RIn --exclude-dir=.git --exclude=README.md --exclude='*.yml' -E 'reproductive_readiness|apply_reproductive_readiness|update_reproductive_readiness|apply_aging|AGING_STRESS_THRESHOLD_DECAY|organism\.age|pub\(crate\) age: u64|age: 0' src
+
+      - name: Format
+        run: cargo fmt --all
+
+      - name: Test
+        run: cargo test --all-targets
+
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of
+
+      - name: Remove temporary workflow and commit
+        run: |
+          rm .github/workflows/p0-authority-cleanup.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/state.rs src/decision.rs src/simulation.rs src/reproduction.rs .github/workflows/p0-authority-cleanup.yml
+          git commit -m "P0: remove age and reproductive readiness authorities"
+          git push origin HEAD:p0-authority-cleanup
