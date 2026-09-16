@@ -353,7 +353,22 @@ pub(crate) fn realize_material_with_context(
     let Some((trial, trial_ledger, trial_energy, assigned, heat)) = solve_parts(
         0, structure, ledger, *energy, &assigned, material, anchor, catalog, external, 0.0,
     ) else {
-        return Err("construction placement could not satisfy physical constraints".into());
+        let resource_name = material
+            .parts
+            .first()
+            .map(|(name, _)| name.as_str())
+            .unwrap_or("<none>");
+        let targets = external
+            .iter()
+            .flatten()
+            .copied()
+            .collect::<Vec<_>>();
+        let candidate_count = resource(catalog, resource_name)
+            .map(|resource| candidate_placements(structure, resource, anchor, &targets, catalog).len())
+            .unwrap_or(0);
+        return Err(format!(
+            "construction placement could not satisfy physical constraints (material={resource_name}, external_targets={targets:?}, candidate_placements={candidate_count})"
+        ));
     };
 
     *structure = trial;
