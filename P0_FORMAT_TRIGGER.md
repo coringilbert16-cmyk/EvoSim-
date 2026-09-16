@@ -1,1 +1,0 @@
-Temporary CI trigger for rustfmt repair; remove after formatting is applied.
