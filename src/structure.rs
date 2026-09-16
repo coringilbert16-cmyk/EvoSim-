@@ -67,10 +67,14 @@ impl StructuralUnit {
         }
         catalog.iter().find(|base| base.name == *name)
     }
-    pub fn shape<'a>(&'a self, catalog: &'a [BaseResource]) -> Option<&'a crate::resources::Shape> {
-        if let Some(geometry) = &self.geometry {
-            return Some(geometry.shape());
-        }
+    /// Return the construction-time default shape for this material.
+    ///
+    /// This method is intentionally named to make its authority boundary
+    /// explicit: it may only be used while creating `PhysicalGeometry`.
+    fn construction_shape<'a>(
+        &'a self,
+        catalog: &'a [BaseResource],
+    ) -> Option<&'a crate::resources::Shape> {
         if !self.material.has_internal_structure() {
             let [(name, amount)] = self.material.parts.as_slice() else {
                 return None;
@@ -90,7 +94,7 @@ impl StructuralUnit {
         if self.geometry.is_some() {
             return true;
         }
-        let Some(shape) = self.shape(catalog).cloned() else {
+        let Some(shape) = self.construction_shape(catalog).cloned() else {
             return false;
         };
         self.geometry = Some(PhysicalGeometry::from_default(&shape));
@@ -185,34 +189,25 @@ impl<'de> Deserialize<'de> for BondEndpoint {
     }
 }
 impl ConnectionEndpoint {
-    pub fn world_point(
-        self,
-        unit: &StructuralUnit,
-        catalog: &[BaseResource],
-    ) -> Option<WorldConnectionPoint> {
+    pub fn world_point(self, unit: &StructuralUnit) -> Option<WorldConnectionPoint> {
+        let shape = unit.realized_shape()?;
         match self {
-            Self::Corner { point_index } => {
-                let shape = unit.shape(catalog)?;
-                crate::connection_geometry::transform_polygon_vertex(
-                    shape,
-                    point_index,
-                    unit.placement.x,
-                    unit.placement.y,
-                    unit.placement.rotation_radians,
-                )
-            }
-            Self::LineEndpoint { point_index } => {
-                let shape = unit.shape(catalog)?;
-                crate::connection_geometry::transform_line_endpoint(
-                    shape,
-                    point_index,
-                    unit.placement.x,
-                    unit.placement.y,
-                    unit.placement.rotation_radians,
-                )
-            }
+            Self::Corner { point_index } => crate::connection_geometry::transform_polygon_vertex(
+                shape,
+                point_index,
+                unit.placement.x,
+                unit.placement.y,
+                unit.placement.rotation_radians,
+            ),
+            Self::LineEndpoint { point_index } => crate::connection_geometry::transform_line_endpoint(
+                shape,
+                point_index,
+                unit.placement.x,
+                unit.placement.y,
+                unit.placement.rotation_radians,
+            ),
             Self::Boundary { angle_radians } => {
-                let crate::resources::Form::Circle { radius } = unit.shape(catalog)?.form else {
+                let crate::resources::Form::Circle { radius } = shape.form else {
                     return None;
                 };
                 let (nx, ny) = (angle_radians.cos(), angle_radians.sin());
@@ -226,15 +221,7 @@ impl ConnectionEndpoint {
                     unit.placement.rotation_radians,
                 ))
             }
-            Self::Fluid { x, y } => Some(crate::connection_geometry::transform_derived_point(
-                x,
-                y,
-                0.0,
-                0.0,
-                unit.placement.x,
-                unit.placement.y,
-                unit.placement.rotation_radians,
-            )),
+            Self::Fluid { .. } => None,
         }
     }
     pub fn same_location(self, other: Self) -> bool {
@@ -269,25 +256,13 @@ impl Bond {
     }
     pub fn has_same_identity(&self, o: &Bond) -> bool {
         (self.endpoint_a.constituent_id == o.endpoint_a.constituent_id
-            && self
-                .endpoint_a
-                .location
-                .same_location(o.endpoint_a.location)
+            && self.endpoint_a.location.same_location(o.endpoint_a.location)
             && self.endpoint_b.constituent_id == o.endpoint_b.constituent_id
-            && self
-                .endpoint_b
-                .location
-                .same_location(o.endpoint_b.location))
+            && self.endpoint_b.location.same_location(o.endpoint_b.location))
             || (self.endpoint_a.constituent_id == o.endpoint_b.constituent_id
-                && self
-                    .endpoint_a
-                    .location
-                    .same_location(o.endpoint_b.location)
+                && self.endpoint_a.location.same_location(o.endpoint_b.location)
                 && self.endpoint_b.constituent_id == o.endpoint_a.constituent_id
-                && self
-                    .endpoint_b
-                    .location
-                    .same_location(o.endpoint_a.location))
+                && self.endpoint_b.location.same_location(o.endpoint_a.location))
     }
     pub fn is_valid(&self, connection_is_valid: impl Fn(BondEndpoint) -> bool) -> bool {
         self.endpoint_a.constituent_id.0 != 0
@@ -299,12 +274,8 @@ impl Bond {
             && connection_is_valid(self.endpoint_b)
     }
 }
-fn units_strictly_overlap(
-    a: &StructuralUnit,
-    b: &StructuralUnit,
-    catalog: &[BaseResource],
-) -> bool {
-    let (Some(form_a), Some(form_b)) = (a.shape(catalog), b.shape(catalog)) else {
+fn units_strictly_overlap(a: &StructuralUnit, b: &StructuralUnit) -> bool {
+    let (Some(form_a), Some(form_b)) = (a.realized_shape(), b.realized_shape()) else {
         return false;
     };
     let pa = crate::material_geometry::PlacedMaterialPart {
@@ -460,12 +431,12 @@ impl PhysicalConstituentGraph {
         };
         if !b.is_valid(|e| {
             self.endpoint_index(e)
-                .and_then(|i| e.location.world_point(self.units.get(i)?, c))
+                .and_then(|i| e.location.world_point(self.units.get(i)?))
                 .is_some()
         }) {
             return false;
         }
-        if units_strictly_overlap(&self.units[a], &self.units[d], c) {
+        if units_strictly_overlap(&self.units[a], &self.units[d]) {
             return false;
         }
         let Some(pa) = self.units[a].properties(c) else {
