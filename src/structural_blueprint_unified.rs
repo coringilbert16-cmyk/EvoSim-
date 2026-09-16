@@ -184,9 +184,6 @@ impl StructuralBlueprint {
         Ok(())
     }
 
-    /// Non-persistent physical preview. It uses a private trial energy budget
-    /// solely so COMBINE can evaluate its real admission rules. No simulation
-    /// ledger, organism energy, or structure is mutated by this method.
     pub fn realize(&self, catalog: &[BaseResource]) -> Result<OrganismStructure, String> {
         let mut ledger = EnergyLedger::default();
         let mut preview_energy = 1.0e12;
@@ -194,9 +191,6 @@ impl StructuralBlueprint {
             .map(|(structure, _)| structure)
     }
 
-    /// Actual blueprint realization. All elements share one energy holder and
-    /// one ledger; each material's internal and external bonds are admitted by
-    /// the same COMBINE runtime.
     pub fn realize_with_context(
         &self,
         catalog: &[BaseResource],
@@ -206,30 +200,22 @@ impl StructuralBlueprint {
         self.validate()?;
         let mut structure = OrganismStructure::new();
         let mut realized = HashMap::<usize, Vec<usize>>::new();
+
+        // Construction begins with every declared anchor, then follows the
+        // blueprint's authored element order. This keeps the intended spatial
+        // layout available to the solver before dependent interface elements
+        // are realized, while still letting COMBINE/backtracking choose the
+        // actual physical endpoints and placements.
         let mut order = Vec::with_capacity(self.elements.len());
-        let mut visited = vec![false; self.elements.len()];
-        let mut queue = vec![self.anchor_elements[0]];
-        visited[self.anchor_elements[0]] = true;
-        while let Some(current) = queue.pop() {
-            order.push(current);
-            for connection in &self.connections {
-                let neighbor = if connection.element_a == current {
-                    connection.element_b
-                } else if connection.element_b == current {
-                    connection.element_a
-                } else {
-                    continue;
-                };
-                if !visited[neighbor] {
-                    visited[neighbor] = true;
-                    queue.push(neighbor);
-                }
-            }
+        let mut included = vec![false; self.elements.len()];
+        for &anchor in &self.anchor_elements {
+            order.push(anchor);
+            included[anchor] = true;
         }
-        if order.len() != self.elements.len() {
-            return Err(
-                "blueprint realization stalled before all elements were constructed".into(),
-            );
+        for index in 0..self.elements.len() {
+            if !included[index] {
+                order.push(index);
+            }
         }
 
         let mut total_heat = 0.0;
