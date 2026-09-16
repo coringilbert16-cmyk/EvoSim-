@@ -142,20 +142,12 @@ impl CurrentNeeds {
 pub struct DecisionParameters {
     /// Immediate usable-energy reserve at which survival pressure reaches 0.
     pub survival_reserve: f64,
-    /// Usable energy at which a mature organism has full energetic readiness
-    /// for reproduction.
-    pub reproduction_reserve: f64,
-    /// Fraction of reproductive readiness accumulated per tick under fully
-    /// mature, fully energy-ready conditions.
-    pub reproduction_accumulation_rate: f64,
 }
 
 impl Default for DecisionParameters {
     fn default() -> Self {
         Self {
             survival_reserve: 1.0,
-            reproduction_reserve: 16.0,
-            reproduction_accumulation_rate: 0.01,
         }
     }
 }
