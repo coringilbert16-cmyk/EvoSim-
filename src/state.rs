@@ -127,9 +127,6 @@ pub(crate) struct Organism {
     pub(crate) stored_material: MaterialStorage,
     pub(crate) structure: OrganismStructure,
     pub(crate) development_stage: DevelopmentStage,
-    pub(crate) age: u64,
-    #[serde(default)]
-    pub(crate) reproductive_readiness: f64,
     pub(crate) active_transformation_id: Option<u64>,
     #[serde(default)]
     pub(crate) reproductive_construction: Option<ReproductiveConstruction>,
@@ -137,7 +134,6 @@ pub(crate) struct Organism {
 pub(crate) const STRESS_DECAY_PER_TICK: f64 = 0.98;
 pub(crate) const INITIAL_STRESS_THRESHOLD: f64 = 100.0;
 pub(crate) const STRESS_THRESHOLD_DECAY: f64 = 0.90;
-pub(crate) const AGING_STRESS_THRESHOLD_DECAY: f64 = 0.9999;
 pub(crate) const MAINTENANCE_ENERGY_PER_MASS: f64 = 0.001;
 pub(crate) const MIN_STRESS_THRESHOLD: f64 = 5.0;
 fn default_stress_threshold() -> f64 {
@@ -157,13 +153,6 @@ impl Organism {
     pub(crate) fn add_transaction_stress(&mut self, heat: f64) {
         if heat.is_finite() && heat > 0.0 {
             self.stress += heat
-        }
-    }
-    pub(crate) fn apply_aging(&mut self) {
-        if matches!(self.development_stage, DevelopmentStage::Adult) {
-            self.stress_threshold = (self.stress_threshold.max(MIN_STRESS_THRESHOLD)
-                * AGING_STRESS_THRESHOLD_DECAY)
-                .max(MIN_STRESS_THRESHOLD)
         }
     }
     pub(crate) fn apply_maintenance(
