@@ -64,8 +64,7 @@ pub(crate) fn candidate_placements(
                             crate::rigid_boundary::corner_normal(&resource.shape, candidate_index),
                             crate::rigid_boundary::corner_normal(target_shape, target_index),
                         ) {
-                            let candidate_angle =
-                                candidate_normal.1.atan2(candidate_normal.0);
+                            let candidate_angle = candidate_normal.1.atan2(candidate_normal.0);
                             let target_angle = target_normal.1.atan2(target_normal.0);
                             let rotation = target_angle + std::f64::consts::PI - candidate_angle;
                             if let Some(local) = crate::rigid_boundary::world_vertex(
@@ -293,8 +292,13 @@ fn solve_parts(
         }
     }
 
-    for candidate_placement in candidate_placements(structure, resource, anchor, &targets, catalog)
-    {
+    for candidate_placement in candidate_placements(
+        structure,
+        resource,
+        anchor,
+        &targets,
+        catalog,
+    ) {
         let mut candidate = structure.clone();
         let mut candidate_ledger = *ledger;
         let mut candidate_energy = energy;
