@@ -328,7 +328,7 @@ fn validate_element_contact(
                 })
             })
             .fold(f64::INFINITY, f64::min);
-        if min_distance > 1e-9 {
+        if min_distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE {
             return Err(format!(
                 "realized material has no physical contact with a prescribed neighbor (minimum endpoint distance: {min_distance})"
             ));
