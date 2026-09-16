@@ -11,7 +11,7 @@ use crate::structure::OrganismStructure;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::{HashMap, HashSet};
 
-fn default_core_elements() -> Vec<usize> {
+fn default_anchor_elements() -> Vec<usize> {
     vec![0]
 }
 
@@ -27,8 +27,10 @@ pub struct BlueprintPlacement {
 pub struct StructuralBlueprint {
     pub elements: Vec<BlueprintElement>,
     pub connections: Vec<BlueprintConnection>,
-    #[serde(default = "default_core_elements")]
-    pub core_elements: Vec<usize>,
+    /// Construction anchors identify where realization may begin. They are
+    /// not a biological genome definition and do not identify the genome.
+    #[serde(default = "default_anchor_elements")]
+    pub anchor_elements: Vec<usize>,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -118,19 +120,19 @@ impl StructuralBlueprint {
         Self {
             elements,
             connections: Self::canonical_connections(connections),
-            core_elements: default_core_elements(),
+            anchor_elements: default_anchor_elements(),
         }
     }
 
-    pub fn with_core_elements(
+    pub fn with_anchor_elements(
         elements: Vec<BlueprintElement>,
         connections: Vec<BlueprintConnection>,
-        core_elements: Vec<usize>,
+        anchor_elements: Vec<usize>,
     ) -> Self {
         Self {
             elements,
             connections: Self::canonical_connections(connections),
-            core_elements,
+            anchor_elements,
         }
     }
 
@@ -151,18 +153,18 @@ impl StructuralBlueprint {
         if self.elements.is_empty() {
             return Err("blueprint must contain at least one element".into());
         }
-        if self.core_elements.is_empty() {
-            return Err("blueprint must define a genome core".into());
+        if self.anchor_elements.is_empty() {
+            return Err("blueprint must define at least one construction anchor".into());
         }
-        let mut core_seen = vec![false; self.elements.len()];
-        for &index in &self.core_elements {
+        let mut anchor_seen = vec![false; self.elements.len()];
+        for &index in &self.anchor_elements {
             if index >= self.elements.len() {
-                return Err("genome core references a missing element".into());
+                return Err("construction anchor references a missing element".into());
             }
-            if core_seen[index] {
-                return Err("genome core contains a duplicate element".into());
+            if anchor_seen[index] {
+                return Err("construction anchors contain a duplicate element".into());
             }
-            core_seen[index] = true;
+            anchor_seen[index] = true;
         }
         let mut connection_seen = HashSet::new();
         for (i, e) in self.elements.iter().enumerate() {
@@ -178,9 +180,6 @@ impl StructuralBlueprint {
         }
         if self.elements.len() > 1 && !self.is_connected() {
             return Err("multi-element blueprint must be connected".into());
-        }
-        if self.core_elements.len() > 1 && !self.core_is_connected() {
-            return Err("genome core must be connected".into());
         }
         Ok(())
     }
@@ -209,8 +208,8 @@ impl StructuralBlueprint {
         let mut realized = HashMap::<usize, Vec<usize>>::new();
         let mut order = Vec::with_capacity(self.elements.len());
         let mut visited = vec![false; self.elements.len()];
-        let mut queue = vec![self.core_elements[0]];
-        visited[self.core_elements[0]] = true;
+        let mut queue = vec![self.anchor_elements[0]];
+        visited[self.anchor_elements[0]] = true;
         while let Some(current) = queue.pop() {
             order.push(current);
             for connection in &self.connections {
@@ -235,39 +234,20 @@ impl StructuralBlueprint {
 
         let mut total_heat = 0.0;
         for index in order {
-            let external = if self.core_elements.contains(&index) {
-                if index == self.core_elements[0] {
-                    Vec::new()
-                } else {
-                    self.connections
-                        .iter()
-                        .filter_map(|connection| {
-                            let neighbor = if connection.element_a == index {
-                                connection.element_b
-                            } else if connection.element_b == index {
-                                connection.element_a
-                            } else {
-                                return None;
-                            };
-                            realized.get(&neighbor).cloned()
-                        })
-                        .collect::<Vec<_>>()
-                }
-            } else {
-                self.connections
-                    .iter()
-                    .filter_map(|connection| {
-                        let neighbor = if connection.element_a == index {
-                            connection.element_b
-                        } else if connection.element_b == index {
-                            connection.element_a
-                        } else {
-                            return None;
-                        };
-                        realized.get(&neighbor).cloned()
-                    })
-                    .collect::<Vec<_>>()
-            };
+            let external = self
+                .connections
+                .iter()
+                .filter_map(|connection| {
+                    let neighbor = if connection.element_a == index {
+                        connection.element_b
+                    } else if connection.element_b == index {
+                        connection.element_a
+                    } else {
+                        return None;
+                    };
+                    realized.get(&neighbor).cloned()
+                })
+                .collect::<Vec<_>>();
             let (ids, heat) = crate::construction_runtime::realize_material_with_context(
                 &mut structure,
                 &self.elements[index],
@@ -309,28 +289,6 @@ impl StructuralBlueprint {
             }
         }
         visited.into_iter().all(|visited| visited)
-    }
-
-    fn core_is_connected(&self) -> bool {
-        let core = self.core_elements.iter().copied().collect::<HashSet<_>>();
-        let mut visited = HashSet::new();
-        let mut stack = vec![self.core_elements[0]];
-        visited.insert(self.core_elements[0]);
-        while let Some(current) = stack.pop() {
-            for connection in &self.connections {
-                let next = if connection.element_a == current {
-                    connection.element_b
-                } else if connection.element_b == current {
-                    connection.element_a
-                } else {
-                    continue;
-                };
-                if core.contains(&next) && visited.insert(next) {
-                    stack.push(next);
-                }
-            }
-        }
-        visited.len() == core.len()
     }
 
     pub fn total_material_amount(&self) -> f64 {
