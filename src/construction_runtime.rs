@@ -292,13 +292,7 @@ fn solve_parts(
         }
     }
 
-    for candidate_placement in candidate_placements(
-        structure,
-        resource,
-        anchor,
-        &targets,
-        catalog,
-    ) {
+    for candidate_placement in candidate_placements(structure, resource, anchor, &targets, catalog) {
         let mut candidate = structure.clone();
         let mut candidate_ledger = *ledger;
         let mut candidate_energy = energy;
