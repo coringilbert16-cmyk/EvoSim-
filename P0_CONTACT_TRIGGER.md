@@ -1,1 +1,0 @@
-Temporary CI trigger after contact geometry fix; remove after verification.
