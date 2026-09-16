@@ -35,10 +35,7 @@ pub(crate) fn restore_material(
 ) -> Option<Vec<usize>> {
     let relative = instance.placements.as_ref()?;
     let material = &instance.material;
-    if !material.is_valid()
-        || material.parts.is_empty()
-        || relative.len() != material.parts.len()
-    {
+    if !material.is_valid() || material.parts.is_empty() || relative.len() != material.parts.len() {
         return None;
     }
 
@@ -62,20 +59,14 @@ pub(crate) fn restore_material(
     for internal in &material.internal_bonds {
         let unit_a = *indices.get(internal.part_a)?;
         let unit_b = *indices.get(internal.part_b)?;
-        let candidates = connection_pair_candidates_cached(
-            &trial,
-            unit_a,
-            unit_b,
-            catalog,
-            &mut cache,
-        )
-        .into_iter()
-        .filter(|candidate| {
-            candidate.available_a
-                && candidate.available_b
-                && candidate.distance <= CONTACT_TOLERANCE
-        })
-        .collect::<Vec<_>>();
+        let candidates = connection_pair_candidates_cached(&trial, unit_a, unit_b, catalog, &mut cache)
+            .into_iter()
+            .filter(|candidate| {
+                candidate.available_a
+                    && candidate.available_b
+                    && candidate.distance <= CONTACT_TOLERANCE
+            })
+            .collect::<Vec<_>>();
         if candidates.len() != 1 {
             return None;
         }
