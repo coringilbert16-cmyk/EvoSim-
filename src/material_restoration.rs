@@ -35,7 +35,10 @@ pub(crate) fn restore_material(
 ) -> Option<Vec<usize>> {
     let relative = instance.placements.as_ref()?;
     let material = &instance.material;
-    if !material.is_valid() || material.parts.is_empty() || relative.len() != material.parts.len() {
+    if !material.is_valid()
+        || material.parts.is_empty()
+        || relative.len() != material.parts.len()
+    {
         return None;
     }
 
