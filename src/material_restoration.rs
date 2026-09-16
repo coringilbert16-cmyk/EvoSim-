@@ -7,9 +7,10 @@
 use crate::contact::{connection_pair_candidates_cached, ConnectionCompatibilityCache};
 use crate::physical_material::PhysicalMaterial;
 use crate::resources::BaseResource;
-use crate::structure::{Bond, BondEndpoint, ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
+use crate::structure::{Bond, BondEndpoint, OrganismStructure, Placement, StructuralUnit};
 
 const EPSILON: f64 = 1e-9;
+const CONTACT_TOLERANCE: f64 = 1.0;
 
 fn transform_relative(origin: Placement, relative: Placement) -> Placement {
     let (sin, cos) = origin.rotation_radians.sin_cos();
@@ -66,7 +67,11 @@ pub(crate) fn restore_material(
             &mut cache,
         )
         .into_iter()
-        .filter(|candidate| candidate.available_a && candidate.available_b)
+        .filter(|candidate| {
+            candidate.available_a
+                && candidate.available_b
+                && candidate.distance <= CONTACT_TOLERANCE
+        })
         .collect::<Vec<_>>();
         if candidates.len() != 1 {
             return None;
@@ -93,15 +98,4 @@ pub(crate) fn restore_material(
 
     *structure = trial;
     Some(indices)
-}
-
-#[allow(dead_code)]
-fn _endpoint_type_is_physical(endpoint: ConnectionEndpoint) -> bool {
-    matches!(
-        endpoint,
-        ConnectionEndpoint::Corner { .. }
-            | ConnectionEndpoint::LineEndpoint { .. }
-            | ConnectionEndpoint::Boundary { .. }
-            | ConnectionEndpoint::Fluid { .. }
-    )
 }
