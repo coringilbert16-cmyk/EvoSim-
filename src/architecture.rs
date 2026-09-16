@@ -9,7 +9,7 @@ pub const JUVENILE_LINEAR_SCALE: f64 = 0.40;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum ArchitectureRole {
-    GenomeCore,
+    ConstructionAnchor,
     StructuralBoundary,
     Interface,
 }
@@ -42,14 +42,14 @@ pub struct ArchitectureRelation {
 pub struct OrganismArchitecture {
     pub regions: Vec<ArchitectureRegion>,
     pub relations: Vec<ArchitectureRelation>,
-    pub genome_region: usize,
+    pub anchor_region: usize,
     pub target_scale: f64,
 }
 
 impl OrganismArchitecture {
     pub fn validate(&self) -> Result<(), String> {
-        if self.regions.is_empty() || self.genome_region >= self.regions.len() {
-            return Err("architecture has no valid genome region".into());
+        if self.regions.is_empty() || self.anchor_region >= self.regions.len() {
+            return Err("architecture has no valid construction anchor region".into());
         }
         if !self.target_scale.is_finite() || self.target_scale <= 0.0 {
             return Err("architecture target scale must be positive and finite".into());
@@ -87,6 +87,9 @@ impl OrganismArchitecture {
         {
             return Err("architecture requires boundary and interface regions".into());
         }
+        if !matches!(self.regions[self.anchor_region].role, ArchitectureRole::ConstructionAnchor) {
+            return Err("anchor_region must identify ConstructionAnchor".into());
+        }
         Ok(())
     }
 
@@ -121,7 +124,6 @@ impl OrganismArchitecture {
                     if crate::juvenile_requirements::validate_realized_juvenile(
                         &structure,
                         catalog,
-                        &target.core_elements,
                         crate::juvenile_requirements::JuvenileViabilityRequirements::default(),
                     )
                     .is_ok() =>
@@ -137,10 +139,7 @@ impl OrganismArchitecture {
 
     fn construction_target(&self, scale: f64) -> Result<StructuralBlueprint, String> {
         self.validate()?;
-        let core = &self.regions[self.genome_region];
-        if !matches!(core.role, ArchitectureRole::GenomeCore) {
-            return Err("genome_region must identify GenomeCore".into());
-        }
+        let anchor = &self.regions[self.anchor_region];
         let boundary = self
             .regions
             .iter()
@@ -153,51 +152,28 @@ impl OrganismArchitecture {
             .ok_or("architecture requires an interface")?;
         let mut elements = Vec::new();
         let mut connections = Vec::new();
-        add_core(&mut elements, &mut connections, core);
+        add_anchor(&mut elements, &mut connections, anchor);
         add_boundary(&mut elements, &mut connections, boundary, scale);
         add_interface(&mut elements, &mut connections, interface, scale);
-        let target =
-            StructuralBlueprint::with_core_elements(elements, connections, vec![0, 1, 2, 3]);
+        let target = StructuralBlueprint::with_anchor_elements(elements, connections, vec![0]);
         target.validate()?;
         Ok(target)
     }
 }
 
-fn add_core(
+fn add_anchor(
     elements: &mut Vec<BlueprintElement>,
-    connections: &mut Vec<BlueprintConnection>,
+    _connections: &mut Vec<BlueprintConnection>,
     region: &ArchitectureRegion,
 ) {
-    let d = (1.511_858 + 0.330_719) / 2.0;
-    for (x, y, rotation_radians) in [
-        (region.center_x, region.center_y + d, 0.0),
-        (
-            region.center_x - d,
-            region.center_y,
-            std::f64::consts::FRAC_PI_2,
-        ),
-        (
-            region.center_x + d,
-            region.center_y,
-            std::f64::consts::FRAC_PI_2,
-        ),
-        (region.center_x, region.center_y - d, 0.0),
-    ] {
-        elements.push(BlueprintElement {
-            material: region.material.clone(),
-            placement: BlueprintPlacement {
-                x,
-                y,
-                rotation_radians,
-            },
-        });
-    }
-    for (a, b) in [(0, 1), (0, 2), (1, 3), (2, 3)] {
-        connections.push(BlueprintConnection {
-            element_a: a,
-            element_b: b,
-        });
-    }
+    elements.push(BlueprintElement {
+        material: region.material.clone(),
+        placement: BlueprintPlacement {
+            x: region.center_x,
+            y: region.center_y,
+            rotation_radians: 0.0,
+        },
+    });
 }
 
 fn add_boundary(
@@ -327,7 +303,7 @@ pub fn default_architecture() -> OrganismArchitecture {
     OrganismArchitecture {
         regions: vec![
             ArchitectureRegion {
-                role: ArchitectureRole::GenomeCore,
+                role: ArchitectureRole::ConstructionAnchor,
                 material: Material::free_base("Nitrogen", 1.0),
                 center_x: 0.0,
                 center_y: 0.0,
@@ -366,7 +342,7 @@ pub fn default_architecture() -> OrganismArchitecture {
                 kind: ArchitectureRelationKind::Interfaces,
             },
         ],
-        genome_region: 0,
+        anchor_region: 0,
         target_scale: 1.0,
     }
 }
@@ -386,10 +362,11 @@ mod tests {
     fn juvenile_target_is_a_discrete_analog_not_a_scaled_body_plan() {
         let architecture = default_architecture();
         let target = architecture.construction_target(1.0).unwrap();
-        assert_eq!(target.elements.len(), 16);
+        assert_eq!(target.elements.len(), 12);
         assert!(target
             .elements
             .iter()
             .all(|element| { element.placement.x.abs() < 2.0 && element.placement.y.abs() < 2.0 }));
+        assert_eq!(target.anchor_elements, vec![0]);
     }
 }
