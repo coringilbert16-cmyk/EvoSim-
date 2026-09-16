@@ -60,6 +60,30 @@ pub(crate) fn candidate_placements(
                         continue;
                     };
                     for candidate_index in 0..candidate_count {
+                        if let (Some(candidate_normal), Some(target_normal)) = (
+                            crate::rigid_boundary::corner_normal(&resource.shape, candidate_index),
+                            crate::rigid_boundary::corner_normal(target_shape, target_index),
+                        ) {
+                            let candidate_angle =
+                                candidate_normal.1.atan2(candidate_normal.0);
+                            let target_angle = target_normal.1.atan2(target_normal.0);
+                            let rotation = target_angle + std::f64::consts::PI - candidate_angle;
+                            if let Some(local) = crate::rigid_boundary::world_vertex(
+                                &resource.shape,
+                                candidate_index,
+                                Placement {
+                                    x: 0.0,
+                                    y: 0.0,
+                                    rotation_radians: rotation,
+                                },
+                            ) {
+                                out.push(Placement {
+                                    x: tp.x - local.0,
+                                    y: tp.y - local.1,
+                                    rotation_radians: rotation,
+                                });
+                            }
+                        }
                         for rotation in crate::rigid_boundary::corner_alignment_rotations(
                             &resource.shape,
                             candidate_index,
