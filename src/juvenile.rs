@@ -1,16 +1,15 @@
 //! Deterministic construction of one valid juvenile realization.
 //!
 //! The genome owns architectural intent. This module asks the genome for a
-//! developmental construction target, realizes it physically, and validates
-//! the resulting structure against the juvenile viability contract.
-use crate::combine_runtime::combine_specific_pair;
-use crate::contact::ConnectionCompatibilityCache;
+//! developmental construction target, realizes it through the unified
+//! construction runtime, and validates the resulting physical structure
+//! against the juvenile viability contract.
 use crate::genome::Genome;
 use crate::juvenile_requirements::{validate_realized_juvenile, JuvenileViabilityRequirements};
 use crate::resources::BaseResource;
 use crate::state::EnergyLedger;
 use crate::structural_blueprint::StructuralBlueprint;
-use crate::structure::{OrganismStructure, StructuralUnit};
+use crate::structure::OrganismStructure;
 
 pub(crate) const JUVENILE_INITIAL_ENERGY_RESERVE: f64 = 16.0;
 const TRIAL_ENERGY: f64 = 1.0e12;
@@ -49,78 +48,67 @@ pub(crate) fn realize_initial_with_reserve(
     if !reserve_energy.is_finite() || reserve_energy <= 0.0 {
         return Err("juvenile energy reserve must be finite and positive".into());
     }
-    let base = realize_declared_units(blueprint, catalog)?;
-    let (_, _, required_initial_energy) =
-        form_declared_bonds(base.clone(), blueprint, catalog, TRIAL_ENERGY)?;
+
+    // First realization is a non-persistent energy requirement calculation.
+    // The actual physical assembly is still performed by the same unified
+    // blueprint/construction/COMBINE path used elsewhere.
+    let mut trial_ledger = EnergyLedger::default();
+    let mut trial_energy = TRIAL_ENERGY;
+    blueprint
+        .realize_with_context(catalog, &mut trial_ledger, &mut trial_energy)
+        .map_err(|error| format!("juvenile construction target could not be realized: {error}"))?;
+    let required_initial_energy = TRIAL_ENERGY - trial_energy;
+    if !required_initial_energy.is_finite() || required_initial_energy < 0.0 {
+        return Err("juvenile construction produced an invalid energy requirement".into());
+    }
+
     let initial_energy = required_initial_energy + reserve_energy;
-    let (structure, ledger, remaining) =
-        form_declared_bonds(base, blueprint, catalog, initial_energy)?;
+    let mut ledger = EnergyLedger::default();
+    let (structure, _) = blueprint
+        .realize_with_context(catalog, &mut ledger, &mut { initial_energy })
+        .map_err(|error| format!("juvenile construction target could not be realized: {error}"))?;
+    let remaining = {
+        let mut rerun_energy = initial_energy;
+        let mut rerun_ledger = EnergyLedger::default();
+        let (structure, _) = blueprint
+            .realize_with_context(catalog, &mut rerun_ledger, &mut rerun_energy)
+            .map_err(|error| {
+                format!("juvenile construction target could not be realized: {error}")
+            })?;
+        if !rerun_energy.is_finite() {
+            return Err("juvenile construction produced non-finite remaining energy".into());
+        }
+        if rerun_energy + EPS < reserve_energy {
+            return Err(format!(
+                "juvenile initialization could not preserve its reserve: remaining={rerun_energy}"
+            ));
+        }
+        return validate_and_return(
+            structure,
+            rerun_ledger,
+            rerun_energy,
+            blueprint,
+            catalog,
+        );
+    };
+    let _ = (&structure, &ledger, remaining);
+    unreachable!()
+}
+
+fn validate_and_return(
+    structure: OrganismStructure,
+    ledger: EnergyLedger,
+    remaining: f64,
+    blueprint: &StructuralBlueprint,
+    catalog: &[BaseResource],
+) -> Result<(OrganismStructure, EnergyLedger, f64), String> {
     validate_realized_juvenile(
         &structure,
         catalog,
         &blueprint.core_elements,
         JuvenileViabilityRequirements::default(),
     )?;
-    if remaining + EPS < reserve_energy {
-        return Err(format!(
-            "juvenile initialization could not preserve its reserve: remaining={remaining}"
-        ));
-    }
     Ok((structure, ledger, remaining))
-}
-
-fn realize_declared_units(
-    blueprint: &StructuralBlueprint,
-    catalog: &[BaseResource],
-) -> Result<OrganismStructure, String> {
-    let mut structure = OrganismStructure::new();
-    for element in &blueprint.elements {
-        let mut unit = StructuralUnit::from_material(
-            element.material.clone(),
-            crate::structure::Placement {
-                x: element.placement.x,
-                y: element.placement.y,
-                rotation_radians: element.placement.rotation_radians,
-            },
-        )
-        .ok_or_else(|| "juvenile construction target contains invalid material".to_string())?;
-        if !unit.realize_default_geometry(catalog) {
-            return Err(
-                "juvenile construction target contains unrealizable material geometry".into(),
-            );
-        }
-        structure.add_unit(unit);
-    }
-    Ok(structure)
-}
-
-fn form_declared_bonds(
-    mut structure: OrganismStructure,
-    blueprint: &StructuralBlueprint,
-    catalog: &[BaseResource],
-    mut energy: f64,
-) -> Result<(OrganismStructure, EnergyLedger, f64), String> {
-    let mut ledger = EnergyLedger::default();
-    let mut cache = ConnectionCompatibilityCache::new();
-    for connection in &blueprint.connections {
-        combine_specific_pair(
-            &mut structure,
-            connection.element_a,
-            connection.element_b,
-            catalog,
-            0.0,
-            &mut cache,
-            &mut ledger,
-            &mut energy,
-        )
-        .ok_or_else(|| {
-            format!(
-                "juvenile construction target bond could not be realized: {}-{}",
-                connection.element_a, connection.element_b
-            )
-        })?;
-    }
-    Ok((structure, ledger, energy))
 }
 
 #[cfg(test)]
