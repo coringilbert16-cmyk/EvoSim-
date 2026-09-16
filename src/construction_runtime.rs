@@ -358,13 +358,11 @@ pub(crate) fn realize_material_with_context(
             .first()
             .map(|(name, _)| name.as_str())
             .unwrap_or("<none>");
-        let targets = external
-            .iter()
-            .flatten()
-            .copied()
-            .collect::<Vec<_>>();
+        let targets = external.iter().flatten().copied().collect::<Vec<_>>();
         let candidate_count = resource(catalog, resource_name)
-            .map(|resource| candidate_placements(structure, resource, anchor, &targets, catalog).len())
+            .map(|resource| {
+                candidate_placements(structure, resource, anchor, &targets, catalog).len()
+            })
             .unwrap_or(0);
         return Err(format!(
             "construction placement could not satisfy physical constraints (material={resource_name}, external_targets={targets:?}, candidate_placements={candidate_count})"
