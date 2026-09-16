@@ -114,10 +114,7 @@ impl BlueprintConnection {
 }
 
 impl StructuralBlueprint {
-    pub fn new(
-        elements: Vec<BlueprintElement>,
-        connections: Vec<BlueprintConnection>,
-    ) -> Self {
+    pub fn new(elements: Vec<BlueprintElement>, connections: Vec<BlueprintConnection>) -> Self {
         Self {
             elements,
             connections: Self::canonical_connections(connections),
@@ -137,9 +134,7 @@ impl StructuralBlueprint {
         }
     }
 
-    fn canonical_connections(
-        connections: Vec<BlueprintConnection>,
-    ) -> Vec<BlueprintConnection> {
+    fn canonical_connections(connections: Vec<BlueprintConnection>) -> Vec<BlueprintConnection> {
         let mut seen = HashSet::new();
         connections
             .into_iter()
