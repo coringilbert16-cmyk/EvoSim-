@@ -43,9 +43,6 @@ pub(crate) fn realize_initial_with_reserve(
     if !blueprint.is_valid() {
         return Err("juvenile construction target is invalid".into());
     }
-    if blueprint.core_elements.is_empty() {
-        return Err("juvenile construction target has no genome core".into());
-    }
     if !reserve_energy.is_finite() || reserve_energy <= 0.0 {
         return Err("juvenile energy reserve must be finite and positive".into());
     }
@@ -58,7 +55,6 @@ pub(crate) fn realize_initial_with_reserve(
     validate_realized_juvenile(
         &structure,
         catalog,
-        &blueprint.core_elements,
         JuvenileViabilityRequirements::default(),
     )?;
     if remaining + EPS < reserve_energy {
