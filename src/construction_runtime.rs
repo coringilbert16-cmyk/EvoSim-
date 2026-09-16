@@ -132,8 +132,7 @@ pub(crate) fn candidate_placements(
                         else {
                             continue;
                         };
-                        let candidate_normal_angle =
-                            candidate_normal.1.atan2(candidate_normal.0);
+                        let candidate_normal_angle = candidate_normal.1.atan2(candidate_normal.0);
                         let rotation =
                             target_normal_angle + std::f64::consts::PI - candidate_normal_angle;
                         let Some(local) = crate::rigid_boundary::world_vertex(
