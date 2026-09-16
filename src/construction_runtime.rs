@@ -87,9 +87,38 @@ pub(crate) fn candidate_placements(
                     }
                 }
                 (
-                    Form::Line {
-                        length: candidate_length,
+                    Form::Line { length: candidate_length },
+                    ConnectionEndpoint::Corner {
+                        point_index: target_index,
                     },
+                ) => {
+                    let Some(target_normal) =
+                        crate::rigid_boundary::corner_normal(target_shape, target_index)
+                    else {
+                        continue;
+                    };
+                    let target_normal_angle = target_normal.1.atan2(target_normal.0);
+                    let half = *candidate_length / 2.0;
+                    for candidate_index in 0..2 {
+                        let candidate_normal =
+                            crate::rigid_boundary::line_endpoint_normal(&resource.shape, candidate_index)
+                                .unwrap();
+                        let candidate_normal_angle = candidate_normal.1.atan2(candidate_normal.0);
+                        let rotation = target_normal_angle + std::f64::consts::PI
+                            - candidate_normal_angle;
+                        let local_x = if candidate_index == 0 { -half } else { half };
+                        let (s, c) = rotation.sin_cos();
+                        let lx = local_x * c;
+                        let ly = local_x * s;
+                        out.push(Placement {
+                            x: tp.x - lx,
+                            y: tp.y - ly,
+                            rotation_radians: rotation,
+                        });
+                    }
+                }
+                (
+                    Form::Line { length: candidate_length },
                     ConnectionEndpoint::LineEndpoint {
                         point_index: target_index,
                     },
