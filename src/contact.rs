@@ -56,7 +56,7 @@ fn continuous_endpoint(
     let (s, c) = unit.placement.rotation_radians.sin_cos();
     let lx = ux * c + uy * s;
     let ly = -ux * s + uy * c;
-    let shape = unit.shape()?;
+    let shape = unit.realized_shape()?;
     let point = boundary_point_toward(shape, lx, ly)?;
     match &shape.form {
         Form::Circle { .. } => Some(ConnectionEndpoint::Boundary {
@@ -71,7 +71,7 @@ fn endpoint_indices(
     unit: &StructuralUnit,
     _catalog: &[crate::resources::BaseResource],
 ) -> Vec<ConnectionEndpoint> {
-    let Some(shape) = unit.shape() else {
+    let Some(shape) = unit.realized_shape() else {
         return Vec::new();
     };
     match &shape.form {
@@ -133,7 +133,7 @@ fn endpoint_world_point(
     unit: &StructuralUnit,
     _catalog: &[crate::resources::BaseResource],
 ) -> Option<crate::connection_geometry::WorldConnectionPoint> {
-    let shape = unit.shape()?;
+    let shape = unit.realized_shape()?;
     match endpoint {
         ConnectionEndpoint::Corner { point_index }
         | ConnectionEndpoint::LineEndpoint { point_index } => rigid_endpoint_world_point(
