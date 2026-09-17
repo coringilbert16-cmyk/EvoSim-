@@ -3,14 +3,12 @@
 //! Restoration is deliberately distinct from COMBINE. It does not create
 //! chemistry, charge energy, or establish a new external bond. It expands an
 //! intact stored material into its constituent physical units and restores the
-//! internal bonds that already belonged to that material.
-use crate::contact::{connection_pair_candidates_cached, ConnectionCompatibilityCache};
+//! exact internal bonds that already belonged to that material.
 use crate::physical_material::PhysicalMaterial;
 use crate::resources::BaseResource;
 use crate::structure::{Bond, BondEndpoint, OrganismStructure, Placement, StructuralUnit};
 
 const EPSILON: f64 = 1e-9;
-const CONTACT_TOLERANCE: f64 = 1.0;
 
 fn transform_relative(origin: Placement, relative: Placement) -> Placement {
     let (sin, cos) = origin.rotation_radians.sin_cos();
@@ -23,10 +21,9 @@ fn transform_relative(origin: Placement, relative: Placement) -> Placement {
 
 /// Restore an intact stored physical material into `structure` at `origin`.
 ///
-/// The stored constituent arrangement is authoritative. If it is absent, or
-/// if an existing internal bond cannot be mapped to exactly one physical
-/// connection pair at the stored geometry, restoration fails rather than
-/// inventing a placement or endpoint.
+/// The stored constituent arrangement and stored internal bond endpoints are
+/// authoritative. If either is absent, restoration fails rather than deriving
+/// a new physical connection from composition and geometry.
 pub(crate) fn restore_material(
     structure: &mut OrganismStructure,
     instance: &PhysicalMaterial,
@@ -34,8 +31,16 @@ pub(crate) fn restore_material(
     catalog: &[BaseResource],
 ) -> Option<Vec<usize>> {
     let relative = instance.placements.as_ref()?;
+    let connections = instance.internal_connections.as_ref()?;
     let material = &instance.material;
     if !material.is_valid() || material.parts.is_empty() || relative.len() != material.parts.len() {
+        return None;
+    }
+    if connections.len() != material.internal_bonds.len()
+        || connections.iter().any(|connection| {
+            connection.part_a >= material.parts.len() || connection.part_b >= material.parts.len()
+        })
+    {
         return None;
     }
 
@@ -55,23 +60,9 @@ pub(crate) fn restore_material(
         indices.push(trial.add_unit(unit));
     }
 
-    let mut cache = ConnectionCompatibilityCache::default();
-    for internal in &material.internal_bonds {
-        let unit_a = *indices.get(internal.part_a)?;
-        let unit_b = *indices.get(internal.part_b)?;
-        let candidates =
-            connection_pair_candidates_cached(&trial, unit_a, unit_b, catalog, &mut cache)
-                .into_iter()
-                .filter(|candidate| {
-                    candidate.available_a
-                        && candidate.available_b
-                        && candidate.distance <= CONTACT_TOLERANCE
-                })
-                .collect::<Vec<_>>();
-        if candidates.len() != 1 {
-            return None;
-        }
-        let candidate = candidates[0];
+    for connection in connections {
+        let unit_a = *indices.get(connection.part_a)?;
+        let unit_b = *indices.get(connection.part_b)?;
         let id_a = trial.physical_id(unit_a)?;
         let id_b = trial.physical_id(unit_b)?;
         let a = trial.units[unit_a].properties(catalog)?;
@@ -81,8 +72,8 @@ pub(crate) fn restore_material(
             return None;
         }
         let bond = Bond {
-            endpoint_a: BondEndpoint::new(id_a, candidate.endpoint_a),
-            endpoint_b: BondEndpoint::new(id_b, candidate.endpoint_b),
+            endpoint_a: BondEndpoint::new(id_a, connection.endpoint_a),
+            endpoint_b: BondEndpoint::new(id_b, connection.endpoint_b),
             strength,
             // This bond predates organism admission. Restoration therefore
             // carries no new COMBINE investment or energy transaction.
