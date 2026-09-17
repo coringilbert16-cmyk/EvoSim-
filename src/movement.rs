@@ -166,8 +166,7 @@ fn movement_collides(
                             form: base.shape.form.clone(),
                             placement: *placement,
                         };
-                        if crate::material_geometry::placed_forms_penetrate(&moved, &blocker, 0.0)
-                        {
+                        if crate::material_geometry::placed_forms_penetrate(&moved, &blocker, 0.0) {
                             return true;
                         }
                     }
