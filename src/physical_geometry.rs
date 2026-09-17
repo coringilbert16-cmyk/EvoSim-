@@ -33,6 +33,7 @@ impl PhysicalGeometry {
 
     /// Rigid geometry cannot be replaced. This compatibility method accepts
     /// only an identical shape and never mutates the realized geometry.
+    #[allow(dead_code)]
     pub fn replace(&mut self, shape: Shape) -> bool {
         self.shape == shape
     }
