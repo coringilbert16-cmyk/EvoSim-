@@ -209,6 +209,7 @@ fn stored_realized_single_constituent_enters_combine_through_physical_path() {
             .abs()
             <= 1e-12
     );
+    let storage_before = organism.stored_material.materials.len();
 
     let mut cache = ConnectionCompatibilityCache::new();
     let mut ledger = EnergyLedger::default();
@@ -216,7 +217,14 @@ fn stored_realized_single_constituent_enters_combine_through_physical_path() {
         try_combine_stored_unit(organism, &simulation.environment, &mut cache, &mut ledger)
             .expect("stored physical Carbon should be incorporated through COMBINE");
 
-    assert!(organism.stored_material.is_empty());
+    assert_eq!(
+        organism.stored_material.materials.len(),
+        storage_before - 1
+    );
+    assert!(organism
+        .stored_material
+        .peek_matching_physical(&material)
+        .is_none());
     assert_eq!(organism.structure.units.len(), 2);
     assert_eq!(organism.structure.bonds.len(), 1);
     assert!(attempt.energy_invested >= 0.0);
