@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 4 is in **P4.0 audit complete / P4.1 implementation ready**. The audit was performed against the post-Phase-3 `main` state. No movement mechanics were changed during P4.0.
+Phase 4 is in **P4.2 collision audit complete / implementation awaiting collision-policy approval**. P4.0 established the movement authority audit, P4.1 established the canonical movement boundary, and P4.2 has now audited the available collision/contact infrastructure without inventing a collision policy.
 
 ## Phase 4 objective
 
@@ -113,13 +113,59 @@ However, the exact behavioral semantics of `directional_resolution`, `sensory_re
 
 The repository already contains derived contact/connection geometry in `src/contact.rs`, including endpoint generation, world-point calculation, facing compatibility, distance checks, and contact candidate filtering. `src/structure.rs` owns physical constituent placement and bond data. These are the systems P4.1/P4.2 should build on rather than introducing a parallel occupancy representation.
 
-### P4.0 conclusion
+## P4.1 — Canonical movement boundary — COMPLETE
 
-**P4.0 is complete.** The current movement implementation is identified as a legacy/simple transform that must be hardened rather than duplicated.
+P4.1 established one canonical movement commit boundary in `src/movement.rs`: `Simulation::try_move_cell`.
 
-The first implementation target is therefore **P4.1: establish one canonical movement boundary** around the existing transform while preserving current approved directional inputs. P4.2 will then move collision/contact validation into that boundary using derived geometry from canonical physical state.
+The boundary now:
 
-No unspecified physical rule was selected during P4.0.
+1. accepts an already-computed world displacement,
+2. rejects non-finite displacement without mutation,
+3. uses the first occupied position as the locomotion anchor,
+4. clamps the resulting anchor to existing environment bounds,
+5. computes the actual applied world-space delta after clamping,
+6. applies that exact delta to every realized `StructuralUnit.placement`, and
+7. returns `false` when no displacement was actually committed.
+
+`Simulation::update_movement` remains the movement-intent layer and now delegates the actual position/structure mutation to `try_move_cell`. No collision, pushing, energy, speed, turning, friction, or new sensory rule was added in P4.1.
+
+Regression coverage was added for:
+
+- anchor and physical-structure translation together,
+- boundary clamping with no partial structure mutation, and
+- rejection of non-finite displacement without mutation.
+
+**Validation status:** code and tests are committed, but repository CI/test execution has not yet been independently verified in this environment. Do not treat P4.1 as test-passing until CI or an equivalent full local test run provides evidence.
+
+## P4.2 — Collision/contact audit — AUDIT COMPLETE; IMPLEMENTATION BLOCKED ON POLICY
+
+The repository contains a reusable geometric overlap primitive through `material_geometry::placed_forms_overlap`, and `structure.rs` already uses it through `units_strictly_overlap` to reject physically overlapping structural constituents. `contact.rs` provides derived endpoint/contact candidates, but no movement collision solver exists.
+
+The audit found three distinct cases that must not be silently conflated:
+
+1. **Organism vs organism:** both sides have realized structural geometry, so proposed movement can be tested against the other organism's canonical physical graph.
+2. **Organism vs realized environmental material:** `ActiveMaterialField` can contain `physical_materials` carrying realized placements, so these objects can expose physical geometry for collision work.
+3. **Organism vs logical/aggregate environmental material:** `FieldCell.materials` is explicitly an aggregate stock for unstructured material and does not represent an existing composite or a physical object with a world geometry. Treating aggregate stock as an obstacle would create geometry that does not exist.
+
+The first two cases can therefore be represented physically without adding a new obstacle category. The missing design decision is **what collision means for movement**.
+
+Before P4.2 code is added, the project must specify at minimum:
+
+- whether strict geometric overlap is the condition that invalidates a movement, while mere contact/touching remains allowed;
+- whether an organism encountering another organism is blocked, connected/contacting, or eligible for pushing;
+- whether realized environmental material blocks movement, is physically displaced, or is otherwise interactable;
+- whether logical/aggregate environmental material is always passable because it has no realized geometry;
+- and, if multiple collisions occur in one proposed displacement, what resolution/priority rule applies.
+
+These are not implementation details: they determine observable simulation behavior. P4.2 must not choose them implicitly.
+
+### P4.2 implementation target after approval
+
+Once the collision policy is approved, `try_move_cell` remains the single commit boundary. The intended architecture is:
+
+> proposed displacement → derived collision/contact evaluation → interaction resolution → one contextual world transform commit
+
+No second occupancy model should be introduced.
 
 ## Explicit non-goals
 
@@ -144,15 +190,15 @@ The newly approved developmental-field blueprint is a separate future migration 
 
 Audit every current movement entry point and every caller of movement, collision, contact, pushing, translation, and rotation.
 
-### P4.1 — Canonical movement boundary — NEXT
+### P4.1 — Canonical movement boundary — COMPLETE
 
 Establish one movement boundary that accepts a proposed physical displacement/transform and operates on the canonical organism structure.
 
 It must preserve intrinsic material realization and update only contextual/world placement.
 
-### P4.2 — Collision/contact resolution
+### P4.2 — Collision/contact resolution — BLOCKED ON COLLISION POLICY
 
-Migrate movement collision/contact checks to derived geometry over canonical physical state.
+Migrate movement collision/contact checks to derived geometry over canonical physical state after the policy above is explicitly approved.
 
 Do not create a second occupancy authority.
 

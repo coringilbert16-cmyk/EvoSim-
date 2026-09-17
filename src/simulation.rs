@@ -411,23 +411,35 @@ impl Simulation {
         {
             let (organisms, environment) = (&mut self.organisms, &mut self.environment);
             let mut compatibility_cache = crate::contact::ConnectionCompatibilityCache::new();
-            for organism in organisms {
-                if completed_organisms.contains(&organism.id) {
+            for index in 0..organisms.len() {
+                if completed_organisms.contains(&organisms[index].id) {
                     continue;
                 }
-                let needs = Self::current_needs(organism, environment, decision_parameters);
-                let eligibility = Self::action_eligibility(organism, environment);
+                let needs =
+                    Self::current_needs(&organisms[index], environment, decision_parameters);
+                let eligibility = Self::action_eligibility(&organisms[index], environment);
                 let context = DecisionContext { needs, eligibility };
                 let candidates =
-                    Self::decision_candidates(organism, environment, needs, eligibility);
+                    Self::decision_candidates(&organisms[index], environment, needs, eligibility);
                 let Some(selected) =
-                    select_action(context, &organism.decision_history, &candidates)
+                    select_action(context, &organisms[index].decision_history, &candidates)
                 else {
                     continue;
                 };
                 match selected.action {
                     ActionKind::Move => {
-                        let moved = Self::update_movement(organism, environment);
+                        let organism_count = organisms.len();
+                        let (before, rest) = organisms.split_at_mut(index);
+                        let (organism, after) =
+                            rest.split_first_mut().expect("index is in organisms");
+                        let mut others = Vec::with_capacity(organism_count.saturating_sub(1));
+                        for other in before.iter() {
+                            others.push((*other).clone());
+                        }
+                        for other in after.iter() {
+                            others.push((*other).clone());
+                        }
+                        let moved = Self::update_movement(organism, environment, &others);
                         crate::decision_runtime::record_outcome(
                             &mut organism.decision_history,
                             &selected,
@@ -440,14 +452,14 @@ impl Simulation {
                     }
                     ActionKind::Combine => {
                         let combined = crate::combine_runtime::try_combine(
-                            organism,
+                            &mut organisms[index],
                             environment,
                             &mut compatibility_cache,
                             &mut self.energy_ledger,
                         )
                         .is_some();
                         crate::decision_runtime::record_outcome(
-                            &mut organism.decision_history,
+                            &mut organisms[index].decision_history,
                             &selected,
                             if combined {
                                 crate::decision::OutcomeKind::Neutral
@@ -455,13 +467,13 @@ impl Simulation {
                                 crate::decision::OutcomeKind::Harmful
                             },
                         );
-                        if matches!(organism.development_stage, DevelopmentStage::Adult) {
-                            reproduction_requests.push(organism.id.clone());
+                        if matches!(organisms[index].development_stage, DevelopmentStage::Adult) {
+                            reproduction_requests.push(organisms[index].id.clone());
                         }
                     }
                     ActionKind::Break => {
                         if let Some(transformation) = Self::try_start_transformation(
-                            organism,
+                            &mut organisms[index],
                             &environment.catalog,
                             &mut self.next_transformation_id,
                             &selected,
@@ -476,11 +488,15 @@ impl Simulation {
                             .and_then(|key| key.strip_prefix("target:"))
                             .and_then(|index| index.parse::<usize>().ok())
                             .map(|field_index| {
-                                Self::acquire_target(organism, environment, field_index)
+                                Self::acquire_target(
+                                    &mut organisms[index],
+                                    environment,
+                                    field_index,
+                                )
                             })
                             .unwrap_or(false);
                         crate::decision_runtime::record_outcome(
-                            &mut organism.decision_history,
+                            &mut organisms[index].decision_history,
                             &selected,
                             if success {
                                 crate::decision::OutcomeKind::Neutral
