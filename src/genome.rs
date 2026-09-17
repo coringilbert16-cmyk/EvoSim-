@@ -1,3 +1,4 @@
+#![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
