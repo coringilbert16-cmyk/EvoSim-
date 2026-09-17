@@ -208,7 +208,7 @@ fn add_boundary(
     scale: f64,
 ) {
     let hs = 1.511_858 / 2.0;
-    let off = 1.677_2175;
+    let off = 1.677_217_5;
     let start = elements.len();
     let x = region.center_x;
     let y = region.center_y;
@@ -312,10 +312,10 @@ fn add_interface(
     } else {
         [0, 2, 4, 6]
     };
-    for i in 0..4 {
+    for (i, map) in maps.iter().enumerate() {
         connections.push(BlueprintConnection {
             element_a: start + i,
-            element_b: boundary_start + maps[i],
+            element_b: boundary_start + *map,
         });
         connections.push(BlueprintConnection {
             element_a: start + i,

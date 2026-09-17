@@ -1,3 +1,4 @@
+#![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 use crate::connection_geometry::WorldConnectionPoint;
 use crate::physical_geometry::PhysicalGeometry;
 use crate::resources::{BaseResource, Material};

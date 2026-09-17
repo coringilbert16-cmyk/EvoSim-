@@ -1,3 +1,4 @@
+#![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 use crate::state::EnergyLedger;
 
 const EPSILON: f64 = 1e-9;

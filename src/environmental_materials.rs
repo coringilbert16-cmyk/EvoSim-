@@ -1,3 +1,4 @@
+#![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 use crate::environment::ActiveMaterialField;
 use crate::resources::{combine_materials, Material};
 

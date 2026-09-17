@@ -1,3 +1,4 @@
+#![allow(unfulfilled_lint_expectations)]
 #![allow(clippy::too_many_arguments)]
 
 // Core environment, resources, and physical material/structure.

@@ -1,3 +1,4 @@
+#![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 //! Environment subsystem: active ecological material field and environmental vents.
 //!
 //! The active field is the complete environmental material layer. Vents are

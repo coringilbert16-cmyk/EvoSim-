@@ -1,3 +1,4 @@
+#![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 //! A physically realized material instance carried through acquisition/storage.
 //!
 //! `Material` owns composition and the identity of pre-existing internal bonds.

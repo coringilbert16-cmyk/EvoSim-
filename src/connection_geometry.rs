@@ -1,3 +1,4 @@
+#![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 //! Rigid geometry helpers for realized physical connection points.
 //! Continuous boundaries intentionally have no socket indices.
 use crate::math::directional_compatibility;

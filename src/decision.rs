@@ -1,3 +1,4 @@
+#![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 //! Organism decision architecture.
 //!
 //! The decision layer separates physical eligibility, internal need pressure,

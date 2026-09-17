@@ -1,3 +1,4 @@
+#![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 use crate::combine_runtime::combine_specific_pair;
 use crate::resources::{BaseResource, Form, Material};
 use crate::state::EnergyLedger;

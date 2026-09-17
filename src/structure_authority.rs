@@ -1,3 +1,4 @@
+#![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 //! Audit helpers for the physical-structure authority boundary.
 //!
 //! This module intentionally reports architectural inconsistencies instead of

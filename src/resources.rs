@@ -1,3 +1,4 @@
+#![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 use serde::{Deserialize, Serialize};
 
 use crate::math::{complexity, exponential_influence};
