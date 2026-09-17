@@ -1,6 +1,6 @@
 use crate::combine::experimental_interaction;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
-use crate::resources::Material;
+use crate::physical_material::PhysicalMaterial;
 use crate::state::{EnergyLedger, Environment, Organism, Position};
 use crate::structure::OrganismStructure;
 
@@ -37,7 +37,7 @@ pub(crate) struct DecompositionStep {
     pub(crate) bond_energy: f64,
     pub(crate) break_interaction_energy: f64,
     pub(crate) heat: f64,
-    pub(crate) released_material: Option<Vec<Material>>,
+    pub(crate) released_material: Option<Vec<PhysicalMaterial>>,
 }
 
 fn water_field_amount(environment: &Environment, position: &Position) -> f64 {
@@ -105,7 +105,13 @@ pub(crate) fn resolve_one_bond_with_ledger(
             trial_structure
                 .units
                 .iter()
-                .map(|unit| unit.material.clone())
+                .filter_map(|unit| {
+                    PhysicalMaterial::realized(
+                        unit.material.clone(),
+                        vec![unit.placement],
+                        &environment.catalog,
+                    )
+                })
                 .collect(),
         )
     } else {
