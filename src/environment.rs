@@ -35,7 +35,10 @@ impl FieldCell {
     }
 
     pub fn total_amount(&self) -> f64 {
-        self.materials.iter().map(Material::total_amount).sum::<f64>()
+        self.materials
+            .iter()
+            .map(Material::total_amount)
+            .sum::<f64>()
             + self
                 .physical_materials
                 .iter()
@@ -216,24 +219,16 @@ impl ActiveMaterialField {
 
     /// Deposit an already realized physical material. This operation transfers
     /// the existing object; it does not create or re-form any of its bonds.
-    pub fn deposit_physical_at_index(
-        &mut self,
-        index: usize,
-        material: PhysicalMaterial,
-    ) -> bool {
-        if !material.is_realized() || material.material.is_empty() || !material.material.is_valid() {
+    pub fn deposit_physical_at_index(&mut self, index: usize, material: PhysicalMaterial) -> bool {
+        if !material.is_realized() || material.material.is_empty() || !material.material.is_valid()
+        {
             return false;
         }
         self.cells[index].physical_materials.push(material);
         true
     }
 
-    pub fn deposit_physical(
-        &mut self,
-        x: f64,
-        y: f64,
-        material: PhysicalMaterial,
-    ) -> bool {
+    pub fn deposit_physical(&mut self, x: f64, y: f64, material: PhysicalMaterial) -> bool {
         let Some(index) = self.index_for_position(x, y) else {
             return false;
         };
