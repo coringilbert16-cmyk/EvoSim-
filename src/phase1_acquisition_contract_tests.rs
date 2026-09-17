@@ -5,7 +5,7 @@ mod tests {
     use crate::resources::{
         BaseResource, Form, InternalBond, Material, PhysicalState, ResourceProperties, Shape,
     };
-    use crate::simulation::Simulation;
+    use crate::state::Simulation;
     use crate::structure::Placement;
 
     fn catalog() -> Vec<BaseResource> {
@@ -21,7 +21,6 @@ mod tests {
                 physical_state: PhysicalState::Rigid,
                 shape: Shape {
                     form: Form::Circle { radius: 1.0 },
-                    connection_points: vec![],
                 },
             },
             BaseResource {
@@ -35,7 +34,6 @@ mod tests {
                 physical_state: PhysicalState::Rigid,
                 shape: Shape {
                     form: Form::Circle { radius: 1.0 },
-                    connection_points: vec![],
                 },
             },
         ]
