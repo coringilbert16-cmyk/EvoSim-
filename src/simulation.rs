@@ -36,7 +36,6 @@ impl Simulation {
             decision_parameters: DecisionParameters::default(),
         }
     }
-
     fn create_environment() -> Environment {
         let catalog = crate::resources::default_catalog();
         let width = 1000.0;
@@ -74,7 +73,6 @@ impl Simulation {
             vents,
         }
     }
-
     pub(crate) fn create_initial_organism() -> Organism {
         let genome = initial_genome();
         let catalog = crate::resources::default_catalog();
@@ -108,7 +106,6 @@ impl Simulation {
             reproductive_construction: None,
         }
     }
-
     pub(crate) fn step_environment(&mut self) {
         apply_vents(
             &mut self.environment.field,
@@ -120,7 +117,6 @@ impl Simulation {
             .field
             .diffuse_step(DEFAULT_DIFFUSION_FRACTION);
     }
-
     fn mature_structural_mass(organism: &Organism, environment: &Environment) -> f64 {
         organism
             .genome
@@ -129,7 +125,6 @@ impl Simulation {
             .map(|target| target.structural_mass(&environment.catalog))
             .unwrap_or(0.0)
     }
-
     fn growth_fraction(organism: &Organism, environment: &Environment) -> f64 {
         let mature_mass = Self::mature_structural_mass(organism, environment);
         if !mature_mass.is_finite() || mature_mass <= 0.0 {
@@ -137,7 +132,6 @@ impl Simulation {
         }
         (organism.structural_mass(&environment.catalog) / mature_mass).max(0.0)
     }
-
     fn update_development_stage(organism: &mut Organism, environment: &Environment) {
         match organism.development_stage {
             DevelopmentStage::Offspring => {
@@ -153,7 +147,6 @@ impl Simulation {
             DevelopmentStage::Adult => {}
         }
     }
-
     fn current_needs(
         organism: &Organism,
         environment: &Environment,
@@ -172,7 +165,6 @@ impl Simulation {
             },
         }
     }
-
     fn acquisition_targets(organism: &Organism, environment: &Environment) -> Vec<usize> {
         let Some(position) = organism.occupied_cells.first() else {
             return Vec::new();
@@ -180,24 +172,26 @@ impl Simulation {
         let Some(field_index) = environment.field.index_for_position(position.x, position.y) else {
             return Vec::new();
         };
-        if environment.field.cells[field_index]
-            .materials
+        let cell = &environment.field.cells[field_index];
+        if cell
+            .physical_materials
             .iter()
-            .any(|material| !material.is_empty() && material.is_valid())
+            .any(|material| material.is_realized() && !material.material.is_empty())
+            || cell.materials.iter().any(|material| {
+                !material.is_empty() && material.is_valid() && !material.has_internal_structure()
+            })
         {
             vec![field_index]
         } else {
             Vec::new()
         }
     }
-
     fn acquisition_context_key(field_index: usize) -> String {
         format!("target:{field_index}")
     }
-
     fn action_eligibility(organism: &Organism, environment: &Environment) -> ActionEligibility {
-        let can_build_from_storage = !organism.structure.units.is_empty()
-            && organism.stored_material.count_unstructured() > 0;
+        let can_build_from_storage =
+            !organism.structure.units.is_empty() && !organism.stored_material.is_empty();
         let can_join_existing_structure = organism.structure.units.len() >= 2;
         ActionEligibility {
             can_move: organism.active_transformation_id.is_none(),
@@ -210,7 +204,6 @@ impl Simulation {
             can_expel: false,
         }
     }
-
     fn decision_candidates(
         organism: &Organism,
         environment: &Environment,
@@ -232,19 +225,19 @@ impl Simulation {
                         action: ActionKind::Break,
                         context_key: Some(format!("bond:{index}")),
                     }),
-            )
+            );
         }
         if relevant(ActionKind::Combine) {
             candidates.push(ActionCandidate {
                 action: ActionKind::Combine,
                 context_key: None,
-            })
+            });
         }
         if relevant(ActionKind::Move) {
             candidates.push(ActionCandidate {
                 action: ActionKind::Move,
                 context_key: None,
-            })
+            });
         }
         if relevant(ActionKind::Acquire) {
             candidates.extend(
@@ -254,18 +247,17 @@ impl Simulation {
                         action: ActionKind::Acquire,
                         context_key: Some(Self::acquisition_context_key(field_index)),
                     }),
-            )
+            );
         }
         if relevant(ActionKind::Expel) {
             candidates.push(ActionCandidate {
                 action: ActionKind::Expel,
                 context_key: None,
-            })
+            });
         }
         candidates
     }
-
-    fn acquire_target(
+    pub(crate) fn acquire_target(
         organism: &mut Organism,
         environment: &mut Environment,
         field_index: usize,
@@ -280,12 +272,25 @@ impl Simulation {
         if expected_index != field_index {
             return false;
         }
+        if let Some(physical) = environment.field.take_physical_for_acquisition(field_index) {
+            let material = physical.material.clone();
+            let placements = physical.placements.clone().unwrap_or_default();
+            if organism
+                .stored_material
+                .store_physical(material, placements, &environment.catalog)
+            {
+                return true;
+            }
+            let _ = environment
+                .field
+                .deposit_physical_at_index(field_index, physical);
+            return false;
+        }
         let Some(material) = environment.field.take_for_acquisition(field_index) else {
             return false;
         };
         organism.store_material(material)
     }
-
     fn recycle_dead_organism(
         environment: &mut Environment,
         organism: &mut Organism,
@@ -308,7 +313,6 @@ impl Simulation {
         }
         Some(body)
     }
-
     fn process_decomposing_bodies(&mut self) {
         let mut finished_indices = Vec::new();
         for index in 0..self.decomposing_bodies.len() {
@@ -349,7 +353,6 @@ impl Simulation {
             self.decomposing_bodies.remove(index);
         }
     }
-
     pub(crate) fn step(&mut self) {
         self.tick += 1;
         self.step_environment();
@@ -552,7 +555,6 @@ impl Simulation {
         self.energy_ledger.total_usable_energy_held =
             self.organisms.iter().map(|o| o.usable_energy).sum();
     }
-
     pub(crate) fn apply_energy_capacity(
         organism: &mut Organism,
         environment: &Environment,
@@ -561,7 +563,6 @@ impl Simulation {
         organism.stress *= crate::state::STRESS_DECAY_PER_TICK;
         organism.apply_stress_damage(environment, ledger)
     }
-
     #[cfg(test)]
     pub(crate) fn total_material_in_system(&self) -> f64 {
         let mut total = self.environment.field.total_amount();

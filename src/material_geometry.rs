@@ -8,7 +8,6 @@ pub struct PlacedMaterialPart {
     pub form: Form,
     pub placement: Placement,
 }
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct MaterialGeometry {
     pub parts: Vec<PlacedMaterialPart>,
@@ -17,13 +16,11 @@ pub struct MaterialGeometry {
     pub min_y: f64,
     pub max_y: f64,
 }
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct PhysicalMaterialInstance {
     pub material: Material,
     pub geometry: MaterialGeometry,
 }
-
 impl PhysicalMaterialInstance {
     pub fn new(
         material: Material,
@@ -36,7 +33,6 @@ impl PhysicalMaterialInstance {
         })
     }
 }
-
 impl MaterialGeometry {
     pub fn new(
         material: &Material,
@@ -86,15 +82,10 @@ impl MaterialGeometry {
             max_y,
         })
     }
-
     pub fn bounding_box_contains(&self, x: f64, y: f64) -> bool {
         x >= self.min_x && x <= self.max_x && y >= self.min_y && y <= self.max_y
     }
 }
-
-/// Returns true when two forms touch or overlap. Contact at exactly the
-/// boundary is intentionally included because this predicate is used for
-/// physical contact detection.
 pub fn placed_forms_overlap(
     a: &PlacedMaterialPart,
     b: &PlacedMaterialPart,
@@ -136,11 +127,6 @@ pub fn placed_forms_overlap(
         _ => polygons_overlap(a, b, tolerance),
     }
 }
-
-/// Returns true only when two finite-area forms penetrate one another.
-/// Merely touching at a boundary is not penetration. This is deliberately
-/// separate from `placed_forms_overlap`, whose inclusive semantics represent
-/// physical contact.
 pub fn placed_forms_penetrate(
     a: &PlacedMaterialPart,
     b: &PlacedMaterialPart,
@@ -176,16 +162,11 @@ pub fn placed_forms_penetrate(
         (polygon, Form::Circle { radius }) => {
             circle_polygon_penetration(b, *radius, a, polygon, tolerance)
         }
-        (Form::Line { .. }, _) | (_, Form::Line { .. }) => {
-            // Lines have no area, so crossing/contact is not a finite-area
-            // penetration. Their existing contact predicate handles them.
-            false
-        }
+        (Form::Line { .. }, _) | (_, Form::Line { .. }) => false,
         (Form::Fluid { .. }, _) | (_, Form::Fluid { .. }) => false,
         _ => polygons_penetrate(a, b, tolerance),
     }
 }
-
 fn line_segment(form: &Form, placement: Placement) -> Option<((f64, f64), (f64, f64))> {
     let Form::Line { length } = form else {
         return None;
@@ -197,7 +178,6 @@ fn line_segment(form: &Form, placement: Placement) -> Option<((f64, f64), (f64, 
         (placement.x + h * c, placement.y + h * s),
     ))
 }
-
 fn circle_line_overlap(
     circle: &PlacedMaterialPart,
     radius: f64,
@@ -209,7 +189,6 @@ fn circle_line_overlap(
     };
     point_segment_distance((circle.placement.x, circle.placement.y), a, b) <= radius + tolerance
 }
-
 fn circle_line_penetration(
     circle: &PlacedMaterialPart,
     radius: f64,
@@ -222,7 +201,6 @@ fn circle_line_penetration(
     point_segment_distance((circle.placement.x, circle.placement.y), a, b)
         < (radius - tolerance).max(0.0)
 }
-
 fn line_line_overlap(a: &PlacedMaterialPart, b: &PlacedMaterialPart, tolerance: f64) -> bool {
     let Some((a0, a1)) = line_segment(&a.form, a.placement) else {
         return false;
@@ -232,7 +210,6 @@ fn line_line_overlap(a: &PlacedMaterialPart, b: &PlacedMaterialPart, tolerance: 
     };
     segments_distance(a0, a1, b0, b1) <= tolerance
 }
-
 fn line_polygon_overlap(
     line: &PlacedMaterialPart,
     polygon: &PlacedMaterialPart,
@@ -253,7 +230,6 @@ fn line_polygon_overlap(
         segments_distance(start, end, edge_start, edge_end) <= tolerance
     })
 }
-
 fn segments_distance(a0: (f64, f64), a1: (f64, f64), b0: (f64, f64), b1: (f64, f64)) -> f64 {
     if segments_intersect(a0, a1, b0, b1) {
         return 0.0;
@@ -263,11 +239,9 @@ fn segments_distance(a0: (f64, f64), a1: (f64, f64), b0: (f64, f64), b1: (f64, f
         .min(point_segment_distance(b0, a0, a1))
         .min(point_segment_distance(b1, a0, a1))
 }
-
 fn orientation(a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> f64 {
     (b.0 - a.0) * (c.1 - a.1) - (b.1 - a.1) * (c.0 - a.0)
 }
-
 fn segments_intersect(a0: (f64, f64), a1: (f64, f64), b0: (f64, f64), b1: (f64, f64)) -> bool {
     let eps = 1e-12;
     let o1 = orientation(a0, a1, b0);
@@ -288,7 +262,6 @@ fn segments_intersect(a0: (f64, f64), a1: (f64, f64), b0: (f64, f64), b1: (f64, 
     }
     (o1 > 0.0 && o2 < 0.0 || o1 < 0.0 && o2 > 0.0) && (o3 > 0.0 && o4 < 0.0 || o3 < 0.0 && o4 > 0.0)
 }
-
 fn circle_polygon_overlap(
     circle: &PlacedMaterialPart,
     radius: f64,
@@ -309,7 +282,6 @@ fn circle_polygon_overlap(
         point_segment_distance(center, start, end) <= expanded_radius
     })
 }
-
 fn circle_polygon_penetration(
     circle: &PlacedMaterialPart,
     radius: f64,
@@ -330,7 +302,6 @@ fn circle_polygon_penetration(
         point_segment_distance(center, start, end) < effective_radius
     })
 }
-
 fn polygons_overlap(a: &PlacedMaterialPart, b: &PlacedMaterialPart, tolerance: f64) -> bool {
     let Some(a_vertices) = world_polygon_vertices(&a.form, a.placement) else {
         return false;
@@ -349,7 +320,6 @@ fn polygons_overlap(a: &PlacedMaterialPart, b: &PlacedMaterialPart, tolerance: f
     }
     true
 }
-
 fn polygons_penetrate(a: &PlacedMaterialPart, b: &PlacedMaterialPart, tolerance: f64) -> bool {
     let Some(a_vertices) = world_polygon_vertices(&a.form, a.placement) else {
         return false;
@@ -368,7 +338,6 @@ fn polygons_penetrate(a: &PlacedMaterialPart, b: &PlacedMaterialPart, tolerance:
     }
     true
 }
-
 fn world_polygon_vertices(form: &Form, placement: Placement) -> Option<Vec<(f64, f64)>> {
     let vertices = form.polygon_vertices()?;
     let (sin, cos) = placement.rotation_radians.sin_cos();
@@ -384,7 +353,6 @@ fn world_polygon_vertices(form: &Form, placement: Placement) -> Option<Vec<(f64,
             .collect(),
     )
 }
-
 fn polygon_axes(vertices: &[(f64, f64)]) -> Vec<(f64, f64)> {
     vertices
         .iter()
@@ -398,7 +366,6 @@ fn polygon_axes(vertices: &[(f64, f64)]) -> Vec<(f64, f64)> {
         })
         .collect()
 }
-
 fn project_polygon(vertices: &[(f64, f64)], axis_x: f64, axis_y: f64) -> (f64, f64) {
     vertices
         .iter()
@@ -407,7 +374,6 @@ fn project_polygon(vertices: &[(f64, f64)], axis_x: f64, axis_y: f64) -> (f64, f
             (min.min(p), max.max(p))
         })
 }
-
 fn point_in_polygon(point: (f64, f64), vertices: &[(f64, f64)]) -> bool {
     let (px, py) = point;
     let mut inside = false;
@@ -416,12 +382,11 @@ fn point_in_polygon(point: (f64, f64), vertices: &[(f64, f64)]) -> bool {
         let (x2, y2) = vertices[(index + 1) % vertices.len()];
         let intersects = (y1 > py) != (y2 > py) && px < (x2 - x1) * (py - y1) / (y2 - y1) + x1;
         if intersects {
-            inside = !inside;
+            inside = !inside
         }
     }
     inside
 }
-
 fn point_segment_distance(point: (f64, f64), start: (f64, f64), end: (f64, f64)) -> f64 {
     let (px, py) = point;
     let (sx, sy) = start;
@@ -440,7 +405,6 @@ fn point_segment_distance(point: (f64, f64), start: (f64, f64), end: (f64, f64))
 mod tests {
     use super::*;
     use crate::resources::{default_catalog, InternalBond};
-
     fn part(form: Form, x: f64, y: f64, rotation_radians: f64) -> PlacedMaterialPart {
         PlacedMaterialPart {
             part_index: 0,
@@ -452,7 +416,6 @@ mod tests {
             },
         }
     }
-
     #[test]
     fn geometry_preserves_material_part_identity_and_placement() {
         let c = default_catalog();
@@ -468,7 +431,6 @@ mod tests {
         assert_eq!(g.parts[0].placement, p[0]);
         assert!(g.bounding_box_contains(12.0, 8.0));
     }
-
     #[test]
     fn physical_instance_keeps_material_and_geometry_together() {
         let c = default_catalog();
@@ -482,7 +444,6 @@ mod tests {
         assert_eq!(i.material, m);
         assert_eq!(i.geometry.parts[0].placement, p[0]);
     }
-
     #[test]
     fn structured_material_requires_one_placement_per_constituent() {
         let c = default_catalog();
@@ -500,7 +461,6 @@ mod tests {
         }];
         assert!(MaterialGeometry::new(&m, &p, &c).is_none());
     }
-
     #[test]
     fn invalid_geometry_is_rejected() {
         let c = default_catalog();
@@ -512,7 +472,6 @@ mod tests {
         }];
         assert!(MaterialGeometry::new(&m, &p, &c).is_none());
     }
-
     #[test]
     fn touching_circles_are_contact_but_not_penetration() {
         let a = part(Form::Circle { radius: 2.0 }, 0.0, 0.0, 0.0);
@@ -520,7 +479,6 @@ mod tests {
         assert!(placed_forms_overlap(&a, &b, 0.0));
         assert!(!placed_forms_penetrate(&a, &b, 0.0));
     }
-
     #[test]
     fn overlapping_circles_are_in_contact_and_penetration() {
         let a = part(Form::Circle { radius: 2.0 }, 0.0, 0.0, 0.0);
@@ -528,7 +486,6 @@ mod tests {
         assert!(placed_forms_overlap(&a, &b, 0.0));
         assert!(placed_forms_penetrate(&a, &b, 0.0));
     }
-
     #[test]
     fn separated_circles_are_neither_contact_nor_penetration() {
         let a = part(Form::Circle { radius: 2.0 }, 0.0, 0.0, 0.0);
@@ -536,7 +493,6 @@ mod tests {
         assert!(!placed_forms_overlap(&a, &b, 0.0));
         assert!(!placed_forms_penetrate(&a, &b, 0.0));
     }
-
     #[test]
     fn rotated_polygons_use_actual_shape_not_bounding_radius() {
         let a = part(
@@ -559,7 +515,6 @@ mod tests {
         );
         assert!(!placed_forms_overlap(&a, &b, 0.0));
     }
-
     #[test]
     fn polygon_contact_is_detected_when_edges_cross() {
         let a = part(
@@ -583,7 +538,6 @@ mod tests {
         assert!(placed_forms_overlap(&a, &b, 0.0));
         assert!(placed_forms_penetrate(&a, &b, 0.0));
     }
-
     #[test]
     fn circle_polygon_contact_is_detected_at_the_boundary() {
         let circle = part(Form::Circle { radius: 1.0 }, 2.0, 0.0, 0.0);
@@ -599,7 +553,6 @@ mod tests {
         assert!(placed_forms_overlap(&circle, &square, 0.0));
         assert!(!placed_forms_penetrate(&circle, &square, 0.0));
     }
-
     #[test]
     fn line_has_physical_endpoints() {
         let line = part(Form::Line { length: 4.0 }, 0.0, 0.0, 0.0);
@@ -611,7 +564,6 @@ mod tests {
             0.0
         ));
     }
-
     #[test]
     fn fluid_has_no_invented_spatial_boundary() {
         let fluid = part(
