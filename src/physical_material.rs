@@ -66,10 +66,8 @@ impl PhysicalMaterial {
             if (*amount - 1.0).abs() > 1e-9 {
                 return None;
             }
-            let mut unit = StructuralUnit::from_material(
-                Material::free_base(name.clone(), 1.0),
-                *placement,
-            )?;
+            let mut unit =
+                StructuralUnit::from_material(Material::free_base(name.clone(), 1.0), *placement)?;
             if !unit.realize_default_geometry(catalog) {
                 return None;
             }
@@ -78,17 +76,15 @@ impl PhysicalMaterial {
 
         let mut internal_connections = Vec::with_capacity(material.internal_bonds.len());
         for bond in &material.internal_bonds {
-            let candidates = connection_pair_candidates(
-                &structure,
-                bond.part_a,
-                bond.part_b,
-                catalog,
-            )
-            .into_iter()
-            .filter(|candidate| {
-                candidate.available_a && candidate.available_b && candidate.distance <= 1.0
-            })
-            .collect::<Vec<_>>();
+            let candidates =
+                connection_pair_candidates(&structure, bond.part_a, bond.part_b, catalog)
+                    .into_iter()
+                    .filter(|candidate| {
+                        candidate.available_a
+                            && candidate.available_b
+                            && candidate.distance <= 1.0
+                    })
+                    .collect::<Vec<_>>();
             if candidates.len() != 1 {
                 return None;
             }
