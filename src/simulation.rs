@@ -432,8 +432,7 @@ impl Simulation {
                         let (before, rest) = organisms.split_at_mut(index);
                         let (organism, after) =
                             rest.split_first_mut().expect("index is in organisms");
-                        let mut others =
-                            Vec::with_capacity(organism_count.saturating_sub(1));
+                        let mut others = Vec::with_capacity(organism_count.saturating_sub(1));
                         for other in before.iter() {
                             others.push((*other).clone());
                         }
