@@ -97,7 +97,10 @@ impl MaterialStorage {
             let count = amount.round() as u64;
             for _ in 0..count {
                 self.entries
-                    .push(StoredMaterial::Logical(Material::free_base(name.clone(), 1.0)));
+                    .push(StoredMaterial::Logical(Material::free_base(
+                        name.clone(),
+                        1.0,
+                    )));
             }
         }
         true
@@ -219,7 +222,10 @@ mod tests {
     fn compound() -> Material {
         Material {
             parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
-            internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
+            internal_bonds: vec![InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
         }
     }
 
@@ -268,8 +274,16 @@ mod tests {
         let mut storage = MaterialStorage::default();
         let m = compound();
         let placements = vec![
-            Placement { x: 10.0, y: 20.0, rotation_radians: 0.5 },
-            Placement { x: 10.838, y: 20.0, rotation_radians: 0.75 },
+            Placement {
+                x: 10.0,
+                y: 20.0,
+                rotation_radians: 0.5,
+            },
+            Placement {
+                x: 10.838,
+                y: 20.0,
+                rotation_radians: 0.75,
+            },
         ];
         assert!(storage.store_physical(m.clone(), placements, &catalog()));
         assert_eq!(storage.physical_count(), 1);
@@ -288,7 +302,11 @@ mod tests {
     fn physical_single_constituent_is_stored_with_its_realization() {
         let mut storage = MaterialStorage::default();
         let m = Material::free_base("Carbon", 1.0);
-        let placements = vec![Placement { x: 10.0, y: 20.0, rotation_radians: 0.25 }];
+        let placements = vec![Placement {
+            x: 10.0,
+            y: 20.0,
+            rotation_radians: 0.25,
+        }];
         assert!(storage.store_physical(m.clone(), placements, &catalog()));
         assert_eq!(storage.physical_count(), 1);
         let restored = storage.take_matching_physical(&m).expect("stored instance");

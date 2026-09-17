@@ -314,8 +314,7 @@ pub(crate) fn finish_reproduction(
     }
     let reserve = construction
         .committed_material
-        .materials
-        .iter()
+        .iter_materials()
         .find(|m| **m == construction.child_genome.juvenile_reserve)
         .cloned();
     let Some(reserve) = reserve else {
