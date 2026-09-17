@@ -1,3 +1,4 @@
+#![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 //! Runtime bridge for the decision architecture.
 //!
 //! This module contains no chemistry or structural math. It connects organism
