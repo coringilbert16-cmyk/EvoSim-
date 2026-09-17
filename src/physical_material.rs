@@ -71,9 +71,7 @@ impl PhysicalMaterial {
                 connection_pair_candidates(&structure, bond.part_a, bond.part_b, catalog)
                     .into_iter()
                     .filter(|candidate| {
-                        candidate.available_a
-                            && candidate.available_b
-                            && candidate.distance <= 1.0
+                        candidate.available_a && candidate.available_b && candidate.distance <= 1.0
                     })
                     .collect::<Vec<_>>();
             if candidates.len() != 1 {
