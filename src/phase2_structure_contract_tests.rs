@@ -227,5 +227,6 @@ fn stored_realized_single_constituent_enters_combine_through_physical_path() {
         .is_none());
     assert_eq!(organism.structure.units.len(), 2);
     assert_eq!(organism.structure.bonds.len(), 1);
+    assert!(organism.structure.units[1].geometry.is_some());
     assert!(attempt.energy_invested >= 0.0);
 }
