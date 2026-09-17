@@ -107,4 +107,26 @@ impl PhysicalMaterial {
     pub(crate) fn is_realized(&self) -> bool {
         self.placements.is_some() && self.internal_connections.is_some()
     }
+
+    /// Returns a physically realized copy translated by `origin` without
+    /// changing the material's intrinsic relative realization.
+    pub(crate) fn translated(&self, origin: Placement) -> Option<Self> {
+        let placements = self.placements.as_ref()?;
+        let translated = placements
+            .iter()
+            .map(|relative| {
+                let (sin, cos) = origin.rotation_radians.sin_cos();
+                Placement {
+                    x: origin.x + relative.x * cos - relative.y * sin,
+                    y: origin.y + relative.x * sin + relative.y * cos,
+                    rotation_radians: origin.rotation_radians + relative.rotation_radians,
+                }
+            })
+            .collect();
+        Some(Self {
+            material: self.material.clone(),
+            placements: Some(translated),
+            internal_connections: self.internal_connections.clone(),
+        })
+    }
 }
