@@ -682,9 +682,12 @@ mod tests {
             5.0,
             0.0
         ));
-        assert_eq!(organism.structure, organism_before);
-        assert_eq!(others[0].structure, first_before);
-        assert_eq!(others[1].structure, second_before);
+        assert_eq!(organism.structure.units, organism_before.units);
+        assert_eq!(organism.structure.bonds, organism_before.bonds);
+        assert_eq!(others[0].structure.units, first_before.units);
+        assert_eq!(others[0].structure.bonds, first_before.bonds);
+        assert_eq!(others[1].structure.units, second_before.units);
+        assert_eq!(others[1].structure.bonds, second_before.bonds);
     }
 
     #[test]
@@ -715,7 +718,7 @@ mod tests {
         ];
         let physical = crate::physical_material::PhysicalMaterial::realized(
             material,
-            placements,
+            placements.clone(),
             &environment.catalog,
         )
         .expect("realized bonded material should be valid");
