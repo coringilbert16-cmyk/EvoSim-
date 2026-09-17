@@ -216,8 +216,6 @@ fn translate_physical(physical: &mut crate::physical_material::PhysicalMaterial,
         }
     }
 }
-
-
 fn organism_overlaps_after(
     blocker: &Organism,
     moving: &Organism,
