@@ -16,9 +16,21 @@ jobs:
           from pathlib import Path
           p = Path('src/structure.rs')
           text = p.read_text()
-          old = '''        if !m.is_valid() || m.is_empty() {\n            return Err(serde::de::Error::custom("invalid material"));\n        }\n        Ok(Self {'''
-          new = '''        if !m.is_valid() || m.is_empty() {\n            return Err(serde::de::Error::custom("invalid material"));\n        }\n        if m.has_internal_structure() {\n            return Err(serde::de::Error::custom(\n                "composite material cannot be loaded as a StructuralUnit; restore its physical constituents and bonds through the organism graph",\n            ));\n        }\n        Ok(Self {'''
-          if text.count(old) != 1:\n              raise SystemExit(f'expected exactly one StructuralUnit deserialization guard, found {text.count(old)}')
+          old = '''        if !m.is_valid() || m.is_empty() {
+            return Err(serde::de::Error::custom("invalid material"));
+        }
+        Ok(Self {'''
+          new = '''        if !m.is_valid() || m.is_empty() {
+            return Err(serde::de::Error::custom("invalid material"));
+        }
+        if m.has_internal_structure() {
+            return Err(serde::de::Error::custom(
+                "composite material cannot be loaded as a StructuralUnit; restore its physical constituents and bonds through the organism graph",
+            ));
+        }
+        Ok(Self {'''
+          if text.count(old) != 1:
+              raise SystemExit(f'expected exactly one StructuralUnit deserialization guard, found {text.count(old)}')
           p.write_text(text.replace(old, new))
           PY
           cargo fmt --all
