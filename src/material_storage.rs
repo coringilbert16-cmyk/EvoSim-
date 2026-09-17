@@ -78,29 +78,6 @@ impl MaterialStorage {
             .find(|material| !material.has_internal_structure() && !material.is_empty())
             .cloned()
     }
-    pub(crate) fn peek_first_realized(&self) -> Option<(Material, PhysicalMaterial)> {
-        self.materials
-            .iter()
-            .enumerate()
-            .find_map(|(index, material)| {
-                let instance = self.physical_instances.get(index)?.as_ref()?;
-                if material.is_empty() || !instance.is_realized() {
-                    return None;
-                }
-                Some((material.clone(), instance.clone()))
-            })
-    }
-    pub(crate) fn take_first_realized(&mut self) -> Option<PhysicalMaterial> {
-        self.normalize_legacy_alignment();
-        let index = self
-            .physical_instances
-            .iter()
-            .position(|instance| instance.as_ref().is_some_and(PhysicalMaterial::is_realized))?;
-        let instance = self.physical_instances[index].take()?;
-        self.physical_instances.swap_remove(index);
-        self.materials.swap_remove(index);
-        Some(instance)
-    }
     pub(crate) fn peek_matching_physical(&self, target: &Material) -> Option<PhysicalMaterial> {
         let index = self
             .materials
@@ -180,10 +157,7 @@ mod tests {
     fn compound() -> Material {
         Material {
             parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
-            internal_bonds: vec![InternalBond {
-                part_a: 0,
-                part_b: 1,
-            }],
+            internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
         }
     }
     fn catalog() -> Vec<BaseResource> {
@@ -226,16 +200,8 @@ mod tests {
         let mut storage = MaterialStorage::default();
         let m = compound();
         let placements = vec![
-            Placement {
-                x: 10.0,
-                y: 20.0,
-                rotation_radians: 0.5,
-            },
-            Placement {
-                x: 10.838,
-                y: 20.0,
-                rotation_radians: 0.75,
-            },
+            Placement { x: 10.0, y: 20.0, rotation_radians: 0.5 },
+            Placement { x: 10.838, y: 20.0, rotation_radians: 0.75 },
         ];
         assert!(storage.store_physical(m.clone(), placements, &catalog()));
         let restored = storage.take_matching_physical(&m).expect("stored instance");
@@ -252,11 +218,7 @@ mod tests {
     fn physical_single_constituent_is_stored_with_its_realization() {
         let mut storage = MaterialStorage::default();
         let m = Material::free_base("Carbon", 1.0);
-        let placements = vec![Placement {
-            x: 10.0,
-            y: 20.0,
-            rotation_radians: 0.25,
-        }];
+        let placements = vec![Placement { x: 10.0, y: 20.0, rotation_radians: 0.25 }];
         assert!(storage.store_physical(m.clone(), placements, &catalog()));
         let restored = storage.take_matching_physical(&m).expect("stored instance");
         assert_eq!(restored.material, m);
