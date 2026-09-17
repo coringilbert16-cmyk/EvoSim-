@@ -334,19 +334,19 @@ fn can_translate_physical(
     dx: f64,
     dy: f64,
 ) -> bool {
-    let Some(placements) = &physical.placements else {
-        return false;
-    };
-    placements.iter().all(|p| {
-        let x = p.x + dx;
-        let y = p.y + dy;
-        x.is_finite()
-            && y.is_finite()
-            && x >= 0.0
-            && y >= 0.0
-            && x <= environment.width
-            && y <= environment.height
-    })
+    let parts = physical_parts_at(physical, environment, dx, dy);
+    !parts.is_empty()
+        && parts.iter().all(|part| {
+            let radius = part.form.bounding_radius();
+            let x = part.placement.x;
+            let y = part.placement.y;
+            x.is_finite()
+                && y.is_finite()
+                && x - radius >= 0.0
+                && y - radius >= 0.0
+                && x + radius <= environment.width
+                && y + radius <= environment.height
+        })
 }
 
 fn translate_physical(physical: &mut crate::physical_material::PhysicalMaterial, dx: f64, dy: f64) {
