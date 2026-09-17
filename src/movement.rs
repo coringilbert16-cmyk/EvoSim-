@@ -108,8 +108,12 @@ fn resolve_push_chain(
 ) -> bool {
     let mut organism_visited = vec![false; other_organisms.len()];
     let mut physical_visited = std::collections::HashSet::new();
-    push_organism_blockers(
-        moving,
+    let moving_destination = organism_parts_at(moving, environment, dx, dy);
+    if static_material_blocks(&moving_destination, environment) {
+        return false;
+    }
+    push_blockers_for_parts(
+        &moving_destination,
         other_organisms,
         environment,
         dx,
@@ -119,8 +123,8 @@ fn resolve_push_chain(
     )
 }
 
-fn push_organism_blockers(
-    moving: &Organism,
+fn push_blockers_for_parts(
+    moving_destination: &[PlacedMaterialPart],
     other_organisms: &mut [Organism],
     environment: &mut Environment,
     dx: f64,
@@ -129,18 +133,24 @@ fn push_organism_blockers(
     physical_visited: &mut std::collections::HashSet<(usize, usize)>,
 ) -> bool {
     for index in 0..other_organisms.len() {
-        if organism_visited[index]
-            || !organism_overlaps_after(&other_organisms[index], moving, dx, dy, environment)
-        {
+        if organism_visited[index] {
             continue;
         }
-        if !can_translate_organism(&other_organisms[index], environment, dx, dy) {
+        let candidate = other_organisms[index].clone();
+        let candidate_parts = organism_parts_at(&candidate, environment, 0.0, 0.0);
+        if !parts_penetrate(moving_destination, &candidate_parts) {
+            continue;
+        }
+        if !can_translate_organism(&candidate, environment, dx, dy) {
+            return false;
+        }
+        let destination = organism_parts_at(&candidate, environment, dx, dy);
+        if static_material_blocks(&destination, environment) {
             return false;
         }
         organism_visited[index] = true;
-        let blocker = other_organisms[index].clone();
-        if !push_organism_blockers(
-            &blocker,
+        if !push_blockers_for_parts(
+            &destination,
             other_organisms,
             environment,
             dx,
@@ -152,39 +162,146 @@ fn push_organism_blockers(
         }
         translate_organism(&mut other_organisms[index], dx, dy);
     }
-    push_physical_blockers(moving, environment, dx, dy, physical_visited)
-}
 
-fn push_physical_blockers(
-    moving: &Organism,
-    environment: &mut Environment,
-    dx: f64,
-    dy: f64,
-    physical_visited: &mut std::collections::HashSet<(usize, usize)>,
-) -> bool {
     for cell_index in 0..environment.field.cells.len() {
         let material_count = environment.field.cells[cell_index].physical_materials.len();
         for material_index in 0..material_count {
-            if physical_visited.contains(&(cell_index, material_index)) {
+            let key = (cell_index, material_index);
+            if physical_visited.contains(&key) {
                 continue;
             }
-            let physical = &environment.field.cells[cell_index].physical_materials[material_index];
-            if !physical.is_realized()
-                || physical.material.is_empty()
-                || !physical_overlaps_after(physical, moving, dx, dy, environment)
+            let candidate = environment.field.cells[cell_index].physical_materials[material_index].clone();
+            if !candidate.is_realized()
+                || candidate.material.is_empty()
             {
                 continue;
             }
-            if !can_translate_physical(physical, environment, dx, dy) {
+            let candidate_parts = physical_parts_at(&candidate, environment, 0.0, 0.0);
+            if !parts_penetrate(moving_destination, &candidate_parts) {
+                continue;
+            }
+            if !can_translate_physical(&candidate, environment, dx, dy) {
                 return false;
             }
-            let mut pushed = physical.clone();
+            let destination = physical_parts_at(&candidate, environment, dx, dy);
+            if static_material_blocks(&destination, environment) {
+                return false;
+            }
+            physical_visited.insert(key);
+            if !push_blockers_for_parts(
+                &destination,
+                other_organisms,
+                environment,
+                dx,
+                dy,
+                organism_visited,
+                physical_visited,
+            ) {
+                return false;
+            }
+            let mut pushed = candidate;
             translate_physical(&mut pushed, dx, dy);
-            physical_visited.insert((cell_index, material_index));
             environment.field.cells[cell_index].physical_materials[material_index] = pushed;
         }
     }
     true
+}
+
+fn organism_parts_at(
+    organism: &Organism,
+    environment: &Environment,
+    dx: f64,
+    dy: f64,
+) -> Vec<PlacedMaterialPart> {
+    organism
+        .structure
+        .units
+        .iter()
+        .filter_map(|unit| {
+            let shape = unit.shape(&environment.catalog)?;
+            Some(PlacedMaterialPart {
+                part_index: 0,
+                form: shape.form.clone(),
+                placement: Placement {
+                    x: unit.placement.x + dx,
+                    y: unit.placement.y + dy,
+                    rotation_radians: unit.placement.rotation_radians,
+                },
+            })
+        })
+        .collect()
+}
+
+fn physical_parts_at(
+    physical: &crate::physical_material::PhysicalMaterial,
+    environment: &Environment,
+    dx: f64,
+    dy: f64,
+) -> Vec<PlacedMaterialPart> {
+    let Some(placements) = &physical.placements else {
+        return Vec::new();
+    };
+    physical
+        .material
+        .parts
+        .iter()
+        .zip(placements.iter())
+        .enumerate()
+        .filter_map(|(part_index, ((name, amount), placement))| {
+            if (*amount - 1.0).abs() > 1e-9 {
+                return None;
+            }
+            let base = environment.catalog.iter().find(|b| b.name == *name)?;
+            Some(PlacedMaterialPart {
+                part_index,
+                form: base.shape.form.clone(),
+                placement: Placement {
+                    x: placement.x + dx,
+                    y: placement.y + dy,
+                    rotation_radians: placement.rotation_radians,
+                },
+            })
+        })
+        .collect()
+}
+
+fn parts_penetrate(a: &[PlacedMaterialPart], b: &[PlacedMaterialPart]) -> bool {
+    a.iter().any(|part_a| {
+        b.iter().any(|part_b| {
+            crate::material_geometry::placed_forms_penetrate(part_a, part_b, 0.0)
+        })
+    })
+}
+
+fn static_material_blocks(parts: &[PlacedMaterialPart], environment: &Environment) -> bool {
+    for part in parts {
+        let radius = part.form.bounding_radius().max(0.0);
+        let min_col =
+            ((part.placement.x - radius).max(0.0) / environment.field.cell_size).floor() as usize;
+        let max_col =
+            ((part.placement.x + radius).max(0.0) / environment.field.cell_size).floor() as usize;
+        let min_row =
+            ((part.placement.y - radius).max(0.0) / environment.field.cell_size).floor() as usize;
+        let max_row =
+            ((part.placement.y + radius).max(0.0) / environment.field.cell_size).floor() as usize;
+        let max_col = max_col.min(environment.field.width_cells.saturating_sub(1));
+        let max_row = max_row.min(environment.field.height_cells.saturating_sub(1));
+        if min_col >= environment.field.width_cells || min_row >= environment.field.height_cells {
+            continue;
+        }
+        for row in min_row..=max_row {
+            for col in min_col..=max_col {
+                if environment.field.cells[row * environment.field.width_cells + col]
+                    .materials
+                    .iter()
+                    .any(|m| m.is_valid() && !m.is_empty() && m.has_internal_structure())
+                {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }
 
 fn can_translate_physical(
