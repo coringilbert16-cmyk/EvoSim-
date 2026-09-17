@@ -268,14 +268,12 @@ fn movement_collides(
         }
         for row in min_row..=max_row {
             for col in min_col..=max_col {
-                let cell =
-                    &environment.field.cells[row * environment.field.width_cells + col];
+                let cell = &environment.field.cells[row * environment.field.width_cells + col];
                 if cell
                     .materials
                     .iter()
-                    .any(|m| {
-                    m.is_valid() && !m.is_empty() && m.has_internal_structure()
-                }) {
+                    .any(|m| m.is_valid() && !m.is_empty() && m.has_internal_structure())
+                {
                     return true;
                 }
                 for physical in &cell.physical_materials {
@@ -300,9 +298,7 @@ fn movement_collides(
                             form: base.shape.form.clone(),
                             placement: *placement,
                         };
-                        if crate::material_geometry::placed_forms_penetrate(
-                            &moved, &blocker, 0.0
-                        ) {
+                        if crate::material_geometry::placed_forms_penetrate(&moved, &blocker, 0.0) {
                             return true;
                         }
                     }
