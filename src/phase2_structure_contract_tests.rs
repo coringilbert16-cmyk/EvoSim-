@@ -171,10 +171,23 @@ fn new_structure_bond_is_formed_only_through_combine() {
 }
 
 #[test]
-fn stored_realized_single_constituent_enters_combine_without_losing_rotation() {
+fn stored_realized_single_constituent_enters_combine_through_physical_path() {
     let mut simulation = Simulation::new(11, 20.0);
     let organism = &mut simulation.organisms[0];
     organism.usable_energy = 1_000.0;
+
+    let mut existing = StructuralUnit::new(
+        "Carbon",
+        Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        },
+    );
+    assert!(existing.realize_default_geometry(&simulation.environment.catalog));
+    organism.structure = OrganismStructure::new();
+    organism.structure.add_unit(existing);
+
     let material = Material::free_base("Carbon", 1.0);
     assert!(organism.stored_material.store_physical(
         material.clone(),
@@ -204,7 +217,7 @@ fn stored_realized_single_constituent_enters_combine_without_losing_rotation() {
             .expect("stored physical Carbon should be incorporated through COMBINE");
 
     assert!(organism.stored_material.is_empty());
-    assert!(organism.structure.units.len() > 1);
-    assert!(!organism.structure.bonds.is_empty());
+    assert_eq!(organism.structure.units.len(), 2);
+    assert_eq!(organism.structure.bonds.len(), 1);
     assert!(attempt.energy_invested >= 0.0);
 }
