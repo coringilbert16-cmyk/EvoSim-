@@ -137,13 +137,14 @@ impl MaterialStorage {
     }
 
     pub(crate) fn peek_matching_physical(&self, target: &Material) -> Option<PhysicalMaterial> {
-        let entry = self
-            .entries
-            .iter()
-            .find(|entry| entry.material() == target && !entry.material().is_empty())?;
-        entry
-            .physical()
-            .or_else(|| Some(PhysicalMaterial::logical(target.clone())))
+        self.entries.iter().find_map(|entry| match entry {
+            StoredMaterial::Physical(instance)
+                if instance.material == *target && !instance.material.is_empty() =>
+            {
+                Some(instance.clone())
+            }
+            _ => None,
+        })
     }
 
     pub(crate) fn take_one_unstructured_named(&mut self, name: &str) -> Option<Material> {
@@ -167,13 +168,13 @@ impl MaterialStorage {
     }
 
     pub(crate) fn take_matching_physical(&mut self, target: &Material) -> Option<PhysicalMaterial> {
-        let index = self
-            .entries
-            .iter()
-            .position(|entry| entry.material() == target && !entry.material().is_empty())?;
+        let index = self.entries.iter().position(|entry| {
+            matches!(entry, StoredMaterial::Physical(instance)
+                if instance.material == *target && !instance.material.is_empty())
+        })?;
         match self.entries.swap_remove(index) {
             StoredMaterial::Physical(instance) => Some(instance),
-            StoredMaterial::Logical(material) => Some(PhysicalMaterial::logical(material)),
+            StoredMaterial::Logical(_) => None,
         }
     }
 
