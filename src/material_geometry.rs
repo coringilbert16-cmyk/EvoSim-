@@ -1,3 +1,4 @@
+#![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 //! Physical geometry for environmental material instances.
 use crate::resources::{BaseResource, Form, Material};
 use crate::structure::Placement;
