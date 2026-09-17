@@ -5,8 +5,8 @@ use crate::structure::Placement;
 impl Simulation {
     pub(crate) fn update_movement(
         organism: &mut Organism,
-        environment: &Environment,
-        other_organisms: &[Organism],
+        environment: &mut Environment,
+        other_organisms: &mut [Organism],
     ) -> bool {
         let memory_strength = organism.genome.memory_strength();
         let movement_efficiency = organism.genome.movement_efficiency();
@@ -52,8 +52,8 @@ impl Simulation {
 
     pub(crate) fn try_move_cell(
         organism: &mut Organism,
-        environment: &Environment,
-        other_organisms: &[Organism],
+        environment: &mut Environment,
+        other_organisms: &mut [Organism],
         delta_x: f64,
         delta_y: f64,
     ) -> bool {
@@ -71,64 +71,243 @@ impl Simulation {
         if dx.abs() <= f64::EPSILON && dy.abs() <= f64::EPSILON {
             return false;
         }
-        if movement_collides(organism, environment, other_organisms, dx, dy) {
+
+        let mut trial_environment = environment.clone();
+        let mut trial_organisms = other_organisms.to_vec();
+        if !resolve_push_chain(
+            organism,
+            &mut trial_organisms,
+            &mut trial_environment,
+            dx,
+            dy,
+        ) {
             return false;
         }
-        let cell = organism.occupied_cells.first_mut().expect("checked above");
-        cell.x = new_x;
-        cell.y = new_y;
+        reindex_physical_materials(&mut trial_environment);
+
+        organism.occupied_cells[0].x = new_x;
+        organism.occupied_cells[0].y = new_y;
         for unit in &mut organism.structure.units {
             unit.placement.x += dx;
             unit.placement.y += dy;
         }
+        for (original, trial) in other_organisms.iter_mut().zip(trial_organisms) {
+            original.occupied_cells = trial.occupied_cells;
+            original.structure = trial.structure;
+        }
+        *environment = trial_environment;
         true
     }
 }
 
-fn movement_collides(
-    organism: &Organism,
-    environment: &Environment,
-    other_organisms: &[Organism],
+fn reindex_physical_materials(environment: &mut Environment) {
+    let mut physical_materials = Vec::new();
+    for cell in &mut environment.field.cells {
+        physical_materials.append(&mut cell.physical_materials);
+    }
+    for physical in physical_materials {
+        let Some(placement) = physical
+            .placements
+            .as_ref()
+            .and_then(|placements| placements.first())
+        else {
+            continue;
+        };
+        let Some(index) = environment
+            .field
+            .index_for_position(placement.x, placement.y)
+        else {
+            continue;
+        };
+        environment.field.cells[index]
+            .physical_materials
+            .push(physical);
+    }
+}
+
+fn resolve_push_chain(
+    moving: &Organism,
+    other_organisms: &mut [Organism],
+    environment: &mut Environment,
     dx: f64,
     dy: f64,
 ) -> bool {
-    for unit in &organism.structure.units {
-        let Some(shape) = unit.shape(&environment.catalog) else {
+    let mut organism_visited = vec![false; other_organisms.len()];
+    let mut physical_visited = std::collections::HashSet::new();
+    let moving_destination = organism_parts_at(moving, environment, dx, dy);
+    if static_material_blocks(&moving_destination, environment) {
+        return false;
+    }
+    push_blockers_for_parts(
+        &moving_destination,
+        other_organisms,
+        environment,
+        dx,
+        dy,
+        &mut organism_visited,
+        &mut physical_visited,
+    )
+}
+
+fn push_blockers_for_parts(
+    moving_destination: &[PlacedMaterialPart],
+    other_organisms: &mut [Organism],
+    environment: &mut Environment,
+    dx: f64,
+    dy: f64,
+    organism_visited: &mut [bool],
+    physical_visited: &mut std::collections::HashSet<(usize, usize)>,
+) -> bool {
+    for index in 0..other_organisms.len() {
+        if organism_visited[index] {
             continue;
-        };
-        let moved = PlacedMaterialPart {
-            part_index: 0,
-            form: shape.form.clone(),
-            placement: Placement {
-                x: unit.placement.x + dx,
-                y: unit.placement.y + dy,
-                rotation_radians: unit.placement.rotation_radians,
-            },
-        };
-        for other in other_organisms {
-            for blocker_unit in &other.structure.units {
-                let Some(blocker_shape) = blocker_unit.shape(&environment.catalog) else {
-                    continue;
-                };
-                let blocker = PlacedMaterialPart {
-                    part_index: 1,
-                    form: blocker_shape.form.clone(),
-                    placement: blocker_unit.placement,
-                };
-                if crate::material_geometry::placed_forms_penetrate(&moved, &blocker, 0.0) {
-                    return true;
-                }
-            }
         }
-        let radius = moved.form.bounding_radius().max(0.0);
+        let candidate = other_organisms[index].clone();
+        let candidate_parts = organism_parts_at(&candidate, environment, 0.0, 0.0);
+        if !parts_penetrate(moving_destination, &candidate_parts) {
+            continue;
+        }
+        if !can_translate_organism(&candidate, environment, dx, dy) {
+            return false;
+        }
+        let destination = organism_parts_at(&candidate, environment, dx, dy);
+        if static_material_blocks(&destination, environment) {
+            return false;
+        }
+        organism_visited[index] = true;
+        if !push_blockers_for_parts(
+            &destination,
+            other_organisms,
+            environment,
+            dx,
+            dy,
+            organism_visited,
+            physical_visited,
+        ) {
+            return false;
+        }
+        translate_organism(&mut other_organisms[index], dx, dy);
+    }
+
+    for cell_index in 0..environment.field.cells.len() {
+        let material_count = environment.field.cells[cell_index].physical_materials.len();
+        for material_index in 0..material_count {
+            let key = (cell_index, material_index);
+            if physical_visited.contains(&key) {
+                continue;
+            }
+            let candidate =
+                environment.field.cells[cell_index].physical_materials[material_index].clone();
+            if !candidate.is_realized() || candidate.material.is_empty() {
+                continue;
+            }
+            let candidate_parts = physical_parts_at(&candidate, environment, 0.0, 0.0);
+            if !parts_penetrate(moving_destination, &candidate_parts) {
+                continue;
+            }
+            if !can_translate_physical(&candidate, environment, dx, dy) {
+                return false;
+            }
+            let destination = physical_parts_at(&candidate, environment, dx, dy);
+            if static_material_blocks(&destination, environment) {
+                return false;
+            }
+            physical_visited.insert(key);
+            if !push_blockers_for_parts(
+                &destination,
+                other_organisms,
+                environment,
+                dx,
+                dy,
+                organism_visited,
+                physical_visited,
+            ) {
+                return false;
+            }
+            let mut pushed = candidate;
+            translate_physical(&mut pushed, dx, dy);
+            environment.field.cells[cell_index].physical_materials[material_index] = pushed;
+        }
+    }
+    true
+}
+
+fn organism_parts_at(
+    organism: &Organism,
+    environment: &Environment,
+    dx: f64,
+    dy: f64,
+) -> Vec<PlacedMaterialPart> {
+    organism
+        .structure
+        .units
+        .iter()
+        .filter_map(|unit| {
+            let shape = unit.shape(&environment.catalog)?;
+            Some(PlacedMaterialPart {
+                part_index: 0,
+                form: shape.form.clone(),
+                placement: Placement {
+                    x: unit.placement.x + dx,
+                    y: unit.placement.y + dy,
+                    rotation_radians: unit.placement.rotation_radians,
+                },
+            })
+        })
+        .collect()
+}
+
+fn physical_parts_at(
+    physical: &crate::physical_material::PhysicalMaterial,
+    environment: &Environment,
+    dx: f64,
+    dy: f64,
+) -> Vec<PlacedMaterialPart> {
+    let Some(placements) = &physical.placements else {
+        return Vec::new();
+    };
+    physical
+        .material
+        .parts
+        .iter()
+        .zip(placements.iter())
+        .enumerate()
+        .filter_map(|(part_index, ((name, amount), placement))| {
+            if (*amount - 1.0).abs() > 1e-9 {
+                return None;
+            }
+            let base = environment.catalog.iter().find(|b| b.name == *name)?;
+            Some(PlacedMaterialPart {
+                part_index,
+                form: base.shape.form.clone(),
+                placement: Placement {
+                    x: placement.x + dx,
+                    y: placement.y + dy,
+                    rotation_radians: placement.rotation_radians,
+                },
+            })
+        })
+        .collect()
+}
+
+fn parts_penetrate(a: &[PlacedMaterialPart], b: &[PlacedMaterialPart]) -> bool {
+    a.iter().any(|part_a| {
+        b.iter()
+            .any(|part_b| crate::material_geometry::placed_forms_penetrate(part_a, part_b, 0.0))
+    })
+}
+
+fn static_material_blocks(parts: &[PlacedMaterialPart], environment: &Environment) -> bool {
+    for part in parts {
+        let radius = part.form.bounding_radius().max(0.0);
         let min_col =
-            ((moved.placement.x - radius).max(0.0) / environment.field.cell_size).floor() as usize;
+            ((part.placement.x - radius).max(0.0) / environment.field.cell_size).floor() as usize;
         let max_col =
-            ((moved.placement.x + radius).max(0.0) / environment.field.cell_size).floor() as usize;
+            ((part.placement.x + radius).max(0.0) / environment.field.cell_size).floor() as usize;
         let min_row =
-            ((moved.placement.y - radius).max(0.0) / environment.field.cell_size).floor() as usize;
+            ((part.placement.y - radius).max(0.0) / environment.field.cell_size).floor() as usize;
         let max_row =
-            ((moved.placement.y + radius).max(0.0) / environment.field.cell_size).floor() as usize;
+            ((part.placement.y + radius).max(0.0) / environment.field.cell_size).floor() as usize;
         let max_col = max_col.min(environment.field.width_cells.saturating_sub(1));
         let max_row = max_row.min(environment.field.height_cells.saturating_sub(1));
         if min_col >= environment.field.width_cells || min_row >= environment.field.height_cells {
@@ -136,45 +315,79 @@ fn movement_collides(
         }
         for row in min_row..=max_row {
             for col in min_col..=max_col {
-                let cell = &environment.field.cells[row * environment.field.width_cells + col];
-                if cell
+                if environment.field.cells[row * environment.field.width_cells + col]
                     .materials
                     .iter()
                     .any(|m| m.is_valid() && !m.is_empty() && m.has_internal_structure())
                 {
                     return true;
                 }
-                for physical in &cell.physical_materials {
-                    if !physical.is_realized() || physical.material.is_empty() {
-                        continue;
-                    }
-                    let Some(placements) = &physical.placements else {
-                        continue;
-                    };
-                    for ((name, amount), placement) in
-                        physical.material.parts.iter().zip(placements.iter())
-                    {
-                        if (*amount - 1.0).abs() > 1e-9 {
-                            continue;
-                        }
-                        let Some(base) = environment.catalog.iter().find(|b| b.name == *name)
-                        else {
-                            continue;
-                        };
-                        let blocker = PlacedMaterialPart {
-                            part_index: 1,
-                            form: base.shape.form.clone(),
-                            placement: *placement,
-                        };
-                        if crate::material_geometry::placed_forms_penetrate(&moved, &blocker, 0.0) {
-                            return true;
-                        }
-                    }
-                }
             }
         }
     }
     false
+}
+
+fn can_translate_physical(
+    physical: &crate::physical_material::PhysicalMaterial,
+    environment: &Environment,
+    dx: f64,
+    dy: f64,
+) -> bool {
+    let parts = physical_parts_at(physical, environment, dx, dy);
+    !parts.is_empty()
+        && parts.iter().all(|part| {
+            let radius = part.form.bounding_radius();
+            let x = part.placement.x;
+            let y = part.placement.y;
+            x.is_finite()
+                && y.is_finite()
+                && x - radius >= 0.0
+                && y - radius >= 0.0
+                && x + radius <= environment.width
+                && y + radius <= environment.height
+        })
+}
+
+fn translate_physical(physical: &mut crate::physical_material::PhysicalMaterial, dx: f64, dy: f64) {
+    if let Some(placements) = physical.placements.as_mut() {
+        for placement in placements {
+            placement.x += dx;
+            placement.y += dy;
+        }
+    }
+}
+fn can_translate_organism(
+    organism: &Organism,
+    environment: &Environment,
+    dx: f64,
+    dy: f64,
+) -> bool {
+    organism.structure.units.iter().all(|unit| {
+        let Some(shape) = unit.shape(&environment.catalog) else {
+            return false;
+        };
+        let radius = shape.form.bounding_radius();
+        let x = unit.placement.x + dx;
+        let y = unit.placement.y + dy;
+        x.is_finite()
+            && y.is_finite()
+            && x - radius >= 0.0
+            && y - radius >= 0.0
+            && x + radius <= environment.width
+            && y + radius <= environment.height
+    })
+}
+
+fn translate_organism(organism: &mut Organism, dx: f64, dy: f64) {
+    for point in &mut organism.occupied_cells {
+        point.x += dx;
+        point.y += dy;
+    }
+    for unit in &mut organism.structure.units {
+        unit.placement.x += dx;
+        unit.placement.y += dy;
+    }
 }
 
 #[cfg(test)]
@@ -193,7 +406,7 @@ mod tests {
     #[test]
     fn move_translates_anchor_and_structure() {
         let simulation = Simulation::new(7, 20.0);
-        let environment = empty_environment(&simulation);
+        let mut environment = empty_environment(&simulation);
         let mut organism = simulation.organisms[0].clone();
         let anchor = organism.occupied_cells[0].clone();
         let placements: Vec<_> = organism
@@ -204,8 +417,8 @@ mod tests {
             .collect();
         assert!(Simulation::try_move_cell(
             &mut organism,
-            &environment,
-            &[],
+            &mut environment,
+            &mut [],
             12.0,
             -7.0
         ));
@@ -220,44 +433,49 @@ mod tests {
     #[test]
     fn blocked_zero_move_and_nonfinite_move_are_rejected() {
         let simulation = Simulation::new(7, 20.0);
-        let environment = simulation.environment.clone();
+        let mut environment = simulation.environment.clone();
         let mut organism = simulation.organisms[0].clone();
         organism.occupied_cells[0].x = 0.0;
         organism.occupied_cells[0].y = 0.0;
         assert!(!Simulation::try_move_cell(
             &mut organism,
-            &environment,
-            &[],
+            &mut environment,
+            &mut [],
             -10.0,
             -10.0
         ));
         assert!(!Simulation::try_move_cell(
             &mut organism,
-            &environment,
-            &[],
+            &mut environment,
+            &mut [],
             f64::NAN,
             1.0
         ));
     }
 
     #[test]
-    fn movement_is_blocked_by_another_organism() {
+    fn movement_is_blocked_by_structured_aggregate_material() {
         let simulation = Simulation::new(7, 20.0);
-        let environment = empty_environment(&simulation);
+        let mut environment = empty_environment(&simulation);
         let mut organism = simulation.organisms[0].clone();
-        let mut blocker = simulation.organisms[0].clone();
-        blocker.id = "blocker".to_string();
         let x = organism.structure.units[0].placement.x;
         let y = organism.structure.units[0].placement.y;
-        for unit in &mut blocker.structure.units {
-            unit.placement.x = x + 4.0;
-            unit.placement.y = y;
-        }
+        environment.field.deposit(
+            x + 5.0,
+            y,
+            crate::resources::Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: vec![crate::resources::InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+        );
         let old_anchor = organism.occupied_cells[0].clone();
         assert!(!Simulation::try_move_cell(
             &mut organism,
-            &environment,
-            &[blocker],
+            &mut environment,
+            &mut [],
             5.0,
             0.0
         ));
@@ -265,9 +483,116 @@ mod tests {
     }
 
     #[test]
+    fn movement_pushes_another_organism_atomically() {
+        let simulation = Simulation::new(7, 20.0);
+        let mut environment = empty_environment(&simulation);
+        let mut organism = simulation.organisms[0].clone();
+        let mut blocker = simulation.organisms[0].clone();
+        blocker.id = "pushed".to_string();
+        let x = organism.structure.units[0].placement.x;
+        let y = organism.structure.units[0].placement.y;
+        for unit in &mut blocker.structure.units {
+            unit.placement.x = x + 6.0;
+            unit.placement.y = y;
+        }
+        let mut others = vec![blocker];
+        let blocker_before = others[0].structure.units[0].placement.x;
+        assert!(Simulation::try_move_cell(
+            &mut organism,
+            &mut environment,
+            &mut others,
+            5.0,
+            0.0
+        ));
+        assert!((organism.structure.units[0].placement.x - (x + 5.0)).abs() < 1e-9);
+        assert!((others[0].structure.units[0].placement.x - (blocker_before + 5.0)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn movement_propagates_an_organism_push_chain_atomically() {
+        let simulation = Simulation::new(7, 20.0);
+        let mut environment = empty_environment(&simulation);
+        let mut organism = simulation.organisms[0].clone();
+        let mut first = simulation.organisms[0].clone();
+        let mut second = simulation.organisms[0].clone();
+        first.id = "first".to_string();
+        second.id = "second".to_string();
+        let x = organism.structure.units[0].placement.x;
+        let y = organism.structure.units[0].placement.y;
+        for unit in &mut first.structure.units {
+            unit.placement.x = x + 6.0;
+            unit.placement.y = y;
+        }
+        for unit in &mut second.structure.units {
+            unit.placement.x = x + 12.0;
+            unit.placement.y = y;
+        }
+        let first_before = first.structure.units[0].placement.x;
+        let second_before = second.structure.units[0].placement.x;
+        let mut others = vec![first, second];
+        assert!(Simulation::try_move_cell(
+            &mut organism,
+            &mut environment,
+            &mut others,
+            5.0,
+            0.0
+        ));
+        assert_eq!(organism.structure.units[0].placement.x, x + 5.0);
+        assert_eq!(others[0].structure.units[0].placement.x, first_before + 5.0);
+        assert_eq!(
+            others[1].structure.units[0].placement.x,
+            second_before + 5.0
+        );
+    }
+
+    #[test]
+    fn movement_pushes_realized_physical_material_and_reindexes_it() {
+        let simulation = Simulation::new(7, 20.0);
+        let mut environment = empty_environment(&simulation);
+        let mut organism = simulation.organisms[0].clone();
+        let x = organism.structure.units[0].placement.x;
+        let y = organism.structure.units[0].placement.y;
+        let placement = crate::structure::Placement {
+            x: x + 6.0,
+            y,
+            rotation_radians: 0.0,
+        };
+        let physical = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![placement],
+            &environment.catalog,
+        )
+        .expect("single carbon should have a valid physical realization");
+        let original_index = environment
+            .field
+            .index_for_position(placement.x, placement.y)
+            .expect("physical material must be in bounds");
+        assert!(environment
+            .field
+            .deposit_physical_at_index(original_index, physical));
+        assert!(Simulation::try_move_cell(
+            &mut organism,
+            &mut environment,
+            &mut [],
+            5.0,
+            0.0
+        ));
+        let moved_x = x + 11.0;
+        let moved_index = environment
+            .field
+            .index_for_position(moved_x, y)
+            .expect("pushed material must remain in bounds");
+        let physical = environment.field.cells[moved_index]
+            .physical_materials
+            .first()
+            .expect("pushed physical material must be reindexed");
+        assert_eq!(physical.placements.as_ref().unwrap()[0].x, moved_x);
+    }
+
+    #[test]
     fn touching_another_organism_does_not_block_movement() {
         let simulation = Simulation::new(7, 20.0);
-        let environment = empty_environment(&simulation);
+        let mut environment = empty_environment(&simulation);
         let mut organism = simulation.organisms[0].clone();
         let mut blocker = simulation.organisms[0].clone();
         blocker.id = "touching".to_string();
@@ -279,8 +604,8 @@ mod tests {
         }
         assert!(Simulation::try_move_cell(
             &mut organism,
-            &environment,
-            &[blocker],
+            &mut environment,
+            &mut [blocker],
             5.0,
             0.0
         ));
