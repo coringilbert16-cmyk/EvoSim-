@@ -218,11 +218,10 @@ mod tests {
         let restored = storage.take_matching_physical(&m).expect("stored instance");
         assert_eq!(restored.material, m);
         let intrinsic = restored.placements.expect("intrinsic realization");
-        assert!((intrinsic[0].x).abs() <= 1e-12);
-        assert!((intrinsic[0].y).abs() <= 1e-12);
-        assert!((intrinsic[0].rotation_radians).abs() <= 1e-12);
-        assert!((intrinsic[1].x - 0.838).abs() <= 1e-12);
-        assert!(intrinsic[1].y.abs() <= 1e-12);
+        assert!(intrinsic[0].x.abs() <= 1e-12);
+        assert!(intrinsic[0].y.abs() <= 1e-12);
+        assert!(intrinsic[0].rotation_radians.abs() <= 1e-12);
+        assert!((intrinsic[1].x.hypot(intrinsic[1].y) - 0.838).abs() <= 1e-9);
         assert!((intrinsic[1].rotation_radians - 0.25).abs() <= 1e-12);
         assert!(restored.internal_connections.is_some());
     }
@@ -239,8 +238,8 @@ mod tests {
         let restored = storage.take_matching_physical(&m).expect("stored instance");
         assert_eq!(restored.material, m);
         let intrinsic = restored.placements.expect("intrinsic realization");
-        assert!((intrinsic[0].x).abs() <= 1e-12);
-        assert!((intrinsic[0].y).abs() <= 1e-12);
+        assert!(intrinsic[0].x.abs() <= 1e-12);
+        assert!(intrinsic[0].y.abs() <= 1e-12);
         assert!(intrinsic[0].rotation_radians.abs() <= 1e-12);
         assert!(restored.internal_connections.is_some());
     }
