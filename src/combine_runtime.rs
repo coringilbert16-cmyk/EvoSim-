@@ -8,7 +8,6 @@ use crate::combine::{
 };
 use crate::contact::ConnectionCompatibilityCache;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
-use crate::physical_material::PhysicalMaterial;
 use crate::resources::{BaseResource, Material};
 use crate::state::{EnergyLedger, Environment, Organism};
 use crate::structure::{BondEndpoint, ConnectionEndpoint, Placement, StructuralUnit};
