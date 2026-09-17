@@ -106,14 +106,22 @@ fn reindex_physical_materials(environment: &mut Environment) {
         physical_materials.append(&mut cell.physical_materials);
     }
     for physical in physical_materials {
-        let Some(placement) = physical.placements.as_ref().and_then(|placements| placements.first())
+        let Some(placement) = physical
+            .placements
+            .as_ref()
+            .and_then(|placements| placements.first())
         else {
             continue;
         };
-        let Some(index) = environment.field.index_for_position(placement.x, placement.y) else {
+        let Some(index) = environment
+            .field
+            .index_for_position(placement.x, placement.y)
+        else {
             continue;
         };
-        environment.field.cells[index].physical_materials.push(physical);
+        environment.field.cells[index]
+            .physical_materials
+            .push(physical);
     }
 }
 
@@ -578,10 +586,7 @@ mod tests {
             .physical_materials
             .first()
             .expect("pushed physical material must be reindexed");
-        assert_eq!(
-            physical.placements.as_ref().unwrap()[0].x,
-            moved_x
-        );
+        assert_eq!(physical.placements.as_ref().unwrap()[0].x, moved_x);
     }
 
     #[test]
