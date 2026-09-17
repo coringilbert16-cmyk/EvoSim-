@@ -26,6 +26,7 @@ jobs:
               ],
               'src/reproduction.rs': [
                   ('.materials', '.iter_materials()'),
+                  ('.iter_materials()\n        .iter()', '.iter_materials()'),
               ],
               'src/simulation_tests.rs': [
                   ('o.stored_material.materials,', 'o.stored_material.materials_snapshot(),'),
