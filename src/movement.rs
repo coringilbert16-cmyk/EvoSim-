@@ -465,24 +465,31 @@ mod tests {
     }
 
     #[test]
-    fn pushing_is_rejected_when_the_blocker_cannot_move() {
+    fn movement_is_blocked_by_structured_aggregate_material() {
         let simulation = Simulation::new(7, 20.0);
         let mut environment = empty_environment(&simulation);
         let mut organism = simulation.organisms[0].clone();
-        let mut blocker = simulation.organisms[0].clone();
-        blocker.id = "blocker".to_string();
         let x = organism.structure.units[0].placement.x;
         let y = organism.structure.units[0].placement.y;
-        for unit in &mut blocker.structure.units {
-            unit.placement.x = x + 4.0;
-            unit.placement.y = y;
-        }
-        environment.width = x + 6.0;
+        environment.field.deposit(
+            x + 5.0,
+            y,
+            crate::resources::Material {
+                parts: vec![
+                    ("Carbon".into(), 1.0),
+                    ("Hydrogen".into(), 1.0),
+                ],
+                internal_bonds: vec![crate::resources::InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+        );
         let old_anchor = organism.occupied_cells[0].clone();
         assert!(!Simulation::try_move_cell(
             &mut organism,
             &mut environment,
-            &mut [blocker],
+            &mut [],
             5.0,
             0.0
         ));
