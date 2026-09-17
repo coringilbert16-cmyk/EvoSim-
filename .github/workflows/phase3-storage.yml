@@ -48,10 +48,8 @@ jobs:
 
           p = Path('src/phase2_structure_contract_tests.rs')
           text = p.read_text()
-          before_pattern = r'let realized_before\s*=\s*organism\.stored_material\s*\.physical_instances\s*\.iter\(\)\s*\.filter\(\|instance\|\s*instance\.is_some\(\)\)\s*\.count\(\);'
-          after_pattern = r'let realized_after\s*=\s*organism\.stored_material\s*\.physical_instances\s*\.iter\(\)\s*\.filter\(\|instance\|\s*instance\.is_some\(\)\)\s*\.count\(\);'
-          text, before_count = re.subn(before_pattern, 'let realized_before = organism.stored_material.physical_count();', text)
-          text, after_count = re.subn(after_pattern, 'let realized_after = organism.stored_material.physical_count();', text)
+          chain = r'let realized_(before|after)\s*=\s*organism\s*\.stored_material\s*\.physical_instances\s*\.iter\(\)\s*\.filter\(\|instance\|\s*instance\.is_some\(\)\)\s*\.count\(\);'
+          text = re.sub(chain, lambda m: f'let realized_{m.group(1)} = organism.stored_material.physical_count();', text)
           if 'physical_instances' in text:
               raise SystemExit('remaining phase2 physical_instances access was not migrated')
           p.write_text(text)
