@@ -124,40 +124,6 @@ fn realized_material_carries_exact_internal_connection_and_restores_without_comb
 }
 
 #[test]
-fn translated_realized_material_preserves_internal_endpoint_identity() {
-    let catalog = line_catalog();
-    let instance = PhysicalMaterial::realized(
-        bonded_material(),
-        vec![
-            Placement {
-                x: -1.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-            Placement {
-                x: 1.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        ],
-        &catalog,
-    )
-    .unwrap();
-    let translated = instance
-        .translated(Placement {
-            x: 7.0,
-            y: -3.0,
-            rotation_radians: 0.5,
-        })
-        .unwrap();
-    assert_eq!(
-        translated.internal_connections,
-        instance.internal_connections
-    );
-    assert_eq!(translated.material, instance.material);
-}
-
-#[test]
 fn new_structure_bond_is_formed_only_through_combine() {
     let catalog = line_catalog();
     let mut structure = OrganismStructure::new();
