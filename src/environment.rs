@@ -77,6 +77,23 @@ pub struct ActiveMaterialField {
     pub cells: Vec<FieldCell>,
 }
 
+pub(crate) enum FieldDeposit {
+    Logical(Material),
+    Physical(PhysicalMaterial),
+}
+
+impl From<Material> for FieldDeposit {
+    fn from(material: Material) -> Self {
+        Self::Logical(material)
+    }
+}
+
+impl From<PhysicalMaterial> for FieldDeposit {
+    fn from(material: PhysicalMaterial) -> Self {
+        Self::Physical(material)
+    }
+}
+
 impl ActiveMaterialField {
     pub fn new(world_width: f64, world_height: f64, cell_size: f64) -> Self {
         let cell_size = cell_size.max(1.0);
@@ -184,13 +201,16 @@ impl ActiveMaterialField {
         out
     }
 
-    pub fn deposit(&mut self, x: f64, y: f64, material: Material) -> bool {
-        match self.index_for_position(x, y) {
-            Some(index) => {
+    pub(crate) fn deposit<T: Into<FieldDeposit>>(&mut self, x: f64, y: f64, material: T) -> bool {
+        let Some(index) = self.index_for_position(x, y) else {
+            return false;
+        };
+        match material.into() {
+            FieldDeposit::Logical(material) => {
                 self.deposit_at_index(index, material);
                 true
             }
-            None => false,
+            FieldDeposit::Physical(material) => self.deposit_physical_at_index(index, material),
         }
     }
 
