@@ -267,9 +267,8 @@ fn physical_parts_at(
 
 fn parts_penetrate(a: &[PlacedMaterialPart], b: &[PlacedMaterialPart]) -> bool {
     a.iter().any(|part_a| {
-        b.iter().any(|part_b| {
-            crate::material_geometry::placed_forms_penetrate(part_a, part_b, 0.0)
-        })
+        b.iter()
+            .any(|part_b| crate::material_geometry::placed_forms_penetrate(part_a, part_b, 0.0))
     })
 }
 
