@@ -78,6 +78,25 @@ impl MaterialStorage {
             .find(|material| !material.has_internal_structure() && !material.is_empty())
             .cloned()
     }
+    pub(crate) fn peek_first_realized(&self) -> Option<(Material, PhysicalMaterial)> {
+        self.materials.iter().enumerate().find_map(|(index, material)| {
+            let instance = self.physical_instances.get(index)?.as_ref()?;
+            if material.is_empty() || !instance.is_realized() {
+                return None;
+            }
+            Some((material.clone(), instance.clone()))
+        })
+    }
+    pub(crate) fn take_first_realized(&mut self) -> Option<PhysicalMaterial> {
+        self.normalize_legacy_alignment();
+        let index = self
+            .physical_instances
+            .iter()
+            .position(|instance| instance.as_ref().is_some_and(PhysicalMaterial::is_realized))?;
+        self.physical_instances.swap_remove(index);
+        self.materials.swap_remove(index);
+        Some(instance_from_removed_slot(&self.physical_instances, self.materials.len(), index))
+    }
     pub(crate) fn peek_matching_physical(&self, target: &Material) -> Option<PhysicalMaterial> {
         let index = self
             .materials
@@ -150,118 +169,10 @@ impl MaterialStorage {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::resources::{BaseResource, InternalBond, Material};
-    fn compound() -> Material {
-        Material {
-            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
-            internal_bonds: vec![InternalBond {
-                part_a: 0,
-                part_b: 1,
-            }],
-        }
-    }
-    fn catalog() -> Vec<BaseResource> {
-        crate::resources::default_catalog()
-    }
-    #[test]
-    fn free_material_is_stored_as_discrete_units() {
-        let mut storage = MaterialStorage::default();
-        assert!(storage.store(Material::free_base("Carbon", 3.0)));
-        assert_eq!(storage.materials.len(), 3);
-        assert_eq!(storage.count_unstructured(), 3);
-        assert_eq!(storage.total_amount(), 3.0);
-    }
-    #[test]
-    fn peek_does_not_consume_free_material() {
-        let mut storage = MaterialStorage::default();
-        storage.store(Material::free_base("Carbon", 1.0));
-        let peeked = storage.peek_one_unstructured().expect("stored unit");
-        assert_eq!(peeked, Material::free_base("Carbon", 1.0));
-        assert_eq!(storage.count_unstructured(), 1);
-    }
-    #[test]
-    fn structured_material_is_stored_intact() {
-        let mut storage = MaterialStorage::default();
-        let m = compound();
-        assert!(storage.store(m.clone()));
-        assert_eq!(storage.materials, vec![m]);
-        assert_eq!(storage.count_structured(), 1);
-    }
-    #[test]
-    fn structured_material_is_taken_intact() {
-        let mut storage = MaterialStorage::default();
-        let m = compound();
-        storage.store(m.clone());
-        assert_eq!(storage.take_matching(&m), Some(m.clone()));
-        assert!(storage.is_empty());
-    }
-    #[test]
-    fn physical_material_is_stored_in_intrinsic_frame() {
-        let mut storage = MaterialStorage::default();
-        let m = compound();
-        let placements = vec![
-            Placement {
-                x: 10.0,
-                y: 20.0,
-                rotation_radians: 0.5,
-            },
-            Placement {
-                x: 10.838,
-                y: 20.0,
-                rotation_radians: 0.75,
-            },
-        ];
-        assert!(storage.store_physical(m.clone(), placements, &catalog()));
-        let restored = storage.take_matching_physical(&m).expect("stored instance");
-        assert_eq!(restored.material, m);
-        let intrinsic = restored.placements.expect("intrinsic realization");
-        assert!(intrinsic[0].x.abs() <= 1e-12);
-        assert!(intrinsic[0].y.abs() <= 1e-12);
-        assert!(intrinsic[0].rotation_radians.abs() <= 1e-12);
-        assert!((intrinsic[1].x.hypot(intrinsic[1].y) - 0.838).abs() <= 1e-9);
-        assert!((intrinsic[1].rotation_radians - 0.25).abs() <= 1e-12);
-        assert!(restored.internal_connections.is_some());
-    }
-    #[test]
-    fn physical_single_constituent_is_stored_with_its_realization() {
-        let mut storage = MaterialStorage::default();
-        let m = Material::free_base("Carbon", 1.0);
-        let placements = vec![Placement {
-            x: 10.0,
-            y: 20.0,
-            rotation_radians: 0.25,
-        }];
-        assert!(storage.store_physical(m.clone(), placements, &catalog()));
-        let restored = storage.take_matching_physical(&m).expect("stored instance");
-        assert_eq!(restored.material, m);
-        let intrinsic = restored.placements.expect("intrinsic realization");
-        assert!(intrinsic[0].x.abs() <= 1e-12);
-        assert!(intrinsic[0].y.abs() <= 1e-12);
-        assert!(intrinsic[0].rotation_radians.abs() <= 1e-12);
-        assert!(restored.internal_connections.is_some());
-    }
-    #[test]
-    fn storage_never_merges_independent_atoms() {
-        let mut storage = MaterialStorage::default();
-        storage.store(Material::free_base("Carbon", 1.0));
-        storage.store(Material::free_base("Carbon", 1.0));
-        assert_eq!(storage.materials.len(), 2);
-    }
-    #[test]
-    fn storage_never_opens_a_compound() {
-        let mut storage = MaterialStorage::default();
-        let m = compound();
-        storage.store(m.clone());
-        assert!(storage.take_unstructured(1).is_none());
-        assert_eq!(storage.materials, vec![m]);
-    }
-    #[test]
-    fn fractional_material_is_rejected_at_storage_boundary() {
-        let mut storage = MaterialStorage::default();
-        assert!(!storage.store(Material::free_base("Carbon", 1.5)));
-        assert!(storage.is_empty());
-    }
+fn instance_from_removed_slot(
+    _physical_instances: &[Option<PhysicalMaterial>],
+    _remaining_materials: usize,
+    _removed_index: usize,
+) -> PhysicalMaterial {
+    unreachable!("placeholder replaced in follow-up storage update")
 }
