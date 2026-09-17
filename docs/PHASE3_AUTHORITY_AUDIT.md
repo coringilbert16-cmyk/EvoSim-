@@ -2,86 +2,57 @@
 
 ## Status
 
-Phase 3 implementation branch: `phase3-physical-structure-authority`.
+Phase 3 begins with an audit-only boundary pass. No physical authority is removed or rewritten until each active consumer has a migration path.
 
-**Implementation status: complete pending merge.** The audit distinguishes logical material descriptions from realized physical material and keeps the organism physical graph authoritative for what physically exists.
+## Frozen authority
 
-## Authority contract
+The organism's realized physical graph is the authoritative representation of what physically exists inside the organism. `Material` describes composition/internal relationships; a physically existing material requires a complete realization. Geometry calculations are derived from physical state and must not become a competing source of truth.
 
-The authoritative representation of an organism's physically existing structure is its physical constituent graph: constituent identity, constituent material, realized placement/geometry, and physical bonds. `Material` describes composition/internal material structure. `PhysicalMaterial` carries an already-realized material across Environment/Storage/COMBINE boundaries. Derived geometry must not become a second physical authority.
+## Findings
 
-## Findings and current state
+### 1. `PhysicalMaterial`
 
-### 1. `StructuralUnit`
+`PhysicalMaterial` is an appropriate transfer/identity wrapper for a physically realized material crossing Environment → Storage → COMBINE. Its intrinsic realization (relative placements plus pre-existing connection endpoints) must remain intact until restoration into the organism graph.
 
-`StructuralUnit` is the graph's constituent record and remains necessary. It stores exactly one physical constituent `Material`, placement, and optional derived `PhysicalGeometry`.
+**Migration status:** retain as a transfer representation; do not treat it as an independent organism-owned structure after restoration.
 
-Completed: production construction rejects multi-part or internally bonded material in `StructuralUnit::from_material`, and deserialization rejects composite material as a `StructuralUnit`. Composite physical structure is represented by constituent units and graph bonds.
+### 2. `MaterialStorage::physical_instances`
 
-### 2. `PhysicalMaterial`
+Storage currently maintains parallel `materials` and optional `physical_instances` vectors. This is transitional state and is the clearest remaining duplicate representation at the Storage boundary.
 
-`PhysicalMaterial` is used at Environment acquisition, organism Storage, COMBINE, restoration, and decomposition transfer boundaries. It contains composition, intrinsic placements, and resolved internal connection endpoints.
+The Phase 2 runtime depends on this alignment and on the newly acquired physical entry being selected first. Removing it immediately would risk silently routing realized material through the logical `Material` path.
 
-Completed: it is treated as a transfer representation, not organism-owned structure authority. Restoration writes its realized constituents and pre-existing bonds into the organism graph. Decomposition converts released graph constituents back into realized `PhysicalMaterial` objects before returning them to the environment, preserving physical realization instead of reducing it to composition-only `Material` values.
+**Migration status:** retain temporarily; next migration should replace parallel optional state with an explicitly typed storage entry that cannot silently fall back from realized to logical representation.
 
-### 3. `MaterialStorage`
+### 3. `PhysicalMaterialInstance` in `material_geometry.rs`
 
-Completed: storage uses one `entries` collection with explicit `StoredMaterial::Logical` and `StoredMaterial::Physical` variants instead of parallel logical/physical vectors. Realized entries are prioritized for physical COMBINE selection so a newly acquired physical object cannot be silently replaced by a logical description.
+A second physical-material representation remains in `material_geometry.rs`. It overlaps conceptually with `PhysicalMaterial` and therefore remains a competing physical-material abstraction.
 
-Logical material remains valid for genuinely logical reserves and descriptions. It must not masquerade as an existing physical object.
+**Migration status:** transitional only. Before deletion, every consumer must be identified and migrated to derived geometry over canonical physical state. No new consumer should be added.
 
-### 4. `PhysicalMaterialInstance`
+### 4. `StructuralUnit`
 
-Completed: the unused `PhysicalMaterialInstance` wrapper was removed. `MaterialGeometry` and `PlacedMaterialPart` remain derived geometry helpers used by physical structure calculations.
+`StructuralUnit` is the constituent node of the physical graph and is therefore valid as a constituent-level representation. However, its `material: Material` field currently permits a structured/composite `Material` to be stored in one unit. That makes a whole composite appear as one graph constituent without carrying the constituent-level realization needed by the physical graph.
 
-### 5. Environment storage
+The repository already contains `structure_authority::audit_structure`, which reports `StructuredMaterialInUnit` instead of silently rewriting such state.
 
-`FieldCell` intentionally retains two categories because the semantics are different: aggregated logical/unstructured stock in `materials` and existing realized objects in `physical_materials`.
+**Migration status:** composite-as-one-unit is transitional. New construction/restoration paths should create one physical graph constituent per realized constituent and explicit graph bonds for relationships. Existing deserialization compatibility must remain until persisted legacy state has a defined migration path.
 
-Completed: `ActiveMaterialField::deposit` accepts either logical `Material` or already-realized `PhysicalMaterial` and routes them to the correct representation without reconstructing geometry. Diffusion and legacy logical transfer continue to operate only on logical/unstructured stock.
+### 5. Derived geometry
 
-This dual representation is therefore an intentional semantic distinction, not a second physical authority. No environment-entry unification is required; collapsing the distinction would obscure the logical-vs-realized boundary.
+`PhysicalGeometry`, connection geometry, collision/overlap helpers, and material geometry are derived calculations. They may cache or calculate geometric facts, but they must not define constituent identity, ownership, bond existence, or material composition independently of the physical graph.
 
-### 6. Derived geometry
+**Migration status:** audit consumers before changing or deleting any geometry abstraction.
 
-`MaterialGeometry`, `PlacedMaterialPart`, `PhysicalGeometry`, connection geometry, and collision helpers remain calculations from physical state. They are not authoritative organism structure.
+## Phase 3 first implementation boundary
 
-### 7. Context transforms
+The first code migration should target the Storage representation because it is the smallest remaining authority duplication with a clear Phase 2 consumer contract:
 
-`PhysicalMaterial` uses an intrinsic-frame realization across Storage and applies contextual placement during restoration. This preserves intrinsic physical identity while allowing environment/organism placement to differ.
+1. Introduce an explicit storage entry type representing either logical material or a complete realized physical material.
+2. Preserve exact intrinsic realization for realized entries.
+3. Make logical fallback explicit rather than implicit.
+4. Preserve current COMBINE selection behavior during migration.
+5. Add conservation/identity regression tests.
+6. Only after all consumers migrate, remove `physical_instances` parallel state.
 
-### 8. Organism membership and decomposition
-
-The physical graph remains the source for realized constituent identity and bonds. BREAK removes a bond immediately. Decomposition operates on the graph and, when the final bonds are gone, exports the remaining graph constituents as realized physical material rather than composition-only values.
-
-Completed: death storage also drains logical and realized stored entries through their respective environment paths, so physically realized stored material is not flattened during death.
-
-### 9. Reproduction
-
-Reproduction uses logical juvenile reserves as construction material and passes those descriptions through the shared construction runtime. This is distinct from an already-realized acquired physical composite: the reproduction reserve is a construction input, not an existing physical object.
-
-## Completed migration order
-
-1. Remove the unused `PhysicalMaterialInstance` wrapper while retaining `MaterialGeometry` helpers.
-2. Consolidate `MaterialStorage` into one entry collection with an explicit logical/realized distinction.
-3. Migrate COMBINE and restoration to consume storage entries without parallel vectors.
-4. Migrate decomposition release so physically existing material returns to Environment as realized physical material.
-5. Prevent composite material from masquerading as one `StructuralUnit` in construction and deserialization.
-6. Re-audit Environment's logical/realized boundary and retain physical realization through transfers.
-7. Close the death/storage boundary so realized stored material remains realized during recycling.
-
-## Verification
-
-- Full Rust test suite: **185 passed, 0 failed** after the authority migrations.
-- Composite `StructuralUnit` regression is passing.
-- Decomposition → Environment contract test is present and verifies released constituents remain realized physical material.
-- Environment logical-vs-realized storage behavior remains covered by existing environment and acquisition tests.
-- Repository workflow directory contains only the normal `rust.yml`; temporary migration workflows were removed.
-- Formatting was run as part of the verified migration passes.
-- Clippy warnings remain as pre-existing repository debt and are not being suppressed or reclassified as Phase 3 authority failures.
-
-## Phase 3 conclusion
-
-The remaining Environment dual-category representation is intentional and semantically required: logical aggregate stock and existing realized physical objects are different states. The organism physical graph is the sole authority for organism-owned physical structure; `PhysicalMaterial` is a transfer carrier; geometry is derived; logical material cannot masquerade as an existing physical object; and death/recycling preserves realized material.
-
-Phase 3 is therefore **complete pending merge**. No lifecycle, chemistry/resource semantics, energy rules, movement, perception, blueprint redesign, or new biological rules were introduced by this phase.
+No lifecycle, chemistry, blueprint, movement, energy, or biological rules are changed by this boundary.
