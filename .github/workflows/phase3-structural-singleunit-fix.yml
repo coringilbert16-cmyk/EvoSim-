@@ -1,0 +1,35 @@
+name: phase3-structural-singleunit-fix
+on:
+  push:
+    branches: [phase3-physical-structure-authority]
+permissions:
+  contents: write
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase3-physical-structure-authority
+          fetch-depth: 0
+      - name: Require StructuralUnit to contain exactly one constituent
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/structure.rs')
+          text = p.read_text()
+          text = text.replace('!material.is_valid() || material.is_empty() || material.has_internal_structure()', 'material.parts.len() != 1 || !material.is_valid() || material.is_empty() || material.has_internal_structure()', 1)
+          text = text.replace('if m.has_internal_structure() { return Err(serde::de::Error::custom("composite material cannot be loaded as a StructuralUnit; restore its physical constituents and bonds through the organism graph")); }', 'if m.parts.len() != 1 || m.has_internal_structure() { return Err(serde::de::Error::custom("composite material cannot be loaded as a StructuralUnit; restore its physical constituents and bonds through the organism graph")); }', 1)
+          p.write_text(text)
+          PY
+          cargo fmt --all
+          cargo test --all-targets
+      - name: Commit fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/structure.rs
+          git diff --cached --quiet && exit 0
+          git commit -m 'Phase 3: reject multi-part structural units'
+          git push origin HEAD:phase3-physical-structure-authority
