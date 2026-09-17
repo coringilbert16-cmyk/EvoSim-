@@ -1,0 +1,48 @@
+name: phase3-final-cleanup
+on:
+  push:
+    branches: [phase3-physical-structure-authority]
+permissions:
+  contents: write
+jobs:
+  cleanup:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase3-physical-structure-authority
+          fetch-depth: 0
+      - name: Remove superseded helper paths
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/material_storage.rs')
+          text = p.read_text()
+          block = '''\n    fn physical(&self) -> Option<PhysicalMaterial> {\n        match self {\n            Self::Logical(_) => None,\n            Self::Physical(instance) => Some(instance.clone()),\n        }\n    }\n'''
+          if block not in text:
+              raise SystemExit('storage physical helper not found')
+          p.write_text(text.replace(block, '', 1))
+          p = Path('src/physical_material.rs')
+          text = p.read_text()
+          block = '''    pub(crate) fn logical(material: Material) -> Self {\n        Self {\n            material,\n            placements: None,\n            internal_connections: None,\n        }\n    }\n\n'''
+          if block not in text:
+              raise SystemExit('physical logical helper not found')
+          p.write_text(text.replace(block, '', 1))
+          p = Path('src/environment.rs')
+          text = p.read_text()
+          block = '''    pub fn deposit_physical(&mut self, x: f64, y: f64, material: PhysicalMaterial) -> bool {\n        self.deposit(x, y, material)\n    }\n'''
+          if block not in text:
+              raise SystemExit('environment physical helper not found')
+          p.write_text(text.replace(block, '', 1))
+          PY
+          cargo fmt --all
+          cargo test --all-targets
+      - name: Commit cleanup
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/material_storage.rs src/physical_material.rs src/environment.rs
+          git diff --cached --quiet && exit 0
+          git commit -m 'Phase 3: remove superseded physical helper paths'
+          git push origin HEAD:phase3-physical-structure-authority
