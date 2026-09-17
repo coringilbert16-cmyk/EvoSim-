@@ -108,7 +108,15 @@ fn resolve_push_chain(
 ) -> bool {
     let mut organism_visited = vec![false; other_organisms.len()];
     let mut physical_visited = std::collections::HashSet::new();
-    push_organism_blockers(moving, other_organisms, environment, dx, dy, &mut organism_visited, &mut physical_visited)
+    push_organism_blockers(
+        moving,
+        other_organisms,
+        environment,
+        dx,
+        dy,
+        &mut organism_visited,
+        &mut physical_visited,
+    )
 }
 
 fn push_organism_blockers(
@@ -121,7 +129,9 @@ fn push_organism_blockers(
     physical_visited: &mut std::collections::HashSet<(usize, usize)>,
 ) -> bool {
     for index in 0..other_organisms.len() {
-        if organism_visited[index] || !organism_overlaps_after(&other_organisms[index], moving, dx, dy, environment) {
+        if organism_visited[index]
+            || !organism_overlaps_after(&other_organisms[index], moving, dx, dy, environment)
+        {
             continue;
         }
         if !can_translate_organism(&other_organisms[index], environment, dx, dy) {
@@ -129,7 +139,15 @@ fn push_organism_blockers(
         }
         organism_visited[index] = true;
         let blocker = other_organisms[index].clone();
-        if !push_organism_blockers(&blocker, other_organisms, environment, dx, dy, organism_visited, physical_visited) {
+        if !push_organism_blockers(
+            &blocker,
+            other_organisms,
+            environment,
+            dx,
+            dy,
+            organism_visited,
+            physical_visited,
+        ) {
             return false;
         }
         translate_organism(&mut other_organisms[index], dx, dy);
@@ -151,7 +169,10 @@ fn push_physical_blockers(
                 continue;
             }
             let physical = &environment.field.cells[cell_index].physical_materials[material_index];
-            if !physical.is_realized() || physical.material.is_empty() || !physical_overlaps_after(physical, moving, dx, dy, environment) {
+            if !physical.is_realized()
+                || physical.material.is_empty()
+                || !physical_overlaps_after(physical, moving, dx, dy, environment)
+            {
                 continue;
             }
             if !can_translate_physical(physical, environment, dx, dy) {
@@ -172,11 +193,18 @@ fn can_translate_physical(
     dx: f64,
     dy: f64,
 ) -> bool {
-    let Some(placements) = &physical.placements else { return false; };
+    let Some(placements) = &physical.placements else {
+        return false;
+    };
     placements.iter().all(|p| {
         let x = p.x + dx;
         let y = p.y + dy;
-        x.is_finite() && y.is_finite() && x >= 0.0 && y >= 0.0 && x <= environment.width && y <= environment.height
+        x.is_finite()
+            && y.is_finite()
+            && x >= 0.0
+            && y >= 0.0
+            && x <= environment.width
+            && y <= environment.height
     })
 }
 
@@ -240,8 +268,12 @@ fn movement_collides(
         }
         for row in min_row..=max_row {
             for col in min_col..=max_col {
-                let cell = &environment.field.cells[row * environment.field.width_cells + col];
-                if cell.materials.iter().any(|m| {
+                let cell =
+                    &environment.field.cells[row * environment.field.width_cells + col];
+                if cell
+                    .materials
+                    .iter()
+                    .any(|m| {
                     m.is_valid() && !m.is_empty() && m.has_internal_structure()
                 }) {
                     return true;
