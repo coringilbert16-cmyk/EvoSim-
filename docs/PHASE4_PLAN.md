@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 4 is in **P4.0 audit complete / P4.1 implementation ready**. The audit was performed against the post-Phase-3 `main` state. No movement mechanics were changed during P4.0.
+Phase 4 is in **P4.1 implementation complete / P4.2 ready**. P4.0 established the movement authority audit; P4.1 established the canonical movement boundary without adding collision, pushing, or new movement physics.
 
 ## Phase 4 objective
 
@@ -117,9 +117,29 @@ The repository already contains derived contact/connection geometry in `src/cont
 
 **P4.0 is complete.** The current movement implementation is identified as a legacy/simple transform that must be hardened rather than duplicated.
 
-The first implementation target is therefore **P4.1: establish one canonical movement boundary** around the existing transform while preserving current approved directional inputs. P4.2 will then move collision/contact validation into that boundary using derived geometry from canonical physical state.
+## P4.1 — Canonical movement boundary — COMPLETE
 
-No unspecified physical rule was selected during P4.0.
+P4.1 established one canonical movement commit boundary in `src/movement.rs`: `Simulation::try_move_cell`.
+
+The boundary now:
+
+1. accepts an already-computed world displacement,
+2. rejects non-finite displacement without mutation,
+3. uses the first occupied position as the locomotion anchor,
+4. clamps the resulting anchor to existing environment bounds,
+5. computes the actual applied world-space delta after clamping,
+6. applies that exact delta to every realized `StructuralUnit.placement`, and
+7. returns `false` when no displacement was actually committed.
+
+`Simulation::update_movement` remains the movement-intent layer and now delegates the actual position/structure mutation to `try_move_cell`. No collision, pushing, energy, speed, turning, friction, or new sensory rule was added in P4.1.
+
+Regression coverage was added for:
+
+- anchor and physical-structure translation together,
+- boundary clamping with no partial structure mutation, and
+- rejection of non-finite displacement without mutation.
+
+**Validation status:** code and tests are committed, but repository CI/test execution has not yet been independently verified in this environment. Do not treat P4.1 as test-passing until CI or an equivalent full local test run provides evidence.
 
 ## Explicit non-goals
 
@@ -144,13 +164,13 @@ The newly approved developmental-field blueprint is a separate future migration 
 
 Audit every current movement entry point and every caller of movement, collision, contact, pushing, translation, and rotation.
 
-### P4.1 — Canonical movement boundary — NEXT
+### P4.1 — Canonical movement boundary — COMPLETE
 
 Establish one movement boundary that accepts a proposed physical displacement/transform and operates on the canonical organism structure.
 
 It must preserve intrinsic material realization and update only contextual/world placement.
 
-### P4.2 — Collision/contact resolution
+### P4.2 — Collision/contact resolution — NEXT
 
 Migrate movement collision/contact checks to derived geometry over canonical physical state.
 
