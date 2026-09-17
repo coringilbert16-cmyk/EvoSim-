@@ -403,140 +403,6 @@ fn translate_organism(organism: &mut Organism, dx: f64, dy: f64) {
     }
 }
 
-fn physical_overlaps_after(
-    physical: &crate::physical_material::PhysicalMaterial,
-    moving: &Organism,
-    dx: f64,
-    dy: f64,
-    environment: &Environment,
-) -> bool {
-    let Some(placements) = &physical.placements else {
-        return false;
-    };
-    for ((name, amount), placement) in physical.material.parts.iter().zip(placements.iter()) {
-        if (*amount - 1.0).abs() > 1e-9 {
-            continue;
-        }
-        let Some(base) = environment.catalog.iter().find(|b| b.name == *name) else {
-            continue;
-        };
-        let blocker = PlacedMaterialPart {
-            part_index: 1,
-            form: base.shape.form.clone(),
-            placement: *placement,
-        };
-        for unit in &moving.structure.units {
-            let Some(shape) = unit.shape(&environment.catalog) else {
-                continue;
-            };
-            let moved = PlacedMaterialPart {
-                part_index: 0,
-                form: shape.form.clone(),
-                placement: Placement {
-                    x: unit.placement.x + dx,
-                    y: unit.placement.y + dy,
-                    rotation_radians: unit.placement.rotation_radians,
-                },
-            };
-            if crate::material_geometry::placed_forms_penetrate(&moved, &blocker, 0.0) {
-                return true;
-            }
-        }
-    }
-    false
-}
-
-fn movement_collides(
-    organism: &Organism,
-    environment: &Environment,
-    other_organisms: &[Organism],
-    dx: f64,
-    dy: f64,
-) -> bool {
-    for unit in &organism.structure.units {
-        let Some(shape) = unit.shape(&environment.catalog) else {
-            continue;
-        };
-        let moved = PlacedMaterialPart {
-            part_index: 0,
-            form: shape.form.clone(),
-            placement: Placement {
-                x: unit.placement.x + dx,
-                y: unit.placement.y + dy,
-                rotation_radians: unit.placement.rotation_radians,
-            },
-        };
-        for other in other_organisms {
-            for blocker_unit in &other.structure.units {
-                let Some(blocker_shape) = blocker_unit.shape(&environment.catalog) else {
-                    continue;
-                };
-                let blocker = PlacedMaterialPart {
-                    part_index: 1,
-                    form: blocker_shape.form.clone(),
-                    placement: blocker_unit.placement,
-                };
-                if crate::material_geometry::placed_forms_penetrate(&moved, &blocker, 0.0) {
-                    return true;
-                }
-            }
-        }
-        let radius = moved.form.bounding_radius().max(0.0);
-        let min_col =
-            ((moved.placement.x - radius).max(0.0) / environment.field.cell_size).floor() as usize;
-        let max_col =
-            ((moved.placement.x + radius).max(0.0) / environment.field.cell_size).floor() as usize;
-        let min_row =
-            ((moved.placement.y - radius).max(0.0) / environment.field.cell_size).floor() as usize;
-        let max_row =
-            ((moved.placement.y + radius).max(0.0) / environment.field.cell_size).floor() as usize;
-        let max_col = max_col.min(environment.field.width_cells.saturating_sub(1));
-        let max_row = max_row.min(environment.field.height_cells.saturating_sub(1));
-        if min_col >= environment.field.width_cells || min_row >= environment.field.height_cells {
-            continue;
-        }
-        for row in min_row..=max_row {
-            for col in min_col..=max_col {
-                let cell = &environment.field.cells[row * environment.field.width_cells + col];
-                if cell
-                    .materials
-                    .iter()
-                    .any(|m| m.is_valid() && !m.is_empty() && m.has_internal_structure())
-                {
-                    return true;
-                }
-                for physical in &cell.physical_materials {
-                    if !physical.is_realized() || physical.material.is_empty() {
-                        continue;
-                    }
-                    let Some(placements) = &physical.placements else {
-                        continue;
-                    };
-                    for ((name, amount), placement) in
-                        physical.material.parts.iter().zip(placements.iter())
-                    {
-                        if (*amount - 1.0).abs() > 1e-9 {
-                            continue;
-                        }
-                        let Some(base) = environment.catalog.iter().find(|b| b.name == *name)
-                        else {
-                            continue;
-                        };
-                        let blocker = PlacedMaterialPart {
-                            part_index: 1,
-                            form: base.shape.form.clone(),
-                            placement: *placement,
-                        };
-                        if crate::material_geometry::placed_forms_penetrate(&moved, &blocker, 0.0) {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    false
-}
 
 #[cfg(test)]
 mod tests {
@@ -602,7 +468,7 @@ mod tests {
     }
 
     #[test]
-    fn movement_is_blocked_by_another_organism() {
+    fn pushing_is_rejected_when_the_blocker_cannot_move() {
         let simulation = Simulation::new(7, 20.0);
         let mut environment = empty_environment(&simulation);
         let mut organism = simulation.organisms[0].clone();
@@ -614,6 +480,7 @@ mod tests {
             unit.placement.x = x + 4.0;
             unit.placement.y = y;
         }
+        environment.width = x + 6.0;
         let old_anchor = organism.occupied_cells[0].clone();
         assert!(!Simulation::try_move_cell(
             &mut organism,
@@ -635,7 +502,7 @@ mod tests {
         let x = organism.structure.units[0].placement.x;
         let y = organism.structure.units[0].placement.y;
         for unit in &mut blocker.structure.units {
-            unit.placement.x = x + 7.0;
+            unit.placement.x = x + 6.0;
             unit.placement.y = y;
         }
         let mut others = vec![blocker];
