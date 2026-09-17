@@ -100,182 +100,92 @@ impl Simulation {
 }
 
 fn resolve_push_chain(
-    moving: &mut Organism,
+    moving: &Organism,
     other_organisms: &mut [Organism],
     environment: &mut Environment,
     dx: f64,
     dy: f64,
 ) -> bool {
-    let mut moved_organisms = Vec::new();
-    let mut moved_environment = Vec::new();
+    let mut organism_visited = vec![false; other_organisms.len()];
+    let mut physical_visited = std::collections::HashSet::new();
+    push_organism_blockers(moving, other_organisms, environment, dx, dy, &mut organism_visited, &mut physical_visited)
+}
 
-    loop {
-        let mut changed = false;
+fn push_organism_blockers(
+    moving: &Organism,
+    other_organisms: &mut [Organism],
+    environment: &mut Environment,
+    dx: f64,
+    dy: f64,
+    organism_visited: &mut [bool],
+    physical_visited: &mut std::collections::HashSet<(usize, usize)>,
+) -> bool {
+    for index in 0..other_organisms.len() {
+        if organism_visited[index] || !organism_overlaps_after(&other_organisms[index], moving, dx, dy, environment) {
+            continue;
+        }
+        if !can_translate_organism(&other_organisms[index], environment, dx, dy) {
+            return false;
+        }
+        organism_visited[index] = true;
+        let blocker = other_organisms[index].clone();
+        if !push_organism_blockers(&blocker, other_organisms, environment, dx, dy, organism_visited, physical_visited) {
+            return false;
+        }
+        translate_organism(&mut other_organisms[index], dx, dy);
+    }
+    push_physical_blockers(moving, environment, dx, dy, physical_visited)
+}
 
-        for (index, blocker) in other_organisms.iter_mut().enumerate() {
-            if moved_organisms.contains(&index) {
+fn push_physical_blockers(
+    moving: &Organism,
+    environment: &mut Environment,
+    dx: f64,
+    dy: f64,
+    physical_visited: &mut std::collections::HashSet<(usize, usize)>,
+) -> bool {
+    for cell_index in 0..environment.field.cells.len() {
+        let material_count = environment.field.cells[cell_index].physical_materials.len();
+        for material_index in 0..material_count {
+            if physical_visited.contains(&(cell_index, material_index)) {
                 continue;
             }
-            if !organism_overlaps_after(blocker, moving, dx, dy, environment) {
+            let physical = &environment.field.cells[cell_index].physical_materials[material_index];
+            if !physical.is_realized() || physical.material.is_empty() || !physical_overlaps_after(physical, moving, dx, dy, environment) {
                 continue;
             }
-            if !can_translate_organism(blocker, environment, dx, dy) {
+            if !can_translate_physical(physical, environment, dx, dy) {
                 return false;
             }
-            translate_organism(blocker, dx, dy);
-            moved_organisms.push(index);
-            changed = true;
-        }
-
-        for (cell_index, cell) in environment.field.cells.iter_mut().enumerate() {
-            for material_index in 0..cell.physical_materials.len() {
-                if moved_environment.contains(&(cell_index, material_index)) {
-                    continue;
-                }
-                let physical = &cell.physical_materials[material_index];
-                if !physical.is_realized() || physical.material.is_empty() {
-                    continue;
-                }
-                let Some(placements) = &physical.placements else {
-                    continue;
-                };
-                if !physical_overlaps_after(physical, moving, dx, dy, environment) {
-                    continue;
-                }
-                if placements.iter().any(|p| {
-                    let x = p.x + dx;
-                    let y = p.y + dy;
-                    !x.is_finite()
-                        || !y.is_finite()
-                        || x < 0.0
-                        || y < 0.0
-                        || x > environment.width
-                        || y > environment.height
-                }) {
-                    return false;
-                }
-                let physical = &mut cell.physical_materials[material_index];
-                for placement in physical.placements.as_mut().into_iter().flatten() {
-                    placement.x += dx;
-                    placement.y += dy;
-                }
-                moved_environment.push((cell_index, material_index));
-                changed = true;
-            }
-        }
-
-        if !changed {
-            break;
+            let mut pushed = physical.clone();
+            translate_physical(&mut pushed, dx, dy);
+            physical_visited.insert((cell_index, material_index));
+            environment.field.cells[cell_index].physical_materials[material_index] = pushed;
         }
     }
-
-    !movement_collides(moving, environment, other_organisms, dx, dy)
-        && !moved_organisms.is_empty().then_some(()).is_some_and(|_| false)
+    true
 }
 
-fn organism_overlaps_after(
-    blocker: &Organism,
-    moving: &Organism,
-    dx: f64,
-    dy: f64,
-    environment: &Environment,
-) -> bool {
-    for moving_unit in &moving.structure.units {
-        let Some(moving_shape) = moving_unit.shape(&environment.catalog) else {
-            continue;
-        };
-        let moved = PlacedMaterialPart {
-            part_index: 0,
-            form: moving_shape.form.clone(),
-            placement: Placement {
-                x: moving_unit.placement.x + dx,
-                y: moving_unit.placement.y + dy,
-                rotation_radians: moving_unit.placement.rotation_radians,
-            },
-        };
-        for blocker_unit in &blocker.structure.units {
-            let Some(blocker_shape) = blocker_unit.shape(&environment.catalog) else {
-                continue;
-            };
-            let blocker_part = PlacedMaterialPart {
-                part_index: 1,
-                form: blocker_shape.form.clone(),
-                placement: blocker_unit.placement,
-            };
-            if crate::material_geometry::placed_forms_penetrate(&moved, &blocker_part, 0.0) {
-                return true;
-            }
-        }
-    }
-    false
-}
-
-fn physical_overlaps_after(
+fn can_translate_physical(
     physical: &crate::physical_material::PhysicalMaterial,
-    moving: &Organism,
-    dx: f64,
-    dy: f64,
-    environment: &Environment,
-) -> bool {
-    let Some(placements) = &physical.placements else {
-        return false;
-    };
-    for (part_index, ((name, amount), placement)) in
-        physical.material.parts.iter().zip(placements.iter()).enumerate()
-    {
-        if (*amount - 1.0).abs() > 1e-9 {
-            continue;
-        }
-        let Some(base) = environment.catalog.iter().find(|b| b.name == *name) else {
-            continue;
-        };
-        let moved = PlacedMaterialPart {
-            part_index: 0,
-            form: base.shape.form.clone(),
-            placement: Placement {
-                x: moving.structure.units[0].placement.x + dx,
-                y: moving.structure.units[0].placement.y + dy,
-                rotation_radians: moving.structure.units[0].placement.rotation_radians,
-            },
-        };
-        let blocker = PlacedMaterialPart {
-            part_index,
-            form: base.shape.form.clone(),
-            placement: *placement,
-        };
-        if crate::material_geometry::placed_forms_penetrate(&moved, &blocker, 0.0) {
-            return true;
-        }
-    }
-    false
-}
-
-fn can_translate_organism(
-    organism: &Organism,
     environment: &Environment,
     dx: f64,
     dy: f64,
 ) -> bool {
-    organism.structure.units.iter().all(|unit| {
-        let x = unit.placement.x + dx;
-        let y = unit.placement.y + dy;
-        x.is_finite()
-            && y.is_finite()
-            && x >= 0.0
-            && y >= 0.0
-            && x <= environment.width
-            && y <= environment.height
+    let Some(placements) = &physical.placements else { return false; };
+    placements.iter().all(|p| {
+        let x = p.x + dx;
+        let y = p.y + dy;
+        x.is_finite() && y.is_finite() && x >= 0.0 && y >= 0.0 && x <= environment.width && y <= environment.height
     })
 }
 
-fn translate_organism(organism: &mut Organism, dx: f64, dy: f64) {
-    if let Some(anchor) = organism.occupied_cells.first_mut() {
-        anchor.x += dx;
-        anchor.y += dy;
-    }
-    for unit in &mut organism.structure.units {
-        unit.placement.x += dx;
-        unit.placement.y += dy;
+fn translate_physical(physical: &mut crate::physical_material::PhysicalMaterial, dx: f64, dy: f64) {
+    if let Some(placements) = physical.placements.as_mut() {
+        for placement in placements {
+            placement.x += dx;
+            placement.y += dy;
+        }
     }
 }
 
@@ -398,8 +308,8 @@ mod tests {
             .collect();
         assert!(Simulation::try_move_cell(
             &mut organism,
-            &environment,
-            &[],
+            &mut environment,
+            &mut [],
             12.0,
             -7.0
         ));
@@ -414,14 +324,14 @@ mod tests {
     #[test]
     fn blocked_zero_move_and_nonfinite_move_are_rejected() {
         let simulation = Simulation::new(7, 20.0);
-        let environment = simulation.environment.clone();
+        let mut environment = simulation.environment.clone();
         let mut organism = simulation.organisms[0].clone();
         organism.occupied_cells[0].x = 0.0;
         organism.occupied_cells[0].y = 0.0;
         assert!(!Simulation::try_move_cell(
             &mut organism,
-            &environment,
-            &[],
+            &mut environment,
+            &mut [],
             -10.0,
             -10.0
         ));
@@ -450,8 +360,8 @@ mod tests {
         let old_anchor = organism.occupied_cells[0].clone();
         assert!(!Simulation::try_move_cell(
             &mut organism,
-            &environment,
-            &[blocker],
+            &mut environment,
+            &mut [blocker],
             5.0,
             0.0
         ));
