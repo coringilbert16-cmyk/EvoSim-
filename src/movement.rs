@@ -357,43 +357,6 @@ fn translate_physical(physical: &mut crate::physical_material::PhysicalMaterial,
         }
     }
 }
-fn organism_overlaps_after(
-    blocker: &Organism,
-    moving: &Organism,
-    dx: f64,
-    dy: f64,
-    environment: &Environment,
-) -> bool {
-    for blocker_unit in &blocker.structure.units {
-        let Some(blocker_shape) = blocker_unit.shape(&environment.catalog) else {
-            continue;
-        };
-        let blocker_part = PlacedMaterialPart {
-            part_index: 1,
-            form: blocker_shape.form.clone(),
-            placement: blocker_unit.placement,
-        };
-        for moving_unit in &moving.structure.units {
-            let Some(moving_shape) = moving_unit.shape(&environment.catalog) else {
-                continue;
-            };
-            let moved_part = PlacedMaterialPart {
-                part_index: 0,
-                form: moving_shape.form.clone(),
-                placement: Placement {
-                    x: moving_unit.placement.x + dx,
-                    y: moving_unit.placement.y + dy,
-                    rotation_radians: moving_unit.placement.rotation_radians,
-                },
-            };
-            if crate::material_geometry::placed_forms_penetrate(&moved_part, &blocker_part, 0.0) {
-                return true;
-            }
-        }
-    }
-    false
-}
-
 fn can_translate_organism(
     organism: &Organism,
     environment: &Environment,
