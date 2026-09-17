@@ -16,6 +16,7 @@ const TRIAL_ENERGY: f64 = 1.0e12;
 const EPS: f64 = 1e-8;
 
 /// Realize the juvenile target generated from inherited architecture.
+#[allow(dead_code)]
 pub(crate) fn realize_initial_for_genome(
     genome: &Genome,
     catalog: &[BaseResource],
