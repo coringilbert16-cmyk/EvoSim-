@@ -538,6 +538,53 @@ mod tests {
     }
 
     #[test]
+    fn movement_pushes_realized_physical_material_and_reindexes_it() {
+        let simulation = Simulation::new(7, 20.0);
+        let mut environment = empty_environment(&simulation);
+        let mut organism = simulation.organisms[0].clone();
+        let x = organism.structure.units[0].placement.x;
+        let y = organism.structure.units[0].placement.y;
+        let placement = crate::structure::Placement {
+            x: x + 6.0,
+            y,
+            rotation_radians: 0.0,
+        };
+        let physical = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![placement],
+            &environment.catalog,
+        )
+        .expect("single carbon should have a valid physical realization");
+        let original_index = environment
+            .field
+            .index_for_position(placement.x, placement.y)
+            .expect("physical material must be in bounds");
+        assert!(environment
+            .field
+            .deposit_physical_at_index(original_index, physical));
+        assert!(Simulation::try_move_cell(
+            &mut organism,
+            &mut environment,
+            &mut [],
+            5.0,
+            0.0
+        ));
+        let moved_x = x + 11.0;
+        let moved_index = environment
+            .field
+            .index_for_position(moved_x, y)
+            .expect("pushed material must remain in bounds");
+        let physical = environment.field.cells[moved_index]
+            .physical_materials
+            .first()
+            .expect("pushed physical material must be reindexed");
+        assert_eq!(
+            physical.placements.as_ref().unwrap()[0].x,
+            moved_x
+        );
+    }
+
+    #[test]
     fn touching_another_organism_does_not_block_movement() {
         let simulation = Simulation::new(7, 20.0);
         let mut environment = empty_environment(&simulation);
