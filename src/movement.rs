@@ -170,10 +170,9 @@ fn push_blockers_for_parts(
             if physical_visited.contains(&key) {
                 continue;
             }
-            let candidate = environment.field.cells[cell_index].physical_materials[material_index].clone();
-            if !candidate.is_realized()
-                || candidate.material.is_empty()
-            {
+            let candidate =
+                environment.field.cells[cell_index].physical_materials[material_index].clone();
+            if !candidate.is_realized() || candidate.material.is_empty() {
                 continue;
             }
             let candidate_parts = physical_parts_at(&candidate, environment, 0.0, 0.0);
