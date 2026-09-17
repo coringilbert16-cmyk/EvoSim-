@@ -19,16 +19,7 @@ pub(crate) struct PhysicalMaterialBond {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct PhysicalMaterial {
     pub(crate) material: Material,
-    /// One placement per material constituent, in `parts` order. Placements
-    /// are relative to the material's part-0 origin; they are transformed into
-    /// world placement only when the material is restored into a structure.
-    /// `None` means no physical realization was supplied and restoration must
-    /// refuse to invent one.
     pub(crate) placements: Option<Vec<Placement>>,
-    /// Exact physical endpoints for each pre-existing internal bond. This is
-    /// part of the realization, not a construction hint. `None` is retained
-    /// only for legacy/logical values and cannot be restored as a physical
-    /// object.
     #[serde(default)]
     pub(crate) internal_connections: Option<Vec<PhysicalMaterialBond>>,
 }
@@ -108,19 +99,18 @@ impl PhysicalMaterial {
         self.placements.is_some() && self.internal_connections.is_some()
     }
 
-    /// Returns a physically realized copy translated by `origin` without
-    /// changing the material's intrinsic relative realization.
+    /// Return the same intrinsic physical material translated into world space.
+    /// Internal endpoint identities are unchanged because they are local to each
+    /// constituent; only constituent placement is transformed by the origin.
     pub(crate) fn translated(&self, origin: Placement) -> Option<Self> {
         let placements = self.placements.as_ref()?;
+        let (sin, cos) = origin.rotation_radians.sin_cos();
         let translated = placements
             .iter()
-            .map(|relative| {
-                let (sin, cos) = origin.rotation_radians.sin_cos();
-                Placement {
-                    x: origin.x + relative.x * cos - relative.y * sin,
-                    y: origin.y + relative.x * sin + relative.y * cos,
-                    rotation_radians: origin.rotation_radians + relative.rotation_radians,
-                }
+            .map(|relative| Placement {
+                x: origin.x + relative.x * cos - relative.y * sin,
+                y: origin.y + relative.x * sin + relative.y * cos,
+                rotation_radians: origin.rotation_radians + relative.rotation_radians,
             })
             .collect();
         Some(Self {
