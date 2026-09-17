@@ -84,15 +84,8 @@ impl FieldCell {
                         .deposit(position.x, position.y, material);
                 }
 '''
-          new = '''                for material in materials {
-                    self.environment
-                        .field
-                        .deposit(position.x, position.y, material);
-                }
-'''
           if old not in text:
               raise SystemExit('simulation release block unexpectedly changed')
-          text = text.replace(old, new, 1)
           simulation.write_text(text)
           PY
 
@@ -109,3 +102,5 @@ impl FieldCell {
           git diff --cached --quiet && exit 0
           git commit -m 'Phase 3: preserve physical material during decomposition'
           git push origin HEAD:phase3-physical-structure-authority
+
+# Triggered after the workflow file itself is established on the migration branch.
