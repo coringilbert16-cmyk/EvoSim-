@@ -115,7 +115,7 @@ fn movement_collides(
                     form: blocker_shape.form.clone(),
                     placement: blocker_unit.placement,
                 };
-                if crate::material_geometry::placed_forms_overlap(&moved, &blocker, 0.0) {
+                if crate::material_geometry::placed_forms_penetrate(&moved, &blocker, 0.0) {
                     return true;
                 }
             }
@@ -166,7 +166,8 @@ fn movement_collides(
                             form: base.shape.form.clone(),
                             placement: *placement,
                         };
-                        if crate::material_geometry::placed_forms_overlap(&moved, &blocker, 0.0) {
+                        if crate::material_geometry::placed_forms_penetrate(&moved, &blocker, 0.0)
+                        {
                             return true;
                         }
                     }
@@ -253,5 +254,27 @@ mod tests {
             0.0
         ));
         assert_eq!(organism.occupied_cells[0], old_anchor);
+    }
+
+    #[test]
+    fn touching_another_organism_does_not_block_movement() {
+        let simulation = Simulation::new(7, 20.0);
+        let environment = simulation.environment.clone();
+        let mut organism = simulation.organisms[0].clone();
+        let mut blocker = simulation.organisms[0].clone();
+        blocker.id = "touching".to_string();
+        let x = organism.structure.units[0].placement.x;
+        let y = organism.structure.units[0].placement.y;
+        for unit in &mut blocker.structure.units {
+            unit.placement.x = x + 10.0;
+            unit.placement.y = y;
+        }
+        assert!(Simulation::try_move_cell(
+            &mut organism,
+            &environment,
+            &[blocker],
+            5.0,
+            0.0
+        ));
     }
 }
