@@ -312,10 +312,10 @@ fn add_interface(
     } else {
         [0, 2, 4, 6]
     };
-    for i in 0..4 {
+    for (i, map) in maps.iter().enumerate() {
         connections.push(BlueprintConnection {
             element_a: start + i,
-            element_b: boundary_start + maps[i],
+            element_b: boundary_start + map,
         });
         connections.push(BlueprintConnection {
             element_a: start + i,
