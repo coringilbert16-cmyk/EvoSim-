@@ -205,7 +205,7 @@ pub(crate) fn instantiate_one_unit(
     organism: &mut Organism,
     catalog: &[BaseResource],
 ) -> Option<usize> {
-    let material = organism.stored_material.materials.first()?.clone();
+    let material = organism.stored_material.first_material()?;
     let (x, y) = organism
         .occupied_cells
         .first()
@@ -250,7 +250,7 @@ pub(crate) fn try_combine_stored_unit(
     cache: &mut ConnectionCompatibilityCache,
     ledger: &mut EnergyLedger,
 ) -> Option<CombineAttempt> {
-    let raw = organism.stored_material.materials.first()?.clone();
+    let raw = organism.stored_material.first_material()?;
     if !raw.is_valid() || raw.is_empty() {
         return None;
     }

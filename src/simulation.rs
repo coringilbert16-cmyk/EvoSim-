@@ -297,12 +297,26 @@ impl Simulation {
         ledger: &mut EnergyLedger,
     ) -> Option<crate::decomposition::DecomposingBody> {
         let position = organism.occupied_cells.first().cloned()?;
-        for material in organism.stored_material.materials.iter().cloned() {
-            environment.field.deposit(position.x, position.y, material);
+        for entry in organism.stored_material.drain_entries() {
+            match entry {
+                crate::material_storage::StoredMaterial::Logical(material) => {
+                    environment.field.deposit(position.x, position.y, material);
+                }
+                crate::material_storage::StoredMaterial::Physical(material) => {
+                    environment.field.deposit(position.x, position.y, material);
+                }
+            }
         }
-        if let Some(construction) = &organism.reproductive_construction {
-            for material in construction.committed_material.materials.iter().cloned() {
-                environment.field.deposit(position.x, position.y, material);
+        if let Some(mut construction) = organism.reproductive_construction.take() {
+            for entry in construction.committed_material.drain_entries() {
+                match entry {
+                    crate::material_storage::StoredMaterial::Logical(material) => {
+                        environment.field.deposit(position.x, position.y, material);
+                    }
+                    crate::material_storage::StoredMaterial::Physical(material) => {
+                        environment.field.deposit(position.x, position.y, material);
+                    }
+                }
             }
         }
         let mut body =

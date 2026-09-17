@@ -16,23 +16,6 @@ pub struct MaterialGeometry {
     pub min_y: f64,
     pub max_y: f64,
 }
-#[derive(Clone, Debug, PartialEq)]
-pub struct PhysicalMaterialInstance {
-    pub material: Material,
-    pub geometry: MaterialGeometry,
-}
-impl PhysicalMaterialInstance {
-    pub fn new(
-        material: Material,
-        placements: &[Placement],
-        catalog: &[BaseResource],
-    ) -> Option<Self> {
-        Some(Self {
-            material: material.clone(),
-            geometry: MaterialGeometry::new(&material, placements, catalog)?,
-        })
-    }
-}
 impl MaterialGeometry {
     pub fn new(
         material: &Material,
@@ -430,19 +413,6 @@ mod tests {
         assert_eq!(g.parts[0].part_index, 0);
         assert_eq!(g.parts[0].placement, p[0]);
         assert!(g.bounding_box_contains(12.0, 8.0));
-    }
-    #[test]
-    fn physical_instance_keeps_material_and_geometry_together() {
-        let c = default_catalog();
-        let m = Material::free_base("Carbon", 1.0);
-        let p = [Placement {
-            x: 4.0,
-            y: 6.0,
-            rotation_radians: 0.0,
-        }];
-        let i = PhysicalMaterialInstance::new(m.clone(), &p, &c).unwrap();
-        assert_eq!(i.material, m);
-        assert_eq!(i.geometry.parts[0].placement, p[0]);
     }
     #[test]
     fn structured_material_requires_one_placement_per_constituent() {

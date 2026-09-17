@@ -64,7 +64,7 @@ mod integration_tests {
         assert!(!o.stored_material.is_empty());
         assert!(matches!(o.development_stage, DevelopmentStage::Juvenile));
         assert_eq!(
-            o.stored_material.materials,
+            o.stored_material.materials_snapshot(),
             vec![o.genome.juvenile_reserve.clone()]
         );
         assert!(o.usable_energy >= o.genome.juvenile_energy_reserve);
@@ -106,7 +106,7 @@ mod integration_tests {
     fn storage_contains_discrete_independent_material_objects() {
         let mut o = Simulation::create_initial_organism();
         assert!(o.store_material(Material::free_base("Carbon", 5.0)));
-        assert_eq!(o.stored_material.materials.len(), 6);
+        assert_eq!(o.stored_material.len(), 6);
         assert_eq!(o.stored_material.count_unstructured(), 6);
         assert_eq!(o.stored_material.total_amount(), 6.0);
     }
@@ -115,7 +115,7 @@ mod integration_tests {
         let mut o = Simulation::create_initial_organism();
         let m = structured_carbon_hydrogen();
         assert!(o.store_material(m.clone()));
-        assert!(o.stored_material.materials.contains(&m));
+        assert!(o.stored_material.materials_snapshot().contains(&m));
         assert_eq!(o.stored_material.count_structured(), 1);
     }
     #[test]
@@ -165,7 +165,10 @@ mod integration_tests {
         s.step();
         assert!(s.environment.field.cells[i].physical_materials.is_empty());
         assert!(s.environment.field.cells[i].materials.is_empty());
-        assert!(s.organisms[0].stored_material.materials.contains(&m));
+        assert!(s.organisms[0]
+            .stored_material
+            .materials_snapshot()
+            .contains(&m));
     }
     #[test]
     fn acquire_only_considers_the_currently_occupied_field_cell() {

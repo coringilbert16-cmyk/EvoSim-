@@ -29,7 +29,11 @@ impl StructuralUnit {
         }
     }
     pub fn from_material(material: Material, placement: Placement) -> Option<Self> {
-        if !material.is_valid() || material.is_empty() {
+        if material.parts.len() != 1
+            || !material.is_valid()
+            || material.is_empty()
+            || material.has_internal_structure()
+        {
             return None;
         }
         Some(Self {
@@ -134,6 +138,9 @@ impl<'de> Deserialize<'de> for StructuralUnit {
         };
         if !m.is_valid() || m.is_empty() {
             return Err(serde::de::Error::custom("invalid material"));
+        }
+        if m.parts.len() != 1 || m.has_internal_structure() {
+            return Err(serde::de::Error::custom("composite material cannot be loaded as a StructuralUnit; restore its physical constituents and bonds through the organism graph"));
         }
         Ok(Self {
             physical_id: s.physical_id,
@@ -503,7 +510,7 @@ impl PhysicalConstituentGraph {
                 for &next in &adjacency[u] {
                     if !visited[next] {
                         visited[next] = true;
-                        stack.push(next)
+                        stack.push(next);
                     }
                 }
             }
@@ -610,20 +617,19 @@ mod tests {
         assert!(decoded.geometry.is_none());
     }
     #[test]
-    fn composite_material_is_accepted_as_structural_material() {
+    fn composite_material_is_rejected_as_structural_material() {
         let material = Material {
             parts: vec![("Carbon".into(), 2.0), ("Hydrogen".into(), 3.0)],
             internal_bonds: vec![],
         };
-        let unit = StructuralUnit::from_material(
-            material.clone(),
+        assert!(StructuralUnit::from_material(
+            material,
             Placement {
                 x: 0.0,
                 y: 0.0,
-                rotation_radians: 0.0,
-            },
+                rotation_radians: 0.0
+            }
         )
-        .unwrap();
-        assert_eq!(unit.material, material);
+        .is_none());
     }
 }
