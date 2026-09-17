@@ -1,3 +1,4 @@
+#![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 //! COMBINE support: deterministic recipe caching, locked formation threshold, and
 //! resource-derived bond strength.
 use crate::contact::{ConnectionCompatibilityCache, ConnectionPairCandidate};
