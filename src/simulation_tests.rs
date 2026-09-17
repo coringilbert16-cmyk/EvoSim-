@@ -155,9 +155,7 @@ mod integration_tests {
         s.environment.field.cells[i].materials.clear();
         let m = structured_carbon_hydrogen();
         let physical = realized_structured_carbon_hydrogen(&s.environment.catalog);
-        s.environment
-            .field
-            .deposit_physical_at_index(i, physical);
+        s.environment.field.deposit_physical_at_index(i, physical);
         s.organisms[0].usable_energy = 0.0;
         s.organisms[0].decision_history.record(
             ActionKind::Acquire,
