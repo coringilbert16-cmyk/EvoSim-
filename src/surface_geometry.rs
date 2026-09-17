@@ -110,6 +110,7 @@ pub fn boundary_point_toward(shape: &Shape, target_x: f64, target_y: f64) -> Opt
         Form::Fluid { .. } => None,
     }
 }
+#[allow(dead_code)]
 pub fn segment_endpoints(
     x0: f64,
     y0: f64,
