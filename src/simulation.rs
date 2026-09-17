@@ -86,10 +86,28 @@ impl Simulation {
         let catalog = self.environment.catalog.clone();
         for id in reproduction_requests { if let Some(organism) = self.organisms.iter_mut().find(|o| o.id == id) { let _ = crate::reproduction::begin_reproduction(organism, &mut self.rng, &catalog, &mut self.energy_ledger); } }
         let mut offspring = Vec::new(); let mut next_organism_id = self.next_organism_id;
-        for organism in &mut self.organisms { if organism.reproductive_construction.is_some() { if let Some(construction) = organism.reproductive_construction.as_mut() { if let Some(stress) = crate::reproduction::advance_construction(&mut organism.stored_material, construction, &catalog, &mut self.energy_ledger, &mut organism.usable_energy) { organism.add_transaction_stress(stress); } } if organism.reproductive_construction.as_ref().map(|construction| construction.is_complete()).unwrap_or(false) { if let Some(child) = crate::reproduction::finalize_reproduction(organism, &mut next_organism_id, &catalog, &mut self.energy_ledger) { offspring.push(child); } } } }
+        for organism in &mut self.organisms {
+            if organism.reproductive_construction.is_some() {
+                if let Some(construction) = organism.reproductive_construction.as_mut() {
+                    if let Some(stress) = crate::reproduction::advance_construction(&mut organism.stored_material, construction, &catalog, &mut self.energy_ledger, &mut organism.usable_energy) { organism.add_transaction_stress(stress); }
+                }
+                if organism.reproductive_construction.as_ref().map(|construction| construction.realized_elements.len() == construction.target_elements.len()).unwrap_or(false) {
+                    let child_id = next_organism_id.to_string();
+                    if let Some(child) = crate::reproduction::finish_reproduction(organism, child_id, &catalog, &mut self.energy_ledger) {
+                        next_organism_id += 1;
+                        offspring.push(child);
+                    }
+                }
+            }
+        }
         self.next_organism_id = next_organism_id; self.organisms.extend(offspring);
-        let mut survivors = Vec::new();
-        for mut organism in self.organisms.drain(..) { if organism.is_dead() { if let Some(body) = Self::recycle_dead_organism(&mut self.environment, &mut organism, &mut self.energy_ledger) { self.decomposing_bodies.push(body); } } else { survivors.push(organism); } }
+        let mut survivors = Vec::with_capacity(self.organisms.len());
+        for mut organism in self.organisms.drain(..) {
+            let dead = Self::apply_energy_capacity(&mut organism, &self.environment, &mut self.energy_ledger);
+            if dead {
+                if let Some(body) = Self::recycle_dead_organism(&mut self.environment, &mut organism, &mut self.energy_ledger) { self.decomposing_bodies.push(body); }
+            } else { survivors.push(organism); }
+        }
         self.organisms = survivors; self.process_decomposing_bodies(); let live_ids: HashSet<String> = self.organisms.iter().map(|o| o.id.clone()).collect(); self.active_transformations.retain(|t| live_ids.contains(&t.organism_id)); self.energy_ledger.total_usable_energy_held = self.organisms.iter().map(|o| o.usable_energy).sum();
     }
     pub(crate) fn apply_energy_capacity(organism: &mut Organism, environment: &Environment, ledger: &mut EnergyLedger) -> bool { organism.stress *= crate::state::STRESS_DECAY_PER_TICK; organism.apply_stress_damage(environment, ledger) }
