@@ -181,10 +181,19 @@ fn movement_collides(
 mod tests {
     use super::*;
 
+    fn empty_environment(simulation: &Simulation) -> Environment {
+        let mut environment = simulation.environment.clone();
+        for cell in &mut environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        environment
+    }
+
     #[test]
     fn move_translates_anchor_and_structure() {
         let simulation = Simulation::new(7, 20.0);
-        let environment = simulation.environment.clone();
+        let environment = empty_environment(&simulation);
         let mut organism = simulation.organisms[0].clone();
         let anchor = organism.occupied_cells[0].clone();
         let placements: Vec<_> = organism
@@ -234,7 +243,7 @@ mod tests {
     #[test]
     fn movement_is_blocked_by_another_organism() {
         let simulation = Simulation::new(7, 20.0);
-        let environment = simulation.environment.clone();
+        let environment = empty_environment(&simulation);
         let mut organism = simulation.organisms[0].clone();
         let mut blocker = simulation.organisms[0].clone();
         blocker.id = "blocker".to_string();
@@ -258,7 +267,7 @@ mod tests {
     #[test]
     fn touching_another_organism_does_not_block_movement() {
         let simulation = Simulation::new(7, 20.0);
-        let environment = simulation.environment.clone();
+        let environment = empty_environment(&simulation);
         let mut organism = simulation.organisms[0].clone();
         let mut blocker = simulation.organisms[0].clone();
         blocker.id = "touching".to_string();
