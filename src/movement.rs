@@ -711,9 +711,9 @@ mod tests {
                 rotation_radians: 0.0,
             },
             crate::structure::Placement {
-                x: x + 6.0,
-                y: y + 0.5,
-                rotation_radians: 0.0,
+                x: x + 5.0,
+                y,
+                rotation_radians: 0.25,
             },
         ];
         let physical = crate::physical_material::PhysicalMaterial::realized(
