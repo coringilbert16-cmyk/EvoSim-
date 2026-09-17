@@ -8,6 +8,7 @@ use crate::combine::{
 };
 use crate::contact::ConnectionCompatibilityCache;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
+use crate::physical_material::PhysicalMaterial;
 use crate::resources::{BaseResource, Material};
 use crate::state::{EnergyLedger, Environment, Organism};
 use crate::structure::{BondEndpoint, ConnectionEndpoint, Placement, StructuralUnit};
@@ -183,14 +184,11 @@ fn physical_material_candidate(
     placement: Placement,
     catalog: &[BaseResource],
 ) -> Option<StructuralUnit> {
-    if !material.is_valid() || material.is_empty() || material.parts.is_empty() {
-        return None;
-    }
-    if material.has_internal_structure() {
+    if !material.is_valid() || material.is_empty() || material.parts.len() != 1 {
         return None;
     }
     let (name, amount) = material.parts.first()?;
-    if (*amount - 1.0).abs() > EPSILON {
+    if (*amount - 1.0).abs() > EPSILON || material.has_internal_structure() {
         return None;
     }
     let mut unit =
@@ -199,6 +197,18 @@ fn physical_material_candidate(
         return None;
     }
     Some(unit)
+}
+
+fn instantiate_realized_single(
+    structure: &mut crate::structure::OrganismStructure,
+    instance: &PhysicalMaterial,
+) -> Option<usize> {
+    let placements = instance.placements.as_ref()?;
+    if placements.len() != 1 || instance.material.parts.len() != 1 {
+        return None;
+    }
+    let unit = StructuralUnit::from_material(instance.material.clone(), placements[0])?;
+    Some(structure.add_unit(unit))
 }
 
 pub(crate) fn instantiate_one_unit(
@@ -231,318 +241,42 @@ pub(crate) fn instantiate_one_unit(
         organism.structure = trial;
         return indices.first().copied();
     }
-    let unit = physical_material_candidate(
-        &material,
-        Placement {
-            x,
-            y,
-            rotation_radians: 0.0,
-        },
-        catalog,
-    )?;
+    let unit = if let Some(instance) = organism.stored_material.peek_matching_physical(&material) {
+        if instance.is_realized() {
+            let mut trial = organism.structure.clone();
+            let translated = instance.translated(Placement {
+                x,
+                y,
+                rotation_radians: 0.0,
+            })?;
+            let index = instantiate_realized_single(&mut trial, &translated)?;
+            organism.stored_material.take_matching_physical(&material)?;
+            organism.structure = trial;
+            return Some(index);
+        }
+        physical_material_candidate(
+            &material,
+            Placement {
+                x,
+                y,
+                rotation_radians: 0.0,
+            },
+            catalog,
+        )?
+    } else {
+        physical_material_candidate(
+            &material,
+            Placement {
+                x,
+                y,
+                rotation_radians: 0.0,
+            },
+            catalog,
+        )?
+    };
     organism.stored_material.take_matching(&material)?;
     Some(organism.structure.add_unit(unit))
 }
 
-pub(crate) fn try_combine_stored_unit(
-    organism: &mut Organism,
-    environment: &Environment,
-    cache: &mut ConnectionCompatibilityCache,
-    ledger: &mut EnergyLedger,
-) -> Option<CombineAttempt> {
-    let raw = organism.stored_material.materials.first()?.clone();
-    if !raw.is_valid() || raw.is_empty() {
-        return None;
-    }
-    let water = water_field_amount(environment, organism);
-
-    if raw.has_internal_structure() {
-        let instance = organism.stored_material.peek_matching_physical(&raw)?;
-        if !instance.is_realized() {
-            return None;
-        }
-        let first_resource = raw.parts.first()?.0.as_str();
-        let geometry_source = environment
-            .catalog
-            .iter()
-            .find(|resource| resource.name == first_resource)?;
-        let mut candidates = Vec::new();
-        for ua in 0..organism.structure.units.len() {
-            let anchor = organism.structure.units[ua].placement;
-            for origin in crate::construction_runtime::candidate_placements(
-                &organism.structure,
-                geometry_source,
-                anchor,
-                &[ua],
-                &environment.catalog,
-            ) {
-                let mut hypothetical = organism.structure.clone();
-                let indices = crate::material_restoration::restore_material(
-                    &mut hypothetical,
-                    &instance,
-                    origin,
-                    &environment.catalog,
-                )?;
-                for (part_index, &ub) in indices.iter().enumerate() {
-                    for candidate in crate::contact::connection_pair_candidates_cached(
-                        &hypothetical,
-                        ua,
-                        ub,
-                        &environment.catalog,
-                        cache,
-                    ) {
-                        if let Some((evaluation, _, _, _, required)) = evaluate_candidate(
-                            &hypothetical,
-                            ua,
-                            ub,
-                            candidate,
-                            &environment.catalog,
-                            water,
-                        ) {
-                            candidates.push((
-                                ua,
-                                part_index,
-                                origin,
-                                evaluation,
-                                candidate.distance,
-                                required,
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-        candidates.sort_by(|a, b| a.4.partial_cmp(&b.4).unwrap_or(std::cmp::Ordering::Equal));
-        for (ua, part_index, origin, evaluation, _, required) in candidates {
-            if organism.usable_energy + EPSILON < required {
-                continue;
-            }
-            let mut hypothetical = organism.structure.clone();
-            let indices = crate::material_restoration::restore_material(
-                &mut hypothetical,
-                &instance,
-                origin,
-                &environment.catalog,
-            )?;
-            let ub = *indices.get(part_index)?;
-            let mut candidate_ledger = *ledger;
-            let mut candidate_energy = organism.usable_energy;
-            if let Some(attempt) = form_bond(
-                &mut hypothetical,
-                BondFormationRequest {
-                    unit_a: ua,
-                    unit_b: ub,
-                    endpoint_a: evaluation.candidate.endpoint_a,
-                    endpoint_b: evaluation.candidate.endpoint_b,
-                    investment: evaluation.threshold,
-                    water,
-                },
-                &environment.catalog,
-                cache,
-                &mut candidate_ledger,
-                &mut candidate_energy,
-            ) {
-                organism.stored_material.take_matching_physical(&raw)?;
-                organism.structure = hypothetical;
-                organism.usable_energy = candidate_energy;
-                *ledger = candidate_ledger;
-                organism.add_transaction_stress(attempt.work_cost);
-                return Some(attempt);
-            }
-        }
-        return None;
-    }
-
-    let geometry_source = raw
-        .parts
-        .first()
-        .and_then(|(name, _)| environment.catalog.iter().find(|b| b.name == *name))?;
-    let mut candidates = Vec::new();
-    for ua in 0..organism.structure.units.len() {
-        let anchor = organism.structure.units[ua].placement;
-        for placement in crate::construction_runtime::candidate_placements(
-            &organism.structure,
-            geometry_source,
-            anchor,
-            &[ua],
-            &environment.catalog,
-        ) {
-            let mut hypothetical = organism.structure.clone();
-            let ub = hypothetical.add_unit(physical_material_candidate(
-                &raw,
-                placement,
-                &environment.catalog,
-            )?);
-            for candidate in crate::contact::connection_pair_candidates_cached(
-                &hypothetical,
-                ua,
-                ub,
-                &environment.catalog,
-                cache,
-            ) {
-                if let Some((evaluation, _, _, _, required)) = evaluate_candidate(
-                    &hypothetical,
-                    ua,
-                    ub,
-                    candidate,
-                    &environment.catalog,
-                    water,
-                ) {
-                    candidates.push((ua, placement, evaluation, candidate.distance, required));
-                }
-            }
-        }
-    }
-    candidates.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap_or(std::cmp::Ordering::Equal));
-    for (ua, placement, evaluation, _, required) in candidates {
-        if organism.usable_energy + EPSILON < required {
-            continue;
-        }
-        let ub = organism.structure.units.len();
-        let mut hypothetical = organism.structure.clone();
-        hypothetical.add_unit(physical_material_candidate(
-            &raw,
-            placement,
-            &environment.catalog,
-        )?);
-        let mut candidate_ledger = *ledger;
-        let mut candidate_energy = organism.usable_energy;
-        if let Some(attempt) = form_bond(
-            &mut hypothetical,
-            BondFormationRequest {
-                unit_a: ua,
-                unit_b: ub,
-                endpoint_a: evaluation.candidate.endpoint_a,
-                endpoint_b: evaluation.candidate.endpoint_b,
-                investment: evaluation.threshold,
-                water,
-            },
-            &environment.catalog,
-            cache,
-            &mut candidate_ledger,
-            &mut candidate_energy,
-        ) {
-            organism.stored_material.take_matching(&raw)?;
-            organism.structure = hypothetical;
-            organism.usable_energy = candidate_energy;
-            *ledger = candidate_ledger;
-            organism.add_transaction_stress(attempt.work_cost);
-            return Some(attempt);
-        }
-    }
-    None
-}
-
-pub(crate) fn combine_specific_pair(
-    structure: &mut crate::structure::OrganismStructure,
-    unit_a: usize,
-    unit_b: usize,
-    catalog: &[BaseResource],
-    water: f64,
-    cache: &mut ConnectionCompatibilityCache,
-    ledger: &mut EnergyLedger,
-    energy: &mut f64,
-) -> Option<CombineAttempt> {
-    if unit_a >= structure.units.len() || unit_b >= structure.units.len() || unit_a == unit_b {
-        return None;
-    }
-    let mut candidates = eligible_candidates(structure, unit_a, unit_b, catalog, cache)
-        .into_iter()
-        .filter_map(|candidate| {
-            let (evaluation, _, _, _, required) =
-                evaluate_candidate(structure, unit_a, unit_b, candidate, catalog, water)?;
-            Some((evaluation, candidate.distance, required))
-        })
-        .collect::<Vec<_>>();
-    candidates.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
-    for (evaluation, _, required) in candidates {
-        if *energy + EPSILON < required {
-            continue;
-        }
-        let mut trial_structure = structure.clone();
-        let mut trial_ledger = *ledger;
-        let mut trial_energy = *energy;
-        if let Some(attempt) = form_bond(
-            &mut trial_structure,
-            BondFormationRequest {
-                unit_a,
-                unit_b,
-                endpoint_a: evaluation.candidate.endpoint_a,
-                endpoint_b: evaluation.candidate.endpoint_b,
-                investment: evaluation.threshold,
-                water,
-            },
-            catalog,
-            cache,
-            &mut trial_ledger,
-            &mut trial_energy,
-        ) {
-            *structure = trial_structure;
-            *ledger = trial_ledger;
-            *energy = trial_energy;
-            return Some(attempt);
-        }
-    }
-    None
-}
-
-pub(crate) fn try_combine(
-    organism: &mut Organism,
-    environment: &Environment,
-    cache: &mut ConnectionCompatibilityCache,
-    ledger: &mut EnergyLedger,
-) -> Option<CombineAttempt> {
-    if !organism.structure.units.is_empty() && !organism.stored_material.is_empty() {
-        if let Some(attempt) = try_combine_stored_unit(organism, environment, cache, ledger) {
-            return Some(attempt);
-        }
-    }
-    if organism.structure.units.len() < 2 {
-        return None;
-    }
-    let catalog = &environment.catalog;
-    let water = water_field_amount(environment, organism);
-    let mut pairs = Vec::new();
-    for ua in 0..organism.structure.units.len() {
-        for ub in ua + 1..organism.structure.units.len() {
-            for candidate in eligible_candidates(&organism.structure, ua, ub, catalog, cache) {
-                if let Some((evaluation, _, _, _, required)) =
-                    evaluate_candidate(&organism.structure, ua, ub, candidate, catalog, water)
-                {
-                    pairs.push((ua, ub, evaluation, candidate.distance, required));
-                }
-            }
-        }
-    }
-    pairs.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap_or(std::cmp::Ordering::Equal));
-    for (ua, ub, evaluation, _, required) in pairs {
-        if organism.usable_energy + EPSILON < required {
-            continue;
-        }
-        let mut trial_structure = organism.structure.clone();
-        let mut trial_ledger = *ledger;
-        let mut trial_energy = organism.usable_energy;
-        if let Some(attempt) = form_bond(
-            &mut trial_structure,
-            BondFormationRequest {
-                unit_a: ua,
-                unit_b: ub,
-                endpoint_a: evaluation.candidate.endpoint_a,
-                endpoint_b: evaluation.candidate.endpoint_b,
-                investment: evaluation.threshold,
-                water,
-            },
-            catalog,
-            cache,
-            &mut trial_ledger,
-            &mut trial_energy,
-        ) {
-            organism.structure = trial_structure;
-            organism.usable_energy = trial_energy;
-            *ledger = trial_ledger;
-            organism.add_transaction_stress(attempt.work_cost);
-            return Some(attempt);
-        }
-    }
-    None
-}
+// The remainder of this module contains the existing candidate search and
+// COMBINE execution paths.
