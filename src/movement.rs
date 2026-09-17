@@ -575,10 +575,7 @@ mod tests {
             0.0
         ));
         assert_eq!(organism.structure.units[0].placement.x, x + 5.0);
-        assert_eq!(
-            others[0].structure.units[0].placement.x,
-            first_before + 5.0
-        );
+        assert_eq!(others[0].structure.units[0].placement.x, first_before + 5.0);
         assert_eq!(
             others[1].structure.units[0].placement.x,
             second_before + 5.0
