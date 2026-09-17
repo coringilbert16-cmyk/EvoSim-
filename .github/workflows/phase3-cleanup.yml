@@ -10,32 +10,43 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Remove obsolete PhysicalMaterialInstance
+      - name: Migrate direct storage consumers
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
-          p = Path('src/material_geometry.rs')
-          s = p.read_text()
-          pattern = r'(?ms)^#\[derive\(Clone, Debug, PartialEq\)\]\npub struct PhysicalMaterialInstance \{.*?^\}\nimpl PhysicalMaterialInstance \{.*?^\}\n'
-          updated, count = re.subn(pattern, '', s, count=1)
-          if count != 1:
-              raise SystemExit(f'expected one PhysicalMaterialInstance block, found {count}')
-          test_pattern = r'(?ms)^    #\[test\]\n    fn physical_instance_keeps_material_and_geometry_together\(\) \{.*?^    \}\n'
-          updated, test_count = re.subn(test_pattern, '', updated, count=1)
-          if test_count != 1:
-              raise SystemExit(f'expected one obsolete PhysicalMaterialInstance test, found {test_count}')
-          p.write_text(updated)
+          replacements = {
+              'src/combine_runtime.rs': [
+                  ('organism.stored_material.materials.first()?.clone()', 'organism.stored_material.first_material()?'),
+              ],
+              'src/simulation.rs': [
+                  ('for material in organism.stored_material.materials.iter().cloned() {', 'for material in organism.stored_material.iter_materials().cloned() {'),
+              ],
+              'src/simulation_tests.rs': [
+                  ('o.stored_material.materials,', 'o.stored_material.materials_snapshot(),'),
+                  ('o.stored_material.materials.len()', 'o.stored_material.len()'),
+              ],
+              'src/phase2_structure_contract_tests.rs': [
+                  ('organism.stored_material.materials.len()', 'organism.stored_material.len()'),
+              ],
+          }
+          for name, pairs in replacements.items():
+              p = Path(name)
+              text = p.read_text()
+              for old, new in pairs:
+                  if old not in text:
+                      raise SystemExit(f'missing expected text in {name}: {old}')
+                  text = text.replace(old, new)
+              p.write_text(text)
           PY
           cargo fmt --all
           cargo test --all-targets
-      - name: Commit cleanup
+      - name: Commit migration
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/material_geometry.rs
+          git add src
           git diff --cached --quiet && exit 0
-          git commit -m 'Phase 3: remove obsolete PhysicalMaterialInstance abstraction'
+          git commit -m 'Phase 3: migrate storage consumers to consolidated entries'
           git push
