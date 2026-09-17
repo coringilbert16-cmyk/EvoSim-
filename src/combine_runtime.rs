@@ -8,6 +8,7 @@ use crate::combine::{
 };
 use crate::contact::ConnectionCompatibilityCache;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
+use crate::physical_material::PhysicalMaterial;
 use crate::resources::{BaseResource, Material};
 use crate::state::{EnergyLedger, Environment, Organism};
 use crate::structure::{BondEndpoint, ConnectionEndpoint, Placement, StructuralUnit};
@@ -357,6 +358,11 @@ pub(crate) fn try_combine_stored_unit(
         .parts
         .first()
         .and_then(|(name, _)| environment.catalog.iter().find(|b| b.name == *name))?;
+    let physical_instance = organism
+        .stored_material
+        .peek_matching_physical(&raw)
+        .filter(|instance| instance.is_realized())
+        .cloned();
     let mut candidates = Vec::new();
     for ua in 0..organism.structure.units.len() {
         let anchor = organism.structure.units[ua].placement;
@@ -368,11 +374,21 @@ pub(crate) fn try_combine_stored_unit(
             &environment.catalog,
         ) {
             let mut hypothetical = organism.structure.clone();
-            let ub = hypothetical.add_unit(physical_material_candidate(
-                &raw,
-                placement,
-                &environment.catalog,
-            )?);
+            let ub = if let Some(instance) = physical_instance.as_ref() {
+                let indices = crate::material_restoration::restore_material(
+                    &mut hypothetical,
+                    instance,
+                    placement,
+                    &environment.catalog,
+                )?;
+                *indices.first()?
+            } else {
+                hypothetical.add_unit(physical_material_candidate(
+                    &raw,
+                    placement,
+                    &environment.catalog,
+                )?)
+            };
             for candidate in crate::contact::connection_pair_candidates_cached(
                 &hypothetical,
                 ua,
@@ -398,13 +414,22 @@ pub(crate) fn try_combine_stored_unit(
         if organism.usable_energy + EPSILON < required {
             continue;
         }
-        let ub = organism.structure.units.len();
         let mut hypothetical = organism.structure.clone();
-        hypothetical.add_unit(physical_material_candidate(
-            &raw,
-            placement,
-            &environment.catalog,
-        )?);
+        let ub = if let Some(instance) = physical_instance.as_ref() {
+            let indices = crate::material_restoration::restore_material(
+                &mut hypothetical,
+                instance,
+                placement,
+                &environment.catalog,
+            )?;
+            *indices.first()?
+        } else {
+            hypothetical.add_unit(physical_material_candidate(
+                &raw,
+                placement,
+                &environment.catalog,
+            )?)
+        };
         let mut candidate_ledger = *ledger;
         let mut candidate_energy = organism.usable_energy;
         if let Some(attempt) = form_bond(
@@ -422,7 +447,11 @@ pub(crate) fn try_combine_stored_unit(
             &mut candidate_ledger,
             &mut candidate_energy,
         ) {
-            organism.stored_material.take_matching(&raw)?;
+            if physical_instance.is_some() {
+                organism.stored_material.take_matching_physical(&raw)?;
+            } else {
+                organism.stored_material.take_matching(&raw)?;
+            }
             organism.structure = hypothetical;
             organism.usable_energy = candidate_energy;
             *ledger = candidate_ledger;
