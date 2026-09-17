@@ -66,7 +66,8 @@ impl MaterialGeometry {
             max_y,
         })
     }
-    pub fn bounding_box_contains(&self, x: f64, y: f64) -> bool {
+    #[allow(dead_code)]
+pub fn bounding_box_contains(&self, x: f64, y: f64) -> bool {
         x >= self.min_x && x <= self.max_x && y >= self.min_y && y <= self.max_y
     }
 }
