@@ -57,6 +57,30 @@ mod tests {
                 Placement {
                     x: 2.0,
                     y: 0.5,
+                    rotation_radians: 0.0,
+                },
+            ],
+        )
+    }
+
+    fn default_compound() -> (Material, Vec<Placement>) {
+        (
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: vec![InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 1.0,
+                    y: 0.0,
                     rotation_radians: 0.25,
                 },
             ],
@@ -86,7 +110,7 @@ mod tests {
     }
 
     #[test]
-    fn organism_acquire_target_preserves_realized_composite() {
+    fn organism_acquire_target_preserves_realized_composite_in_storage_frame() {
         let mut simulation = Simulation::new(7, 20.0);
         let organism_position = simulation.organisms[0].occupied_cells[0].clone();
         let field_index = simulation
@@ -94,7 +118,7 @@ mod tests {
             .field
             .index_for_position(organism_position.x, organism_position.y)
             .unwrap();
-        let (material, placements) = compound();
+        let (material, placements) = default_compound();
         let physical = PhysicalMaterial::realized(
             material.clone(),
             placements.clone(),
@@ -115,7 +139,12 @@ mod tests {
             .peek_matching_physical(&material)
             .unwrap();
         assert_eq!(acquired.material, material);
-        assert_eq!(acquired.placements, Some(placements));
+        let stored = acquired.placements.expect("intrinsic realization");
+        assert!(stored[0].x.abs() <= 1e-12);
+        assert!(stored[0].y.abs() <= 1e-12);
+        assert!(stored[0].rotation_radians.abs() <= 1e-12);
+        assert!((stored[1].x.hypot(stored[1].y) - 1.0).abs() <= 1e-9);
+        assert!((stored[1].rotation_radians - 0.25).abs() <= 1e-9);
         assert!(simulation.environment.field.cells[field_index]
             .physical_materials
             .is_empty());

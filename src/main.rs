@@ -64,6 +64,8 @@ mod observation_contract_tests;
 #[cfg(test)]
 mod phase1_acquisition_contract_tests;
 #[cfg(test)]
+mod phase2_structure_contract_tests;
+#[cfg(test)]
 mod simulation_tests;
 
 #[tokio::main]
