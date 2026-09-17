@@ -12,7 +12,10 @@ impl Simulation {
         let movement_efficiency = organism.genome.movement_efficiency();
         let perception_weight = 1.0 - (0.5 + memory_strength * 0.5);
         let memory_weight = 1.0 - perception_weight;
-        let (px, py) = match organism.occupied_cells.first() { Some(p) => (p.x, p.y), None => return false };
+        let (px, py) = match organism.occupied_cells.first() {
+            Some(p) => (p.x, p.y),
+            None => return false,
+        };
         let mut mx = 0.0;
         let mut my = 0.0;
         let mut total = 0.0;
@@ -20,18 +23,27 @@ impl Simulation {
             let dx = point.x - px;
             let dy = point.y - py;
             let distance = (dx * dx + dy * dy).sqrt();
-            if distance <= f64::EPSILON { continue; }
+            if distance <= f64::EPSILON {
+                continue;
+            }
             let weight = point.strength / distance;
             mx += dx / distance * weight;
             my += dy / distance * weight;
             total += weight;
         }
-        if total > 0.0 { mx /= total; my /= total; }
-        if organism.active_transformation_id.is_some() { return false; }
+        if total > 0.0 {
+            mx /= total;
+            my /= total;
+        }
+        if organism.active_transformation_id.is_some() {
+            return false;
+        }
         let mut x = memory_weight * mx + perception_weight * organism.resource_sense.direction_x;
         let mut y = memory_weight * my + perception_weight * organism.resource_sense.direction_y;
         let magnitude = (x * x + y * y).sqrt();
-        if magnitude <= f64::EPSILON { return false; }
+        if magnitude <= f64::EPSILON {
+            return false;
+        }
         x /= magnitude;
         y /= magnitude;
         let step = 5.0 * movement_efficiency;
@@ -45,18 +57,30 @@ impl Simulation {
         delta_x: f64,
         delta_y: f64,
     ) -> bool {
-        if !delta_x.is_finite() || !delta_y.is_finite() { return false; }
-        let (old_x, old_y) = match organism.occupied_cells.first() { Some(p) => (p.x, p.y), None => return false };
+        if !delta_x.is_finite() || !delta_y.is_finite() {
+            return false;
+        }
+        let (old_x, old_y) = match organism.occupied_cells.first() {
+            Some(p) => (p.x, p.y),
+            None => return false,
+        };
         let new_x = (old_x + delta_x).clamp(0.0, environment.width);
         let new_y = (old_y + delta_y).clamp(0.0, environment.height);
         let dx = new_x - old_x;
         let dy = new_y - old_y;
-        if dx.abs() <= f64::EPSILON && dy.abs() <= f64::EPSILON { return false; }
-        if movement_collides(organism, environment, other_organisms, dx, dy) { return false; }
+        if dx.abs() <= f64::EPSILON && dy.abs() <= f64::EPSILON {
+            return false;
+        }
+        if movement_collides(organism, environment, other_organisms, dx, dy) {
+            return false;
+        }
         let cell = organism.occupied_cells.first_mut().expect("checked above");
         cell.x = new_x;
         cell.y = new_y;
-        for unit in &mut organism.structure.units { unit.placement.x += dx; unit.placement.y += dy; }
+        for unit in &mut organism.structure.units {
+            unit.placement.x += dx;
+            unit.placement.y += dy;
+        }
         true
     }
 }
@@ -69,35 +93,82 @@ fn movement_collides(
     dy: f64,
 ) -> bool {
     for unit in &organism.structure.units {
-        let Some(shape) = unit.shape(&environment.catalog) else { continue; };
-        let moved = PlacedMaterialPart { part_index: 0, form: shape.form.clone(), placement: Placement { x: unit.placement.x + dx, y: unit.placement.y + dy, rotation_radians: unit.placement.rotation_radians } };
+        let Some(shape) = unit.shape(&environment.catalog) else {
+            continue;
+        };
+        let moved = PlacedMaterialPart {
+            part_index: 0,
+            form: shape.form.clone(),
+            placement: Placement {
+                x: unit.placement.x + dx,
+                y: unit.placement.y + dy,
+                rotation_radians: unit.placement.rotation_radians,
+            },
+        };
         for other in other_organisms {
             for blocker_unit in &other.structure.units {
-                let Some(blocker_shape) = blocker_unit.shape(&environment.catalog) else { continue; };
-                let blocker = PlacedMaterialPart { part_index: 1, form: blocker_shape.form.clone(), placement: blocker_unit.placement };
-                if crate::material_geometry::placed_forms_overlap(&moved, &blocker, 0.0) { return true; }
+                let Some(blocker_shape) = blocker_unit.shape(&environment.catalog) else {
+                    continue;
+                };
+                let blocker = PlacedMaterialPart {
+                    part_index: 1,
+                    form: blocker_shape.form.clone(),
+                    placement: blocker_unit.placement,
+                };
+                if crate::material_geometry::placed_forms_overlap(&moved, &blocker, 0.0) {
+                    return true;
+                }
             }
         }
         let radius = moved.form.bounding_radius().max(0.0);
-        let min_col = ((moved.placement.x - radius).max(0.0) / environment.field.cell_size).floor() as usize;
-        let max_col = ((moved.placement.x + radius).max(0.0) / environment.field.cell_size).floor() as usize;
-        let min_row = ((moved.placement.y - radius).max(0.0) / environment.field.cell_size).floor() as usize;
-        let max_row = ((moved.placement.y + radius).max(0.0) / environment.field.cell_size).floor() as usize;
+        let min_col =
+            ((moved.placement.x - radius).max(0.0) / environment.field.cell_size).floor() as usize;
+        let max_col =
+            ((moved.placement.x + radius).max(0.0) / environment.field.cell_size).floor() as usize;
+        let min_row =
+            ((moved.placement.y - radius).max(0.0) / environment.field.cell_size).floor() as usize;
+        let max_row =
+            ((moved.placement.y + radius).max(0.0) / environment.field.cell_size).floor() as usize;
         let max_col = max_col.min(environment.field.width_cells.saturating_sub(1));
         let max_row = max_row.min(environment.field.height_cells.saturating_sub(1));
-        if min_col >= environment.field.width_cells || min_row >= environment.field.height_cells { continue; }
+        if min_col >= environment.field.width_cells || min_row >= environment.field.height_cells {
+            continue;
+        }
         for row in min_row..=max_row {
             for col in min_col..=max_col {
                 let cell = &environment.field.cells[row * environment.field.width_cells + col];
-                if cell.materials.iter().any(|m| m.is_valid() && !m.is_empty() && m.has_internal_structure()) { return true; }
+                if cell
+                    .materials
+                    .iter()
+                    .any(|m| m.is_valid() && !m.is_empty() && m.has_internal_structure())
+                {
+                    return true;
+                }
                 for physical in &cell.physical_materials {
-                    if !physical.is_realized() || physical.material.is_empty() { continue; }
-                    let Some(placements) = &physical.placements else { continue; };
-                    for ((name, amount), placement) in physical.material.parts.iter().zip(placements.iter()) {
-                        if (*amount - 1.0).abs() > 1e-9 { continue; }
-                        let Some(base) = environment.catalog.iter().find(|b| b.name == *name) else { continue; };
-                        let blocker = PlacedMaterialPart { part_index: 1, form: base.shape.form.clone(), placement: *placement };
-                        if crate::material_geometry::placed_forms_overlap(&moved, &blocker, 0.0) { return true; }
+                    if !physical.is_realized() || physical.material.is_empty() {
+                        continue;
+                    }
+                    let Some(placements) = &physical.placements else {
+                        continue;
+                    };
+                    for ((name, amount), placement) in
+                        physical.material.parts.iter().zip(placements.iter())
+                    {
+                        if (*amount - 1.0).abs() > 1e-9 {
+                            continue;
+                        }
+                        let Some(base) = environment.catalog.iter().find(|b| b.name == *name)
+                        else {
+                            continue;
+                        };
+                        let blocker = PlacedMaterialPart {
+                            part_index: 1,
+                            form: base.shape.form.clone(),
+                            placement: *placement,
+                        };
+                        if crate::material_geometry::placed_forms_overlap(&moved, &blocker, 0.0) {
+                            return true;
+                        }
                     }
                 }
             }
@@ -116,8 +187,19 @@ mod tests {
         let environment = simulation.environment.clone();
         let mut organism = simulation.organisms[0].clone();
         let anchor = organism.occupied_cells[0].clone();
-        let placements: Vec<_> = organism.structure.units.iter().map(|u| (u.placement.x, u.placement.y)).collect();
-        assert!(Simulation::try_move_cell(&mut organism, &environment, &[], 12.0, -7.0));
+        let placements: Vec<_> = organism
+            .structure
+            .units
+            .iter()
+            .map(|u| (u.placement.x, u.placement.y))
+            .collect();
+        assert!(Simulation::try_move_cell(
+            &mut organism,
+            &environment,
+            &[],
+            12.0,
+            -7.0
+        ));
         assert!((organism.occupied_cells[0].x - anchor.x - 12.0).abs() < 1e-9);
         assert!((organism.occupied_cells[0].y - anchor.y + 7.0).abs() < 1e-9);
         for (unit, (x, y)) in organism.structure.units.iter().zip(placements) {
@@ -133,8 +215,20 @@ mod tests {
         let mut organism = simulation.organisms[0].clone();
         organism.occupied_cells[0].x = 0.0;
         organism.occupied_cells[0].y = 0.0;
-        assert!(!Simulation::try_move_cell(&mut organism, &environment, &[], -10.0, -10.0));
-        assert!(!Simulation::try_move_cell(&mut organism, &environment, &[], f64::NAN, 1.0));
+        assert!(!Simulation::try_move_cell(
+            &mut organism,
+            &environment,
+            &[],
+            -10.0,
+            -10.0
+        ));
+        assert!(!Simulation::try_move_cell(
+            &mut organism,
+            &environment,
+            &[],
+            f64::NAN,
+            1.0
+        ));
     }
 
     #[test]
@@ -146,9 +240,18 @@ mod tests {
         blocker.id = "blocker".to_string();
         let x = organism.structure.units[0].placement.x;
         let y = organism.structure.units[0].placement.y;
-        for unit in &mut blocker.structure.units { unit.placement.x = x + 4.0; unit.placement.y = y; }
+        for unit in &mut blocker.structure.units {
+            unit.placement.x = x + 4.0;
+            unit.placement.y = y;
+        }
         let old_anchor = organism.occupied_cells[0].clone();
-        assert!(!Simulation::try_move_cell(&mut organism, &environment, &[blocker], 5.0, 0.0));
+        assert!(!Simulation::try_move_cell(
+            &mut organism,
+            &environment,
+            &[blocker],
+            5.0,
+            0.0
+        ));
         assert_eq!(organism.occupied_cells[0], old_anchor);
     }
 }
