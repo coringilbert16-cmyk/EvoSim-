@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 4 is in **P4.4 complete / P4.5 next**. P4.0 established the movement authority audit, P4.1 established the canonical movement boundary, P4.2 established the approved collision/contact policy and implementation, and P4.3 established atomic pushing/displacement interactions.
+Phase 4 is **COMPLETE**. P4.0 established the movement authority audit, P4.1 established the canonical movement boundary, P4.2 established the approved collision/contact policy and implementation, and P4.3 established atomic pushing/displacement interactions.
 
 ## Phase 4 objective
 
@@ -232,36 +232,41 @@ Movement now has an explicit directional-resolution boundary: the existing memor
 
 `perception_radius` and `sensory_resolution` remain perception-layer controls, while `directional_resolution` remains applied by the existing perception system when producing `resource_sense`; movement consumes that already-produced directional state rather than reimplementing perception.
 
-### P4.5 — Contract tests and audit
+### P4.5 — Contract tests and audit — COMPLETE
 
-Add tests covering:
+The final authority audit confirms that the simulation decision path delegates movement to `Simulation::update_movement`, while `Simulation::try_move_cell` remains the canonical movement commit boundary. The simulation no longer wraps that boundary in a second environment trial/commit layer.
 
-- intrinsic realization unchanged by world movement,
-- translation/rotation consistency,
-- collision against physical environmental material,
-- organism-organism contact,
-- pushing where already specified,
-- no duplicate/parallel physical authority,
-- and movement failure without partial mutation.
+Contract coverage now includes:
 
-Run formatting, architecture checks, and the full test suite. Report any unavailable CI separately.
+- intrinsic realized material composition and internal connections surviving movement,
+- world translation of realized material without changing its intrinsic realization,
+- touching without penetration remaining non-blocking,
+- organism push chains propagating atomically,
+- failed push chains leaving every affected organism unchanged,
+- realized physical environmental material being pushed and reindexed,
+- structured aggregate material blocking movement,
+- and movement rejection without partial mutation.
+
+The audit found no second movement executor or parallel movement-position authority. Movement continues to consume existing directional state rather than implementing a new perception system.
+
+**Validation:** GitHub Actions run 2415 passed formatting, source-size checks, COMBINE architecture checks, the full Rust test suite (197 tests), and strict Clippy on the final P4.5 head.
 
 ## Completion criteria
 
 Phase 4 is complete only when:
 
-- [ ] All movement entry points and consumers are audited.
-- [ ] One canonical movement boundary is established.
-- [ ] Intrinsic physical material realization survives movement unchanged.
-- [ ] World placement is treated as contextual state rather than material identity.
-- [ ] Collision/contact uses derived geometry from canonical physical state.
-- [ ] Existing pushing behavior, where specified, uses physical interaction.
-- [ ] No new biological role or obstacle category is introduced.
+- [x] All movement entry points and consumers are audited.
+- [x] One canonical movement boundary is established.
+- [x] Intrinsic physical material realization survives movement unchanged.
+- [x] World placement is treated as contextual state rather than material identity.
+- [x] Collision/contact uses derived geometry from canonical physical state.
+- [x] Existing pushing behavior, where specified, uses physical interaction.
+- [x] No new biological role or obstacle category is introduced.
 - [x] Movement-related genome/internal-state inputs use only already-approved semantics.
-- [ ] Contract tests cover the movement authority boundary.
-- [ ] Full test suite passes.
-- [ ] Formatting and architecture checks pass.
-- [ ] Remaining Clippy debt is reported separately rather than suppressed.
+- [x] Contract tests cover the movement authority boundary.
+- [x] Full test suite passes.
+- [x] Formatting and architecture checks pass.
+- [x] Remaining Clippy debt is reported separately rather than suppressed.
 
 ## Phase 4 stop conditions
 
