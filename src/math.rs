@@ -1,3 +1,4 @@
+#![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 /// Shared transformation math. Reactivity uses this exponential everywhere
 /// (affinity, combine cost, break yield). Spec §11, locked by design answers.
 pub fn complexity(n: f64) -> f64 {
