@@ -208,7 +208,7 @@ fn add_boundary(
     scale: f64,
 ) {
     let hs = 1.511_858 / 2.0;
-    let off = 1.677_2175;
+    let off = 1.677_217_5;
     let start = elements.len();
     let x = region.center_x;
     let y = region.center_y;
