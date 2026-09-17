@@ -237,6 +237,7 @@ pub fn connection_pair_candidates(
         .collect()
 }
 
+#[allow(dead_code)]
 pub fn contacting_connection_pair_candidates(
     s: &OrganismStructure,
     ua: usize,
