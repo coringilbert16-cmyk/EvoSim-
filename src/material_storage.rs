@@ -72,6 +72,13 @@ impl MaterialStorage {
         self.iter_materials().cloned().collect()
     }
 
+    pub(crate) fn physical_count(&self) -> usize {
+        self.entries
+            .iter()
+            .filter(|entry| matches!(entry, StoredMaterial::Physical(_)))
+            .count()
+    }
+
     fn is_discrete(material: &Material) -> bool {
         material.parts.iter().all(|(_, amount)| {
             amount.is_finite() && *amount > 0.0 && amount.fract().abs() <= MATERIAL_EPSILON
@@ -265,6 +272,7 @@ mod tests {
             Placement { x: 10.838, y: 20.0, rotation_radians: 0.75 },
         ];
         assert!(storage.store_physical(m.clone(), placements, &catalog()));
+        assert_eq!(storage.physical_count(), 1);
         let restored = storage.take_matching_physical(&m).expect("stored instance");
         assert_eq!(restored.material, m);
         let intrinsic = restored.placements.expect("intrinsic realization");
@@ -282,6 +290,7 @@ mod tests {
         let m = Material::free_base("Carbon", 1.0);
         let placements = vec![Placement { x: 10.0, y: 20.0, rotation_radians: 0.25 }];
         assert!(storage.store_physical(m.clone(), placements, &catalog()));
+        assert_eq!(storage.physical_count(), 1);
         let restored = storage.take_matching_physical(&m).expect("stored instance");
         assert_eq!(restored.material, m);
         let intrinsic = restored.placements.expect("intrinsic realization");
