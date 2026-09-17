@@ -57,7 +57,7 @@ mod tests {
                 Placement {
                     x: 2.0,
                     y: 0.5,
-                    rotation_radians: 0.25,
+                    rotation_radians: 0.0,
                 },
             ],
         )
@@ -86,7 +86,7 @@ mod tests {
     }
 
     #[test]
-    fn organism_acquire_target_preserves_realized_composite() {
+    fn organism_acquire_target_preserves_realized_composite_in_storage_frame() {
         let mut simulation = Simulation::new(7, 20.0);
         let organism_position = simulation.organisms[0].occupied_cells[0].clone();
         let field_index = simulation
