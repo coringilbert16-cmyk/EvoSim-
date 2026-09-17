@@ -640,7 +640,7 @@ mod tests {
         ));
     }
 
-    
+
     #[test]
     fn failed_push_chain_is_atomic_for_all_affected_objects() {
         let simulation = Simulation::new(7, 20.0);
