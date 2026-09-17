@@ -1,4 +1,5 @@
 name: phase3-legacy-structure
+# Phase 3 migration verifier
 on:
   push:
     branches: [phase3-physical-structure-authority]
