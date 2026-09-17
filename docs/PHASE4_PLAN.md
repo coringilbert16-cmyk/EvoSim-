@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 4 is prepared for implementation. This document defines the implementation boundary; it does not authorize redesign of unrelated systems.
+Phase 4 is in **P4.0 audit complete / P4.1 implementation ready**. The audit was performed against the post-Phase-3 `main` state. No movement mechanics were changed during P4.0.
 
 ## Phase 4 objective
 
@@ -68,6 +68,59 @@ Perception is adjacent infrastructure but is not automatically expanded into a n
 
 The existing bounded perception radius and directional/sensory resolution should be audited for movement consumption. Any missing behavioral definition must be surfaced for approval.
 
+## P4.0 movement authority audit
+
+### Audit result
+
+The current repository has a single named movement execution entry point: `Simulation::update_movement` in `src/movement.rs`. The simulation decision loop calls that function when `ActionKind::Move` is selected. There is no second movement executor identified by the current code search.
+
+### Current movement behavior observed
+
+1. Movement reads `memory_strength`, `movement_efficiency`, the organism's memory points, and the existing `resource_sense` direction.
+2. The first `occupied_cells` position is used as the movement anchor.
+3. A normalized direction is calculated from memory and resource-sense inputs.
+4. The current implementation uses a fixed `STEP_DISTANCE` of `5.0`, multiplied by the genome's `movement_efficiency`.
+5. The first occupied cell is directly translated and clamped to environment bounds.
+6. The same translation delta is then applied directly to every `StructuralUnit.placement` in the physical graph.
+7. The current movement function does not perform physical collision/contact validation before committing the displacement.
+8. The current movement function does not perform pushing.
+9. The current movement function does not rotate the organism.
+10. The current movement function does not consume movement energy directly.
+11. Movement failure is currently represented by a boolean and can occur for an active transformation, zero direction, or zero resulting displacement.
+
+The implementation therefore has a movement transform, but it does **not yet satisfy the Phase 4 authority boundary** for physical collision/contact and pushing.
+
+### Coordinate/authority findings
+
+- `Organism.occupied_cells[0]` currently acts as the locomotion/world-position anchor.
+- `StructuralUnit.placement` is currently stored in world-space coordinates and is translated alongside the anchor.
+- The physical graph itself is therefore already involved in movement, but the movement API is not yet expressed as a canonical physical transform over the graph.
+- Intrinsic `PhysicalMaterial` realization is distinct from world placement in the Phase 3 storage/transfer model; movement must preserve that distinction.
+- `ConnectionEndpoint::world_point` derives world-space endpoint positions from unit placement and intrinsic endpoint data, which provides an existing geometry basis for later collision/contact work.
+- `contact.rs` already provides connection/contact candidate calculations from structural units and derived geometry, including fluid endpoints. It does not currently constitute a movement solver.
+
+### Caller audit
+
+The current simulation decision path selects `ActionKind::Move` and invokes `Simulation::update_movement`. Decision selection remains outside the movement mechanics, as required. Movement-related eligibility is also checked before selection through the existing `ActionEligibility` path.
+
+### Memory/perception audit
+
+The movement function currently combines existing memory-derived direction with `resource_sense.direction_x/y`. Memory maintenance and perception are separate systems. The movement implementation therefore consumes existing directional state rather than implementing its own sensory search.
+
+However, the exact behavioral semantics of `directional_resolution`, `sensory_resolution`, and the bounded `perception_radius` as movement modifiers are not established by P4.0. They must not be invented during P4.4.
+
+### Existing physical interaction infrastructure
+
+The repository already contains derived contact/connection geometry in `src/contact.rs`, including endpoint generation, world-point calculation, facing compatibility, distance checks, and contact candidate filtering. `src/structure.rs` owns physical constituent placement and bond data. These are the systems P4.1/P4.2 should build on rather than introducing a parallel occupancy representation.
+
+### P4.0 conclusion
+
+**P4.0 is complete.** The current movement implementation is identified as a legacy/simple transform that must be hardened rather than duplicated.
+
+The first implementation target is therefore **P4.1: establish one canonical movement boundary** around the existing transform while preserving current approved directional inputs. P4.2 will then move collision/contact validation into that boundary using derived geometry from canonical physical state.
+
+No unspecified physical rule was selected during P4.0.
+
 ## Explicit non-goals
 
 Phase 4 does not redesign:
@@ -87,23 +140,11 @@ The newly approved developmental-field blueprint is a separate future migration 
 
 ## Phase 4 implementation sequence
 
-### P4.0 — Audit before code
+### P4.0 — Audit before code — COMPLETE
 
 Audit every current movement entry point and every caller of movement, collision, contact, pushing, translation, and rotation.
 
-Identify:
-
-- current movement authority,
-- current world/local coordinate assumptions,
-- geometry consumers,
-- collision consumers,
-- existing tests,
-- legacy movement representations,
-- and any undefined behavior.
-
-Stop for approval if the repository does not already define a required behavior.
-
-### P4.1 — Canonical movement boundary
+### P4.1 — Canonical movement boundary — NEXT
 
 Establish one movement boundary that accepts a proposed physical displacement/transform and operates on the canonical organism structure.
 
