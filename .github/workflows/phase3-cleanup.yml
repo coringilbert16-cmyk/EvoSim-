@@ -16,18 +16,21 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           replacements = {
-              'src/combine_runtime.rs': [
-                  ('organism.stored_material.materials.first()?.clone()', 'organism.stored_material.first_material()?'),
+              'src/reproduction.rs': [
+                  ('.materials\n        .iter()\n        .find(|m| **m == construction.child_genome.juvenile_reserve)', '.iter_materials()\n        .find(|m| **m == construction.child_genome.juvenile_reserve)'),
               ],
               'src/simulation.rs': [
-                  ('for material in organism.stored_material.materials.iter().cloned() {', 'for material in organism.stored_material.iter_materials().cloned() {'),
+                  ('for material in construction.committed_material.materials.iter().cloned() {', 'for material in construction.committed_material.iter_materials().cloned() {'),
               ],
               'src/simulation_tests.rs': [
                   ('o.stored_material.materials,', 'o.stored_material.materials_snapshot(),'),
                   ('o.stored_material.materials.len()', 'o.stored_material.len()'),
+                  ('o.stored_material.materials.contains(&m)', 'o.stored_material.materials_snapshot().contains(&m)'),
+                  ('s.organisms[0].stored_material.materials.contains(&m)', 's.organisms[0].stored_material.materials_snapshot().contains(&m)'),
               ],
               'src/phase2_structure_contract_tests.rs': [
                   ('organism.stored_material.materials.len()', 'organism.stored_material.len()'),
+                  ('.physical_instances\n        .iter()\n        .filter(|entry| entry.is_some())\n        .count()', '.physical_count()'),
               ],
           }
           for name, pairs in replacements.items():
@@ -48,5 +51,5 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src
           git diff --cached --quiet && exit 0
-          git commit -m 'Phase 3: migrate storage consumers to consolidated entries'
+          git commit -m 'Phase 3: migrate remaining storage consumers'
           git push
