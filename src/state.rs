@@ -1,3 +1,4 @@
+#![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 use crate::decision::{DecisionHistory, DecisionParameters};
 use crate::decomposition::DecomposingBody;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
