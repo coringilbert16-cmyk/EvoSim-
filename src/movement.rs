@@ -546,6 +546,46 @@ mod tests {
     }
 
     #[test]
+    fn movement_propagates_an_organism_push_chain_atomically() {
+        let simulation = Simulation::new(7, 20.0);
+        let mut environment = empty_environment(&simulation);
+        let mut organism = simulation.organisms[0].clone();
+        let mut first = simulation.organisms[0].clone();
+        let mut second = simulation.organisms[0].clone();
+        first.id = "first".to_string();
+        second.id = "second".to_string();
+        let x = organism.structure.units[0].placement.x;
+        let y = organism.structure.units[0].placement.y;
+        for unit in &mut first.structure.units {
+            unit.placement.x = x + 6.0;
+            unit.placement.y = y;
+        }
+        for unit in &mut second.structure.units {
+            unit.placement.x = x + 12.0;
+            unit.placement.y = y;
+        }
+        let first_before = first.structure.units[0].placement.x;
+        let second_before = second.structure.units[0].placement.x;
+        let mut others = vec![first, second];
+        assert!(Simulation::try_move_cell(
+            &mut organism,
+            &mut environment,
+            &mut others,
+            5.0,
+            0.0
+        ));
+        assert_eq!(organism.structure.units[0].placement.x, x + 5.0);
+        assert_eq!(
+            others[0].structure.units[0].placement.x,
+            first_before + 5.0
+        );
+        assert_eq!(
+            others[1].structure.units[0].placement.x,
+            second_before + 5.0
+        );
+    }
+
+    #[test]
     fn movement_pushes_realized_physical_material_and_reindexes_it() {
         let simulation = Simulation::new(7, 20.0);
         let mut environment = empty_environment(&simulation);
