@@ -25,7 +25,7 @@ jobs:
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add -A
             git commit -m "chore: format phase 1 changes"
-            git push
+            git push origin HEAD:phase1-physical-authority
           fi
       - name: Check formatting
         run: cargo fmt --all -- --check
