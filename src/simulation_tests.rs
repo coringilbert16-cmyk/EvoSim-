@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod integration_tests {
     use crate::decision::{ActionKind, OutcomeKind};
+    use crate::physical_material::PhysicalMaterial;
     use crate::resources::{InternalBond, Material};
     use crate::state::{DevelopmentStage, Simulation};
     use crate::structure::{Bond, BondEndpoint, ConnectionEndpoint, Placement, StructuralUnit};
@@ -13,6 +14,28 @@ mod integration_tests {
                 part_b: 1,
             }],
         }
+    }
+
+    fn realized_structured_carbon_hydrogen(
+        catalog: &[crate::resources::BaseResource],
+    ) -> PhysicalMaterial {
+        PhysicalMaterial::realized(
+            structured_carbon_hydrogen(),
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 1.0,
+                    y: 0.0,
+                    rotation_radians: 0.25,
+                },
+            ],
+            catalog,
+        )
+        .expect("test composite must have a valid physical realization")
     }
 
     #[test]
@@ -108,6 +131,7 @@ mod integration_tests {
         s.environment
             .field
             .deposit_at_index(i, Material::free_base("Carbon", 10.0));
+        s.organisms[0].usable_energy = 0.0;
         s.organisms[0].decision_history.record(
             ActionKind::Acquire,
             Some(format!("target:{i}")),
@@ -130,13 +154,18 @@ mod integration_tests {
             .unwrap();
         s.environment.field.cells[i].materials.clear();
         let m = structured_carbon_hydrogen();
-        s.environment.field.deposit_at_index(i, m.clone());
+        let physical = realized_structured_carbon_hydrogen(&s.environment.catalog);
+        s.environment
+            .field
+            .deposit_physical_at_index(i, physical);
+        s.organisms[0].usable_energy = 0.0;
         s.organisms[0].decision_history.record(
             ActionKind::Acquire,
             Some(format!("target:{i}")),
             OutcomeKind::Beneficial,
         );
         s.step();
+        assert!(s.environment.field.cells[i].physical_materials.is_empty());
         assert!(s.environment.field.cells[i].materials.is_empty());
         assert!(s.organisms[0].stored_material.materials.contains(&m));
     }
@@ -201,6 +230,7 @@ mod integration_tests {
     fn break_action_starts_a_transformation_before_resolution() {
         let mut s = Simulation::new(7, 10.0);
         add_test_break_bond(&mut s);
+        s.organisms[0].usable_energy = 0.0;
         s.step();
         assert_eq!(s.organisms[0].structure.bonds.len(), 1);
         assert!(s.organisms[0].active_transformation_id.is_some());
@@ -209,6 +239,7 @@ mod integration_tests {
     fn break_resolution_changes_state_on_expected_tick() {
         let mut s = Simulation::new(7, 10.0);
         add_test_break_bond(&mut s);
+        s.organisms[0].usable_energy = 0.0;
         s.step();
         s.step();
         s.step();
