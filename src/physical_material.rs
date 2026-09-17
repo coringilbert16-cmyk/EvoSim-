@@ -75,10 +75,9 @@ impl PhysicalMaterial {
             let candidate =
                 connection_pair_candidates(&structure, bond.part_a, bond.part_b, catalog)
                     .into_iter()
-                    .filter(|candidate| {
+                    .find(|candidate| {
                         candidate.available_a && candidate.available_b && candidate.distance <= 1.0
-                    })
-                    .next()?;
+                    })?;
             internal_connections.push(PhysicalMaterialBond {
                 part_a: bond.part_a,
                 endpoint_a: candidate.endpoint_a,
@@ -122,27 +121,6 @@ impl PhysicalMaterial {
             material: self.material,
             placements: Some(rebased),
             internal_connections: self.internal_connections,
-        })
-    }
-
-    /// Return the same intrinsic physical material translated into world space.
-    /// Internal endpoint identities are unchanged because they are local to each
-    /// constituent; only constituent placement is transformed by the origin.
-    pub(crate) fn translated(&self, origin: Placement) -> Option<Self> {
-        let placements = self.placements.as_ref()?;
-        let (sin, cos) = origin.rotation_radians.sin_cos();
-        let translated = placements
-            .iter()
-            .map(|relative| Placement {
-                x: origin.x + relative.x * cos - relative.y * sin,
-                y: origin.y + relative.x * sin + relative.y * cos,
-                rotation_radians: origin.rotation_radians + relative.rotation_radians,
-            })
-            .collect();
-        Some(Self {
-            material: self.material.clone(),
-            placements: Some(translated),
-            internal_connections: self.internal_connections.clone(),
         })
     }
 }
