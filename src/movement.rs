@@ -403,7 +403,6 @@ fn translate_organism(organism: &mut Organism, dx: f64, dy: f64) {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
