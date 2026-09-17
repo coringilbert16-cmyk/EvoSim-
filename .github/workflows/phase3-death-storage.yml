@@ -17,7 +17,6 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-
           storage = Path('src/material_storage.rs')
           text = storage.read_text()
           marker = '''    pub(crate) fn materials_snapshot(&self) -> Vec<Material> {\n        self.iter_materials().cloned().collect()\n    }\n'''
@@ -25,13 +24,11 @@ jobs:
           if 'pub(crate) fn drain_entries' not in text:
               if marker not in text:
                   raise SystemExit('storage insertion marker not found')
-              text = text.replace(marker, insert, 1)
-              storage.write_text(text)
-
+              storage.write_text(text.replace(marker, insert, 1))
           simulation = Path('src/simulation.rs')
           text = simulation.read_text()
           old = '''        for material in organism.stored_material.iter_materials().cloned() {\n            environment.field.deposit(position.x, position.y, material);\n        }\n        if let Some(construction) = &organism.reproductive_construction {\n            for material in construction.committed_material.iter_materials().cloned() {\n                environment.field.deposit(position.x, position.y, material);\n            }\n        }\n'''
-          new = '''        for entry in organism.stored_material.drain_entries() {\n            match entry {\n                crate::material_storage::StoredMaterial::Logical(material) => {\n                    environment.field.deposit(position.x, position.y, material);\n                }\n                crate::material_storage::StoredMaterial::Physical(material) => {\n                    environment.field.deposit(position.x, position.y, material);\n                }\n            }\n        }\n        if let Some(construction) = organism.reproductive_construction.take() {\n            for entry in construction.committed_material.drain_entries() {\n                match entry {\n                    crate::material_storage::StoredMaterial::Logical(material) => {\n                        environment.field.deposit(position.x, position.y, material);\n                    }\n                    crate::material_storage::StoredMaterial::Physical(material) => {\n                        environment.field.deposit(position.x, position.y, material);\n                    }\n                }\n            }\n        }\n'''
+          new = '''        for entry in organism.stored_material.drain_entries() {\n            match entry {\n                crate::material_storage::StoredMaterial::Logical(material) => {\n                    environment.field.deposit(position.x, position.y, material);\n                }\n                crate::material_storage::StoredMaterial::Physical(material) => {\n                    environment.field.deposit(position.x, position.y, material);\n                }\n            }\n        }\n        if let Some(mut construction) = organism.reproductive_construction.take() {\n            for entry in construction.committed_material.drain_entries() {\n                match entry {\n                    crate::material_storage::StoredMaterial::Logical(material) => {\n                        environment.field.deposit(position.x, position.y, material);\n                    }\n                    crate::material_storage::StoredMaterial::Physical(material) => {\n                        environment.field.deposit(position.x, position.y, material);\n                    }\n                }\n            }\n        }\n'''
           if old not in text:
               raise SystemExit('death storage block not found')
           simulation.write_text(text.replace(old, new, 1))
