@@ -83,6 +83,7 @@ impl Simulation {
         ) {
             return false;
         }
+        reindex_physical_materials(&mut trial_environment);
 
         organism.occupied_cells[0].x = new_x;
         organism.occupied_cells[0].y = new_y;
@@ -96,6 +97,23 @@ impl Simulation {
         }
         *environment = trial_environment;
         true
+    }
+}
+
+fn reindex_physical_materials(environment: &mut Environment) {
+    let mut physical_materials = Vec::new();
+    for cell in &mut environment.field.cells {
+        physical_materials.append(&mut cell.physical_materials);
+    }
+    for physical in physical_materials {
+        let Some(placement) = physical.placements.as_ref().and_then(|placements| placements.first())
+        else {
+            continue;
+        };
+        let Some(index) = environment.field.index_for_position(placement.x, placement.y) else {
+            continue;
+        };
+        environment.field.cells[index].physical_materials.push(physical);
     }
 }
 
