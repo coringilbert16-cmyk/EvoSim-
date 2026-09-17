@@ -537,7 +537,7 @@ mod tests {
     #[test]
     fn touching_another_organism_does_not_block_movement() {
         let simulation = Simulation::new(7, 20.0);
-        let environment = empty_environment(&simulation);
+        let mut environment = empty_environment(&simulation);
         let mut organism = simulation.organisms[0].clone();
         let mut blocker = simulation.organisms[0].clone();
         blocker.id = "touching".to_string();
