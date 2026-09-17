@@ -22,6 +22,10 @@ jobs:
           updated, count = re.subn(pattern, '', s, count=1)
           if count != 1:
               raise SystemExit(f'expected one PhysicalMaterialInstance block, found {count}')
+          test_pattern = r'(?ms)^    #\[test\]\n    fn physical_instance_keeps_material_and_geometry_together\(\) \{.*?^    \}\n'
+          updated, test_count = re.subn(test_pattern, '', updated, count=1)
+          if test_count != 1:
+              raise SystemExit(f'expected one obsolete PhysicalMaterialInstance test, found {test_count}')
           p.write_text(updated)
           PY
           cargo fmt --all
