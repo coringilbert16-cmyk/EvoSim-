@@ -180,7 +180,11 @@ impl Simulation {
             || cell
                 .materials
                 .iter()
-                .any(|material| !material.is_empty() && material.is_valid())
+                .any(|material| {
+                    !material.is_empty()
+                        && material.is_valid()
+                        && !material.has_internal_structure()
+                })
         {
             vec![field_index]
         } else {
