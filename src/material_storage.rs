@@ -207,9 +207,9 @@ mod tests {
                 rotation_radians: 0.0,
             },
             Placement {
-                x: 1.0,
+                x: 0.838,
                 y: 0.0,
-                rotation_radians: 0.25,
+                rotation_radians: 0.0,
             },
         ];
         assert!(storage.store_physical(m.clone(), placements.clone(), &catalog()));
