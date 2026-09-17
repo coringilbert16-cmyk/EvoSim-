@@ -1,0 +1,35 @@
+name: phase3-cleanup
+on:
+  push:
+    branches: [phase3-physical-structure-authority]
+permissions:
+  contents: write
+jobs:
+  cleanup:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Remove obsolete PhysicalMaterialInstance
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/material_geometry.rs')
+          s = p.read_text()
+          old = '''#[derive(Clone, Debug, PartialEq)]\npub struct PhysicalMaterialInstance {\n    pub material: Material,\n    pub geometry: MaterialGeometry,\n}\nimpl PhysicalMaterialInstance {\n    pub fn new(\n        material: Material,\n        placements: &[Placement],\n        catalog: &[BaseResource],\n    ) -> Option<Self> {\n        Some(Self {\n            material: material.clone(),\n            geometry: MaterialGeometry::new(&material, placements, catalog)?,\n        })\n    }\n}\n'''
+          if old not in s:
+              raise SystemExit('expected PhysicalMaterialInstance definition not found')
+          p.write_text(s.replace(old, ''))
+          PY
+          cargo fmt --all
+          cargo test --all-targets
+      - name: Commit cleanup
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/material_geometry.rs
+          git diff --cached --quiet && exit 0
+          git commit -m 'Phase 3: remove obsolete PhysicalMaterialInstance abstraction'
+          git push
