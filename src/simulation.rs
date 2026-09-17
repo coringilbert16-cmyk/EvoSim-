@@ -439,7 +439,19 @@ impl Simulation {
                         for other in after.iter() {
                             others.push((*other).clone());
                         }
-                        let moved = Self::update_movement(organism, environment, &others);
+                        let mut trial_environment = environment.clone();
+                        let moved = Self::update_movement(
+                            organism,
+                            &mut trial_environment,
+                            &mut others,
+                        );
+                        if moved {
+                            *environment = trial_environment;
+                            for (original, trial) in before.iter_mut().chain(after.iter_mut()).zip(others) {
+                                original.occupied_cells = trial.occupied_cells;
+                                original.structure = trial.structure;
+                            }
+                        }
                         crate::decision_runtime::record_outcome(
                             &mut organism.decision_history,
                             &selected,
