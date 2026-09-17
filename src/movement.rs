@@ -706,13 +706,13 @@ mod tests {
         };
         let placements = vec![
             crate::structure::Placement {
-                x: x + 6.0,
+                x: x + 4.0,
                 y,
                 rotation_radians: 0.0,
             },
             crate::structure::Placement {
-                x: x + 9.0,
-                y,
+                x: x + 6.0,
+                y: y + 0.5,
                 rotation_radians: 0.0,
             },
         ];
@@ -739,7 +739,7 @@ mod tests {
         ));
         let moved_index = environment
             .field
-            .index_for_position(x + 11.0, y)
+            .index_for_position(x + 9.0, y)
             .expect("material must remain in bounds");
         let moved = environment.field.cells[moved_index]
             .physical_materials
