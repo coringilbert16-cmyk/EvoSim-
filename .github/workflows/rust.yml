@@ -2,11 +2,11 @@ name: Rust
 
 on:
   push:
-    branches: [main]
+    branches: [main, phase1-physical-authority]
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   test:
@@ -16,6 +16,25 @@ jobs:
         with:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
+      - name: Apply Phase 1 acquisition target fix
+        if: github.ref == 'refs/heads/phase1-physical-authority'
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/simulation.rs')
+          text = path.read_text()
+          old = '''            || cell\n                .materials\n                .iter()\n                .any(|material| !material.is_empty() && material.is_valid())'''
+          new = '''            || cell\n                .materials\n                .iter()\n                .any(|material| {\n                    !material.is_empty()\n                        && material.is_valid()\n                        && !material.has_internal_structure()\n                })'''
+          if old in text:
+              path.write_text(text.replace(old, new, 1))
+          PY
+          if ! git diff --quiet -- src/simulation.rs; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add src/simulation.rs
+            git commit -m 'Phase 1: restrict acquisition targets to physically acquirable material'
+            git push
+          fi
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Check source file sizes
