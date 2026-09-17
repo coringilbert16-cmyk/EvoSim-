@@ -475,10 +475,7 @@ mod tests {
             x + 5.0,
             y,
             crate::resources::Material {
-                parts: vec![
-                    ("Carbon".into(), 1.0),
-                    ("Hydrogen".into(), 1.0),
-                ],
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
                 internal_bonds: vec![crate::resources::InternalBond {
                     part_a: 0,
                     part_b: 1,
