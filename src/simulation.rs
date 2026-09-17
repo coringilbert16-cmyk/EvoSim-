@@ -300,10 +300,10 @@ impl Simulation {
         for entry in organism.stored_material.drain_entries() {
             match entry {
                 crate::material_storage::StoredMaterial::Logical(material) => {
-                    environment.field.deposit(position.x, position.y, material)
+                    environment.field.deposit(position.x, position.y, material);
                 }
                 crate::material_storage::StoredMaterial::Physical(material) => {
-                    environment.field.deposit(position.x, position.y, material)
+                    environment.field.deposit(position.x, position.y, material);
                 }
             }
         }
@@ -311,10 +311,10 @@ impl Simulation {
             for entry in construction.committed_material.drain_entries() {
                 match entry {
                     crate::material_storage::StoredMaterial::Logical(material) => {
-                        environment.field.deposit(position.x, position.y, material)
+                        environment.field.deposit(position.x, position.y, material);
                     }
                     crate::material_storage::StoredMaterial::Physical(material) => {
-                        environment.field.deposit(position.x, position.y, material)
+                        environment.field.deposit(position.x, position.y, material);
                     }
                 }
             }
@@ -428,10 +428,12 @@ impl Simulation {
                 };
                 match selected.action {
                     ActionKind::Move => {
+                        let organism_count = organisms.len();
                         let (before, rest) = organisms.split_at_mut(index);
                         let (organism, after) =
                             rest.split_first_mut().expect("index is in organisms");
-                        let mut others = Vec::with_capacity(organisms.len().saturating_sub(1));
+                        let mut others =
+                            Vec::with_capacity(organism_count.saturating_sub(1));
                         for other in before.iter() {
                             others.push((*other).clone());
                         }
