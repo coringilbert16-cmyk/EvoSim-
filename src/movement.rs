@@ -100,3 +100,82 @@ impl Simulation {
         true
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn try_move_cell_translates_anchor_and_realized_structure_together() {
+        let simulation = Simulation::new(7, 20.0);
+        let environment = simulation.environment.clone();
+        let mut organism = simulation.organisms[0].clone();
+        let original_anchor = organism.occupied_cells[0].clone();
+        let original_placements: Vec<(f64, f64)> = organism
+            .structure
+            .units
+            .iter()
+            .map(|unit| (unit.placement.x, unit.placement.y))
+            .collect();
+
+        assert!(Simulation::try_move_cell(
+            &mut organism,
+            &environment,
+            12.0,
+            -7.0,
+        ));
+
+        let moved_anchor = &organism.occupied_cells[0];
+        assert!((moved_anchor.x - (original_anchor.x + 12.0)).abs() < 1e-9);
+        assert!((moved_anchor.y - (original_anchor.y - 7.0)).abs() < 1e-9);
+        for (unit, (old_x, old_y)) in organism.structure.units.iter().zip(original_placements) {
+            assert!((unit.placement.x - (old_x + 12.0)).abs() < 1e-9);
+            assert!((unit.placement.y - (old_y - 7.0)).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn try_move_cell_reports_no_move_when_boundary_clamping_removes_displacement() {
+        let simulation = Simulation::new(7, 20.0);
+        let environment = simulation.environment.clone();
+        let mut organism = simulation.organisms[0].clone();
+        organism.occupied_cells[0].x = 0.0;
+        organism.occupied_cells[0].y = 0.0;
+
+        let original_placements: Vec<(f64, f64)> = organism
+            .structure
+            .units
+            .iter()
+            .map(|unit| (unit.placement.x, unit.placement.y))
+            .collect();
+
+        assert!(!Simulation::try_move_cell(
+            &mut organism,
+            &environment,
+            -10.0,
+            -10.0,
+        ));
+        assert_eq!(organism.occupied_cells[0].x, 0.0);
+        assert_eq!(organism.occupied_cells[0].y, 0.0);
+        for (unit, (old_x, old_y)) in organism.structure.units.iter().zip(original_placements) {
+            assert_eq!(unit.placement.x, old_x);
+            assert_eq!(unit.placement.y, old_y);
+        }
+    }
+
+    #[test]
+    fn try_move_cell_rejects_non_finite_displacement_without_mutation() {
+        let simulation = Simulation::new(7, 20.0);
+        let environment = simulation.environment.clone();
+        let mut organism = simulation.organisms[0].clone();
+        let original_anchor = organism.occupied_cells[0].clone();
+
+        assert!(!Simulation::try_move_cell(
+            &mut organism,
+            &environment,
+            f64::NAN,
+            1.0,
+        ));
+        assert_eq!(organism.occupied_cells[0], original_anchor);
+    }
+}
