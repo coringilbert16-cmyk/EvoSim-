@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 4 is in **P4.2 collision audit complete / implementation awaiting collision-policy approval**. P4.0 established the movement authority audit, P4.1 established the canonical movement boundary, and P4.2 has now audited the available collision/contact infrastructure without inventing a collision policy.
+Phase 4 is in **P4.3 complete / P4.4 next**. P4.0 established the movement authority audit, P4.1 established the canonical movement boundary, P4.2 established the approved collision/contact policy and implementation, and P4.3 established atomic pushing/displacement interactions.
 
 ## Phase 4 objective
 
@@ -137,35 +137,57 @@ Regression coverage was added for:
 
 **Validation status:** code and tests are committed, but repository CI/test execution has not yet been independently verified in this environment. Do not treat P4.1 as test-passing until CI or an equivalent full local test run provides evidence.
 
-## P4.2 — Collision/contact audit — AUDIT COMPLETE; IMPLEMENTATION BLOCKED ON POLICY
+## P4.2 — Collision/contact resolution — COMPLETE
 
-The repository contains a reusable geometric overlap primitive through `material_geometry::placed_forms_overlap`, and `structure.rs` already uses it through `units_strictly_overlap` to reject physically overlapping structural constituents. `contact.rs` provides derived endpoint/contact candidates, but no movement collision solver exists.
+P4.2 established the movement collision policy and implemented it at the canonical try_move_cell boundary.
 
-The audit found three distinct cases that must not be silently conflated:
+Approved rules:
 
-1. **Organism vs organism:** both sides have realized structural geometry, so proposed movement can be tested against the other organism's canonical physical graph.
-2. **Organism vs realized environmental material:** `ActiveMaterialField` can contain `physical_materials` carrying realized placements, so these objects can expose physical geometry for collision work.
-3. **Organism vs logical/aggregate environmental material:** `FieldCell.materials` is explicitly an aggregate stock for unstructured material and does not represent an existing composite or a physical object with a world geometry. Treating aggregate stock as an obstacle would create geometry that does not exist.
+- Collision is actual geometric penetration/overlap; touching is allowed.
+- Organism-organism penetration blocks movement at P4.2; pushing is deferred to P4.3.
+- Realized environmental physical material is physical and blocking.
+- Logical structured aggregate material occupies its field cell and is blocking; ordinary unstructured aggregate material is not a geometric obstacle.
+- Any collision in the proposed displacement rejects the entire movement.
+- No partial movement, sliding, restitution, friction, collision priority, or new force model was introduced.
 
-The first two cases can therefore be represented physically without adding a new obstacle category. The missing design decision is **what collision means for movement**.
+The implementation uses derived material_geometry::placed_forms_penetrate geometry over the organism's realized structural units and realized environmental physical material. The canonical movement boundary remains the only movement commit point.
 
-Before P4.2 code is added, the project must specify at minimum:
+Regression coverage includes:
 
-- whether strict geometric overlap is the condition that invalidates a movement, while mere contact/touching remains allowed;
-- whether an organism encountering another organism is blocked, connected/contacting, or eligible for pushing;
-- whether realized environmental material blocks movement, is physically displaced, or is otherwise interactable;
-- whether logical/aggregate environmental material is always passable because it has no realized geometry;
-- and, if multiple collisions occur in one proposed displacement, what resolution/priority rule applies.
+- geometric penetration blocking,
+- touching without blocking,
+- boundary/non-finite rejection,
+- structured aggregate material blocking,
+- and movement without partial mutation.
 
-These are not implementation details: they determine observable simulation behavior. P4.2 must not choose them implicitly.
+Validation: GitHub Actions run 2377 verified formatting, source-size checks, COMBINE architecture checks, and the full Rust test suite. Clippy remains failing on pre-existing repository-wide lint/dead-code findings outside this phase; it is not used as the P4.2/P4.3 acceptance gate.
 
-### P4.2 implementation target after approval
+## P4.3 — Pushing / displacement interactions — COMPLETE
 
-Once the collision policy is approved, `try_move_cell` remains the single commit boundary. The intended architecture is:
+P4.3 extends the canonical movement boundary so a proposed organism displacement can propagate through physically penetrated blockers.
 
-> proposed displacement → derived collision/contact evaluation → interaction resolution → one contextual world transform commit
+Approved rules:
 
-No second occupancy model should be introduced.
+- Organisms and realized environmental physical material can be pushed.
+- Every affected object receives the same contextual world displacement.
+- Push chains propagate through further penetrated organisms or realized physical material.
+- All affected objects are resolved as one atomic interaction chain.
+- If any affected object cannot translate or would enter a blocking structured aggregate field cell, the entire movement fails and no object is committed.
+- Touching alone does not propagate a push.
+- No mass/size threshold, force calculation, friction, momentum, deformation, movement-energy cost, or new pushing trait is introduced.
+- Intrinsic physical realization is preserved; pushing changes only contextual world placement.
+- Realized environmental material is reindexed by its world position after a successful movement so field-cell ownership remains consistent with its physical placement.
+
+Regression coverage includes:
+
+- single-organism pushing,
+- multi-organism push-chain propagation,
+- touching without pushing,
+- atomic failure against structured aggregate material,
+- realized physical-material pushing,
+- and physical-material field reindexing.
+
+Validation: GitHub Actions run 2377 verified formatting, source-size checks, COMBINE architecture checks, and the full Rust test suite successfully on the final P4.3 head. Clippy still fails on repository-wide pre-existing findings; the reported findings include unrelated architecture/environment dead-code and numeric-literal lint debt.
 
 ## Explicit non-goals
 
@@ -196,15 +218,13 @@ Establish one movement boundary that accepts a proposed physical displacement/tr
 
 It must preserve intrinsic material realization and update only contextual/world placement.
 
-### P4.2 — Collision/contact resolution — BLOCKED ON COLLISION POLICY
+### P4.2 — Collision/contact resolution — COMPLETE
 
-Migrate movement collision/contact checks to derived geometry over canonical physical state after the policy above is explicitly approved.
+Implement the approved penetration/contact policy at the canonical movement boundary using derived physical geometry.
 
-Do not create a second occupancy authority.
+### P4.3 — Pushing / displacement interactions — COMPLETE
 
-### P4.3 — Pushing / displacement interactions
-
-Preserve or migrate the existing pushing behavior so it operates on physical contact rather than abstract organism roles.
+Resolve organism and realized-material push chains atomically through the canonical movement boundary while preserving intrinsic realization.
 
 ### P4.4 — Movement memory/directional integration
 
