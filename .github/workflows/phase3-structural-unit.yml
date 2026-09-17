@@ -5,42 +5,13 @@ on:
 permissions:
   contents: write
 jobs:
-  migrate:
+  verify:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Remove composite StructuralUnit construction path
+      - name: Verify composite StructuralUnit guard
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('src/structure.rs')
-          text = p.read_text()
-          old = '''        if !material.is_valid() || material.is_empty() {\n            return None;\n        }'''
-          new = '''        if !material.is_valid() || material.is_empty() || material.has_internal_structure() {\n            return None;\n        }'''
-          if text.count(old) != 1:
-              raise SystemExit(f'expected exactly one StructuralUnit::from_material guard, found {text.count(old)}')
-          p.write_text(text.replace(old, new, 1))
-
-          p = Path('src/structure_authority.rs')
-          text = p.read_text()
-          start = text.find('    #[test]\n    fn structured_unit_is_reported_without_being_silently_rewritten() {')
-          if start < 0:
-              raise SystemExit('structured-unit audit test not found')
-          end = text.find('\n    #[test]', start + 10)
-          if end < 0:
-              raise SystemExit('next structure authority test not found')
-          replacement = '''    #[test]\n    fn composite_material_cannot_become_a_structural_unit() {\n        let material = Material {\n            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],\n            internal_bonds: vec![InternalBond {\n                part_a: 0,\n                part_b: 1,\n            }],\n        };\n        assert!(StructuralUnit::from_material(material, placement(0.0, 0.0)).is_none());\n    }\n'''
-          text = text[:start] + replacement + text[end:]
-          p.write_text(text)
-          PY
-          cargo fmt --all
+          grep -F 'material.has_internal_structure()' src/structure.rs
+          cargo fmt --all -- --check
           cargo test --all-targets
-      - name: Commit migration
-        run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add src
-          git diff --cached --quiet && exit 0
-          git commit -m 'Phase 3: prevent composite material from masquerading as StructuralUnit'
-          git push
