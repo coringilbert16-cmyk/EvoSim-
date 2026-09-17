@@ -157,7 +157,10 @@ mod tests {
     fn compound() -> Material {
         Material {
             parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
-            internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
+            internal_bonds: vec![InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
         }
     }
     fn catalog() -> Vec<BaseResource> {
@@ -200,8 +203,16 @@ mod tests {
         let mut storage = MaterialStorage::default();
         let m = compound();
         let placements = vec![
-            Placement { x: 10.0, y: 20.0, rotation_radians: 0.5 },
-            Placement { x: 10.838, y: 20.0, rotation_radians: 0.75 },
+            Placement {
+                x: 10.0,
+                y: 20.0,
+                rotation_radians: 0.5,
+            },
+            Placement {
+                x: 10.838,
+                y: 20.0,
+                rotation_radians: 0.75,
+            },
         ];
         assert!(storage.store_physical(m.clone(), placements, &catalog()));
         let restored = storage.take_matching_physical(&m).expect("stored instance");
@@ -218,7 +229,11 @@ mod tests {
     fn physical_single_constituent_is_stored_with_its_realization() {
         let mut storage = MaterialStorage::default();
         let m = Material::free_base("Carbon", 1.0);
-        let placements = vec![Placement { x: 10.0, y: 20.0, rotation_radians: 0.25 }];
+        let placements = vec![Placement {
+            x: 10.0,
+            y: 20.0,
+            rotation_radians: 0.25,
+        }];
         assert!(storage.store_physical(m.clone(), placements, &catalog()));
         let restored = storage.take_matching_physical(&m).expect("stored instance");
         assert_eq!(restored.material, m);
