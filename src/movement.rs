@@ -639,4 +639,120 @@ mod tests {
             0.0
         ));
     }
-}
+
+    
+    #[test]
+    fn failed_push_chain_is_atomic_for_all_affected_objects() {
+        let simulation = Simulation::new(7, 20.0);
+        let mut environment = empty_environment(&simulation);
+        let mut organism = simulation.organisms[0].clone();
+        let mut first = simulation.organisms[0].clone();
+        let mut second = simulation.organisms[0].clone();
+        first.id = "first".to_string();
+        second.id = "second".to_string();
+        let x = organism.structure.units[0].placement.x;
+        let y = organism.structure.units[0].placement.y;
+        for unit in &mut first.structure.units {
+            unit.placement.x = x + 6.0;
+            unit.placement.y = y;
+        }
+        for unit in &mut second.structure.units {
+            unit.placement.x = x + 12.0;
+            unit.placement.y = y;
+        }
+        let aggregate_x = x + 17.0;
+        environment.field.deposit(
+            aggregate_x,
+            y,
+            crate::resources::Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: vec![crate::resources::InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+        );
+        let organism_before = organism.structure.clone();
+        let first_before = first.structure.clone();
+        let second_before = second.structure.clone();
+        let mut others = vec![first, second];
+        assert!(!Simulation::try_move_cell(
+            &mut organism,
+            &mut environment,
+            &mut others,
+            5.0,
+            0.0
+        ));
+        assert_eq!(organism.structure, organism_before);
+        assert_eq!(others[0].structure, first_before);
+        assert_eq!(others[1].structure, second_before);
+    }
+
+    #[test]
+    fn moving_realized_material_preserves_intrinsic_realization() {
+        let simulation = Simulation::new(7, 20.0);
+        let mut environment = empty_environment(&simulation);
+        let mut organism = simulation.organisms[0].clone();
+        let x = organism.structure.units[0].placement.x;
+        let y = organism.structure.units[0].placement.y;
+        let material = crate::resources::Material {
+            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+            internal_bonds: vec![crate::resources::InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
+        };
+        let placements = vec![
+            crate::structure::Placement {
+                x: x + 6.0,
+                y,
+                rotation_radians: 0.0,
+            },
+            crate::structure::Placement {
+                x: x + 9.0,
+                y,
+                rotation_radians: 0.0,
+            },
+        ];
+        let physical = crate::physical_material::PhysicalMaterial::realized(
+            material,
+            placements,
+            &environment.catalog,
+        )
+        .expect("realized bonded material should be valid");
+        let original = physical.clone();
+        let original_index = environment
+            .field
+            .index_for_position(placements[0].x, placements[0].y)
+            .expect("material must be in bounds");
+        assert!(environment
+            .field
+            .deposit_physical_at_index(original_index, physical));
+        assert!(Simulation::try_move_cell(
+            &mut organism,
+            &mut environment,
+            &mut [],
+            5.0,
+            0.0
+        ));
+        let moved_index = environment
+            .field
+            .index_for_position(x + 11.0, y)
+            .expect("material must remain in bounds");
+        let moved = environment.field.cells[moved_index]
+            .physical_materials
+            .iter()
+            .find(|candidate| candidate.material.parts == original.material.parts)
+            .expect("realized material should remain present");
+        assert_eq!(moved.material, original.material);
+        assert_eq!(moved.internal_connections, original.internal_connections);
+        let moved_placements = moved.placements.as_ref().expect("placements must remain");
+        let original_placements = original.placements.as_ref().expect("placements must exist");
+        assert_eq!(moved_placements.len(), original_placements.len());
+        for (moved, original) in moved_placements.iter().zip(original_placements) {
+            assert!((moved.x - original.x - 5.0).abs() < 1e-9);
+            assert!((moved.y - original.y).abs() < 1e-9);
+            assert_eq!(moved.rotation_radians, original.rotation_radians);
+        }
+    }
+}\n}
