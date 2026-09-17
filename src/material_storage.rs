@@ -58,7 +58,9 @@ impl MaterialStorage {
         placements: Vec<Placement>,
         catalog: &[crate::resources::BaseResource],
     ) -> bool {
-        let instance = match PhysicalMaterial::realized(material.clone(), placements, catalog) {
+        let instance = match PhysicalMaterial::realized(material.clone(), placements, catalog)
+            .and_then(PhysicalMaterial::into_intrinsic_frame)
+        {
             Some(instance) => instance,
             None => return false,
         };
@@ -197,25 +199,31 @@ mod tests {
         assert!(storage.is_empty());
     }
     #[test]
-    fn physical_material_is_stored_with_its_realization() {
+    fn physical_material_is_stored_in_intrinsic_frame() {
         let mut storage = MaterialStorage::default();
         let m = compound();
         let placements = vec![
             Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
+                x: 10.0,
+                y: 20.0,
+                rotation_radians: 0.5,
             },
             Placement {
-                x: 0.838,
-                y: 0.0,
-                rotation_radians: 0.0,
+                x: 10.838,
+                y: 20.0,
+                rotation_radians: 0.75,
             },
         ];
-        assert!(storage.store_physical(m.clone(), placements.clone(), &catalog()));
+        assert!(storage.store_physical(m.clone(), placements, &catalog()));
         let restored = storage.take_matching_physical(&m).expect("stored instance");
         assert_eq!(restored.material, m);
-        assert_eq!(restored.placements, Some(placements));
+        let intrinsic = restored.placements.expect("intrinsic realization");
+        assert!((intrinsic[0].x).abs() <= 1e-12);
+        assert!((intrinsic[0].y).abs() <= 1e-12);
+        assert!((intrinsic[0].rotation_radians).abs() <= 1e-12);
+        assert!((intrinsic[1].x - 0.838).abs() <= 1e-12);
+        assert!(intrinsic[1].y.abs() <= 1e-12);
+        assert!((intrinsic[1].rotation_radians - 0.25).abs() <= 1e-12);
         assert!(restored.internal_connections.is_some());
     }
     #[test]
@@ -223,14 +231,17 @@ mod tests {
         let mut storage = MaterialStorage::default();
         let m = Material::free_base("Carbon", 1.0);
         let placements = vec![Placement {
-            x: 0.0,
-            y: 0.0,
+            x: 10.0,
+            y: 20.0,
             rotation_radians: 0.25,
         }];
-        assert!(storage.store_physical(m.clone(), placements.clone(), &catalog()));
+        assert!(storage.store_physical(m.clone(), placements, &catalog()));
         let restored = storage.take_matching_physical(&m).expect("stored instance");
         assert_eq!(restored.material, m);
-        assert_eq!(restored.placements, Some(placements));
+        let intrinsic = restored.placements.expect("intrinsic realization");
+        assert!((intrinsic[0].x).abs() <= 1e-12);
+        assert!((intrinsic[0].y).abs() <= 1e-12);
+        assert!(intrinsic[0].rotation_radians.abs() <= 1e-12);
         assert!(restored.internal_connections.is_some());
     }
     #[test]
