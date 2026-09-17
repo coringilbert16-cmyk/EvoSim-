@@ -29,7 +29,7 @@ impl StructuralUnit {
         }
     }
     pub fn from_material(material: Material, placement: Placement) -> Option<Self> {
-        if !material.is_valid() || material.is_empty() {
+        if !material.is_valid() || material.is_empty() || material.has_internal_structure() {
             return None;
         }
         Some(Self {

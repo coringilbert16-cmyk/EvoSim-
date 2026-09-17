@@ -95,9 +95,7 @@ mod tests {
     }
 
     #[test]
-    fn structured_unit_is_reported_without_being_silently_rewritten() {
-        let catalog = default_catalog();
-        let mut structure = OrganismStructure::new();
+    fn composite_material_cannot_become_a_structural_unit() {
         let material = Material {
             parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
             internal_bonds: vec![InternalBond {
@@ -105,9 +103,7 @@ mod tests {
                 part_b: 1,
             }],
         };
-        structure.add_unit(StructuralUnit::from_material(material, placement(0.0, 0.0)).unwrap());
-        assert!(audit_structure(&structure, &catalog)
-            .contains(&AuthorityFinding::StructuredMaterialInUnit { unit_index: 0 }));
+        assert!(StructuralUnit::from_material(material, placement(0.0, 0.0)).is_none());
     }
 
     #[test]
