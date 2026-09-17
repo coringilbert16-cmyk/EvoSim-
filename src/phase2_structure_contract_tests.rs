@@ -190,20 +190,21 @@ fn stored_realized_single_constituent_enters_combine_without_losing_rotation() {
         .peek_matching_physical(&material)
         .expect("stored physical material");
     assert!(stored.is_realized());
-    assert!(stored.placements.as_ref().unwrap()[0].rotation_radians.abs() <= 1e-12);
+    assert!(
+        stored.placements.as_ref().unwrap()[0]
+            .rotation_radians
+            .abs()
+            <= 1e-12
+    );
 
     let mut cache = ConnectionCompatibilityCache::new();
     let mut ledger = EnergyLedger::default();
-    let attempt = try_combine_stored_unit(
-        organism,
-        &simulation.environment,
-        &mut cache,
-        &mut ledger,
-    )
-    .expect("stored physical Carbon should be incorporated through COMBINE");
+    let attempt =
+        try_combine_stored_unit(organism, &simulation.environment, &mut cache, &mut ledger)
+            .expect("stored physical Carbon should be incorporated through COMBINE");
 
     assert!(organism.stored_material.is_empty());
     assert!(organism.structure.units.len() > 1);
-    assert!(organism.structure.bonds.len() > 0);
+    assert!(!organism.structure.bonds.is_empty());
     assert!(attempt.energy_invested >= 0.0);
 }
