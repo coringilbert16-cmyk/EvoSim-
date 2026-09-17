@@ -117,7 +117,10 @@ fn realized_material_carries_exact_internal_connection_and_restores_without_comb
         ledger.total_usable_energy_gained,
         before_ledger.total_usable_energy_gained
     );
-    assert_eq!(ledger.total_heat_dissipated, before_ledger.total_heat_dissipated);
+    assert_eq!(
+        ledger.total_heat_dissipated,
+        before_ledger.total_heat_dissipated
+    );
 }
 
 #[test]
