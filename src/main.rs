@@ -3,13 +3,16 @@
 // Core environment, resources, and physical material/structure.
 mod environment;
 mod environmental_materials;
+mod material_geometry;
+mod material_restoration;
 mod material_storage;
 mod material_transfer;
+mod physical_material;
 mod resources;
 mod structure;
+mod structure_authority;
 
-// Active physical geometry authority stack. These modules query realized rigid
-// geometry; they do not define a second catalog-shaped physical representation.
+// Active physical geometry authority stack.
 mod architecture;
 mod cavity;
 mod connection_geometry;
@@ -17,7 +20,6 @@ mod construction_runtime;
 mod contact;
 mod juvenile;
 mod juvenile_requirements;
-mod material_geometry;
 mod organism_geometry;
 mod physical_geometry;
 mod rigid_boundary;
@@ -59,6 +61,8 @@ mod blueprint_diagnostics;
 mod blueprint_spatial_target_tests;
 #[cfg(test)]
 mod observation_contract_tests;
+#[cfg(test)]
+mod phase1_acquisition_contract_tests;
 #[cfg(test)]
 mod simulation_tests;
 

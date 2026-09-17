@@ -100,7 +100,10 @@ mod tests {
         let mut structure = OrganismStructure::new();
         let material = Material {
             parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
-            internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
+            internal_bonds: vec![InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
         };
         structure.add_unit(StructuralUnit::from_material(material, placement(0.0, 0.0)).unwrap());
         assert!(audit_structure(&structure, &catalog)

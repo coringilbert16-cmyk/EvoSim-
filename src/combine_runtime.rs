@@ -186,13 +186,18 @@ fn physical_material_candidate(
     if !material.is_valid() || material.is_empty() || material.parts.is_empty() {
         return None;
     }
-    let (name, _) = material.parts.first()?;
-    let proxy = Material::free_base(name.clone(), 1.0);
-    let mut unit = StructuralUnit::from_material(proxy, placement)?;
+    if material.has_internal_structure() {
+        return None;
+    }
+    let (name, amount) = material.parts.first()?;
+    if (*amount - 1.0).abs() > EPSILON {
+        return None;
+    }
+    let mut unit =
+        StructuralUnit::from_material(Material::free_base(name.clone(), 1.0), placement)?;
     if !unit.realize_default_geometry(catalog) {
         return None;
     }
-    unit.material = material.clone();
     Some(unit)
 }
 
@@ -206,6 +211,26 @@ pub(crate) fn instantiate_one_unit(
         .first()
         .map(|p| (p.x, p.y))
         .unwrap_or((0.0, 0.0));
+    if material.has_internal_structure() {
+        let instance = organism.stored_material.peek_matching_physical(&material)?;
+        if !instance.is_realized() {
+            return None;
+        }
+        let mut trial = organism.structure.clone();
+        let indices = crate::material_restoration::restore_material(
+            &mut trial,
+            &instance,
+            Placement {
+                x,
+                y,
+                rotation_radians: 0.0,
+            },
+            catalog,
+        )?;
+        organism.stored_material.take_matching_physical(&material)?;
+        organism.structure = trial;
+        return indices.first().copied();
+    }
     let unit = physical_material_candidate(
         &material,
         Placement {
@@ -229,16 +254,110 @@ pub(crate) fn try_combine_stored_unit(
     if !raw.is_valid() || raw.is_empty() {
         return None;
     }
+    let water = water_field_amount(environment, organism);
+
+    if raw.has_internal_structure() {
+        let instance = organism.stored_material.peek_matching_physical(&raw)?;
+        if !instance.is_realized() {
+            return None;
+        }
+        let first_resource = raw.parts.first()?.0.as_str();
+        let geometry_source = environment
+            .catalog
+            .iter()
+            .find(|resource| resource.name == first_resource)?;
+        let mut candidates = Vec::new();
+        for ua in 0..organism.structure.units.len() {
+            let anchor = organism.structure.units[ua].placement;
+            for origin in crate::construction_runtime::candidate_placements(
+                &organism.structure,
+                geometry_source,
+                anchor,
+                &[ua],
+                &environment.catalog,
+            ) {
+                let mut hypothetical = organism.structure.clone();
+                let indices = crate::material_restoration::restore_material(
+                    &mut hypothetical,
+                    &instance,
+                    origin,
+                    &environment.catalog,
+                )?;
+                for (part_index, &ub) in indices.iter().enumerate() {
+                    for candidate in crate::contact::connection_pair_candidates_cached(
+                        &hypothetical,
+                        ua,
+                        ub,
+                        &environment.catalog,
+                        cache,
+                    ) {
+                        if let Some((evaluation, _, _, _, required)) = evaluate_candidate(
+                            &hypothetical,
+                            ua,
+                            ub,
+                            candidate,
+                            &environment.catalog,
+                            water,
+                        ) {
+                            candidates.push((
+                                ua,
+                                part_index,
+                                origin,
+                                evaluation,
+                                candidate.distance,
+                                required,
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        candidates.sort_by(|a, b| a.4.partial_cmp(&b.4).unwrap_or(std::cmp::Ordering::Equal));
+        for (ua, part_index, origin, evaluation, _, required) in candidates {
+            if organism.usable_energy + EPSILON < required {
+                continue;
+            }
+            let mut hypothetical = organism.structure.clone();
+            let indices = crate::material_restoration::restore_material(
+                &mut hypothetical,
+                &instance,
+                origin,
+                &environment.catalog,
+            )?;
+            let ub = *indices.get(part_index)?;
+            let mut candidate_ledger = *ledger;
+            let mut candidate_energy = organism.usable_energy;
+            if let Some(attempt) = form_bond(
+                &mut hypothetical,
+                BondFormationRequest {
+                    unit_a: ua,
+                    unit_b: ub,
+                    endpoint_a: evaluation.candidate.endpoint_a,
+                    endpoint_b: evaluation.candidate.endpoint_b,
+                    investment: evaluation.threshold,
+                    water,
+                },
+                &environment.catalog,
+                cache,
+                &mut candidate_ledger,
+                &mut candidate_energy,
+            ) {
+                organism.stored_material.take_matching_physical(&raw)?;
+                organism.structure = hypothetical;
+                organism.usable_energy = candidate_energy;
+                *ledger = candidate_ledger;
+                organism.add_transaction_stress(attempt.work_cost);
+                return Some(attempt);
+            }
+        }
+        return None;
+    }
+
     let geometry_source = raw
         .parts
         .first()
         .and_then(|(name, _)| environment.catalog.iter().find(|b| b.name == *name))?;
-    let water = water_field_amount(environment, organism);
     let mut candidates = Vec::new();
-
-    // Stored-material COMBINE uses the same actual-boundary rigid placement
-    // solver as blueprint construction. Connection-site normals and authored
-    // clearance/radius heuristics are deliberately not used to place it.
     for ua in 0..organism.structure.units.len() {
         let anchor = organism.structure.units[ua].placement;
         for placement in crate::construction_runtime::candidate_placements(
@@ -275,7 +394,6 @@ pub(crate) fn try_combine_stored_unit(
         }
     }
     candidates.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap_or(std::cmp::Ordering::Equal));
-
     for (ua, placement, evaluation, _, required) in candidates {
         if organism.usable_energy + EPSILON < required {
             continue;
