@@ -1200,3 +1200,372 @@ The central rule for future development is:
 If a mechanism is necessary to implement an approved behavior but its exact form has not yet been determined, that mechanism must be discussed and approved before becoming part of EvoSim's architecture.
 
 **No deviation from this document is authorized without explicit approval from the project owner.**
+
+
+
+
+
+
+
+
+amendment for blueprint design: 
+
+EvoSim — Developmental Field Blueprint Specification
+
+Status: Approved
+Authority: Master Technical Specification 2.4
+Purpose: Define the genome blueprint as developmental intent rather than an explicit construction diagram.
+
+---
+
+1. Core Principle
+
+The EvoSim blueprint is not a diagram of an organism.
+
+It describes the developmental tendencies encoded by a genome: where material is favored, where structure is favored, how connectivity is favored, and the approximate scale toward which development tends.
+
+The blueprint does not prescribe the exact physical organism.
+
+The authoritative developmental chain is:
+
+Genome → Developmental Field Blueprint → Construction / Development Solver → Physical Organism Structure
+
+The physical organism structure is the final authority.
+
+---
+
+2. What the Blueprint Represents
+
+The blueprint represents a compact set of continuous developmental fields.
+
+Initial fields are:
+
+1. Material-composition fields
+2. Structural-density field
+3. Connectivity field
+4. Preferred developmental mass
+
+These are preferences, not commands.
+
+A field may influence where the construction solver attempts to place or develop material, but it cannot require an impossible realization.
+
+---
+
+3. What the Blueprint Must NOT Specify
+
+The blueprint must not directly encode:
+
+- Exact material instances
+- Exact unit count
+- Exact coordinates
+- Exact bonds
+- Exact connection-point assignments
+- Exact angles
+- Exact rotations
+- Exact silhouette
+- Exact topology
+- Explicit branches
+- Explicit organs
+- Species-specific body plans
+- Predator/prey/scavenger roles
+- A fixed evolutionary progression
+- A guaranteed final structure
+
+If the blueprint uniquely determines these properties, it has reverted to the old explicit-diagram model and violates this specification.
+
+---
+
+4. Developmental Coordinate System
+
+Blueprint fields exist in an organism-local developmental coordinate system.
+
+Origin
+
+The developmental origin is anchored to the organism's initial seed.
+
+This origin persists throughout development.
+
+Translation
+
+When the organism moves through the world, its developmental coordinate frame moves with it.
+
+Developmental coordinates therefore remain stable relative to the organism rather than the environment.
+
+Re-centering
+
+The developmental frame must not continuously re-center on:
+
+- Center of mass
+- Current bounding box
+- Current geometric center
+- Newly grown material
+
+Continuous re-centering would change the meaning of existing developmental fields as the organism grows and could create feedback in which growth changes the developmental target that caused the growth.
+
+Orientation
+
+The initial local axes are established when the organism is initialized.
+
+The blueprint does not require a permanently world-aligned body plan.
+
+Future orientation mechanisms may evolve if required, but they must not introduce a fixed world-space body plan.
+
+---
+
+5. Field Representation
+
+Fields must be represented as compact continuous parameterizations, not literal high-resolution bitmap or voxel grids.
+
+The initial implementation should use a small number of radial influences.
+
+Each influence may contain:
+
+- Local center
+- Radius
+- Strength
+- Falloff
+
+Initial fields should generally use approximately 1–3 influences per field.
+
+This provides a compact genome representation while allowing nonuniform developmental tendencies.
+
+Deferred complexity
+
+The initial implementation should not add aspect ratio, ellipse parameters, arbitrary orientation, or high-resolution spatial maps unless experimentation demonstrates that the simpler representation cannot produce the desired emergent behavior.
+
+Additional parameters should be introduced only when justified by observed developmental limitations.
+
+---
+
+6. Material-Composition Fields
+
+Each material-composition field represents a relative developmental preference for a material.
+
+The field does not command the organism to contain a particular quantity of that material.
+
+For example, a Carbon field may indicate that Carbon-rich development is favored in one region and less favored in another.
+
+The solver remains free to produce a different composition when constrained by:
+
+- Available environmental material
+- Physical geometry
+- Existing structure
+- Connection constraints
+- Developmental history
+- Other physical limitations
+
+The resource catalog remains authoritative for the physical properties of each resource.
+
+Blueprint mutation changes developmental preference; it does not mutate the underlying physical properties of resources.
+
+---
+
+7. Structural-Density Field
+
+The structural-density field indicates where the genome favors more or less physical structure.
+
+It does not prescribe:
+
+- The number of structural units
+- Exact geometry
+- Exact thickness
+- Exact boundaries
+- Specific branches
+
+A high-density region means that additional structure is developmentally favored there.
+
+The realized amount and arrangement of structure are determined by the construction process and physical constraints.
+
+---
+
+8. Connectivity Field
+
+The connectivity field indicates where greater or lesser structural connectivity is developmentally favored.
+
+It does not specify which particular units connect to which other units.
+
+It does not prescribe individual bonds or connection-point assignments.
+
+The construction solver uses the field as one input when selecting among physically valid structural realizations.
+
+The actual bond graph remains owned by the physical structure.
+
+---
+
+9. Preferred Developmental Mass
+
+The existing genome "adult_mass" concept is repurposed as the organism's preferred developmental mass.
+
+It means:
+
+«The approximate structural mass toward which development tends.»
+
+It does not mean:
+
+«The mass at which an organism becomes an adult.»
+
+Actual organism mass is always derived from the realized physical structure.
+
+There must not be a separate authoritative "blueprint_mass" alongside "adult_mass".
+
+Mass authority
+
+Genome: preferred developmental mass
+Physical structure: actual mass
+
+The preferred mass is a soft developmental preference, not a hard boundary or guaranteed final mass.
+
+Environmental scarcity, structural constraints, damage, developmental history, and other physical conditions may prevent the organism from reaching it.
+
+Maturation
+
+Maturation remains a separate lifecycle state.
+
+Reaching preferred developmental mass does not, by itself, constitute maturation unless a future lifecycle specification explicitly establishes that relationship.
+
+---
+
+10. Construction Solver
+
+The construction/development solver receives, at minimum:
+
+- Genome developmental fields
+- Current physical structure
+- Available material
+- Resource geometry
+- Connection constraints
+- Existing physical relationships
+- Environmental constraints
+
+The solver searches for a physically valid realization that is compatible with the developmental preferences.
+
+It should select among possible realizations rather than simply translating blueprint coordinates directly into geometry.
+
+---
+
+11. Existing Structure Has Priority
+
+Already-realized physical structure is authoritative.
+
+Development must not arbitrarily rearrange existing units merely because another arrangement would produce a better blueprint-field match.
+
+The blueprint influences future development.
+
+It does not retroactively rewrite physical history.
+
+This allows developmental history and environmental conditions to contribute to the resulting organism.
+
+---
+
+12. No Guaranteed Blueprint Realization
+
+A blueprint is an intention, not a guarantee.
+
+The final organism may differ from its genome's developmental preferences because of:
+
+- Resource scarcity
+- Unavailable material
+- Physical collision
+- Connection limitations
+- Existing structural geometry
+- Environmental conditions
+- Developmental history
+- Other physical constraints
+
+This variation is intentional.
+
+Two organisms with the same genome may therefore develop different valid structures under different conditions.
+
+---
+
+13. Authority Boundaries
+
+The following authority hierarchy is mandatory:
+
+Information| Authority
+Resource physical properties| Resource catalog
+Developmental preferences| Genome / blueprint
+Actual material composition| Physical structure
+Actual structural units| Physical structure
+Actual geometry| Physical structure
+Actual positions/orientations| Physical structure
+Actual bonds| Physical structure
+Actual connectivity| Physical structure
+Actual mass| Physical structure
+Environmental availability| Environment
+
+No duplicated authoritative representation should be introduced.
+
+The blueprint must never become a second source of truth for the organism's actual structure.
+
+---
+
+14. Mutation and Inheritance
+
+Blueprint parameters are genome traits and therefore may:
+
+- Be inherited
+- Mutate
+- Produce developmental variation
+
+Mutation should modify field parameters smoothly where practical rather than replacing a developmental field with arbitrary spatial noise.
+
+Resource properties themselves are not mutated through the blueprint.
+
+---
+
+15. Blueprint Fitness
+
+The blueprint has no independent fitness score.
+
+It contributes to organism development.
+
+Natural selection operates on the organism and its consequences in the simulation rather than directly scoring whether a blueprint matches a predetermined body shape.
+
+---
+
+16. Performance Requirement
+
+Blueprints must remain compact.
+
+The initial implementation must not store a per-organism high-resolution spatial bitmap or voxel map.
+
+Continuous parameterized influences are preferred because they:
+
+- Reduce memory use
+- Reduce mutation dimensionality
+- Preserve smooth developmental variation
+- Avoid encoding explicit body plans
+- Allow environmental constraints to influence realization
+
+---
+
+17. Minimum Viable Blueprint
+
+The minimum useful implementation consists of:
+
+1. Material-composition preference
+2. Structural-density preference
+3. Preferred developmental mass
+
+The architecture should support a connectivity field, but connectivity may be introduced as an active developmental input when testing demonstrates that material and density preferences alone cannot produce sufficient structural variation.
+
+---
+
+18. Required Success Test
+
+A valid implementation must permit the following:
+
+«The same blueprint can produce two different physically valid organisms when environmental conditions or developmental history differ.»
+
+A blueprint that uniquely determines every material, bond, angle, coordinate, or structural relationship fails this specification.
+
+---
+
+19. Design Intent
+
+The blueprint exists to provide the minimum amount of heritable information necessary to bias development toward repeatable tendencies while leaving physical realization to emergence.
+
+The goal is not to encode an organism.
+
+The goal is to encode how development tends to behave.
