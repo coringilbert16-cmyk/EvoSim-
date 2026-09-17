@@ -1,0 +1,47 @@
+name: phase3-apply-structure
+on:
+  push:
+    branches:
+      - phase3-physical-structure-authority
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply migration
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/structure.rs')
+          text = p.read_text()
+          marker = '        if !m.is_valid() || m.is_empty() {'
+          start = text.find(marker, text.find("impl<'de> Deserialize<'de> for StructuralUnit"))
+          end = text.find('        Ok(Self {', start)
+          if start < 0 or end < 0:
+              raise SystemExit('StructuralUnit deserializer guard not found')
+          block = text[start:end]
+          if 'm.has_internal_structure()' not in block:
+              replacement = '''        if !m.is_valid() || m.is_empty() {
+            return Err(serde::de::Error::custom("invalid material"));
+        }
+        if m.has_internal_structure() {
+            return Err(serde::de::Error::custom(
+                "composite material cannot be loaded as a StructuralUnit; restore its physical constituents and bonds through the organism graph",
+            ));
+        }
+'''
+              text = text[:start] + replacement + text[end:]
+              p.write_text(text)
+          PY
+          cargo fmt --all
+          cargo test --all-targets
+      - name: Commit migration
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/structure.rs
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Phase 3: reject composite StructuralUnit persistence'
+          git push
