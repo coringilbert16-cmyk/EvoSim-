@@ -97,6 +97,33 @@ impl PhysicalMaterial {
         self.placements.is_some() && self.internal_connections.is_some()
     }
 
+    /// Re-express this realization in a deterministic local frame anchored on
+    /// its first constituent. This changes only coordinate representation; all
+    /// relative positions, orientations, geometry, and endpoint identities are
+    /// preserved. World position is supplied later by the owning context.
+    pub(crate) fn into_intrinsic_frame(self) -> Option<Self> {
+        let placements = self.placements?;
+        let origin = *placements.first()?;
+        let (sin, cos) = origin.rotation_radians.sin_cos();
+        let rebased = placements
+            .into_iter()
+            .map(|placement| {
+                let dx = placement.x - origin.x;
+                let dy = placement.y - origin.y;
+                Placement {
+                    x: dx * cos + dy * sin,
+                    y: -dx * sin + dy * cos,
+                    rotation_radians: placement.rotation_radians - origin.rotation_radians,
+                }
+            })
+            .collect();
+        Some(Self {
+            material: self.material,
+            placements: Some(rebased),
+            internal_connections: self.internal_connections,
+        })
+    }
+
     /// Return the same intrinsic physical material translated into world space.
     /// Internal endpoint identities are unchanged because they are local to each
     /// constituent; only constituent placement is transformed by the origin.
