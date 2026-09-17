@@ -8,44 +8,14 @@ impl Simulation {
         environment: &mut Environment,
         other_organisms: &mut [Organism],
     ) -> bool {
-        let memory_strength = organism.genome.memory_strength();
         let movement_efficiency = organism.genome.movement_efficiency();
-        let perception_weight = 1.0 - (0.5 + memory_strength * 0.5);
-        let memory_weight = 1.0 - perception_weight;
-        let (px, py) = match organism.occupied_cells.first() {
-            Some(p) => (p.x, p.y),
+        let (x, y) = match movement_direction(organism) {
+            Some(direction) => direction,
             None => return false,
         };
-        let mut mx = 0.0;
-        let mut my = 0.0;
-        let mut total = 0.0;
-        for point in &organism.memory {
-            let dx = point.x - px;
-            let dy = point.y - py;
-            let distance = (dx * dx + dy * dy).sqrt();
-            if distance <= f64::EPSILON {
-                continue;
-            }
-            let weight = point.strength / distance;
-            mx += dx / distance * weight;
-            my += dy / distance * weight;
-            total += weight;
-        }
-        if total > 0.0 {
-            mx /= total;
-            my /= total;
-        }
         if organism.active_transformation_id.is_some() {
             return false;
         }
-        let mut x = memory_weight * mx + perception_weight * organism.resource_sense.direction_x;
-        let mut y = memory_weight * my + perception_weight * organism.resource_sense.direction_y;
-        let magnitude = (x * x + y * y).sqrt();
-        if magnitude <= f64::EPSILON {
-            return false;
-        }
-        x /= magnitude;
-        y /= magnitude;
         let step = 5.0 * movement_efficiency;
         Self::try_move_cell(organism, environment, other_organisms, x * step, y * step)
     }
@@ -97,6 +67,42 @@ impl Simulation {
         }
         *environment = trial_environment;
         true
+    }
+}
+
+fn movement_direction(organism: &Organism) -> Option<(f64, f64)> {
+    let memory_strength = organism.genome.memory_strength();
+    let perception_weight = 1.0 - (0.5 + memory_strength * 0.5);
+    let memory_weight = 1.0 - perception_weight;
+    let (px, py) = organism.occupied_cells.first().map(|p| (p.x, p.y))?;
+
+    let mut memory_x = 0.0;
+    let mut memory_y = 0.0;
+    let mut total = 0.0;
+    for point in &organism.memory {
+        let dx = point.x - px;
+        let dy = point.y - py;
+        let distance = (dx * dx + dy * dy).sqrt();
+        if distance <= f64::EPSILON {
+            continue;
+        }
+        let weight = point.strength / distance;
+        memory_x += dx / distance * weight;
+        memory_y += dy / distance * weight;
+        total += weight;
+    }
+    if total > 0.0 {
+        memory_x /= total;
+        memory_y /= total;
+    }
+
+    let x = memory_weight * memory_x + perception_weight * organism.resource_sense.direction_x;
+    let y = memory_weight * memory_y + perception_weight * organism.resource_sense.direction_y;
+    let magnitude = (x * x + y * y).sqrt();
+    if magnitude <= f64::EPSILON {
+        None
+    } else {
+        Some((x / magnitude, y / magnitude))
     }
 }
 
@@ -401,6 +407,29 @@ mod tests {
             cell.physical_materials.clear();
         }
         environment
+    }
+
+    #[test]
+    fn movement_direction_uses_existing_memory_and_resource_sense() {
+        let simulation = Simulation::new(7, 20.0);
+        let mut organism = simulation.organisms[0].clone();
+        organism.resource_sense.direction_x = 1.0;
+        organism.resource_sense.direction_y = 0.0;
+        organism.memory.push(crate::state::MemoryPoint {
+            x: organism.occupied_cells[0].x,
+            y: organism.occupied_cells[0].y - 20.0,
+            strength: 1.0,
+        });
+        let (x, y) = movement_direction(&organism).expect("direction should exist");
+        assert!(x > 0.0);
+        assert!(y < 0.0);
+    }
+
+    #[test]
+    fn movement_direction_without_inputs_is_rejected() {
+        let simulation = Simulation::new(7, 20.0);
+        let organism = simulation.organisms[0].clone();
+        assert!(movement_direction(&organism).is_none());
     }
 
     #[test]
