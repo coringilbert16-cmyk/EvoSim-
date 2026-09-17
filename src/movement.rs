@@ -297,7 +297,7 @@ mod tests {
     #[test]
     fn move_translates_anchor_and_structure() {
         let simulation = Simulation::new(7, 20.0);
-        let environment = empty_environment(&simulation);
+        let mut environment = empty_environment(&simulation);
         let mut organism = simulation.organisms[0].clone();
         let anchor = organism.occupied_cells[0].clone();
         let placements: Vec<_> = organism
@@ -337,8 +337,8 @@ mod tests {
         ));
         assert!(!Simulation::try_move_cell(
             &mut organism,
-            &environment,
-            &[],
+            &mut environment,
+            &mut [],
             f64::NAN,
             1.0
         ));
@@ -369,6 +369,30 @@ mod tests {
     }
 
     #[test]
+    fn movement_pushes_another_organism_atomically() {
+        let simulation = Simulation::new(7, 20.0);
+        let mut environment = empty_environment(&simulation);
+        let mut organism = simulation.organisms[0].clone();
+        let mut blocker = simulation.organisms[0].clone();
+        blocker.id = "pushed".to_string();
+        let x = organism.structure.units[0].placement.x;
+        let y = organism.structure.units[0].placement.y;
+        for unit in &mut blocker.structure.units {
+            unit.placement.x = x + 7.0;
+            unit.placement.y = y;
+        }
+        let blocker_x = blocker.structure.units[0].placement.x;
+        assert!(Simulation::try_move_cell(
+            &mut organism,
+            &mut environment,
+            &mut [blocker],
+            5.0,
+            0.0
+        ));
+        assert!((organism.structure.units[0].placement.x - (x + 5.0)).abs() < 1e-9);
+    }
+
+    #[test]
     fn touching_another_organism_does_not_block_movement() {
         let simulation = Simulation::new(7, 20.0);
         let environment = empty_environment(&simulation);
@@ -383,8 +407,8 @@ mod tests {
         }
         assert!(Simulation::try_move_cell(
             &mut organism,
-            &environment,
-            &[blocker],
+            &mut environment,
+            &mut [blocker],
             5.0,
             0.0
         ));
