@@ -72,7 +72,6 @@ fn movement_collides(
         let Some(shape) = unit.shape(&environment.catalog) else { continue; };
         let moved = PlacedMaterialPart { part_index: 0, form: shape.form.clone(), placement: Placement { x: unit.placement.x + dx, y: unit.placement.y + dy, rotation_radians: unit.placement.rotation_radians } };
         for other in other_organisms {
-            if std::ptr::eq(organism, other) { continue; }
             for blocker_unit in &other.structure.units {
                 let Some(blocker_shape) = blocker_unit.shape(&environment.catalog) else { continue; };
                 let blocker = PlacedMaterialPart { part_index: 1, form: blocker_shape.form.clone(), placement: blocker_unit.placement };
