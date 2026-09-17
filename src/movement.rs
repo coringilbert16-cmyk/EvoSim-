@@ -382,14 +382,17 @@ mod tests {
             unit.placement.y = y;
         }
         let blocker_x = blocker.structure.units[0].placement.x;
+        let mut others = vec![blocker];
+        let blocker_before = others[0].structure.units[0].placement.x;
         assert!(Simulation::try_move_cell(
             &mut organism,
             &mut environment,
-            &mut [blocker],
+            &mut others,
             5.0,
             0.0
         ));
         assert!((organism.structure.units[0].placement.x - (x + 5.0)).abs() < 1e-9);
+        assert!((others[0].structure.units[0].placement.x - (blocker_before + 5.0)).abs() < 1e-9);
     }
 
     #[test]
