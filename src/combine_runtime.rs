@@ -360,8 +360,7 @@ pub(crate) fn try_combine_stored_unit(
     let physical_instance = organism
         .stored_material
         .peek_matching_physical(&raw)
-        .filter(|instance| instance.is_realized())
-        .cloned();
+        .filter(|instance| instance.is_realized());
     let mut candidates = Vec::new();
     for ua in 0..organism.structure.units.len() {
         let anchor = organism.structure.units[ua].placement;
