@@ -17,7 +17,7 @@ jobs:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - name: Apply Phase 1 acquisition target fix
-        if: github.ref == 'refs/heads/phase1-physical-authority'
+        if: github.head_ref == 'phase1-physical-authority'
         run: |
           python3 - <<'PY'
           from pathlib import Path
