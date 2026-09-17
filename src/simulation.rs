@@ -439,11 +439,8 @@ impl Simulation {
                         for other in after.iter() {
                             others.push((*other).clone());
                         }
-                        let mut trial_environment = environment.clone();
-                        let moved =
-                            Self::update_movement(organism, &mut trial_environment, &mut others);
+                        let moved = Self::update_movement(organism, environment, &mut others);
                         if moved {
-                            *environment = trial_environment;
                             for (original, trial) in
                                 before.iter_mut().chain(after.iter_mut()).zip(others)
                             {
