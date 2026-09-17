@@ -7,7 +7,9 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use crate::material_transfer::take_whole_unstructured;
+use crate::physical_material::PhysicalMaterial;
 use crate::resources::{merge_parts, Material};
+use crate::structure::Placement;
 
 pub const DEFAULT_CELL_SIZE: f64 = 25.0;
 pub const DEFAULT_DIFFUSION_FRACTION: f64 = 0.05;
@@ -15,27 +17,45 @@ const MATERIAL_EPSILON: f64 = 1e-9;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FieldCell {
-    /// Ecological stock occupying this field cell.
-    /// Unstructured base stock may be aggregated for field physics. Structured
-    /// material remains a distinct object and is never fractionally split.
+    /// Aggregate stock for unstructured material. Aggregation is a spatial
+    /// optimization only; it is not used to represent an existing composite.
     pub materials: Vec<Material>,
+    /// Existing physically realized material objects. Their composition,
+    /// internal bonds, and relative realization travel together during ACQUIRE.
+    #[serde(default)]
+    pub physical_materials: Vec<PhysicalMaterial>,
 }
 
 impl FieldCell {
     pub fn empty() -> Self {
         Self {
             materials: Vec::new(),
+            physical_materials: Vec::new(),
         }
     }
 
     pub fn total_amount(&self) -> f64 {
-        self.materials.iter().map(Material::total_amount).sum()
+        self.materials.iter().map(Material::total_amount).sum::<f64>()
+            + self
+                .physical_materials
+                .iter()
+                .map(|material| material.material.total_amount())
+                .sum::<f64>()
     }
 
     pub fn total_material(&self) -> Vec<(String, f64)> {
         let mut totals = Vec::new();
         for material in &self.materials {
             for (name, amount) in &material.parts {
+                if let Some(existing) = totals.iter_mut().find(|(n, _)| n == name) {
+                    existing.1 += amount;
+                } else {
+                    totals.push((name.clone(), *amount));
+                }
+            }
+        }
+        for material in &self.physical_materials {
+            for (name, amount) in &material.material.parts {
                 if let Some(existing) = totals.iter_mut().find(|(n, _)| n == name) {
                     existing.1 += amount;
                 } else {
@@ -194,6 +214,32 @@ impl ActiveMaterialField {
         }
     }
 
+    /// Deposit an already realized physical material. This operation transfers
+    /// the existing object; it does not create or re-form any of its bonds.
+    pub fn deposit_physical_at_index(
+        &mut self,
+        index: usize,
+        material: PhysicalMaterial,
+    ) -> bool {
+        if !material.is_realized() || material.material.is_empty() || !material.material.is_valid() {
+            return false;
+        }
+        self.cells[index].physical_materials.push(material);
+        true
+    }
+
+    pub fn deposit_physical(
+        &mut self,
+        x: f64,
+        y: f64,
+        material: PhysicalMaterial,
+    ) -> bool {
+        let Some(index) = self.index_for_position(x, y) else {
+            return false;
+        };
+        self.deposit_physical_at_index(index, material)
+    }
+
     pub fn take_at(
         &mut self,
         x: f64,
@@ -228,21 +274,22 @@ impl ActiveMaterialField {
         Some(taken)
     }
 
-    /// ACQUIRE transfer: one intact structured material object when available;
-    /// otherwise one discrete base unit. The field may contain both, and
-    /// acquisition must not destroy the identity of the structured object.
+    /// ACQUIRE a physically existing material without reducing it to a
+    /// composition-only value. This is the organism-facing physical transfer.
+    pub fn take_physical_for_acquisition(&mut self, index: usize) -> Option<PhysicalMaterial> {
+        let cell = self.cells.get_mut(index)?;
+        let material_index = cell
+            .physical_materials
+            .iter()
+            .position(|material| material.is_realized() && !material.material.is_empty())?;
+        Some(cell.physical_materials.swap_remove(material_index))
+    }
+
+    /// Legacy logical ACQUIRE for unstructured aggregate stock. Existing
+    /// structured material without a physical realization is intentionally not
+    /// promoted into a physical object here.
     pub fn take_for_acquisition(&mut self, index: usize) -> Option<Material> {
         let cell = self.cells.get_mut(index)?;
-        if let Some(material_index) = cell.materials.iter().position(|material| {
-            material.has_internal_structure()
-                && material.is_valid()
-                && !material.is_empty()
-                && material.parts.iter().all(|(_, amount)| {
-                    amount.is_finite() && *amount > 0.0 && amount.fract().abs() <= MATERIAL_EPSILON
-                })
-        }) {
-            return Some(cell.materials.swap_remove(material_index));
-        }
         let material_index = cell.materials.iter().position(|material| {
             !material.has_internal_structure() && !material.is_empty() && material.is_valid()
         })?;
@@ -352,9 +399,6 @@ fn distribute_evenly(field: &mut ActiveMaterialField, mut mat: Material, neighbo
     }
 }
 
-/// A vent is an environmental source, not a chemical recipe or reservoir
-/// outlet. Each emission independently chooses a valid material and a
-/// fluctuating quantity around the vent's long-term average.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Vent {
     pub x: f64,
@@ -380,9 +424,6 @@ fn scale_material(material: &Material, amount: f64) -> Material {
     }
 }
 
-/// Build the pool from which vents may emit. It contains both elemental/raw
-/// materials and the approved environmental compounds. No material category
-/// is preferred; selection is uniformly random among valid material kinds.
 pub fn valid_vent_materials(catalog: &[crate::resources::BaseResource]) -> Vec<Material> {
     let mut materials = catalog
         .iter()
