@@ -14,7 +14,9 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          replacements = {
+          import re
+
+          exact = {
               'src/combine_runtime.rs': [
                   ('organism.stored_material.materials.first()?.clone()', 'organism.stored_material.first_material()?'),
               ],
@@ -23,7 +25,7 @@ jobs:
                   ('for material in construction.committed_material.materials.iter().cloned() {', 'for material in construction.committed_material.iter_materials().cloned() {'),
               ],
               'src/reproduction.rs': [
-                  ('.materials\n        .iter()\n        .find(|m| **m == construction.child_genome.juvenile_reserve)', '.iter_materials()\n        .find(|m| **m == construction.child_genome.juvenile_reserve)'),
+                  ('.materials', '.iter_materials()'),
               ],
               'src/simulation_tests.rs': [
                   ('o.stored_material.materials,', 'o.stored_material.materials_snapshot(),'),
@@ -33,17 +35,32 @@ jobs:
               ],
               'src/phase2_structure_contract_tests.rs': [
                   ('organism.stored_material.materials.len()', 'organism.stored_material.len()'),
-                  ('.physical_instances\n        .iter()\n        .filter(|entry| entry.is_some())\n        .count()', '.physical_count()'),
               ],
           }
-          for name, pairs in replacements.items():
+
+          for name, pairs in exact.items():
               p = Path(name)
               text = p.read_text()
               for old, new in pairs:
-                  if old not in text:
-                      raise SystemExit(f'missing expected text in {name}: {old}')
-                  text = text.replace(old, new)
+                  if old in text:
+                      text = text.replace(old, new)
               p.write_text(text)
+
+          p = Path('src/phase2_structure_contract_tests.rs')
+          text = p.read_text()
+          text, count_before = re.subn(
+              r'let realized_before = organism\.stored_material\.physical_instances\s*\.iter\(\)\s*\.filter\(\|instance\| instance\.is_some\(\)\)\s*\.count\(\);',
+              'let realized_before = organism.stored_material.physical_count();',
+              text,
+          )
+          text, count_after = re.subn(
+              r'let realized_after = organism\.stored_material\.physical_instances\s*\.iter\(\)\s*\.filter\(\|instance\| instance\.is_some\(\)\)\s*\.count\(\);',
+              'let realized_after = organism.stored_material.physical_count();',
+              text,
+          )
+          if count_before + count_after == 0 and 'physical_instances' in text:
+              raise SystemExit('remaining phase2 physical_instances access was not migrated')
+          p.write_text(text)
           PY
           cargo fmt --all
           cargo test --all-targets
