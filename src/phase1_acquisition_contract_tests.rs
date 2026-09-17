@@ -63,6 +63,30 @@ mod tests {
         )
     }
 
+    fn default_compound() -> (Material, Vec<Placement>) {
+        (
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: vec![InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 1.0,
+                    y: 0.0,
+                    rotation_radians: 0.25,
+                },
+            ],
+        )
+    }
+
     #[test]
     fn acquisition_transfers_realized_composite_intact() {
         let catalog = catalog();
@@ -94,7 +118,7 @@ mod tests {
             .field
             .index_for_position(organism_position.x, organism_position.y)
             .unwrap();
-        let (material, placements) = compound();
+        let (material, placements) = default_compound();
         let physical = PhysicalMaterial::realized(
             material.clone(),
             placements.clone(),
@@ -115,7 +139,12 @@ mod tests {
             .peek_matching_physical(&material)
             .unwrap();
         assert_eq!(acquired.material, material);
-        assert_eq!(acquired.placements, Some(placements));
+        let stored = acquired.placements.expect("intrinsic realization");
+        assert!(stored[0].x.abs() <= 1e-12);
+        assert!(stored[0].y.abs() <= 1e-12);
+        assert!(stored[0].rotation_radians.abs() <= 1e-12);
+        assert!((stored[1].x.hypot(stored[1].y) - 1.0).abs() <= 1e-9);
+        assert!((stored[1].rotation_radians - 0.25).abs() <= 1e-9);
         assert!(simulation.environment.field.cells[field_index]
             .physical_materials
             .is_empty());
