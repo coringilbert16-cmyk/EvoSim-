@@ -755,4 +755,5 @@ mod tests {
             assert_eq!(moved.rotation_radians, original.rotation_radians);
         }
     }
-}\n}
+}
+}
