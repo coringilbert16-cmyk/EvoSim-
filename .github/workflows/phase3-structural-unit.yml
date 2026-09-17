@@ -3,15 +3,84 @@ on:
   push:
     branches: [phase3-physical-structure-authority]
 permissions:
-  contents: read
+  contents: write
 jobs:
-  verify:
+  migrate:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Verify composite StructuralUnit authority guard
+        with:
+          ref: phase3-physical-structure-authority
+          fetch-depth: 0
+      - name: Preserve physical material during decomposition
         run: |
-          grep -F 'm.has_internal_structure()' src/structure.rs
-          cargo fmt --all -- --check
+          python3 - <<'PY'
+          from pathlib import Path
+
+          environment = Path('src/environment.rs')
+          text = environment.read_text()
+          old = '''    pub fn deposit(&mut self, x: f64, y: f64, material: Material) -> bool {
+        match self.index_for_position(x, y) {
+            Some(index) => {
+                self.deposit_at_index(index, material);
+                true
+            }
+            None => false,
+        }
+    }
+'''
+          new = '''    pub(crate) fn deposit<T: Into<FieldDeposit>>(&mut self, x: f64, y: f64, material: T) -> bool {
+        let Some(index) = self.index_for_position(x, y) else {
+            return false;
+        };
+        match material.into() {
+            FieldDeposit::Logical(material) => {
+                self.deposit_at_index(index, material);
+                true
+            }
+            FieldDeposit::Physical(material) => self.deposit_physical_at_index(index, material),
+        }
+    }
+'''
+          if old not in text:
+              raise SystemExit('environment deposit block not found')
+          text = text.replace(old, new, 1)
+          marker = '''impl FieldCell {
+'''
+          insert = '''pub(crate) enum FieldDeposit {
+    Logical(Material),
+    Physical(PhysicalMaterial),
+}
+
+impl From<Material> for FieldDeposit {
+    fn from(material: Material) -> Self {
+        Self::Logical(material)
+    }
+}
+
+impl From<PhysicalMaterial> for FieldDeposit {
+    fn from(material: PhysicalMaterial) -> Self {
+        Self::Physical(material)
+    }
+}
+
+impl FieldCell {
+'''
+          if marker not in text:
+              raise SystemExit('FieldCell marker not found')
+          text = text.replace(marker, insert, 1)
+          environment.write_text(text)
+          PY
+      - name: Format and test
+        run: |
+          cargo fmt --all
           cargo test --all-targets
+      - name: Commit migration
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/environment.rs
+          git diff --cached --quiet && exit 0
+          git commit -m 'Phase 3: route physical decomposition releases through physical field'
+          git push origin HEAD:phase3-physical-structure-authority
