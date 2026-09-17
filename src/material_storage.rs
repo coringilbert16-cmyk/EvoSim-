@@ -72,6 +72,10 @@ impl MaterialStorage {
         self.iter_materials().cloned().collect()
     }
 
+    pub(crate) fn drain_entries(&mut self) -> Vec<StoredMaterial> {
+        std::mem::take(&mut self.entries)
+    }
+
     pub(crate) fn physical_count(&self) -> usize {
         self.entries
             .iter()
