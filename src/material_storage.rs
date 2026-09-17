@@ -62,11 +62,7 @@ impl MaterialStorage {
             Some(instance) => instance,
             None => return false,
         };
-        if material.parts.is_empty()
-            || !material.is_valid()
-            || !Self::is_discrete(&material)
-            || !material.has_internal_structure()
-        {
+        if material.parts.is_empty() || !material.is_valid() || !Self::is_discrete(&material) {
             return false;
         }
         self.normalize_legacy_alignment();
@@ -220,6 +216,22 @@ mod tests {
         let restored = storage.take_matching_physical(&m).expect("stored instance");
         assert_eq!(restored.material, m);
         assert_eq!(restored.placements, Some(placements));
+        assert!(restored.internal_connections.is_some());
+    }
+    #[test]
+    fn physical_single_constituent_is_stored_with_its_realization() {
+        let mut storage = MaterialStorage::default();
+        let m = Material::free_base("Carbon", 1.0);
+        let placements = vec![Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.25,
+        }];
+        assert!(storage.store_physical(m.clone(), placements.clone(), &catalog()));
+        let restored = storage.take_matching_physical(&m).expect("stored instance");
+        assert_eq!(restored.material, m);
+        assert_eq!(restored.placements, Some(placements));
+        assert!(restored.internal_connections.is_some());
     }
     #[test]
     fn storage_never_merges_independent_atoms() {
