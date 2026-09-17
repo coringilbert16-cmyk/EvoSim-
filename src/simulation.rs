@@ -177,14 +177,9 @@ impl Simulation {
             .physical_materials
             .iter()
             .any(|material| material.is_realized() && !material.material.is_empty())
-            || cell
-                .materials
-                .iter()
-                .any(|material| {
-                    !material.is_empty()
-                        && material.is_valid()
-                        && !material.has_internal_structure()
-                })
+            || cell.materials.iter().any(|material| {
+                !material.is_empty() && material.is_valid() && !material.has_internal_structure()
+            })
         {
             vec![field_index]
         } else {
