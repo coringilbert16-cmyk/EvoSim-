@@ -1,9 +1,10 @@
 use crate::combine_runtime::combine_specific_pair;
 use crate::contact::ConnectionCompatibilityCache;
-use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::material_restoration::restore_material;
 use crate::physical_material::PhysicalMaterial;
-use crate::resources::{BaseResource, Form, InternalBond, Material, PhysicalState, ResourceProperties, Shape};
+use crate::resources::{
+    BaseResource, Form, InternalBond, Material, PhysicalState, ResourceProperties, Shape,
+};
 use crate::state::EnergyLedger;
 use crate::structure::{ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
 
@@ -83,7 +84,7 @@ fn realized_material_carries_exact_internal_connection_and_restores_without_comb
     );
 
     let mut structure = OrganismStructure::new();
-    let mut ledger = EnergyLedger::default();
+    let ledger = EnergyLedger::default();
     let before_ledger = ledger;
     let indices = restore_material(
         &mut structure,
@@ -100,10 +101,22 @@ fn realized_material_carries_exact_internal_connection_and_restores_without_comb
     assert_eq!(indices, vec![0, 1]);
     assert_eq!(structure.units.len(), 2);
     assert_eq!(structure.bonds.len(), 1);
-    assert_eq!(structure.bonds[0].endpoint_a.location, connections[0].endpoint_a);
-    assert_eq!(structure.bonds[0].endpoint_b.location, connections[0].endpoint_b);
-    assert_eq!(ledger.total_potential_energy_released, before_ledger.total_potential_energy_released);
-    assert_eq!(ledger.total_usable_energy_gained, before_ledger.total_usable_energy_gained);
+    assert_eq!(
+        structure.bonds[0].endpoint_a.location,
+        connections[0].endpoint_a
+    );
+    assert_eq!(
+        structure.bonds[0].endpoint_b.location,
+        connections[0].endpoint_b
+    );
+    assert_eq!(
+        ledger.total_potential_energy_released,
+        before_ledger.total_potential_energy_released
+    );
+    assert_eq!(
+        ledger.total_usable_energy_gained,
+        before_ledger.total_usable_energy_gained
+    );
     assert_eq!(ledger.total_heat_dissipated, before_ledger.total_heat_dissipated);
 }
 
@@ -111,8 +124,22 @@ fn realized_material_carries_exact_internal_connection_and_restores_without_comb
 fn new_structure_bond_is_formed_only_through_combine() {
     let catalog = line_catalog();
     let mut structure = OrganismStructure::new();
-    let mut a = StructuralUnit::new("A", Placement { x: -1.0, y: 0.0, rotation_radians: 0.0 });
-    let mut b = StructuralUnit::new("B", Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 });
+    let mut a = StructuralUnit::new(
+        "A",
+        Placement {
+            x: -1.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        },
+    );
+    let mut b = StructuralUnit::new(
+        "B",
+        Placement {
+            x: 1.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        },
+    );
     assert!(a.realize_default_geometry(&catalog));
     assert!(b.realize_default_geometry(&catalog));
     let ua = structure.add_unit(a);
