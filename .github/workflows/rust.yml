@@ -6,7 +6,7 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   test:
@@ -16,17 +16,6 @@ jobs:
         with:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
-      - name: Format Phase 1 branch
-        if: github.head_ref == 'phase1-physical-authority'
-        run: |
-          cargo fmt --all
-          if ! git diff --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -A
-            git commit -m "chore: format phase 1 changes"
-            git push origin HEAD:phase1-physical-authority
-          fi
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Check source file sizes
