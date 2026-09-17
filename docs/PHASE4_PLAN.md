@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 4 is in **P4.3 complete / P4.4 next**. P4.0 established the movement authority audit, P4.1 established the canonical movement boundary, P4.2 established the approved collision/contact policy and implementation, and P4.3 established atomic pushing/displacement interactions.
+Phase 4 is in **P4.4 complete / P4.5 next**. P4.0 established the movement authority audit, P4.1 established the canonical movement boundary, P4.2 established the approved collision/contact policy and implementation, and P4.3 established atomic pushing/displacement interactions.
 
 ## Phase 4 objective
 
@@ -226,9 +226,11 @@ Implement the approved penetration/contact policy at the canonical movement boun
 
 Resolve organism and realized-material push chains atomically through the canonical movement boundary while preserving intrinsic realization.
 
-### P4.4 — Movement memory/directional integration
+### P4.4 — Movement memory/directional integration — COMPLETE
 
-Only after the physical movement boundary is correct, connect already-defined movement-related genome/internal-state inputs.
+Movement now has an explicit directional-resolution boundary: the existing memory-derived direction and existing resource-sense direction are combined exactly as previously implemented, then normalized before movement efficiency determines displacement magnitude. No new sensory, learning, turning, force, or mutation semantics were introduced. The direction calculation is covered by regression tests for combined memory/resource-sense input and the no-input rejection path.
+
+`perception_radius` and `sensory_resolution` remain perception-layer controls, while `directional_resolution` remains applied by the existing perception system when producing `resource_sense`; movement consumes that already-produced directional state rather than reimplementing perception.
 
 ### P4.5 — Contract tests and audit
 
@@ -255,7 +257,7 @@ Phase 4 is complete only when:
 - [ ] Collision/contact uses derived geometry from canonical physical state.
 - [ ] Existing pushing behavior, where specified, uses physical interaction.
 - [ ] No new biological role or obstacle category is introduced.
-- [ ] Movement-related genome/internal-state inputs use only already-approved semantics.
+- [x] Movement-related genome/internal-state inputs use only already-approved semantics.
 - [ ] Contract tests cover the movement authority boundary.
 - [ ] Full test suite passes.
 - [ ] Formatting and architecture checks pass.
