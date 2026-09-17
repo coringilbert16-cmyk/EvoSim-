@@ -315,7 +315,7 @@ fn add_interface(
     for (i, map) in maps.iter().enumerate() {
         connections.push(BlueprintConnection {
             element_a: start + i,
-            element_b: boundary_start + map,
+            element_b: boundary_start + *map,
         });
         connections.push(BlueprintConnection {
             element_a: start + i,
