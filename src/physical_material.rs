@@ -67,17 +67,17 @@ impl PhysicalMaterial {
 
         let mut internal_connections = Vec::with_capacity(material.internal_bonds.len());
         for bond in &material.internal_bonds {
-            let candidates =
-                connection_pair_candidates(&structure, bond.part_a, bond.part_b, catalog)
-                    .into_iter()
-                    .filter(|candidate| {
-                        candidate.available_a && candidate.available_b && candidate.distance <= 1.0
-                    })
-                    .collect::<Vec<_>>();
-            if candidates.len() != 1 {
-                return None;
-            }
-            let candidate = candidates[0];
+            // `Material::InternalBond` records which constituents are bonded,
+            // while the physical endpoints are derived from their realization.
+            // More than one endpoint pairing can be geometrically valid for a
+            // symmetric realization. Preserve one deterministic physical choice
+            // rather than rejecting an otherwise valid material.
+            let candidate = connection_pair_candidates(&structure, bond.part_a, bond.part_b, catalog)
+                .into_iter()
+                .filter(|candidate| {
+                    candidate.available_a && candidate.available_b && candidate.distance <= 1.0
+                })
+                .next()?;
             internal_connections.push(PhysicalMaterialBond {
                 part_a: bond.part_a,
                 endpoint_a: candidate.endpoint_a,
