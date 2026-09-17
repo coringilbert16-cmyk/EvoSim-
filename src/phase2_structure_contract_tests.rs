@@ -1,11 +1,11 @@
-use crate::combine_runtime::combine_specific_pair;
+use crate::combine_runtime::{combine_specific_pair, try_combine_stored_unit};
 use crate::contact::ConnectionCompatibilityCache;
 use crate::material_restoration::restore_material;
 use crate::physical_material::PhysicalMaterial;
 use crate::resources::{
     BaseResource, Form, InternalBond, Material, PhysicalState, ResourceProperties, Shape,
 };
-use crate::state::EnergyLedger;
+use crate::state::{EnergyLedger, Simulation};
 use crate::structure::{ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
 
 fn line_catalog() -> Vec<BaseResource> {
@@ -168,4 +168,42 @@ fn new_structure_bond_is_formed_only_through_combine() {
     assert!(ledger.total_usable_energy_gained.is_finite());
     assert!(ledger.total_heat_dissipated > 0.0);
     assert!(energy < 100.0 || attempt.energy_invested == 0.0);
+}
+
+#[test]
+fn stored_realized_single_constituent_enters_combine_without_losing_rotation() {
+    let mut simulation = Simulation::new(11, 20.0);
+    let organism = &mut simulation.organisms[0];
+    organism.usable_energy = 1_000.0;
+    let material = Material::free_base("Carbon", 1.0);
+    assert!(organism.stored_material.store_physical(
+        material.clone(),
+        vec![Placement {
+            x: 100.0,
+            y: 200.0,
+            rotation_radians: 0.4,
+        }],
+        &simulation.environment.catalog,
+    ));
+    let stored = organism
+        .stored_material
+        .peek_matching_physical(&material)
+        .expect("stored physical material");
+    assert!(stored.is_realized());
+    assert!(stored.placements.as_ref().unwrap()[0].rotation_radians.abs() <= 1e-12);
+
+    let mut cache = ConnectionCompatibilityCache::new();
+    let mut ledger = EnergyLedger::default();
+    let attempt = try_combine_stored_unit(
+        organism,
+        &simulation.environment,
+        &mut cache,
+        &mut ledger,
+    )
+    .expect("stored physical Carbon should be incorporated through COMBINE");
+
+    assert!(organism.stored_material.is_empty());
+    assert!(organism.structure.units.len() > 1);
+    assert!(organism.structure.bonds.len() > 0);
+    assert!(attempt.energy_invested >= 0.0);
 }
