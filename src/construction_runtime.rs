@@ -23,25 +23,7 @@ pub(crate) fn candidate_placements(
     targets: &[usize],
     catalog: &[BaseResource],
 ) -> Vec<Placement> {
-    // Preserve the inherited spatial target while allowing the physical solver to
-    // choose an equivalent orientation when the authored orientation is not a
-    // valid contact configuration. Position remains the primary spatial target.
     let mut out = vec![anchor];
-    for rotation_offset in [
-        std::f64::consts::FRAC_PI_2,
-        -std::f64::consts::FRAC_PI_2,
-        std::f64::consts::PI,
-        std::f64::consts::FRAC_PI_4,
-        -std::f64::consts::FRAC_PI_4,
-        3.0 * std::f64::consts::FRAC_PI_4,
-        -3.0 * std::f64::consts::FRAC_PI_4,
-    ] {
-        out.push(Placement {
-            x: anchor.x,
-            y: anchor.y,
-            rotation_radians: anchor.rotation_radians + rotation_offset,
-        });
-    }
     for &target in targets {
         let Some(unit) = structure.units.get(target) else {
             continue;
