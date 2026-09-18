@@ -65,7 +65,7 @@ pub struct GenomeCavity {
 
 impl GenomeCavity {
     pub fn qualifies(&self) -> bool {
-        self.area > self.minimum_area + EPS
+        self.area + EPS >= self.minimum_area
     }
 
     /// Return the physical bond indices that form the qualifying genome-cavity
