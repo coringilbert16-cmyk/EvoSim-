@@ -188,8 +188,9 @@ fn add_boundary(
     region: &ArchitectureRegion,
     scale: f64,
 ) {
-    let hs = 1.511_858 / 2.0;
-    let off = 1.677_217_5;
+    let growth = scale / JUVENILE_LINEAR_SCALE;
+    let hs = 1.511_858 / 2.0 * growth;
+    let off = 1.677_217_5 * growth;
     let start = elements.len();
     let x = region.center_x;
     let y = region.center_y;
@@ -247,9 +248,10 @@ fn add_interface(
     region: &ArchitectureRegion,
     scale: f64,
 ) {
-    let inner: f64 = 1.086_648;
-    let outer: f64 = 1.511_858;
-    let length: f64 = 0.797_884;
+    let growth = scale / JUVENILE_LINEAR_SCALE;
+    let inner: f64 = 1.086_648 * growth;
+    let outer: f64 = 1.511_858 * growth;
+    let length: f64 = 0.797_884 * growth;
     let gap = outer - inner;
     let tangent: f64 = (length * length - gap * gap).sqrt();
     let center = (inner + outer) / 2.0;
@@ -379,6 +381,30 @@ mod tests {
         let adult = architecture.adult_construction_target().unwrap();
         assert!(adult.elements.len() > juvenile.elements.len());
         assert_eq!(adult.anchor_elements, juvenile.anchor_elements);
+
+        let juvenile_extent = juvenile
+            .elements
+            .iter()
+            .filter(|element| element.placement.x != 0.0 || element.placement.y != 0.0)
+            .map(|element| {
+                element
+                    .placement
+                    .x
+                    .hypot(element.placement.y)
+            })
+            .fold(0.0, f64::max);
+        let adult_extent = adult
+            .elements
+            .iter()
+            .filter(|element| element.placement.x != 0.0 || element.placement.y != 0.0)
+            .map(|element| {
+                element
+                    .placement
+                    .x
+                    .hypot(element.placement.y)
+            })
+            .fold(0.0, f64::max);
+        assert!(adult_extent > juvenile_extent);
     }
 
     #[test]
