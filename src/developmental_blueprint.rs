@@ -212,7 +212,13 @@ impl DevelopmentalFieldBlueprint {
             );
         }
 
-        let mut resources = catalog.iter().collect::<Vec<_>>();
+        let mut resources = catalog
+            .iter()
+            .filter(|resource| matches!(resource.shape.form, crate::resources::Form::Rectangle { .. }))
+            .collect::<Vec<_>>();
+        if resources.is_empty() {
+            resources = catalog.iter().collect();
+        }
         resources.sort_by(|a, b| {
             self.material_preference(&b.name, 0.0, 0.0)
                 .partial_cmp(&self.material_preference(&a.name, 0.0, 0.0))
