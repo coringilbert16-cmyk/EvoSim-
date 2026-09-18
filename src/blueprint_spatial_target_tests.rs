@@ -48,6 +48,34 @@ mod tests {
         }
     }
 
+
+    #[test]
+    fn juvenile_construction_preserves_full_size_anchor_placements() {
+        let genome = initial_genome();
+        let catalog = default_catalog();
+        let blueprint = genome
+            .developmental_construction_target(&catalog)
+            .expect("juvenile architecture must be constructible");
+        let structure = blueprint
+            .realize(&catalog)
+            .expect("juvenile architecture must have a physical realization");
+
+        for &index in &blueprint.anchor_elements {
+            let target = blueprint.elements[index].placement;
+            let closest = structure
+                .units
+                .iter()
+                .map(|unit| (unit.placement.x - target.x).hypot(unit.placement.y - target.y))
+                .fold(f64::INFINITY, f64::min);
+            assert!(
+                closest < 1e-6,
+                "juvenile realization moved a fixed construction anchor from ({}, {})",
+                target.x,
+                target.y
+            );
+        }
+    }
+
     #[test]
     fn physically_valid_divergence_is_allowed_when_anchor_is_impossible() {
         let blueprint = StructuralBlueprint::new(
