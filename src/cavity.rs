@@ -67,6 +67,27 @@ impl GenomeCavity {
     pub fn qualifies(&self) -> bool {
         self.area > self.minimum_area + EPS
     }
+
+    /// Return the physical bond indices that form the qualifying genome-cavity
+    /// boundary. This is derived from the realized physical genome criterion;
+    /// it is not a second stored genome representation.
+    pub fn boundary_bond_indices(&self, structure: &OrganismStructure) -> Vec<usize> {
+        let boundary_ids: std::collections::HashSet<_> = self
+            .boundary_units
+            .iter()
+            .filter_map(|&index| structure.units.get(index).map(|unit| unit.physical_id))
+            .collect();
+        structure
+            .bonds
+            .iter()
+            .enumerate()
+            .filter_map(|(index, bond)| {
+                (boundary_ids.contains(&bond.endpoint_a.constituent_id)
+                    && boundary_ids.contains(&bond.endpoint_b.constituent_id))
+                .then_some(index)
+            })
+            .collect()
+    }
 }
 
 /// The minimum cavity is strictly larger than the area occupied by three

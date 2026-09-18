@@ -31,6 +31,22 @@ impl DecomposingBody {
     pub(crate) fn is_finished(&self) -> bool {
         self.structure.bonds.is_empty()
     }
+
+    pub(crate) fn release_finished_material(
+        &mut self,
+        catalog: &[crate::resources::BaseResource],
+    ) -> Vec<PhysicalMaterial> {
+        if !self.is_finished() {
+            return Vec::new();
+        }
+        self.structure
+            .units
+            .iter()
+            .filter_map(|unit| {
+                PhysicalMaterial::realized(unit.material.clone(), vec![unit.placement], catalog)
+            })
+            .collect()
+    }
 }
 
 pub(crate) struct DecompositionStep {

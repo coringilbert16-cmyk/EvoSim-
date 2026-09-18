@@ -182,6 +182,7 @@ impl Organism {
             self.stress += demand;
             return;
         }
+        self.add_transaction_stress(paid);
         let deficit = demand - paid;
         if deficit > 0.0 {
             self.stress += deficit
@@ -191,6 +192,7 @@ impl Organism {
         &mut self,
         environment: &Environment,
         ledger: &mut EnergyLedger,
+        rng: &mut ChaCha8Rng,
     ) -> bool {
         if !self.stress.is_finite() || !self.stress_threshold.is_finite() {
             return true;
@@ -202,7 +204,7 @@ impl Organism {
             if self.structure.bonds.is_empty() {
                 return true;
             }
-            if !crate::transformation::resolve_stress_break(self, environment, ledger) {
+            if !crate::transformation::resolve_stress_break(self, environment, ledger, rng) {
                 break;
             }
         }

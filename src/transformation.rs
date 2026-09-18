@@ -2,6 +2,8 @@ use crate::decision::{ActionKind, OutcomeKind};
 use crate::decision_runtime::ActionCandidate;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
 use crate::state::{ActiveTransformation, EnergyLedger, Environment, Organism, Simulation};
+use rand::Rng;
+use rand_chacha::ChaCha8Rng;
 
 fn water_field_amount(environment: &Environment, organism: &Organism) -> f64 {
     organism
@@ -60,25 +62,39 @@ fn settle_break_energy(
     true
 }
 
-pub(crate) fn resolve_stress_break(
-    organism: &mut Organism,
-    environment: &Environment,
-    ledger: &mut EnergyLedger,
-) -> bool {
-    let Some((_, target)) = organism
+fn stress_break_candidate_indices(organism: &Organism, environment: &Environment) -> Vec<usize> {
+    let genome_bonds =
+        crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
+            .ok()
+            .flatten()
+            .map(|cavity| cavity.boundary_bond_indices(&organism.structure))
+            .unwrap_or_default();
+    let candidates: Vec<usize> = organism
         .structure
         .bonds
         .iter()
         .enumerate()
-        .min_by(|(_, a), (_, b)| {
-            a.strength
-                .partial_cmp(&b.strength)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
+        .filter_map(|(index, _)| (!genome_bonds.contains(&index)).then_some(index))
+        .collect();
+    if candidates.is_empty() {
+        (0..organism.structure.bonds.len()).collect()
+    } else {
+        candidates
+    }
+}
+
+pub(crate) fn resolve_stress_break(
+    organism: &mut Organism,
+    environment: &Environment,
+    ledger: &mut EnergyLedger,
+    rng: &mut ChaCha8Rng,
+) -> bool {
+    let candidate_indices = stress_break_candidate_indices(organism, environment);
+    let Some(&target_index) = candidate_indices.get(rng.gen_range(0..candidate_indices.len()))
     else {
         return false;
     };
-    let target = *target;
+    let target = organism.structure.bonds[target_index];
     let Some(ia) = organism
         .structure
         .unit_index(target.endpoint_a.constituent_id)
@@ -340,6 +356,53 @@ mod tests {
         assert!(break_net_energy(10.0, 5.0, 3.0).unwrap() > 0.0);
         assert_eq!(break_net_energy(10.0, 0.0, 10.0).unwrap(), 0.0);
         assert!(break_net_energy(10.0, -5.0, 6.0).unwrap() < 0.0)
+    }
+
+    #[test]
+    fn stress_break_candidates_exclude_genome_boundary_bonds() {
+        let genome = crate::genome::initial_genome();
+        let catalog = crate::resources::default_catalog();
+        let blueprint = genome.mature_construction_target().unwrap();
+        let structure = blueprint.realize(&catalog).unwrap();
+        let organism = crate::state::Organism {
+            id: "test".into(),
+            occupied_cells: vec![crate::state::Position { x: 0.0, y: 0.0 }],
+            genome,
+            resource_sense: crate::state::ResourceSense {
+                sensed_resources: Vec::new(),
+                direction_x: 0.0,
+                direction_y: 0.0,
+                direction_strength: 0.0,
+            },
+            memory: Vec::new(),
+            decision_history: crate::decision::DecisionHistory::default(),
+            usable_energy: 1_000_000.0,
+            stress: 0.0,
+            stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
+            stored_material: crate::material_storage::MaterialStorage::default(),
+            structure,
+            development_stage: crate::state::DevelopmentStage::Juvenile,
+            active_transformation_id: None,
+            reproductive_construction: None,
+        };
+        let environment = crate::state::Environment {
+            width: 1000.0,
+            height: 1000.0,
+            catalog: catalog.clone(),
+            field: crate::environment::ActiveMaterialField::new(
+                1000.0,
+                1000.0,
+                crate::environment::DEFAULT_CELL_SIZE,
+            ),
+            vents: Vec::new(),
+        };
+        let candidates = stress_break_candidate_indices(&organism, &environment);
+        assert!(!candidates.is_empty());
+        let genome_bonds = crate::cavity::analyze_genome_cavity(&organism.structure, &catalog)
+            .unwrap()
+            .unwrap()
+            .boundary_bond_indices(&organism.structure);
+        assert!(candidates.iter().all(|index| !genome_bonds.contains(index)));
     }
 
     #[test]
