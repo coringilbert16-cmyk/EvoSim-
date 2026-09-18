@@ -181,13 +181,13 @@ impl DevelopmentalFieldBlueprint {
 pub fn default_developmental_blueprint() -> DevelopmentalFieldBlueprint {
     DevelopmentalFieldBlueprint {
         material_preferences: vec![
-            ("Water", 0.5),
-            ("Nitrogen", 0.5),
-            ("Phosphorus", 0.5),
-            ("Carbon", 0.5),
-            ("Sulfur", 0.5),
-            ("Hydrogen", 0.5),
-            ("Methane", 0.5),
+            ("Carbon", 1.0),
+            ("Nitrogen", 0.0),
+            ("Phosphorus", 0.0),
+            ("Sulfur", 0.0),
+            ("Hydrogen", 0.0),
+            ("Methane", 0.0),
+            ("Water", 0.0),
         ]
         .into_iter()
         .map(|(resource_name, center_preference)| MaterialPreferenceField {
