@@ -343,21 +343,6 @@ pub(crate) fn break_work_cost(
     crate::combine::bond_strength(a, b) * complexity.max(0.0)
 }
 
-pub(crate) fn reinforce_memory_point(organism: &mut Organism, x: f64, y: f64, reinforcement: f64) {
-    if let Some(point) = organism
-        .memory
-        .iter_mut()
-        .find(|p| (p.x - x).abs() < f64::EPSILON && (p.y - y).abs() < f64::EPSILON)
-    {
-        point.strength = crate::math::clamp01(point.strength + reinforcement)
-    } else {
-        organism.memory.push(crate::state::MemoryPoint {
-            x,
-            y,
-            strength: crate::math::clamp01(reinforcement),
-        })
-    }
-}
 
 #[cfg(test)]
 mod tests {
