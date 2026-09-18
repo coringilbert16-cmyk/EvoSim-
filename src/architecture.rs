@@ -261,7 +261,7 @@ fn add_interface(
     let growth = scale / JUVENILE_LINEAR_SCALE;
     let inner: f64 = 1.086_648 * growth;
     let outer: f64 = 1.511_858 * growth;
-    let length: f64 = 0.797_884 * growth;
+    let length: f64 = 0.797_884;
     let gap = outer - inner;
     let tangent: f64 = (length * length - gap * gap).sqrt();
     let center = (inner + outer) / 2.0;
