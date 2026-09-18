@@ -1,4 +1,7 @@
-#![expect(dead_code, reason = "Staged blueprint API retained for subsystem integration")]
+#![expect(
+    dead_code,
+    reason = "Staged blueprint API retained for subsystem integration"
+)]
 //! Unified inherited structural blueprint authority.
 //!
 //! Blueprint intent is separate from physical realization. Actual constituent
