@@ -129,7 +129,7 @@ pub fn analyze_genome_cavity(
         }
         polygons.push((index, polygon));
     }
-    if polygons.is_empty() || !boundary_bonds_are_sealed(structure, &polygons) {
+    if polygons.is_empty() {
         return Ok(None);
     }
 
@@ -240,7 +240,40 @@ pub fn analyze_genome_cavity(
                     segment_in_polygon_boundary(a, b, polygon).then_some(*unit)
                 })
             })
-            .collect();
+            .collect::<Vec<_>>();
+        if boundary_units.is_empty() {
+            continue;
+        }
+        let mut sealed = true;
+        for &edge_index in &face {
+            let a = points[edges[edge_index].from];
+            let b = points[edges[edge_index].to];
+            let Some(unit_a) = polygons.iter().find_map(|(unit, polygon)| {
+                segment_in_polygon_boundary(a, b, polygon).then_some(*unit)
+            }) else {
+                sealed = false;
+                break;
+            };
+            let Some(unit_b) = polygons.iter().find_map(|(unit, polygon)| {
+                (*unit != unit_a && segment_in_polygon_boundary(a, b, polygon)).then_some(*unit)
+            }) else {
+                sealed = false;
+                break;
+            };
+            let id_a = structure.units[unit_a].physical_id;
+            let id_b = structure.units[unit_b].physical_id;
+            if !structure.bonds.iter().any(|bond| {
+                let x = bond.endpoint_a.constituent_id;
+                let y = bond.endpoint_b.constituent_id;
+                (x == id_a && y == id_b) || (x == id_b && y == id_a)
+            }) {
+                sealed = false;
+                break;
+            }
+        }
+        if !sealed {
+            continue;
+        }
         let candidate = GenomeCavity {
             area,
             boundary_units,
