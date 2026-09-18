@@ -48,7 +48,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn juvenile_construction_preserves_full_size_anchor_placements() {
         let genome = initial_genome();
