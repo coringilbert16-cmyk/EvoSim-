@@ -150,7 +150,6 @@ mod integration_tests {
             .field
             .deposit_at_index(i, Material::free_base("Carbon", 10.0));
         s.organisms[0].usable_energy = 0.0;
-        let initial_stored = s.organisms[0].stored_material.total_amount();
         s.organisms[0].decision_history.record(
             ActionKind::Acquire,
             Some(format!("target:{i}")),
@@ -210,6 +209,7 @@ mod integration_tests {
             .field
             .deposit_at_index(occupied_index, Material::free_base("Carbon", 10.0));
         s.organisms[0].usable_energy = 0.0;
+        let initial_stored = s.organisms[0].stored_material.total_amount();
         s.organisms[0].decision_history.record(
             ActionKind::Acquire,
             Some(format!("target:{occupied_index}")),
