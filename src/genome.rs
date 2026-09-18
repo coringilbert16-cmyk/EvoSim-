@@ -113,7 +113,7 @@ impl Genome {
         juvenile: bool,
     ) -> Result<crate::structural_blueprint::StructuralBlueprint, String> {
         let juvenile_scale = if juvenile {
-            crate::architecture::JUVENILE_LINEAR_SCALE
+            crate::developmental_blueprint::JUVENILE_LINEAR_SCALE
         } else {
             1.0
         };
