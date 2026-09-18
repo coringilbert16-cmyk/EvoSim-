@@ -234,15 +234,15 @@ impl DevelopmentalFieldBlueprint {
         // especially useful because their geometry can naturally enclose a
         // cavity larger than the three-Carbon reference without inventing a
         // special genome core.
-        for cycle_count in [4usize] {
-            for resource in &resources {
+        let cycle_count = 4usize;
+        for resource in &resources {
                 let mut ring_variants = Vec::<Vec<BlueprintPlacement>>::new();
                 match &resource.shape.form {
-                    crate::resources::Form::Rectangle { width, height } if cycle_count == 4 => {
+                    crate::resources::Form::Rectangle { width, height } => {
                         let d = (width + height) * 0.5;
-                        for factor in [1.0] {
-                            let radius = d * factor;
-                            ring_variants.push(vec![
+                        let factor = 1.0;
+                        let radius = d * factor;
+                        ring_variants.push(vec![
                                 BlueprintPlacement {
                                     x: 0.0,
                                     y: radius,
@@ -263,8 +263,7 @@ impl DevelopmentalFieldBlueprint {
                                     y: 0.0,
                                     rotation_radians: std::f64::consts::FRAC_PI_2,
                                 },
-                            ]);
-                        }
+                        ]);
                     }
                     _ => {
                         let Some(vertices) = resource.shape.form.polygon_vertices() else {
@@ -277,10 +276,10 @@ impl DevelopmentalFieldBlueprint {
                         if radius <= 0.0 {
                             continue;
                         }
-                        for factor in [1.0] {
-                            let ring_radius =
-                                radius * factor / (std::f64::consts::PI / cycle_count as f64).sin();
-                            let mut placements = Vec::with_capacity(cycle_count);
+                        let factor = 1.0;
+                        let ring_radius =
+                            radius * factor / (std::f64::consts::PI / cycle_count as f64).sin();
+                        let mut placements = Vec::with_capacity(cycle_count);
                             for i in 0..cycle_count {
                                 let angle = i as f64 * std::f64::consts::TAU / cycle_count as f64;
                                 placements.push(BlueprintPlacement {
@@ -290,7 +289,6 @@ impl DevelopmentalFieldBlueprint {
                                 });
                             }
                             ring_variants.push(placements);
-                        }
                     }
                 }
 
