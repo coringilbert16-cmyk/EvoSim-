@@ -204,11 +204,12 @@ impl DevelopmentalFieldBlueprint {
         // capable of producing a cavity and one locally connected growth
         // extension. The actual geometry is taken from the selected resources.
         const MIN_TOTAL_ELEMENTS: usize = 7;
+        const CAVITY_CYCLE_ELEMENTS: usize = 6;
         if count < MIN_TOTAL_ELEMENTS {
             return Err("candidate is too small to express a qualifying cavity and external structure".into());
         }
 
-        let cycle_count = count - 1;
+        let cycle_count = CAVITY_CYCLE_ELEMENTS;
         let mut materials = Vec::with_capacity(count);
 
         // Material preference is sampled at normalized developmental locations
@@ -229,17 +230,25 @@ impl DevelopmentalFieldBlueprint {
             materials.push(material);
         }
 
-        // The final constituent is chosen from the same inherited material
-        // tendency, evaluated where a local growth extension would occur.
-        let extension_material = catalog
-            .iter()
-            .max_by(|a, b| {
-                self.material_preference(&a.name, 1.0, 0.0)
-                    .partial_cmp(&self.material_preference(&b.name, 1.0, 0.0))
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .ok_or("no resource candidate")?;
-        materials.push(extension_material);
+        // Remaining constituents are selected from the inherited material
+        // tendency along a local developmental extension. Their count changes
+        // developmental extent, while physical spacing is determined below
+        // from the selected resource geometry.
+        for extension_index in 0..(count - cycle_count) {
+            let material = catalog
+                .iter()
+                .max_by(|a, b| {
+                    self.material_preference(&a.name, 1.0 + extension_index as f64, 0.0)
+                        .partial_cmp(&self.material_preference(
+                            &b.name,
+                            1.0 + extension_index as f64,
+                            0.0,
+                        ))
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .ok_or("no resource candidate")?;
+            materials.push(material);
+        }
 
         let circumradius = materials
             .iter()
@@ -276,48 +285,39 @@ impl DevelopmentalFieldBlueprint {
             });
         }
 
-        // Place one additional constituent by actual constituent extent. Its
-        // placement is a local physical-contact candidate, not a scaled body
-        // coordinate derived from size_preference.
-        let first = materials
-            .first()
-            .ok_or("candidate has no cycle material")?;
-        let first_radius = first
-            .shape
-            .form
-            .polygon_vertices()
-            .map(|vertices| {
-                vertices
-                    .into_iter()
-                    .map(|(x, y)| x.hypot(y))
-                    .fold(0.0, f64::max)
-            })
-            .unwrap_or(0.0);
-        let extension_radius = extension_material
-            .shape
-            .form
-            .polygon_vertices()
-            .map(|vertices| {
-                vertices
-                    .into_iter()
-                    .map(|(x, y)| x.hypot(y))
-                    .fold(0.0, f64::max)
-            })
-            .unwrap_or(0.0);
-        if first_radius <= 0.0 || extension_radius <= 0.0 {
-            return Err("growth extension requires rigid polygonal geometry".into());
+        // Extend from the cavity boundary by physically sized constituents.
+        // Each extension is admitted as a local contact candidate; no
+        // size_preference-derived coordinate scale is used.
+        let mut previous_center = first_center;
+        let mut previous_radius = first_radius;
+        for extension_index in 0..(count - cycle_count) {
+            let extension_material = materials[cycle_count + extension_index];
+            let extension_radius = extension_material
+                .shape
+                .form
+                .polygon_vertices()
+                .map(|vertices| {
+                    vertices
+                        .into_iter()
+                        .map(|(x, y)| x.hypot(y))
+                        .fold(0.0, f64::max)
+                })
+                .unwrap_or(0.0);
+            if extension_radius <= 0.0 {
+                return Err("growth extension requires rigid polygonal geometry".into());
+            }
+            let extension_center = previous_center + previous_radius + extension_radius;
+            elements.push(BlueprintElement {
+                material: Material::free_base(&extension_material.name, 1.0),
+                placement: BlueprintPlacement {
+                    x: extension_center,
+                    y: 0.0,
+                    rotation_radians: std::f64::consts::PI,
+                },
+            });
+            previous_center = extension_center;
+            previous_radius = extension_radius;
         }
-
-        let first_center = cycle_radius;
-        let extension_center = first_center + first_radius + extension_radius;
-        elements.push(BlueprintElement {
-            material: Material::free_base(&extension_material.name, 1.0),
-            placement: BlueprintPlacement {
-                x: extension_center,
-                y: 0.0,
-                rotation_radians: std::f64::consts::PI,
-            },
-        });
 
         let mut connections = Vec::with_capacity(count);
         for i in 0..cycle_count {
@@ -327,10 +327,18 @@ impl DevelopmentalFieldBlueprint {
                 element_b: i.max(next),
             });
         }
-        connections.push(BlueprintConnection {
-            element_a: 0,
-            element_b: cycle_count,
-        });
+        for extension_index in 0..(count - cycle_count) {
+            let extension = cycle_count + extension_index;
+            let parent = if extension_index == 0 {
+                0
+            } else {
+                extension - 1
+            };
+            connections.push(BlueprintConnection {
+                element_a: parent.min(extension),
+                element_b: parent.max(extension),
+            });
+        }
 
         Ok(StructuralBlueprint::with_anchor_elements(
             elements,
