@@ -85,7 +85,8 @@ pub(crate) fn resolve_stress_break(
     } else {
         candidates
     };
-    let Some(&target_index) = candidate_indices.get(rng.gen_range(0..candidate_indices.len())) else {
+    let Some(&target_index) = candidate_indices.get(rng.gen_range(0..candidate_indices.len()))
+    else {
         return false;
     };
     let target = organism.structure.bonds[target_index];
