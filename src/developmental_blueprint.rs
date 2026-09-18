@@ -90,6 +90,13 @@ pub struct DevelopmentalFieldBlueprint {
 }
 
 impl DevelopmentalFieldBlueprint {
+    /// Converts the inherited size preference into the normalized developmental
+    /// scale consumed by the construction solver. The value is intentionally
+    /// dimensionless; physical mass is determined only after realization.
+    pub fn preferred_developmental_scale(size_preference: f64) -> f64 {
+        size_preference.clamp(0.0, 1.0)
+    }
+
     pub fn validate(&self) -> Result<(), String> {
         if self.material_preferences.is_empty() {
             return Err("developmental blueprint requires material preferences".into());
@@ -163,6 +170,22 @@ mod tests {
             radial_falloff: 0.5,
         };
         assert!(field.evaluate(0.0, 0.0) > field.evaluate(2.0, 0.0));
+    }
+
+    #[test]
+    fn size_preference_maps_to_developmental_scale_without_mass_authority() {
+        assert_eq!(
+            DevelopmentalFieldBlueprint::preferred_developmental_scale(0.0),
+            0.0
+        );
+        assert_eq!(
+            DevelopmentalFieldBlueprint::preferred_developmental_scale(0.5),
+            0.5
+        );
+        assert_eq!(
+            DevelopmentalFieldBlueprint::preferred_developmental_scale(1.0),
+            1.0
+        );
     }
 
     #[test]
