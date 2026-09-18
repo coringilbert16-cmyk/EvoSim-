@@ -202,8 +202,6 @@ pub fn initial_genome() -> Genome {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::SeedableRng;
-
     #[test]
     fn developmental_blueprint_is_the_serialized_structural_authority() {
         let genome = initial_genome();
