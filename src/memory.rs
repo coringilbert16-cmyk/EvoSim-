@@ -202,3 +202,14 @@ mod tests {
         assert!((medium - base) > (large - medium));
     }
 }
+
+
+pub(crate) fn reinforce_memory_point(
+    organism: &mut Organism,
+    sx: f64,
+    sy: f64,
+    memory_strength: f64,
+    capacity: usize,
+) {
+    Simulation::reinforce_memory_point(organism, sx, sy, memory_strength, capacity);
+}
