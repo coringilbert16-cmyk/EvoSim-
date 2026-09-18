@@ -2,7 +2,7 @@
 
 ## Status
 
-**P6.0 AUTHORITY AUDIT COMPLETE — P6.1 IMPLEMENTATION IN PROGRESS**
+**P6.0 COMPLETE — P6.1/P6.2 IMPLEMENTATION IN PROGRESS**
 
 The governing pipeline is:
 
@@ -31,17 +31,17 @@ The physical graph remains authoritative for realized structure.
 - Existing memory_strength remains the formation/reinforcement-strength parameter and is not repurposed as capacity or persistence.
 - Transformation-driven memory reinforcement now uses the same cavity-derived capacity authority rather than a separate fixed capacity.
 
-### Still required for P6.1
+### Remaining P6.1 work
 
-- Replace the inherited discrete body-plan representation with the approved continuous developmental-field representation.
+- Complete removal of remaining legacy architecture helpers from construction/lifecycle code.
 - Define the minimum inherited information for material-composition and structural-density preference fields.
 - Define how size preference maps to preferred developmental mass/scale without creating a hard size ladder.
 - Keep connectivity available as an optional field, inactive until validation demonstrates that material and density fields are insufficient for structural variation.
 - Preserve discrete construction objects only as transient solver artifacts.
 
-## P6.2 — Developmental solver — NEXT
+## P6.2 — Developmental solver — IN PROGRESS
 
-Adapt the existing physical construction machinery to evaluate developmental fields and search for physically valid realizations consistent with already-realized neighborhood structure.
+A first transient field-driven construction candidate now exists. It derives material selection, structural density, and juvenile/adult spatial scale from developmental fields; the returned discrete blueprint is explicitly transient and is passed into the existing physical construction/COMBINE machinery. Remaining P6.2 work is to replace the candidate ring heuristic with genuine candidate search/backtracking driven by field evaluation and already-realized neighborhood constraints.
 
 ## P6.3 — Growth integration
 
