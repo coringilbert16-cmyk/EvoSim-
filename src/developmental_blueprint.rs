@@ -203,8 +203,8 @@ impl DevelopmentalFieldBlueprint {
         // smallest bounded graph that can express both conditions: a cycle
         // capable of producing a cavity and one locally connected growth
         // extension. The actual geometry is taken from the selected resources.
-        const MIN_TOTAL_ELEMENTS: usize = 10;
-        const CAVITY_CYCLE_ELEMENTS: usize = 9;
+        const MIN_TOTAL_ELEMENTS: usize = 13;
+        const CAVITY_CYCLE_ELEMENTS: usize = 12;
         if count < MIN_TOTAL_ELEMENTS {
             return Err(
                 "candidate is too small to express a qualifying cavity and external structure"
