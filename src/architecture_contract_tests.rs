@@ -4,7 +4,7 @@ mod tests {
     use crate::resources::default_catalog;
 
     #[test]
-    fn developmental_realization_uses_a_discrete_juvenile_analog() {
+    fn juvenile_inherits_the_full_adult_developmental_field() {
         let architecture = default_architecture();
         let catalog = default_catalog();
         let adult = architecture.adult_construction_target().unwrap();
@@ -14,7 +14,7 @@ mod tests {
             .developmental_target(JUVENILE_LINEAR_SCALE, &catalog)
             .unwrap();
         assert!(adult.is_connected());
-        assert!(juvenile.elements.len() < adult.elements.len());
+        assert_eq!(juvenile.elements.len(), adult.elements.len());
         assert_eq!(juvenile.anchor_elements.len(), adult.anchor_elements.len());
         assert!(juvenile.is_connected());
     }
