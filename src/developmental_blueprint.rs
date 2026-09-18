@@ -158,7 +158,7 @@ impl DevelopmentalFieldBlueprint {
         let effective_preference = (preference * juvenile_bias).clamp(0.0, 1.0);
 
         let mut feasible = Vec::<(usize, StructuralBlueprint, bool)>::new();
-        for count in 3..=16 {
+        for count in 5..=16 {
             let Ok(candidate) = self.candidate_for_count(catalog, count) else {
                 continue;
             };
@@ -225,212 +225,154 @@ impl DevelopmentalFieldBlueprint {
         catalog: &[BaseResource],
         count: usize,
     ) -> Result<StructuralBlueprint, String> {
-        // The minimum viable realization must contain a closed physical region
-        // plus material outside that region. Those are validation outcomes, not
-        // inherited topology. This candidate generator therefore searches the
-        // smallest bounded graph that can express both conditions: a cycle
-        // capable of producing a cavity and one locally connected growth
-        // extension. The actual geometry is taken from the selected resources.
-        const MIN_TOTAL_ELEMENTS: usize = 13;
-        const CAVITY_CYCLE_ELEMENTS: usize = 12;
-        if count < MIN_TOTAL_ELEMENTS {
-            return Err(
-                "candidate is too small to express a qualifying cavity and external structure"
-                    .into(),
-            );
+        // The solver searches transient physical candidates. Neither the
+        // number of boundary units nor their topology is inherited; both are
+        // candidate choices evaluated against actual geometry and the
+        // qualifying-cavity contract.
+        if count < 5 {
+            return Err("candidate requires room for a qualifying cavity and extra structure".into());
         }
 
-        let cycle_count = CAVITY_CYCLE_ELEMENTS;
-        let mut materials = Vec::with_capacity(count);
+        let mut resources = catalog.iter().collect::<Vec<_>>();
+        resources.sort_by(|a, b| {
+            self.material_preference(&b.name, 0.0, 0.0)
+                .partial_cmp(&self.material_preference(&a.name, 0.0, 0.0))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
-        // Material preference is sampled at normalized developmental locations
-        // only to choose constituent tendencies. These normalized coordinates
-        // are not persisted as physical coordinates.
-        for i in 0..cycle_count {
-            let angle = i as f64 * std::f64::consts::TAU / cycle_count as f64;
-            let x = angle.cos();
-            let y = angle.sin();
-            let material = catalog
-                .iter()
-                .max_by(|a, b| {
-                    self.material_preference(&a.name, x, y)
-                        .partial_cmp(&self.material_preference(&b.name, x, y))
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                })
-                .ok_or("no resource candidate")?;
-            materials.push(material);
-        }
+        // Search small closed boundaries first. Four physical rectangles are
+        // especially useful because their geometry can naturally enclose a
+        // cavity larger than the three-Carbon reference without inventing a
+        // special genome core.
+        for cycle_count in 4..=count.saturating_sub(1).min(8) {
+            for resource in &resources {
+                let mut ring_variants = Vec::<Vec<BlueprintPlacement>>::new();
+                match &resource.shape.form {
+                    crate::resources::Form::Rectangle { width, height } if cycle_count == 4 => {
+                        let d = (width + height) * 0.5;
+                        for factor in [0.90, 1.0, 1.10, 1.20] {
+                            let radius = d * factor;
+                            ring_variants.push(vec![
+                                BlueprintPlacement { x: 0.0, y: radius, rotation_radians: 0.0 },
+                                BlueprintPlacement {
+                                    x: radius,
+                                    y: 0.0,
+                                    rotation_radians: std::f64::consts::FRAC_PI_2,
+                                },
+                                BlueprintPlacement {
+                                    x: 0.0,
+                                    y: -radius,
+                                    rotation_radians: 0.0,
+                                },
+                                BlueprintPlacement {
+                                    x: -radius,
+                                    y: 0.0,
+                                    rotation_radians: std::f64::consts::FRAC_PI_2,
+                                },
+                            ]);
+                        }
+                    }
+                    _ => {
+                        let Some(vertices) = resource.shape.form.polygon_vertices() else {
+                            continue;
+                        };
+                        let radius = vertices
+                            .iter()
+                            .map(|(x, y)| x.hypot(*y))
+                            .fold(0.0, f64::max);
+                        if radius <= 0.0 {
+                            continue;
+                        }
+                        for factor in [0.90, 1.0, 1.10, 1.20, 1.35, 1.50] {
+                            let ring_radius = radius * factor
+                                / (std::f64::consts::PI / cycle_count as f64).sin();
+                            let mut placements = Vec::with_capacity(cycle_count);
+                            for i in 0..cycle_count {
+                                let angle =
+                                    i as f64 * std::f64::consts::TAU / cycle_count as f64;
+                                placements.push(BlueprintPlacement {
+                                    x: ring_radius * angle.cos(),
+                                    y: ring_radius * angle.sin(),
+                                    rotation_radians: angle + std::f64::consts::FRAC_PI_2,
+                                });
+                            }
+                            ring_variants.push(placements);
+                        }
+                    }
+                }
 
-        // Remaining constituents are selected from the inherited material
-        // tendency along a local developmental extension. Their count changes
-        // developmental extent, while physical spacing is determined below
-        // from the selected resource geometry.
-        for extension_index in 0..(count - cycle_count) {
-            let material = catalog
-                .iter()
-                .max_by(|a, b| {
-                    self.material_preference(&a.name, 1.0 + extension_index as f64, 0.0)
-                        .partial_cmp(&self.material_preference(
-                            &b.name,
-                            1.0 + extension_index as f64,
-                            0.0,
-                        ))
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                })
-                .ok_or("no resource candidate")?;
-            materials.push(material);
-        }
+                for ring in ring_variants {
+                    let mut elements = ring
+                        .iter()
+                        .copied()
+                        .map(|placement| BlueprintElement {
+                            material: Material::free_base(&resource.name, 1.0),
+                            placement,
+                        })
+                        .collect::<Vec<_>>();
 
-        let circumradius = materials
-            .iter()
-            .map(|resource| {
-                resource
-                    .shape
-                    .form
-                    .polygon_vertices()
-                    .map(|vertices| {
-                        vertices
-                            .into_iter()
-                            .map(|(x, y)| x.hypot(y))
-                            .fold(0.0, f64::max)
-                    })
-                    .unwrap_or(0.0)
-            })
-            .fold(0.0, f64::max);
-        if !circumradius.is_finite() || circumradius <= 0.0 {
-            return Err("candidate materials have no rigid polygonal geometry".into());
-        }
+                    let mut connections = Vec::with_capacity(count);
+                    for i in 0..cycle_count {
+                        let next = (i + 1) % cycle_count;
+                        connections.push(BlueprintConnection {
+                            element_a: i.min(next),
+                            element_b: i.max(next),
+                        });
+                    }
 
-        // Build the cavity candidate from physical connection spacing rather
-        // than an authored angular ring. Axial hex-lattice steps are generated
-        // from the selected constituent extent; the graph closes naturally
-        // around the interior region.
-        let step = circumradius * 3.0_f64.sqrt();
-        let lattice_directions = [(1i32, 0i32), (0, 1), (-1, 1), (-1, 0), (0, -1), (1, -1)];
-        let mut axial = (0i32, -2i32);
-        let mut cycle_positions = Vec::with_capacity(cycle_count);
-        for &(dq, dr) in &lattice_directions {
-            for _ in 0..2 {
-                let q = axial.0;
-                let r = axial.1;
-                cycle_positions.push((
-                    step * (q as f64 + 0.5 * r as f64),
-                    step * (3.0_f64.sqrt() * 0.5 * r as f64),
-                ));
-                axial.0 += dq;
-                axial.1 += dr;
+                    // Add the requested amount of structure as a local
+                    // extension from one realized boundary location. Its
+                    // placement is only a transient solver seed; the physical
+                    // construction solver remains free to move it.
+                    let first = ring[0];
+                    let outward_length = match &resource.shape.form {
+                        crate::resources::Form::Rectangle { height, .. } => *height,
+                        _ => resource.shape.form.bounding_radius().max(1e-6),
+                    };
+                    let outward = (first.x, first.y);
+                    let norm = outward.0.hypot(outward.1).max(1e-9);
+                    let direction = (outward.0 / norm, outward.1 / norm);
+                    let mut previous = first;
+                    for extension_index in 0..(count - cycle_count) {
+                        let distance = outward_length.max(1e-6);
+                        let placement = BlueprintPlacement {
+                            x: previous.x + direction.0 * distance,
+                            y: previous.y + direction.1 * distance,
+                            rotation_radians: first.rotation_radians,
+                        };
+                        let parent = elements.len() - 1;
+                        elements.push(BlueprintElement {
+                            material: Material::free_base(&resource.name, 1.0),
+                            placement,
+                        });
+                        connections.push(BlueprintConnection {
+                            element_a: parent.min(elements.len() - 1),
+                            element_b: parent.max(elements.len() - 1),
+                        });
+                        previous = placement;
+                        let _ = extension_index;
+                    }
+
+                    let candidate =
+                        StructuralBlueprint::with_anchor_elements(elements, connections, vec![0]);
+                    if !candidate.is_valid() {
+                        continue;
+                    }
+                    let Ok(structure) = candidate.realize(catalog) else {
+                        continue;
+                    };
+                    let qualifies = crate::cavity::analyze_genome_cavity(&structure, catalog)
+                        .ok()
+                        .flatten()
+                        .is_some_and(|cavity| cavity.qualifies());
+                    if qualifies && structure.units.len() == count {
+                        return Ok(candidate);
+                    }
+                }
             }
         }
-        if cycle_positions.len() != cycle_count {
-            return Err("physical cavity candidate did not close its lattice search".into());
-        }
 
-        let mut elements = Vec::with_capacity(count);
-        for (material_resource, (x, y)) in materials[..cycle_count]
-            .iter()
-            .zip(cycle_positions.iter().copied())
-        {
-            elements.push(BlueprintElement {
-                material: Material::free_base(&material_resource.name, 1.0),
-                placement: BlueprintPlacement {
-                    x,
-                    y,
-                    rotation_radians: 0.0,
-                },
-            });
-        }
-
-        let first_radius = materials
-            .first()
-            .and_then(|resource| {
-                resource.shape.form.polygon_vertices().map(|vertices| {
-                    vertices
-                        .into_iter()
-                        .map(|(x, y)| x.hypot(y))
-                        .fold(0.0, f64::max)
-                })
-            })
-            .unwrap_or(0.0);
-        if first_radius <= 0.0 {
-            return Err("growth extension requires rigid polygonal geometry".into());
-        }
-        let first_position = cycle_positions
-            .first()
-            .copied()
-            .ok_or("physical cavity candidate has no boundary anchor")?;
-        let first_distance = first_position.0.hypot(first_position.1);
-        if first_distance <= 0.0 {
-            return Err("physical cavity boundary anchor is degenerate".into());
-        }
-        let outward = (
-            first_position.0 / first_distance,
-            first_position.1 / first_distance,
-        );
-
-        // Extend from the cavity boundary by physically sized constituents.
-        // Each extension is admitted as a local contact candidate; no
-        // size_preference-derived coordinate scale is used.
-        let mut previous_center = first_position;
-        let mut previous_radius = first_radius;
-        for extension_index in 0..(count - cycle_count) {
-            let extension_material = materials[cycle_count + extension_index];
-            let extension_radius = extension_material
-                .shape
-                .form
-                .polygon_vertices()
-                .map(|vertices| {
-                    vertices
-                        .into_iter()
-                        .map(|(x, y)| x.hypot(y))
-                        .fold(0.0, f64::max)
-                })
-                .unwrap_or(0.0);
-            if extension_radius <= 0.0 {
-                return Err("growth extension requires rigid polygonal geometry".into());
-            }
-            let extension_distance = previous_radius + extension_radius;
-            let extension_center = (
-                previous_center.0 + outward.0 * extension_distance,
-                previous_center.1 + outward.1 * extension_distance,
-            );
-            elements.push(BlueprintElement {
-                material: Material::free_base(&extension_material.name, 1.0),
-                placement: BlueprintPlacement {
-                    x: extension_center.0,
-                    y: extension_center.1,
-                    rotation_radians: std::f64::consts::PI,
-                },
-            });
-            previous_center = extension_center;
-            previous_radius = extension_radius;
-        }
-
-        let mut connections = Vec::with_capacity(count);
-        for i in 0..cycle_count {
-            let next = (i + 1) % cycle_count;
-            connections.push(BlueprintConnection {
-                element_a: i.min(next),
-                element_b: i.max(next),
-            });
-        }
-        for extension_index in 0..(count - cycle_count) {
-            let extension = cycle_count + extension_index;
-            let parent = if extension_index == 0 {
-                0
-            } else {
-                extension - 1
-            };
-            connections.push(BlueprintConnection {
-                element_a: parent.min(extension),
-                element_b: parent.max(extension),
-            });
-        }
-
-        Ok(StructuralBlueprint::with_anchor_elements(
-            elements,
-            connections,
-            vec![0],
-        ))
+        Err("candidate search found no physically viable developmental realization".into())
     }
 }
 
