@@ -324,7 +324,7 @@ impl DevelopmentalFieldBlueprint {
                     let norm = outward.0.hypot(outward.1).max(1e-9);
                     let direction = (outward.0 / norm, outward.1 / norm);
                     let mut previous = first;
-                    for extension_index in 0..(count - cycle_count) {
+                    for _ in 0..(count - cycle_count) {
                         let distance = outward_length.max(1e-6);
                         let placement = BlueprintPlacement {
                             x: previous.x + direction.0 * distance,
@@ -341,7 +341,6 @@ impl DevelopmentalFieldBlueprint {
                             element_b: parent.max(elements.len() - 1),
                         });
                         previous = placement;
-                        let _ = extension_index;
                     }
 
                     let candidate =
@@ -361,7 +360,6 @@ impl DevelopmentalFieldBlueprint {
                     }
                 }
             }
-        }
 
         Err("candidate search found no physically viable developmental realization".into())
     }
