@@ -114,7 +114,11 @@ impl Genome {
     }
 
     pub fn mutate(&mut self, rng: &mut ChaCha8Rng) {
-        if !self.traits.iter().any(|trait_def| trait_def.name == "size_preference") {
+        if !self
+            .traits
+            .iter()
+            .any(|trait_def| trait_def.name == "size_preference")
+        {
             self.traits.push(trait_def("size_preference", 0.5, 0.05));
         }
 
