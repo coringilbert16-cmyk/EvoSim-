@@ -780,11 +780,13 @@ Stress damage has an important physical distinction.
 
 When stress causes structural damage:
 
-- a **random non-genome structural bond** is selected first,
-- genome bonds are protected while non-genome structural bonds remain,
-- once all non-genome structural bonds have been broken, genome bonds may become vulnerable.
+- the **weakest eligible non-genome structural bond** is selected first,
+- genome bonds are protected while eligible non-genome structural bonds remain,
+- once all eligible non-genome structural bonds have been broken, genome bonds may become vulnerable.
 
 This ordering is authoritative.
+
+The physical graph must provide an authoritative way to distinguish genome bonds from non-genome bonds. Phase 5 must not infer genome membership from a fixed material recipe, unit count, or implementation-specific index.
 
 The current "weakest bond" implementation is therefore not equivalent to the intended rule.
 
