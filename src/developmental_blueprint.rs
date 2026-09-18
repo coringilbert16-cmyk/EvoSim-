@@ -272,7 +272,6 @@ impl DevelopmentalFieldBlueprint {
             vec![0],
         ))
     }
-
 }
 
 pub fn default_developmental_blueprint() -> DevelopmentalFieldBlueprint {
