@@ -192,6 +192,7 @@ impl Organism {
         &mut self,
         environment: &Environment,
         ledger: &mut EnergyLedger,
+        rng: &mut ChaCha8Rng,
     ) -> bool {
         if !self.stress.is_finite() || !self.stress_threshold.is_finite() {
             return true;
@@ -203,7 +204,7 @@ impl Organism {
             if self.structure.bonds.is_empty() {
                 return true;
             }
-            if !crate::transformation::resolve_stress_break(self, environment, ledger) {
+            if !crate::transformation::resolve_stress_break(self, environment, ledger, rng) {
                 break;
             }
         }
