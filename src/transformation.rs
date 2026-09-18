@@ -76,11 +76,7 @@ fn stress_break_candidate_indices(organism: &Organism, environment: &Environment
         .enumerate()
         .filter_map(|(index, _)| (!genome_bonds.contains(&index)).then_some(index))
         .collect();
-    if candidates.is_empty() {
-        (0..organism.structure.bonds.len()).collect()
-    } else {
-        candidates
-    }
+    candidates
 }
 
 pub(crate) fn resolve_stress_break(
