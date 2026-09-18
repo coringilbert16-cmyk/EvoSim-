@@ -140,10 +140,7 @@ impl Genome {
             probability_sum += t.mutation_probability;
             sigma_sum += t.mutation_sigma.max(0.0);
         }
-        let count = self.traits.len().max(1) as f64;
-
     }
-
 }
 
 fn default_juvenile_reserve() -> Material {
