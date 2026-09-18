@@ -231,16 +231,18 @@ pub fn analyze_genome_cavity(
         {
             continue;
         }
-        let boundary_units = face
-            .iter()
-            .filter_map(|&i| {
-                let a = points[edges[i].from];
-                let b = points[edges[i].to];
-                polygons.iter().find_map(|(unit, polygon)| {
-                    segment_in_polygon_boundary(a, b, polygon).then_some(*unit)
-                })
-            })
-            .collect();
+        let mut boundary_units = Vec::new();
+        for &i in &face {
+            let a = points[edges[i].from];
+            let b = points[edges[i].to];
+            if let Some(unit) = polygons.iter().find_map(|(unit, polygon)| {
+                segment_in_polygon_boundary(a, b, polygon).then_some(*unit)
+            }) {
+                if !boundary_units.contains(&unit) {
+                    boundary_units.push(unit);
+                }
+            }
+        }
         let candidate = GenomeCavity {
             area,
             boundary_units,
