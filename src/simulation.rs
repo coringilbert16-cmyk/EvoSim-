@@ -584,6 +584,7 @@ impl Simulation {
                 &mut organism,
                 &self.environment,
                 &mut self.energy_ledger,
+                &mut self.rng,
             );
             if dead {
                 if let Some(body) = Self::recycle_dead_organism(
@@ -609,9 +610,10 @@ impl Simulation {
         organism: &mut Organism,
         environment: &Environment,
         ledger: &mut EnergyLedger,
+        rng: &mut ChaCha8Rng,
     ) -> bool {
         organism.stress *= crate::state::STRESS_DECAY_PER_TICK;
-        organism.apply_stress_damage(environment, ledger)
+        organism.apply_stress_damage(environment, ledger, rng)
     }
     #[cfg(test)]
     pub(crate) fn total_material_in_system(&self) -> f64 {
