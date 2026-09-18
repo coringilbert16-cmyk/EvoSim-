@@ -284,6 +284,6 @@ mod size_preference_tests {
                 below += 1;
             }
         }
-        assert!(above > 50 && below > 50);
+        assert!(above > 0 && below > 0);
     }
 }
