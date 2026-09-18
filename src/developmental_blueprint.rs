@@ -230,7 +230,9 @@ impl DevelopmentalFieldBlueprint {
         // candidate choices evaluated against actual geometry and the
         // qualifying-cavity contract.
         if count < 5 {
-            return Err("candidate requires room for a qualifying cavity and extra structure".into());
+            return Err(
+                "candidate requires room for a qualifying cavity and extra structure".into(),
+            );
         }
 
         let mut resources = catalog.iter().collect::<Vec<_>>();
@@ -253,7 +255,11 @@ impl DevelopmentalFieldBlueprint {
                         for factor in [0.90, 1.0, 1.10, 1.20] {
                             let radius = d * factor;
                             ring_variants.push(vec![
-                                BlueprintPlacement { x: 0.0, y: radius, rotation_radians: 0.0 },
+                                BlueprintPlacement {
+                                    x: 0.0,
+                                    y: radius,
+                                    rotation_radians: 0.0,
+                                },
                                 BlueprintPlacement {
                                     x: radius,
                                     y: 0.0,
@@ -284,12 +290,13 @@ impl DevelopmentalFieldBlueprint {
                             continue;
                         }
                         for factor in [0.90, 1.0, 1.10, 1.20, 1.35, 1.50] {
-                            let ring_radius = radius * factor
-                                / (std::f64::consts::PI / cycle_count as f64).sin();
+                            let ring_radius =
+                                radius * factor / (std::f64::consts::PI / cycle_count as f64).sin();
                             let mut placements = Vec::with_capacity(cycle_count);
                             for i in 0..cycle_count {
-                                let angle =
-                                    i as f64 * std::f64::consts::TAU / cycle_count as f64;
+                                let angle = i as f64
+                                    * std::f64::consts::TAU
+                                    / cycle_count as f64;
                                 placements.push(BlueprintPlacement {
                                     x: ring_radius * angle.cos(),
                                     y: ring_radius * angle.sin(),
