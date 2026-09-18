@@ -285,6 +285,22 @@ impl DevelopmentalFieldBlueprint {
             });
         }
 
+        let first_radius = materials
+            .first()
+            .and_then(|resource| {
+                resource.shape.form.polygon_vertices().map(|vertices| {
+                    vertices
+                        .into_iter()
+                        .map(|(x, y)| x.hypot(y))
+                        .fold(0.0, f64::max)
+                })
+            })
+            .unwrap_or(0.0);
+        if first_radius <= 0.0 {
+            return Err("growth extension requires rigid polygonal geometry".into());
+        }
+        let first_center = cycle_radius;
+
         // Extend from the cavity boundary by physically sized constituents.
         // Each extension is admitted as a local contact candidate; no
         // size_preference-derived coordinate scale is used.
