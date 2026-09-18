@@ -241,6 +241,7 @@ pub fn analyze_genome_cavity(
                 })
             })
             .collect();
+        eprintln!("CAVITY_DEBUG face area={area} boundary_units={boundary_units:?} minimum={minimum_area}");
         let candidate = GenomeCavity {
             area,
             boundary_units,
