@@ -265,10 +265,6 @@ mod tests {
 
     #[test]
     fn connectivity_can_remain_inactive() {
-    }
-
-    #[test]
-    fn connectivity_can_remain_inactive() {
         let blueprint = default_developmental_blueprint();
         assert_eq!(blueprint.connectivity_preference(0.0, 0.0), 0.0);
     }
