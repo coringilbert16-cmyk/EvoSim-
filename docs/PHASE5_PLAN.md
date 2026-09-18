@@ -175,6 +175,8 @@ Add/adjust contract tests for:
 
 Verify the common heat/stress pathway and stress dissipation.
 
+**Current architecture blocker:** the physical graph does not currently expose an authoritative genome-bond classification. The approved rule requires genome bonds to remain protected while eligible non-genome bonds remain. P5 must not infer that classification from fixed materials, unit counts, indices, or other legacy proxies. This must be resolved through the existing physical-genome authority before stress-damage selection is finalized.
+
 Add/adjust contract tests for:
 
 - maintenance heat,
