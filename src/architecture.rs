@@ -221,15 +221,18 @@ fn add_boundary(
             (x - off, y, std::f64::consts::FRAC_PI_2),
         ]
     } else {
+        let outer = off + 0.330_719;
         vec![
-            (x - hs, y + off, 0.0),
-            (x + hs, y + off, 0.0),
-            (x - off, y - hs, std::f64::consts::FRAC_PI_2),
-            (x - off, y + hs, std::f64::consts::FRAC_PI_2),
-            (x + off, y - hs, std::f64::consts::FRAC_PI_2),
-            (x + off, y + hs, std::f64::consts::FRAC_PI_2),
-            (x - hs, y - off, 0.0),
-            (x + hs, y - off, 0.0),
+            // The adult boundary preserves the juvenile four-sided enclosure
+            // and expands it by adding an outer structural layer.
+            (x, y + off, 0.0),
+            (x + off, y, std::f64::consts::FRAC_PI_2),
+            (x, y - off, 0.0),
+            (x - off, y, std::f64::consts::FRAC_PI_2),
+            (x, y + outer, 0.0),
+            (x + outer, y, std::f64::consts::FRAC_PI_2),
+            (x, y - outer, 0.0),
+            (x - outer, y, std::f64::consts::FRAC_PI_2),
         ]
     };
     for (x, y, rotation_radians) in positions {
@@ -250,11 +253,13 @@ fn add_boundary(
             });
         }
     } else {
-        let ring = [0, 1, 5, 4, 7, 6, 2, 3];
-        for i in 0..8 {
+        // Keep the juvenile enclosure as a closed inner ring. Each added
+        // adult unit attaches to its corresponding outer face rather than
+        // replacing the enclosure topology.
+        for i in 0..4 {
             connections.push(BlueprintConnection {
-                element_a: start + ring[i],
-                element_b: start + ring[(i + 1) % 8],
+                element_a: start + i,
+                element_b: start + 4 + i,
             });
         }
     }
