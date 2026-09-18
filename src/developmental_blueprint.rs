@@ -287,7 +287,7 @@ impl DevelopmentalFieldBlueprint {
                 let r = axial.1;
                 cycle_positions.push((
                     step * (q as f64 + 0.5 * r as f64),
-                    step * (std::f64::consts::SQRT_3 * 0.5 * r as f64),
+                    step * (3.0_f64.sqrt() * 0.5 * r as f64),
                 ));
                 axial.0 += dq;
                 axial.1 += dr;
