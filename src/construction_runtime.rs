@@ -420,9 +420,7 @@ pub(crate) fn realize_material_with_context(
     energy: &mut f64,
     external: &[Vec<usize>],
 ) -> Result<(Vec<usize>, f64), String> {
-    realize_material_with_context_mode(
-        structure, element, catalog, ledger, energy, external, false,
-    )
+    realize_material_with_context_mode(structure, element, catalog, ledger, energy, external, false)
 }
 
 pub(crate) fn realize_material_at_fixed_placement_with_context(
@@ -433,9 +431,7 @@ pub(crate) fn realize_material_at_fixed_placement_with_context(
     energy: &mut f64,
     external: &[Vec<usize>],
 ) -> Result<(Vec<usize>, f64), String> {
-    realize_material_with_context_mode(
-        structure, element, catalog, ledger, energy, external, true,
-    )
+    realize_material_with_context_mode(structure, element, catalog, ledger, energy, external, true)
 }
 
 fn realize_material_with_context_mode(
