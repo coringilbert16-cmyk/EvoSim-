@@ -331,7 +331,7 @@ pub fn default_architecture() -> OrganismArchitecture {
                 role: ArchitectureRole::ConstructionAnchor,
                 material: Material::free_base("Nitrogen", 1.0),
                 center_x: 0.0,
-                center_y: 5.0,
+                center_y: 0.0,
                 extent_x: 1.0,
                 extent_y: 1.0,
                 density: 1.0,
@@ -349,7 +349,7 @@ pub fn default_architecture() -> OrganismArchitecture {
                 role: ArchitectureRole::Interface,
                 material: Material::free_base("Hydrogen", 1.0),
                 center_x: 0.0,
-                center_y: 3.5,
+                center_y: 0.0,
                 extent_x: 1.0,
                 extent_y: 1.0,
                 density: 1.0,
@@ -359,7 +359,7 @@ pub fn default_architecture() -> OrganismArchitecture {
             ArchitectureRelation {
                 region_a: 0,
                 region_b: 1,
-                kind: ArchitectureRelationKind::Interfaces,
+                kind: ArchitectureRelationKind::Encloses,
             },
             ArchitectureRelation {
                 region_a: 1,
