@@ -137,11 +137,7 @@ impl Genome {
             sigma_sum += t.mutation_sigma.max(0.0);
         }
         let count = self.traits.len().max(1) as f64;
-        self.mutate_architecture(
-            rng,
-            (probability_sum / count).clamp(1e-6, 0.25),
-            (sigma_sum / count).clamp(1e-6, 1.0),
-        );
+
     }
 
 }
