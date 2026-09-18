@@ -1,3 +1,5 @@
+#![expect(dead_code, reason = "Staged developmental-field API retained for solver integration")]
+
 //! Continuous inherited developmental-field blueprint.
 //!
 //! This module stores developmental tendencies rather than an exact body plan.
