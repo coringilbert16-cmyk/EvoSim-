@@ -168,3 +168,68 @@ Because EvoSim is a 2D simulation, the phrase **interior surface area** requires
 No numerical cavity-to-memory conversion factor is authorized yet.
 
 The intended emergent relationship also permits organisms with different realized cavity geometry to differ in memory capacity without introducing a direct "intelligence" gene. Offspring variation in developmental traits, including size preference, may consequently produce variation in realized cavity geometry and derived memory capacity.
+
+
+## Approved size-preference inheritance rule
+
+The inherited size-preference value is normalized to **[0, 1]** and expresses developmental scale preference, not minimum viable size.
+
+For offspring variation, the parent's inherited size-preference value is the **center of the offspring mutation distribution**. Mutation is therefore bell-shaped around the parent rather than uniformly distributed across the full scale. Values are bounded to [0, 1].
+
+This means:
+
+> parent size preference → offspring bell-curve variation centered on that parent → developmental preferred mass/scale
+
+Two offspring from the same parent may therefore receive different size-preference values while remaining statistically centered on the parent's value.
+
+The size-preference value is not itself a required final mass, viability threshold, adulthood threshold, or death condition. Physical constraints and developmental realization can cause final adult mass to differ from the preferred value.
+
+## Approved cavity-derived memory rules
+
+Memory capacity and persistence are both consequences of the **realized qualifying genome cavity**.
+
+### Memory quantity
+
+The number of simultaneously retained memory points is derived from the cavity's realized **2D interior area**. Capacity has diminishing returns rather than scaling one-for-one with area.
+
+The minimum qualifying cavity is strictly greater than the established three-Carbon reference area. A qualifying cavity provides at least one memory slot.
+
+The current implementation uses a square-root relationship:
+
+> memory capacity ∝ sqrt(cavity area / minimum qualifying cavity area)
+
+The square-root form is an implementation parameterization of the approved diminishing-returns rule; it does not create a new inherited mental-power gene.
+
+### Memory persistence
+
+Memory retention time is also determined by realized qualifying cavity area. Larger cavities retain memories longer, with diminishing returns.
+
+The baseline memory decay applies at the minimum qualifying cavity size. As cavity area increases, the effective decay approaches zero asymptotically rather than allowing retention time to grow linearly without bound.
+
+The current implementation applies the baseline decay raised to the square root of the inverse normalized cavity area:
+
+> effective decay = baseline decay ^ sqrt(minimum cavity area / realized cavity area)
+
+Thus larger cavities improve persistence while producing progressively smaller additional benefit.
+
+### Cavity qualification and memory existence
+
+Memories may exist only while the organism has a qualifying realized genome cavity:
+
+> enclosed 2D cavity area > three-Carbon reference area
+
+If the realized organism loses that qualifying cavity, its retained memories are cleared. This is a consequence of losing the physical substrate that provides memory capacity and persistence; it is not a separate death or viability authority.
+
+### Existing memory-strength trait
+
+The existing memory_strength trait remains a separate inherited behavioral parameter controlling memory formation/reinforcement strength. It does not determine memory capacity or retention time.
+
+The causal chain is therefore:
+
+> size preference → developmental scale → realized structure → genome cavity geometry → memory capacity + persistence
+
+while:
+
+> memory_strength → memory formation/reinforcement strength
+
+No direct inherited mental-power trait is added.
