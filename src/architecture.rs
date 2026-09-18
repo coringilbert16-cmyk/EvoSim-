@@ -296,8 +296,40 @@ fn add_interface(
         [0, 1, 2, 3]
     } else {
         [0, 2, 4, 6]
+    ];
+
+    // The genome/core remains full size while the surrounding architecture
+    // grows. A single fixed-length interface constituent cannot stretch with
+    // that gap, so the developmental field increases interface material
+    // composition instead. The blueprint remains region-level intent; the
+    // physical graph receives the additional bonded constituents at realization.
+    let anchor_width = 1.511_858;
+    let anchor_height = 0.330_719;
+    let anchor_center = (anchor_width + anchor_height) / 2.0;
+    let boundary_half_width = 1.511_858 / 2.0 * growth;
+    let boundary_half_height = 0.330_719 / 2.0;
+    let boundary_offset = 1.677_217_5 * growth;
+    let anchor_point = (-anchor_width / 2.0, anchor_center + anchor_height / 2.0);
+    let boundary_x = if boundary_count == 4 {
+        -anchor_width / 2.0
+    } else {
+        -boundary_half_width + anchor_width / 2.0
     };
+    let boundary_point = (boundary_x, boundary_offset - boundary_half_height);
+    let interface_span =
+        (boundary_point.0 - anchor_point.0).hypot(boundary_point.1 - anchor_point.1);
+    let segment_count = (interface_span / length).ceil().max(1.0) as usize;
+    let interface_material = interface_material(region, segment_count);
+
     for (i, map) in maps.iter().enumerate() {
+        elements.push(BlueprintElement {
+            material: interface_material.clone(),
+            placement: BlueprintPlacement {
+                x: p[i].0,
+                y: p[i].1,
+                rotation_radians: p[i].2,
+            },
+        });
         connections.push(BlueprintConnection {
             element_a: start + i,
             element_b: boundary_start + *map,
@@ -306,6 +338,31 @@ fn add_interface(
             element_a: start + i,
             element_b: i,
         });
+    }
+}
+
+fn interface_material(region: &ArchitectureRegion, segment_count: usize) -> Material {
+    if segment_count <= 1 {
+        return region.material.clone();
+    }
+
+    let Some((name, amount)) = region.material.parts.first() else {
+        return region.material.clone();
+    };
+    if region.material.parts.len() != 1 || !region.material.internal_bonds.is_empty() {
+        return region.material.clone();
+    }
+
+    Material {
+        parts: (0..segment_count)
+            .map(|_| (name.clone(), *amount))
+            .collect(),
+        internal_bonds: (0..segment_count - 1)
+            .map(|i| crate::resources::InternalBond {
+                part_a: i,
+                part_b: i + 1,
+            })
+            .collect(),
     }
 }
 
@@ -397,6 +454,9 @@ mod tests {
             .map(|element| element.placement.x.hypot(element.placement.y))
             .fold(0.0, f64::max);
         assert!(adult_extent > juvenile_extent);
+        let juvenile_interface_parts = juvenile.elements[8].material.parts.len();
+        let adult_interface_parts = adult.elements[12].material.parts.len();
+        assert!(adult_interface_parts > juvenile_interface_parts);
     }
 
     #[test]
