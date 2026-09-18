@@ -191,7 +191,6 @@ pub(crate) fn reinforce_memory_point(
             }
         }
     }
-}
 
 #[cfg(test)]
 mod tests {
