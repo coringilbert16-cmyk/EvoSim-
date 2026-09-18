@@ -97,7 +97,7 @@ mod integration_tests {
         let before_environment_amount = s.environment.field.total_amount();
         let organism = &mut s.organisms[0];
         organism.structure.bonds.clear();
-        organism.stress = organism.stress_threshold;
+        organism.stress = organism.stress_threshold / crate::state::STRESS_DECAY_PER_TICK;
         let initial_units = organism.structure.units.len();
         assert!(initial_units > 0);
 
