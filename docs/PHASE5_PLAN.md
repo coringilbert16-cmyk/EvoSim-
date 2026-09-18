@@ -52,7 +52,7 @@ No speed, acceleration, friction, terrain, pushing-strength, or movement-energy 
 ### P5-6 — Stress mechanism
 The existing heat/stress pathway remains authoritative:
 
-> energy transaction → heat/stress → threshold → weakest eligible structural bond
+> energy transaction → heat/stress → threshold → random eligible non-genome structural bond
 
 Non-genome structural bonds are damaged before genome bonds. Genome capability-degradation semantics remain outside Phase 5.
 
@@ -175,7 +175,7 @@ Add/adjust contract tests for:
 
 Verify the common heat/stress pathway and stress dissipation.
 
-**Current architecture blocker:** the physical graph does not currently expose an authoritative genome-bond classification. The approved rule requires genome bonds to remain protected while eligible non-genome bonds remain. P5 must not infer that classification from fixed materials, unit counts, indices, or other legacy proxies. This must be resolved through the existing physical-genome authority before stress-damage selection is finalized.
+The existing physical genome-cavity authority provides the genome-bond distinction needed by stress damage. The qualifying cavity boundary identifies the physical genome bonds. P5 must not infer genome membership from fixed materials, unit counts, indices, or other legacy proxies.
 
 Add/adjust contract tests for:
 
@@ -183,7 +183,7 @@ Add/adjust contract tests for:
 - unpaid maintenance deficit,
 - stress decay,
 - threshold-triggered structural damage,
-- weakest eligible bond selection,
+- random eligible non-genome bond selection,
 - genome-bond protection while non-genome bonds remain.
 
 ### P5.3 — Survival/death boundary
