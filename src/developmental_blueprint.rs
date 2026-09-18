@@ -148,9 +148,11 @@ impl DevelopmentalFieldBlueprint {
             return Err("developmental construction requires a resource catalog".into());
         }
 
+        // These fields rank physically feasible developmental realizations.
+        // They never become direct coordinate or piece-count authorities.
         let preference = developmental_scale.clamp(0.0, 1.0);
         let juvenile_bias = juvenile_scale.clamp(0.0, 1.0);
-        let effective_preference = preference * juvenile_bias;
+        let effective_preference = (preference * juvenile_bias).clamp(0.0, 1.0);
 
         let mut feasible = Vec::<(usize, StructuralBlueprint, bool)>::new();
         for count in 3..=16 {
@@ -173,23 +175,47 @@ impl DevelopmentalFieldBlueprint {
             );
         }
 
-        // Genome-capable candidates are preferred when the search can produce
-        // them, but cavity qualification is still derived from realized physics.
-        let qualifying = feasible
+        // A genome-capable realization is required where one exists for this
+        // developmental request, but qualification remains a consequence of
+        // the realized structure rather than an authored core.
+        let qualifying: Vec<_> = feasible
             .iter()
             .filter(|(_, _, qualifies)| *qualifies)
-            .count();
-        if qualifying > 0 {
-            feasible.retain(|(_, _, qualifies)| *qualifies);
-        }
+            .map(|(count, _, _)| *count)
+            .collect();
 
-        let max_index = feasible.len().saturating_sub(1);
-        let selected_index = (effective_preference * max_index as f64).round() as usize;
+        let (min_count, max_count) = if let (Some(min), Some(max)) =
+            (qualifying.iter().min(), qualifying.iter().max())
+        {
+            (*min, *max)
+        } else {
+            let min = feasible.iter().map(|(count, _, _)| *count).min().unwrap();
+            let max = feasible.iter().map(|(count, _, _)| *count).max().unwrap();
+            (min, max)
+        };
+
+        let target_count = min_count as f64
+            + effective_preference * (max_count.saturating_sub(min_count) as f64);
+
+        let selected_index = feasible
+            .iter()
+            .enumerate()
+            .filter(|(_, (_, _, qualifies))| qualifying.is_empty() || *qualifies)
+            .min_by(|(_, a), (_, b)| {
+                let da = (a.0 as f64 - target_count).abs();
+                let db = (b.0 as f64 - target_count).abs();
+                da.partial_cmp(&db)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| a.0.cmp(&b.0))
+            })
+            .map(|(index, _)| index)
+            .expect("selected feasible developmental candidate");
+
         Ok(feasible
             .into_iter()
-            .nth(selected_index.min(max_index))
-            .expect("selected feasible developmental candidate"))
-        .map(|(_, candidate, _)| candidate)
+            .nth(selected_index)
+            .expect("selected feasible developmental candidate")
+            .1)
     }
 
     fn candidate_for_count(
