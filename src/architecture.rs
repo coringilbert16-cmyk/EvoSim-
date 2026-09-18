@@ -5,7 +5,7 @@ use crate::structural_blueprint::{
 };
 use serde::{Deserialize, Serialize};
 
-pub const JUVENILE_LINEAR_SCALE: f64 = 0.40;
+/// Juveniles inherit the complete adult developmental field. Developmental\n/// stage changes how much of that field is realized, not the blueprint itself.\npub const JUVENILE_LINEAR_SCALE: f64 = 1.0;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum ArchitectureRole {
@@ -384,7 +384,7 @@ mod tests {
     }
 
     #[test]
-    fn juvenile_target_is_a_discrete_analog_not_a_scaled_body_plan() {
+    fn juvenile_target_preserves_the_full_adult_developmental_field() {
         let architecture = default_architecture();
         let target = architecture.construction_target(1.0).unwrap();
         assert_eq!(target.elements.len(), 16);
