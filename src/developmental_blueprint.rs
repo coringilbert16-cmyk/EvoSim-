@@ -287,7 +287,7 @@ impl DevelopmentalFieldBlueprint {
                 let r = axial.1;
                 cycle_positions.push((
                     step * (q as f64 + 0.5 * r as f64),
-                    step * (std::f64::consts::FRAC_3_SQRT * 0.5 * r as f64),
+                    step * (std::f64::consts::SQRT_3 * 0.5 * r as f64),
                 ));
                 axial.0 += dq;
                 axial.1 += dr;
@@ -326,12 +326,23 @@ impl DevelopmentalFieldBlueprint {
         if first_radius <= 0.0 {
             return Err("growth extension requires rigid polygonal geometry".into());
         }
-        let first_center = cycle_radius;
+        let first_position = cycle_positions
+            .first()
+            .copied()
+            .ok_or("physical cavity candidate has no boundary anchor")?;
+        let first_distance = first_position.0.hypot(first_position.1);
+        if first_distance <= 0.0 {
+            return Err("physical cavity boundary anchor is degenerate".into());
+        }
+        let outward = (
+            first_position.0 / first_distance,
+            first_position.1 / first_distance,
+        );
 
         // Extend from the cavity boundary by physically sized constituents.
         // Each extension is admitted as a local contact candidate; no
         // size_preference-derived coordinate scale is used.
-        let mut previous_center = first_center;
+        let mut previous_center = first_position;
         let mut previous_radius = first_radius;
         for extension_index in 0..(count - cycle_count) {
             let extension_material = materials[cycle_count + extension_index];
@@ -349,7 +360,7 @@ impl DevelopmentalFieldBlueprint {
             if extension_radius <= 0.0 {
                 return Err("growth extension requires rigid polygonal geometry".into());
             }
-            let extension_center = previous_center + previous_radius + extension_radius;
+            let extension_distance = previous_radius + extension_radius;\n            let extension_center = (\n                previous_center.0 + outward.0 * extension_distance,\n                previous_center.1 + outward.1 * extension_distance,\n            );
             elements.push(BlueprintElement {
                 material: Material::free_base(&extension_material.name, 1.0),
                 placement: BlueprintPlacement {
