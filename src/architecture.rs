@@ -139,8 +139,8 @@ impl OrganismArchitecture {
         let mut elements = Vec::new();
         let mut connections = Vec::new();
         add_anchor(&mut elements, &mut connections, anchor);
-        add_boundary(&mut elements, &mut connections, boundary, scale);
-        add_interface(&mut elements, &mut connections, interface, scale);
+        let boundary_start = add_boundary(&mut elements, &mut connections, boundary, scale);
+        add_interface(&mut elements, &mut connections, interface, scale, boundary_start);
         let target = StructuralBlueprint::with_anchor_elements(elements, connections, vec![0]);
         target.validate()?;
         Ok(target)
@@ -189,7 +189,7 @@ fn add_boundary(
     connections: &mut Vec<BlueprintConnection>,
     region: &ArchitectureRegion,
     scale: f64,
-) {
+) -> usize {
     let growth = scale / JUVENILE_LINEAR_SCALE;
     let hs = 1.511_858 / 2.0 * growth;
     let off = 1.677_217_5 * growth;
@@ -242,6 +242,7 @@ fn add_boundary(
             });
         }
     }
+    start
 }
 
 fn add_interface(
@@ -249,6 +250,7 @@ fn add_interface(
     connections: &mut Vec<BlueprintConnection>,
     region: &ArchitectureRegion,
     scale: f64,
+    boundary_start: usize,
 ) {
     let growth = scale / JUVENILE_LINEAR_SCALE;
     let inner: f64 = 1.086_648 * growth;
@@ -291,7 +293,6 @@ fn add_interface(
         });
     }
     let boundary_count = ((8.0 * region.density * scale).round() as usize).clamp(4, 8);
-    let boundary_start = start - boundary_count;
     let maps = if boundary_count == 4 {
         [0, 1, 2, 3]
     } else {
