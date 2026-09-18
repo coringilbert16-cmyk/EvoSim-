@@ -392,12 +392,7 @@ mod tests {
             .elements
             .iter()
             .filter(|element| element.placement.x != 0.0 || element.placement.y != 0.0)
-            .map(|element| {
-                element
-                    .placement
-                    .x
-                    .hypot(element.placement.y)
-            })
+            .map(|element| element.placement.x.hypot(element.placement.y))
             .fold(0.0, f64::max);
         assert!(adult_extent > juvenile_extent);
     }
