@@ -81,7 +81,9 @@ mod tests {
     fn unsealed_genome_fails_viability() {
         let genome = initial_genome();
         let catalog = default_catalog();
-        let blueprint = genome.developmental_construction_target(&catalog, true).unwrap();
+        let blueprint = genome
+            .developmental_construction_target(&catalog, true)
+            .unwrap();
         let mut structure = blueprint.realize(&catalog).unwrap();
         structure.bonds.clear();
         assert!(validate_realized_juvenile(
