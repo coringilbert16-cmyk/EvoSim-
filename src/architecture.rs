@@ -288,9 +288,27 @@ fn add_interface(
             (-gap).atan2(tangent),
         ),
     ];
+    let anchor_width = 1.511_858;
+    let anchor_height = 0.330_719;
+    let anchor_center = (anchor_width + anchor_height) / 2.0;
+    let boundary_half_width = 1.511_858 / 2.0 * growth;
+    let boundary_half_height = 0.330_719 / 2.0;
+    let boundary_offset = 1.677_217_5 * growth;
+    let anchor_point = (-anchor_width / 2.0, anchor_center + anchor_height / 2.0);
+    let boundary_x = if boundary_count == 4 {
+        -anchor_width / 2.0
+    } else {
+        -boundary_half_width + anchor_width / 2.0
+    };
+    let boundary_point = (boundary_x, boundary_offset - boundary_half_height);
+    let interface_span =
+        (boundary_point.0 - anchor_point.0).hypot(boundary_point.1 - anchor_point.1);
+    let segment_count = (interface_span / length).ceil().max(1.0) as usize;
+    let interface_material = interface_material(region, segment_count);
+
     for (x, y, rotation_radians) in p {
         elements.push(BlueprintElement {
-            material: interface_material(region, 1),
+            material: interface_material.clone(),
             placement: BlueprintPlacement {
                 x,
                 y,
@@ -310,23 +328,6 @@ fn add_interface(
     // that gap, so the developmental field increases interface material
     // composition instead. The blueprint remains region-level intent; the
     // physical graph receives the additional bonded constituents at realization.
-    let anchor_width = 1.511_858;
-    let anchor_height = 0.330_719;
-    let anchor_center = (anchor_width + anchor_height) / 2.0;
-    let boundary_half_width = 1.511_858 / 2.0 * growth;
-    let boundary_half_height = 0.330_719 / 2.0;
-    let boundary_offset = 1.677_217_5 * growth;
-    let anchor_point = (-anchor_width / 2.0, anchor_center + anchor_height / 2.0);
-    let boundary_x = if boundary_count == 4 {
-        -anchor_width / 2.0
-    } else {
-        -boundary_half_width + anchor_width / 2.0
-    };
-    let boundary_point = (boundary_x, boundary_offset - boundary_half_height);
-    let interface_span =
-        (boundary_point.0 - anchor_point.0).hypot(boundary_point.1 - anchor_point.1);
-    let segment_count = (interface_span / length).ceil().max(1.0) as usize;
-    let interface_material = interface_material(region, segment_count);
 
     for (i, map) in maps.iter().enumerate() {
         connections.push(BlueprintConnection {
