@@ -148,6 +148,18 @@ impl Simulation {
     }
 }
 
+}
+
+pub(crate) fn reinforce_memory_point(
+    organism: &mut Organism,
+    sx: f64,
+    sy: f64,
+    memory_strength: f64,
+    capacity: usize,
+) {
+    Simulation::reinforce_memory_point(organism, sx, sy, memory_strength, capacity);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -199,14 +211,5 @@ mod tests {
     }
 }
 
-pub(crate) fn reinforce_memory_point(
-    organism: &mut Organism,
-    sx: f64,
-    sy: f64,
-    memory_strength: f64,
-    capacity: usize,
-) {
-    Simulation::reinforce_memory_point(organism, sx, sy, memory_strength, capacity);
-}
 
 
