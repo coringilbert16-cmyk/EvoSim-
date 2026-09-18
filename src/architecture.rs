@@ -173,16 +173,20 @@ fn add_anchor(
     for (x, y, rotation_radians) in [
         (region.center_x, region.center_y + d, 0.0),
         (
-            region.center_x - d,
-            region.center_y,
-            std::f64::consts::FRAC_PI_2,
+            region.center_x + 1.038_023_593_500_123_6,
+            region.center_y + 1.368_742_593_500_123_7,
+            std::f64::consts::FRAC_PI_4,
         ),
         (
-            region.center_x + d,
-            region.center_y,
+            region.center_x - 0.755_929,
+            region.center_y + 1.677_217_5,
+            0.0,
+        ),
+        (
+            region.center_x - 1.677_217_5,
+            region.center_y + 0.755_929,
             std::f64::consts::FRAC_PI_2,
         ),
-        (region.center_x, region.center_y - d, 0.0),
     ] {
         elements.push(BlueprintElement {
             material: region.material.clone(),
