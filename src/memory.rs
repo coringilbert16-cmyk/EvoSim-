@@ -46,13 +46,11 @@ impl Simulation {
             .memory
             .retain(|p| p.strength > MEMORY_PRUNE_THRESHOLD);
         if organism.memory.len() > capacity {
-            organism
-                .memory
-                .sort_by(|a, b| {
-                    b.strength
-                        .partial_cmp(&a.strength)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                });
+            organism.memory.sort_by(|a, b| {
+                b.strength
+                    .partial_cmp(&a.strength)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
             organism.memory.truncate(capacity);
         }
 
@@ -150,7 +148,6 @@ impl Simulation {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
