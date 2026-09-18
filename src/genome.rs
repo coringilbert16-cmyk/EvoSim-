@@ -225,7 +225,6 @@ mod tests {
     }
 }
 
-
 #[cfg(test)]
 mod size_preference_tests {
     use super::*;
@@ -258,7 +257,12 @@ mod size_preference_tests {
         let mut below = 0;
         for seed in 0..200 {
             let mut genome = initial_genome();
-            genome.traits.iter_mut().find(|t| t.name == "size_preference").unwrap().mutation_probability = 1.0;
+            genome
+                .traits
+                .iter_mut()
+                .find(|t| t.name == "size_preference")
+                .unwrap()
+                .mutation_probability = 1.0;
             genome
             .traits
             .iter_mut()
