@@ -43,7 +43,7 @@ mod integration_tests {
         let o = Simulation::create_initial_organism();
         let blueprint = o
             .genome
-            .developmental_construction_target(&crate::resources::default_catalog())
+            .developmental_construction_target(&crate::resources::default_catalog(), true)
             .unwrap();
         let expected_constituents = blueprint
             .elements
@@ -77,12 +77,12 @@ mod integration_tests {
         let c = &crate::resources::default_catalog();
         let juvenile = o
             .genome
-            .developmental_construction_target(c)
+            .developmental_construction_target(c, true)
             .unwrap()
             .structural_mass(c);
         let mature = o
             .genome
-            .mature_construction_target()
+            .developmental_construction_target(c, false)
             .unwrap()
             .structural_mass(c);
         assert!(mature > juvenile);
