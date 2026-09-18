@@ -273,17 +273,41 @@ impl DevelopmentalFieldBlueprint {
             return Err("candidate materials have no rigid polygonal geometry".into());
         }
 
-        let cycle_radius = circumradius / (std::f64::consts::PI / cycle_count as f64).sin();
-        let mut elements = Vec::with_capacity(count);
+        // Build the cavity candidate from physical connection spacing rather
+        // than an authored angular ring. Axial hex-lattice steps are generated
+        // from the selected constituent extent; the graph closes naturally
+        // around the interior region.
+        let step = 2.0 * circumradius;
+        let lattice_directions = [(1i32, 0i32), (0, 1), (-1, 1), (-1, 0), (0, -1), (1, -1)];
+        let mut axial = (0i32, -2i32);
+        let mut cycle_positions = Vec::with_capacity(cycle_count);
+        for &(dq, dr) in &lattice_directions {
+            for _ in 0..2 {
+                let q = axial.0;
+                let r = axial.1;
+                cycle_positions.push((
+                    step * (q as f64 + 0.5 * r as f64),
+                    step * (std::f64::consts::FRAC_3_SQRT * 0.5 * r as f64),
+                ));
+                axial.0 += dq;
+                axial.1 += dr;
+            }
+        }
+        if cycle_positions.len() != cycle_count {
+            return Err("physical cavity candidate did not close its lattice search".into());
+        }
 
-        for (i, material_resource) in materials[..cycle_count].iter().enumerate() {
-            let angle = i as f64 * std::f64::consts::TAU / cycle_count as f64;
+        let mut elements = Vec::with_capacity(count);
+        for (material_resource, (x, y)) in materials[..cycle_count]
+            .iter()
+            .zip(cycle_positions.iter().copied())
+        {
             elements.push(BlueprintElement {
                 material: Material::free_base(&material_resource.name, 1.0),
                 placement: BlueprintPlacement {
-                    x: cycle_radius * angle.cos(),
-                    y: cycle_radius * angle.sin(),
-                    rotation_radians: angle + std::f64::consts::PI,
+                    x,
+                    y,
+                    rotation_radians: 0.0,
                 },
             });
         }
