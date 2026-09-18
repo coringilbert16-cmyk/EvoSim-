@@ -2,6 +2,7 @@
 #![allow(clippy::too_many_arguments)]
 
 // Core environment, resources, and physical material/structure.
+mod developmental_blueprint;
 mod environment;
 mod environmental_materials;
 mod material_geometry;
