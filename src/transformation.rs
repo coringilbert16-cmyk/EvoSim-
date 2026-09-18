@@ -343,7 +343,6 @@ pub(crate) fn break_work_cost(
     crate::combine::bond_strength(a, b) * complexity.max(0.0)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
