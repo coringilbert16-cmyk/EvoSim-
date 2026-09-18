@@ -544,30 +544,38 @@ The blueprint must not be confused with a hard-coded body-plan category.
 
 # 21. Juvenile Blueprint Construction
 
-The juvenile is generated from the adult blueprint.
+The current seed-cell blueprint is the organism's **canonical juvenile realization**.
 
-The adult blueprint represents **100% size**.
+The juvenile is not created by taking an adult realization and shrinking it until it happens to become viable. Instead:
 
-To construct the initial juvenile:
+1. The genome's developmental architecture defines the inherited developmental intent.
+2. The seed-cell construction at the canonical juvenile scale is the known viable starting realization.
+3. The genome cavity/core is realized at its required full physical size from birth.
+4. The surrounding developmental structure begins at the canonical juvenile extent.
+5. Growth expands realization of this same architecture toward its adult extent.
 
-1. Begin with the adult blueprint.
-2. Reduce the overall spatial layout to approximately **40%**.
-3. Do **not** require the juvenile to contain exactly 40% of the adult's constituents.
-4. Do **not** require exactly 40% of the adult's bonds.
-5. The important target is the reduced **overall layout**.
-6. A constructor or appropriate realization mechanism then attempts to build the closest physically valid structure to that reduced layout.
+The juvenile therefore has a physically validated starting point before developmental growth begins.
 
-The exact realization mechanism remains an implementation question to be resolved through the existing construction architecture rather than through invention of a new biological rule.
+The juvenile target does **not** require:
+
+- a fixed percentage of adult constituents,
+- a fixed percentage of adult bonds,
+- a separately authored juvenile body plan,
+- or arbitrary viability fallback to a nearby scale.
+
+The adult extent is derived by expanding the same developmental architecture. The construction solver remains responsible for finding a physically valid realization.
 
 # 22. Juvenile's Blueprint After Birth
 
-Once the juvenile is born, it possesses the **100% adult blueprint**.
+Once the juvenile is born, it possesses the same inherited developmental architecture that defines its adult target.
 
-It does not receive a permanently reduced 40% blueprint.
+The juvenile's physical structure is smaller than the adult realization, but its developmental intent is not replaced with a separate juvenile blueprint.
 
-The juvenile therefore knows, through its blueprint, what adult structure it is growing toward.
+Growth is therefore progressive realization:
 
-Growth is the process by which physical realization moves toward that adult blueprint.
+> **canonical viable juvenile realization → increasing realization of the same inherited architecture → adult realization**
+
+The genome cavity/core is the explicit full-size exception to surrounding juvenile developmental extent. Its required physical size is established at birth and remains available as the organism's internal developmental anchor.
 
 # 23. Growth Is Not a Decision
 
@@ -696,16 +704,13 @@ The offspring is then constructed within/through the adult's physical reproducti
 
 # 30. Reproductive Juvenile Target
 
-The juvenile must reach:
+The reproductive juvenile must reach the **canonical viable juvenile realization** established by the inherited developmental architecture before birth/separation.
 
-- approximately **40% of adult structural size**, and
-- approximately **90% visual/functional similarity** to the intended reduced realization,
+This is a developmental target, not a requirement that the juvenile contain a fixed percentage of the adult's constituents or bonds.
 
-before birth/separation.
+The genome cavity/core is realized at its required full physical size. The surrounding structure begins at the canonical juvenile extent.
 
-The 40% target concerns the overall spatial realization, not a requirement that the juvenile contain exactly 40% of the adult's constituents or bonds.
-
-The constructor is responsible for finding the closest physically valid realization of the reduced target.
+The constructor is responsible for finding the physically valid realization of this target.
 
 The detailed visual/functional similarity system remains subject to the previously established design and must not be replaced with an invented metric.
 

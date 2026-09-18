@@ -321,6 +321,7 @@ fn solve_parts(
     catalog: &[BaseResource],
     external: &[Vec<usize>],
     heat: f64,
+    fixed_placement: bool,
 ) -> Option<ConstructionSolution> {
     if part == material.parts.len() {
         let (structure, ledger, energy, heat) = solve_external_groups(
@@ -339,8 +340,13 @@ fn solve_parts(
         }
     }
 
-    for candidate_placement in candidate_placements(structure, resource, anchor, &targets, catalog)
-    {
+    let candidates = candidate_placements(structure, resource, anchor, &targets, catalog);
+    let candidates = if fixed_placement {
+        candidates.into_iter().take(1).collect()
+    } else {
+        candidates
+    };
+    for candidate_placement in candidates {
         let mut candidate = structure.clone();
         let mut candidate_ledger = *ledger;
         let mut candidate_energy = energy;
@@ -398,6 +404,7 @@ fn solve_parts(
             catalog,
             external,
             candidate_heat,
+            fixed_placement,
         ) {
             return Some(result);
         }
@@ -413,6 +420,29 @@ pub(crate) fn realize_material_with_context(
     energy: &mut f64,
     external: &[Vec<usize>],
 ) -> Result<(Vec<usize>, f64), String> {
+    realize_material_with_context_mode(structure, element, catalog, ledger, energy, external, false)
+}
+
+pub(crate) fn realize_material_at_fixed_placement_with_context(
+    structure: &mut OrganismStructure,
+    element: &BlueprintElement,
+    catalog: &[BaseResource],
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+    external: &[Vec<usize>],
+) -> Result<(Vec<usize>, f64), String> {
+    realize_material_with_context_mode(structure, element, catalog, ledger, energy, external, true)
+}
+
+fn realize_material_with_context_mode(
+    structure: &mut OrganismStructure,
+    element: &BlueprintElement,
+    catalog: &[BaseResource],
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+    external: &[Vec<usize>],
+    fixed_placement: bool,
+) -> Result<(Vec<usize>, f64), String> {
     let material = &element.material;
     let anchor = placement(element.placement);
     if material.parts.is_empty() {
@@ -421,7 +451,17 @@ pub(crate) fn realize_material_with_context(
 
     let assigned = vec![None; material.parts.len()];
     let Some((trial, trial_ledger, trial_energy, assigned, heat)) = solve_parts(
-        0, structure, ledger, *energy, &assigned, material, anchor, catalog, external, 0.0,
+        0,
+        structure,
+        ledger,
+        *energy,
+        &assigned,
+        material,
+        anchor,
+        catalog,
+        external,
+        0.0,
+        fixed_placement,
     ) else {
         let resource_name = material
             .parts

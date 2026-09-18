@@ -96,48 +96,31 @@ impl OrganismArchitecture {
         Ok(())
     }
 
+    /// The known-viable seed-cell construction. This is the organism's
+    /// canonical juvenile realization; it is not an adult blueprint shrunk
+    /// until it happens to become viable.
+    pub fn juvenile_construction_target(&self) -> Result<StructuralBlueprint, String> {
+        self.construction_target(JUVENILE_LINEAR_SCALE)
+    }
+
+    /// The same inherited developmental architecture at its adult extent.
+    /// Growth expands realization from the canonical juvenile target toward
+    /// this target rather than switching to a separately authored body plan.
     pub fn adult_construction_target(&self) -> Result<StructuralBlueprint, String> {
-        self.construction_target(self.target_scale.clamp(JUVENILE_LINEAR_SCALE, 1.0))
+        self.construction_target(self.target_scale.max(JUVENILE_LINEAR_SCALE))
     }
 
     pub fn developmental_target(
         &self,
         requested_scale: f64,
-        catalog: &[crate::resources::BaseResource],
+        _catalog: &[crate::resources::BaseResource],
     ) -> Result<StructuralBlueprint, String> {
         self.validate()?;
-        let requested = requested_scale.clamp(JUVENILE_LINEAR_SCALE, 1.0);
-        let mut candidates = vec![requested];
-        for step in 1..=12 {
-            candidates.push((requested + step as f64 * 0.05).min(1.0));
-            candidates.push((requested - step as f64 * 0.05).max(JUVENILE_LINEAR_SCALE));
-        }
-        candidates.sort_by(|a, b| {
-            (a - requested)
-                .abs()
-                .partial_cmp(&(b - requested).abs())
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-        candidates.dedup_by(|a, b| (*a - *b).abs() < 1e-12);
-        let mut last_error = "no viable developmental target".to_string();
-        for scale in candidates {
-            let target = self.construction_target(scale)?;
-            match target.realize(catalog) {
-                Ok(structure)
-                    if crate::juvenile_requirements::validate_realized_juvenile(
-                        &structure,
-                        catalog,
-                        crate::juvenile_requirements::JuvenileViabilityRequirements::default(),
-                    )
-                    .is_ok() =>
-                {
-                    return Ok(target);
-                }
-                Ok(_) => last_error = format!("scale {scale:.2} failed juvenile viability"),
-                Err(error) => last_error = format!("scale {scale:.2} failed realization: {error}"),
-            }
-        }
-        Err(last_error)
+        let requested = requested_scale.clamp(
+            JUVENILE_LINEAR_SCALE,
+            self.target_scale.max(JUVENILE_LINEAR_SCALE),
+        );
+        self.construction_target(requested)
     }
 
     fn construction_target(&self, scale: f64) -> Result<StructuralBlueprint, String> {
@@ -156,8 +139,14 @@ impl OrganismArchitecture {
         let mut elements = Vec::new();
         let mut connections = Vec::new();
         add_anchor(&mut elements, &mut connections, anchor);
-        add_boundary(&mut elements, &mut connections, boundary, scale);
-        add_interface(&mut elements, &mut connections, interface, scale);
+        let boundary_start = add_boundary(&mut elements, &mut connections, boundary, scale);
+        add_interface(
+            &mut elements,
+            &mut connections,
+            interface,
+            scale,
+            boundary_start,
+        );
         let target = StructuralBlueprint::with_anchor_elements(elements, connections, vec![0]);
         target.validate()?;
         Ok(target)
@@ -206,9 +195,10 @@ fn add_boundary(
     connections: &mut Vec<BlueprintConnection>,
     region: &ArchitectureRegion,
     scale: f64,
-) {
-    let hs = 1.511_858 / 2.0;
-    let off = 1.677_217_5;
+) -> usize {
+    let growth = scale / JUVENILE_LINEAR_SCALE;
+    let hs = 1.511_858 / 2.0 * growth;
+    let off = 1.677_217_5 * growth;
     let start = elements.len();
     let x = region.center_x;
     let y = region.center_y;
@@ -258,6 +248,7 @@ fn add_boundary(
             });
         }
     }
+    start
 }
 
 fn add_interface(
@@ -265,9 +256,11 @@ fn add_interface(
     connections: &mut Vec<BlueprintConnection>,
     region: &ArchitectureRegion,
     scale: f64,
+    boundary_start: usize,
 ) {
-    let inner: f64 = 1.086_648;
-    let outer: f64 = 1.511_858;
+    let growth = scale / JUVENILE_LINEAR_SCALE;
+    let inner: f64 = 1.086_648 * growth;
+    let outer: f64 = 1.511_858 * growth;
     let length: f64 = 0.797_884;
     let gap = outer - inner;
     let tangent: f64 = (length * length - gap * gap).sqrt();
@@ -295,9 +288,29 @@ fn add_interface(
             (-gap).atan2(tangent),
         ),
     ];
+    let boundary_count = ((8.0 * region.density * scale).round() as usize).clamp(4, 8);
+
+    let anchor_width = 1.511_858;
+    let anchor_height = 0.330_719;
+    let anchor_center = (anchor_width + anchor_height) / 2.0;
+    let boundary_half_width = 1.511_858 / 2.0 * growth;
+    let boundary_half_height = 0.330_719 / 2.0;
+    let boundary_offset = 1.677_217_5 * growth;
+    let anchor_point = (-anchor_width / 2.0, anchor_center + anchor_height / 2.0);
+    let boundary_x = if boundary_count == 4 {
+        -anchor_width / 2.0
+    } else {
+        -boundary_half_width + anchor_width / 2.0
+    };
+    let boundary_point = (boundary_x, boundary_offset - boundary_half_height);
+    let interface_span =
+        (boundary_point.0 - anchor_point.0).hypot(boundary_point.1 - anchor_point.1);
+    let segment_count = (interface_span / length).ceil().max(1.0) as usize;
+    let interface_material = interface_material(region, segment_count);
+
     for (x, y, rotation_radians) in p {
         elements.push(BlueprintElement {
-            material: region.material.clone(),
+            material: interface_material.clone(),
             placement: BlueprintPlacement {
                 x,
                 y,
@@ -305,13 +318,18 @@ fn add_interface(
             },
         });
     }
-    let boundary_count = ((8.0 * region.density * scale).round() as usize).clamp(4, 8);
-    let boundary_start = start - boundary_count;
     let maps = if boundary_count == 4 {
         [0, 1, 2, 3]
     } else {
         [0, 2, 4, 6]
     };
+
+    // The genome/core remains full size while the surrounding architecture
+    // grows. A single fixed-length interface constituent cannot stretch with
+    // that gap, so the developmental field increases interface material
+    // composition instead. The blueprint remains region-level intent; the
+    // physical graph receives the additional bonded constituents at realization.
+
     for (i, map) in maps.iter().enumerate() {
         connections.push(BlueprintConnection {
             element_a: start + i,
@@ -321,6 +339,31 @@ fn add_interface(
             element_a: start + i,
             element_b: i,
         });
+    }
+}
+
+fn interface_material(region: &ArchitectureRegion, segment_count: usize) -> Material {
+    if segment_count <= 1 {
+        return region.material.clone();
+    }
+
+    let Some((name, amount)) = region.material.parts.first() else {
+        return region.material.clone();
+    };
+    if region.material.parts.len() != 1 || !region.material.internal_bonds.is_empty() {
+        return region.material.clone();
+    }
+
+    Material {
+        parts: (0..segment_count)
+            .map(|_| (name.clone(), *amount))
+            .collect(),
+        internal_bonds: (0..segment_count - 1)
+            .map(|i| crate::resources::InternalBond {
+                part_a: i,
+                part_b: i + 1,
+            })
+            .collect(),
     }
 }
 
@@ -384,14 +427,47 @@ mod tests {
     }
 
     #[test]
-    fn juvenile_target_is_a_discrete_analog_not_a_scaled_body_plan() {
+    fn juvenile_target_is_the_canonical_seed_cell_realization() {
         let architecture = default_architecture();
-        let target = architecture.construction_target(1.0).unwrap();
-        assert_eq!(target.elements.len(), 16);
-        assert!(target
+        let target = architecture.juvenile_construction_target().unwrap();
+        assert_eq!(target.elements.len(), 12);
+        assert_eq!(target.anchor_elements, vec![0]);
+    }
+
+    #[test]
+    fn adult_target_is_expanded_from_the_same_architecture() {
+        let architecture = default_architecture();
+        let juvenile = architecture.juvenile_construction_target().unwrap();
+        let adult = architecture.adult_construction_target().unwrap();
+        assert!(adult.elements.len() > juvenile.elements.len());
+        assert_eq!(adult.anchor_elements, juvenile.anchor_elements);
+
+        let juvenile_extent = juvenile
             .elements
             .iter()
-            .all(|element| { element.placement.x.abs() < 2.0 && element.placement.y.abs() < 2.0 }));
-        assert_eq!(target.anchor_elements, vec![0]);
+            .filter(|element| element.placement.x != 0.0 || element.placement.y != 0.0)
+            .map(|element| element.placement.x.hypot(element.placement.y))
+            .fold(0.0, f64::max);
+        let adult_extent = adult
+            .elements
+            .iter()
+            .filter(|element| element.placement.x != 0.0 || element.placement.y != 0.0)
+            .map(|element| element.placement.x.hypot(element.placement.y))
+            .fold(0.0, f64::max);
+        assert!(adult_extent > juvenile_extent);
+        let juvenile_interface_parts = juvenile.elements[8].material.parts.len();
+        let adult_interface_parts = adult.elements[12].material.parts.len();
+        assert!(adult_interface_parts > juvenile_interface_parts);
+    }
+
+    #[test]
+    fn developmental_target_is_not_a_viability_search() {
+        let architecture = default_architecture();
+        let juvenile = architecture
+            .developmental_target(JUVENILE_LINEAR_SCALE, &[])
+            .unwrap();
+        let canonical = architecture.juvenile_construction_target().unwrap();
+        assert_eq!(juvenile.elements, canonical.elements);
+        assert_eq!(juvenile.connections, canonical.connections);
     }
 }

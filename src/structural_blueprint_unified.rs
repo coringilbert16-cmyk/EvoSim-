@@ -208,7 +208,12 @@ impl StructuralBlueprint {
         let mut direct_heat = 0.0;
         let mut direct_ok = true;
         for index in 0..self.elements.len() {
-            match crate::construction_runtime::realize_material_with_context(
+            let realize = if self.anchor_elements.contains(&index) {
+                crate::construction_runtime::realize_material_at_fixed_placement_with_context
+            } else {
+                crate::construction_runtime::realize_material_with_context
+            };
+            match realize(
                 &mut direct_structure,
                 &self.elements[index],
                 catalog,
@@ -315,7 +320,12 @@ impl StructuralBlueprint {
                     realized.get(&neighbor).cloned()
                 })
                 .collect::<Vec<_>>();
-            let (ids, heat) = crate::construction_runtime::realize_material_with_context(
+            let realize = if self.anchor_elements.contains(&index) {
+                crate::construction_runtime::realize_material_at_fixed_placement_with_context
+            } else {
+                crate::construction_runtime::realize_material_with_context
+            };
+            let (ids, heat) = realize(
                 &mut structure,
                 &self.elements[index],
                 catalog,
