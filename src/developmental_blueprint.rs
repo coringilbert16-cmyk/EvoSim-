@@ -144,9 +144,8 @@ impl DevelopmentalFieldBlueprint {
         if catalog.is_empty() {
             return Err("developmental construction requires a resource catalog".into());
         }
-        let scale = (developmental_scale.clamp(0.0, 1.0)
-            * juvenile_scale.clamp(0.40, 1.0))
-            .max(0.40);
+        let scale =
+            (developmental_scale.clamp(0.0, 1.0) * juvenile_scale.clamp(0.40, 1.0)).max(0.40);
         let density = self.density_preference(0.0, 0.0);
         let count = (4.0 + (density * 4.0).round()) as usize;
         let radius = 1.677_217_5 * scale;
