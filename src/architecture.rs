@@ -5,7 +5,7 @@ use crate::structural_blueprint::{
 };
 use serde::{Deserialize, Serialize};
 
-/// Juveniles inherit the complete adult developmental field. Developmental\n/// stage changes how much of that field is realized, not the blueprint itself.\npub const JUVENILE_LINEAR_SCALE: f64 = 1.0;
+pub const JUVENILE_LINEAR_SCALE: f64 = 0.40;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum ArchitectureRole {
@@ -102,24 +102,42 @@ impl OrganismArchitecture {
 
     pub fn developmental_target(
         &self,
-        _requested_scale: f64,
+        requested_scale: f64,
         catalog: &[crate::resources::BaseResource],
     ) -> Result<StructuralBlueprint, String> {
         self.validate()?;
-
-        // The juvenile inherits the complete adult developmental field. A
-        // developmental stage may realize less of that field, but the genome
-        // blueprint itself is never geometrically shrunk.
-        let target = self.construction_target(1.0)?;
-        let structure = target.realize(catalog).map_err(|error| {
-            format!("full adult developmental target failed realization: {error}")
-        })?;
-        crate::juvenile_requirements::validate_realized_juvenile(
-            &structure,
-            catalog,
-            crate::juvenile_requirements::JuvenileViabilityRequirements::default(),
-        )?;
-        Ok(target)
+        let requested = requested_scale.clamp(JUVENILE_LINEAR_SCALE, 1.0);
+        let mut candidates = vec![requested];
+        for step in 1..=12 {
+            candidates.push((requested + step as f64 * 0.05).min(1.0));
+            candidates.push((requested - step as f64 * 0.05).max(JUVENILE_LINEAR_SCALE));
+        }
+        candidates.sort_by(|a, b| {
+            (a - requested)
+                .abs()
+                .partial_cmp(&(b - requested).abs())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        candidates.dedup_by(|a, b| (*a - *b).abs() < 1e-12);
+        let mut last_error = "no viable developmental target".to_string();
+        for scale in candidates {
+            let target = self.construction_target(scale)?;
+            match target.realize(catalog) {
+                Ok(structure)
+                    if crate::juvenile_requirements::validate_realized_juvenile(
+                        &structure,
+                        catalog,
+                        crate::juvenile_requirements::JuvenileViabilityRequirements::default(),
+                    )
+                    .is_ok() =>
+                {
+                    return Ok(target);
+                }
+                Ok(_) => last_error = format!("scale {scale:.2} failed juvenile viability"),
+                Err(error) => last_error = format!("scale {scale:.2} failed realization: {error}"),
+            }
+        }
+        Err(last_error)
     }
 
     fn construction_target(&self, scale: f64) -> Result<StructuralBlueprint, String> {
@@ -366,7 +384,7 @@ mod tests {
     }
 
     #[test]
-    fn juvenile_target_preserves_the_full_adult_developmental_field() {
+    fn juvenile_target_is_a_discrete_analog_not_a_scaled_body_plan() {
         let architecture = default_architecture();
         let target = architecture.construction_target(1.0).unwrap();
         assert_eq!(target.elements.len(), 16);
