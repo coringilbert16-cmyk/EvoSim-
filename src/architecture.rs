@@ -116,8 +116,10 @@ impl OrganismArchitecture {
         _catalog: &[crate::resources::BaseResource],
     ) -> Result<StructuralBlueprint, String> {
         self.validate()?;
-        let requested = requested_scale
-            .clamp(JUVENILE_LINEAR_SCALE, self.target_scale.max(JUVENILE_LINEAR_SCALE));
+        let requested = requested_scale.clamp(
+            JUVENILE_LINEAR_SCALE,
+            self.target_scale.max(JUVENILE_LINEAR_SCALE),
+        );
         self.construction_target(requested)
     }
 
