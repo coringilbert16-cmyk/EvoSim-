@@ -330,6 +330,18 @@ impl Simulation {
     fn process_decomposing_bodies(&mut self) {
         let mut finished_indices = Vec::new();
         for index in 0..self.decomposing_bodies.len() {
+            if self.decomposing_bodies[index].is_finished() {
+                let position = self.decomposing_bodies[index].position.clone();
+                let materials = self.decomposing_bodies[index]
+                    .release_finished_material(&self.environment.catalog);
+                for material in materials {
+                    self.environment
+                        .field
+                        .deposit(position.x, position.y, material);
+                }
+                finished_indices.push(index);
+                continue;
+            }
             let Some(step) = crate::decomposition::resolve_one_bond_with_ledger(
                 &mut self.decomposing_bodies[index],
                 &self.environment,
