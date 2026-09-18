@@ -228,6 +228,79 @@ mod integration_tests {
         });
     }
     #[test]
+    fn maintenance_is_based_on_realized_structural_mass_and_ledger_settlement() {
+        let mut organism = Simulation::create_initial_organism();
+        let catalog = crate::resources::default_catalog();
+        let demand =
+            organism.structural_mass(&catalog) * crate::state::MAINTENANCE_ENERGY_PER_MASS;
+        organism.usable_energy = demand + 1.0;
+        organism.stress = 0.0;
+        let mut ledger = crate::state::EnergyLedger::default();
+
+        organism.apply_maintenance(&catalog, &mut ledger);
+
+        assert!((organism.usable_energy - 1.0).abs() < 1e-12);
+        assert!((organism.stress - demand).abs() < 1e-12);
+        assert!((ledger.total_heat_dissipated - demand).abs() < 1e-12);
+    }
+
+    #[test]
+    fn unpaid_maintenance_becomes_stress_without_direct_death() {
+        let mut organism = Simulation::create_initial_organism();
+        let catalog = crate::resources::default_catalog();
+        let demand =
+            organism.structural_mass(&catalog) * crate::state::MAINTENANCE_ENERGY_PER_MASS;
+        organism.usable_energy = demand * 0.25;
+        organism.stress = 0.0;
+        let mut ledger = crate::state::EnergyLedger::default();
+
+        organism.apply_maintenance(&catalog, &mut ledger);
+
+        let expected_stress = demand;
+        assert!((organism.stress - expected_stress).abs() < 1e-12);
+        assert!((organism.usable_energy - demand * 0.75).abs() < 1e-12);
+        assert!(organism.stress < organism.stress_threshold);
+    }
+
+    #[test]
+    fn zero_maintenance_energy_creates_stress_without_changing_energy() {
+        let mut organism = Simulation::create_initial_organism();
+        let catalog = crate::resources::default_catalog();
+        let demand =
+            organism.structural_mass(&catalog) * crate::state::MAINTENANCE_ENERGY_PER_MASS;
+        organism.usable_energy = 0.0;
+        organism.stress = 0.0;
+        let mut ledger = crate::state::EnergyLedger::default();
+
+        organism.apply_maintenance(&catalog, &mut ledger);
+
+        assert_eq!(organism.usable_energy, 0.0);
+        assert!((organism.stress - demand).abs() < 1e-12);
+        assert_eq!(ledger.total_heat_dissipated, 0.0);
+    }
+
+    #[test]
+    fn maintenance_heat_dissipates_without_repairing_structure() {
+        let mut organism = Simulation::create_initial_organism();
+        let catalog = crate::resources::default_catalog();
+        let initial_units = organism.structure.units.clone();
+        let initial_bonds = organism.structure.bonds.clone();
+        let demand =
+            organism.structural_mass(&catalog) * crate::state::MAINTENANCE_ENERGY_PER_MASS;
+        organism.usable_energy = demand + 1.0;
+        let mut ledger = crate::state::EnergyLedger::default();
+
+        organism.apply_maintenance(&catalog, &mut ledger);
+        let after_maintenance_stress = organism.stress;
+        organism.stress *= crate::state::STRESS_DECAY_PER_TICK;
+
+        assert!(after_maintenance_stress > 0.0);
+        assert!(organism.stress < after_maintenance_stress);
+        assert_eq!(organism.structure.units, initial_units);
+        assert_eq!(organism.structure.bonds, initial_bonds);
+    }
+
+    #[test]
     fn break_action_starts_a_transformation_before_resolution() {
         let mut s = Simulation::new(7, 10.0);
         add_test_break_bond(&mut s);
