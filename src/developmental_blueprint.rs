@@ -202,16 +202,15 @@ impl DevelopmentalFieldBlueprint {
         catalog: &[BaseResource],
         count: usize,
     ) -> Result<StructuralBlueprint, String> {
-        // The solver searches transient physical candidates. Neither the
-        // number of boundary units nor their topology is inherited; both are
-        // candidate choices evaluated against actual geometry and the
-        // qualifying-cavity contract.
         if count < 5 {
             return Err(
                 "candidate requires room for a qualifying cavity and extra structure".into(),
             );
         }
 
+        // Physical feasibility is evaluated before preference. Rectangular
+        // resources are searched first because their realized geometry can
+        // naturally enclose the minimum genome cavity.
         let mut resources = catalog
             .iter()
             .filter(|resource| {
@@ -230,136 +229,124 @@ impl DevelopmentalFieldBlueprint {
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
 
-        // Search small closed boundaries first. Four physical rectangles are
-        // especially useful because their geometry can naturally enclose a
-        // cavity larger than the three-Carbon reference without inventing a
-        // special genome core.
         let cycle_count = 4usize;
-        for resource in &resources {
-                let mut ring_variants = Vec::<Vec<BlueprintPlacement>>::new();
-                match &resource.shape.form {
-                    crate::resources::Form::Rectangle { width, height } => {
-                        let d = (width + height) * 0.5;
-                        let factor = 1.0;
-                        let radius = d * factor;
-                        ring_variants.push(vec![
-                                BlueprintPlacement {
-                                    x: 0.0,
-                                    y: radius,
-                                    rotation_radians: 0.0,
-                                },
-                                BlueprintPlacement {
-                                    x: radius,
-                                    y: 0.0,
-                                    rotation_radians: std::f64::consts::FRAC_PI_2,
-                                },
-                                BlueprintPlacement {
-                                    x: 0.0,
-                                    y: -radius,
-                                    rotation_radians: 0.0,
-                                },
-                                BlueprintPlacement {
-                                    x: -radius,
-                                    y: 0.0,
-                                    rotation_radians: std::f64::consts::FRAC_PI_2,
-                                },
-                        ]);
-                    }
-                    _ => {
-                        let Some(vertices) = resource.shape.form.polygon_vertices() else {
-                            continue;
-                        };
-                        let radius = vertices
-                            .iter()
-                            .map(|(x, y)| x.hypot(*y))
-                            .fold(0.0, f64::max);
-                        if radius <= 0.0 {
-                            continue;
-                        }
-                        let factor = 1.0;
-                        let ring_radius =
-                            radius * factor / (std::f64::consts::PI / cycle_count as f64).sin();
-                        let mut placements = Vec::with_capacity(cycle_count);
-                            for i in 0..cycle_count {
-                                let angle = i as f64 * std::f64::consts::TAU / cycle_count as f64;
-                                placements.push(BlueprintPlacement {
-                                    x: ring_radius * angle.cos(),
-                                    y: ring_radius * angle.sin(),
-                                    rotation_radians: angle + std::f64::consts::FRAC_PI_2,
-                                });
-                            }
-                            ring_variants.push(placements);
-                    }
+        for resource in resources {
+            let ring = match &resource.shape.form {
+                crate::resources::Form::Rectangle { width, height } => {
+                    let radius = (width + height) * 0.5;
+                    vec![
+                        BlueprintPlacement {
+                            x: 0.0,
+                            y: radius,
+                            rotation_radians: 0.0,
+                        },
+                        BlueprintPlacement {
+                            x: radius,
+                            y: 0.0,
+                            rotation_radians: std::f64::consts::FRAC_PI_2,
+                        },
+                        BlueprintPlacement {
+                            x: 0.0,
+                            y: -radius,
+                            rotation_radians: 0.0,
+                        },
+                        BlueprintPlacement {
+                            x: -radius,
+                            y: 0.0,
+                            rotation_radians: std::f64::consts::FRAC_PI_2,
+                        },
+                    ]
                 }
-
-                for ring in ring_variants {
-                    let mut elements = ring
+                _ => {
+                    let Some(vertices) = resource.shape.form.polygon_vertices() else {
+                        continue;
+                    };
+                    let radius = vertices
                         .iter()
-                        .copied()
-                        .map(|placement| BlueprintElement {
-                            material: Material::free_base(&resource.name, 1.0),
-                            placement,
+                        .map(|(x, y)| x.hypot(*y))
+                        .fold(0.0, f64::max);
+                    if radius <= 0.0 {
+                        continue;
+                    }
+                    let ring_radius =
+                        radius / (std::f64::consts::PI / cycle_count as f64).sin();
+                    (0..cycle_count)
+                        .map(|i| {
+                            let angle =
+                                i as f64 * std::f64::consts::TAU / cycle_count as f64;
+                            BlueprintPlacement {
+                                x: ring_radius * angle.cos(),
+                                y: ring_radius * angle.sin(),
+                                rotation_radians: angle
+                                    + std::f64::consts::FRAC_PI_2,
+                            }
                         })
-                        .collect::<Vec<_>>();
-
-                    let mut connections = Vec::with_capacity(count);
-                    for i in 0..cycle_count {
-                        let next = (i + 1) % cycle_count;
-                        connections.push(BlueprintConnection {
-                            element_a: i.min(next),
-                            element_b: i.max(next),
-                        });
-                    }
-
-                    // Add the requested amount of structure as a local
-                    // extension from one realized boundary location. Its
-                    // placement is only a transient solver seed; the physical
-                    // construction solver remains free to move it.
-                    let first = ring[0];
-                    let outward_length = match &resource.shape.form {
-                        crate::resources::Form::Rectangle { height, .. } => *height,
-                        _ => resource.shape.form.bounding_radius().max(1e-6),
-                    };
-                    let outward = (first.x, first.y);
-                    let norm = outward.0.hypot(outward.1).max(1e-9);
-                    let direction = (outward.0 / norm, outward.1 / norm);
-                    let mut previous = first;
-                    for _ in 0..(count - cycle_count) {
-                        let distance = outward_length.max(1e-6);
-                        let placement = BlueprintPlacement {
-                            x: previous.x + direction.0 * distance,
-                            y: previous.y + direction.1 * distance,
-                            rotation_radians: first.rotation_radians,
-                        };
-                        let parent = elements.len() - 1;
-                        elements.push(BlueprintElement {
-                            material: Material::free_base(&resource.name, 1.0),
-                            placement,
-                        });
-                        connections.push(BlueprintConnection {
-                            element_a: parent.min(elements.len() - 1),
-                            element_b: parent.max(elements.len() - 1),
-                        });
-                        previous = placement;
-                    }
-
-                    let candidate =
-                        StructuralBlueprint::with_anchor_elements(elements, connections, vec![0]);
-                    if !candidate.is_valid() {
-                        continue;
-                    }
-                    let Ok(structure) = candidate.realize(catalog) else {
-                        continue;
-                    };
-                    let qualifies = crate::cavity::analyze_genome_cavity(&structure, catalog)
-                        .ok()
-                        .flatten()
-                        .is_some_and(|cavity| cavity.qualifies());
-                    if qualifies && structure.units.len() == count {
-                        return Ok(candidate);
-                    }
+                        .collect()
                 }
+            };
+
+            let mut elements = ring
+                .iter()
+                .copied()
+                .map(|placement| BlueprintElement {
+                    material: Material::free_base(&resource.name, 1.0),
+                    placement,
+                })
+                .collect::<Vec<_>>();
+
+            let mut connections = Vec::with_capacity(count);
+            for i in 0..cycle_count {
+                let next = (i + 1) % cycle_count;
+                connections.push(BlueprintConnection {
+                    element_a: i.min(next),
+                    element_b: i.max(next),
+                });
             }
+
+            let first = ring[0];
+            let outward_length = match &resource.shape.form {
+                crate::resources::Form::Rectangle { height, .. } => *height,
+                _ => resource.shape.form.bounding_radius().max(1e-6),
+            };
+            let outward = (first.x, first.y);
+            let norm = outward.0.hypot(outward.1).max(1e-9);
+            let direction = (outward.0 / norm, outward.1 / norm);
+            let mut previous = first;
+
+            for _ in 0..(count - cycle_count) {
+                let placement = BlueprintPlacement {
+                    x: previous.x + direction.0 * outward_length.max(1e-6),
+                    y: previous.y + direction.1 * outward_length.max(1e-6),
+                    rotation_radians: first.rotation_radians,
+                };
+                let parent = elements.len() - 1;
+                elements.push(BlueprintElement {
+                    material: Material::free_base(&resource.name, 1.0),
+                    placement,
+                });
+                connections.push(BlueprintConnection {
+                    element_a: parent,
+                    element_b: parent + 1,
+                });
+                previous = placement;
+            }
+
+            let candidate =
+                StructuralBlueprint::with_anchor_elements(elements, connections, vec![0]);
+            if !candidate.is_valid() {
+                continue;
+            }
+            let Ok(structure) = candidate.realize(catalog) else {
+                continue;
+            };
+            let qualifies = crate::cavity::analyze_genome_cavity(&structure, catalog)
+                .ok()
+                .flatten()
+                .is_some_and(|cavity| cavity.qualifies());
+            if qualifies && structure.units.len() == count {
+                return Ok(candidate);
+            }
+        }
 
         Err("candidate search found no physically viable developmental realization".into())
     }
