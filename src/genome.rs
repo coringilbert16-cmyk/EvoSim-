@@ -3,7 +3,9 @@ use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 
-use crate::developmental_blueprint::{default_developmental_blueprint, DevelopmentalFieldBlueprint};
+use crate::developmental_blueprint::{
+    default_developmental_blueprint, DevelopmentalFieldBlueprint,
+};
 use crate::resources::Material;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
