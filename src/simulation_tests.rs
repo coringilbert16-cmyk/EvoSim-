@@ -150,6 +150,7 @@ mod integration_tests {
             .field
             .deposit_at_index(i, Material::free_base("Carbon", 10.0));
         s.organisms[0].usable_energy = 0.0;
+        let initial_stored = s.organisms[0].stored_material.total_amount();
         s.organisms[0].decision_history.record(
             ActionKind::Acquire,
             Some(format!("target:{i}")),
@@ -215,7 +216,7 @@ mod integration_tests {
             OutcomeKind::Beneficial,
         );
         s.step();
-        assert_eq!(s.organisms[0].stored_material.total_amount(), 1.0);
+        assert_eq!(s.organisms[0].stored_material.total_amount(), initial_stored + 1.0);
         assert_eq!(
             s.environment.field.cells[i].materials[0].total_amount(),
             10.0
