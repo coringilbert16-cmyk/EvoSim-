@@ -97,6 +97,7 @@ mod integration_tests {
         let before_environment_amount = s.environment.field.total_amount();
         let organism = &mut s.organisms[0];
         organism.structure.bonds.clear();
+        organism.stress = organism.stress_threshold;
         let initial_units = organism.structure.units.len();
         assert!(initial_units > 0);
 
@@ -273,7 +274,7 @@ mod integration_tests {
 
         let expected_stress = demand;
         assert!((organism.stress - expected_stress).abs() < 1e-12);
-        assert!((organism.usable_energy - demand * 0.75).abs() < 1e-12);
+        assert_eq!(organism.usable_energy, 0.0);
         assert!(organism.stress < organism.stress_threshold);
     }
 
