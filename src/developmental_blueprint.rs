@@ -265,7 +265,6 @@ impl DevelopmentalFieldBlueprint {
                 element_b: i.max((i + 1) % count),
             })
             .collect();
-        StructuralBlueprint::with_anchor_elements(elements, connections, vec![0]).validate()?;
         Ok(StructuralBlueprint::with_anchor_elements(
             elements,
             connections,
