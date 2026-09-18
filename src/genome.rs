@@ -59,6 +59,12 @@ impl Genome {
         self.trait_value("memory_strength", 0.5).clamp(0.0, 1.0)
     }
 
+    /// Inherited developmental preference for adult scale, centered at the
+    /// parent's value when offspring mutation is sampled.
+    pub fn size_preference(&self) -> f64 {
+        self.trait_value("size_preference", 0.5).clamp(0.0, 1.0)
+    }
+
     pub fn perception_radius(&self) -> f64 {
         self.trait_value("perception_radius", 100.0).max(0.0)
     }
@@ -100,11 +106,24 @@ impl Genome {
     }
 
     pub fn mutate(&mut self, rng: &mut ChaCha8Rng) {
+        if !self.traits.iter().any(|trait_def| trait_def.name == "size_preference") {
+            self.traits.push(trait_def("size_preference", 0.5, 0.05));
+        }
+
         let mut probability_sum = 0.0;
         let mut sigma_sum = 0.0;
         for t in &mut self.traits {
             if rng.gen::<f64>() < t.mutation_probability.clamp(1e-6, 0.25) {
-                t.value += rng.gen_range(-1.0..1.0) * t.mutation_sigma.max(0.0);
+                let delta = if t.name == "size_preference" {
+                    gaussian_unit(rng) * t.mutation_sigma.max(0.0)
+                } else {
+                    rng.gen_range(-1.0..1.0) * t.mutation_sigma.max(0.0)
+                };
+                t.value = if t.name == "size_preference" {
+                    (t.value + delta).clamp(0.0, 1.0)
+                } else {
+                    t.value + delta
+                };
             }
             if rng.gen::<f64>() < 0.001 {
                 t.mutation_probability =
@@ -154,6 +173,12 @@ fn default_juvenile_energy_reserve() -> f64 {
     16.0
 }
 
+fn gaussian_unit(rng: &mut ChaCha8Rng) -> f64 {
+    let u1 = rng.gen_range(f64::MIN_POSITIVE..1.0);
+    let u2 = rng.gen_range(0.0..1.0);
+    (-2.0 * u1.ln()).sqrt() * (std::f64::consts::TAU * u2).cos()
+}
+
 fn trait_def(name: &str, value: f64, sigma: f64) -> TraitDef {
     TraitDef {
         name: name.into(),
@@ -167,6 +192,7 @@ pub fn initial_genome() -> Genome {
     Genome {
         traits: vec![
             trait_def("memory_strength", 0.5, 0.05),
+            trait_def("size_preference", 0.5, 0.05),
             trait_def("perception_radius", 100.0, 1.0),
             trait_def("sensory_resolution", 0.5, 0.05),
             trait_def("directional_resolution", 1.0, 0.05),
