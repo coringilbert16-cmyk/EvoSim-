@@ -1,4 +1,7 @@
-#![expect(dead_code, reason = "Staged developmental-field API retained for solver integration")]
+#![expect(
+    dead_code,
+    reason = "Staged developmental-field API retained for solver integration"
+)]
 
 //! Continuous inherited developmental-field blueprint.
 //!
@@ -176,7 +179,11 @@ impl DevelopmentalFieldBlueprint {
                 element_b: i.max((i + 1) % count),
             })
             .collect();
-        Ok(StructuralBlueprint::with_anchor_elements(elements, connections, vec![0]))
+        Ok(StructuralBlueprint::with_anchor_elements(
+            elements,
+            connections,
+            vec![0],
+        ))
     }
 }
 
@@ -192,11 +199,13 @@ pub fn default_developmental_blueprint() -> DevelopmentalFieldBlueprint {
             ("Water", 0.0),
         ]
         .into_iter()
-        .map(|(resource_name, center_preference)| MaterialPreferenceField {
-            resource_name: resource_name.into(),
-            center_preference,
-            radial_falloff: 0.0,
-        })
+        .map(
+            |(resource_name, center_preference)| MaterialPreferenceField {
+                resource_name: resource_name.into(),
+                center_preference,
+                radial_falloff: 0.0,
+            },
+        )
         .collect(),
         structural_density: StructuralDensityField {
             center_preference: 0.5,
@@ -247,8 +256,12 @@ mod tests {
     fn construction_candidate_is_derived_from_fields_and_juvenile_scale() {
         let blueprint = default_developmental_blueprint();
         let catalog = crate::resources::default_catalog();
-        let adult = blueprint.construction_candidate(&catalog, 0.5, 1.0).unwrap();
-        let juvenile = blueprint.construction_candidate(&catalog, 0.5, 0.40).unwrap();
+        let adult = blueprint
+            .construction_candidate(&catalog, 0.5, 1.0)
+            .unwrap();
+        let juvenile = blueprint
+            .construction_candidate(&catalog, 0.5, 0.40)
+            .unwrap();
         assert!(adult.is_valid() && juvenile.is_valid());
         let adult_extent = adult
             .elements
