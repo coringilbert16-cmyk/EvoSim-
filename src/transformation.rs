@@ -2,6 +2,8 @@ use crate::decision::{ActionKind, OutcomeKind};
 use crate::decision_runtime::ActionCandidate;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
 use crate::state::{ActiveTransformation, EnergyLedger, Environment, Organism, Simulation};
+use rand::Rng;
+use rand_chacha::ChaCha8Rng;
 
 fn water_field_amount(environment: &Environment, organism: &Organism) -> f64 {
     organism
@@ -64,21 +66,29 @@ pub(crate) fn resolve_stress_break(
     organism: &mut Organism,
     environment: &Environment,
     ledger: &mut EnergyLedger,
+    rng: &mut ChaCha8Rng,
 ) -> bool {
-    let Some((_, target)) = organism
+    let genome_bonds = crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
+        .ok()
+        .flatten()
+        .map(|cavity| cavity.boundary_bond_indices(&organism.structure))
+        .unwrap_or_default();
+    let candidates: Vec<usize> = organism
         .structure
         .bonds
         .iter()
         .enumerate()
-        .min_by(|(_, a), (_, b)| {
-            a.strength
-                .partial_cmp(&b.strength)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-    else {
+        .filter_map(|(index, _)| (!genome_bonds.contains(&index)).then_some(index))
+        .collect();
+    let candidate_indices = if candidates.is_empty() {
+        (0..organism.structure.bonds.len()).collect()
+    } else {
+        candidates
+    };
+    let Some(&target_index) = candidate_indices.get(rng.gen_range(0..candidate_indices.len())) else {
         return false;
     };
-    let target = *target;
+    let target = organism.structure.bonds[target_index];
     let Some(ia) = organism
         .structure
         .unit_index(target.endpoint_a.constituent_id)
