@@ -65,7 +65,7 @@ mod tests {
     fn viability_does_not_depend_on_a_predefined_piece_count_or_core() {
         let genome = initial_genome();
         let catalog = default_catalog();
-        let blueprint = genome.developmental_construction_target(&catalog).unwrap();
+        let blueprint = genome.developmental_construction_target(&catalog, true).unwrap();
         let structure = blueprint.realize(&catalog).unwrap();
         validate_realized_juvenile(
             &structure,
@@ -79,7 +79,7 @@ mod tests {
     fn unsealed_genome_fails_viability() {
         let genome = initial_genome();
         let catalog = default_catalog();
-        let blueprint = genome.developmental_construction_target(&catalog).unwrap();
+        let blueprint = genome.developmental_construction_target(&catalog, true).unwrap();
         let mut structure = blueprint.realize(&catalog).unwrap();
         structure.bonds.clear();
         assert!(validate_realized_juvenile(
