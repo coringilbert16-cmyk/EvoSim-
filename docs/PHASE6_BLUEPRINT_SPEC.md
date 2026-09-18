@@ -143,3 +143,28 @@ P6.1 does not redesign:
 - decomposition,
 - environmental material semantics,
 - or evolution.
+
+
+## Cavity-derived memory capacity
+
+The genome-cavity's physical geometry is permitted to become the physical basis for memory capacity.
+
+The intended causal relationship is:
+
+> **genome/developmental information → realized genome cavity geometry → interior surface measure → memory capacity**
+
+This is a physical consequence of the organism rather than a separate authored "mental power" body-plan variable.
+
+The following distinction is required:
+
+- **Cavity geometry** determines the available physical basis for memory capacity.
+- **Existing `memory_strength`** remains a distinct inherited behavioral parameter controlling the strength of memory formation/reinforcement where already established.
+- Memory capacity must not become a replacement authority for genome identity, development, adulthood, reproduction, or survival.
+
+The current implementation's fixed `MAX_MEMORY_POINTS` is therefore not treated as the final biological authority for memory capacity. During P6, it must be evaluated for replacement or derivation from realized cavity geometry.
+
+Because EvoSim is a 2D simulation, the phrase **interior surface area** requires an explicit geometric definition before it is used quantitatively. The current genome-cavity implementation calculates enclosed 2D area; that is not automatically equivalent to an interior surface measure. P6 must therefore define the exact physical measure intended by this concept before assigning a conversion ratio to memory capacity.
+
+No numerical cavity-to-memory conversion factor is authorized yet.
+
+The intended emergent relationship also permits organisms with different realized cavity geometry to differ in memory capacity without introducing a direct "intelligence" gene. Offspring variation in developmental traits, including size preference, may consequently produce variation in realized cavity geometry and derived memory capacity.
