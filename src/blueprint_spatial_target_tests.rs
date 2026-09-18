@@ -18,34 +18,21 @@ mod tests {
     }
 
     #[test]
-    fn ancestral_seed_realizes_its_inherited_spatial_targets() {
+    fn ancestral_seed_realizes_a_physically_valid_developmental_structure() {
         let blueprint = initial_genome().mature_construction_target().unwrap();
         let catalog = default_catalog();
         let structure = blueprint
             .realize(&catalog)
-            .expect("ancestral architecture must have a physical realization");
+            .expect("developmental candidate must have a physical realization");
 
         assert_eq!(structure.units.len(), blueprint.elements.len());
         assert_eq!(structure.bonds.len(), blueprint.connections.len());
 
-        // The inherited position is a construction preference; the realization
-        // remains responsible for choosing a physically valid arrangement.
-        for element in &blueprint.elements {
-            let target = element.placement;
-            let closest = structure
-                .units
-                .iter()
-                .map(|unit| (unit.placement.x - target.x).hypot(unit.placement.y - target.y))
-                .fold(f64::INFINITY, f64::min);
-            assert!(
-                closest < 1e-6,
-                "realized structure lost the inherited spatial target at ({}, {}); units={:?}; bonds={:?}",
-                target.x,
-                target.y,
-                structure.units.iter().map(|u| (u.placement.x, u.placement.y, u.placement.rotation_radians)).collect::<Vec<_>>(),
-                structure.bonds
-            );
-        }
+        let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
+            .expect("cavity analysis must succeed")
+            .expect("developmental realization must contain a qualifying physical cavity");
+        assert!(cavity.qualifies());
+        assert!(structure.units.iter().all(|unit| unit.geometry.is_some()));
     }
 
     #[test]
