@@ -294,9 +294,7 @@ impl DevelopmentalFieldBlueprint {
                                 radius * factor / (std::f64::consts::PI / cycle_count as f64).sin();
                             let mut placements = Vec::with_capacity(cycle_count);
                             for i in 0..cycle_count {
-                                let angle = i as f64
-                                    * std::f64::consts::TAU
-                                    / cycle_count as f64;
+                                let angle = i as f64 * std::f64::consts::TAU / cycle_count as f64;
                                 placements.push(BlueprintPlacement {
                                     x: ring_radius * angle.cos(),
                                     y: ring_radius * angle.sin(),
