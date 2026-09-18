@@ -65,7 +65,9 @@ mod tests {
     fn viability_does_not_depend_on_a_predefined_piece_count_or_core() {
         let genome = initial_genome();
         let catalog = default_catalog();
-        let blueprint = genome.developmental_construction_target(&catalog, true).unwrap();
+        let blueprint = genome
+            .developmental_construction_target(&catalog, true)
+            .unwrap();
         let structure = blueprint.realize(&catalog).unwrap();
         validate_realized_juvenile(
             &structure,
