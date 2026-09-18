@@ -6,6 +6,8 @@
 //! It contains no constituent instances, coordinates, bonds, rotations,
 //! silhouette, or guaranteed topology.
 
+use crate::resources::{BaseResource, Material};
+use crate::structural_blueprint::{BlueprintConnection, BlueprintElement, BlueprintPlacement, StructuralBlueprint};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -123,6 +125,57 @@ impl DevelopmentalFieldBlueprint {
     pub fn connectivity_preference(&self, x: f64, y: f64) -> f64 {
         self.connectivity.evaluate(x, y)
     }
+
+    /// Produces a discrete construction candidate from continuous developmental
+    /// preferences. The returned StructuralBlueprint is a transient solver
+    /// artifact; it is never stored in the genome.
+    pub fn construction_candidate(
+        &self,
+        catalog: &[BaseResource],
+        developmental_scale: f64,
+        juvenile_scale: f64,
+    ) -> Result<StructuralBlueprint, String> {
+        self.validate()?;
+        if catalog.is_empty() {
+            return Err("developmental construction requires a resource catalog".into());
+        }
+        let scale = (developmental_scale.clamp(0.0, 1.0)
+            * juvenile_scale.clamp(0.40, 1.0))
+            .max(0.40);
+        let density = self.density_preference(0.0, 0.0);
+        let count = (4.0 + (density * 4.0).round()) as usize;
+        let radius = 1.677_217_5 * scale;
+        let mut elements = Vec::with_capacity(count);
+        for i in 0..count {
+            let angle = i as f64 * std::f64::consts::TAU / count as f64;
+            let x = radius * angle.cos();
+            let y = radius * angle.sin();
+            let material_name = catalog
+                .iter()
+                .max_by(|a, b| {
+                    self.material_preference(&a.name, x / scale, y / scale)
+                        .partial_cmp(&self.material_preference(&b.name, x / scale, y / scale))
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .map(|resource| resource.name.clone())
+                .ok_or("no resource candidate")?;
+            elements.push(BlueprintElement {
+                material: Material::free_base(&material_name, 1.0),
+                placement: BlueprintPlacement {
+                    x,
+                    y,
+                    rotation_radians: angle + std::f64::consts::FRAC_PI_2,
+                },
+            });
+        }
+        let connections = (0..count)
+            .map(|i| BlueprintConnection {
+                element_a: i.min((i + 1) % count),
+                element_b: i.max((i + 1) % count),
+            })
+            .collect();
+        Ok(StructuralBlueprint::with_anchor_elements(elements, connections, vec![0]))
+    }
 }
 
 pub fn default_developmental_blueprint() -> DevelopmentalFieldBlueprint {
@@ -186,6 +239,30 @@ mod tests {
             DevelopmentalFieldBlueprint::preferred_developmental_scale(1.0),
             1.0
         );
+    }
+
+    #[test]
+    fn construction_candidate_is_derived_from_fields_and_juvenile_scale() {
+        let blueprint = default_developmental_blueprint();
+        let catalog = crate::resources::default_catalog();
+        let adult = blueprint.construction_candidate(&catalog, 0.5, 1.0).unwrap();
+        let juvenile = blueprint.construction_candidate(&catalog, 0.5, 0.40).unwrap();
+        assert!(adult.is_valid() && juvenile.is_valid());
+        let adult_extent = adult
+            .elements
+            .iter()
+            .map(|e| e.placement.x.abs().max(e.placement.y.abs()))
+            .fold(0.0, f64::max);
+        let juvenile_extent = juvenile
+            .elements
+            .iter()
+            .map(|e| e.placement.x.abs().max(e.placement.y.abs()))
+            .fold(0.0, f64::max);
+        assert!(juvenile_extent < adult_extent);
+    }
+
+    #[test]
+    fn connectivity_can_remain_inactive() {
     }
 
     #[test]
