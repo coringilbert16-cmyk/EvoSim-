@@ -182,6 +182,7 @@ impl Organism {
             self.stress += demand;
             return;
         }
+        self.add_transaction_stress(paid);
         let deficit = demand - paid;
         if deficit > 0.0 {
             self.stress += deficit
