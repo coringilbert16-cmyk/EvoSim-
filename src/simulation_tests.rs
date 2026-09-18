@@ -91,6 +91,21 @@ mod integration_tests {
     }
 
     #[test]
+    fn death_with_no_remaining_bonds_releases_realized_structure() {
+        let mut s = Simulation::new(41, 10.0);
+        let organism = &mut s.organisms[0];
+        organism.structure.bonds.clear();
+        let initial_units = organism.structure.units.len();
+        assert!(initial_units > 0);
+
+        s.step();
+
+        assert!(s.organisms.is_empty());
+        assert!(s.decomposing_bodies.is_empty());
+        assert!(s.environment.field.total_amount() > 0.0);
+    }
+
+    #[test]
     fn adulthood_is_irreversible_after_structural_loss() {
         let mut s = Simulation::new(32, 10.0);
         s.organisms[0].development_stage = DevelopmentStage::Adult;
