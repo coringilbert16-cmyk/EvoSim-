@@ -160,8 +160,7 @@ impl DevelopmentalFieldBlueprint {
         const MIN_CANDIDATE_COUNT: usize = 5;
         const MAX_CANDIDATE_COUNT: usize = 16;
         let target_count = MIN_CANDIDATE_COUNT as f64
-            + effective_preference
-                * (MAX_CANDIDATE_COUNT - MIN_CANDIDATE_COUNT) as f64;
+            + effective_preference * (MAX_CANDIDATE_COUNT - MIN_CANDIDATE_COUNT) as f64;
 
         // Search candidates in order of developmental preference. Physical
         // realization remains the acceptance test; the preferred count is not
