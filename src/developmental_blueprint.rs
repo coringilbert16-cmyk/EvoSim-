@@ -7,7 +7,9 @@
 //! silhouette, or guaranteed topology.
 
 use crate::resources::{BaseResource, Material};
-use crate::structural_blueprint::{BlueprintConnection, BlueprintElement, BlueprintPlacement, StructuralBlueprint};
+use crate::structural_blueprint::{
+    BlueprintConnection, BlueprintElement, BlueprintPlacement, StructuralBlueprint,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
