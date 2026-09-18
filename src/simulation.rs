@@ -77,7 +77,7 @@ impl Simulation {
         let genome = initial_genome();
         let catalog = crate::resources::default_catalog();
         let juvenile_target = genome
-            .developmental_construction_target(&catalog)
+            .developmental_construction_target(&catalog, true)
             .expect("initial architecture must produce a viable juvenile target");
         let (structure, _construction_ledger, initial_energy) =
             realize_initial(&juvenile_target, &catalog)
@@ -120,7 +120,7 @@ impl Simulation {
     fn mature_structural_mass(organism: &Organism, environment: &Environment) -> f64 {
         organism
             .genome
-            .mature_construction_target()
+            .developmental_construction_target(&environment.catalog, false)
             .ok()
             .map(|target| target.structural_mass(&environment.catalog))
             .unwrap_or(0.0)
