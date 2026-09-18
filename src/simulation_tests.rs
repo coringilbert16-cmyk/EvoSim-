@@ -93,6 +93,8 @@ mod integration_tests {
     #[test]
     fn death_with_no_remaining_bonds_releases_realized_structure() {
         let mut s = Simulation::new(41, 10.0);
+        s.environment.vents.clear();
+        let before_environment_amount = s.environment.field.total_amount();
         let organism = &mut s.organisms[0];
         organism.structure.bonds.clear();
         let initial_units = organism.structure.units.len();
@@ -102,7 +104,7 @@ mod integration_tests {
 
         assert!(s.organisms.is_empty());
         assert!(s.decomposing_bodies.is_empty());
-        assert!(s.environment.field.total_amount() > 0.0);
+        assert!(s.environment.field.total_amount() > before_environment_amount);
     }
 
     #[test]
