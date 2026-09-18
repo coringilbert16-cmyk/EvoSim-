@@ -1,8 +1,18 @@
+#![expect(dead_code, reason = "Staged construction helper retained for subsystem integration")]
 use crate::combine_runtime::combine_specific_pair;
 use crate::resources::{BaseResource, Form, Material};
 use crate::state::EnergyLedger;
 use crate::structural_blueprint::{BlueprintElement, BlueprintPlacement};
 use crate::structure::{ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
+
+type ConstructionSolution = (
+    OrganismStructure,
+    EnergyLedger,
+    f64,
+    Vec<Option<usize>>,
+    f64,
+    f64,
+);
 
 fn resource<'a>(catalog: &'a [BaseResource], name: &str) -> Option<&'a BaseResource> {
     catalog.iter().find(|r| r.name == name)
@@ -313,14 +323,7 @@ fn solve_parts(
     external: &[Vec<usize>],
     heat: f64,
     score: f64,
-) -> Option<(
-    OrganismStructure,
-    EnergyLedger,
-    f64,
-    Vec<Option<usize>>,
-    f64,
-    f64,
-)> {
+) -> Option<ConstructionSolution> {
     if part == material.parts.len() {
         let (structure, ledger, energy, heat) = solve_external_groups(
             0, structure, ledger, energy, assigned, external, catalog, heat,
