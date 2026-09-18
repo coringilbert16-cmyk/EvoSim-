@@ -15,6 +15,9 @@ use crate::structural_blueprint::{
 };
 use serde::{Deserialize, Serialize};
 
+/// Current developmental realization floor for a juvenile derived from the adult blueprint.
+pub const JUVENILE_LINEAR_SCALE: f64 = 0.40;
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MaterialPreferenceField {
     pub resource_name: String,
