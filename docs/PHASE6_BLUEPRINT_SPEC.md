@@ -182,7 +182,7 @@ This means:
 
 Two offspring from the same parent may therefore receive different size-preference values while remaining statistically centered on the parent's value.
 
-The size-preference value is not itself a required final mass, viability threshold, adulthood threshold, or death condition. Physical constraints and developmental realization can cause final adult mass to differ from the preferred value.
+The size-preference value is not itself a required final mass, viability threshold, adulthood threshold, or death condition. It maps first to a normalized developmental scale; the construction solver converts that developmental intent into physically realized structure. Physical constraints and developmental realization can cause final adult mass to differ from the preference.
 
 ## Approved cavity-derived memory rules
 
