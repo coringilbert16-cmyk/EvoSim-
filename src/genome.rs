@@ -265,11 +265,11 @@ mod size_preference_tests {
                 .unwrap()
                 .mutation_probability = 1.0;
             genome
-            .traits
-            .iter_mut()
-            .find(|t| t.name == "size_preference")
-            .unwrap()
-            .value = 0.5;
+                .traits
+                .iter_mut()
+                .find(|t| t.name == "size_preference")
+                .unwrap()
+                .value = 0.5;
             let mut rng = ChaCha8Rng::seed_from_u64(seed);
             genome.mutate(&mut rng);
             if genome.size_preference() > 0.5 {
