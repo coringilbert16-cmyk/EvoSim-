@@ -721,15 +721,23 @@ Its blueprint is the full adult target.
 
 # 32. Maintenance
 
-An organism must maintain sufficient usable energy to continue operating.
+An organism continuously incurs maintenance demand while it exists.
 
-Maintenance consumes usable energy according to the current basic maintenance model.
+Maintenance demand is derived from the realized physical structural mass:
 
-The current basic formula is **experimental**.
+> maintenance demand = realized structural mass × maintenance coefficient
 
-It must therefore be treated as a provisional implementation rather than a permanently established biological law.
+The initial implementation uses the simulation coefficient `MAINTENANCE_ENERGY_PER_MASS`.
 
-No new maintenance formula should be substituted without approval.
+Maintenance consumes usable energy through the energy ledger.
+
+An organism pays as much of its maintenance demand as its available usable energy permits. Any unpaid maintenance deficit becomes stress rather than directly causing death.
+
+Maintenance heat remains part of the common energy-transaction/stress pathway.
+
+This maintenance rule does not create a maintenance-specific health meter, age system, lifespan, or death countdown.
+
+The coefficient is a simulation parameter rather than inherited biological information.
 
 # 33. Heat Stress
 
