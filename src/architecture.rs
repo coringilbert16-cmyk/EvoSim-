@@ -96,48 +96,29 @@ impl OrganismArchitecture {
         Ok(())
     }
 
+    /// The known-viable seed-cell construction. This is the organism's
+    /// canonical juvenile realization; it is not an adult blueprint shrunk
+    /// until it happens to become viable.
+    pub fn juvenile_construction_target(&self) -> Result<StructuralBlueprint, String> {
+        self.construction_target(JUVENILE_LINEAR_SCALE)
+    }
+
+    /// The same inherited developmental architecture at its adult extent.
+    /// Growth expands realization from the canonical juvenile target toward
+    /// this target rather than switching to a separately authored body plan.
     pub fn adult_construction_target(&self) -> Result<StructuralBlueprint, String> {
-        self.construction_target(self.target_scale.clamp(JUVENILE_LINEAR_SCALE, 1.0))
+        self.construction_target(self.target_scale.max(JUVENILE_LINEAR_SCALE))
     }
 
     pub fn developmental_target(
         &self,
         requested_scale: f64,
-        catalog: &[crate::resources::BaseResource],
+        _catalog: &[crate::resources::BaseResource],
     ) -> Result<StructuralBlueprint, String> {
         self.validate()?;
-        let requested = requested_scale.clamp(JUVENILE_LINEAR_SCALE, 1.0);
-        let mut candidates = vec![requested];
-        for step in 1..=12 {
-            candidates.push((requested + step as f64 * 0.05).min(1.0));
-            candidates.push((requested - step as f64 * 0.05).max(JUVENILE_LINEAR_SCALE));
-        }
-        candidates.sort_by(|a, b| {
-            (a - requested)
-                .abs()
-                .partial_cmp(&(b - requested).abs())
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-        candidates.dedup_by(|a, b| (*a - *b).abs() < 1e-12);
-        let mut last_error = "no viable developmental target".to_string();
-        for scale in candidates {
-            let target = self.construction_target(scale)?;
-            match target.realize(catalog) {
-                Ok(structure)
-                    if crate::juvenile_requirements::validate_realized_juvenile(
-                        &structure,
-                        catalog,
-                        crate::juvenile_requirements::JuvenileViabilityRequirements::default(),
-                    )
-                    .is_ok() =>
-                {
-                    return Ok(target);
-                }
-                Ok(_) => last_error = format!("scale {scale:.2} failed juvenile viability"),
-                Err(error) => last_error = format!("scale {scale:.2} failed realization: {error}"),
-            }
-        }
-        Err(last_error)
+        let requested = requested_scale
+            .clamp(JUVENILE_LINEAR_SCALE, self.target_scale.max(JUVENILE_LINEAR_SCALE));
+        self.construction_target(requested)
     }
 
     fn construction_target(&self, scale: f64) -> Result<StructuralBlueprint, String> {
@@ -384,14 +365,30 @@ mod tests {
     }
 
     #[test]
-    fn juvenile_target_is_a_discrete_analog_not_a_scaled_body_plan() {
+    fn juvenile_target_is_the_canonical_seed_cell_realization() {
         let architecture = default_architecture();
-        let target = architecture.construction_target(1.0).unwrap();
-        assert_eq!(target.elements.len(), 16);
-        assert!(target
-            .elements
-            .iter()
-            .all(|element| { element.placement.x.abs() < 2.0 && element.placement.y.abs() < 2.0 }));
+        let target = architecture.juvenile_construction_target().unwrap();
+        assert_eq!(target.elements.len(), 12);
         assert_eq!(target.anchor_elements, vec![0]);
+    }
+
+    #[test]
+    fn adult_target_is_expanded_from_the_same_architecture() {
+        let architecture = default_architecture();
+        let juvenile = architecture.juvenile_construction_target().unwrap();
+        let adult = architecture.adult_construction_target().unwrap();
+        assert!(adult.elements.len() > juvenile.elements.len());
+        assert_eq!(adult.anchor_elements, juvenile.anchor_elements);
+    }
+
+    #[test]
+    fn developmental_target_is_not_a_viability_search() {
+        let architecture = default_architecture();
+        let juvenile = architecture
+            .developmental_target(JUVENILE_LINEAR_SCALE, &[])
+            .unwrap();
+        let canonical = architecture.juvenile_construction_target().unwrap();
+        assert_eq!(juvenile.elements, canonical.elements);
+        assert_eq!(juvenile.connections, canonical.connections);
     }
 }
