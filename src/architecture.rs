@@ -288,6 +288,8 @@ fn add_interface(
             (-gap).atan2(tangent),
         ),
     ];
+    let boundary_count = ((8.0 * region.density * scale).round() as usize).clamp(4, 8);
+
     let anchor_width = 1.511_858;
     let anchor_height = 0.330_719;
     let anchor_center = (anchor_width + anchor_height) / 2.0;
@@ -316,7 +318,6 @@ fn add_interface(
             },
         });
     }
-    let boundary_count = ((8.0 * region.density * scale).round() as usize).clamp(4, 8);
     let maps = if boundary_count == 4 {
         [0, 1, 2, 3]
     } else {
