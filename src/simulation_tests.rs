@@ -248,8 +248,7 @@ mod integration_tests {
     fn maintenance_is_based_on_realized_structural_mass_and_ledger_settlement() {
         let mut organism = Simulation::create_initial_organism();
         let catalog = crate::resources::default_catalog();
-        let demand =
-            organism.structural_mass(&catalog) * crate::state::MAINTENANCE_ENERGY_PER_MASS;
+        let demand = organism.structural_mass(&catalog) * crate::state::MAINTENANCE_ENERGY_PER_MASS;
         organism.usable_energy = demand + 1.0;
         organism.stress = 0.0;
         let mut ledger = crate::state::EnergyLedger::default();
