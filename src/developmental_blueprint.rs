@@ -168,12 +168,17 @@ impl DevelopmentalFieldBlueprint {
         }
 
         if feasible.is_empty() {
-            return Err("developmental construction found no physically realizable candidate".into());
+            return Err(
+                "developmental construction found no physically realizable candidate".into(),
+            );
         }
 
         // Genome-capable candidates are preferred when the search can produce
         // them, but cavity qualification is still derived from realized physics.
-        let qualifying = feasible.iter().filter(|(_, _, qualifies)| *qualifies).count();
+        let qualifying = feasible
+            .iter()
+            .filter(|(_, _, qualifies)| *qualifies)
+            .count();
         if qualifying > 0 {
             feasible.retain(|(_, _, qualifies)| *qualifies);
         }
@@ -184,7 +189,7 @@ impl DevelopmentalFieldBlueprint {
             .into_iter()
             .nth(selected_index.min(max_index))
             .expect("selected feasible developmental candidate"))
-            .map(|(_, candidate, _)| candidate)
+        .map(|(_, candidate, _)| candidate)
     }
 
     fn candidate_for_count(
@@ -260,8 +265,7 @@ impl DevelopmentalFieldBlueprint {
                 element_b: i.max((i + 1) % count),
             })
             .collect();
-        StructuralBlueprint::with_anchor_elements(elements, connections, vec![0])
-            .validate()?;
+        StructuralBlueprint::with_anchor_elements(elements, connections, vec![0]).validate()?;
         Ok(StructuralBlueprint::with_anchor_elements(
             elements,
             connections,
