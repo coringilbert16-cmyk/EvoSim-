@@ -43,11 +43,7 @@ impl DecomposingBody {
             .units
             .iter()
             .filter_map(|unit| {
-                PhysicalMaterial::realized(
-                    unit.material.clone(),
-                    vec![unit.placement],
-                    catalog,
-                )
+                PhysicalMaterial::realized(unit.material.clone(), vec![unit.placement], catalog)
             })
             .collect()
     }
