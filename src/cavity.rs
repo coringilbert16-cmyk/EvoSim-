@@ -243,6 +243,25 @@ pub fn analyze_genome_cavity(
                 }
             }
         }
+        if boundary_units.len() < 2 {
+            continue;
+        }
+        let sealed = boundary_units.iter().enumerate().all(|(index, &unit_a)| {
+            let unit_b = boundary_units[(index + 1) % boundary_units.len()];
+            if unit_a == unit_b {
+                return true;
+            }
+            let id_a = structure.units[unit_a].physical_id;
+            let id_b = structure.units[unit_b].physical_id;
+            structure.bonds.iter().any(|bond| {
+                let x = bond.endpoint_a.constituent_id;
+                let y = bond.endpoint_b.constituent_id;
+                (x == id_a && y == id_b) || (x == id_b && y == id_a)
+            })
+        });
+        if !sealed {
+            continue;
+        }
         let candidate = GenomeCavity {
             area,
             boundary_units,
@@ -256,48 +275,6 @@ pub fn analyze_genome_cavity(
         }
     }
     Ok(best)
-}
-
-fn boundary_bonds_are_sealed(
-    structure: &OrganismStructure,
-    polygons: &[(usize, Vec<Point>)],
-) -> bool {
-    let mut required = Vec::<(PhysicalConstituentId, PhysicalConstituentId)>::new();
-    for i in 0..polygons.len() {
-        for j in (i + 1)..polygons.len() {
-            if !polygon_edges_touch(&polygons[i].1, &polygons[j].1) {
-                continue;
-            }
-            let a = structure.units[polygons[i].0].physical_id;
-            let b = structure.units[polygons[j].0].physical_id;
-            required.push(if a.0 < b.0 { (a, b) } else { (b, a) });
-        }
-    }
-    if required.is_empty() {
-        return false;
-    }
-    required.into_iter().all(|(a, b)| {
-        structure.bonds.iter().any(|bond| {
-            let x = bond.endpoint_a.constituent_id;
-            let y = bond.endpoint_b.constituent_id;
-            (x == a && y == b) || (x == b && y == a)
-        })
-    })
-}
-
-fn polygon_edges_touch(a: &[Point], b: &[Point]) -> bool {
-    (0..a.len()).any(|i| {
-        let a0 = a[i];
-        let a1 = a[(i + 1) % a.len()];
-        (0..b.len()).any(|j| {
-            let b0 = b[j];
-            let b1 = b[(j + 1) % b.len()];
-            a0.sub(b0).norm() <= NODE_TOLERANCE
-                || a0.sub(b1).norm() <= NODE_TOLERANCE
-                || a1.sub(b0).norm() <= NODE_TOLERANCE
-                || a1.sub(b1).norm() <= NODE_TOLERANCE
-        })
-    })
 }
 
 fn intern(point: Point, points: &mut Vec<Point>, index: &mut HashMap<(i64, i64), usize>) -> usize {
