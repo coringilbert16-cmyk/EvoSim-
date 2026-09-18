@@ -3,7 +3,7 @@ use crate::state::{
     MEMORY_PRUNE_THRESHOLD,
 };
 
-const MEMORY_CAPACITY_GROWTH_EXPONENT: f64 = 0.5;
+pub(crate) const MEMORY_CAPACITY_GROWTH_EXPONENT: f64 = 0.5;
 
 fn qualifying_genome_cavity(
     organism: &Organism,
@@ -15,7 +15,7 @@ fn qualifying_genome_cavity(
         .filter(|cavity| cavity.qualifies())
 }
 
-fn memory_capacity(cavity: &crate::cavity::GenomeCavity) -> usize {
+pub(crate) fn memory_capacity(cavity: &crate::cavity::GenomeCavity) -> usize {
     let area_ratio = (cavity.area / cavity.minimum_area).max(1.0);
     area_ratio
         .powf(MEMORY_CAPACITY_GROWTH_EXPONENT)
@@ -104,7 +104,7 @@ impl Simulation {
         if memory_strength <= 0.0 {
             return;
         }
-        Self::reinforce_memory_point(organism, sx, sy, memory_strength, capacity);
+        reinforce_memory_point(organism, sx, sy, memory_strength, capacity);
     }
 
     pub(crate) fn reinforce_memory_point(
