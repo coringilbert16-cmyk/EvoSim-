@@ -1,16 +1,60 @@
 use crate::state::{
-    Environment, MemoryPoint, Organism, Simulation, MAX_MEMORY_POINTS, MEMORY_DECAY_PER_TICK,
-    MEMORY_MERGE_RADIUS, MEMORY_PRUNE_THRESHOLD,
+    Environment, MemoryPoint, Organism, Simulation, MEMORY_DECAY_PER_TICK, MEMORY_MERGE_RADIUS,
+    MEMORY_PRUNE_THRESHOLD,
 };
+
+const MEMORY_CAPACITY_GROWTH_EXPONENT: f64 = 0.5;
+
+fn qualifying_genome_cavity(
+    organism: &Organism,
+    environment: &Environment,
+) -> Option<crate::cavity::GenomeCavity> {
+    crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
+        .ok()
+        .flatten()
+        .filter(|cavity| cavity.qualifies())
+}
+
+fn memory_capacity(cavity: &crate::cavity::GenomeCavity) -> usize {
+    let area_ratio = (cavity.area / cavity.minimum_area).max(1.0);
+    area_ratio
+        .powf(MEMORY_CAPACITY_GROWTH_EXPONENT)
+        .floor()
+        .max(1.0) as usize
+}
+
+fn memory_decay_for_cavity(cavity: &crate::cavity::GenomeCavity) -> f64 {
+    let area_ratio = (cavity.minimum_area / cavity.area.max(cavity.minimum_area)).sqrt();
+    MEMORY_DECAY_PER_TICK
+        .powf(area_ratio)
+        .clamp(MEMORY_DECAY_PER_TICK, 1.0)
+}
 
 impl Simulation {
     pub(crate) fn update_memory_from_sources(organism: &mut Organism, environment: &Environment) {
+        let Some(cavity) = qualifying_genome_cavity(organism, environment) else {
+            organism.memory.clear();
+            return;
+        };
+        let capacity = memory_capacity(&cavity);
+        let decay = memory_decay_for_cavity(&cavity);
+
         for point in &mut organism.memory {
-            point.strength *= MEMORY_DECAY_PER_TICK;
+            point.strength *= decay;
         }
         organism
             .memory
             .retain(|p| p.strength > MEMORY_PRUNE_THRESHOLD);
+        if organism.memory.len() > capacity {
+            organism
+                .memory
+                .sort_by(|a, b| {
+                    b.strength
+                        .partial_cmp(&a.strength)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
+            organism.memory.truncate(capacity);
+        }
 
         let (px, py) = {
             let p = &organism.occupied_cells[0];
@@ -60,7 +104,7 @@ impl Simulation {
         if memory_strength <= 0.0 {
             return;
         }
-        Self::reinforce_memory_point(organism, sx, sy, memory_strength);
+        Self::reinforce_memory_point(organism, sx, sy, memory_strength, capacity);
     }
 
     pub(crate) fn reinforce_memory_point(
@@ -68,6 +112,7 @@ impl Simulation {
         sx: f64,
         sy: f64,
         memory_strength: f64,
+        capacity: usize,
     ) {
         let merged = organism.memory.iter_mut().find(|p| {
             let dx = p.x - sx;
@@ -82,7 +127,7 @@ impl Simulation {
                 existing.strength = (existing.strength + memory_strength).min(1.0);
             }
             None => {
-                if organism.memory.len() < MAX_MEMORY_POINTS {
+                if organism.memory.len() < capacity {
                     organism.memory.push(MemoryPoint {
                         x: sx,
                         y: sy,
