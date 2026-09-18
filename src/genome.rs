@@ -236,8 +236,6 @@ mod tests {
 #[cfg(test)]
 mod size_preference_tests {
     use super::*;
-    use rand::SeedableRng;
-
     #[test]
     fn size_preference_defaults_to_center() {
         assert_eq!(initial_genome().size_preference(), 0.5);
