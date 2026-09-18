@@ -223,13 +223,13 @@ impl DevelopmentalFieldBlueprint {
         // especially useful because their geometry can naturally enclose a
         // cavity larger than the three-Carbon reference without inventing a
         // special genome core.
-        for cycle_count in 4..=count.saturating_sub(1).min(8) {
+        for cycle_count in [4usize] {
             for resource in &resources {
                 let mut ring_variants = Vec::<Vec<BlueprintPlacement>>::new();
                 match &resource.shape.form {
                     crate::resources::Form::Rectangle { width, height } if cycle_count == 4 => {
                         let d = (width + height) * 0.5;
-                        for factor in [0.90, 1.0, 1.10, 1.20] {
+                        for factor in [1.0] {
                             let radius = d * factor;
                             ring_variants.push(vec![
                                 BlueprintPlacement {
@@ -266,7 +266,7 @@ impl DevelopmentalFieldBlueprint {
                         if radius <= 0.0 {
                             continue;
                         }
-                        for factor in [0.90, 1.0, 1.10, 1.20, 1.35, 1.50] {
+                        for factor in [1.0] {
                             let ring_radius =
                                 radius * factor / (std::f64::consts::PI / cycle_count as f64).sin();
                             let mut placements = Vec::with_capacity(cycle_count);
