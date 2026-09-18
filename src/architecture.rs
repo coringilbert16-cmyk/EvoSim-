@@ -296,7 +296,7 @@ fn add_interface(
         [0, 1, 2, 3]
     } else {
         [0, 2, 4, 6]
-    ];
+    };
 
     // The genome/core remains full size while the surrounding architecture
     // grows. A single fixed-length interface constituent cannot stretch with
