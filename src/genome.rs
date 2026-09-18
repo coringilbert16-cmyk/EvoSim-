@@ -98,6 +98,15 @@ impl Genome {
         DevelopmentalFieldBlueprint::preferred_developmental_scale(self.size_preference())
     }
 
+    /// Compatibility accessor for callers that need the adult developmental
+    /// realization. The returned StructuralBlueprint is transient solver state;
+    /// the genome stores only the developmental field blueprint.
+    pub fn mature_construction_target(
+        &self,
+    ) -> Result<crate::structural_blueprint::StructuralBlueprint, String> {
+        self.developmental_construction_target(&crate::resources::default_catalog(), false)
+    }
+
     pub fn developmental_construction_target(
         &self,
         catalog: &[crate::resources::BaseResource],
@@ -124,8 +133,6 @@ impl Genome {
             self.traits.push(trait_def("size_preference", 0.5, 0.05));
         }
 
-        let mut probability_sum = 0.0;
-        let mut sigma_sum = 0.0;
         for t in &mut self.traits {
             if rng.gen::<f64>() < t.mutation_probability.clamp(1e-6, 0.25) {
                 let delta = if t.name == "size_preference" {
@@ -143,8 +150,6 @@ impl Genome {
                 t.mutation_probability =
                     (t.mutation_probability * rng.gen_range(0.5..1.5)).clamp(1e-6, 0.1);
             }
-            probability_sum += t.mutation_probability;
-            sigma_sum += t.mutation_sigma.max(0.0);
         }
     }
 }
