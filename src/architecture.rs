@@ -259,6 +259,10 @@ fn add_boundary(
         for i in 0..4 {
             connections.push(BlueprintConnection {
                 element_a: start + i,
+                element_b: start + (i + 1) % 4,
+            });
+            connections.push(BlueprintConnection {
+                element_a: start + i,
                 element_b: start + 4 + i,
             });
         }
