@@ -568,7 +568,7 @@ impl Simulation {
         self.organisms.extend(offspring);
         let mut survivors = Vec::with_capacity(self.organisms.len());
         for mut organism in self.organisms.drain(..) {
-            let dead = Self::apply_energy_capacity(
+            let dead = Self::apply_survival_damage(
                 &mut organism,
                 &self.environment,
                 &mut self.energy_ledger,
@@ -593,7 +593,7 @@ impl Simulation {
         self.energy_ledger.total_usable_energy_held =
             self.organisms.iter().map(|o| o.usable_energy).sum();
     }
-    pub(crate) fn apply_energy_capacity(
+    pub(crate) fn apply_survival_damage(
         organism: &mut Organism,
         environment: &Environment,
         ledger: &mut EnergyLedger,
