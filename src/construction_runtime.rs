@@ -325,14 +325,7 @@ fn solve_parts(
         let (structure, ledger, energy, heat) = solve_external_groups(
             0, structure, ledger, energy, assigned, external, catalog, heat,
         )?;
-        return Some((
-            structure,
-            ledger,
-            energy,
-            assigned.to_vec(),
-            heat,
-            score,
-        ));
+        return Some((structure, ledger, energy, assigned.to_vec(), heat, score));
     }
 
     let resource = resource(catalog, &material.parts[part].0)?;
@@ -348,15 +341,19 @@ fn solve_parts(
     let mut best = None;
     for candidate_placement in candidate_placements(structure, resource, anchor, &targets, catalog)
     {
-        let placement_score = (candidate_placement.x - anchor.x)
-            .hypot(candidate_placement.y - anchor.y);
+        let placement_score =
+            (candidate_placement.x - anchor.x).hypot(candidate_placement.y - anchor.y);
         let candidate_score = score + placement_score;
-        if best
-            .as_ref()
-            .is_some_and(|result: &(OrganismStructure, EnergyLedger, f64, Vec<Option<usize>>, f64, f64)| {
-                candidate_score >= result.5
-            })
-        {
+        if best.as_ref().is_some_and(
+            |result: &(
+                OrganismStructure,
+                EnergyLedger,
+                f64,
+                Vec<Option<usize>>,
+                f64,
+                f64,
+            )| { candidate_score >= result.5 },
+        ) {
             continue;
         }
 
