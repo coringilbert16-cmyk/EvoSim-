@@ -140,7 +140,13 @@ impl OrganismArchitecture {
         let mut connections = Vec::new();
         add_anchor(&mut elements, &mut connections, anchor);
         let boundary_start = add_boundary(&mut elements, &mut connections, boundary, scale);
-        add_interface(&mut elements, &mut connections, interface, scale, boundary_start);
+        add_interface(
+            &mut elements,
+            &mut connections,
+            interface,
+            scale,
+            boundary_start,
+        );
         let target = StructuralBlueprint::with_anchor_elements(elements, connections, vec![0]);
         target.validate()?;
         Ok(target)
