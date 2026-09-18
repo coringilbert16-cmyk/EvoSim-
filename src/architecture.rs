@@ -397,9 +397,10 @@ mod tests {
         let architecture = default_architecture();
         let target = architecture.construction_target(1.0).unwrap();
         assert_eq!(target.elements.len(), 16);
-        assert!(target.elements.iter().all(|element| {
-            element.placement.x.is_finite() && element.placement.y.is_finite()
-        }));
+        assert!(target
+            .elements
+            .iter()
+            .all(|element| { element.placement.x.is_finite() && element.placement.y.is_finite() }));
         assert_eq!(target.anchor_elements, vec![0]);
     }
 }
