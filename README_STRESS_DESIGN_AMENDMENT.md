@@ -1,17 +1,17 @@
 # EvoSim README Amendment — Stress Damage Selection
 
-**Approved design correction — 2026-09-16**
+**Approved design correction — 2026-09-17**
 
-The stress-damage rule in the authoritative EvoSim design is corrected as follows:
+The stress-damage rule is corrected back to the approved random-selection behavior.
 
-When accumulated heat stress reaches the current stress threshold, structural damage selects the **weakest eligible structural bond** rather than selecting a random bond.
+When accumulated heat stress reaches the current stress threshold, structural damage selects a **random eligible non-genome structural bond**.
 
-The ordering remains:
+The ordering is:
 
-1. Select the weakest eligible **non-genome** structural bond.
+1. Select a random eligible **non-genome** structural bond.
 2. Genome bonds remain protected while eligible non-genome structural bonds remain.
 3. Once all eligible non-genome structural bonds have been exhausted, genome bonds may become vulnerable.
 
-The weakest-bond rule is intentional. Natural selection is expected to determine the evolutionary consequences of this physical damage mechanism; no additional randomization mechanism is required merely to produce variability.
+The physical genome-bond distinction is derived from the existing genome-cavity authority. The qualifying cavity boundary identifies the physical genome bonds; no fixed material recipe, unit count, construction index, or other legacy proxy is introduced.
 
-The previous README wording that required a random non-genome bond is superseded by this correction.
+The previous 2026-09-16 weakest-bond amendment is superseded by this correction.
