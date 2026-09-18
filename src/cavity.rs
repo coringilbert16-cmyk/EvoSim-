@@ -84,7 +84,7 @@ impl GenomeCavity {
             .filter_map(|(index, bond)| {
                 (boundary_ids.contains(&bond.endpoint_a.constituent_id)
                     && boundary_ids.contains(&bond.endpoint_b.constituent_id))
-                    .then_some(index)
+                .then_some(index)
             })
             .collect()
     }
