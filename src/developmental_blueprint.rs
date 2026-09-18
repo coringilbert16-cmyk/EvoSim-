@@ -131,9 +131,12 @@ impl DevelopmentalFieldBlueprint {
         self.connectivity.evaluate(x, y)
     }
 
-    /// Produces a discrete construction candidate from continuous developmental
-    /// preferences. The returned StructuralBlueprint is a transient solver
-    /// artifact; it is never stored in the genome.
+    /// Searches a bounded family of physically realizable construction candidates.
+    ///
+    /// The developmental scale is a preference over the feasible candidates,
+    /// not a direct multiplier on physical geometry. Juvenile development biases
+    /// that preference toward the smallest feasible realization. The returned
+    /// StructuralBlueprint remains a transient solver artifact.
     pub fn construction_candidate(
         &self,
         catalog: &[BaseResource],
@@ -144,46 +147,128 @@ impl DevelopmentalFieldBlueprint {
         if catalog.is_empty() {
             return Err("developmental construction requires a resource catalog".into());
         }
-        let scale =
-            (developmental_scale.clamp(0.0, 1.0) * juvenile_scale.clamp(0.40, 1.0)).max(0.40);
-        let density = self.density_preference(0.0, 0.0);
-        let count = (4.0 + (density * 4.0).round()) as usize;
-        let radius = 1.677_217_5 * scale;
-        let mut elements = Vec::with_capacity(count);
+
+        let preference = developmental_scale.clamp(0.0, 1.0);
+        let juvenile_bias = juvenile_scale.clamp(0.0, 1.0);
+        let effective_preference = preference * juvenile_bias;
+
+        let mut feasible = Vec::<(usize, StructuralBlueprint, bool)>::new();
+        for count in 3..=16 {
+            let Ok(candidate) = self.candidate_for_count(catalog, count) else {
+                continue;
+            };
+            let Ok(structure) = candidate.realize(catalog) else {
+                continue;
+            };
+            let qualifies = crate::cavity::analyze_genome_cavity(&structure, catalog)
+                .ok()
+                .flatten()
+                .is_some_and(|cavity| cavity.qualifies());
+            feasible.push((count, candidate, qualifies));
+        }
+
+        if feasible.is_empty() {
+            return Err("developmental construction found no physically realizable candidate".into());
+        }
+
+        // Genome-capable candidates are preferred when the search can produce
+        // them, but cavity qualification is still derived from realized physics.
+        let qualifying = feasible.iter().filter(|(_, _, qualifies)| *qualifies).count();
+        if qualifying > 0 {
+            feasible.retain(|(_, _, qualifies)| *qualifies);
+        }
+
+        let max_index = feasible.len().saturating_sub(1);
+        let selected_index = (effective_preference * max_index as f64).round() as usize;
+        Ok(feasible
+            .into_iter()
+            .nth(selected_index.min(max_index))
+            .expect("selected feasible developmental candidate"))
+            .map(|(_, candidate, _)| candidate)
+    }
+
+    fn candidate_for_count(
+        &self,
+        catalog: &[BaseResource],
+        count: usize,
+    ) -> Result<StructuralBlueprint, String> {
+        if count < 3 {
+            return Err("construction candidate requires at least three elements".into());
+        }
+
+        // First choose material tendencies on a normalized developmental ring.
+        // No physical coordinates are stored in the developmental field.
+        let mut materials = Vec::with_capacity(count);
         for i in 0..count {
             let angle = i as f64 * std::f64::consts::TAU / count as f64;
-            let x = radius * angle.cos();
-            let y = radius * angle.sin();
-            let material_name = catalog
+            let x = angle.cos();
+            let y = angle.sin();
+            let material = catalog
                 .iter()
                 .max_by(|a, b| {
-                    self.material_preference(&a.name, x / scale, y / scale)
-                        .partial_cmp(&self.material_preference(&b.name, x / scale, y / scale))
+                    self.material_preference(&a.name, x, y)
+                        .partial_cmp(&self.material_preference(&b.name, x, y))
                         .unwrap_or(std::cmp::Ordering::Equal)
                 })
-                .map(|resource| resource.name.clone())
                 .ok_or("no resource candidate")?;
+            materials.push(material);
+        }
+
+        // A candidate ring is scaled from the actual geometry of its selected
+        // materials so adjacent connection points can meet. If the material
+        // cannot participate in rigid polygonal contact, this candidate is
+        // rejected rather than inventing a geometric approximation.
+        let circumradius = materials
+            .iter()
+            .map(|resource| {
+                resource
+                    .shape
+                    .form
+                    .polygon_vertices()
+                    .map(|vertices| {
+                        vertices
+                            .into_iter()
+                            .map(|(x, y)| x.hypot(y))
+                            .fold(0.0, f64::max)
+                    })
+                    .unwrap_or(0.0)
+            })
+            .fold(0.0, f64::max);
+        if !circumradius.is_finite() || circumradius <= 0.0 {
+            return Err("candidate materials have no rigid polygonal geometry".into());
+        }
+
+        let radius = circumradius / (std::f64::consts::PI / count as f64).sin();
+        let mut elements = Vec::with_capacity(count);
+        for (i, material_resource) in materials.iter().enumerate() {
+            let angle = i as f64 * std::f64::consts::TAU / count as f64;
+            let normalized_x = angle.cos();
+            let normalized_y = angle.sin();
             elements.push(BlueprintElement {
-                material: Material::free_base(&material_name, 1.0),
+                material: Material::free_base(&material_resource.name, 1.0),
                 placement: BlueprintPlacement {
-                    x,
-                    y,
-                    rotation_radians: angle + std::f64::consts::FRAC_PI_2,
+                    x: radius * normalized_x,
+                    y: radius * normalized_y,
+                    rotation_radians: angle + std::f64::consts::PI,
                 },
             });
         }
+
         let connections = (0..count)
             .map(|i| BlueprintConnection {
                 element_a: i.min((i + 1) % count),
                 element_b: i.max((i + 1) % count),
             })
             .collect();
+        StructuralBlueprint::with_anchor_elements(elements, connections, vec![0])
+            .validate()?;
         Ok(StructuralBlueprint::with_anchor_elements(
             elements,
             connections,
             vec![0],
         ))
     }
+
 }
 
 pub fn default_developmental_blueprint() -> DevelopmentalFieldBlueprint {
