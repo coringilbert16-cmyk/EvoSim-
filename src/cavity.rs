@@ -129,7 +129,7 @@ pub fn analyze_genome_cavity(
         }
         polygons.push((index, polygon));
     }
-    if polygons.is_empty() || !boundary_bonds_are_sealed(structure, &polygons) {
+    if polygons.is_empty() {
         return Ok(None);
     }
 
