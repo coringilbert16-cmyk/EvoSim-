@@ -264,8 +264,7 @@ mod integration_tests {
     fn unpaid_maintenance_becomes_stress_without_direct_death() {
         let mut organism = Simulation::create_initial_organism();
         let catalog = crate::resources::default_catalog();
-        let demand =
-            organism.structural_mass(&catalog) * crate::state::MAINTENANCE_ENERGY_PER_MASS;
+        let demand = organism.structural_mass(&catalog) * crate::state::MAINTENANCE_ENERGY_PER_MASS;
         organism.usable_energy = demand * 0.25;
         organism.stress = 0.0;
         let mut ledger = crate::state::EnergyLedger::default();
@@ -282,8 +281,7 @@ mod integration_tests {
     fn zero_maintenance_energy_creates_stress_without_changing_energy() {
         let mut organism = Simulation::create_initial_organism();
         let catalog = crate::resources::default_catalog();
-        let demand =
-            organism.structural_mass(&catalog) * crate::state::MAINTENANCE_ENERGY_PER_MASS;
+        let demand = organism.structural_mass(&catalog) * crate::state::MAINTENANCE_ENERGY_PER_MASS;
         organism.usable_energy = 0.0;
         organism.stress = 0.0;
         let mut ledger = crate::state::EnergyLedger::default();
@@ -301,8 +299,7 @@ mod integration_tests {
         let catalog = crate::resources::default_catalog();
         let initial_units = organism.structure.units.clone();
         let initial_bonds = organism.structure.bonds.clone();
-        let demand =
-            organism.structural_mass(&catalog) * crate::state::MAINTENANCE_ENERGY_PER_MASS;
+        let demand = organism.structural_mass(&catalog) * crate::state::MAINTENANCE_ENERGY_PER_MASS;
         organism.usable_energy = demand + 1.0;
         let mut ledger = crate::state::EnergyLedger::default();
 
