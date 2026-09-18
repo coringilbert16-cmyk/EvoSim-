@@ -452,6 +452,7 @@ fn realize_material_with_context_mode(
     let assigned = vec![None; material.parts.len()];
     let Some((trial, trial_ledger, trial_energy, assigned, heat)) = solve_parts(
         0, structure, ledger, *energy, &assigned, material, anchor, catalog, external, 0.0,
+        fixed_placement,
     ) else {
         let resource_name = material
             .parts
