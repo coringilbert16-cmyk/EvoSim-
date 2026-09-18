@@ -157,67 +157,45 @@ impl DevelopmentalFieldBlueprint {
         let juvenile_bias = juvenile_scale.clamp(0.0, 1.0);
         let effective_preference = (preference * juvenile_bias).clamp(0.0, 1.0);
 
-        let mut feasible = Vec::<(usize, StructuralBlueprint, bool)>::new();
-        for count in 5..=16 {
+        const MIN_CANDIDATE_COUNT: usize = 5;
+        const MAX_CANDIDATE_COUNT: usize = 16;
+        let target_count = MIN_CANDIDATE_COUNT as f64
+            + effective_preference
+                * (MAX_CANDIDATE_COUNT - MIN_CANDIDATE_COUNT) as f64;
+
+        // Search candidates in order of developmental preference. Physical
+        // realization remains the acceptance test; the preferred count is not
+        // itself a structural authority.
+        let mut counts = (MIN_CANDIDATE_COUNT..=MAX_CANDIDATE_COUNT).collect::<Vec<_>>();
+        counts.sort_by(|a, b| {
+            let da = (*a as f64 - target_count).abs();
+            let db = (*b as f64 - target_count).abs();
+            da.partial_cmp(&db)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.cmp(b))
+        });
+
+        let mut last_error = "no viable developmental target".to_string();
+        for count in counts {
             let Ok(candidate) = self.candidate_for_count(catalog, count) else {
+                last_error = format!("count {count} produced no physical candidate");
                 continue;
             };
             let Ok(structure) = candidate.realize(catalog) else {
+                last_error = format!("count {count} failed physical realization");
                 continue;
             };
             let qualifies = crate::cavity::analyze_genome_cavity(&structure, catalog)
                 .ok()
                 .flatten()
                 .is_some_and(|cavity| cavity.qualifies());
-            feasible.push((count, candidate, qualifies));
+            if qualifies {
+                return Ok(candidate);
+            }
+            last_error = format!("count {count} produced no qualifying physical cavity");
         }
 
-        if feasible.is_empty() {
-            return Err(
-                "developmental construction found no physically realizable candidate".into(),
-            );
-        }
-
-        // A genome-capable realization is required where one exists for this
-        // developmental request, but qualification remains a consequence of
-        // the realized structure rather than an authored core.
-        let qualifying: Vec<_> = feasible
-            .iter()
-            .filter(|(_, _, qualifies)| *qualifies)
-            .map(|(count, _, _)| *count)
-            .collect();
-
-        let (min_count, max_count) =
-            if let (Some(min), Some(max)) = (qualifying.iter().min(), qualifying.iter().max()) {
-                (*min, *max)
-            } else {
-                let min = feasible.iter().map(|(count, _, _)| *count).min().unwrap();
-                let max = feasible.iter().map(|(count, _, _)| *count).max().unwrap();
-                (min, max)
-            };
-
-        let target_count =
-            min_count as f64 + effective_preference * (max_count.saturating_sub(min_count) as f64);
-
-        let selected_index = feasible
-            .iter()
-            .enumerate()
-            .filter(|(_, (_, _, qualifies))| qualifying.is_empty() || *qualifies)
-            .min_by(|(_, a), (_, b)| {
-                let da = (a.0 as f64 - target_count).abs();
-                let db = (b.0 as f64 - target_count).abs();
-                da.partial_cmp(&db)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-                    .then_with(|| a.0.cmp(&b.0))
-            })
-            .map(|(index, _)| index)
-            .expect("selected feasible developmental candidate");
-
-        Ok(feasible
-            .into_iter()
-            .nth(selected_index)
-            .expect("selected feasible developmental candidate")
-            .1)
+        Err(last_error)
     }
 
     fn candidate_for_count(
