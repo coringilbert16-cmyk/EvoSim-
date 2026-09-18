@@ -250,3 +250,45 @@ mod tests {
         assert!(genome.juvenile_energy_reserve.is_finite() && genome.juvenile_energy_reserve > 0.0);
     }
 }
+
+
+#[cfg(test)]
+mod size_preference_tests {
+    use super::*;
+    use rand::SeedableRng;
+
+    #[test]
+    fn size_preference_defaults_to_center() {
+        assert_eq!(initial_genome().size_preference(), 0.5);
+    }
+
+    #[test]
+    fn size_preference_mutation_stays_bounded() {
+        let mut genome = initial_genome();
+        genome.traits.iter_mut().find(|t| t.name == "size_preference").unwrap().mutation_probability = 1.0;
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        for _ in 0..1000 {
+            genome.mutate(&mut rng);
+            assert!((0.0..=1.0).contains(&genome.size_preference()));
+        }
+    }
+
+    #[test]
+    fn size_preference_mutation_is_parent_centered_in_distribution() {
+        let mut above = 0;
+        let mut below = 0;
+        for seed in 0..200 {
+            let mut genome = initial_genome();
+            genome.traits.iter_mut().find(|t| t.name == "size_preference").unwrap().mutation_probability = 1.0;
+            genome.traits.iter_mut().find(|t| t.name == "size_preference").unwrap().value = 0.5;
+            let mut rng = ChaCha8Rng::seed_from_u64(seed);
+            genome.mutate(&mut rng);
+            if genome.size_preference() > 0.5 {
+                above += 1;
+            } else if genome.size_preference() < 0.5 {
+                below += 1;
+            }
+        }
+        assert!(above > 50 && below > 50);
+    }
+}
