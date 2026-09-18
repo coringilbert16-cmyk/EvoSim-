@@ -318,7 +318,19 @@ impl Simulation {
                 .first()
                 .map(|p| (p.x, p.y))
                 .unwrap_or((0.0, 0.0));
-            reinforce_memory_point(organism, x, y, reinforcement)
+            let capacity = crate::cavity::analyze_genome_cavity(
+                &organism.structure,
+                &environment.catalog,
+            )
+            .ok()
+            .flatten()
+            .filter(|cavity| cavity.qualifies())
+            .map(|cavity| crate::memory::memory_capacity(&cavity));
+            if let Some(capacity) = capacity {
+                crate::memory::reinforce_memory_point(organism, x, y, reinforcement, capacity);
+            } else {
+                organism.memory.clear();
+            }
         }
     }
 }
