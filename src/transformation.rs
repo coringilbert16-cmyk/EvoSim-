@@ -62,10 +62,7 @@ fn settle_break_energy(
     true
 }
 
-fn stress_break_candidate_indices(
-    organism: &Organism,
-    environment: &Environment,
-) -> Vec<usize> {
+fn stress_break_candidate_indices(organism: &Organism, environment: &Environment) -> Vec<usize> {
     let genome_bonds =
         crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
             .ok()
@@ -405,9 +402,7 @@ mod tests {
             .unwrap()
             .unwrap()
             .boundary_bond_indices(&organism.structure);
-        assert!(candidates
-            .iter()
-            .all(|index| !genome_bonds.contains(index)));
+        assert!(candidates.iter().all(|index| !genome_bonds.contains(index)));
     }
 
     #[test]
