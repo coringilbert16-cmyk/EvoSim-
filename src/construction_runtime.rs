@@ -1,4 +1,7 @@
-#![expect(dead_code, reason = "Staged construction helper retained for subsystem integration")]
+#![expect(
+    dead_code,
+    reason = "Staged construction helper retained for subsystem integration"
+)]
 use crate::combine_runtime::combine_specific_pair;
 use crate::resources::{BaseResource, Form, Material};
 use crate::state::EnergyLedger;
