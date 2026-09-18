@@ -216,7 +216,10 @@ mod integration_tests {
             OutcomeKind::Beneficial,
         );
         s.step();
-        assert_eq!(s.organisms[0].stored_material.total_amount(), initial_stored + 1.0);
+        assert_eq!(
+            s.organisms[0].stored_material.total_amount(),
+            initial_stored + 1.0
+        );
         assert_eq!(
             s.environment.field.cells[i].materials[0].total_amount(),
             10.0
