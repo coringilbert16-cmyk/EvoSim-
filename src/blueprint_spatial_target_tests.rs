@@ -73,6 +73,13 @@ mod tests {
                 target.y
             );
         }
+
+        crate::juvenile_requirements::validate_realized_juvenile(
+            &structure,
+            &catalog,
+            crate::juvenile_requirements::JuvenileViabilityRequirements::default(),
+        )
+        .expect("canonical juvenile realization must be viable");
     }
 
     #[test]
