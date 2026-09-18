@@ -2,15 +2,17 @@
 
 ## Status
 
-Phase 5 design is APPROVED. The initial implementation audit is complete enough to establish the frozen authority boundary. Code changes must preserve the existing genome, physical-structure, death, and decomposition authorities.
+**Phase 5 COMPLETE**
 
-## Objective
-
-Implement and harden continuous maintenance and survival pressure for an organism without introducing a second life/death authority, a generic health system, age-based deterioration, or an artificial energy-battery model.
+Phase 5 implements continuous maintenance and survival pressure for an organism without introducing a second life/death authority, a generic health system, age-based deterioration, or an artificial energy-battery model.
 
 The governing chain is:
 
 > Genome defines life → physical graph defines organism membership → maintenance creates ongoing demand → energy shortage produces stress → stress can damage physical structure → existing death authority determines when the organism ceases to remain viable → decomposition handles the resulting physical material.
+
+## Objective
+
+Implement and harden continuous maintenance and survival pressure for an organism while preserving the existing genome, physical-structure, death, and decomposition authorities.
 
 ## Frozen decisions
 
@@ -42,7 +44,7 @@ Any unpaid maintenance deficit becomes stress.
 
 Insufficient maintenance energy does not directly constitute death.
 
-The resulting stress can cause physical structural damage through the already-approved stress-damage mechanism.
+The resulting stress can cause physical structural damage through the approved stress-damage mechanism.
 
 ### P5-5 — Movement energy
 Movement has no explicit movement-energy cost in Phase 5.
@@ -54,7 +56,7 @@ The existing heat/stress pathway remains authoritative:
 
 > energy transaction → heat/stress → threshold → random eligible non-genome structural bond
 
-Non-genome structural bonds are damaged before genome bonds. Genome capability-degradation semantics remain outside Phase 5.
+Random eligible non-genome structural bonds are damaged while such bonds remain. Genome bonds become eligible only after non-genome candidates are exhausted. Genome capability-degradation semantics remain outside Phase 5.
 
 ### P5-7 — Stress dissipation
 Accumulated stress dissipates over time.
@@ -83,7 +85,7 @@ No age, aging rate, lifespan, health decay, or death countdown is introduced.
 ### P5-10 — Internal state
 P5 does not add a generic viability/health state.
 
-Existing usable_energy, stress, and stress_threshold may participate in maintenance because they already have defined mechanical roles.
+Existing usable_energy, stress, and stress_threshold participate in maintenance because they already have defined mechanical roles.
 
 Genome remains the life/identity authority. Physical structure remains the physical authority. Death remains the lifecycle authority.
 
@@ -95,39 +97,82 @@ Genome remains the life/identity authority. Physical structure remains the physi
 | Physical graph | Determines realized organism structure and physical membership |
 | Maintenance | Creates ongoing structural maintenance demand |
 | Energy ledger | Accounts for maintenance energy transactions |
-| Stress | Carries accumulated heat/maintenance deficit consequences |
+| Stress | Carries accumulated heat/maintenance-deficit consequences |
 | Stress damage | Alters actual physical structure through eligible bond damage |
 | Death | Determines when an organism can no longer remain a viable organism |
 | Decomposition | Processes the physical material of a dead organism |
 
-P5 must not duplicate or override these authorities.
+P5 does not duplicate or override these authorities.
 
-## Current implementation audit
+## Implementation sequence
 
-The current repository already contains a maintenance/stress pipeline:
+### P5.0 — Authority audit — COMPLETE
+Traced maintenance, energy ledger, stress, structural damage, genome identity, death, and decomposition paths and froze the authority boundary before implementation.
 
-- Organism::structural_mass() derives mass from realized structural units.
-- Organism::apply_maintenance() computes demand from structural mass and MAINTENANCE_ENERGY_PER_MASS.
-- Paid maintenance is settled through EnergyReason::Maintenance.
-- An unpaid maintenance deficit becomes stress.
-- Stress is decayed each simulation tick before stress damage is applied.
-- Organism::apply_stress_damage() invokes the existing stress-break transformation.
-- Simulation cleanup removes organisms for which the existing stress-damage path reports death and transfers their physical structure into DecomposingBody.
-- Decomposition preserves the organism's realized structure and energy budget before releasing physical material.
+### P5.1 — Maintenance authority — COMPLETE
+Verified and tested:
 
-### Existing implementation discrepancy to resolve
+- structural-mass-based maintenance demand,
+- full maintenance payment,
+- partial payment,
+- zero usable energy,
+- ledger accounting,
+- no maintenance-specific death shortcut.
 
-Simulation::apply_energy_capacity() currently performs stress decay and stress damage. Its name does not describe that responsibility and must not be treated as a separate energy-capacity/death authority.
+### P5.2 — Stress integration — COMPLETE
+Verified and tested:
 
-Phase 5 should audit and, if appropriate, rename/refactor this boundary without changing its established semantics.
+- maintenance heat enters the common stress pathway,
+- unpaid maintenance deficit becomes stress,
+- stress dissipates over time,
+- threshold-triggered structural damage,
+- random eligible non-genome bond selection,
+- genome-boundary bond protection while non-genome bonds remain.
 
-### Existing death boundary
+Genome-bond eligibility is derived from the existing physical genome-cavity authority rather than fixed materials, unit counts, indices, or legacy proxies.
 
-The simulation currently treats the boolean result of the established stress-damage path as the signal to recycle the organism into decomposition.
+### P5.3 — Survival/death boundary — COMPLETE
+Audited and tested:
 
-Phase 5 must verify that this behavior exactly matches the README's death/genome/physical-structure authority before changing it.
+- intact organisms survive ordinary maintenance,
+- structural damage remains physical,
+- death transitions through the existing stress-damage/decomposition path,
+- realized physical material is preserved into decomposition,
+- dead organisms are removed from the live-organism collection,
+- finished decomposition with no remaining bonds releases realized physical material into the environment.
 
-If the existing implementation is incomplete relative to those rules, the discrepancy must be isolated rather than silently filled with a new viability rule.
+No second viability or health authority was introduced.
+
+### P5.4 — Contract audit — COMPLETE
+Final audit confirms:
+
+- one maintenance authority,
+- one stress-dissipation/damage path,
+- no duplicate death decision,
+- no alternate energy-capacity authority,
+- movement has no explicit P5 energy cost,
+- physical structure remains authoritative,
+- genome remains the life/non-life authority,
+- decomposition preserves physical material.
+
+## Completion criteria
+
+- [x] Continuous maintenance is implemented through one authority.
+- [x] Demand is derived from realized structural mass.
+- [x] Maintenance uses the energy ledger.
+- [x] Unpaid maintenance becomes stress rather than direct death.
+- [x] Movement remains free of an explicit energy cost.
+- [x] Stress uses the existing heat/stress mechanism.
+- [x] Stress dissipation does not repair damage.
+- [x] No age/aging/health/death-countdown authority is introduced.
+- [x] Genome remains the life/non-life authority.
+- [x] Physical graph remains the organism-structure authority.
+- [x] Existing death authority remains the death authority.
+- [x] Decomposition preserves physical material.
+- [x] Contract tests cover the complete maintenance → stress → damage → death/decomposition boundary.
+- [x] Full test suite passes.
+- [x] Formatting and architecture checks pass.
+- [x] Strict Clippy passes.
 
 ## Explicit non-goals
 
@@ -150,77 +195,4 @@ Phase 5 does not redesign:
 - decomposition semantics,
 - or evolution.
 
-## Implementation sequence
-
-### P5.0 — Authority audit — COMPLETE
-
-Trace maintenance, energy ledger, stress, structural damage, genome identity, death, and decomposition paths.
-
-Freeze the rules above before changing code.
-
-### P5.1 — Maintenance authority
-
-Verify the maintenance calculation and ledger settlement against the frozen rules.
-
-Add/adjust contract tests for:
-
-- structural-mass-based demand,
-- full maintenance payment,
-- partial payment,
-- zero usable energy,
-- ledger accounting,
-- and no maintenance-specific death shortcut.
-
-### P5.2 — Stress integration
-
-Verify the common heat/stress pathway and stress dissipation.
-
-The existing physical genome-cavity authority provides the genome-bond distinction needed by stress damage. The qualifying cavity boundary identifies the physical genome bonds. P5 must not infer genome membership from fixed materials, unit counts, indices, or other legacy proxies.
-
-Add/adjust contract tests for:
-
-- maintenance heat,
-- unpaid maintenance deficit,
-- stress decay,
-- threshold-triggered structural damage,
-- random eligible non-genome bond selection,
-- genome-bond protection while non-genome bonds remain.
-
-### P5.3 — Survival/death boundary
-
-Audit the exact transition from stress damage to the existing death/recycling path.
-
-Ensure no second viability or health authority is introduced.
-
-Add/adjust tests for:
-
-- intact organism surviving maintenance,
-- structural damage remaining physical,
-- death transition through the existing authority,
-- realized material preserved into decomposition,
-- and dead organisms removed from the live-organism collection.
-
-### P5.4 — Contract audit
-
-Run full tests, formatting, architecture checks, and strict Clippy.
-
-Audit all P5 call sites for duplicate maintenance, duplicate stress decay, duplicate death decisions, or alternate energy-capacity authorities.
-
-## P5 completion criteria
-
-- [ ] Continuous maintenance is implemented through one authority.
-- [ ] Demand is derived from realized structural mass.
-- [ ] Maintenance uses the energy ledger.
-- [ ] Unpaid maintenance becomes stress rather than direct death.
-- [ ] Movement remains free of an explicit energy cost.
-- [ ] Stress uses the existing heat/stress mechanism.
-- [ ] Stress dissipation does not repair damage.
-- [ ] No age/aging/health/death-countdown authority is introduced.
-- [ ] Genome remains the life/non-life authority.
-- [ ] Physical graph remains the organism-structure authority.
-- [ ] Existing death authority remains the death authority.
-- [ ] Decomposition preserves physical material.
-- [ ] Contract tests cover the complete maintenance → stress → damage → death/decomposition boundary.
-- [ ] Full test suite passes.
-- [ ] Formatting and architecture checks pass.
-- [ ] Strict Clippy passes.
+Phase 5 establishes the maintenance/survival foundation only. Future lifecycle phases must build on these authorities rather than creating competing ones.
