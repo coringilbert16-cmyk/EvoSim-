@@ -302,7 +302,7 @@ impl DevelopmentalFieldBlueprint {
         // than an authored angular ring. Axial hex-lattice steps are generated
         // from the selected constituent extent; the graph closes naturally
         // around the interior region.
-        let step = 2.0 * circumradius;
+        let step = circumradius * 3.0_f64.sqrt();
         let lattice_directions = [(1i32, 0i32), (0, 1), (-1, 1), (-1, 0), (0, -1), (1, -1)];
         let mut axial = (0i32, -2i32);
         let mut cycle_positions = Vec::with_capacity(cycle_count);
