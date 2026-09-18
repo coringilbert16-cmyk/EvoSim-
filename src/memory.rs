@@ -203,7 +203,6 @@ mod tests {
     }
 }
 
-
 pub(crate) fn reinforce_memory_point(
     organism: &mut Organism,
     sx: f64,
