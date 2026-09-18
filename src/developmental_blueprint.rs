@@ -214,7 +214,12 @@ impl DevelopmentalFieldBlueprint {
 
         let mut resources = catalog
             .iter()
-            .filter(|resource| matches!(resource.shape.form, crate::resources::Form::Rectangle { .. }))
+            .filter(|resource| {
+                matches!(
+                    resource.shape.form,
+                    crate::resources::Form::Rectangle { .. }
+                )
+            })
             .collect::<Vec<_>>();
         if resources.is_empty() {
             resources = catalog.iter().collect();
