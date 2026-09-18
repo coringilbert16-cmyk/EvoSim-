@@ -206,7 +206,7 @@ impl DevelopmentalFieldBlueprint {
         const MIN_TOTAL_ELEMENTS: usize = 7;
         const CAVITY_CYCLE_ELEMENTS: usize = 6;
         if count < MIN_TOTAL_ELEMENTS {
-            return Err("candidate is too small to express a qualifying cavity and external structure".into());
+            return Err(\n                "candidate is too small to express a qualifying cavity and external structure"\n                    .into(),\n            );
         }
 
         let cycle_count = CAVITY_CYCLE_ELEMENTS;
