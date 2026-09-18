@@ -290,7 +290,7 @@ fn add_interface(
     ];
     for (x, y, rotation_radians) in p {
         elements.push(BlueprintElement {
-            material: region.material.clone(),
+            material: interface_material(region, 1),
             placement: BlueprintPlacement {
                 x,
                 y,
@@ -329,14 +329,6 @@ fn add_interface(
     let interface_material = interface_material(region, segment_count);
 
     for (i, map) in maps.iter().enumerate() {
-        elements.push(BlueprintElement {
-            material: interface_material.clone(),
-            placement: BlueprintPlacement {
-                x: p[i].0,
-                y: p[i].1,
-                rotation_radians: p[i].2,
-            },
-        });
         connections.push(BlueprintConnection {
             element_a: start + i,
             element_b: boundary_start + *map,
