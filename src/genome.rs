@@ -101,7 +101,11 @@ impl Genome {
         catalog: &[crate::resources::BaseResource],
         juvenile: bool,
     ) -> Result<crate::structural_blueprint::StructuralBlueprint, String> {
-        let juvenile_scale = if juvenile { crate::architecture::JUVENILE_LINEAR_SCALE } else { 1.0 };
+        let juvenile_scale = if juvenile {
+            crate::architecture::JUVENILE_LINEAR_SCALE
+        } else {
+            1.0
+        };
         self.developmental_blueprint.construction_candidate(
             catalog,
             self.preferred_developmental_scale(),
@@ -235,7 +239,12 @@ mod size_preference_tests {
     #[test]
     fn size_preference_mutation_stays_bounded() {
         let mut genome = initial_genome();
-        genome.traits.iter_mut().find(|t| t.name == "size_preference").unwrap().mutation_probability = 1.0;
+        genome
+            .traits
+            .iter_mut()
+            .find(|t| t.name == "size_preference")
+            .unwrap()
+            .mutation_probability = 1.0;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         for _ in 0..1000 {
             genome.mutate(&mut rng);
@@ -250,7 +259,12 @@ mod size_preference_tests {
         for seed in 0..200 {
             let mut genome = initial_genome();
             genome.traits.iter_mut().find(|t| t.name == "size_preference").unwrap().mutation_probability = 1.0;
-            genome.traits.iter_mut().find(|t| t.name == "size_preference").unwrap().value = 0.5;
+            genome
+            .traits
+            .iter_mut()
+            .find(|t| t.name == "size_preference")
+            .unwrap()
+            .value = 0.5;
             let mut rng = ChaCha8Rng::seed_from_u64(seed);
             genome.mutate(&mut rng);
             if genome.size_preference() > 0.5 {
