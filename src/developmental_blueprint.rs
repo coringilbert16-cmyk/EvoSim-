@@ -360,12 +360,16 @@ impl DevelopmentalFieldBlueprint {
             if extension_radius <= 0.0 {
                 return Err("growth extension requires rigid polygonal geometry".into());
             }
-            let extension_distance = previous_radius + extension_radius;\n            let extension_center = (\n                previous_center.0 + outward.0 * extension_distance,\n                previous_center.1 + outward.1 * extension_distance,\n            );
+            let extension_distance = previous_radius + extension_radius;
+            let extension_center = (
+                previous_center.0 + outward.0 * extension_distance,
+                previous_center.1 + outward.1 * extension_distance,
+            );
             elements.push(BlueprintElement {
                 material: Material::free_base(&extension_material.name, 1.0),
                 placement: BlueprintPlacement {
-                    x: extension_center,
-                    y: 0.0,
+                    x: extension_center.0,
+                    y: extension_center.1,
                     rotation_radians: std::f64::consts::PI,
                 },
             });
