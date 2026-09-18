@@ -184,18 +184,17 @@ impl DevelopmentalFieldBlueprint {
             .map(|(count, _, _)| *count)
             .collect();
 
-        let (min_count, max_count) = if let (Some(min), Some(max)) =
-            (qualifying.iter().min(), qualifying.iter().max())
-        {
-            (*min, *max)
-        } else {
-            let min = feasible.iter().map(|(count, _, _)| *count).min().unwrap();
-            let max = feasible.iter().map(|(count, _, _)| *count).max().unwrap();
-            (min, max)
-        };
+        let (min_count, max_count) =
+            if let (Some(min), Some(max)) = (qualifying.iter().min(), qualifying.iter().max()) {
+                (*min, *max)
+            } else {
+                let min = feasible.iter().map(|(count, _, _)| *count).min().unwrap();
+                let max = feasible.iter().map(|(count, _, _)| *count).max().unwrap();
+                (min, max)
+            };
 
-        let target_count = min_count as f64
-            + effective_preference * (max_count.saturating_sub(min_count) as f64);
+        let target_count =
+            min_count as f64 + effective_preference * (max_count.saturating_sub(min_count) as f64);
 
         let selected_index = feasible
             .iter()
