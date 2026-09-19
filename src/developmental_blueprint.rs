@@ -672,7 +672,8 @@ impl DevelopmentalFieldBlueprint {
                             .parts
                             .iter()
                             .map(|(name, amount)| {
-                                (amount / total_amount) * self.material_preference_scaled(name, x, y, preferred_length)
+                                (amount / total_amount)
+                                    * self.material_preference_scaled(name, x, y, preferred_length)
                             })
                             .sum::<f64>()
                     },
