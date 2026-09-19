@@ -294,32 +294,233 @@ The developmental score can never make an impossible physical construction valid
 
 ### 7. Developmental realization
 
-Developmental completion is represented by a normalized realization value:
+Developmental completion is calculated from three independent realization domains:
+
+- material-composition realization,
+- structural-density realization,
+- connectivity realization.
+
+Each domain is normalized independently to the interval [0, 1]. The overall realization is the arithmetic mean of the **active** domains. An inactive domain does not penalize realization.
+
+This avoids introducing tunable realization weights. The equal arithmetic mean is the fixed mathematical aggregation rule, not an experimental biological parameter.
+
+#### 7.1 Material realization
+
+For material m, let C_m(p) be its continuous developmental preference field and A_m(G) be the actual physical area occupied by that material in the authoritative physical graph G.
+
+Realized material value:
 
 \[
+V_{M,R}
+=
+\sum_m
+\int_{A_m(G)}
+C_m(\mathbf p)\,dA
+\]
+
+Available material value:
+
+\[
+V_{M,A}
+=
+\sum_m
+\int_{\mathbb R^2}
+C_m(\mathbf p)\,dA
+\]
+
+Therefore:
+
+\[
+R_M
+=
+\frac{V_{M,R}}{V_{M,A}}
+\]
+
+provided V_{M,A} > 0.
+
+The physical graph determines A_m(G). The developmental field determines C_m(p). No authored quantity, coordinate list, or material count is introduced.
+
+For Gaussian influences, each finite-width influence has:
+
+\[
+\int_{\mathbb R^2}
+e^{-\|\mathbf p-\mathbf c_i\|^2/(2\sigma_i^2)}
+\,dA
+=
+2\pi\sigma_i^2
+\]
+
+Therefore a finite available material value requires finite positive sigma for every influence contributing to the realization denominator. A zero radial falloff/infinite-width field may remain an experimental candidate-scoring representation, but it cannot be used as a finite realization denominator.
+
+#### 7.2 Structural-density realization
+
+Let D(p) be the structural-density field and A_G be the physical area occupied by realized organism structure.
+
+Realized density value:
+
+\[
+V_{D,R}
+=
+\int_{A_G}
+D(\mathbf p)\,dA
+\]
+
+Available density value:
+
+\[
+V_{D,A}
+=
+\int_{\mathbb R^2}
+D(\mathbf p)\,dA
+\]
+
+Therefore:
+
+\[
+R_D
+=
+\frac{V_{D,R}}{V_{D,A}}
+\]
+
+provided V_{D,A} > 0.
+
+Density expresses where additional structure is developmentally favored. It does not prescribe unit count, thickness, topology, or a boundary.
+
+#### 7.3 Connectivity realization
+
+Connectivity is a property of the physical graph rather than a spatial area measure.
+
+For an actual or physically admissible connection between endpoints a and b:
+
+\[
+S_K(a,b)
+=
+\frac{K(\mathbf a)+K(\mathbf b)}{2}
++
+\lambda N(a,b)
+\]
+
+The neighborhood term is normalized from the actual physical graph:
+
+\[
+N(a,b)
+=
+\frac12
+\left(
+\frac{q_a}{Q_a}
++
+\frac{q_b}{Q_b}
+\right)
+\]
+
+where q_x is the number of realized physical connections incident to endpoint x and Q_x is the number of physically available connection sites on the corresponding realized material/structure. A valid endpoint has Q_x > 0. Thus:
+
+\[
+0\le N(a,b)\le1
+\]
+
+The candidate-opportunity set is defined without an authored topology:
+
+\[
+O(G)
+=
+\{
+(a,b)\mid
+\text{a single connection between exposed compatible physical connection sites a,b is physically admissible}
+\}
+\]
+
+The available connectivity set includes both already-realized connections and currently admissible new opportunities:
+
+\[
+E_{K,A}(G)
+=
+E_G\cup O(G)
+\]
+
+This prevents the denominator from being derived from existing connections alone while ensuring every realized connection belongs to the comparison domain.
+
+Realized connectivity value:
+
+\[
+V_{K,R}
+=
+\sum_{e\in E_G}
+S_K(e)
+\]
+
+Available connectivity value:
+
+\[
+V_{K,A}
+=
+\sum_{e\in E_{K,A}(G)}
+S_K(e)
+\]
+
+Therefore:
+
+\[
+R_K
+=
+\frac{V_{K,R}}{V_{K,A}}
+\]
+
+when V_{K,A} > 0.
+
+If V_{K,A}=0, connectivity is inactive and contributes no penalty to overall realization.
+
+The opportunity set is always generated from the authoritative physical graph and physical construction rules. It must not be generated from an inherited exact topology.
+
+#### 7.4 Overall realization
+
+Define the active-domain set:
+
+\[
+\mathcal A
+=
+\{
+M\mid V_{M,A}>0
+\}
+\cup
+\{
+D\mid V_{D,A}>0
+\}
+\cup
+\{
+K\mid V_{K,A}>0
+\}
+\]
+
+Then:
+
+\[
+\boxed{
 R
 =
-\frac{\text{realized developmental value}}
-{\text{available developmental value}}
+\frac{1}{|\mathcal A|}
+\sum_{X\in\mathcal A}R_X
+}
 \]
 
-with:
+A valid developmental blueprint must have at least one active realization domain.
+
+This fixed equal-weight mean is intentional: it adds no tunable realization-weight parameter. Candidate-selection weights remain separate experimental solver parameters and must not be reused as realization weights.
+
+The adulthood contract is:
 
 \[
-0\le R\le1
-\]
-
-The numerator and denominator must be calculated from the actual developmental fields and the authoritative physical graph; they must not be implemented as comparison against an authored exact body plan.
-
-The existing approved adulthood threshold remains:
-
-\[
+\boxed{
 R\ge0.90
+\quad\Rightarrow\quad
+\text{adult}
+}
 \]
 
-provided the implementation measures actual developmental-field realization.
+The 0.90 threshold is **approved**, not experimental.
 
-The 0.90 adulthood threshold is **approved**, not experimental. The exact physical integration/sampling method used to calculate the numerator and denominator is an implementation detail that must preserve the authority rules above.
+The numerator and denominator of every realization domain must come from the inherited continuous developmental fields plus the authoritative physical graph. No exact body plan, authored topology, target coordinate list, or transient structural blueprint may serve as the adulthood authority.
+
 
 ### 8. Juvenile realization
 
