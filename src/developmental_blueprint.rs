@@ -77,7 +77,11 @@ impl MaterialPreferenceField {
         } else {
             0.0
         };
-        total += self.additional_influences.iter().map(|i| i.evaluate(x, y, scale)).sum::<f64>();
+        total += self
+            .additional_influences
+            .iter()
+            .map(|i| i.evaluate(x, y, scale))
+            .sum::<f64>();
         let strength = self.center_preference.max(0.0)
             + self
                 .additional_influences
