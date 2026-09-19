@@ -321,8 +321,7 @@ pub(crate) fn realize_initial_with_reserve(
 
     let base = realize_declared_units(blueprint, catalog)?;
 
-    let (_, trial_remaining) =
-        form_declared_bonds(base.clone(), blueprint, catalog, TRIAL_ENERGY)?;
+    let (_, trial_remaining) = form_declared_bonds(base.clone(), blueprint, catalog, TRIAL_ENERGY)?;
     let required_initial_energy = TRIAL_ENERGY - trial_remaining;
     if !required_initial_energy.is_finite() || required_initial_energy < 0.0 {
         return Err("juvenile construction produced an invalid energy requirement".into());
