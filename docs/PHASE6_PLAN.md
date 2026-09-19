@@ -62,7 +62,7 @@ An authored exact body plan, target coordinate list, or transient structural blu
 
 ## P6.2b — Persistent developmental coordinates — IMPLEMENTED
 
-Organisms now retain a persistent seed-anchored developmental origin and initial orientation. Movement translates that frame with the organism; it is never re-centered on center of mass, bounding box, or new growth. Offspring initialize a new frame at their own viable seed.
+Organisms now retain a persistent organism-local and persistent developmental origin and initial orientation. Movement translates that frame with the organism; it is never re-centered on center of mass, bounding box, or new growth. Offspring initialize a new frame at their own viable seed.
 
 The realization API evaluates physical structure in that persistent frame. Finite Gaussian realization denominators are required mathematically; the current zero-falloff default fields therefore remain unavailable as finite realization domains until their experimental field parameterization is established.
 
