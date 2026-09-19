@@ -18,8 +18,8 @@ mod tests {
 
     #[test]
     fn ancestral_seed_realizes_a_physically_valid_developmental_structure() {
-        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
         let catalog = default_catalog();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
         let structure = blueprint
             .realize(&catalog)
             .expect("developmental candidate must have a physical realization");
