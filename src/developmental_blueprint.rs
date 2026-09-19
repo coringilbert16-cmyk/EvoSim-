@@ -244,8 +244,7 @@ impl DevelopmentalFieldBlueprint {
                             BlueprintPlacement {
                                 x: ring_radius * angle.cos(),
                                 y: ring_radius * angle.sin(),
-                                rotation_radians: angle
-                                    + std::f64::consts::FRAC_PI_2,
+                                rotation_radians: angle + std::f64::consts::FRAC_PI_2,
                             }
                         })
                         .collect()
