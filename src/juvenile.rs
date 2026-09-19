@@ -294,6 +294,61 @@ pub(crate) fn confirmed_seed_scale_reference(
     Ok((mass, length))
 }
 
+fn realize_declared_units(
+    blueprint: &StructuralBlueprint,
+    catalog: &[BaseResource],
+) -> Result<OrganismStructure, String> {
+    use crate::structure::StructuralUnit;
+    let mut structure = OrganismStructure::new();
+    for element in &blueprint.elements {
+        let mut unit = StructuralUnit::from_material(
+            element.material.clone(),
+            crate::structure::Placement {
+                x: element.placement.x,
+                y: element.placement.y,
+                rotation_radians: element.placement.rotation_radians,
+            },
+        )
+        .ok_or_else(|| "confirmed seed contains invalid material".to_string())?;
+        if !unit.realize_default_geometry(catalog) {
+            return Err("confirmed seed contains unrealizable geometry".into());
+        }
+        structure.add_unit(unit);
+    }
+    Ok(structure)
+}
+
+fn form_declared_bonds(
+    mut structure: OrganismStructure,
+    blueprint: &StructuralBlueprint,
+    catalog: &[BaseResource],
+    mut energy: f64,
+) -> Result<(OrganismStructure, EnergyLedger, f64), String> {
+    use crate::combine_runtime::combine_specific_pair;
+    use crate::contact::ConnectionCompatibilityCache;
+    let mut ledger = EnergyLedger::default();
+    let mut cache = ConnectionCompatibilityCache::new();
+    for connection in &blueprint.connections {
+        combine_specific_pair(
+            &mut structure,
+            connection.element_a,
+            connection.element_b,
+            catalog,
+            0.0,
+            &mut cache,
+            &mut ledger,
+            &mut energy,
+        )
+        .ok_or_else(|| {
+            format!(
+                "confirmed seed bond could not be realized: {}-{}",
+                connection.element_a, connection.element_b
+            )
+        })?;
+    }
+    Ok((structure, ledger, energy))
+}
+
 pub(crate) const JUVENILE_INITIAL_ENERGY_RESERVE: f64 = 16.0;
 const TRIAL_ENERGY: f64 = 1.0e12;
 const EPS: f64 = 1e-8;
@@ -321,14 +376,16 @@ pub(crate) fn realize_initial_with_reserve(
 
     let base = realize_declared_units(blueprint, catalog)?;
 
-    let (_, trial_remaining) = form_declared_bonds(base.clone(), blueprint, catalog, TRIAL_ENERGY)?;
+    let (_, _, trial_remaining) =
+        form_declared_bonds(base.clone(), blueprint, catalog, TRIAL_ENERGY)?;
     let required_initial_energy = TRIAL_ENERGY - trial_remaining;
     if !required_initial_energy.is_finite() || required_initial_energy < 0.0 {
         return Err("juvenile construction produced an invalid energy requirement".into());
     }
 
     let mut energy = required_initial_energy + reserve_energy;
-    let (structure, remaining) = form_declared_bonds(base, blueprint, catalog, energy)?;
+    let (structure, ledger, remaining) =
+        form_declared_bonds(base, blueprint, catalog, energy)?;
     energy = remaining;
 
     if !energy.is_finite() || energy + EPS < reserve_energy {
