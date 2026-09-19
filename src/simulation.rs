@@ -130,20 +130,19 @@ impl Simulation {
             .field
             .diffuse_step(DEFAULT_DIFFUSION_FRACTION);
     }
-    fn mature_structural_mass(organism: &Organism, environment: &Environment) -> f64 {
+    fn growth_fraction(organism: &Organism, environment: &Environment) -> f64 {
         organism
             .genome
-            .developmental_construction_target(&environment.catalog, false)
-            .ok()
-            .map(|target| target.structural_mass(&environment.catalog))
-            .unwrap_or(0.0)
-    }
-    fn growth_fraction(organism: &Organism, environment: &Environment) -> f64 {
-        let mature_mass = Self::mature_structural_mass(organism, environment);
-        if !mature_mass.is_finite() || mature_mass <= 0.0 {
-            return 0.0;
-        }
-        (organism.structural_mass(&environment.catalog) / mature_mass).max(0.0)
+            .developmental_blueprint
+            .realization(
+                &organism.structure,
+                &environment.catalog,
+                (organism.developmental_origin.x, organism.developmental_origin.y),
+                organism.developmental_orientation_radians,
+                organism.genome.adult_mass(),
+            )
+            .overall
+            .clamp(0.0, 1.0)
     }
     fn update_development_stage(organism: &mut Organism, environment: &Environment) {
         match organism.development_stage {
