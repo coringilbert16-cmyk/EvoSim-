@@ -747,7 +747,7 @@ fn gaussian_plane_integral(amplitude: f64, radial_falloff: f64) -> Option<f64> {
     }
 }
 
-fn developmental_point(x: f64, y: f64, origin: (f64, f64), orientation: f64) -> (f64, f64) {
+pub(crate) fn developmental_point(x: f64, y: f64, origin: (f64, f64), orientation: f64) -> (f64, f64) {
     let dx = x - origin.0;
     let dy = y - origin.1;
     let (s, c) = orientation.sin_cos();
