@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 
 #[path = "developmental_realization.rs"]
 mod realization;
+pub(crate) use realization::{default_developmental_blueprint, developmental_point};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RadialInfluence {
