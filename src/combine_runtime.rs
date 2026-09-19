@@ -313,9 +313,20 @@ pub(crate) fn try_combine_stored_unit(
                                     origin_ref,
                                     orientation,
                                 );
-                                blueprint.material_preference(&first_resource, local.0, local.1)
-                                    + blueprint.density_preference(local.0, local.1)
-                                    + 0.25 * blueprint.connectivity_preference(local.0, local.1)
+                                blueprint.material_preference_scaled(
+                                    &first_resource,
+                                    local.0,
+                                    local.1,
+                                    preferred_length,
+                                ) + blueprint.density_preference_scaled(
+                                    local.0,
+                                    local.1,
+                                    preferred_length,
+                                ) + 0.25 * blueprint.connectivity_preference_scaled(
+                                    local.0,
+                                    local.1,
+                                    preferred_length,
+                                )
                             }).unwrap_or(0.0);
                             candidates.push((
                                 ua,
