@@ -60,7 +60,7 @@ mod integration_tests {
     }
 
     #[test]
-    fn seed_retains_a_distinct_mature_developmental_target() {
+    fn initial_organism_has_a_valid_developmental_blueprint_and_physical_mass() {
         let o = Simulation::create_initial_organism();
         assert!(o.genome.developmental_blueprint.validate().is_ok());
         assert!(o.structural_mass(&crate::resources::default_catalog()) > 0.0);
