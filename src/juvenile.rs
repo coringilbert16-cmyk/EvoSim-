@@ -353,7 +353,7 @@ pub(crate) const JUVENILE_INITIAL_ENERGY_RESERVE: f64 = 16.0;
 const TRIAL_ENERGY: f64 = 1.0e12;
 const EPS: f64 = 1e-8;
 
-/// Realize the juvenile target generated from inherited architecture.
+/// Realize a construction/calibration baseline through the authoritative physical path.
 #[allow(dead_code)]
 pub(crate) fn realize_initial(
     blueprint: &StructuralBlueprint,
