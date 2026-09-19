@@ -2,7 +2,6 @@
 mod tests {
     use crate::decomposition::{resolve_one_bond_with_ledger, DecomposingBody};
     use crate::environment::ActiveMaterialField;
-    use crate::genome::initial_genome;
     use crate::resources::default_catalog;
     use crate::state::{EnergyLedger, Environment, Position};
 
