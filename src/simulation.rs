@@ -76,12 +76,11 @@ impl Simulation {
     pub(crate) fn create_initial_organism() -> Organism {
         let genome = initial_genome();
         let catalog = crate::resources::default_catalog();
-        let juvenile_target = genome
-            .developmental_construction_target(&catalog, true)
-            .expect("initial architecture must produce a viable juvenile target");
+        let seed_baseline = crate::juvenile::confirmed_seed_baseline(&catalog)
+            .expect("confirmed original seed baseline must be valid");
         let (mut structure, _construction_ledger, initial_energy) =
-            realize_initial(&juvenile_target, &catalog)
-                .expect("initial juvenile target must be physically realizable");
+            realize_initial(&seed_baseline, &catalog)
+                .expect("confirmed original seed must be physically realizable");
 
         // Blueprint coordinates are developmental-local. The organism's
         // occupied cell is its world-space anchor, so the realized physical
@@ -505,9 +504,14 @@ impl Simulation {
                             organisms[index].development_stage,
                             DevelopmentStage::Juvenile
                         ) {
+                            let (seed_mass, seed_length) =
+                                crate::juvenile::confirmed_seed_scale_reference(&environment.catalog)
+                                    .ok()
+                                    .unwrap_or((1.0, 1.0));
                             let preferred_length = blueprint.preferred_developmental_length(
-                                &environment.catalog,
                                 organisms[index].genome.adult_mass(),
+                                seed_mass,
+                                seed_length,
                             );
                             Some((blueprint, origin, orientation, preferred_length))
                         } else {
