@@ -15,6 +15,7 @@ use crate::structural_blueprint::{
 };
 use serde::{Deserialize, Serialize};
 
+#[path = "developmental_realization.rs"]
 mod realization;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
