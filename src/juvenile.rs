@@ -26,10 +26,12 @@ pub(crate) fn confirmed_seed_baseline(
     // remaining juvenile units extending from one boundary.
     let resource = catalog
         .iter()
-        .find(|resource| matches!(
-            resource.shape.form,
-            crate::resources::Form::Rectangle { .. }
-        ))
+        .find(|resource| {
+            matches!(
+                resource.shape.form,
+                crate::resources::Form::Rectangle { .. }
+            )
+        })
         .or_else(|| catalog.first())
         .ok_or_else(|| "catalog contains no seed material".to_string())?;
 
@@ -37,13 +39,21 @@ pub(crate) fn confirmed_seed_baseline(
         crate::resources::Form::Rectangle { width, height } => {
             let radius = (width + height) * 0.5;
             vec![
-                BlueprintPlacement { x: 0.0, y: radius, rotation_radians: 0.0 },
+                BlueprintPlacement {
+                    x: 0.0,
+                    y: radius,
+                    rotation_radians: 0.0,
+                },
                 BlueprintPlacement {
                     x: radius,
                     y: 0.0,
                     rotation_radians: std::f64::consts::FRAC_PI_2,
                 },
-                BlueprintPlacement { x: 0.0, y: -radius, rotation_radians: 0.0 },
+                BlueprintPlacement {
+                    x: 0.0,
+                    y: -radius,
+                    rotation_radians: 0.0,
+                },
                 BlueprintPlacement {
                     x: -radius,
                     y: 0.0,
@@ -52,11 +62,10 @@ pub(crate) fn confirmed_seed_baseline(
             ]
         }
         _ => {
-            let vertices = resource
-                .shape
-                .form
-                .polygon_vertices()
-                .ok_or_else(|| "seed resource has no constructible polygon geometry".to_string())?;
+            let vertices =
+                resource.shape.form.polygon_vertices().ok_or_else(|| {
+                    "seed resource has no constructible polygon geometry".to_string()
+                })?;
             let radius = vertices
                 .iter()
                 .map(|(x, y)| x.hypot(*y))
@@ -64,8 +73,7 @@ pub(crate) fn confirmed_seed_baseline(
             if radius <= 0.0 {
                 return Err("seed resource has invalid geometry".into());
             }
-            let ring_radius =
-                radius / (std::f64::consts::PI / 4.0).sin();
+            let ring_radius = radius / (std::f64::consts::PI / 4.0).sin();
             (0..4)
                 .map(|i| {
                     let angle = i as f64 * std::f64::consts::FRAC_PI_2;
