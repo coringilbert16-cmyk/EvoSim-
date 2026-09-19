@@ -94,24 +94,30 @@ impl Genome {
             .clamp(0.15, 1.0)
     }
 
-    pub fn mutate(&mut self, rng: &mut ChaCha8Rng) {
-        if !self
-            .traits
-            .iter()
-            .any(|trait_def| trait_def.name == "size_preference")
-        {
-            self.traits.push(trait_def("size_preference", 0.5, 0.05));
-        }
+    pub fn mature_construction_target(
+        &self,
+    ) -> Result<crate::structural_blueprint::StructuralBlueprint, String> {
+        self.developmental_construction_target(&crate::resources::default_catalog(), false)
+    }
 
+    pub fn developmental_construction_target(
+        &self,
+        catalog: &[crate::resources::BaseResource],
+        juvenile: bool,
+    ) -> Result<crate::structural_blueprint::StructuralBlueprint, String> {
+        self.developmental_blueprint
+            .construction_candidate(catalog, self.adult_mass(), juvenile)
+    }
+
+    pub fn mutate(&mut self, rng: &mut ChaCha8Rng) {
+        if !self.traits.iter().any(|trait_def| trait_def.name == "adult_mass") {
+            self.traits.push(trait_def("adult_mass", 30.0, 0.5));
+        }
         for t in &mut self.traits {
             if rng.gen::<f64>() < t.mutation_probability.clamp(1e-6, 0.25) {
-                let delta = if t.name == "size_preference" {
-                    gaussian_unit(rng) * t.mutation_sigma.max(0.0)
-                } else {
-                    rng.gen_range(-1.0..1.0) * t.mutation_sigma.max(0.0)
-                };
-                t.value = if t.name == "size_preference" {
-                    (t.value + delta).clamp(0.0, 1.0)
+                let delta = gaussian_unit(rng) * t.mutation_sigma.max(0.0);
+                t.value = if t.name == "adult_mass" {
+                    (t.value + delta).clamp(4.0, 1_000.0)
                 } else {
                     t.value + delta
                 };
@@ -122,7 +128,6 @@ impl Genome {
             }
         }
     }
-}
 
 fn default_juvenile_reserve() -> Material {
     Material::free_base("Hydrogen", 1.0)
