@@ -209,4 +209,3 @@ mod tests {
         assert!((medium - base) > (large - medium));
     }
 }
-
