@@ -641,3 +641,20 @@ while:
 > memory_strength → memory formation/reinforcement strength
 
 No direct inherited mental-power trait is added.
+
+
+## P6 Approved Developmental-Scale Parameterization Amendment
+
+The approved P6 developmental-field equations are now paired with the following implementation parameterization:
+
+- The initial representation uses **4 radial influences per developmental field**. The count of four is the approved starting representation; the influence count remains **EXPERIMENTAL** and may change after validation.
+- Each Gaussian influence uses the approved form \(K_i(\mathbf p)=e^{-\|\mathbf p-\mathbf c_i\|^2/(2\sigma_i^2)}\).
+- Influence width is derived from preferred developmental scale: \(\sigma_i=\alpha_i L_p\). The \(\alpha_i\) values are **EXPERIMENTAL** representation parameters.
+- Preferred linear scale is derived from the confirmed-good initial seed realization only as a calibration reference: \(L_p=L_{seed}\sqrt{M_p/M_{seed}}\). This is a scale relationship, not an inherited seed body plan. The comparable 2-D mass scaling is therefore \(M_J\approx0.40^2M_p\) for the approved 40% juvenile linear realization.
+- Influence centers and strengths are **EXPERIMENTAL** numerical parameters. The initial centers and strengths in the default genome are implementation starting values, not biological constants.
+- Developmental-field sums are normalized by their total influence strength so field shape is not confounded with absolute amplitude.
+- Material realization uses composition-weighted physical area for composite units: each constituent contributes according to its fraction of the unit's material amount rather than counting the entire composite area once per constituent.
+- Connectivity uses physically available endpoint opportunities and keeps the neighborhood coefficient \(\lambda\) **EXPERIMENTAL**. Candidate-selection weights \(w_M,w_D,w_K\) are also **EXPERIMENTAL** solver parameters.
+- Numerical size-preference mass bounds remain **EXPERIMENTAL**.
+
+No experimental parameter above is an additional biological authority. Changing one changes the experiment within the approved P6 architecture.
