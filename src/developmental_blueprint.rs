@@ -160,7 +160,12 @@ impl DevelopmentalFieldBlueprint {
         // developmental field used for adulthood.
         let mut resources = catalog
             .iter()
-            .filter(|resource| matches!(resource.shape.form, crate::resources::Form::Rectangle { .. }))
+            .filter(|resource| {
+                matches!(
+                    resource.shape.form,
+                    crate::resources::Form::Rectangle { .. }
+                )
+            })
             .collect::<Vec<_>>();
         if resources.is_empty() {
             resources = catalog.iter().collect();
@@ -175,16 +180,39 @@ impl DevelopmentalFieldBlueprint {
                 crate::resources::Form::Rectangle { width, height } => {
                     let radius = (width + height) * 0.5;
                     vec![
-                        BlueprintPlacement { x: 0.0, y: radius, rotation_radians: 0.0 },
-                        BlueprintPlacement { x: radius, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_2 },
-                        BlueprintPlacement { x: 0.0, y: -radius, rotation_radians: 0.0 },
-                        BlueprintPlacement { x: -radius, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_2 },
+                        BlueprintPlacement {
+                            x: 0.0,
+                            y: radius,
+                            rotation_radians: 0.0,
+                        },
+                        BlueprintPlacement {
+                            x: radius,
+                            y: 0.0,
+                            rotation_radians: std::f64::consts::FRAC_PI_2,
+                        },
+                        BlueprintPlacement {
+                            x: 0.0,
+                            y: -radius,
+                            rotation_radians: 0.0,
+                        },
+                        BlueprintPlacement {
+                            x: -radius,
+                            y: 0.0,
+                            rotation_radians: std::f64::consts::FRAC_PI_2,
+                        },
                     ]
                 }
                 _ => {
-                    let Some(vertices) = resource.shape.form.polygon_vertices() else { continue; };
-                    let radius = vertices.iter().map(|(x, y)| x.hypot(*y)).fold(0.0, f64::max);
-                    if radius <= 0.0 { continue; }
+                    let Some(vertices) = resource.shape.form.polygon_vertices() else {
+                        continue;
+                    };
+                    let radius = vertices
+                        .iter()
+                        .map(|(x, y)| x.hypot(*y))
+                        .fold(0.0, f64::max);
+                    if radius <= 0.0 {
+                        continue;
+                    };
                     let ring_radius = radius / (std::f64::consts::PI / 4.0).sin();
                     (0..4).map(|i| {
                         let angle = i as f64 * std::f64::consts::TAU / 4.0;
@@ -224,9 +252,13 @@ impl DevelopmentalFieldBlueprint {
             if !candidate.is_valid() {
                 continue;
             }
-            let Ok(structure) = candidate.realize(catalog) else { continue; };
+            let Ok(structure) = candidate.realize(catalog) else {
+                continue;
+            };
             let qualifies = crate::cavity::analyze_genome_cavity(&structure, catalog)
-                .ok().flatten().is_some_and(|cavity| cavity.qualifies());
+                .ok()
+                .flatten()
+                .is_some_and(|cavity| cavity.qualifies());
             if qualifies {
                 return Ok(candidate);
             }
@@ -375,7 +407,6 @@ mod tests {
         };
         assert!(field.evaluate(0.0, 0.0) > field.evaluate(2.0, 0.0));
     }
-
 
     #[test]
     fn construction_candidate_is_derived_from_fields_and_juvenile_scale() {
