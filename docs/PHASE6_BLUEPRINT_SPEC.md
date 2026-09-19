@@ -68,15 +68,19 @@ Development therefore changes the degree to which the blueprint has been physica
 
 The approximately 40% juvenile spatial realization used at birth is a construction target derived from the adult blueprint, not a separate inherited blueprint.
 
-## Size preference and developmental mass
+## Preferred developmental mass
 
-The genome should carry a dedicated inherited **size-preference gene** rather than treating minimum viable size as a fixed genome constant.
+The genome's existing `adult_mass` concept is the sole inherited preferred-mass authority.
 
-The gene expresses a preference for the organism's developmental scale/mass. It is not a minimum-viability threshold, and it does not by itself define adulthood, survival, or death.
+It means:
 
-The size preference is part of the developmental field input used to derive preferred developmental mass. The exact numerical domain and mapping from gene value to preferred developmental mass remain implementation questions for the next parameterization step.
+> The approximate structural mass toward which development tends.
 
-Because offspring genomes are independently mutated, two offspring from the same parent may inherit different size-preference values even when their parent genome is identical. This provides heritable within-lineage variation without adding a separate body-plan diagram or authored size ladder.
+It does not define a minimum viable size, an adulthood threshold, or a fixed final mass. Actual mass is always derived from the realized physical structure.
+
+There must not be a separate `size_preference`, `blueprint_mass`, count ladder, or equivalent genome authority for developmental size.
+
+The construction solver converts preferred developmental mass into a spatial realization tendency. Physical geometry, available material, existing neighboring structure, developmental history, and construction constraints determine the realized result.
 
 ## Developmental mass and adulthood
 
