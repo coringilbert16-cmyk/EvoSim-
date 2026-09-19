@@ -65,9 +65,14 @@ mod integration_tests {
         assert!(o.genome.developmental_blueprint.validate().is_ok());
         let catalog = crate::resources::default_catalog();
         assert!(o.structural_mass(&catalog) > 0.0);
-        assert!(
-            Simulation::growth_fraction(&o, &Environment::new(catalog.clone(), vec![], 0.0)) < 0.90
+        let realization = o.genome.developmental_blueprint.realization(
+            &o.structure,
+            &catalog,
+            (o.developmental_origin.x, o.developmental_origin.y),
+            o.developmental_orientation_radians,
+            o.genome.adult_mass(),
         );
+        assert!(realization.overall < 0.90);
         assert!(matches!(o.development_stage, DevelopmentStage::Juvenile));
     }
 
