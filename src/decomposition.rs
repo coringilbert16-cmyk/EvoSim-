@@ -193,8 +193,7 @@ mod tests {
 
     #[test]
     fn zero_bond_structure_is_finished() {
-        let genome = initial_genome();
-        let blueprint = genome.mature_construction_target().unwrap();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&default_catalog()).unwrap();
         let mut structure = blueprint.realize(&default_catalog()).unwrap();
         structure.bonds.clear();
         let body = DecomposingBody::new(structure, 0.0, Position { x: 0.0, y: 0.0 }).unwrap();
