@@ -143,7 +143,11 @@ impl StructuralDensityField {
             strength: self.center_preference.max(0.0),
         };
         let mut total = primary.evaluate(x, y, scale);
-        total += self.additional_influences.iter().map(|i| i.evaluate(x, y, scale)).sum::<f64>();
+        total += self
+            .additional_influences
+            .iter()
+            .map(|i| i.evaluate(x, y, scale))
+            .sum::<f64>();
         let strength = primary.strength
             + self
                 .additional_influences
