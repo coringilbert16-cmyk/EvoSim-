@@ -375,8 +375,7 @@ mod tests {
     #[test]
     fn realized_structure_cavity_qualifies_without_a_predefined_core() {
         let catalog = default_catalog();
-        let genome = initial_genome();
-        let blueprint = genome.mature_construction_target().unwrap();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
         let structure = blueprint.realize(&catalog).unwrap();
         let cavity = analyze_genome_cavity(&structure, &catalog)
             .unwrap()
