@@ -105,7 +105,7 @@ impl Simulation {
         reinforce_memory_point(organism, sx, sy, memory_strength, capacity);
     }
 
-            pub(crate) fn reinforce_memory_point(
+    pub(crate) fn reinforce_memory_point(
         organism: &mut Organism,
         sx: f64,
         sy: f64,
