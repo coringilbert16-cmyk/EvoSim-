@@ -220,11 +220,19 @@ impl DevelopmentalFieldBlueprint {
     }
 
     pub fn density_preference(&self, x: f64, y: f64) -> f64 {
-        self.structural_density.evaluate(x, y)
+        self.density_preference_scaled(x, y, 1.0)
+    }
+
+    pub fn density_preference_scaled(&self, x: f64, y: f64, scale: f64) -> f64 {
+        self.structural_density.evaluate_scaled(x, y, scale)
     }
 
     pub fn connectivity_preference(&self, x: f64, y: f64) -> f64 {
-        self.connectivity.evaluate(x, y)
+        self.connectivity_preference_scaled(x, y, 1.0)
+    }
+
+    pub fn connectivity_preference_scaled(&self, x: f64, y: f64, scale: f64) -> f64 {
+        self.connectivity.evaluate_scaled(x, y, scale)
     }
 
     /// Returns a transient physical construction candidate derived from the same
@@ -250,8 +258,9 @@ impl DevelopmentalFieldBlueprint {
         // from the confirmed-good seed realization; development then evaluates
         // the same field at the reduced realization scale rather than selecting
         // a separate inherited body plan.
-        let realization_fraction = if juvenile { 0.40 } else { 1.0 };
-        // 0.40 is the approved juvenile linear spatial realization; its comparable 2-D mass fraction is approximately 0.16.\n        let target_mass = preferred_mass * realization_fraction;
+        let realization_fraction = if juvenile { 0.40_f64.powi(2) } else { 1.0 };
+        // 0.40 is the approved juvenile linear spatial realization; its comparable 2-D mass fraction is approximately 0.16.
+        let target_mass = preferred_mass * realization_fraction;
         let mut candidate = self.confirmed_juvenile_candidate(catalog)?;
         let mut current_mass = candidate.structural_mass(catalog);
         if !current_mass.is_finite() || current_mass <= 0.0 {
@@ -447,9 +456,11 @@ impl DevelopmentalFieldBlueprint {
         &self,
         current: &StructuralBlueprint,
         catalog: &[BaseResource],
+        target_mass: f64,
     ) -> Result<Vec<(StructuralBlueprint, f64)>, String> {
         let mut candidates = Vec::new();
-        let base_count = current.elements.len();\n        let preferred_length = self.preferred_length(catalog, target_mass.max(1e-9)).max(1e-6);
+        let base_count = current.elements.len();
+        let preferred_length = self.preferred_length(catalog, target_mass.max(1e-9)).max(1e-6);
         const DIRECTION_SAMPLES: usize = 16;
         for parent in 0..base_count {
             let p = current.elements[parent].placement;
