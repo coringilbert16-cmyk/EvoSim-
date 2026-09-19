@@ -429,7 +429,7 @@ impl DevelopmentalFieldBlueprint {
         catalog: &'a [BaseResource],
         x: f64,
         y: f64,
-    ) -> Result<&'a BaseResource, String>
+    ) -> Result<&'a BaseResource, String> {
         catalog
             .iter()
             .max_by(|a, b| {
