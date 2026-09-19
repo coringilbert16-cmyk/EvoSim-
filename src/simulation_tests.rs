@@ -63,7 +63,11 @@ mod integration_tests {
     fn initial_organism_has_a_valid_developmental_blueprint_and_physical_mass() {
         let o = Simulation::create_initial_organism();
         assert!(o.genome.developmental_blueprint.validate().is_ok());
-        assert!(o.structural_mass(&crate::resources::default_catalog()) > 0.0);
+        let catalog = crate::resources::default_catalog();
+        assert!(o.structural_mass(&catalog) > 0.0);
+        assert!(
+            Simulation::growth_fraction(&o, &Environment::new(catalog.clone(), vec![], 0.0)) < 0.90
+        );
         assert!(matches!(o.development_stage, DevelopmentStage::Juvenile));
     }
 
