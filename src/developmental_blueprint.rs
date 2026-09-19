@@ -275,7 +275,7 @@ impl DevelopmentalFieldBlueprint {
                                 rotation_radians: angle + std::f64::consts::FRAC_PI_2,
                             }
                         })
-                    .collect()
+                        .collect()
                 }
             };
             let mut elements = ring
@@ -465,33 +465,52 @@ impl DevelopmentalFieldBlueprint {
         let material_realized = if material_available > 0.0 {
             let mut realized = 0.0;
             for unit in &structure.units {
-                let Some((resource_name, amount)) = unit.material.parts.first() else { continue; };
-                if (*amount - 1.0).abs() > f64::EPSILON { continue; }
-                let Some(shape) = unit.shape(catalog) else { continue; };
+                let Some((resource_name, amount)) = unit.material.parts.first() else {
+                    continue;
+                };
+                if (*amount - 1.0).abs() > f64::EPSILON {
+                    continue;
+                }
+                let Some(shape) = unit.shape(catalog) else {
+                    continue;
+                };
                 realized += self.integrate_shape_field(
-                    &shape.form, unit.placement, developmental_origin,
+                    &shape.form,
+                    unit.placement,
+                    developmental_origin,
                     developmental_orientation_radians,
                     |x, y| self.material_preference(resource_name, x, y),
                 );
             }
             Some((realized / material_available).clamp(0.0, 1.0))
-        } else { None };
+        } else {
+            None
+        };
 
         let density_realized = if density_available > 0.0 {
             let mut realized = 0.0;
             for unit in &structure.units {
-                let Some(shape) = unit.shape(catalog) else { continue; };
+                let Some(shape) = unit.shape(catalog) else {
+                    continue;
+                };
                 realized += self.integrate_shape_field(
-                    &shape.form, unit.placement, developmental_origin,
+                    &shape.form,
+                    unit.placement,
+                    developmental_origin,
                     developmental_orientation_radians,
                     |x, y| self.density_preference(x, y),
                 );
             }
             Some((realized / density_available).clamp(0.0, 1.0))
-        } else { None };
+        } else {
+            None
+        };
 
         let connectivity = self.connectivity_realization(
-            structure, catalog, developmental_origin, developmental_orientation_radians,
+            structure,
+            catalog,
+            developmental_origin,
+            developmental_orientation_radians,
         );
 
         let mut sum = 0.0;
@@ -509,13 +528,20 @@ impl DevelopmentalFieldBlueprint {
             material: material_realized,
             density: density_realized,
             connectivity,
-            overall: if active == 0 { 0.0 } else { (sum / active as f64).clamp(0.0, 1.0) },
+            overall: if active == 0 {
+                0.0
+            } else {
+                (sum / active as f64).clamp(0.0, 1.0)
+            },
         }
     }
 
     fn material_available_value(&self) -> f64 {
-        self.material_preferences.iter()
-            .filter_map(|field| gaussian_plane_integral(field.center_preference, field.radial_falloff))
+        self.material_preferences
+            .iter()
+            .filter_map(|field| {
+                gaussian_plane_integral(field.center_preference, field.radial_falloff)
+            })
             .sum()
     }
 
@@ -538,38 +564,88 @@ impl DevelopmentalFieldBlueprint {
         let mut actual_pairs = Vec::new();
 
         for bond in &structure.bonds {
-            let Some(a) = structure.unit_index(bond.endpoint_a.constituent_id) else { continue; };
-            let Some(b) = structure.unit_index(bond.endpoint_b.constituent_id) else { continue; };
-            let Some(wa) = bond.endpoint_a.location.world_point(&structure.units[a], catalog) else { continue; };
-            let Some(wb) = bond.endpoint_b.location.world_point(&structure.units[b], catalog) else { continue; };
+            let Some(a) = structure.unit_index(bond.endpoint_a.constituent_id) else {
+                continue;
+            };
+            let Some(b) = structure.unit_index(bond.endpoint_b.constituent_id) else {
+                continue;
+            };
+            let Some(wa) = bond
+                .endpoint_a
+                .location
+                .world_point(&structure.units[a], catalog)
+            else {
+                continue;
+            };
+            let Some(wb) = bond
+                .endpoint_b
+                .location
+                .world_point(&structure.units[b], catalog)
+            else {
+                continue;
+            };
             let la = developmental_point(wa.x, wa.y, origin, orientation);
             let lb = developmental_point(wb.x, wb.y, origin, orientation);
-            actual_value += self.connectivity_score(la, lb, structure, a, b, bond.endpoint_a.location, bond.endpoint_b.location, catalog);
+            actual_value += self.connectivity_score(
+                la,
+                lb,
+                structure,
+                a,
+                b,
+                bond.endpoint_a.location,
+                bond.endpoint_b.location,
+                catalog,
+            );
             actual_pairs.push((a, b));
         }
 
         for a in 0..structure.units.len() {
             for b in (a + 1)..structure.units.len() {
-                if actual_pairs.iter().any(|(x, y)| (*x == a && *y == b) || (*x == b && *y == a)) {
+                if actual_pairs
+                    .iter()
+                    .any(|(x, y)| (*x == a && *y == b) || (*x == b && *y == a))
+                {
                     continue;
                 }
-                for candidate in crate::contact::connection_pair_candidates(structure, a, b, catalog)
-                    .into_iter().filter(|candidate| candidate.available_a && candidate.available_b)
+                for candidate in
+                    crate::contact::connection_pair_candidates(structure, a, b, catalog)
+                        .into_iter()
+                        .filter(|candidate| candidate.available_a && candidate.available_b)
                 {
-                    let Some(wa) = candidate.endpoint_a.world_point(&structure.units[a], catalog) else { continue; };
-                    let Some(wb) = candidate.endpoint_b.world_point(&structure.units[b], catalog) else { continue; };
+                    let Some(wa) = candidate
+                        .endpoint_a
+                        .world_point(&structure.units[a], catalog)
+                    else {
+                        continue;
+                    };
+                    let Some(wb) = candidate
+                        .endpoint_b
+                        .world_point(&structure.units[b], catalog)
+                    else {
+                        continue;
+                    };
                     let la = developmental_point(wa.x, wa.y, origin, orientation);
                     let lb = developmental_point(wb.x, wb.y, origin, orientation);
                     available_value += self.connectivity_score(
-                        la, lb, structure, a, b,
-                        candidate.endpoint_a, candidate.endpoint_b, catalog,
+                        la,
+                        lb,
+                        structure,
+                        a,
+                        b,
+                        candidate.endpoint_a,
+                        candidate.endpoint_b,
+                        catalog,
                     );
                 }
             }
         }
 
         available_value += actual_value;
-        if available_value <= 0.0 { None } else { Some((actual_value / available_value).clamp(0.0, 1.0)) }
+        if available_value <= 0.0 {
+            None
+        } else {
+            Some((actual_value / available_value).clamp(0.0, 1.0))
+        }
     }
 
     fn connectivity_score(
@@ -605,19 +681,33 @@ impl DevelopmentalFieldBlueprint {
         orientation: f64,
         field: F,
     ) -> f64
-    where F: Fn(f64, f64) -> f64 {
+    where
+        F: Fn(f64, f64) -> f64,
+    {
         const NODES: [f64; 8] = [
-            -0.9602898564975363, -0.7966664774136267, -0.525532409916329,
-            -0.1834346424956498, 0.1834346424956498, 0.525532409916329,
-            0.7966664774136267, 0.9602898564975363,
+            -0.9602898564975363,
+            -0.7966664774136267,
+            -0.525532409916329,
+            -0.1834346424956498,
+            0.1834346424956498,
+            0.525532409916329,
+            0.7966664774136267,
+            0.9602898564975363,
         ];
         const WEIGHTS: [f64; 8] = [
-            0.1012285362903763, 0.2223810344533745, 0.3137066458778873,
-            0.362683783378362, 0.362683783378362, 0.3137066458778873,
-            0.2223810344533745, 0.1012285362903763,
+            0.1012285362903763,
+            0.2223810344533745,
+            0.3137066458778873,
+            0.362683783378362,
+            0.362683783378362,
+            0.3137066458778873,
+            0.2223810344533745,
+            0.1012285362903763,
         ];
         let radius = form.bounding_radius().max(0.0);
-        if !radius.is_finite() || radius <= 0.0 { return 0.0; }
+        if !radius.is_finite() || radius <= 0.0 {
+            return 0.0;
+        }
         let min_x = placement.x - radius;
         let max_x = placement.x + radius;
         let min_y = placement.y - radius;
@@ -631,7 +721,9 @@ impl DevelopmentalFieldBlueprint {
             for j in 0..8 {
                 let world_x = cx + hx * NODES[i];
                 let world_y = cy + hy * NODES[j];
-                if !point_in_form(form, placement, world_x, world_y) { continue; }
+                if !point_in_form(form, placement, world_x, world_y) {
+                    continue;
+                }
                 let (x, y) = developmental_point(world_x, world_y, origin, orientation);
                 total += WEIGHTS[i] * WEIGHTS[j] * field(x, y);
             }
@@ -641,7 +733,11 @@ impl DevelopmentalFieldBlueprint {
 }
 
 fn gaussian_plane_integral(amplitude: f64, radial_falloff: f64) -> Option<f64> {
-    if !amplitude.is_finite() || amplitude <= 0.0 || !radial_falloff.is_finite() || radial_falloff <= 0.0 {
+    if !amplitude.is_finite()
+        || amplitude <= 0.0
+        || !radial_falloff.is_finite()
+        || radial_falloff <= 0.0
+    {
         None
     } else {
         Some(amplitude * std::f64::consts::PI / radial_falloff)
@@ -668,7 +764,9 @@ fn point_in_form(
         crate::resources::Form::Rectangle { .. }
         | crate::resources::Form::RegularPolygon { .. }
         | crate::resources::Form::Polygon { .. } => {
-            let Some(local_vertices) = form.polygon_vertices() else { return false; };
+            let Some(local_vertices) = form.polygon_vertices() else {
+                return false;
+            };
             let (s, c) = placement.rotation_radians.sin_cos();
             let local_x = (x - placement.x) * c + (y - placement.y) * s;
             let local_y = -(x - placement.x) * s + (y - placement.y) * c;
@@ -677,7 +775,8 @@ fn point_in_form(
                 let a = local_vertices[i];
                 let b = local_vertices[(i + 1) % local_vertices.len()];
                 if (a.1 > local_y) != (b.1 > local_y)
-                    && local_x < (b.0 - a.0) * (local_y - a.1) / (b.1 - a.1) + a.0 {
+                    && local_x < (b.0 - a.0) * (local_y - a.1) / (b.1 - a.1) + a.0
+                {
                     inside = !inside;
                 }
             }
@@ -692,8 +791,14 @@ fn endpoint_realized_count(
     unit: usize,
     endpoint: crate::structure::ConnectionEndpoint,
 ) -> usize {
-    let Some(id) = structure.physical_id(unit) else { return 0; };
-    structure.bonds.iter().filter(|bond| bond.touches(id, endpoint)).count()
+    let Some(id) = structure.physical_id(unit) else {
+        return 0;
+    };
+    structure
+        .bonds
+        .iter()
+        .filter(|bond| bond.touches(id, endpoint))
+        .count()
 }
 
 fn endpoint_opportunity_count(
@@ -704,11 +809,16 @@ fn endpoint_opportunity_count(
 ) -> usize {
     let mut count = endpoint_realized_count(structure, unit, endpoint);
     for other in 0..structure.units.len() {
-        if other == unit { continue; }
+        if other == unit {
+            continue;
+        }
         if crate::contact::connection_pair_candidates(structure, unit, other, catalog)
             .into_iter()
-            .any(|candidate| candidate.available_a && candidate.available_b &&
-                candidate.endpoint_a.same_location(endpoint))
+            .any(|candidate| {
+                candidate.available_a
+                    && candidate.available_b
+                    && candidate.endpoint_a.same_location(endpoint)
+            })
         {
             count += 1;
         }
@@ -746,8 +856,8 @@ pub fn default_developmental_blueprint() -> DevelopmentalFieldBlueprint {
         },
         connectivity: ConnectivityField {
             strength: 0.0,
-            center_x: 0.0, // EXPERIMENTAL: initial influence center.
-            center_y: 0.0, // EXPERIMENTAL: initial influence center.
+            center_x: 0.0,       // EXPERIMENTAL: initial influence center.
+            center_y: 0.0,       // EXPERIMENTAL: initial influence center.
             radial_falloff: 0.0, // EXPERIMENTAL: inactive connectivity field.
         },
     }
