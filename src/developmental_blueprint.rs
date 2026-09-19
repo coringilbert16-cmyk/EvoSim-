@@ -715,8 +715,16 @@ impl DevelopmentalFieldBlueprint {
                     .map(|influence| influence.integral(preferred_length))
                     .sum::<f64>();
                 let normalization = field.center_preference.max(0.0)
-                    + field.additional_influences.iter().map(|i| i.strength).sum::<f64>();
-                if normalization <= 0.0 { 0.0 } else { (primary + additional) / normalization }
+                    + field
+                        .additional_influences
+                        .iter()
+                        .map(|i| i.strength)
+                        .sum::<f64>();
+                if normalization <= 0.0 {
+                    0.0
+                } else {
+                    (primary + additional) / normalization
+                }
             })
             .sum()
     }
@@ -729,12 +737,22 @@ impl DevelopmentalFieldBlueprint {
             strength: self.structural_density.center_preference.max(0.0),
         };
         let normalization = primary.strength
-            + self.structural_density.additional_influences.iter().map(|i| i.strength).sum::<f64>();
+            + self
+                .structural_density
+                .additional_influences
+                .iter()
+                .map(|i| i.strength)
+                .sum::<f64>();
         if normalization <= 0.0 {
             0.0
         } else {
             (primary.integral(preferred_length)
-                + self.structural_density.additional_influences.iter().map(|i| i.integral(preferred_length)).sum::<f64>())
+                + self
+                    .structural_density
+                    .additional_influences
+                    .iter()
+                    .map(|i| i.integral(preferred_length))
+                    .sum::<f64>())
                 / normalization
         }
     }
@@ -1039,7 +1057,12 @@ pub fn default_developmental_blueprint() -> DevelopmentalFieldBlueprint {
                 radial_falloff: 2.0, // EXPERIMENTAL: alpha=0.5 initial Gaussian width.
                 center_x: 0.0,       // EXPERIMENTAL: initial influence center.
                 center_y: 0.0,       // EXPERIMENTAL: initial influence center.
-                additional_influences: vec![RadialInfluence { center_x: 0.0, center_y: 0.0, radial_falloff: 2.0, strength: center_preference }; 3],
+                additional_influences: vec![RadialInfluence {
+                    center_x: 0.0,
+                    center_y: 0.0,
+                    radial_falloff: 2.0,
+                    strength: center_preference,
+                }; 3],
             },
         )
         .collect(),
@@ -1048,14 +1071,24 @@ pub fn default_developmental_blueprint() -> DevelopmentalFieldBlueprint {
             radial_falloff: 2.0, // EXPERIMENTAL: alpha=0.5 initial Gaussian width.
             center_x: 0.0,       // EXPERIMENTAL: initial influence center.
             center_y: 0.0,       // EXPERIMENTAL: initial influence center.
-            additional_influences: vec![RadialInfluence { center_x: 0.0, center_y: 0.0, radial_falloff: 2.0, strength: 0.5 }; 3],
+            additional_influences: vec![RadialInfluence {
+                center_x: 0.0,
+                center_y: 0.0,
+                radial_falloff: 2.0,
+                strength: 0.5,
+            }; 3],
         },
         connectivity: ConnectivityField {
             strength: 0.0,
             center_x: 0.0,       // EXPERIMENTAL: initial influence center.
             center_y: 0.0,       // EXPERIMENTAL: initial influence center.
             radial_falloff: 2.0, // EXPERIMENTAL: alpha=0.5 initial Gaussian width.
-            additional_influences: vec![RadialInfluence { center_x: 0.0, center_y: 0.0, radial_falloff: 2.0, strength: 0.0 }; 3],
+            additional_influences: vec![RadialInfluence {
+                center_x: 0.0,
+                center_y: 0.0,
+                radial_falloff: 2.0,
+                strength: 0.0,
+            }; 3],
         },
     }
 }
