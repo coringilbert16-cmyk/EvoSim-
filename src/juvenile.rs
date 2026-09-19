@@ -319,24 +319,18 @@ pub(crate) fn realize_initial_with_reserve(
         return Err("juvenile energy reserve must be finite and positive".into());
     }
 
-    // First realization is a non-persistent energy requirement calculation.
-    // The actual physical assembly is still performed by the same unified
-    // blueprint/construction/COMBINE path used elsewhere.
-    let mut trial_ledger = EnergyLedger::default();
-    let mut trial_energy = TRIAL_ENERGY;
-    blueprint
-        .realize_with_context(catalog, &mut trial_ledger, &mut trial_energy)
-        .map_err(|error| format!("juvenile construction target could not be realized: {error}"))?;
-    let required_initial_energy = TRIAL_ENERGY - trial_energy;
+    let base = realize_declared_units(blueprint, catalog)?;
+
+    let (_, trial_remaining) =
+        form_declared_bonds(base.clone(), blueprint, catalog, TRIAL_ENERGY)?;
+    let required_initial_energy = TRIAL_ENERGY - trial_remaining;
     if !required_initial_energy.is_finite() || required_initial_energy < 0.0 {
         return Err("juvenile construction produced an invalid energy requirement".into());
     }
 
-    let mut ledger = EnergyLedger::default();
     let mut energy = required_initial_energy + reserve_energy;
-    let (structure, _) = blueprint
-        .realize_with_context(catalog, &mut ledger, &mut energy)
-        .map_err(|error| format!("juvenile construction target could not be realized: {error}"))?;
+    let (structure, remaining) = form_declared_bonds(base, blueprint, catalog, energy)?;
+    energy = remaining;
 
     if !energy.is_finite() || energy + EPS < reserve_energy {
         return Err(format!(
