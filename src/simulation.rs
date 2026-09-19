@@ -97,6 +97,8 @@ impl Simulation {
         assert!(stored_material.store(genome.juvenile_reserve.clone()));
         Organism {
             id: "1".into(),
+            developmental_origin: anchor.clone(),
+            developmental_orientation_radians: 0.0,
             occupied_cells: vec![anchor],
             genome,
             resource_sense: ResourceSense {
