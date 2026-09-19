@@ -103,8 +103,7 @@ impl ConnectivityField {
         let dx = x - self.center_x;
         let dy = y - self.center_y;
         let distance_squared = dx.mul_add(dx, dy * dy);
-        (self.strength * (-self.radial_falloff.max(0.0) * distance_squared).exp())
-            .clamp(0.0, 1.0)
+        (self.strength * (-self.radial_falloff.max(0.0) * distance_squared).exp()).clamp(0.0, 1.0)
     }
 
     fn validate(&self) -> Result<(), String> {
@@ -267,13 +266,13 @@ impl DevelopmentalFieldBlueprint {
                     let ring_radius = radius / (std::f64::consts::PI / 4.0).sin();
                     (0..4)
                         .map(|i| {
-                        let angle = i as f64 * std::f64::consts::TAU / 4.0;
-                        BlueprintPlacement {
-                            x: ring_radius * angle.cos(),
-                            y: ring_radius * angle.sin(),
-                            rotation_radians: angle + std::f64::consts::FRAC_PI_2,
-                        }
-                    })
+                            let angle = i as f64 * std::f64::consts::TAU / 4.0;
+                            BlueprintPlacement {
+                                x: ring_radius * angle.cos(),
+                                y: ring_radius * angle.sin(),
+                                rotation_radians: angle + std::f64::consts::FRAC_PI_2,
+                            }
+                        })
                     .collect()
                 }
             };
@@ -412,8 +411,7 @@ impl DevelopmentalFieldBlueprint {
                 let field_score = MATERIAL_WEIGHT
                     * self.material_preference(&resource.name, placement.x, placement.y)
                     + DENSITY_WEIGHT * self.density_preference(placement.x, placement.y)
-                    + CONNECTIVITY_WEIGHT
-                        * self.connectivity_preference(placement.x, placement.y);
+                    + CONNECTIVITY_WEIGHT * self.connectivity_preference(placement.x, placement.y);
                 candidates.push((field_score, candidate, mass));
             }
         }
@@ -458,16 +456,16 @@ pub fn default_developmental_blueprint() -> DevelopmentalFieldBlueprint {
                 resource_name: resource_name.into(),
                 center_preference,
                 radial_falloff: 0.0, // EXPERIMENTAL: constant-width initial field.
-                center_x: 0.0, // EXPERIMENTAL: initial influence center.
-                center_y: 0.0, // EXPERIMENTAL: initial influence center.
+                center_x: 0.0,       // EXPERIMENTAL: initial influence center.
+                center_y: 0.0,       // EXPERIMENTAL: initial influence center.
             },
         )
         .collect(),
         structural_density: StructuralDensityField {
             center_preference: 0.5,
             radial_falloff: 0.0, // EXPERIMENTAL: constant-width initial field.
-            center_x: 0.0, // EXPERIMENTAL: initial influence center.
-            center_y: 0.0, // EXPERIMENTAL: initial influence center.
+            center_x: 0.0,       // EXPERIMENTAL: initial influence center.
+            center_y: 0.0,       // EXPERIMENTAL: initial influence center.
         },
         connectivity: ConnectivityField {
             strength: 0.0,
