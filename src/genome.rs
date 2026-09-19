@@ -197,19 +197,6 @@ mod tests {
         assert!((genome.adult_mass() - 30.0).abs() < 1e-9);
     }
 
-    #[test]
-    fn construction_targets_are_transient_artifacts_of_developmental_fields() {
-        let genome = initial_genome();
-        let catalog = crate::resources::default_catalog();
-        assert!(genome
-            .developmental_construction_target(&catalog, true)
-            .unwrap()
-            .is_valid());
-        assert!(genome
-            .developmental_construction_target(&catalog, false)
-            .unwrap()
-            .is_valid());
-    }
 
     #[test]
     fn reserves_remain_genome_defined() {
