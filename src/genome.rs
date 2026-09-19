@@ -110,7 +110,11 @@ impl Genome {
     }
 
     pub fn mutate(&mut self, rng: &mut ChaCha8Rng) {
-        if !self.traits.iter().any(|trait_def| trait_def.name == "adult_mass") {
+        if !self
+            .traits
+            .iter()
+            .any(|trait_def| trait_def.name == "adult_mass")
+        {
             self.traits.push(trait_def("adult_mass", 30.0, 0.5));
         }
         for t in &mut self.traits {
