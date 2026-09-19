@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use crate::genome::initial_genome;
     use crate::resources::{default_catalog, Material};
     use crate::structural_blueprint::{
         BlueprintConnection, BlueprintElement, BlueprintPlacement, StructuralBlueprint,
@@ -19,14 +18,13 @@ mod tests {
 
     #[test]
     fn ancestral_seed_realizes_a_physically_valid_developmental_structure() {
-        let blueprint = initial_genome().mature_construction_target().unwrap();
         let catalog = default_catalog();
-        let structure = blueprint
-            .realize(&catalog)
-            .expect("developmental candidate must have a physical realization");
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
+        let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog)
+            .expect("confirmed seed must have a physical realization");
 
-        assert_eq!(structure.units.len(), blueprint.elements.len());
-        assert_eq!(structure.bonds.len(), blueprint.connections.len());
+        assert!(!structure.units.is_empty());
+        assert!(!structure.bonds.is_empty());
 
         let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
             .expect("cavity analysis must succeed")

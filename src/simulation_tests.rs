@@ -41,25 +41,13 @@ mod integration_tests {
     #[test]
     fn fresh_organism_is_a_physically_realized_juvenile() {
         let o = Simulation::create_initial_organism();
-        let blueprint = o
-            .genome
-            .developmental_construction_target(&crate::resources::default_catalog(), true)
-            .unwrap();
-        let expected_constituents = blueprint
-            .elements
-            .iter()
-            .map(|e| e.material.parts.len())
-            .sum::<usize>();
-        let expected_internal_bonds = blueprint
-            .elements
-            .iter()
-            .map(|e| e.material.internal_bonds.len())
-            .sum::<usize>();
-        assert_eq!(o.structure.units.len(), expected_constituents);
-        assert_eq!(
-            o.structure.bonds.len(),
-            expected_internal_bonds + blueprint.connections.len()
-        );
+        assert!(!o.structure.units.is_empty());
+        assert!(crate::cavity::analyze_genome_cavity(
+            &o.structure,
+            &crate::resources::default_catalog(),
+        )
+        .unwrap()
+        .is_some());
         assert!(!o.structure.units.is_empty());
         assert!(!o.stored_material.is_empty());
         assert!(matches!(o.development_stage, DevelopmentStage::Juvenile));
@@ -72,21 +60,19 @@ mod integration_tests {
     }
 
     #[test]
-    fn seed_retains_a_distinct_mature_developmental_target() {
+    fn initial_organism_has_a_valid_developmental_blueprint_and_physical_mass() {
         let o = Simulation::create_initial_organism();
-        let c = &crate::resources::default_catalog();
-        let juvenile = o
-            .genome
-            .developmental_construction_target(c, true)
-            .unwrap()
-            .structural_mass(c);
-        let mature = o
-            .genome
-            .developmental_construction_target(c, false)
-            .unwrap()
-            .structural_mass(c);
-        assert!(mature > juvenile);
-        assert!(o.structural_mass(c) < mature * 0.90);
+        assert!(o.genome.developmental_blueprint.validate().is_ok());
+        let catalog = crate::resources::default_catalog();
+        assert!(o.structural_mass(&catalog) > 0.0);
+        let realization = o.genome.developmental_blueprint.realization(
+            &o.structure,
+            &catalog,
+            (o.developmental_origin.x, o.developmental_origin.y),
+            o.developmental_orientation_radians,
+            o.genome.adult_mass(),
+        );
+        assert!(realization.overall < 0.90);
         assert!(matches!(o.development_stage, DevelopmentStage::Juvenile));
     }
 

@@ -214,9 +214,14 @@ fn stored_realized_single_constituent_enters_combine_through_physical_path() {
 
     let mut cache = ConnectionCompatibilityCache::new();
     let mut ledger = EnergyLedger::default();
-    let attempt =
-        try_combine_stored_unit(organism, &simulation.environment, &mut cache, &mut ledger)
-            .expect("stored physical Carbon should be incorporated through COMBINE");
+    let attempt = try_combine_stored_unit(
+        organism,
+        &simulation.environment,
+        &mut cache,
+        &mut ledger,
+        None,
+    )
+    .expect("stored physical Carbon should be incorporated through COMBINE");
 
     assert_eq!(organism.stored_material.len(), storage_before - 1);
     let realized_after = organism.stored_material.physical_count();

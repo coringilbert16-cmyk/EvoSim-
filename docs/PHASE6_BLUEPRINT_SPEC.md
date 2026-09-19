@@ -68,15 +68,19 @@ Development therefore changes the degree to which the blueprint has been physica
 
 The approximately 40% juvenile spatial realization used at birth is a construction target derived from the adult blueprint, not a separate inherited blueprint.
 
-## Size preference and developmental mass
+## Preferred developmental mass
 
-The genome should carry a dedicated inherited **size-preference gene** rather than treating minimum viable size as a fixed genome constant.
+The inherited **size-preference gene** is the source of developmental-size variation. Preferred developmental mass is derived from that gene by the approved size mapping above. `adult_mass` may remain as the current implementation-facing preferred-mass concept only if it is not a second independent inherited authority.
 
-The gene expresses a preference for the organism's developmental scale/mass. It is not a minimum-viability threshold, and it does not by itself define adulthood, survival, or death.
+It means:
 
-The size preference is part of the developmental field input used to derive preferred developmental mass. The exact numerical domain and mapping from gene value to preferred developmental mass remain implementation questions for the next parameterization step.
+> The approximate structural mass toward which development tends.
 
-Because offspring genomes are independently mutated, two offspring from the same parent may inherit different size-preference values even when their parent genome is identical. This provides heritable within-lineage variation without adding a separate body-plan diagram or authored size ladder.
+It does not define a minimum viable size, an adulthood threshold, or a fixed final mass. Actual mass is always derived from the realized physical structure.
+
+There must not be a separate `size_preference`, `blueprint_mass`, count ladder, or equivalent genome authority for developmental size.
+
+The construction solver converts preferred developmental mass into a spatial realization tendency. Physical geometry, available material, existing neighboring structure, developmental history, and construction constraints determine the realized result.
 
 ## Developmental mass and adulthood
 
@@ -144,6 +148,410 @@ P6.1 does not redesign:
 - environmental material semantics,
 - or evolution.
 
+
+
+## Approved developmental equations
+
+The following equation forms are now **approved design equations** for the P6 developmental-field model. They define how developmental intent is evaluated; they do not authorize exact body plans or physical placements.
+
+### 1. Inherited size preference
+
+The inherited size-preference gene is a normalized value:
+
+\[
+s \in [0,1]
+\]
+
+Preferred developmental mass is derived from that value using a logarithmic scale:
+
+\[
+M_{preferred}
+=
+M_{min}
+\left(
+\frac{M_{max}}{M_{min}}
+\right)^s
+\]
+
+Equal changes in the gene therefore represent equal multiplicative movement through the allowed developmental-size range.
+
+**Experimental parameters:** M_min and M_max are implementation parameters and are **not yet permanent biological constants**. Their numerical values must be treated as experimental until explicitly approved.
+
+The size-preference gene remains the inherited source of developmental-size variation. It does not replace actual physical mass, and it does not independently cause maturation.
+
+### 2. Radial developmental influence
+
+A developmental influence centered at c_i is evaluated as:
+
+\[
+K_i(\mathbf p)
+=
+e^{-d_i^2/(2\sigma_i^2)}
+\]
+
+where:
+
+\[
+d_i = \|\mathbf p-\mathbf c_i\|
+\]
+
+A field is the weighted sum of its influences:
+
+\[
+F(\mathbf p)
+=
+\sum_i w_iK_i(\mathbf p)
+\]
+
+The field is a continuous preference function. It does not reserve, require, or create a physical location.
+
+The initial implementation may use a small number of radial influences, but the exact number is an **experimental representation parameter**, not a permanent biological law.
+
+**Experimental parameters:**
+- influence count,
+- influence centers,
+- influence widths sigma_i,
+- influence strengths w_i,
+- and any bounds used to keep those values numerically stable.
+
+### 3. Material-composition preference
+
+For material m:
+
+\[
+S_M(m,\mathbf p)=C_m(\mathbf p)
+\]
+
+where C_m is that material's developmental preference field.
+
+The value expresses relative preference only. It does not command a quantity of material.
+
+### 4. Structural-density preference
+
+For a candidate location:
+
+\[
+S_D(\mathbf p)=D(\mathbf p)
+\]
+
+where D is the structural-density field.
+
+A high value means additional physical structure is more developmentally favored there. It does not specify unit count, thickness, boundaries, or topology.
+
+### 5. Connectivity preference
+
+For a candidate structural connection between positions a and b:
+
+\[
+S_K
+=
+\frac{K(\mathbf a)+K(\mathbf b)}{2}
++
+\lambda N
+\]
+
+where N represents the relevant existing-neighborhood connectivity contribution.
+
+The equation evaluates a candidate relationship; it does not specify which particular physical units must connect.
+
+**Experimental parameter:** lambda, the neighborhood contribution weight, is an experimental solver parameter until explicitly approved.
+
+### 6. Candidate realization score
+
+For each physically valid candidate c:
+
+\[
+S(c)
+=
+w_MS_M
++
+w_DS_D
++
+w_KS_K
+\]
+
+and the solver selects:
+
+\[
+c^*
+=
+\arg\max_{c\in V}S(c)
+\]
+
+where V is the set of candidates that already satisfy the physical construction constraints.
+
+This ordering is mandatory:
+
+1. Generate physically possible candidates.
+2. Reject physically invalid candidates.
+3. Score the surviving candidates using developmental intent.
+4. Select among valid candidates.
+5. Admit the selected construction through the normal physical construction/COMBINE machinery.
+
+The developmental score can never make an impossible physical construction valid.
+
+**Experimental parameters:** w_M, w_D, and w_K are relative solver weights. Their numerical values are experimental until explicitly approved. They must not be represented as new biological authorities merely because the solver needs numerical weights.
+
+### 7. Developmental realization
+
+Developmental completion is calculated from three independent realization domains:
+
+- material-composition realization,
+- structural-density realization,
+- connectivity realization.
+
+Each domain is normalized independently to the interval [0, 1]. The overall realization is the arithmetic mean of the **active** domains. An inactive domain does not penalize realization.
+
+This avoids introducing tunable realization weights. The equal arithmetic mean is the fixed mathematical aggregation rule, not an experimental biological parameter.
+
+#### 7.1 Material realization
+
+For material m, let C_m(p) be its continuous developmental preference field and A_m(G) be the actual physical area occupied by that material in the authoritative physical graph G.
+
+Realized material value:
+
+\[
+V_{M,R}
+=
+\sum_m
+\int_{A_m(G)}
+C_m(\mathbf p)\,dA
+\]
+
+Available material value:
+
+\[
+V_{M,A}
+=
+\sum_m
+\int_{\mathbb R^2}
+C_m(\mathbf p)\,dA
+\]
+
+Therefore:
+
+\[
+R_M
+=
+\frac{V_{M,R}}{V_{M,A}}
+\]
+
+provided V_{M,A} > 0.
+
+The physical graph determines A_m(G). The developmental field determines C_m(p). No authored quantity, coordinate list, or material count is introduced.
+
+For Gaussian influences, each finite-width influence has:
+
+\[
+\int_{\mathbb R^2}
+e^{-\|\mathbf p-\mathbf c_i\|^2/(2\sigma_i^2)}
+\,dA
+=
+2\pi\sigma_i^2
+\]
+
+Therefore a finite available material value requires finite positive sigma for every influence contributing to the realization denominator. A zero radial falloff/infinite-width field may remain an experimental candidate-scoring representation, but it cannot be used as a finite realization denominator.
+
+#### 7.2 Structural-density realization
+
+Let D(p) be the structural-density field and A_G be the physical area occupied by realized organism structure.
+
+Realized density value:
+
+\[
+V_{D,R}
+=
+\int_{A_G}
+D(\mathbf p)\,dA
+\]
+
+Available density value:
+
+\[
+V_{D,A}
+=
+\int_{\mathbb R^2}
+D(\mathbf p)\,dA
+\]
+
+Therefore:
+
+\[
+R_D
+=
+\frac{V_{D,R}}{V_{D,A}}
+\]
+
+provided V_{D,A} > 0.
+
+Density expresses where additional structure is developmentally favored. It does not prescribe unit count, thickness, topology, or a boundary.
+
+#### 7.3 Connectivity realization
+
+Connectivity is a property of the physical graph rather than a spatial area measure.
+
+For an actual or physically admissible connection between endpoints a and b:
+
+\[
+S_K(a,b)
+=
+\frac{K(\mathbf a)+K(\mathbf b)}{2}
++
+\lambda N(a,b)
+\]
+
+The neighborhood term is normalized from the actual physical graph:
+
+\[
+N(a,b)
+=
+\frac12
+\left(
+\frac{q_a}{Q_a}
++
+\frac{q_b}{Q_b}
+\right)
+\]
+
+where q_x is the number of realized physical connections incident to endpoint x and Q_x is the number of physically available connection sites on the corresponding realized material/structure. A valid endpoint has Q_x > 0. Thus:
+
+\[
+0\le N(a,b)\le1
+\]
+
+The candidate-opportunity set is defined without an authored topology:
+
+\[
+O(G)
+=
+\{
+(a,b)\mid
+\text{a single connection between exposed compatible physical connection sites a,b is physically admissible}
+\}
+\]
+
+The available connectivity set includes both already-realized connections and currently admissible new opportunities:
+
+\[
+E_{K,A}(G)
+=
+E_G\cup O(G)
+\]
+
+This prevents the denominator from being derived from existing connections alone while ensuring every realized connection belongs to the comparison domain.
+
+Realized connectivity value:
+
+\[
+V_{K,R}
+=
+\sum_{e\in E_G}
+S_K(e)
+\]
+
+Available connectivity value:
+
+\[
+V_{K,A}
+=
+\sum_{e\in E_{K,A}(G)}
+S_K(e)
+\]
+
+Therefore:
+
+\[
+R_K
+=
+\frac{V_{K,R}}{V_{K,A}}
+\]
+
+when V_{K,A} > 0.
+
+If V_{K,A}=0, connectivity is inactive and contributes no penalty to overall realization.
+
+The opportunity set is always generated from the authoritative physical graph and physical construction rules. It must not be generated from an inherited exact topology.
+
+#### 7.4 Overall realization
+
+Define the active-domain set:
+
+\[
+\mathcal A
+=
+\{
+M\mid V_{M,A}>0
+\}
+\cup
+\{
+D\mid V_{D,A}>0
+\}
+\cup
+\{
+K\mid V_{K,A}>0
+\}
+\]
+
+Then:
+
+\[
+\boxed{
+R
+=
+\frac{1}{|\mathcal A|}
+\sum_{X\in\mathcal A}R_X
+}
+\]
+
+A valid developmental blueprint must have at least one active realization domain.
+
+This fixed equal-weight mean is intentional: it adds no tunable realization-weight parameter. Candidate-selection weights remain separate experimental solver parameters and must not be reused as realization weights.
+
+The adulthood contract is:
+
+\[
+\boxed{
+R\ge0.90
+\quad\Rightarrow\quad
+\text{adult}
+}
+\]
+
+The 0.90 threshold is **approved**, not experimental.
+
+The numerator and denominator of every realization domain must come from the inherited continuous developmental fields plus the authoritative physical graph. No exact body plan, authored topology, target coordinate list, or transient structural blueprint may serve as the adulthood authority.
+
+
+### 8. Juvenile realization
+
+The approved juvenile spatial realization remains approximately:
+
+\[
+R_{juvenile}=0.40
+\]
+
+of the adult developmental scale.
+
+The 0.40 value is an **approved P6 developmental parameter**, not an experimental parameter. It does not create a separate juvenile blueprint.
+
+### Parameter-status rule
+
+Every numerical value introduced by the implementation must be explicitly classified as one of:
+
+- **Approved:** established by the project owner/specification.
+- **Experimental:** provisional numerical tuning or representation choice used to test the approved equation/architecture.
+- **Implementation/infrastructure:** technically necessary value with no biological semantic authority.
+- **Pending design:** required by the architecture but not yet specified.
+
+Experimental values must never be described in documentation, code comments, tests, or status reports as established biological facts.
+
+Changing an experimental parameter does not change the P6 architecture. It changes an experiment within that architecture.
+
+### Current implementation warning
+
+The current Rust implementation predates these approved equations in several details. In particular, its present radial fields use a simplified centered form and its candidate score contains provisional weights. Those values are therefore **experimental implementation state**, not proof that the approved equations have been fully implemented.
+
+P6 completion requires the implementation to be audited against these equations and the authority boundaries above.
 
 ## Cavity-derived memory capacity
 
@@ -233,3 +641,20 @@ while:
 > memory_strength → memory formation/reinforcement strength
 
 No direct inherited mental-power trait is added.
+
+
+## P6 Approved Developmental-Scale Parameterization Amendment
+
+The approved P6 developmental-field equations are now paired with the following implementation parameterization:
+
+- The initial representation uses **4 radial influences per developmental field**. The count of four is the approved starting representation; the influence count remains **EXPERIMENTAL** and may change after validation.
+- Each Gaussian influence uses the approved form \(K_i(\mathbf p)=e^{-\|\mathbf p-\mathbf c_i\|^2/(2\sigma_i^2)}\).
+- Influence width is derived from preferred developmental scale: \(\sigma_i=\alpha_i L_p\). The \(\alpha_i\) values are **EXPERIMENTAL** representation parameters.
+- Preferred linear scale is derived from the confirmed-good initial seed realization only as a calibration reference: \(L_p=L_{seed}\sqrt{M_p/M_{seed}}\). This is a scale relationship, not an inherited seed body plan. The comparable 2-D mass scaling is therefore \(M_J\approx0.40^2M_p\) for the approved 40% juvenile linear realization.
+- Influence centers and strengths are **EXPERIMENTAL** numerical parameters. The initial centers and strengths in the default genome are implementation starting values, not biological constants.
+- Developmental-field sums are normalized by their total influence strength so field shape is not confounded with absolute amplitude.
+- Material realization uses composition-weighted physical area for composite units: each constituent contributes according to its fraction of the unit's material amount rather than counting the entire composite area once per constituent.
+- Connectivity uses physically available endpoint opportunities and keeps the neighborhood coefficient \(\lambda\) **EXPERIMENTAL**. Candidate-selection weights \(w_M,w_D,w_K\) are also **EXPERIMENTAL** solver parameters.
+- Numerical size-preference mass bounds remain **EXPERIMENTAL**.
+
+No experimental parameter above is an additional biological authority. Changing one changes the experiment within the approved P6 architecture.

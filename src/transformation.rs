@@ -352,10 +352,12 @@ mod tests {
     fn stress_break_candidates_exclude_genome_boundary_bonds() {
         let genome = crate::genome::initial_genome();
         let catalog = crate::resources::default_catalog();
-        let blueprint = genome.mature_construction_target().unwrap();
-        let structure = blueprint.realize(&catalog).unwrap();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
+        let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
         let organism = crate::state::Organism {
             id: "test".into(),
+            developmental_origin: crate::state::Position { x: 0.0, y: 0.0 },
+            developmental_orientation_radians: 0.0,
             occupied_cells: vec![crate::state::Position { x: 0.0, y: 0.0 }],
             genome,
             resource_sense: crate::state::ResourceSense {

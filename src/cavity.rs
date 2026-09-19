@@ -375,9 +375,8 @@ mod tests {
     #[test]
     fn realized_structure_cavity_qualifies_without_a_predefined_core() {
         let catalog = default_catalog();
-        let genome = initial_genome();
-        let blueprint = genome.mature_construction_target().unwrap();
-        let structure = blueprint.realize(&catalog).unwrap();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
+        let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
         let cavity = analyze_genome_cavity(&structure, &catalog)
             .unwrap()
             .expect("realized structure must contain a sealed qualifying cavity");
@@ -388,8 +387,7 @@ mod tests {
     #[test]
     fn unbonded_structure_is_not_a_genome() {
         let catalog = default_catalog();
-        let genome = initial_genome();
-        let blueprint = genome.mature_construction_target().unwrap();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&default_catalog()).unwrap();
         let mut structure = blueprint.realize(&catalog).unwrap();
         structure.bonds.clear();
         assert!(analyze_genome_cavity(&structure, &catalog)

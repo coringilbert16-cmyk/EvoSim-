@@ -76,12 +76,11 @@ impl Simulation {
     pub(crate) fn create_initial_organism() -> Organism {
         let genome = initial_genome();
         let catalog = crate::resources::default_catalog();
-        let juvenile_target = genome
-            .developmental_construction_target(&catalog, true)
-            .expect("initial architecture must produce a viable juvenile target");
+        let seed_baseline = crate::juvenile::confirmed_seed_baseline(&catalog)
+            .expect("confirmed original seed baseline must be valid");
         let (mut structure, _construction_ledger, initial_energy) =
-            realize_initial(&juvenile_target, &catalog)
-                .expect("initial juvenile target must be physically realizable");
+            realize_initial(&seed_baseline, &catalog)
+                .expect("confirmed original seed must be physically realizable");
 
         // Blueprint coordinates are developmental-local. The organism's
         // occupied cell is its world-space anchor, so the realized physical
@@ -97,6 +96,8 @@ impl Simulation {
         assert!(stored_material.store(genome.juvenile_reserve.clone()));
         Organism {
             id: "1".into(),
+            developmental_origin: anchor.clone(),
+            developmental_orientation_radians: 0.0,
             occupied_cells: vec![anchor],
             genome,
             resource_sense: ResourceSense {
@@ -128,20 +129,22 @@ impl Simulation {
             .field
             .diffuse_step(DEFAULT_DIFFUSION_FRACTION);
     }
-    fn mature_structural_mass(organism: &Organism, environment: &Environment) -> f64 {
+    fn growth_fraction(organism: &Organism, environment: &Environment) -> f64 {
         organism
             .genome
-            .developmental_construction_target(&environment.catalog, false)
-            .ok()
-            .map(|target| target.structural_mass(&environment.catalog))
-            .unwrap_or(0.0)
-    }
-    fn growth_fraction(organism: &Organism, environment: &Environment) -> f64 {
-        let mature_mass = Self::mature_structural_mass(organism, environment);
-        if !mature_mass.is_finite() || mature_mass <= 0.0 {
-            return 0.0;
-        }
-        (organism.structural_mass(&environment.catalog) / mature_mass).max(0.0)
+            .developmental_blueprint
+            .realization(
+                &organism.structure,
+                &environment.catalog,
+                (
+                    organism.developmental_origin.x,
+                    organism.developmental_origin.y,
+                ),
+                organism.developmental_orientation_radians,
+                organism.genome.adult_mass(),
+            )
+            .overall
+            .clamp(0.0, 1.0)
     }
     fn update_development_stage(organism: &mut Organism, environment: &Environment) {
         match organism.development_stage {
@@ -166,7 +169,11 @@ impl Simulation {
         let survival_reserve = parameters.survival_reserve.max(f64::EPSILON);
         let reserve_pressure = (1.0 - organism.usable_energy / survival_reserve).clamp(0.0, 1.0);
         let survival = (reserve_pressure * (1.0 + organism.stress.max(0.0))).clamp(0.0, 1.0);
-        let _ = environment;
+        let development = if matches!(organism.development_stage, DevelopmentStage::Juvenile) {
+            (1.0 - Self::growth_fraction(organism, environment).clamp(0.0, 1.0)).max(0.0)
+        } else {
+            0.0
+        };
         CurrentNeeds {
             survival,
             reproduction: if matches!(organism.development_stage, DevelopmentStage::Adult) {
@@ -174,6 +181,7 @@ impl Simulation {
             } else {
                 0.0
             },
+            development,
         }
     }
     fn acquisition_targets(organism: &Organism, environment: &Environment) -> Vec<usize> {
@@ -438,6 +446,14 @@ impl Simulation {
                 if completed_organisms.contains(&organisms[index].id) {
                     continue;
                 }
+                if organisms[index].structure.bonds.is_empty()
+                    && organisms[index].stress
+                        >= organisms[index]
+                            .stress_threshold
+                            .max(crate::state::MIN_STRESS_THRESHOLD)
+                {
+                    continue;
+                }
                 let needs =
                     Self::current_needs(&organisms[index], environment, decision_parameters);
                 let eligibility = Self::action_eligibility(&organisms[index], environment);
@@ -482,11 +498,40 @@ impl Simulation {
                         );
                     }
                     ActionKind::Combine => {
+                        let developmental_blueprint =
+                            organisms[index].genome.developmental_blueprint.clone();
+                        let (blueprint, origin, orientation) = (
+                            &developmental_blueprint,
+                            (
+                                organisms[index].developmental_origin.x,
+                                organisms[index].developmental_origin.y,
+                            ),
+                            organisms[index].developmental_orientation_radians,
+                        );
+                        let developmental = if matches!(
+                            organisms[index].development_stage,
+                            DevelopmentStage::Juvenile
+                        ) {
+                            let (seed_mass, seed_length) =
+                                crate::juvenile::confirmed_seed_scale_reference(
+                                    &environment.catalog,
+                                )
+                                .expect("confirmed seed scale reference must be valid");
+                            let preferred_length = blueprint.preferred_developmental_length(
+                                organisms[index].genome.adult_mass(),
+                                seed_mass,
+                                seed_length,
+                            );
+                            Some((blueprint, origin, orientation, preferred_length))
+                        } else {
+                            None
+                        };
                         let combined = crate::combine_runtime::try_combine(
                             &mut organisms[index],
                             environment,
                             &mut compatibility_cache,
                             &mut self.energy_ledger,
+                            developmental,
                         )
                         .is_some();
                         crate::decision_runtime::record_outcome(
@@ -623,7 +668,17 @@ impl Simulation {
         ledger: &mut EnergyLedger,
         rng: &mut ChaCha8Rng,
     ) -> bool {
+        // A bondless structure cannot absorb another stress threshold. Preserve
+        // that lethal condition before the ordinary per-tick stress decay so
+        // crossing the threshold cannot be erased solely by decay ordering.
+        let threshold = organism
+            .stress_threshold
+            .max(crate::state::MIN_STRESS_THRESHOLD);
+        let lethal_before_decay = organism.stress >= threshold;
         organism.stress *= crate::state::STRESS_DECAY_PER_TICK;
+        if organism.structure.bonds.is_empty() && lethal_before_decay {
+            return true;
+        }
         organism.apply_stress_damage(environment, ledger, rng)
     }
     #[cfg(test)]

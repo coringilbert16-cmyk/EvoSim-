@@ -2,14 +2,13 @@
 mod tests {
     use crate::decomposition::{resolve_one_bond_with_ledger, DecomposingBody};
     use crate::environment::ActiveMaterialField;
-    use crate::genome::initial_genome;
     use crate::resources::default_catalog;
     use crate::state::{EnergyLedger, Environment, Position};
 
     #[test]
     fn decomposition_release_returns_realized_material_to_environment() {
         let catalog = default_catalog();
-        let blueprint = initial_genome().mature_construction_target().unwrap();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
         let mut structure = blueprint.realize(&catalog).unwrap();
         assert!(!structure.bonds.is_empty());
         structure.bonds.truncate(1);

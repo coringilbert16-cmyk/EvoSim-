@@ -8,6 +8,7 @@ use crate::combine::{
     FormationEvaluation,
 };
 use crate::contact::ConnectionCompatibilityCache;
+use crate::developmental_blueprint::DevelopmentalFieldBlueprint;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
 use crate::resources::{BaseResource, Material};
 use crate::state::{EnergyLedger, Environment, Organism};
@@ -15,6 +16,10 @@ use crate::structure::{BondEndpoint, ConnectionEndpoint, Placement, StructuralUn
 
 const EPSILON: f64 = 1e-12;
 pub(crate) const COMBINE_CONTACT_TOLERANCE: f64 = 1.0;
+
+/// Developmental context is solver intent only. Physical validity is still
+/// established by the normal COMBINE candidate and formation checks.
+pub(crate) type DevelopmentalContext<'a> = (&'a DevelopmentalFieldBlueprint, (f64, f64), f64, f64);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct CombineAttempt {
@@ -250,6 +255,7 @@ pub(crate) fn try_combine_stored_unit(
     environment: &Environment,
     cache: &mut ConnectionCompatibilityCache,
     ledger: &mut EnergyLedger,
+    developmental: Option<DevelopmentalContext<'_>>,
 ) -> Option<CombineAttempt> {
     let raw = organism.stored_material.first_material()?;
     if !raw.is_valid() || raw.is_empty() {
@@ -300,6 +306,37 @@ pub(crate) fn try_combine_stored_unit(
                             &environment.catalog,
                             water,
                         ) {
+                            let developmental_score = developmental
+                                .map(|(blueprint, origin_ref, orientation, preferred_length)| {
+                                    let Some(world) = candidate
+                                        .endpoint_a
+                                        .world_point(&hypothetical.units[ua], &environment.catalog)
+                                    else {
+                                        return 0.0;
+                                    };
+                                    let local = crate::developmental_blueprint::developmental_point(
+                                        world.x,
+                                        world.y,
+                                        origin_ref,
+                                        orientation,
+                                    );
+                                    blueprint.material_preference_scaled(
+                                        first_resource,
+                                        local.0,
+                                        local.1,
+                                        preferred_length,
+                                    ) + blueprint.density_preference_scaled(
+                                        local.0,
+                                        local.1,
+                                        preferred_length,
+                                    ) + crate::developmental_blueprint::CANDIDATE_CONNECTIVITY_WEIGHT
+                                        * blueprint.connectivity_preference_scaled(
+                                            local.0,
+                                            local.1,
+                                            preferred_length,
+                                        )
+                                })
+                                .unwrap_or(0.0);
                             candidates.push((
                                 ua,
                                 part_index,
@@ -307,14 +344,19 @@ pub(crate) fn try_combine_stored_unit(
                                 evaluation,
                                 candidate.distance,
                                 required,
+                                developmental_score,
                             ));
                         }
                     }
                 }
             }
         }
-        candidates.sort_by(|a, b| a.4.partial_cmp(&b.4).unwrap_or(std::cmp::Ordering::Equal));
-        for (ua, part_index, origin, evaluation, _, required) in candidates {
+        candidates.sort_by(|a, b| {
+            b.6.partial_cmp(&a.6)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.4.partial_cmp(&b.4).unwrap_or(std::cmp::Ordering::Equal))
+        });
+        for (ua, part_index, origin, evaluation, _, required, _) in candidates {
             if organism.usable_energy + EPSILON < required {
                 continue;
             }
@@ -519,9 +561,12 @@ pub(crate) fn try_combine(
     environment: &Environment,
     cache: &mut ConnectionCompatibilityCache,
     ledger: &mut EnergyLedger,
+    developmental: Option<DevelopmentalContext<'_>>,
 ) -> Option<CombineAttempt> {
     if !organism.structure.units.is_empty() && !organism.stored_material.is_empty() {
-        if let Some(attempt) = try_combine_stored_unit(organism, environment, cache, ledger) {
+        if let Some(attempt) =
+            try_combine_stored_unit(organism, environment, cache, ledger, developmental)
+        {
             return Some(attempt);
         }
     }
@@ -537,13 +582,57 @@ pub(crate) fn try_combine(
                 if let Some((evaluation, _, _, _, required)) =
                     evaluate_candidate(&organism.structure, ua, ub, candidate, catalog, water)
                 {
-                    pairs.push((ua, ub, evaluation, candidate.distance, required));
+                    let developmental_score = developmental
+                        .map(|(blueprint, origin, orientation, preferred_length)| {
+                            let Some(wa) = candidate
+                                .endpoint_a
+                                .world_point(&organism.structure.units[ua], catalog)
+                            else {
+                                return 0.0;
+                            };
+                            let Some(wb) = candidate
+                                .endpoint_b
+                                .world_point(&organism.structure.units[ub], catalog)
+                            else {
+                                return 0.0;
+                            };
+                            let la = crate::developmental_blueprint::developmental_point(
+                                wa.x,
+                                wa.y,
+                                origin,
+                                orientation,
+                            );
+                            let lb = crate::developmental_blueprint::developmental_point(
+                                wb.x,
+                                wb.y,
+                                origin,
+                                orientation,
+                            );
+                            blueprint.connectivity_preference_scaled(
+                                (la.0 + lb.0) * 0.5,
+                                (la.1 + lb.1) * 0.5,
+                                preferred_length,
+                            )
+                        })
+                        .unwrap_or(0.0);
+                    pairs.push((
+                        ua,
+                        ub,
+                        evaluation,
+                        candidate.distance,
+                        required,
+                        developmental_score,
+                    ));
                 }
             }
         }
     }
-    pairs.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap_or(std::cmp::Ordering::Equal));
-    for (ua, ub, evaluation, _, required) in pairs {
+    pairs.sort_by(|a, b| {
+        b.5.partial_cmp(&a.5)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.3.partial_cmp(&b.3).unwrap_or(std::cmp::Ordering::Equal))
+    });
+    for (ua, ub, evaluation, _, required, _) in pairs {
         if organism.usable_energy + EPSILON < required {
             continue;
         }

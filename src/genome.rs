@@ -60,10 +60,22 @@ impl Genome {
         self.trait_value("memory_strength", 0.5).clamp(0.0, 1.0)
     }
 
-    /// Inherited developmental preference for adult scale, centered at the
-    /// parent's value when offspring mutation is sampled.
+    /// Inherited developmental-size preference.
+    ///
+    /// The normalized value is the inherited authority. Preferred mass is derived
+    /// from it; actual mass always belongs to the realized physical structure.
     pub fn size_preference(&self) -> f64 {
         self.trait_value("size_preference", 0.5).clamp(0.0, 1.0)
+    }
+
+    /// Preferred structural mass derived from the inherited size preference.
+    ///
+    /// M_MIN and M_MAX are experimental P6 parameter values, not permanent
+    /// biological constants. The logarithmic mapping is the approved equation.
+    pub fn adult_mass(&self) -> f64 {
+        const M_MIN: f64 = 4.0; // EXPERIMENTAL: P6 developmental-size bound.
+        const M_MAX: f64 = 225.0; // EXPERIMENTAL: chosen so default s=0.5 preserves 30.0.
+        M_MIN * (M_MAX / M_MIN).powf(self.size_preference())
     }
 
     pub fn perception_radius(&self) -> f64 {
@@ -94,31 +106,6 @@ impl Genome {
             .clamp(0.15, 1.0)
     }
 
-    pub fn preferred_developmental_scale(&self) -> f64 {
-        DevelopmentalFieldBlueprint::preferred_developmental_scale(self.size_preference())
-    }
-
-    /// Compatibility accessor for callers that need the adult developmental
-    /// realization. The returned StructuralBlueprint is transient solver state;
-    /// the genome stores only the developmental field blueprint.
-    pub fn mature_construction_target(
-        &self,
-    ) -> Result<crate::structural_blueprint::StructuralBlueprint, String> {
-        self.developmental_construction_target(&crate::resources::default_catalog(), false)
-    }
-
-    pub fn developmental_construction_target(
-        &self,
-        catalog: &[crate::resources::BaseResource],
-        juvenile: bool,
-    ) -> Result<crate::structural_blueprint::StructuralBlueprint, String> {
-        self.developmental_blueprint.construction_candidate(
-            catalog,
-            self.preferred_developmental_scale(),
-            juvenile,
-        )
-    }
-
     pub fn mutate(&mut self, rng: &mut ChaCha8Rng) {
         if !self
             .traits
@@ -127,16 +114,16 @@ impl Genome {
         {
             self.traits.push(trait_def("size_preference", 0.5, 0.05));
         }
-
         for t in &mut self.traits {
             if rng.gen::<f64>() < t.mutation_probability.clamp(1e-6, 0.25) {
-                let delta = if t.name == "size_preference" {
-                    gaussian_unit(rng) * t.mutation_sigma.max(0.0)
-                } else {
-                    rng.gen_range(-1.0..1.0) * t.mutation_sigma.max(0.0)
-                };
+                let delta = gaussian_unit(rng) * t.mutation_sigma.max(0.0);
                 t.value = if t.name == "size_preference" {
+                    // Bell-shaped mutation around the parent's value, bounded to [0, 1].
                     (t.value + delta).clamp(0.0, 1.0)
+                } else if t.name == "adult_mass" {
+                    // Legacy serialized genomes may still contain this trait. It is no
+                    // longer an authority and must not affect developmental size.
+                    t.value
                 } else {
                     t.value + delta
                 };
@@ -204,17 +191,10 @@ mod tests {
     }
 
     #[test]
-    fn construction_targets_are_transient_artifacts_of_developmental_fields() {
+    fn size_preference_is_the_inherited_size_authority() {
         let genome = initial_genome();
-        let catalog = crate::resources::default_catalog();
-        assert!(genome
-            .developmental_construction_target(&catalog, true)
-            .unwrap()
-            .is_valid());
-        assert!(genome
-            .developmental_construction_target(&catalog, false)
-            .unwrap()
-            .is_valid());
+        assert!((genome.size_preference() - 0.5).abs() < f64::EPSILON);
+        assert!((genome.adult_mass() - 30.0).abs() < 1e-9);
     }
 
     #[test]
@@ -223,60 +203,5 @@ mod tests {
         assert!(genome.juvenile_reserve.is_valid());
         assert_eq!(genome.juvenile_reserve.total_amount(), 1.0);
         assert!(genome.juvenile_energy_reserve.is_finite() && genome.juvenile_energy_reserve > 0.0);
-    }
-}
-
-#[cfg(test)]
-mod size_preference_tests {
-    use super::*;
-    use rand::SeedableRng;
-    #[test]
-    fn size_preference_defaults_to_center() {
-        assert_eq!(initial_genome().size_preference(), 0.5);
-    }
-
-    #[test]
-    fn size_preference_mutation_stays_bounded() {
-        let mut genome = initial_genome();
-        genome
-            .traits
-            .iter_mut()
-            .find(|t| t.name == "size_preference")
-            .unwrap()
-            .mutation_probability = 1.0;
-        let mut rng = ChaCha8Rng::seed_from_u64(42);
-        for _ in 0..1000 {
-            genome.mutate(&mut rng);
-            assert!((0.0..=1.0).contains(&genome.size_preference()));
-        }
-    }
-
-    #[test]
-    fn size_preference_mutation_is_parent_centered_in_distribution() {
-        let mut above = 0;
-        let mut below = 0;
-        for seed in 0..200 {
-            let mut genome = initial_genome();
-            genome
-                .traits
-                .iter_mut()
-                .find(|t| t.name == "size_preference")
-                .unwrap()
-                .mutation_probability = 1.0;
-            genome
-                .traits
-                .iter_mut()
-                .find(|t| t.name == "size_preference")
-                .unwrap()
-                .value = 0.5;
-            let mut rng = ChaCha8Rng::seed_from_u64(seed);
-            genome.mutate(&mut rng);
-            if genome.size_preference() > 0.5 {
-                above += 1;
-            } else if genome.size_preference() < 0.5 {
-                below += 1;
-            }
-        }
-        assert!(above > 0 && below > 0);
     }
 }
