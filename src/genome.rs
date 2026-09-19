@@ -60,10 +60,22 @@ impl Genome {
         self.trait_value("memory_strength", 0.5).clamp(0.0, 1.0)
     }
 
-    /// Preferred structural mass toward which development tends.
-    /// Actual mass always belongs to the realized physical structure.
+    /// Inherited developmental-size preference.
+    ///
+    /// The normalized value is the inherited authority. Preferred mass is derived
+    /// from it; actual mass always belongs to the realized physical structure.
+    pub fn size_preference(&self) -> f64 {
+        self.trait_value("size_preference", 0.5).clamp(0.0, 1.0)
+    }
+
+    /// Preferred structural mass derived from the inherited size preference.
+    ///
+    /// M_MIN and M_MAX are experimental P6 parameter values, not permanent
+    /// biological constants. The logarithmic mapping is the approved equation.
     pub fn adult_mass(&self) -> f64 {
-        self.trait_value("adult_mass", 30.0).clamp(4.0, 1_000.0)
+        const M_MIN: f64 = 4.0; // EXPERIMENTAL: P6 developmental-size bound.
+        const M_MAX: f64 = 225.0; // EXPERIMENTAL: chosen so default s=0.5 preserves 30.0.
+        M_MIN * (M_MAX / M_MIN).powf(self.size_preference())
     }
 
     pub fn perception_radius(&self) -> f64 {
@@ -113,15 +125,20 @@ impl Genome {
         if !self
             .traits
             .iter()
-            .any(|trait_def| trait_def.name == "adult_mass")
+            .any(|trait_def| trait_def.name == "size_preference")
         {
-            self.traits.push(trait_def("adult_mass", 30.0, 0.5));
+            self.traits.push(trait_def("size_preference", 0.5, 0.05));
         }
         for t in &mut self.traits {
             if rng.gen::<f64>() < t.mutation_probability.clamp(1e-6, 0.25) {
                 let delta = gaussian_unit(rng) * t.mutation_sigma.max(0.0);
-                t.value = if t.name == "adult_mass" {
-                    (t.value + delta).clamp(4.0, 1_000.0)
+                t.value = if t.name == "size_preference" {
+                    // Bell-shaped mutation around the parent's value, bounded to [0, 1].
+                    (t.value + delta).clamp(0.0, 1.0)
+                } else if t.name == "adult_mass" {
+                    // Legacy serialized genomes may still contain this trait. It is no
+                    // longer an authority and must not affect developmental size.
+                    t.value
                 } else {
                     t.value + delta
                 };
@@ -161,7 +178,7 @@ pub fn initial_genome() -> Genome {
     Genome {
         traits: vec![
             trait_def("memory_strength", 0.5, 0.05),
-            trait_def("adult_mass", 30.0, 0.5),
+            trait_def("size_preference", 0.5, 0.05),
             trait_def("perception_radius", 100.0, 1.0),
             trait_def("sensory_resolution", 0.5, 0.05),
             trait_def("directional_resolution", 1.0, 0.05),
@@ -186,6 +203,13 @@ mod tests {
     fn developmental_blueprint_is_the_serialized_structural_authority() {
         let genome = initial_genome();
         assert!(genome.developmental_blueprint.validate().is_ok());
+    }
+
+    #[test]
+    fn size_preference_is_the_inherited_size_authority() {
+        let genome = initial_genome();
+        assert!((genome.size_preference() - 0.5).abs() < f64::EPSILON);
+        assert!((genome.adult_mass() - 30.0).abs() < 1e-9);
     }
 
     #[test]
