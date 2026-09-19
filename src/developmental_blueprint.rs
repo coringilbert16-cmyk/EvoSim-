@@ -281,7 +281,6 @@ impl DevelopmentalFieldBlueprint {
         self.connectivity.evaluate_scaled(x, y, scale)
     }
 
-
     pub fn preferred_developmental_length(
         &self,
         preferred_mass: f64,
@@ -338,7 +337,6 @@ mod tests {
         };
         assert!(field.evaluate(0.0, 0.0) > field.evaluate(2.0, 0.0));
     }
-
 
     #[test]
     fn connectivity_can_remain_inactive() {
