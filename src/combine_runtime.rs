@@ -306,28 +306,30 @@ pub(crate) fn try_combine_stored_unit(
                             &environment.catalog,
                             water,
                         ) {
-                            let developmental_score = developmental.map(|(blueprint, origin_ref, orientation, preferred_length)| {
-                                let local = crate::developmental_blueprint::developmental_point(
-                                    candidate.endpoint_a.world_point(&hypothetical.units[ua], &environment.catalog)?.x,
-                                    candidate.endpoint_a.world_point(&hypothetical.units[ua], &environment.catalog)?.y,
-                                    origin_ref,
-                                    orientation,
-                                );
-                                blueprint.material_preference_scaled(
-                                    &first_resource,
-                                    local.0,
-                                    local.1,
-                                    preferred_length,
-                                ) + blueprint.density_preference_scaled(
-                                    local.0,
-                                    local.1,
-                                    preferred_length,
-                                ) + 0.25 * blueprint.connectivity_preference_scaled(
-                                    local.0,
-                                    local.1,
-                                    preferred_length,
-                                )
-                            }).unwrap_or(0.0);
+                            let developmental_score = developmental
+                                .map(|(blueprint, origin_ref, orientation, preferred_length)| {
+                                    let local = crate::developmental_blueprint::developmental_point(
+                                        candidate.endpoint_a.world_point(&hypothetical.units[ua], &environment.catalog)?.x,
+                                        candidate.endpoint_a.world_point(&hypothetical.units[ua], &environment.catalog)?.y,
+                                        origin_ref,
+                                        orientation,
+                                    );
+                                    blueprint.material_preference_scaled(
+                                        &first_resource,
+                                        local.0,
+                                        local.1,
+                                        preferred_length,
+                                    ) + blueprint.density_preference_scaled(
+                                        local.0,
+                                        local.1,
+                                        preferred_length,
+                                    ) + 0.25 * blueprint.connectivity_preference_scaled(
+                                        local.0,
+                                        local.1,
+                                        preferred_length,
+                                    )
+                                })
+                                .unwrap_or(0.0);
                             candidates.push((
                                 ua,
                                 part_index,
