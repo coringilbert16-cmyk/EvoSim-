@@ -75,10 +75,18 @@ impl MaterialPreferenceField {
         let mut total = if self.center_preference.is_finite() {
             self.primary_influence().evaluate(x, y, scale)
         } else { 0.0 };
-        total += self.additional_influences.iter().map(|i| i.evaluate(x, y, scale)).sum::<f64>();
+        total += self
+            .additional_influences
+            .iter()
+            .map(|i| i.evaluate(x, y, scale))
+            .sum::<f64>();
         let strength = self.center_preference.max(0.0)
             + self.additional_influences.iter().map(|i| i.strength).sum::<f64>();
-        if strength <= 0.0 { 0.0 } else { (total / strength).clamp(0.0, 1.0) }
+        if strength <= 0.0 {
+            0.0
+        } else {
+            (total / strength).clamp(0.0, 1.0)
+        }
     }
 
     fn primary_influence(&self) -> RadialInfluence {
@@ -130,7 +138,12 @@ impl StructuralDensityField {
         };
         let mut total = primary.evaluate(x, y, scale);
         total += self.additional_influences.iter().map(|i| i.evaluate(x, y, scale)).sum::<f64>();
-        let strength = primary.strength + self.additional_influences.iter().map(|i| i.strength).sum::<f64>();
+        let strength = primary.strength
+            + self
+                .additional_influences
+                .iter()
+                .map(|i| i.strength)
+                .sum::<f64>();
         if strength <= 0.0 { 0.0 } else { (total / strength).clamp(0.0, 1.0) }
     }
 
@@ -210,7 +223,13 @@ impl DevelopmentalFieldBlueprint {
         self.material_preference_scaled(resource_name, x, y, 1.0)
     }
 
-    pub fn material_preference_scaled(&self, resource_name: &str, x: f64, y: f64, scale: f64) -> f64 {
+    pub fn material_preference_scaled(
+        &self,
+        resource_name: &str,
+        x: f64,
+        y: f64,
+        scale: f64,
+    ) -> f64 {
         self.material_preferences
             .iter()
             .filter(|field| field.resource_name == resource_name)
@@ -500,9 +519,24 @@ impl DevelopmentalFieldBlueprint {
                 const DENSITY_WEIGHT: f64 = 1.0;
                 const CONNECTIVITY_WEIGHT: f64 = 0.25;
                 let field_score = MATERIAL_WEIGHT
-                    * self.material_preference_scaled(&resource.name, placement.x, placement.y, preferred_length)
-                    + DENSITY_WEIGHT * self.density_preference_scaled(placement.x, placement.y, preferred_length)
-                    + CONNECTIVITY_WEIGHT * self.connectivity_preference_scaled(placement.x, placement.y, preferred_length);
+                    * self.material_preference_scaled(
+                        &resource.name,
+                        placement.x,
+                        placement.y,
+                        preferred_length,
+                    )
+                    + DENSITY_WEIGHT
+                        * self.density_preference_scaled(
+                            placement.x,
+                            placement.y,
+                            preferred_length,
+                        )
+                    + CONNECTIVITY_WEIGHT
+                        * self.connectivity_preference_scaled(
+                            placement.x,
+                            placement.y,
+                            preferred_length,
+                        );
                 candidates.push((field_score, candidate, mass));
             }
         }
@@ -513,7 +547,11 @@ impl DevelopmentalFieldBlueprint {
             .collect())
     }
 
-    pub fn preferred_developmental_length(&self, catalog: &[BaseResource], preferred_mass: f64) -> f64 {
+    pub fn preferred_developmental_length(
+        &self,
+        catalog: &[BaseResource],
+        preferred_mass: f64,
+    ) -> f64 {
         self.preferred_length(catalog, preferred_mass)
     }
 
@@ -818,10 +856,8 @@ impl DevelopmentalFieldBlueprint {
         let qb = endpoint_opportunity_count(structure, unit_b, endpoint_b, catalog);
         let qreal_a = endpoint_realized_count(structure, unit_a, endpoint_a);
         let qreal_b = endpoint_realized_count(structure, unit_b, endpoint_b);
-        let n = 0.5 * (
-            qreal_a as f64 / qa.max(1) as f64 +
-            qreal_b as f64 / qb.max(1) as f64
-        );
+        let n = 0.5
+            * (qreal_a as f64 / qa.max(1) as f64 + qreal_b as f64 / qb.max(1) as f64);
         const LAMBDA: f64 = 0.25; // EXPERIMENTAL: connectivity neighborhood coefficient.\n        let lambda = LAMBDA;
         ((ka + kb) * 0.5 + lambda * n).max(0.0)
     }
@@ -897,7 +933,12 @@ fn gaussian_plane_integral(amplitude: f64, radial_falloff: f64) -> Option<f64> {
     }
 }
 
-pub(crate) fn developmental_point(x: f64, y: f64, origin: (f64, f64), orientation: f64) -> (f64, f64) {
+pub(crate) fn developmental_point(
+    x: f64,
+    y: f64,
+    origin: (f64, f64),
+    orientation: f64,
+) -> (f64, f64) {
     let dx = x - origin.0;
     let dy = y - origin.1;
     let (s, c) = orientation.sin_cos();
