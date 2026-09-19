@@ -1,16 +1,14 @@
 //! Deterministic construction of one valid juvenile realization.
 //!
-//! The genome owns architectural intent. This module asks the genome for a
-//! developmental construction target, realizes it through the unified
-//! construction runtime, and validates the resulting physical structure
-//! against the juvenile viability contract.
+//! The original viable seed realization is retained only as a physical
+//! construction calibration baseline. Developmental fields, not this baseline,
+//! determine descendant growth and realized architecture.
 use crate::genome::Genome;
 use crate::juvenile_requirements::{validate_realized_juvenile, JuvenileViabilityRequirements};
 use crate::resources::BaseResource;
 use crate::state::EnergyLedger;
 use crate::structural_blueprint::StructuralBlueprint;
 use crate::structure::OrganismStructure;
-
 
 /// Confirmed original-seed construction baseline.
 ///
