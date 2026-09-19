@@ -3,7 +3,6 @@
 //! The original viable seed realization is retained only as a physical
 //! construction calibration baseline. Developmental fields, not this baseline,
 //! determine descendant growth and realized architecture.
-use crate::genome::Genome;
 use crate::juvenile_requirements::{validate_realized_juvenile, JuvenileViabilityRequirements};
 use crate::resources::BaseResource;
 use crate::state::EnergyLedger;
@@ -71,7 +70,11 @@ pub(crate) fn confirmed_seed_scale_reference(
 ) -> Result<(f64, f64), String> {
     let baseline = confirmed_seed_baseline(catalog)?;
     let structure = baseline.realize(catalog)?;
-    let mass = structure.structural_mass(catalog);
+    let mass = structure
+        .units
+        .iter()
+        .map(|unit| unit.material.mass(catalog))
+        .sum::<f64>();
     let length = structure
         .units
         .iter()
