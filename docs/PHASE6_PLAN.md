@@ -4,6 +4,8 @@
 
 **P6.0 COMPLETE — P6.1/P6.2 IMPLEMENTATION IN PROGRESS**
 
+CI validation is being used as the completion gate for the README-authorized architecture.
+
 The governing pipeline is:
 
 > Genome → Developmental Field Blueprint → Construction/Development Solver → Physical Structure
