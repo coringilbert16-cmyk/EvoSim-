@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-        use crate::resources::{default_catalog, Material};
+    use crate::resources::{default_catalog, Material};
     use crate::structural_blueprint::{
         BlueprintConnection, BlueprintElement, BlueprintPlacement, StructuralBlueprint,
     };
