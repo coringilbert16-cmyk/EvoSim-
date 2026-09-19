@@ -505,9 +505,10 @@ impl Simulation {
                             DevelopmentStage::Juvenile
                         ) {
                             let (seed_mass, seed_length) =
-                                crate::juvenile::confirmed_seed_scale_reference(&environment.catalog)
-                                    .ok()
-                                    .unwrap_or((1.0, 1.0));
+                                crate::juvenile::confirmed_seed_scale_reference(
+                                    &environment.catalog,
+                                )
+                                .expect("confirmed seed scale reference must be valid");
                             let preferred_length = blueprint.preferred_developmental_length(
                                 organisms[index].genome.adult_mass(),
                                 seed_mass,
