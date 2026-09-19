@@ -70,7 +70,7 @@ The approximately 40% juvenile spatial realization used at birth is a constructi
 
 ## Preferred developmental mass
 
-The genome's existing `adult_mass` concept is the sole inherited preferred-mass authority.
+The inherited **size-preference gene** is the source of developmental-size variation. Preferred developmental mass is derived from that gene by the approved size mapping above. `adult_mass` may remain as the current implementation-facing preferred-mass concept only if it is not a second independent inherited authority.
 
 It means:
 
@@ -148,6 +148,209 @@ P6.1 does not redesign:
 - environmental material semantics,
 - or evolution.
 
+
+
+## Approved developmental equations
+
+The following equation forms are now **approved design equations** for the P6 developmental-field model. They define how developmental intent is evaluated; they do not authorize exact body plans or physical placements.
+
+### 1. Inherited size preference
+
+The inherited size-preference gene is a normalized value:
+
+\[
+s \in [0,1]
+\]
+
+Preferred developmental mass is derived from that value using a logarithmic scale:
+
+\[
+M_{preferred}
+=
+M_{min}
+\left(
+\frac{M_{max}}{M_{min}}
+\right)^s
+\]
+
+Equal changes in the gene therefore represent equal multiplicative movement through the allowed developmental-size range.
+
+**Experimental parameters:** M_min and M_max are implementation parameters and are **not yet permanent biological constants**. Their numerical values must be treated as experimental until explicitly approved.
+
+The size-preference gene remains the inherited source of developmental-size variation. It does not replace actual physical mass, and it does not independently cause maturation.
+
+### 2. Radial developmental influence
+
+A developmental influence centered at c_i is evaluated as:
+
+\[
+K_i(\mathbf p)
+=
+e^{-d_i^2/(2\sigma_i^2)}
+\]
+
+where:
+
+\[
+d_i = \|\mathbf p-\mathbf c_i\|
+\]
+
+A field is the weighted sum of its influences:
+
+\[
+F(\mathbf p)
+=
+\sum_i w_iK_i(\mathbf p)
+\]
+
+The field is a continuous preference function. It does not reserve, require, or create a physical location.
+
+The initial implementation may use a small number of radial influences, but the exact number is an **experimental representation parameter**, not a permanent biological law.
+
+**Experimental parameters:**
+- influence count,
+- influence centers,
+- influence widths sigma_i,
+- influence strengths w_i,
+- and any bounds used to keep those values numerically stable.
+
+### 3. Material-composition preference
+
+For material m:
+
+\[
+S_M(m,\mathbf p)=C_m(\mathbf p)
+\]
+
+where C_m is that material's developmental preference field.
+
+The value expresses relative preference only. It does not command a quantity of material.
+
+### 4. Structural-density preference
+
+For a candidate location:
+
+\[
+S_D(\mathbf p)=D(\mathbf p)
+\]
+
+where D is the structural-density field.
+
+A high value means additional physical structure is more developmentally favored there. It does not specify unit count, thickness, boundaries, or topology.
+
+### 5. Connectivity preference
+
+For a candidate structural connection between positions a and b:
+
+\[
+S_K
+=
+\frac{K(\mathbf a)+K(\mathbf b)}{2}
++
+\lambda N
+\]
+
+where N represents the relevant existing-neighborhood connectivity contribution.
+
+The equation evaluates a candidate relationship; it does not specify which particular physical units must connect.
+
+**Experimental parameter:** lambda, the neighborhood contribution weight, is an experimental solver parameter until explicitly approved.
+
+### 6. Candidate realization score
+
+For each physically valid candidate c:
+
+\[
+S(c)
+=
+w_MS_M
++
+w_DS_D
++
+w_KS_K
+\]
+
+and the solver selects:
+
+\[
+c^*
+=
+\arg\max_{c\in V}S(c)
+\]
+
+where V is the set of candidates that already satisfy the physical construction constraints.
+
+This ordering is mandatory:
+
+1. Generate physically possible candidates.
+2. Reject physically invalid candidates.
+3. Score the surviving candidates using developmental intent.
+4. Select among valid candidates.
+5. Admit the selected construction through the normal physical construction/COMBINE machinery.
+
+The developmental score can never make an impossible physical construction valid.
+
+**Experimental parameters:** w_M, w_D, and w_K are relative solver weights. Their numerical values are experimental until explicitly approved. They must not be represented as new biological authorities merely because the solver needs numerical weights.
+
+### 7. Developmental realization
+
+Developmental completion is represented by a normalized realization value:
+
+\[
+R
+=
+\frac{\text{realized developmental value}}
+{\text{available developmental value}}
+\]
+
+with:
+
+\[
+0\le R\le1
+\]
+
+The numerator and denominator must be calculated from the actual developmental fields and the authoritative physical graph; they must not be implemented as comparison against an authored exact body plan.
+
+The existing approved adulthood threshold remains:
+
+\[
+R\ge0.90
+\]
+
+provided the implementation measures actual developmental-field realization.
+
+The 0.90 adulthood threshold is **approved**, not experimental. The exact physical integration/sampling method used to calculate the numerator and denominator is an implementation detail that must preserve the authority rules above.
+
+### 8. Juvenile realization
+
+The approved juvenile spatial realization remains approximately:
+
+\[
+R_{juvenile}=0.40
+\]
+
+of the adult developmental scale.
+
+The 0.40 value is an **approved P6 developmental parameter**, not an experimental parameter. It does not create a separate juvenile blueprint.
+
+### Parameter-status rule
+
+Every numerical value introduced by the implementation must be explicitly classified as one of:
+
+- **Approved:** established by the project owner/specification.
+- **Experimental:** provisional numerical tuning or representation choice used to test the approved equation/architecture.
+- **Implementation/infrastructure:** technically necessary value with no biological semantic authority.
+- **Pending design:** required by the architecture but not yet specified.
+
+Experimental values must never be described in documentation, code comments, tests, or status reports as established biological facts.
+
+Changing an experimental parameter does not change the P6 architecture. It changes an experiment within that architecture.
+
+### Current implementation warning
+
+The current Rust implementation predates these approved equations in several details. In particular, its present radial fields use a simplified centered form and its candidate score contains provisional weights. Those values are therefore **experimental implementation state**, not proof that the approved equations have been fully implemented.
+
+P6 completion requires the implementation to be audited against these equations and the authority boundaries above.
 
 ## Cavity-derived memory capacity
 
