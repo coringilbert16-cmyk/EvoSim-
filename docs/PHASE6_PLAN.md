@@ -36,7 +36,7 @@ The physical graph remains authoritative for realized structure.
 
 ## P6.2 — Developmental solver — IN PROGRESS
 
-The approved developmental equations are now documented and partially represented in code. Current numerical field widths, influence locations, candidate-score weights, and mass bounds are explicitly **experimental**.
+The approved developmental equations are now documented and partially represented in code. The realization equations are now implemented as a physical-graph measurement API. Current numerical field widths, influence locations, candidate-score weights, mass bounds, and connectivity neighborhood coefficient are explicitly **experimental**.
 
 A first transient field-driven construction candidate now exists. It derives material selection, structural density, and juvenile/adult spatial scale from developmental fields; the returned discrete blueprint is explicitly transient and is passed into the existing physical construction/COMBINE machinery. P6.2 now uses field-scored candidate growth from the confirmed-good physical seed. Remaining work is to route those transient candidates through the existing neighborhood/backtracking machinery rather than accepting a single greedy candidate.
 
@@ -59,6 +59,12 @@ The mathematical authority is:
 > continuous inherited developmental fields + authoritative physical graph -> developmental realization
 
 An authored exact body plan, target coordinate list, or transient structural blueprint cannot serve as the adulthood authority.
+
+## P6.2b — Persistent developmental coordinates — IMPLEMENTED
+
+Organisms now retain a persistent seed-anchored developmental origin and initial orientation. Movement translates that frame with the organism; it is never re-centered on center of mass, bounding box, or new growth. Offspring initialize a new frame at their own viable seed.
+
+The realization API evaluates physical structure in that persistent frame. Finite Gaussian realization denominators are required mathematically; the current zero-falloff default fields therefore remain unavailable as finite realization domains until their experimental field parameterization is established.
 
 ## P6.3 — Growth integration
 
