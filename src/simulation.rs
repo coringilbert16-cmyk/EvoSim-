@@ -446,6 +446,19 @@ impl Simulation {
                 if completed_organisms.contains(&organisms[index].id) {
                     continue;
                 }
+                // A bondless organism that has already crossed its stress
+                // threshold is terminal for this tick. Do not let the normal
+                // decision loop repair/rebond it before survival damage is
+                // resolved; otherwise a lethal structural state could erase
+                // itself by choosing COMBINE.
+                let stress_threshold = organisms[index]
+                    .stress_threshold
+                    .max(crate::state::MIN_STRESS_THRESHOLD);
+                if organisms[index].structure.bonds.is_empty()
+                    && organisms[index].stress >= stress_threshold
+                {
+                    continue;
+                }
                 let needs =
                     Self::current_needs(&organisms[index], environment, decision_parameters);
                 let eligibility = Self::action_eligibility(&organisms[index], environment);
