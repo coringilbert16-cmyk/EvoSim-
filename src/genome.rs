@@ -197,7 +197,6 @@ mod tests {
         assert!((genome.adult_mass() - 30.0).abs() < 1e-9);
     }
 
-
     #[test]
     fn reserves_remain_genome_defined() {
         let genome = initial_genome();
