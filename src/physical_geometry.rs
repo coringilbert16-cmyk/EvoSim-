@@ -1,4 +1,5 @@
 use crate::resources::Shape;
+use crate::structure::{ConnectionEndpoint, StructuralUnit};
 use serde::{Deserialize, Serialize};
 
 impl PartialEq for Shape {
@@ -39,14 +40,25 @@ impl PhysicalGeometry {
     }
 }
 
+impl StructuralUnit {
+    /// Return only geometry that has already been realized on this physical
+    /// constituent. Construction-time catalog geometry must never be used as
+    /// a fallback for physical queries.
+    pub fn realized_shape(&self) -> Option<&Shape> {
+        self.geometry.as_ref().map(PhysicalGeometry::shape)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::resources::{default_catalog, Form, PhysicalState};
+    use crate::structure::Placement;
 
     #[test]
     fn physical_geometry_starts_from_default_shape() {
         let default_shape = Shape {
-            form: crate::resources::Form::Circle { radius: 1.0 },
+            form: Form::Circle { radius: 1.0 },
         };
         let geometry = PhysicalGeometry::from_default(&default_shape);
         assert_eq!(geometry.shape(), &default_shape);
@@ -55,11 +67,11 @@ mod tests {
     #[test]
     fn different_shape_cannot_replace_rigid_geometry() {
         let default_shape = Shape {
-            form: crate::resources::Form::Circle { radius: 1.0 },
+            form: Form::Circle { radius: 1.0 },
         };
         let mut geometry = PhysicalGeometry::from_default(&default_shape);
         assert!(!geometry.replace(Shape {
-            form: crate::resources::Form::Circle { radius: 2.0 },
+            form: Form::Circle { radius: 2.0 },
         }));
         assert_eq!(geometry.shape(), &default_shape);
     }
@@ -67,10 +79,65 @@ mod tests {
     #[test]
     fn identical_shape_is_a_no_op() {
         let default_shape = Shape {
-            form: crate::resources::Form::Circle { radius: 1.0 },
+            form: Form::Circle { radius: 1.0 },
         };
         let mut geometry = PhysicalGeometry::from_default(&default_shape);
         assert!(geometry.replace(default_shape.clone()));
         assert_eq!(geometry.shape(), &default_shape);
+    }
+
+    #[test]
+    fn unrealized_constituent_has_no_physical_shape() {
+        let unit = StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        assert!(unit.realized_shape().is_none());
+    }
+
+    #[test]
+    fn unrealized_constituent_has_no_physical_endpoint() {
+        let unit = StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        assert!(ConnectionEndpoint::Corner { point_index: 0 }
+            .world_point(&unit)
+            .is_none());
+    }
+
+    #[test]
+    fn realized_constituent_exposes_only_its_physical_shape() {
+        let default_shape = Shape {
+            form: Form::Circle { radius: 1.0 },
+        };
+        let mut unit = StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        unit.geometry = Some(PhysicalGeometry::from_default(&default_shape));
+        assert_eq!(unit.realized_shape(), Some(&default_shape));
+    }
+
+    #[test]
+    fn water_is_fluid_with_a_default_circle_geometry() {
+        let water = default_catalog()
+            .into_iter()
+            .find(|resource| resource.name == "Water")
+            .expect("default catalog must contain Water");
+        assert_eq!(water.physical_state, PhysicalState::Fluid);
+        assert!(matches!(water.shape.form, Form::Circle { radius } if radius > 0.0));
     }
 }

@@ -37,7 +37,7 @@ pub(crate) fn candidate_placements(
         let Some(unit) = structure.units.get(target) else {
             continue;
         };
-        let Some(target_shape) = unit.shape(catalog) else {
+        let Some(target_shape) = unit.realized_shape() else {
             continue;
         };
         let target_endpoints: Vec<ConnectionEndpoint> = match &target_shape.form {
@@ -53,7 +53,7 @@ pub(crate) fn candidate_placements(
             Form::Circle { .. } | Form::Fluid { .. } => Vec::new(),
         };
         for te in target_endpoints {
-            let Some(tp) = te.world_point(unit, catalog) else {
+            let Some(tp) = te.world_point(unit) else {
                 continue;
             };
             match (&resource.shape.form, te) {

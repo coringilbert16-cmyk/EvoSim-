@@ -225,11 +225,11 @@ pub(crate) struct OrganismSilhouettePart {
 impl OrganismObservation {
     pub(crate) fn from_simulation(simulation: &Simulation, organism_id: &str) -> Option<Self> {
         let organism = simulation.organisms.iter().find(|o| o.id == organism_id)?;
-        let position = organism.occupied_cells.first()?;
         let geometry = OrganismBodyGeometry::from_structure(
             &organism.structure,
             &simulation.environment.catalog,
         )?;
+        let position = organism.occupied_cells.first()?;
         let silhouette = geometry
             .parts
             .into_iter()
@@ -279,7 +279,6 @@ pub(crate) struct StructureBondObservation {
 impl StructureObservation {
     pub(crate) fn from_simulation(simulation: &Simulation, organism_id: &str) -> Option<Self> {
         let organism = simulation.organisms.iter().find(|o| o.id == organism_id)?;
-        let catalog = &simulation.environment.catalog;
         let units = organism
             .structure
             .units
@@ -308,14 +307,14 @@ impl StructureObservation {
                     .units
                     .get(ia)
                     .filter(|u| u.geometry.is_some())
-                    .and_then(|u| bond.endpoint_a.location.world_point(u, catalog))
+                    .and_then(|u| bond.endpoint_a.location.world_point(u))
                     .map(|p| WorldPointObservation { x: p.x, y: p.y });
                 let endpoint_b = organism
                     .structure
                     .units
                     .get(ib)
                     .filter(|u| u.geometry.is_some())
-                    .and_then(|u| bond.endpoint_b.location.world_point(u, catalog))
+                    .and_then(|u| bond.endpoint_b.location.world_point(u))
                     .map(|p| WorldPointObservation { x: p.x, y: p.y });
                 Some(StructureBondObservation {
                     unit_a: ia,

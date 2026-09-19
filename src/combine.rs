@@ -354,22 +354,26 @@ mod tests {
     fn continuous_candidates_are_supported_by_combine() {
         let catalog = default_catalog();
         let mut s = OrganismStructure::new();
-        s.add_unit(StructuralUnit::new(
+        let mut hydrogen = StructuralUnit::new(
             "Hydrogen",
             Placement {
                 x: 0.0,
                 y: 0.0,
                 rotation_radians: 0.0,
             },
-        ));
-        s.add_unit(StructuralUnit::new(
+        );
+        assert!(hydrogen.realize_default_geometry(&catalog));
+        s.add_unit(hydrogen);
+        let mut carbon_unit = StructuralUnit::new(
             "Carbon",
             Placement {
                 x: 0.5,
                 y: 0.0,
                 rotation_radians: 0.0,
             },
-        ));
+        );
+        assert!(carbon_unit.realize_default_geometry(&catalog));
+        s.add_unit(carbon_unit);
         let mut cache = ConnectionCompatibilityCache::new();
         assert!(eligible_candidates(&s, 0, 1, &catalog, &mut cache)
             .iter()

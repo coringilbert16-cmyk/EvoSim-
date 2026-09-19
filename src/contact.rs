@@ -44,7 +44,7 @@ fn world_center(unit: &StructuralUnit) -> crate::connection_geometry::WorldConne
 fn continuous_endpoint(
     unit: &StructuralUnit,
     target: crate::connection_geometry::WorldConnectionPoint,
-    catalog: &[crate::resources::BaseResource],
+    _catalog: &[crate::resources::BaseResource],
 ) -> Option<ConnectionEndpoint> {
     let dx = target.x - unit.placement.x;
     let dy = target.y - unit.placement.y;
@@ -56,25 +56,22 @@ fn continuous_endpoint(
     let (s, c) = unit.placement.rotation_radians.sin_cos();
     let lx = ux * c + uy * s;
     let ly = -ux * s + uy * c;
-    let shape = unit.shape(catalog)?;
+    let shape = unit.realized_shape()?;
     let point = boundary_point_toward(shape, lx, ly)?;
     match &shape.form {
         Form::Circle { .. } => Some(ConnectionEndpoint::Boundary {
             angle_radians: point.y.atan2(point.x),
         }),
-        Form::Fluid { .. } => Some(ConnectionEndpoint::Fluid {
-            x: point.x,
-            y: point.y,
-        }),
+        Form::Fluid { .. } => None,
         _ => None,
     }
 }
 
 fn endpoint_indices(
     unit: &StructuralUnit,
-    catalog: &[crate::resources::BaseResource],
+    _catalog: &[crate::resources::BaseResource],
 ) -> Vec<ConnectionEndpoint> {
-    let Some(shape) = unit.shape(catalog) else {
+    let Some(shape) = unit.realized_shape() else {
         return Vec::new();
     };
     match &shape.form {
@@ -134,9 +131,9 @@ fn candidate_endpoints(
 fn endpoint_world_point(
     endpoint: ConnectionEndpoint,
     unit: &StructuralUnit,
-    catalog: &[crate::resources::BaseResource],
+    _catalog: &[crate::resources::BaseResource],
 ) -> Option<crate::connection_geometry::WorldConnectionPoint> {
-    let shape = unit.shape(catalog)?;
+    let shape = unit.realized_shape()?;
     match endpoint {
         ConnectionEndpoint::Corner { point_index }
         | ConnectionEndpoint::LineEndpoint { point_index } => rigid_endpoint_world_point(
@@ -165,23 +162,7 @@ fn endpoint_world_point(
                 unit.placement.rotation_radians,
             ))
         }
-        ConnectionEndpoint::Fluid { x, y } => {
-            let len = x.hypot(y);
-            let (nx, ny) = if len > 1e-12 {
-                (x / len, y / len)
-            } else {
-                (0.0, 0.0)
-            };
-            Some(crate::connection_geometry::transform_derived_point(
-                x,
-                y,
-                nx,
-                ny,
-                unit.placement.x,
-                unit.placement.y,
-                unit.placement.rotation_radians,
-            ))
-        }
+        ConnectionEndpoint::Fluid { .. } => None,
     }
 }
 
