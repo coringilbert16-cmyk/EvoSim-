@@ -2,7 +2,7 @@
 
 ## Status
 
-**P6.0 COMPLETE — P6.1/P6.2 IMPLEMENTATION IN PROGRESS**
+**P6.0–P6.5 IMPLEMENTED — P6.6 FINAL VALIDATION IN PROGRESS**
 
 CI validation is being used as the completion gate for the README-authorized architecture.
 
@@ -14,12 +14,12 @@ The physical graph remains authoritative for realized structure.
 
 ## P6.0 — Authority audit — COMPLETE
 
-- Confirmed the repository still contains the legacy discrete OrganismArchitecture / StructuralBlueprint construction path.
+- Removed the legacy discrete OrganismArchitecture / exact-body-plan construction path from inherited developmental authority.
 - Confirmed the existing construction runtime contains reusable physical candidate generation, backtracking, COMBINE admission, and physical validation machinery.
-- Confirmed adulthood currently uses the existing >=90% realization threshold; P6 will retain that threshold only when the compared quantity is derived from the developmental blueprint rather than a legacy exact body-plan authority.
+- Adulthood uses the existing >=90% threshold against continuous developmental realization derived from the authoritative physical graph.
 - Confirmed no new viability, death, maturation, or lifecycle authority is required.
 
-## P6.1 — Developmental-field blueprint authority — IN PROGRESS
+## P6.1 — Developmental-field blueprint authority — COMPLETE
 
 ### Approved rules implemented so far
 
@@ -31,14 +31,14 @@ The physical graph remains authoritative for realized structure.
 - The numerical mass bounds used by the current mapping are explicitly **experimental**.
 - Removed the discrete size/count ladder and canonical juvenile-count authority.
 - Preserved the confirmed-good juvenile seed only as a physically validated solver starting realization, not as a genome body-plan rule.
-- Keep connectivity available as an optional field, inactive until validation demonstrates that material and density fields are insufficient for structural variation.
-- Preserve discrete construction objects only as transient solver artifacts.
+- Connectivity is implemented as a developmental preference and physical-opportunity measurement; its numerical neighborhood coefficient remains experimental.
+- The confirmed original seed realization survives only as a non-inherited construction/scale calibration baseline.
 
-## P6.2 — Developmental solver — IN PROGRESS
+## P6.2 — Developmental solver — COMPLETE
 
-The approved developmental equations are now documented and partially represented in code. The realization equations are now implemented as a physical-graph measurement API. Current numerical field widths, influence locations, candidate-score weights, mass bounds, and connectivity neighborhood coefficient are explicitly **experimental**.
+The approved developmental equations are implemented as a physical-graph realization API and as developmental scoring inside the ongoing COMBINE construction path. Candidate generation first enforces physical validity, then developmental intent ranks the valid candidates. Current field widths, influence locations, candidate-score weights, mass bounds, and connectivity neighborhood coefficient are explicitly **experimental**.
 
-A first transient field-driven construction candidate now exists. It derives material selection, structural density, and juvenile/adult spatial scale from developmental fields; the returned discrete blueprint is explicitly transient and is passed into the existing physical construction/COMBINE machinery. P6.2 now uses field-scored candidate growth from the confirmed-good physical seed. Remaining work is to route those transient candidates through the existing neighborhood/backtracking machinery rather than accepting a single greedy candidate.
+The confirmed original seed realization is used only as the juvenile construction/calibration baseline. It is not serialized into genomes and does not define descendant topology.
 
 ## P6.2a — Developmental realization mathematics — COMPLETE
 
@@ -66,21 +66,19 @@ Organisms now retain a persistent organism-local and persistent developmental or
 
 The realization API evaluates physical structure in that persistent frame. Finite Gaussian realization denominators are required mathematically; the current zero-falloff default fields therefore remain unavailable as finite realization domains until their experimental field parameterization is established.
 
-## P6.3 — Growth integration
+## P6.3 — Growth integration — COMPLETE
 
-Route developmental field scoring into the actual ongoing COMBINE construction path. The current transient candidate solver is not yet sufficient.
+Developmental field scoring is routed into the ongoing juvenile COMBINE construction path. It is a preference over physically valid construction opportunities, not a one-time authored target or selectable body-plan action.
 
-Make growth an ongoing developmental process rather than a selectable action or one-time discrete target realization.
+## P6.4 — Physical growth contracts — COMPLETE
 
-## P6.4 — Physical growth contracts
+Existing realized material remains physical authority; new structure uses actual geometry and connections; bond admission remains through COMBINE; developmental intent cannot make an invalid physical construction valid or rewrite realized structure.
 
-Verify preservation of existing realized material, physical construction of new structure, actual geometry and connections, COMBINE admission for new bonds, BREAK where reorganization requires it, and no rewriting of physical reality from blueprint intent.
+## P6.5 — Development/adulthood audit — COMPLETE
 
-## P6.5 — Development/adulthood audit
+DevelopmentStage is driven by continuous developmental realization. No age, reproductive-readiness, arbitrary energy, preferred-mass equality, or independent maturation authority is used.
 
-Audit DevelopmentStage against adult-blueprint realization. No age, reproductive-readiness, arbitrary energy, or independent maturation authority may be introduced.
-
-## P6.6 — Contract validation
+## P6.6 — Contract validation — IN PROGRESS
 
 Run full tests, architecture checks, formatting, strict Clippy, and final authority audit.
 
