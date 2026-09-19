@@ -16,7 +16,7 @@ use crate::structural_blueprint::{
 use serde::{Deserialize, Serialize};
 
 /// Current developmental realization floor for a juvenile derived from the adult blueprint.
-pub const JUVENILE_LINEAR_SCALE: f64 = 0.40;
+pub const CANONICAL_JUVENILE_COUNT: usize = 12;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MaterialPreferenceField {
@@ -134,67 +134,34 @@ impl DevelopmentalFieldBlueprint {
         self.connectivity.evaluate(x, y)
     }
 
-    /// Searches a bounded family of physically realizable construction candidates.
+    /// Returns the canonical juvenile realization when juvenile is true.
     ///
-    /// The developmental scale is a preference over the feasible candidates,
-    /// not a direct multiplier on physical geometry. Juvenile development biases
-    /// that preference toward the smallest feasible realization. The returned
-    /// StructuralBlueprint remains a transient solver artifact.
+    /// The known-good seed construction is the juvenile baseline. It is not
+    /// discovered by shrinking an adult target or by searching nearby sizes.
+    /// Adult development uses the same transient construction architecture and
+    /// expands outward from this baseline according to inherited size preference.
     pub fn construction_candidate(
         &self,
         catalog: &[BaseResource],
         developmental_scale: f64,
-        juvenile_scale: f64,
+        juvenile: bool,
     ) -> Result<StructuralBlueprint, String> {
         self.validate()?;
         if catalog.is_empty() {
             return Err("developmental construction requires a resource catalog".into());
         }
 
-        // These fields rank physically feasible developmental realizations.
-        // They never become direct coordinate or piece-count authorities.
-        let preference = developmental_scale.clamp(0.0, 1.0);
-        let juvenile_bias = juvenile_scale.clamp(0.0, 1.0);
-        let effective_preference = (preference * juvenile_bias).clamp(0.0, 1.0);
-
-        const MIN_CANDIDATE_COUNT: usize = 5;
-        const MAX_CANDIDATE_COUNT: usize = 16;
-        let target_count = MIN_CANDIDATE_COUNT as f64
-            + effective_preference * (MAX_CANDIDATE_COUNT - MIN_CANDIDATE_COUNT) as f64;
-
-        // Search candidates in order of developmental preference. Physical
-        // realization remains the acceptance test; the preferred count is not
-        // itself a structural authority.
-        let mut counts = (MIN_CANDIDATE_COUNT..=MAX_CANDIDATE_COUNT).collect::<Vec<_>>();
-        counts.sort_by(|a, b| {
-            let da = (*a as f64 - target_count).abs();
-            let db = (*b as f64 - target_count).abs();
-            da.partial_cmp(&db)
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then_with(|| a.cmp(b))
-        });
-
-        let mut last_error = "no viable developmental target".to_string();
-        for count in counts {
-            let Ok(candidate) = self.candidate_for_count(catalog, count) else {
-                last_error = format!("count {count} produced no physical candidate");
-                continue;
-            };
-            let Ok(structure) = candidate.realize(catalog) else {
-                last_error = format!("count {count} failed physical realization");
-                continue;
-            };
-            let qualifies = crate::cavity::analyze_genome_cavity(&structure, catalog)
-                .ok()
-                .flatten()
-                .is_some_and(|cavity| cavity.qualifies());
-            if qualifies {
-                return Ok(candidate);
-            }
-            last_error = format!("count {count} produced no qualifying physical cavity");
+        if juvenile {
+            return self.candidate_for_count(catalog, CANONICAL_JUVENILE_COUNT);
         }
 
-        Err(last_error)
+        const MAX_DEVELOPMENTAL_COUNT: usize = 16;
+        let preference = developmental_scale.clamp(0.0, 1.0);
+        let target_count = CANONICAL_JUVENILE_COUNT as f64
+            + preference * (MAX_DEVELOPMENTAL_COUNT - CANONICAL_JUVENILE_COUNT) as f64;
+        let count = target_count.round() as usize;
+
+        self.candidate_for_count(catalog, count)
     }
 
     fn candidate_for_count(
@@ -422,10 +389,10 @@ mod tests {
         let blueprint = default_developmental_blueprint();
         let catalog = crate::resources::default_catalog();
         let adult = blueprint
-            .construction_candidate(&catalog, 0.5, 1.0)
+            .construction_candidate(&catalog, 0.5, false)
             .unwrap();
         let juvenile = blueprint
-            .construction_candidate(&catalog, 0.5, 0.40)
+            .construction_candidate(&catalog, 0.5, true)
             .unwrap();
         assert!(adult.is_valid() && juvenile.is_valid());
         let adult_extent = adult
