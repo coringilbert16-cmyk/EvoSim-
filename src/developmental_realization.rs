@@ -10,7 +10,7 @@ impl DevelopmentalFieldBlueprint {
         preferred_mass: f64,
     ) -> DevelopmentalRealization {
         let (seed_mass, seed_length) = crate::juvenile::confirmed_seed_scale_reference(catalog)
-            .unwrap_or((1.0, 1.0));
+            .expect("confirmed seed scale reference must be valid");
         let preferred_length = self.preferred_developmental_length(
             preferred_mass.max(1e-9),
             seed_mass,
