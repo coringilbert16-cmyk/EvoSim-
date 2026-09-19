@@ -137,7 +137,10 @@ impl Simulation {
             .realization(
                 &organism.structure,
                 &environment.catalog,
-                (organism.developmental_origin.x, organism.developmental_origin.y),
+                (
+                    organism.developmental_origin.x,
+                    organism.developmental_origin.y,
+                ),
                 organism.developmental_orientation_radians,
                 organism.genome.adult_mass(),
             )
