@@ -178,7 +178,6 @@ pub(crate) fn harvestable_decomposition_energy(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genome::initial_genome;
     use crate::resources::default_catalog;
 
     #[test]
