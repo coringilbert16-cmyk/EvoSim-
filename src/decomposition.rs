@@ -183,8 +183,7 @@ mod tests {
 
     #[test]
     fn retains_structure_budget_and_position() {
-        let genome = initial_genome();
-        let blueprint = genome.mature_construction_target().unwrap();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&default_catalog()).unwrap();
         let structure = blueprint.realize(&default_catalog()).unwrap();
         let body = DecomposingBody::new(structure, 4.0, Position { x: 2.0, y: 3.0 }).unwrap();
         assert!(!body.structure.units.is_empty());
