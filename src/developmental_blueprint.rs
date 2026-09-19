@@ -176,10 +176,10 @@ impl DevelopmentalFieldBlueprint {
         // a separate inherited body plan.
         let realization_fraction = if juvenile { 0.40 } else { 1.0 };
         let target_mass = preferred_mass * realization_fraction;
-        let mut candidate = self.confirmed_seed_candidate(catalog)?;
+        let mut candidate = self.confirmed_juvenile_candidate(catalog)?;
         let mut current_mass = candidate.structural_mass(catalog);
         if !current_mass.is_finite() || current_mass <= 0.0 {
-            return Err("confirmed developmental seed has invalid structural mass".into());
+            return Err("confirmed juvenile construction baseline has invalid structural mass".into());
         }
         if current_mass + 1e-9 >= target_mass {
             return Ok(candidate);
@@ -206,7 +206,7 @@ impl DevelopmentalFieldBlueprint {
         &self,
         catalog: &[BaseResource],
     ) -> Result<StructuralBlueprint, String> {
-        // The confirmed-good juvenile seed is retained as a physical regression
+        // The confirmed-good juvenile construction baseline is retained as a physical regression
         // baseline. It is not exposed as a genome count, topology, or body-plan
         // authority. Development may grow from this realization using the same
         // developmental field used for adulthood.
