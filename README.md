@@ -1335,9 +1335,9 @@ Each influence may contain:
 - Strength
 - Falloff
 
-Initial fields should generally use approximately 1–3 influences per field.
+Initial fields may use a small number of radial influences. The exact influence count is an **experimental representation parameter**, not a permanent biological law.
 
-This provides a compact genome representation while allowing nonuniform developmental tendencies.
+This provides a compact genome representation while allowing nonuniform developmental tendencies. The approved initial radial equation is Gaussian; influence centers, widths, strengths, and numerical bounds are experimental until explicitly approved.
 
 Deferred complexity
 
@@ -1404,7 +1404,7 @@ The actual bond graph remains owned by the physical structure.
 
 9. Preferred Developmental Mass
 
-The existing genome "adult_mass" concept is repurposed as the organism's preferred developmental mass.
+The inherited **size-preference gene** is the source of developmental-size variation. Preferred developmental mass is derived from that gene using the approved logarithmic size mapping. The current `adult_mass` concept may remain as an implementation-facing preferred-mass value only if it is not maintained as a second independent inherited authority.
 
 It means:
 
@@ -1416,7 +1416,7 @@ It does not mean:
 
 Actual organism mass is always derived from the realized physical structure.
 
-There must not be a separate authoritative "blueprint_mass" alongside "adult_mass".
+There must not be a second independent authoritative developmental-size gene or mass value alongside the size-preference authority.
 
 Mass authority
 
