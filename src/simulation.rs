@@ -489,8 +489,10 @@ impl Simulation {
                         );
                     }
                     ActionKind::Combine => {
+                        let developmental_blueprint =
+                            organisms[index].genome.developmental_blueprint.clone();
                         let (blueprint, origin, orientation) = (
-                            &organisms[index].genome.developmental_blueprint,
+                            &developmental_blueprint,
                             (
                                 organisms[index].developmental_origin.x,
                                 organisms[index].developmental_origin.y,
