@@ -9,10 +9,7 @@
 //! It contains no constituent instances, coordinates, bonds, rotations,
 //! silhouette, or guaranteed topology.
 
-use crate::resources::{BaseResource, Material};
-use crate::structural_blueprint::{
-    BlueprintConnection, BlueprintElement, BlueprintPlacement, StructuralBlueprint,
-};
+use crate::resources::BaseResource;
 use serde::{Deserialize, Serialize};
 
 #[path = "developmental_realization.rs"]
@@ -285,113 +282,6 @@ impl DevelopmentalFieldBlueprint {
     }
 
 
-    fn find_growth_path(
-        &self,
-        current: &StructuralBlueprint,
-        catalog: &[BaseResource],
-        target_mass: f64,
-        budget: &mut usize,
-    ) -> Result<Option<StructuralBlueprint>, String> {
-        let current_mass = current.structural_mass(catalog);
-        if current_mass + 1e-9 >= target_mass {
-            return Ok(Some(current.clone()));
-        }
-        if *budget == 0 {
-            return Ok(None);
-        }
-        let candidates = self.growth_candidates(current, catalog, target_mass)?;
-        for candidate in candidates.into_iter().take(4) {
-            if *budget == 0 {
-                break;
-            }
-            *budget -= 1;
-            if let Some(realized) =
-                self.find_growth_path(&candidate, catalog, target_mass, budget)?
-            {
-                return Ok(Some(realized));
-            }
-        }
-        Ok(None)
-    }
-
-    fn growth_candidates(
-        &self,
-        current: &StructuralBlueprint,
-        catalog: &[BaseResource],
-        target_mass: f64,
-    ) -> Result<Vec<(StructuralBlueprint, f64)>, String> {
-        let mut candidates = Vec::new();
-        let base_count = current.elements.len();
-        let preferred_length = self
-            .preferred_length(catalog, target_mass.max(1e-9))
-            .max(1e-6);
-        const DIRECTION_SAMPLES: usize = 16;
-        for parent in 0..base_count {
-            let p = current.elements[parent].placement;
-            for step in 0..DIRECTION_SAMPLES {
-                let angle = step as f64 * std::f64::consts::TAU / DIRECTION_SAMPLES as f64;
-                let radius = catalog
-                    .iter()
-                    .find(|r| r.name == current.elements[parent].material.parts[0].0)
-                    .map(|r| r.shape.form.bounding_radius().max(1e-6) * 1.5)
-                    .unwrap_or(1.0);
-                let placement = BlueprintPlacement {
-                    x: p.x + angle.cos() * radius,
-                    y: p.y + angle.sin() * radius,
-                    rotation_radians: angle,
-                };
-                let resource = self.select_material(catalog, placement.x, placement.y)?;
-                let mut candidate = current.clone();
-                let child = candidate.elements.len();
-                candidate.elements.push(BlueprintElement {
-                    material: Material::free_base(&resource.name, 1.0),
-                    placement,
-                });
-                candidate.connections.push(BlueprintConnection {
-                    element_a: parent,
-                    element_b: child,
-                });
-                if !candidate.is_valid() {
-                    continue;
-                }
-                let Ok(structure) = candidate.realize(catalog) else {
-                    continue;
-                };
-                let mass = structure.structural_mass(catalog);
-                // EXPERIMENTAL solver weights. These tune candidate preference but
-                // do not establish additional biological authorities.
-                const MATERIAL_WEIGHT: f64 = 1.0;
-                const DENSITY_WEIGHT: f64 = 1.0;
-                const CONNECTIVITY_WEIGHT: f64 = 0.25;
-                let field_score = MATERIAL_WEIGHT
-                    * self.material_preference_scaled(
-                        &resource.name,
-                        placement.x,
-                        placement.y,
-                        preferred_length,
-                    )
-                    + DENSITY_WEIGHT
-                        * self.density_preference_scaled(
-                            placement.x,
-                            placement.y,
-                            preferred_length,
-                        )
-                    + CONNECTIVITY_WEIGHT
-                        * self.connectivity_preference_scaled(
-                            placement.x,
-                            placement.y,
-                            preferred_length,
-                        );
-                candidates.push((field_score, candidate, mass));
-            }
-        }
-        candidates.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-        Ok(candidates
-            .into_iter()
-            .map(|(_, candidate, mass)| (candidate, mass))
-            .collect())
-    }
-
     pub fn preferred_developmental_length(
         &self,
         catalog: &[BaseResource],
@@ -400,43 +290,14 @@ impl DevelopmentalFieldBlueprint {
         self.preferred_length(catalog, preferred_mass)
     }
 
-    fn preferred_length(&self, catalog: &[BaseResource], preferred_mass: f64) -> f64 {
-        let seed = self.confirmed_seed_candidate(catalog).ok();
-        let seed_mass = seed
-            .as_ref()
-            .map(|candidate| candidate.structural_mass(catalog))
-            .filter(|mass| mass.is_finite() && *mass > 0.0)
-            .unwrap_or(preferred_mass.max(1.0));
-        let seed_length = seed
-            .as_ref()
-            .map(|candidate| {
-                candidate
-                    .elements
-                    .iter()
-                    .map(|element| element.placement.x.hypot(element.placement.y))
-                    .fold(0.0, f64::max)
-                    .max(1e-6)
-            })
-            .unwrap_or(1.0);
-        // Approved calibration relationship: L_preferred = L_seed * sqrt(M_preferred / M_seed).
-        // The seed realization is only a scale calibration reference, never an inherited body plan.
-        seed_length * (preferred_mass / seed_mass).max(0.0).sqrt()
-    }
-
-    fn select_material<'a>(
-        &self,
-        catalog: &'a [BaseResource],
-        x: f64,
-        y: f64,
-    ) -> Result<&'a BaseResource, String> {
-        catalog
-            .iter()
-            .max_by(|a, b| {
-                self.material_preference(&a.name, x, y)
-                    .partial_cmp(&self.material_preference(&b.name, x, y))
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .ok_or_else(|| "catalog contains no material candidates".into())
+    fn preferred_length(&self, _catalog: &[BaseResource], preferred_mass: f64) -> f64 {
+        // EXPERIMENTAL: these are calibration values measured from the confirmed
+        // original seed realization. They are scale references only, not inherited
+        // structural or topological authority.
+        const SEED_REFERENCE_MASS: f64 = 12.0;
+        const SEED_REFERENCE_LENGTH: f64 = 6.0;
+        SEED_REFERENCE_LENGTH
+            * (preferred_mass / SEED_REFERENCE_MASS).max(0.0).sqrt()
     }
 }
 
@@ -474,29 +335,6 @@ mod tests {
         assert!(field.evaluate(0.0, 0.0) > field.evaluate(2.0, 0.0));
     }
 
-    #[test]
-    fn construction_candidate_is_derived_from_fields_and_juvenile_scale() {
-        let blueprint = default_developmental_blueprint();
-        let catalog = crate::resources::default_catalog();
-        let adult = blueprint
-            .construction_candidate(&catalog, 30.0, false)
-            .unwrap();
-        let juvenile = blueprint
-            .construction_candidate(&catalog, 30.0, true)
-            .unwrap();
-        assert!(adult.is_valid() && juvenile.is_valid());
-        let adult_extent = adult
-            .elements
-            .iter()
-            .map(|e| e.placement.x.abs().max(e.placement.y.abs()))
-            .fold(0.0, f64::max);
-        let juvenile_extent = juvenile
-            .elements
-            .iter()
-            .map(|e| e.placement.x.abs().max(e.placement.y.abs()))
-            .fold(0.0, f64::max);
-        assert!(juvenile_extent < adult_extent);
-    }
 
     #[test]
     fn connectivity_can_remain_inactive() {
