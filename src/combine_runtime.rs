@@ -321,7 +321,7 @@ pub(crate) fn try_combine_stored_unit(
                                         orientation,
                                     );
                                     blueprint.material_preference_scaled(
-                                        &first_resource,
+                                        first_resource,
                                         local.0,
                                         local.1,
                                         preferred_length,
