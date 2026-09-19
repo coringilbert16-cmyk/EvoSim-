@@ -22,9 +22,9 @@ impl ActionKind {
     pub fn relevant_needs(self) -> &'static [NeedKind] {
         match self {
             ActionKind::Move => &[NeedKind::Survival, NeedKind::Reproduction],
-            ActionKind::Acquire => &[NeedKind::Survival, NeedKind::Reproduction],
-            ActionKind::Combine => &[NeedKind::Reproduction],
-            ActionKind::Break => &[NeedKind::Survival],
+            ActionKind::Acquire => &[NeedKind::Survival, NeedKind::Reproduction, NeedKind::Development],
+            ActionKind::Combine => &[NeedKind::Reproduction, NeedKind::Development],
+            ActionKind::Break => &[NeedKind::Survival, NeedKind::Development],
             ActionKind::Expel => &[NeedKind::Survival],
         }
     }
@@ -35,6 +35,7 @@ impl ActionKind {
 pub enum NeedKind {
     Survival,
     Reproduction,
+    Development,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -118,6 +119,7 @@ impl DecisionHistory {
 pub struct CurrentNeeds {
     pub survival: f64,
     pub reproduction: f64,
+    pub development: f64,
 }
 
 impl CurrentNeeds {
@@ -129,6 +131,7 @@ impl CurrentNeeds {
         match need {
             NeedKind::Survival => self.survival,
             NeedKind::Reproduction => self.reproduction,
+            NeedKind::Development => self.development,
         }
     }
 
