@@ -175,7 +175,7 @@ impl DevelopmentalFieldBlueprint {
         // the same field at the reduced realization scale rather than selecting
         // a separate inherited body plan.
         let realization_fraction = if juvenile { 0.40 } else { 1.0 };
-        let target_mass = preferred_mass * realization_fraction;
+        // 0.40 is the approved juvenile linear spatial realization; its comparable 2-D mass fraction is approximately 0.16.\n        let target_mass = preferred_mass * realization_fraction;
         let mut candidate = self.confirmed_juvenile_candidate(catalog)?;
         let mut current_mass = candidate.structural_mass(catalog);
         if !current_mass.is_finite() || current_mass <= 0.0 {
@@ -352,7 +352,7 @@ impl DevelopmentalFieldBlueprint {
         if *budget == 0 {
             return Ok(None);
         }
-        let candidates = self.growth_candidates(current, catalog)?;
+        let candidates = self.growth_candidates(current, catalog, target_mass)?;
         for candidate in candidates.into_iter().take(4) {
             if *budget == 0 {
                 break;
@@ -373,7 +373,7 @@ impl DevelopmentalFieldBlueprint {
         catalog: &[BaseResource],
     ) -> Result<Vec<(StructuralBlueprint, f64)>, String> {
         let mut candidates = Vec::new();
-        let base_count = current.elements.len();
+        let base_count = current.elements.len();\n        let preferred_length = self.preferred_length(catalog, target_mass.max(1e-9)).max(1e-6);
         const DIRECTION_SAMPLES: usize = 16;
         for parent in 0..base_count {
             let p = current.elements[parent].placement;
@@ -413,9 +413,9 @@ impl DevelopmentalFieldBlueprint {
                 const DENSITY_WEIGHT: f64 = 1.0;
                 const CONNECTIVITY_WEIGHT: f64 = 0.25;
                 let field_score = MATERIAL_WEIGHT
-                    * self.material_preference(&resource.name, placement.x, placement.y)
-                    + DENSITY_WEIGHT * self.density_preference(placement.x, placement.y)
-                    + CONNECTIVITY_WEIGHT * self.connectivity_preference(placement.x, placement.y);
+                    * self.material_preference_scaled(&resource.name, placement.x, placement.y, preferred_length)
+                    + DENSITY_WEIGHT * self.density_preference_scaled(placement.x, placement.y, preferred_length)
+                    + CONNECTIVITY_WEIGHT * self.connectivity_preference_scaled(placement.x, placement.y, preferred_length);
                 candidates.push((field_score, candidate, mass));
             }
         }
@@ -424,6 +424,29 @@ impl DevelopmentalFieldBlueprint {
             .into_iter()
             .map(|(_, candidate, mass)| (candidate, mass))
             .collect())
+    }
+
+    fn preferred_length(&self, catalog: &[BaseResource], preferred_mass: f64) -> f64 {
+        let seed = self.confirmed_seed_candidate(catalog).ok();
+        let seed_mass = seed
+            .as_ref()
+            .map(|candidate| candidate.structural_mass(catalog))
+            .filter(|mass| mass.is_finite() && *mass > 0.0)
+            .unwrap_or(preferred_mass.max(1.0));
+        let seed_length = seed
+            .as_ref()
+            .map(|candidate| {
+                candidate
+                    .elements
+                    .iter()
+                    .map(|element| element.placement.x.hypot(element.placement.y))
+                    .fold(0.0, f64::max)
+                    .max(1e-6)
+            })
+            .unwrap_or(1.0);
+        // Approved calibration relationship: L_preferred = L_seed * sqrt(M_preferred / M_seed).
+        // The seed realization is only a scale calibration reference, never an inherited body plan.
+        seed_length * (preferred_mass / seed_mass).max(0.0).sqrt()
     }
 
     fn select_material<'a>(
