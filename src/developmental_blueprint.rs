@@ -284,20 +284,24 @@ impl DevelopmentalFieldBlueprint {
 
     pub fn preferred_developmental_length(
         &self,
-        catalog: &[BaseResource],
         preferred_mass: f64,
+        seed_mass: f64,
+        seed_length: f64,
     ) -> f64 {
-        self.preferred_length(catalog, preferred_mass)
-    }
-
-    fn preferred_length(&self, _catalog: &[BaseResource], preferred_mass: f64) -> f64 {
-        // EXPERIMENTAL: these are calibration values measured from the confirmed
-        // original seed realization. They are scale references only, not inherited
+        if !preferred_mass.is_finite()
+            || preferred_mass <= 0.0
+            || !seed_mass.is_finite()
+            || seed_mass <= 0.0
+            || !seed_length.is_finite()
+            || seed_length <= 0.0
+        {
+            return 0.0;
+        }
+        // Approved calibration relationship:
+        // L_preferred = L_seed * sqrt(M_preferred / M_seed).
+        // Seed values are physical calibration references, never inherited
         // structural or topological authority.
-        const SEED_REFERENCE_MASS: f64 = 12.0;
-        const SEED_REFERENCE_LENGTH: f64 = 6.0;
-        SEED_REFERENCE_LENGTH
-            * (preferred_mass / SEED_REFERENCE_MASS).max(0.0).sqrt()
+        seed_length * (preferred_mass / seed_mass).sqrt()
     }
 }
 
