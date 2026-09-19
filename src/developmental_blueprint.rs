@@ -16,6 +16,42 @@ use crate::structural_blueprint::{
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct RadialInfluence {
+    pub center_x: f64,
+    pub center_y: f64,
+    pub radial_falloff: f64,
+    pub strength: f64,
+}
+
+impl RadialInfluence {
+    fn validate(&self) -> bool {
+        self.center_x.is_finite()
+            && self.center_y.is_finite()
+            && self.radial_falloff.is_finite()
+            && self.radial_falloff > 0.0
+            && self.strength.is_finite()
+            && (0.0..=1.0).contains(&self.strength)
+    }
+
+    fn evaluate(&self, x: f64, y: f64, scale: f64) -> f64 {
+        if !self.validate() || !scale.is_finite() || scale <= 0.0 {
+            return 0.0;
+        }
+        let dx = x - self.center_x * scale;
+        let dy = y - self.center_y * scale;
+        let falloff = self.radial_falloff / (scale * scale);
+        (self.strength * (-falloff * dx.mul_add(dx, dy * dy)).exp()).clamp(0.0, 1.0)
+    }
+
+    fn integral(&self, scale: f64) -> f64 {
+        if !self.validate() || !scale.is_finite() || scale <= 0.0 {
+            return 0.0;
+        }
+        self.strength * std::f64::consts::PI * scale * scale / self.radial_falloff
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MaterialPreferenceField {
     pub resource_name: String,
     pub center_preference: f64,
@@ -23,22 +59,35 @@ pub struct MaterialPreferenceField {
     #[serde(default)]
     pub center_x: f64,
     #[serde(default)]
-    pub center_y: f64,\n    /// Three additional radial influences; primary + these gives the approved initial count of four.\n    #[serde(default)]\n    pub additional_influences: Vec<RadialInfluence>\n}
+    pub center_y: f64,
+    /// Additional influences in the initial four-influence representation.
+    /// Influence count is experimental; the four-influence starting point is approved.
+    #[serde(default)]
+    pub additional_influences: Vec<RadialInfluence>
+}
 
 impl MaterialPreferenceField {
     pub fn evaluate(&self, x: f64, y: f64) -> f64 {
-        if !x.is_finite() || !y.is_finite() {
-            return 0.0;
+        self.evaluate_scaled(x, y, 1.0)
+    }
+
+    fn evaluate_scaled(&self, x: f64, y: f64, scale: f64) -> f64 {
+        let mut total = if self.center_preference.is_finite() {
+            self.primary_influence().evaluate(x, y, scale)
+        } else { 0.0 };
+        total += self.additional_influences.iter().map(|i| i.evaluate(x, y, scale)).sum::<f64>();
+        let strength = self.center_preference.max(0.0)
+            + self.additional_influences.iter().map(|i| i.strength).sum::<f64>();
+        if strength <= 0.0 { 0.0 } else { (total / strength).clamp(0.0, 1.0) }
+    }
+
+    fn primary_influence(&self) -> RadialInfluence {
+        RadialInfluence {
+            center_x: self.center_x,
+            center_y: self.center_y,
+            radial_falloff: self.radial_falloff,
+            strength: self.center_preference.max(0.0),
         }
-        let dx = x - self.center_x;
-        let dy = y - self.center_y;
-        let distance_squared = dx.mul_add(dx, dy * dy);
-        // Approved Gaussian form: exp(-d² / (2σ²)).
-        // radial_falloff is retained as a compatibility parameter, where
-        // radial_falloff = 1/(2σ²). A zero falloff is the experimental
-        // infinite-width/constant-field case.
-        let exponent = -self.radial_falloff.max(0.0) * distance_squared;
-        (self.center_preference * exponent.exp()).clamp(0.0, 1.0)
     }
 
     fn validate(&self) -> Result<(), String> {
@@ -60,18 +109,29 @@ pub struct StructuralDensityField {
     #[serde(default)]
     pub center_x: f64,
     #[serde(default)]
-    pub center_y: f64,\n    /// Three additional radial influences; primary + these gives the approved initial count of four.\n    #[serde(default)]\n    pub additional_influences: Vec<RadialInfluence>\n}
+    pub center_y: f64,
+    /// Additional influences in the initial four-influence representation.
+    /// Influence count is experimental; the four-influence starting point is approved.
+    #[serde(default)]
+    pub additional_influences: Vec<RadialInfluence>
+}
 
 impl StructuralDensityField {
     pub fn evaluate(&self, x: f64, y: f64) -> f64 {
-        if !x.is_finite() || !y.is_finite() {
-            return 0.0;
-        }
-        let dx = x - self.center_x;
-        let dy = y - self.center_y;
-        let distance_squared = dx.mul_add(dx, dy * dy);
-        let exponent = -self.radial_falloff.max(0.0) * distance_squared;
-        (self.center_preference * exponent.exp()).clamp(0.0, 1.0)
+        self.evaluate_scaled(x, y, 1.0)
+    }
+
+    fn evaluate_scaled(&self, x: f64, y: f64, scale: f64) -> f64 {
+        let primary = RadialInfluence {
+            center_x: self.center_x,
+            center_y: self.center_y,
+            radial_falloff: self.radial_falloff,
+            strength: self.center_preference.max(0.0),
+        };
+        let mut total = primary.evaluate(x, y, scale);
+        total += self.additional_influences.iter().map(|i| i.evaluate(x, y, scale)).sum::<f64>();
+        let strength = primary.strength + self.additional_influences.iter().map(|i| i.strength).sum::<f64>();
+        if strength <= 0.0 { 0.0 } else { (total / strength).clamp(0.0, 1.0) }
     }
 
     fn validate(&self) -> Result<(), String> {
@@ -93,14 +153,29 @@ pub struct ConnectivityField {
     #[serde(default)]
     pub center_y: f64,
     #[serde(default)]
-    pub radial_falloff: f64,\n    /// Three additional radial influences; primary + these gives the approved initial count of four.\n    #[serde(default)]\n    pub additional_influences: Vec<RadialInfluence>\n}
+    pub radial_falloff: f64,
+    /// Additional influences in the initial four-influence representation.
+    /// Influence count is experimental; the four-influence starting point is approved.
+    #[serde(default)]
+    pub additional_influences: Vec<RadialInfluence>
+}
 
 impl ConnectivityField {
     pub fn evaluate(&self, x: f64, y: f64) -> f64 {
-        let dx = x - self.center_x;
-        let dy = y - self.center_y;
-        let distance_squared = dx.mul_add(dx, dy * dy);
-        (self.strength * (-self.radial_falloff.max(0.0) * distance_squared).exp()).clamp(0.0, 1.0)
+        self.evaluate_scaled(x, y, 1.0)
+    }
+
+    fn evaluate_scaled(&self, x: f64, y: f64, scale: f64) -> f64 {
+        let primary = RadialInfluence {
+            center_x: self.center_x,
+            center_y: self.center_y,
+            radial_falloff: self.radial_falloff,
+            strength: self.strength.max(0.0),
+        };
+        let mut total = primary.evaluate(x, y, scale);
+        total += self.additional_influences.iter().map(|i| i.evaluate(x, y, scale)).sum::<f64>();
+        let strength = primary.strength + self.additional_influences.iter().map(|i| i.strength).sum::<f64>();
+        if strength <= 0.0 { 0.0 } else { (total / strength).clamp(0.0, 1.0) }
     }
 
     fn validate(&self) -> Result<(), String> {
@@ -132,10 +207,14 @@ impl DevelopmentalFieldBlueprint {
     }
 
     pub fn material_preference(&self, resource_name: &str, x: f64, y: f64) -> f64 {
+        self.material_preference_scaled(resource_name, x, y, 1.0)
+    }
+
+    pub fn material_preference_scaled(&self, resource_name: &str, x: f64, y: f64, scale: f64) -> f64 {
         self.material_preferences
             .iter()
             .filter(|field| field.resource_name == resource_name)
-            .map(|field| field.evaluate(x, y))
+            .map(|field| field.evaluate_scaled(x, y, scale))
             .sum::<f64>()
             .clamp(0.0, 1.0)
     }
@@ -865,7 +944,7 @@ pub fn default_developmental_blueprint() -> DevelopmentalFieldBlueprint {
             |(resource_name, center_preference)| MaterialPreferenceField {
                 resource_name: resource_name.into(),
                 center_preference,
-                radial_falloff: 0.0, // EXPERIMENTAL: constant-width initial field.
+                radial_falloff: 2.0, // EXPERIMENTAL: alpha=0.5 initial Gaussian width.
                 center_x: 0.0,       // EXPERIMENTAL: initial influence center.
                 center_y: 0.0,       // EXPERIMENTAL: initial influence center.
             },
