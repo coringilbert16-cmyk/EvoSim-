@@ -570,28 +570,41 @@ impl DevelopmentalFieldBlueprint {
         catalog: &[BaseResource],
         developmental_origin: (f64, f64),
         developmental_orientation_radians: f64,
+        preferred_mass: f64,
     ) -> DevelopmentalRealization {
-        let material_available = self.material_available_value();
-        let density_available = self.density_available_value();
+        let preferred_length = self.preferred_length(catalog, preferred_mass.max(1e-9));
+        let material_available = self.material_available_value(preferred_length);
+        let density_available = self.density_available_value(preferred_length);
 
         let material_realized = if material_available > 0.0 {
             let mut realized = 0.0;
             for unit in &structure.units {
-                let Some((resource_name, amount)) = unit.material.parts.first() else {
-                    continue;
-                };
-                if (*amount - 1.0).abs() > f64::EPSILON {
-                    continue;
-                }
                 let Some(shape) = unit.shape(catalog) else {
                     continue;
                 };
+                let total_amount = unit.material.parts.iter().map(|(_, amount)| *amount).sum::<f64>();
+                if !total_amount.is_finite() || total_amount <= 0.0 {
+                    continue;
+                }
                 realized += self.integrate_shape_field(
                     &shape.form,
                     unit.placement,
                     developmental_origin,
                     developmental_orientation_radians,
-                    |x, y| self.material_preference(resource_name, x, y),
+                    |x, y| {
+                        unit.material
+                            .parts
+                            .iter()
+                            .map(|(name, amount)| {
+                                (amount / total_amount) * self.material_preference_scaled(
+                                    name,
+                                    x,
+                                    y,
+                                    preferred_length,
+                                )
+                            })
+                            .sum::<f64>()
+                    },
                 );
             }
             Some((realized / material_available).clamp(0.0, 1.0))
@@ -610,7 +623,7 @@ impl DevelopmentalFieldBlueprint {
                     unit.placement,
                     developmental_origin,
                     developmental_orientation_radians,
-                    |x, y| self.density_preference(x, y),
+                    |x, y| self.density_preference_scaled(x, y, preferred_length),
                 );
             }
             Some((realized / density_available).clamp(0.0, 1.0))
@@ -623,6 +636,7 @@ impl DevelopmentalFieldBlueprint {
             catalog,
             developmental_origin,
             developmental_orientation_radians,
+            preferred_length,
         );
 
         let mut sum = 0.0;
@@ -648,21 +662,39 @@ impl DevelopmentalFieldBlueprint {
         }
     }
 
-    fn material_available_value(&self) -> f64 {
+    fn material_available_value(&self, preferred_length: f64) -> f64 {
         self.material_preferences
             .iter()
-            .filter_map(|field| {
-                gaussian_plane_integral(field.center_preference, field.radial_falloff)
+            .map(|field| {
+                let primary = field.primary_influence().integral(preferred_length);
+                let additional = field
+                    .additional_influences
+                    .iter()
+                    .map(|influence| influence.integral(preferred_length))
+                    .sum::<f64>();
+                let normalization = field.center_preference.max(0.0)
+                    + field.additional_influences.iter().map(|i| i.strength).sum::<f64>();
+                if normalization <= 0.0 { 0.0 } else { (primary + additional) / normalization }
             })
             .sum()
     }
 
-    fn density_available_value(&self) -> f64 {
-        gaussian_plane_integral(
-            self.structural_density.center_preference,
-            self.structural_density.radial_falloff,
-        )
-        .unwrap_or(0.0)
+    fn density_available_value(&self, preferred_length: f64) -> f64 {
+        let primary = RadialInfluence {
+            center_x: self.structural_density.center_x,
+            center_y: self.structural_density.center_y,
+            radial_falloff: self.structural_density.radial_falloff,
+            strength: self.structural_density.center_preference.max(0.0),
+        };
+        let normalization = primary.strength
+            + self.structural_density.additional_influences.iter().map(|i| i.strength).sum::<f64>();
+        if normalization <= 0.0 {
+            0.0
+        } else {
+            (primary.integral(preferred_length)
+                + self.structural_density.additional_influences.iter().map(|i| i.integral(preferred_length)).sum::<f64>())
+                / normalization
+        }
     }
 
     fn connectivity_realization(
@@ -671,6 +703,7 @@ impl DevelopmentalFieldBlueprint {
         catalog: &[BaseResource],
         origin: (f64, f64),
         orientation: f64,
+        preferred_length: f64,
     ) -> Option<f64> {
         let mut actual_value = 0.0;
         let mut available_value = 0.0;
@@ -708,6 +741,7 @@ impl DevelopmentalFieldBlueprint {
                 bond.endpoint_a.location,
                 bond.endpoint_b.location,
                 catalog,
+                preferred_length,
             );
             actual_pairs.push((a, b));
         }
@@ -748,6 +782,7 @@ impl DevelopmentalFieldBlueprint {
                         candidate.endpoint_a,
                         candidate.endpoint_b,
                         catalog,
+                        preferred_length,
                     );
                 }
             }
@@ -771,9 +806,10 @@ impl DevelopmentalFieldBlueprint {
         endpoint_a: crate::structure::ConnectionEndpoint,
         endpoint_b: crate::structure::ConnectionEndpoint,
         catalog: &[BaseResource],
+        preferred_length: f64,
     ) -> f64 {
-        let ka = self.connectivity_preference(a.0, a.1);
-        let kb = self.connectivity_preference(b.0, b.1);
+        let ka = self.connectivity_preference_scaled(a.0, a.1, preferred_length);
+        let kb = self.connectivity_preference_scaled(b.0, b.1, preferred_length);
         let qa = endpoint_opportunity_count(structure, unit_a, endpoint_a, catalog);
         let qb = endpoint_opportunity_count(structure, unit_b, endpoint_b, catalog);
         let qreal_a = endpoint_realized_count(structure, unit_a, endpoint_a);
@@ -782,7 +818,7 @@ impl DevelopmentalFieldBlueprint {
             qreal_a as f64 / qa.max(1) as f64 +
             qreal_b as f64 / qb.max(1) as f64
         );
-        let lambda = 0.25; // EXPERIMENTAL.
+        const LAMBDA: f64 = 0.25; // EXPERIMENTAL: connectivity neighborhood coefficient.\n        let lambda = LAMBDA;
         ((ka + kb) * 0.5 + lambda * n).max(0.0)
     }
 
@@ -958,20 +994,23 @@ pub fn default_developmental_blueprint() -> DevelopmentalFieldBlueprint {
                 radial_falloff: 2.0, // EXPERIMENTAL: alpha=0.5 initial Gaussian width.
                 center_x: 0.0,       // EXPERIMENTAL: initial influence center.
                 center_y: 0.0,       // EXPERIMENTAL: initial influence center.
+                additional_influences: vec![RadialInfluence { center_x: 0.0, center_y: 0.0, radial_falloff: 2.0, strength: center_preference }; 3],
             },
         )
         .collect(),
         structural_density: StructuralDensityField {
             center_preference: 0.5,
-            radial_falloff: 0.0, // EXPERIMENTAL: constant-width initial field.
+            radial_falloff: 2.0, // EXPERIMENTAL: alpha=0.5 initial Gaussian width.
             center_x: 0.0,       // EXPERIMENTAL: initial influence center.
             center_y: 0.0,       // EXPERIMENTAL: initial influence center.
+            additional_influences: vec![RadialInfluence { center_x: 0.0, center_y: 0.0, radial_falloff: 2.0, strength: 0.5 }; 3],
         },
         connectivity: ConnectivityField {
             strength: 0.0,
             center_x: 0.0,       // EXPERIMENTAL: initial influence center.
             center_y: 0.0,       // EXPERIMENTAL: initial influence center.
-            radial_falloff: 0.0, // EXPERIMENTAL: inactive connectivity field.
+            radial_falloff: 2.0, // EXPERIMENTAL: alpha=0.5 initial Gaussian width.
+            additional_influences: vec![RadialInfluence { center_x: 0.0, center_y: 0.0, radial_falloff: 2.0, strength: 0.0 }; 3],
         },
     }
 }
@@ -985,7 +1024,7 @@ mod tests {
         let blueprint = default_developmental_blueprint();
         assert!(blueprint.validate().is_ok());
         assert!((blueprint.density_preference(0.0, 0.0) - 0.5).abs() < f64::EPSILON);
-        assert!((blueprint.density_preference(2.0, 0.0) - 0.5).abs() < f64::EPSILON);
+        assert!(blueprint.density_preference(2.0, 0.0) < 0.5);
     }
 
     #[test]
@@ -995,6 +1034,7 @@ mod tests {
             radial_falloff: 0.5,
             center_x: 0.0,
             center_y: 0.0,
+            additional_influences: Vec::new(),
         };
         assert!(field.evaluate(0.0, 0.0) > field.evaluate(2.0, 0.0));
     }
