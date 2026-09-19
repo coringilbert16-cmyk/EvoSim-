@@ -166,8 +166,6 @@ impl DevelopmentalFieldBlueprint {
     ) -> Option<f64> {
         let mut actual_value = 0.0;
         let mut available_value = 0.0;
-        let mut actual_pairs = Vec::new();
-
         for bond in &structure.bonds {
             let Some(a) = structure.unit_index(bond.endpoint_a.constituent_id) else {
                 continue;
@@ -202,22 +200,38 @@ impl DevelopmentalFieldBlueprint {
                 catalog,
                 preferred_length,
             );
-            actual_pairs.push((a, b));
         }
 
         for a in 0..structure.units.len() {
             for b in (a + 1)..structure.units.len() {
-                if actual_pairs
-                    .iter()
-                    .any(|(x, y)| (*x == a && *y == b) || (*x == b && *y == a))
-                {
-                    continue;
-                }
                 for candidate in
                     crate::contact::connection_pair_candidates(structure, a, b, catalog)
                         .into_iter()
                         .filter(|candidate| candidate.available_a && candidate.available_b)
                 {
+                    // The opportunity denominator is E_G ∪ O_new. Exclude only
+                    // an opportunity that is the exact already-realized edge;
+                    // other available endpoint pairs between the same two
+                    // physical units remain legitimate opportunities.
+                    let is_existing_edge = structure.bonds.iter().any(|bond| {
+                        let Some(id_a) = structure.physical_id(a) else {
+                            return false;
+                        };
+                        let Some(id_b) = structure.physical_id(b) else {
+                            return false;
+                        };
+                        (bond.endpoint_a.constituent_id == id_a
+                            && bond.endpoint_a.location == candidate.endpoint_a
+                            && bond.endpoint_b.constituent_id == id_b
+                            && bond.endpoint_b.location == candidate.endpoint_b)
+                            || (bond.endpoint_a.constituent_id == id_b
+                                && bond.endpoint_a.location == candidate.endpoint_b
+                                && bond.endpoint_b.constituent_id == id_a
+                                && bond.endpoint_b.location == candidate.endpoint_a)
+                    });
+                    if is_existing_edge {
+                        continue;
+                    }
                     let Some(wa) = candidate
                         .endpoint_a
                         .world_point(&structure.units[a], catalog)
@@ -274,8 +288,7 @@ impl DevelopmentalFieldBlueprint {
         let qreal_a = endpoint_realized_count(structure, unit_a, endpoint_a);
         let qreal_b = endpoint_realized_count(structure, unit_b, endpoint_b);
         let n = 0.5 * (qreal_a as f64 / qa.max(1) as f64 + qreal_b as f64 / qb.max(1) as f64);
-        const LAMBDA: f64 = 0.25; // EXPERIMENTAL: initial connectivity neighborhood coefficient.
-        let lambda = LAMBDA;
+        let lambda = crate::developmental_blueprint::CANDIDATE_CONNECTIVITY_WEIGHT;
         ((ka + kb) * 0.5 + lambda * n).max(0.0)
     }
 
