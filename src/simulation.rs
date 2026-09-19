@@ -173,7 +173,11 @@ impl Simulation {
         };
         CurrentNeeds {
             survival,
-            reproduction: if matches!(organism.development_stage, DevelopmentStage::Adult) { 1.0 } else { 0.0 },
+            reproduction: if matches!(organism.development_stage, DevelopmentStage::Adult) {
+                1.0
+            } else {
+                0.0
+            },
             development,
         }
     }
