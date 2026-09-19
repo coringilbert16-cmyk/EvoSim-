@@ -19,52 +19,112 @@ pub(crate) fn confirmed_seed_baseline(
     use crate::resources::Material;
     use crate::structural_blueprint::{BlueprintConnection, BlueprintElement, BlueprintPlacement};
 
+    // This is the historically confirmed viable juvenile construction used as
+    // the physical seed calibration. It is not inherited and does not define
+    // descendant topology. The original viable realization uses the catalog's
+    // rectangular Nitrogen material to form a four-unit enclosure, with the
+    // remaining juvenile units extending from one boundary.
     let resource = catalog
         .iter()
-        .find(|resource| resource.name == "Carbon")
+        .find(|resource| matches!(
+            resource.shape.form,
+            crate::resources::Form::Rectangle { .. }
+        ))
         .or_else(|| catalog.first())
         .ok_or_else(|| "catalog contains no seed material".to_string())?;
-    let radius = resource.shape.form.bounding_radius().max(1e-6);
-    let mut elements = Vec::new();
-    let mut connections = Vec::new();
-    for i in 0..4 {
-        let angle = i as f64 * std::f64::consts::FRAC_PI_2;
-        elements.push(BlueprintElement {
+
+    let ring = match &resource.shape.form {
+        crate::resources::Form::Rectangle { width, height } => {
+            let radius = (width + height) * 0.5;
+            vec![
+                BlueprintPlacement { x: 0.0, y: radius, rotation_radians: 0.0 },
+                BlueprintPlacement {
+                    x: radius,
+                    y: 0.0,
+                    rotation_radians: std::f64::consts::FRAC_PI_2,
+                },
+                BlueprintPlacement { x: 0.0, y: -radius, rotation_radians: 0.0 },
+                BlueprintPlacement {
+                    x: -radius,
+                    y: 0.0,
+                    rotation_radians: std::f64::consts::FRAC_PI_2,
+                },
+            ]
+        }
+        _ => {
+            let vertices = resource
+                .shape
+                .form
+                .polygon_vertices()
+                .ok_or_else(|| "seed resource has no constructible polygon geometry".to_string())?;
+            let radius = vertices
+                .iter()
+                .map(|(x, y)| x.hypot(*y))
+                .fold(0.0, f64::max);
+            if radius <= 0.0 {
+                return Err("seed resource has invalid geometry".into());
+            }
+            let ring_radius =
+                radius / (std::f64::consts::PI / 4.0).sin();
+            (0..4)
+                .map(|i| {
+                    let angle = i as f64 * std::f64::consts::FRAC_PI_2;
+                    BlueprintPlacement {
+                        x: ring_radius * angle.cos(),
+                        y: ring_radius * angle.sin(),
+                        rotation_radians: angle + std::f64::consts::FRAC_PI_2,
+                    }
+                })
+                .collect()
+        }
+    };
+
+    let mut elements = ring
+        .iter()
+        .copied()
+        .map(|placement| BlueprintElement {
             material: Material::free_base(&resource.name, 1.0),
-            placement: BlueprintPlacement {
-                x: radius * 1.5 * angle.cos(),
-                y: radius * 1.5 * angle.sin(),
-                rotation_radians: angle,
-            },
-        });
+            placement,
+        })
+        .collect::<Vec<_>>();
+    let mut connections = Vec::with_capacity(12);
+    for i in 0..4 {
         connections.push(BlueprintConnection {
             element_a: i,
             element_b: (i + 1) % 4,
         });
     }
-    for i in 0..8 {
-        let parent = i % 4;
-        let angle = parent as f64 * std::f64::consts::FRAC_PI_2
-            + (i / 4) as f64 * std::f64::consts::FRAC_PI_4;
-        let child = elements.len();
+
+    let outward_length = match &resource.shape.form {
+        crate::resources::Form::Rectangle { height, .. } => *height,
+        _ => resource.shape.form.bounding_radius().max(1e-6),
+    };
+    let first = ring[0];
+    let norm = first.x.hypot(first.y).max(1e-9);
+    let direction = (first.x / norm, first.y / norm);
+    let mut previous = first;
+    for _ in 0..8 {
+        let placement = BlueprintPlacement {
+            x: previous.x + direction.0 * outward_length.max(1e-6),
+            y: previous.y + direction.1 * outward_length.max(1e-6),
+            rotation_radians: first.rotation_radians,
+        };
+        let parent = elements.len() - 1;
         elements.push(BlueprintElement {
             material: Material::free_base(&resource.name, 1.0),
-            placement: BlueprintPlacement {
-                x: 3.0 * radius * angle.cos(),
-                y: 3.0 * radius * angle.sin(),
-                rotation_radians: angle,
-            },
+            placement,
         });
         connections.push(BlueprintConnection {
             element_a: parent,
-            element_b: child,
+            element_b: parent + 1,
         });
+        previous = placement;
     }
+
     let baseline = StructuralBlueprint::with_anchor_elements(elements, connections, vec![0]);
     baseline.validate()?;
     Ok(baseline)
 }
-
 pub(crate) fn confirmed_seed_scale_reference(
     catalog: &[BaseResource],
 ) -> Result<(f64, f64), String> {
