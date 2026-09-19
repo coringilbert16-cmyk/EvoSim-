@@ -116,7 +116,8 @@ pub(crate) struct EnergyLedger {
 pub(crate) struct Organism {
     pub(crate) id: String,
     /// Persistent organism-local developmental origin. This is anchored at
-    /// the original viable seed and moves with the organism; it is never
+    /// the organism's own persistent developmental reference and moves with the
+    /// organism; it is never
     /// re-centered on current geometry or center of mass.
     #[serde(default)]
     pub(crate) developmental_origin: Position,
