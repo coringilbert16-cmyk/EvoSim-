@@ -20,6 +20,10 @@ pub struct MaterialPreferenceField {
     pub resource_name: String,
     pub center_preference: f64,
     pub radial_falloff: f64,
+    #[serde(default)]
+    pub center_x: f64,
+    #[serde(default)]
+    pub center_y: f64,
 }
 
 impl MaterialPreferenceField {
@@ -27,9 +31,15 @@ impl MaterialPreferenceField {
         if !x.is_finite() || !y.is_finite() {
             return 0.0;
         }
-        let radius_squared = x.mul_add(x, y * y);
-        (self.center_preference * (-self.radial_falloff.max(0.0) * radius_squared).exp())
-            .clamp(0.0, 1.0)
+        let dx = x - self.center_x;
+        let dy = y - self.center_y;
+        let distance_squared = dx.mul_add(dx, dy * dy);
+        // Approved Gaussian form: exp(-d² / (2σ²)).
+        // radial_falloff is retained as a compatibility parameter, where
+        // radial_falloff = 1/(2σ²). A zero falloff is the experimental
+        // infinite-width/constant-field case.
+        let exponent = -self.radial_falloff.max(0.0) * distance_squared;
+        (self.center_preference * exponent.exp()).clamp(0.0, 1.0)
     }
 
     fn validate(&self) -> Result<(), String> {
@@ -48,6 +58,10 @@ impl MaterialPreferenceField {
 pub struct StructuralDensityField {
     pub center_preference: f64,
     pub radial_falloff: f64,
+    #[serde(default)]
+    pub center_x: f64,
+    #[serde(default)]
+    pub center_y: f64,
 }
 
 impl StructuralDensityField {
@@ -55,9 +69,11 @@ impl StructuralDensityField {
         if !x.is_finite() || !y.is_finite() {
             return 0.0;
         }
-        let radius_squared = x.mul_add(x, y * y);
-        (self.center_preference * (-self.radial_falloff.max(0.0) * radius_squared).exp())
-            .clamp(0.0, 1.0)
+        let dx = x - self.center_x;
+        let dy = y - self.center_y;
+        let distance_squared = dx.mul_add(dx, dy * dy);
+        let exponent = -self.radial_falloff.max(0.0) * distance_squared;
+        (self.center_preference * exponent.exp()).clamp(0.0, 1.0)
     }
 
     fn validate(&self) -> Result<(), String> {
@@ -74,11 +90,21 @@ impl StructuralDensityField {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ConnectivityField {
     pub strength: f64,
+    #[serde(default)]
+    pub center_x: f64,
+    #[serde(default)]
+    pub center_y: f64,
+    #[serde(default)]
+    pub radial_falloff: f64,
 }
 
 impl ConnectivityField {
-    pub fn evaluate(&self, _x: f64, _y: f64) -> f64 {
-        self.strength.clamp(0.0, 1.0)
+    pub fn evaluate(&self, x: f64, y: f64) -> f64 {
+        let dx = x - self.center_x;
+        let dy = y - self.center_y;
+        let distance_squared = dx.mul_add(dx, dy * dy);
+        (self.strength * (-self.radial_falloff.max(0.0) * distance_squared).exp())
+            .clamp(0.0, 1.0)
     }
 
     fn validate(&self) -> Result<(), String> {
@@ -378,10 +404,16 @@ impl DevelopmentalFieldBlueprint {
                     continue;
                 };
                 let mass = structure.structural_mass(catalog);
-                let field_score =
-                    self.material_preference(&resource.name, placement.x, placement.y)
-                        + self.density_preference(placement.x, placement.y)
-                        + self.connectivity_preference(placement.x, placement.y) * 0.25;
+                // EXPERIMENTAL solver weights. These tune candidate preference but
+                // do not establish additional biological authorities.
+                const MATERIAL_WEIGHT: f64 = 1.0;
+                const DENSITY_WEIGHT: f64 = 1.0;
+                const CONNECTIVITY_WEIGHT: f64 = 0.25;
+                let field_score = MATERIAL_WEIGHT
+                    * self.material_preference(&resource.name, placement.x, placement.y)
+                    + DENSITY_WEIGHT * self.density_preference(placement.x, placement.y)
+                    + CONNECTIVITY_WEIGHT
+                        * self.connectivity_preference(placement.x, placement.y);
                 candidates.push((field_score, candidate, mass));
             }
         }
@@ -425,15 +457,24 @@ pub fn default_developmental_blueprint() -> DevelopmentalFieldBlueprint {
             |(resource_name, center_preference)| MaterialPreferenceField {
                 resource_name: resource_name.into(),
                 center_preference,
-                radial_falloff: 0.0,
+                radial_falloff: 0.0, // EXPERIMENTAL: constant-width initial field.
+                center_x: 0.0, // EXPERIMENTAL: initial influence center.
+                center_y: 0.0, // EXPERIMENTAL: initial influence center.
             },
         )
         .collect(),
         structural_density: StructuralDensityField {
             center_preference: 0.5,
-            radial_falloff: 0.0,
+            radial_falloff: 0.0, // EXPERIMENTAL: constant-width initial field.
+            center_x: 0.0, // EXPERIMENTAL: initial influence center.
+            center_y: 0.0, // EXPERIMENTAL: initial influence center.
         },
-        connectivity: ConnectivityField { strength: 0.0 },
+        connectivity: ConnectivityField {
+            strength: 0.0,
+            center_x: 0.0, // EXPERIMENTAL: initial influence center.
+            center_y: 0.0, // EXPERIMENTAL: initial influence center.
+            radial_falloff: 0.0, // EXPERIMENTAL: inactive connectivity field.
+        },
     }
 }
 
@@ -454,6 +495,8 @@ mod tests {
         let field = StructuralDensityField {
             center_preference: 1.0,
             radial_falloff: 0.5,
+            center_x: 0.0,
+            center_y: 0.0,
         };
         assert!(field.evaluate(0.0, 0.0) > field.evaluate(2.0, 0.0));
     }
