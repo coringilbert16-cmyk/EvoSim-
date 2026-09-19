@@ -97,6 +97,33 @@ pub struct DevelopmentalFieldBlueprint {
 }
 
 impl DevelopmentalFieldBlueprint {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.material_preferences.is_empty() {
+            return Err("developmental blueprint requires material preferences".into());
+        }
+        for field in &self.material_preferences {
+            field.validate()?;
+        }
+        self.structural_density.validate()?;
+        self.connectivity.validate()?;
+        Ok(())
+    }
+
+    pub fn material_preference(&self, resource_name: &str, x: f64, y: f64) -> f64 {
+        self.material_preferences
+            .iter()
+            .find(|field| field.resource_name == resource_name)
+            .map_or(0.0, |field| field.evaluate(x, y))
+    }
+
+    pub fn density_preference(&self, x: f64, y: f64) -> f64 {
+        self.structural_density.evaluate(x, y)
+    }
+
+    pub fn connectivity_preference(&self, x: f64, y: f64) -> f64 {
+        self.connectivity.evaluate(x, y)
+    }
+
     /// Returns a transient physical construction candidate derived from the same
     /// developmental field at the requested realization scale.
     ///
