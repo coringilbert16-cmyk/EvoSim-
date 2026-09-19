@@ -376,7 +376,7 @@ mod tests {
     fn realized_structure_cavity_qualifies_without_a_predefined_core() {
         let catalog = default_catalog();
         let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
-        let structure = blueprint.realize(&catalog).unwrap();
+        let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
         let cavity = analyze_genome_cavity(&structure, &catalog)
             .unwrap()
             .expect("realized structure must contain a sealed qualifying cavity");

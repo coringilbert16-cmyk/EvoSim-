@@ -277,7 +277,7 @@ pub(crate) fn confirmed_seed_scale_reference(
     catalog: &[BaseResource],
 ) -> Result<(f64, f64), String> {
     let baseline = confirmed_seed_baseline(catalog)?;
-    let structure = baseline.realize(catalog)?;
+    let (structure, _, _) = realize_initial(&baseline, catalog)?;
     let mass = structure
         .units
         .iter()

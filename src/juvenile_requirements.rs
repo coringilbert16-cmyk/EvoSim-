@@ -65,7 +65,7 @@ mod tests {
     fn viability_does_not_depend_on_a_predefined_piece_count_or_core() {
         let catalog = default_catalog();
         let blueprint = confirmed_seed_baseline(&catalog).unwrap();
-        let structure = blueprint.realize(&catalog).unwrap();
+        let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
         validate_realized_juvenile(
             &structure,
             &catalog,

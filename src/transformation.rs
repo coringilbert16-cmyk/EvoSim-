@@ -353,7 +353,7 @@ mod tests {
         let genome = crate::genome::initial_genome();
         let catalog = crate::resources::default_catalog();
         let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
-        let structure = blueprint.realize(&catalog).unwrap();
+        let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
         let organism = crate::state::Organism {
             id: "test".into(),
             developmental_origin: crate::state::Position { x: 0.0, y: 0.0 },
