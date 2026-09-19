@@ -111,42 +111,42 @@ impl Simulation {
         sy: f64,
         memory_strength: f64,
         capacity: usize,
-    ) {
+) {
         let merged = organism.memory.iter_mut().find(|p| {
-        let dx = p.x - sx;
+            let dx: = p.x - sx;
         let dy = p.y - sy;
-            (dx * dx + dy * dy).sqrt() < MEMORY_MERGE_RADIUS
-        });
+        (dx * dx + dy * dy).sqrt() < MEMORY_MERGE_RADIUS
+    });
 
         match merged {
-            Some(existing) => {
-                existing.x = sx;
-                existing.y = sy;
-                existing.strength = (existing.strength + memory_strength).min(1.0);
-            }
-            None => {
-                if organism.memory.len() < capacity {
-                    organism.memory.push(MemoryPoint {
+        Some(existing) => {
+            existing.x = sx;
+            existing.y = sy;
+            existing.strength = (existing.strength + memory_strength).min(1.0);
+        }
+        None => {
+            if organism.memory.len() < capacity {
+                organism.memory.push(MemoryPoint {
+                    x: sx,
+                    y: sy,
+                    strength: memory_strength,
+                });
+            } else if let Some(weakest) = organism
+                .memory
+                .iter_mut()
+                .min_by(|a, b| a.strength.partial_cmp(&b.strength).unwrap())
+            {
+                if memory_strength > weakest.strength {
+                    *weakest = MemoryPoint {
                         x: sx,
                         y: sy,
                         strength: memory_strength,
-                    });
-                } else if let Some(weakest) = organism
-                    .memory
-                    .iter_mut()
-                    .min_by(|a, b| a.strength.partial_cmp(&b.strength).unwrap())
-                {
-                    if memory_strength > weakest.strength {
-                        *weakest = MemoryPoint {
-                            x: sx,
-                            y: sy,
-                            strength: memory_strength,
-                        };
-                    }
+                    };
                 }
             }
         }
     }
+}
 }
 
 pub(crate) fn reinforce_memory_point(
