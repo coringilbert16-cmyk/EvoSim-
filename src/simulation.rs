@@ -660,7 +660,17 @@ impl Simulation {
         ledger: &mut EnergyLedger,
         rng: &mut ChaCha8Rng,
     ) -> bool {
+        // A bondless structure cannot absorb another stress threshold. Preserve
+        // that lethal condition before the ordinary per-tick stress decay so
+        // crossing the threshold cannot be erased solely by decay ordering.
+        let threshold = organism
+            .stress_threshold
+            .max(crate::state::MIN_STRESS_THRESHOLD);
+        let lethal_before_decay = organism.stress >= threshold;
         organism.stress *= crate::state::STRESS_DECAY_PER_TICK;
+        if organism.structure.bonds.is_empty() && lethal_before_decay {
+            return true;
+        }
         organism.apply_stress_damage(environment, ledger, rng)
     }
     #[cfg(test)]
