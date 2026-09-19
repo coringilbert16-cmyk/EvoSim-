@@ -489,11 +489,28 @@ impl Simulation {
                         );
                     }
                     ActionKind::Combine => {
+                        let (blueprint, origin, orientation) = (
+                            &organisms[index].genome.developmental_blueprint,
+                            (
+                                organisms[index].developmental_origin.x,
+                                organisms[index].developmental_origin.y,
+                            ),
+                            organisms[index].developmental_orientation_radians,
+                        );
+                        let developmental = if matches!(
+                            organisms[index].development_stage,
+                            DevelopmentStage::Juvenile
+                        ) {
+                            Some((blueprint, origin, orientation))
+                        } else {
+                            None
+                        };
                         let combined = crate::combine_runtime::try_combine(
                             &mut organisms[index],
                             environment,
                             &mut compatibility_cache,
                             &mut self.energy_ledger,
+                            developmental,
                         )
                         .is_some();
                         crate::decision_runtime::record_outcome(
