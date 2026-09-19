@@ -11,11 +11,8 @@ impl DevelopmentalFieldBlueprint {
     ) -> DevelopmentalRealization {
         let (seed_mass, seed_length) = crate::juvenile::confirmed_seed_scale_reference(catalog)
             .expect("confirmed seed scale reference must be valid");
-        let preferred_length = self.preferred_developmental_length(
-            preferred_mass.max(1e-9),
-            seed_mass,
-            seed_length,
-        );
+        let preferred_length =
+            self.preferred_developmental_length(preferred_mass.max(1e-9), seed_mass, seed_length);
         let material_available = self.material_available_value(preferred_length);
         let density_available = self.density_available_value(preferred_length);
 
