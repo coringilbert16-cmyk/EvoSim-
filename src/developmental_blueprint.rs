@@ -23,8 +23,7 @@ pub struct MaterialPreferenceField {
     #[serde(default)]
     pub center_x: f64,
     #[serde(default)]
-    pub center_y: f64,
-}
+    pub center_y: f64,\n    /// Three additional radial influences; primary + these gives the approved initial count of four.\n    #[serde(default)]\n    pub additional_influences: Vec<RadialInfluence>\n}
 
 impl MaterialPreferenceField {
     pub fn evaluate(&self, x: f64, y: f64) -> f64 {
@@ -61,8 +60,7 @@ pub struct StructuralDensityField {
     #[serde(default)]
     pub center_x: f64,
     #[serde(default)]
-    pub center_y: f64,
-}
+    pub center_y: f64,\n    /// Three additional radial influences; primary + these gives the approved initial count of four.\n    #[serde(default)]\n    pub additional_influences: Vec<RadialInfluence>\n}
 
 impl StructuralDensityField {
     pub fn evaluate(&self, x: f64, y: f64) -> f64 {
@@ -95,8 +93,7 @@ pub struct ConnectivityField {
     #[serde(default)]
     pub center_y: f64,
     #[serde(default)]
-    pub radial_falloff: f64,
-}
+    pub radial_falloff: f64,\n    /// Three additional radial influences; primary + these gives the approved initial count of four.\n    #[serde(default)]\n    pub additional_influences: Vec<RadialInfluence>\n}
 
 impl ConnectivityField {
     pub fn evaluate(&self, x: f64, y: f64) -> f64 {
