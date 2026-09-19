@@ -8,9 +8,9 @@ use crate::combine::{
     FormationEvaluation,
 };
 use crate::contact::ConnectionCompatibilityCache;
+use crate::developmental_blueprint::DevelopmentalFieldBlueprint;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
 use crate::resources::{BaseResource, Material};
-use crate::developmental_blueprint::DevelopmentalFieldBlueprint;
 use crate::state::{EnergyLedger, Environment, Organism};
 use crate::structure::{BondEndpoint, ConnectionEndpoint, Placement, StructuralUnit};
 
