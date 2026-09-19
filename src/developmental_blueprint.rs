@@ -908,9 +908,7 @@ impl DevelopmentalFieldBlueprint {
         let qb = endpoint_opportunity_count(structure, unit_b, endpoint_b, catalog);
         let qreal_a = endpoint_realized_count(structure, unit_a, endpoint_a);
         let qreal_b = endpoint_realized_count(structure, unit_b, endpoint_b);
-        let n = 0.5
-            * (qreal_a as f64 / qa.max(1) as f64
-                + qreal_b as f64 / qb.max(1) as f64);
+        let n = 0.5 * (qreal_a as f64 / qa.max(1) as f64 + qreal_b as f64 / qb.max(1) as f64);
         const LAMBDA: f64 = 0.25; // EXPERIMENTAL: connectivity neighborhood coefficient.
         let lambda = LAMBDA;
         ((ka + kb) * 0.5 + lambda * n).max(0.0)
