@@ -365,6 +365,8 @@ pub(crate) fn finish_reproduction(
     }
     Some(Organism {
         id: child_id,
+        developmental_origin: child_position.clone(),
+        developmental_orientation_radians: 0.0,
         occupied_cells: vec![child_position],
         genome: construction.child_genome,
         resource_sense: ResourceSense {
