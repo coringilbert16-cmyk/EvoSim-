@@ -308,21 +308,15 @@ pub(crate) fn try_combine_stored_unit(
                         ) {
                             let developmental_score = developmental
                                 .map(|(blueprint, origin_ref, orientation, preferred_length)| {
+                                    let Some(world) = candidate
+                                        .endpoint_a
+                                        .world_point(&hypothetical.units[ua], &environment.catalog)
+                                    else {
+                                        return 0.0;
+                                    };
                                     let local = crate::developmental_blueprint::developmental_point(
-                                        candidate
-                                            .endpoint_a
-                                            .world_point(
-                                                &hypothetical.units[ua],
-                                                &environment.catalog,
-                                            )?
-                                            .x,
-                                        candidate
-                                            .endpoint_a
-                                            .world_point(
-                                                &hypothetical.units[ua],
-                                                &environment.catalog,
-                                            )?
-                                            .y,
+                                        world.x,
+                                        world.y,
                                         origin_ref,
                                         orientation,
                                     );
@@ -335,7 +329,7 @@ pub(crate) fn try_combine_stored_unit(
                                         local.0,
                                         local.1,
                                         preferred_length,
-                                    ) + 0.25
+                                    ) + crate::developmental_blueprint::CANDIDATE_CONNECTIVITY_WEIGHT
                                         * blueprint.connectivity_preference_scaled(
                                             local.0,
                                             local.1,
@@ -590,12 +584,18 @@ pub(crate) fn try_combine(
                 {
                     let developmental_score = developmental
                         .map(|(blueprint, origin, orientation, preferred_length)| {
-                            let wa = candidate
+                            let Some(wa) = candidate
                                 .endpoint_a
-                                .world_point(&organism.structure.units[ua], catalog)?;
-                            let wb = candidate
+                                .world_point(&organism.structure.units[ua], catalog)
+                            else {
+                                return 0.0;
+                            };
+                            let Some(wb) = candidate
                                 .endpoint_b
-                                .world_point(&organism.structure.units[ub], catalog)?;
+                                .world_point(&organism.structure.units[ub], catalog)
+                            else {
+                                return 0.0;
+                            };
                             let la = crate::developmental_blueprint::developmental_point(
                                 wa.x,
                                 wa.y,
