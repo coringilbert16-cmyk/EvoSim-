@@ -553,7 +553,7 @@ mod tests {
             unit.placement.y = y;
         }
         for unit in &mut second.structure.units {
-            unit.placement.x = x + 12.0;
+            unit.placement.x = x + 10.0;
             unit.placement.y = y;
         }
         let first_before = first.structure.units[0].placement.x;

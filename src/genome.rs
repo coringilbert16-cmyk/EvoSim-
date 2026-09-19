@@ -3,9 +3,10 @@ use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 
-use crate::architecture::{default_architecture, OrganismArchitecture, JUVENILE_LINEAR_SCALE};
+use crate::developmental_blueprint::{
+    default_developmental_blueprint, DevelopmentalFieldBlueprint,
+};
 use crate::resources::Material;
-use crate::structural_blueprint::StructuralBlueprint;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TraitDef {
@@ -22,10 +23,10 @@ pub struct Genome {
     pub juvenile_reserve: Material,
     #[serde(default = "default_juvenile_energy_reserve")]
     pub juvenile_energy_reserve: f64,
-    /// Sole inherited structural authority. This stores architectural intent,
-    /// never an exact constituent list, bond graph, or body plan.
-    #[serde(default = "default_architecture")]
-    pub architecture: OrganismArchitecture,
+    /// Sole inherited structural-developmental authority. This stores continuous
+    /// developmental tendencies, never exact constituent instances or topology.
+    #[serde(default = "default_developmental_blueprint")]
+    pub developmental_blueprint: DevelopmentalFieldBlueprint,
 }
 
 impl Genome {
@@ -59,6 +60,12 @@ impl Genome {
         self.trait_value("memory_strength", 0.5).clamp(0.0, 1.0)
     }
 
+    /// Inherited developmental preference for adult scale, centered at the
+    /// parent's value when offspring mutation is sampled.
+    pub fn size_preference(&self) -> f64 {
+        self.trait_value("size_preference", 0.5).clamp(0.0, 1.0)
+    }
+
     pub fn perception_radius(&self) -> f64 {
         self.trait_value("perception_radius", 100.0).max(0.0)
     }
@@ -87,61 +94,57 @@ impl Genome {
             .clamp(0.15, 1.0)
     }
 
-    pub fn mature_construction_target(&self) -> Result<StructuralBlueprint, String> {
-        self.architecture.adult_construction_target()
+    pub fn preferred_developmental_scale(&self) -> f64 {
+        DevelopmentalFieldBlueprint::preferred_developmental_scale(self.size_preference())
+    }
+
+    /// Compatibility accessor for callers that need the adult developmental
+    /// realization. The returned StructuralBlueprint is transient solver state;
+    /// the genome stores only the developmental field blueprint.
+    pub fn mature_construction_target(
+        &self,
+    ) -> Result<crate::structural_blueprint::StructuralBlueprint, String> {
+        self.developmental_construction_target(&crate::resources::default_catalog(), false)
     }
 
     pub fn developmental_construction_target(
         &self,
         catalog: &[crate::resources::BaseResource],
-    ) -> Result<StructuralBlueprint, String> {
-        self.architecture
-            .developmental_target(JUVENILE_LINEAR_SCALE, catalog)
+        juvenile: bool,
+    ) -> Result<crate::structural_blueprint::StructuralBlueprint, String> {
+        self.developmental_blueprint.construction_candidate(
+            catalog,
+            self.preferred_developmental_scale(),
+            juvenile,
+        )
     }
 
     pub fn mutate(&mut self, rng: &mut ChaCha8Rng) {
-        let mut probability_sum = 0.0;
-        let mut sigma_sum = 0.0;
+        if !self
+            .traits
+            .iter()
+            .any(|trait_def| trait_def.name == "size_preference")
+        {
+            self.traits.push(trait_def("size_preference", 0.5, 0.05));
+        }
+
         for t in &mut self.traits {
             if rng.gen::<f64>() < t.mutation_probability.clamp(1e-6, 0.25) {
-                t.value += rng.gen_range(-1.0..1.0) * t.mutation_sigma.max(0.0);
+                let delta = if t.name == "size_preference" {
+                    gaussian_unit(rng) * t.mutation_sigma.max(0.0)
+                } else {
+                    rng.gen_range(-1.0..1.0) * t.mutation_sigma.max(0.0)
+                };
+                t.value = if t.name == "size_preference" {
+                    (t.value + delta).clamp(0.0, 1.0)
+                } else {
+                    t.value + delta
+                };
             }
             if rng.gen::<f64>() < 0.001 {
                 t.mutation_probability =
                     (t.mutation_probability * rng.gen_range(0.5..1.5)).clamp(1e-6, 0.1);
             }
-            probability_sum += t.mutation_probability;
-            sigma_sum += t.mutation_sigma.max(0.0);
-        }
-        let count = self.traits.len().max(1) as f64;
-        self.mutate_architecture(
-            rng,
-            (probability_sum / count).clamp(1e-6, 0.25),
-            (sigma_sum / count).clamp(1e-6, 1.0),
-        );
-    }
-
-    fn mutate_architecture(
-        &mut self,
-        rng: &mut ChaCha8Rng,
-        mutation_probability: f64,
-        mutation_sigma: f64,
-    ) {
-        let original = self.architecture.clone();
-        let probability = mutation_probability.clamp(0.0, 1.0);
-        let sigma = mutation_sigma.max(0.0);
-        for region in &mut self.architecture.regions {
-            if rng.gen::<f64>() >= probability {
-                continue;
-            }
-            region.center_x += rng.gen_range(-1.0..1.0) * sigma;
-            region.center_y += rng.gen_range(-1.0..1.0) * sigma;
-            let factor = (1.0 + rng.gen_range(-1.0..1.0) * sigma * 0.1).max(0.01);
-            region.extent_x *= factor;
-            region.extent_y *= factor;
-        }
-        if self.architecture.validate().is_err() {
-            self.architecture = original;
         }
     }
 }
@@ -152,6 +155,12 @@ fn default_juvenile_reserve() -> Material {
 
 fn default_juvenile_energy_reserve() -> f64 {
     16.0
+}
+
+fn gaussian_unit(rng: &mut ChaCha8Rng) -> f64 {
+    let u1 = rng.gen_range(f64::MIN_POSITIVE..1.0);
+    let u2 = rng.gen_range(0.0..1.0);
+    (-2.0 * u1.ln()).sqrt() * (std::f64::consts::TAU * u2).cos()
 }
 
 fn trait_def(name: &str, value: f64, sigma: f64) -> TraitDef {
@@ -167,6 +176,7 @@ pub fn initial_genome() -> Genome {
     Genome {
         traits: vec![
             trait_def("memory_strength", 0.5, 0.05),
+            trait_def("size_preference", 0.5, 0.05),
             trait_def("perception_radius", 100.0, 1.0),
             trait_def("sensory_resolution", 0.5, 0.05),
             trait_def("directional_resolution", 1.0, 0.05),
@@ -180,40 +190,31 @@ pub fn initial_genome() -> Genome {
         ],
         juvenile_reserve: default_juvenile_reserve(),
         juvenile_energy_reserve: default_juvenile_energy_reserve(),
-        architecture: default_architecture(),
+        developmental_blueprint: default_developmental_blueprint(),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::SeedableRng;
-
     #[test]
-    fn genome_architecture_is_the_serialized_structural_authority() {
+    fn developmental_blueprint_is_the_serialized_structural_authority() {
         let genome = initial_genome();
-        assert!(genome.architecture.validate().is_ok());
-        assert_eq!(genome.architecture.regions.len(), 3);
+        assert!(genome.developmental_blueprint.validate().is_ok());
     }
 
     #[test]
-    fn construction_targets_are_derived_from_architecture() {
+    fn construction_targets_are_transient_artifacts_of_developmental_fields() {
         let genome = initial_genome();
         let catalog = crate::resources::default_catalog();
-        assert!(genome.mature_construction_target().unwrap().is_valid());
         assert!(genome
-            .developmental_construction_target(&catalog)
+            .developmental_construction_target(&catalog, true)
             .unwrap()
             .is_valid());
-    }
-
-    #[test]
-    fn structural_mutation_rolls_back_invalid_architecture() {
-        let mut genome = initial_genome();
-        let before = genome.architecture.clone();
-        let mut rng = ChaCha8Rng::seed_from_u64(7);
-        genome.mutate_architecture(&mut rng, 1.0, f64::INFINITY);
-        assert_eq!(genome.architecture, before);
+        assert!(genome
+            .developmental_construction_target(&catalog, false)
+            .unwrap()
+            .is_valid());
     }
 
     #[test]
@@ -222,5 +223,60 @@ mod tests {
         assert!(genome.juvenile_reserve.is_valid());
         assert_eq!(genome.juvenile_reserve.total_amount(), 1.0);
         assert!(genome.juvenile_energy_reserve.is_finite() && genome.juvenile_energy_reserve > 0.0);
+    }
+}
+
+#[cfg(test)]
+mod size_preference_tests {
+    use super::*;
+    use rand::SeedableRng;
+    #[test]
+    fn size_preference_defaults_to_center() {
+        assert_eq!(initial_genome().size_preference(), 0.5);
+    }
+
+    #[test]
+    fn size_preference_mutation_stays_bounded() {
+        let mut genome = initial_genome();
+        genome
+            .traits
+            .iter_mut()
+            .find(|t| t.name == "size_preference")
+            .unwrap()
+            .mutation_probability = 1.0;
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        for _ in 0..1000 {
+            genome.mutate(&mut rng);
+            assert!((0.0..=1.0).contains(&genome.size_preference()));
+        }
+    }
+
+    #[test]
+    fn size_preference_mutation_is_parent_centered_in_distribution() {
+        let mut above = 0;
+        let mut below = 0;
+        for seed in 0..200 {
+            let mut genome = initial_genome();
+            genome
+                .traits
+                .iter_mut()
+                .find(|t| t.name == "size_preference")
+                .unwrap()
+                .mutation_probability = 1.0;
+            genome
+                .traits
+                .iter_mut()
+                .find(|t| t.name == "size_preference")
+                .unwrap()
+                .value = 0.5;
+            let mut rng = ChaCha8Rng::seed_from_u64(seed);
+            genome.mutate(&mut rng);
+            if genome.size_preference() > 0.5 {
+                above += 1;
+            } else if genome.size_preference() < 0.5 {
+                below += 1;
+            }
+        }
+        assert!(above > 0 && below > 0);
     }
 }

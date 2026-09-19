@@ -77,16 +77,27 @@ impl Simulation {
         let genome = initial_genome();
         let catalog = crate::resources::default_catalog();
         let juvenile_target = genome
-            .developmental_construction_target(&catalog)
+            .developmental_construction_target(&catalog, true)
             .expect("initial architecture must produce a viable juvenile target");
-        let (structure, _construction_ledger, initial_energy) =
+        let (mut structure, _construction_ledger, initial_energy) =
             realize_initial(&juvenile_target, &catalog)
                 .expect("initial juvenile target must be physically realizable");
+
+        // Blueprint coordinates are developmental-local. The organism's
+        // occupied cell is its world-space anchor, so the realized physical
+        // structure must be translated to that anchor before entering the
+        // simulation.
+        let anchor = Position { x: 500.0, y: 500.0 };
+        for unit in &mut structure.units {
+            unit.placement.x += anchor.x;
+            unit.placement.y += anchor.y;
+        }
+
         let mut stored_material = crate::material_storage::MaterialStorage::default();
         assert!(stored_material.store(genome.juvenile_reserve.clone()));
         Organism {
             id: "1".into(),
-            occupied_cells: vec![Position { x: 500.0, y: 500.0 }],
+            occupied_cells: vec![anchor],
             genome,
             resource_sense: ResourceSense {
                 sensed_resources: Vec::new(),
@@ -120,7 +131,7 @@ impl Simulation {
     fn mature_structural_mass(organism: &Organism, environment: &Environment) -> f64 {
         organism
             .genome
-            .mature_construction_target()
+            .developmental_construction_target(&environment.catalog, false)
             .ok()
             .map(|target| target.structural_mass(&environment.catalog))
             .unwrap_or(0.0)

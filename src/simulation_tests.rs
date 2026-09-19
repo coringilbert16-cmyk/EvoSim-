@@ -43,7 +43,7 @@ mod integration_tests {
         let o = Simulation::create_initial_organism();
         let blueprint = o
             .genome
-            .developmental_construction_target(&crate::resources::default_catalog())
+            .developmental_construction_target(&crate::resources::default_catalog(), true)
             .unwrap();
         let expected_constituents = blueprint
             .elements
@@ -77,12 +77,12 @@ mod integration_tests {
         let c = &crate::resources::default_catalog();
         let juvenile = o
             .genome
-            .developmental_construction_target(c)
+            .developmental_construction_target(c, true)
             .unwrap()
             .structural_mass(c);
         let mature = o
             .genome
-            .mature_construction_target()
+            .developmental_construction_target(c, false)
             .unwrap()
             .structural_mass(c);
         assert!(mature > juvenile);
@@ -97,7 +97,7 @@ mod integration_tests {
         let before_environment_amount = s.environment.field.total_amount();
         let organism = &mut s.organisms[0];
         organism.structure.bonds.clear();
-        organism.stress = organism.stress_threshold / crate::state::STRESS_DECAY_PER_TICK;
+        organism.stress = (organism.stress_threshold / crate::state::STRESS_DECAY_PER_TICK) * 1.01;
         let initial_units = organism.structure.units.len();
         assert!(initial_units > 0);
 
@@ -200,8 +200,30 @@ mod integration_tests {
         s.environment
             .field
             .deposit_at_index(i, Material::free_base("Carbon", 10.0));
+        let occupied_index = s
+            .environment
+            .field
+            .index_for_position(500.0, 500.0)
+            .unwrap();
+        s.environment
+            .field
+            .deposit_at_index(occupied_index, Material::free_base("Carbon", 10.0));
+        s.organisms[0].usable_energy = 0.0;
+        let initial_stored = s.organisms[0].stored_material.total_amount();
+        s.organisms[0].decision_history.record(
+            ActionKind::Acquire,
+            Some(format!("target:{occupied_index}")),
+            OutcomeKind::Beneficial,
+        );
         s.step();
-        assert_eq!(s.organisms[0].stored_material.total_amount(), 1.0);
+        assert_eq!(
+            s.organisms[0].stored_material.total_amount(),
+            initial_stored + 1.0
+        );
+        assert_eq!(
+            s.environment.field.cells[i].materials[0].total_amount(),
+            8.0
+        );
     }
     #[test]
     fn structural_material_is_not_opened_by_storage() {
