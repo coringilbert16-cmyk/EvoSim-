@@ -235,12 +235,10 @@ impl DevelopmentalFieldBlueprint {
                     if radius <= 0.0 {
                         continue;
                     }
-                    let ring_radius =
-                        radius / (std::f64::consts::PI / cycle_count as f64).sin();
+                    let ring_radius = radius / (std::f64::consts::PI / cycle_count as f64).sin();
                     (0..cycle_count)
                         .map(|i| {
-                            let angle =
-                                i as f64 * std::f64::consts::TAU / cycle_count as f64;
+                            let angle = i as f64 * std::f64::consts::TAU / cycle_count as f64;
                             BlueprintPlacement {
                                 x: ring_radius * angle.cos(),
                                 y: ring_radius * angle.sin(),
