@@ -150,7 +150,11 @@ impl StructuralDensityField {
                 .iter()
                 .map(|i| i.strength)
                 .sum::<f64>();
-        if strength <= 0.0 { 0.0 } else { (total / strength).clamp(0.0, 1.0) }
+        if strength <= 0.0 {
+            0.0
+        } else {
+            (total / strength).clamp(0.0, 1.0)
+        }
     }
 
     fn validate(&self) -> Result<(), String> {
@@ -192,7 +196,11 @@ impl ConnectivityField {
             strength: self.strength.max(0.0),
         };
         let mut total = primary.evaluate(x, y, scale);
-        total += self.additional_influences.iter().map(|i| i.evaluate(x, y, scale)).sum::<f64>();
+        total += self
+            .additional_influences
+            .iter()
+            .map(|i| i.evaluate(x, y, scale))
+            .sum::<f64>();
         let strength = primary.strength
             + self
                 .additional_influences
