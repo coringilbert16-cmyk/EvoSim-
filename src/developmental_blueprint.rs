@@ -339,10 +339,10 @@ mod tests {
         let blueprint = default_developmental_blueprint();
         let catalog = crate::resources::default_catalog();
         let adult = blueprint
-            .construction_candidate(&catalog, 0.5, false)
+            .construction_candidate(&catalog, 30.0, false)
             .unwrap();
         let juvenile = blueprint
-            .construction_candidate(&catalog, 0.5, true)
+            .construction_candidate(&catalog, 30.0, true)
             .unwrap();
         assert!(adult.is_valid() && juvenile.is_valid());
         let adult_extent = adult
