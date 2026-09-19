@@ -16,9 +16,13 @@ use crate::structure::OrganismStructure;
 ///
 /// This is a construction calibration artifact only. It is not serialized into
 /// the genome and does not prescribe descendant topology or geometry.
-pub(crate) fn confirmed_seed_baseline(catalog: &[BaseResource]) -> Result<StructuralBlueprint, String> {
+pub(crate) fn confirmed_seed_baseline(
+    catalog: &[BaseResource],
+) -> Result<StructuralBlueprint, String> {
     use crate::resources::Material;
-    use crate::structural_blueprint::{BlueprintConnection, BlueprintElement, BlueprintPlacement};
+    use crate::structural_blueprint::{
+        BlueprintConnection, BlueprintElement, BlueprintPlacement,
+    };
 
     let resource = catalog
         .iter()
