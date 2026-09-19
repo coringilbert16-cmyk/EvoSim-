@@ -106,21 +106,6 @@ impl Genome {
             .clamp(0.15, 1.0)
     }
 
-    pub fn mature_construction_target(
-        &self,
-    ) -> Result<crate::structural_blueprint::StructuralBlueprint, String> {
-        self.developmental_construction_target(&crate::resources::default_catalog(), false)
-    }
-
-    pub fn developmental_construction_target(
-        &self,
-        catalog: &[crate::resources::BaseResource],
-        juvenile: bool,
-    ) -> Result<crate::structural_blueprint::StructuralBlueprint, String> {
-        self.developmental_blueprint
-            .construction_candidate(catalog, self.adult_mass(), juvenile)
-    }
-
     pub fn mutate(&mut self, rng: &mut ChaCha8Rng) {
         if !self
             .traits
