@@ -128,6 +128,7 @@ impl Genome {
             }
         }
     }
+}
 
 fn default_juvenile_reserve() -> Material {
     Material::free_base("Hydrogen", 1.0)
