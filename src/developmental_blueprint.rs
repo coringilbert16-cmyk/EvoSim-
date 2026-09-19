@@ -16,6 +16,10 @@ use serde::{Deserialize, Serialize};
 mod realization;
 pub(crate) use realization::{default_developmental_blueprint, developmental_point};
 
+pub(crate) const CANDIDATE_MATERIAL_WEIGHT: f64 = 1.0; // EXPERIMENTAL: initial solver weight.
+pub(crate) const CANDIDATE_DENSITY_WEIGHT: f64 = 1.0; // EXPERIMENTAL: initial solver weight.
+pub(crate) const CANDIDATE_CONNECTIVITY_WEIGHT: f64 = 0.25; // EXPERIMENTAL: initial solver weight.
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RadialInfluence {
     pub center_x: f64,
