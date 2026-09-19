@@ -112,15 +112,10 @@ impl Genome {
         catalog: &[crate::resources::BaseResource],
         juvenile: bool,
     ) -> Result<crate::structural_blueprint::StructuralBlueprint, String> {
-        let juvenile_scale = if juvenile {
-            crate::developmental_blueprint::JUVENILE_LINEAR_SCALE
-        } else {
-            1.0
-        };
         self.developmental_blueprint.construction_candidate(
             catalog,
             self.preferred_developmental_scale(),
-            juvenile_scale,
+            juvenile,
         )
     }
 
