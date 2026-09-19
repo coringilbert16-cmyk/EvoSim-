@@ -86,10 +86,9 @@ impl DevelopmentalFieldBlueprint {
             .into_iter()
             .flatten()
         {
-                if value.is_finite() {
-                    sum += value;
-                    active += 1;
-                }
+            if value.is_finite() {
+                sum += value;
+                active += 1;
             }
         }
 
