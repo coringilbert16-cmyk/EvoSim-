@@ -82,8 +82,10 @@ impl DevelopmentalFieldBlueprint {
 
         let mut sum = 0.0;
         let mut active = 0usize;
-        for value in [material_realized, density_realized, connectivity] {
-            if let Some(value) = value {
+        for value in [material_realized, density_realized, connectivity]
+            .into_iter()
+            .flatten()
+        {
                 if value.is_finite() {
                     sum += value;
                     active += 1;
