@@ -302,6 +302,8 @@ impl DevelopmentalFieldBlueprint {
             })
             .ok_or_else(|| "catalog contains no material candidates".into())
     }
+    }
+}
 
 pub fn default_developmental_blueprint() -> DevelopmentalFieldBlueprint {
     DevelopmentalFieldBlueprint {
