@@ -137,8 +137,10 @@ impl DevelopmentalFieldBlueprint {
     pub fn material_preference(&self, resource_name: &str, x: f64, y: f64) -> f64 {
         self.material_preferences
             .iter()
-            .find(|field| field.resource_name == resource_name)
-            .map_or(0.0, |field| field.evaluate(x, y))
+            .filter(|field| field.resource_name == resource_name)
+            .map(|field| field.evaluate(x, y))
+            .sum::<f64>()
+            .clamp(0.0, 1.0)
     }
 
     pub fn density_preference(&self, x: f64, y: f64) -> f64 {
@@ -437,6 +439,281 @@ impl DevelopmentalFieldBlueprint {
             })
             .ok_or_else(|| "catalog contains no material candidates".into())
     }
+}
+
+/// Normalized developmental realization measured from continuous fields and
+/// the authoritative physical graph. Quadrature is numerical infrastructure only.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DevelopmentalRealization {
+    pub material: Option<f64>,
+    pub density: Option<f64>,
+    pub connectivity: Option<f64>,
+    pub overall: f64,
+}
+
+impl DevelopmentalFieldBlueprint {
+    pub fn realization(
+        &self,
+        structure: &crate::structure::OrganismStructure,
+        catalog: &[BaseResource],
+        developmental_origin: (f64, f64),
+        developmental_orientation_radians: f64,
+    ) -> DevelopmentalRealization {
+        let material_available = self.material_available_value();
+        let density_available = self.density_available_value();
+
+        let material_realized = if material_available > 0.0 {
+            let mut realized = 0.0;
+            for unit in &structure.units {
+                let Some((resource_name, amount)) = unit.material.parts.first() else { continue; };
+                if (*amount - 1.0).abs() > f64::EPSILON { continue; }
+                let Some(shape) = unit.shape(catalog) else { continue; };
+                realized += self.integrate_shape_field(
+                    &shape.form, unit.placement, developmental_origin,
+                    developmental_orientation_radians,
+                    |x, y| self.material_preference(resource_name, x, y),
+                );
+            }
+            Some((realized / material_available).clamp(0.0, 1.0))
+        } else { None };
+
+        let density_realized = if density_available > 0.0 {
+            let mut realized = 0.0;
+            for unit in &structure.units {
+                let Some(shape) = unit.shape(catalog) else { continue; };
+                realized += self.integrate_shape_field(
+                    &shape.form, unit.placement, developmental_origin,
+                    developmental_orientation_radians,
+                    |x, y| self.density_preference(x, y),
+                );
+            }
+            Some((realized / density_available).clamp(0.0, 1.0))
+        } else { None };
+
+        let connectivity = self.connectivity_realization(
+            structure, catalog, developmental_origin, developmental_orientation_radians,
+        );
+
+        let mut sum = 0.0;
+        let mut active = 0usize;
+        for value in [material_realized, density_realized, connectivity] {
+            if let Some(value) = value {
+                if value.is_finite() {
+                    sum += value;
+                    active += 1;
+                }
+            }
+        }
+
+        DevelopmentalRealization {
+            material: material_realized,
+            density: density_realized,
+            connectivity,
+            overall: if active == 0 { 0.0 } else { (sum / active as f64).clamp(0.0, 1.0) },
+        }
+    }
+
+    fn material_available_value(&self) -> f64 {
+        self.material_preferences.iter()
+            .filter_map(|field| gaussian_plane_integral(field.center_preference, field.radial_falloff))
+            .sum()
+    }
+
+    fn density_available_value(&self) -> f64 {
+        gaussian_plane_integral(
+            self.structural_density.center_preference,
+            self.structural_density.radial_falloff,
+        ).unwrap_or(0.0)
+    }
+
+    fn connectivity_realization(
+        &self,
+        structure: &crate::structure::OrganismStructure,
+        catalog: &[BaseResource],
+        origin: (f64, f64),
+        orientation: f64,
+    ) -> Option<f64> {
+        let mut actual_value = 0.0;
+        let mut available_value = 0.0;
+        let mut actual_pairs = Vec::new();
+
+        for bond in &structure.bonds {
+            let Some(a) = structure.unit_index(bond.endpoint_a.constituent_id) else { continue; };
+            let Some(b) = structure.unit_index(bond.endpoint_b.constituent_id) else { continue; };
+            let Some(wa) = bond.endpoint_a.location.world_point(&structure.units[a], catalog) else { continue; };
+            let Some(wb) = bond.endpoint_b.location.world_point(&structure.units[b], catalog) else { continue; };
+            let la = developmental_point(wa.x, wa.y, origin, orientation);
+            let lb = developmental_point(wb.x, wb.y, origin, orientation);
+            actual_value += self.connectivity_score(la, lb, structure, a, b, bond.endpoint_a.location, bond.endpoint_b.location, catalog);
+            actual_pairs.push((a, b));
+        }
+
+        for a in 0..structure.units.len() {
+            for b in (a + 1)..structure.units.len() {
+                if actual_pairs.iter().any(|(x, y)| (*x == a && *y == b) || (*x == b && *y == a)) {
+                    continue;
+                }
+                for candidate in crate::contact::connection_pair_candidates(structure, a, b, catalog)
+                    .into_iter().filter(|candidate| candidate.available_a && candidate.available_b)
+                {
+                    let Some(wa) = candidate.endpoint_a.world_point(&structure.units[a], catalog) else { continue; };
+                    let Some(wb) = candidate.endpoint_b.world_point(&structure.units[b], catalog) else { continue; };
+                    let la = developmental_point(wa.x, wa.y, origin, orientation);
+                    let lb = developmental_point(wb.x, wb.y, origin, orientation);
+                    available_value += self.connectivity_score(
+                        la, lb, structure, a, b,
+                        candidate.endpoint_a, candidate.endpoint_b, catalog,
+                    );
+                }
+            }
+        }
+
+        available_value += actual_value;
+        if available_value <= 0.0 { None } else { Some((actual_value / available_value).clamp(0.0, 1.0)) }
+    }
+
+    fn connectivity_score(
+        &self,
+        a: (f64, f64),
+        b: (f64, f64),
+        structure: &crate::structure::OrganismStructure,
+        unit_a: usize,
+        unit_b: usize,
+        endpoint_a: crate::structure::ConnectionEndpoint,
+        endpoint_b: crate::structure::ConnectionEndpoint,
+        catalog: &[BaseResource],
+    ) -> f64 {
+        let ka = self.connectivity_preference(a.0, a.1);
+        let kb = self.connectivity_preference(b.0, b.1);
+        let qa = endpoint_opportunity_count(structure, unit_a, endpoint_a, catalog);
+        let qb = endpoint_opportunity_count(structure, unit_b, endpoint_b, catalog);
+        let qreal_a = endpoint_realized_count(structure, unit_a, endpoint_a);
+        let qreal_b = endpoint_realized_count(structure, unit_b, endpoint_b);
+        let n = 0.5 * (
+            qreal_a as f64 / qa.max(1) as f64 +
+            qreal_b as f64 / qb.max(1) as f64
+        );
+        let lambda = 0.25; // EXPERIMENTAL.
+        ((ka + kb) * 0.5 + lambda * n).max(0.0)
+    }
+
+    fn integrate_shape_field<F>(
+        &self,
+        form: &crate::resources::Form,
+        placement: crate::structure::Placement,
+        origin: (f64, f64),
+        orientation: f64,
+        field: F,
+    ) -> f64
+    where F: Fn(f64, f64) -> f64 {
+        const NODES: [f64; 8] = [
+            -0.9602898564975363, -0.7966664774136267, -0.525532409916329,
+            -0.1834346424956498, 0.1834346424956498, 0.525532409916329,
+            0.7966664774136267, 0.9602898564975363,
+        ];
+        const WEIGHTS: [f64; 8] = [
+            0.1012285362903763, 0.2223810344533745, 0.3137066458778873,
+            0.362683783378362, 0.362683783378362, 0.3137066458778873,
+            0.2223810344533745, 0.1012285362903763,
+        ];
+        let radius = form.bounding_radius().max(0.0);
+        if !radius.is_finite() || radius <= 0.0 { return 0.0; }
+        let min_x = placement.x - radius;
+        let max_x = placement.x + radius;
+        let min_y = placement.y - radius;
+        let max_y = placement.y + radius;
+        let hx = (max_x - min_x) * 0.5;
+        let hy = (max_y - min_y) * 0.5;
+        let cx = (max_x + min_x) * 0.5;
+        let cy = (max_y + min_y) * 0.5;
+        let mut total = 0.0;
+        for i in 0..8 {
+            for j in 0..8 {
+                let world_x = cx + hx * NODES[i];
+                let world_y = cy + hy * NODES[j];
+                if !point_in_form(form, placement, world_x, world_y) { continue; }
+                let (x, y) = developmental_point(world_x, world_y, origin, orientation);
+                total += WEIGHTS[i] * WEIGHTS[j] * field(x, y);
+            }
+        }
+        total * hx * hy
+    }
+}
+
+fn gaussian_plane_integral(amplitude: f64, radial_falloff: f64) -> Option<f64> {
+    if !amplitude.is_finite() || amplitude <= 0.0 || !radial_falloff.is_finite() || radial_falloff <= 0.0 {
+        None
+    } else {
+        Some(amplitude * std::f64::consts::PI / radial_falloff)
+    }
+}
+
+fn developmental_point(x: f64, y: f64, origin: (f64, f64), orientation: f64) -> (f64, f64) {
+    let dx = x - origin.0;
+    let dy = y - origin.1;
+    let (s, c) = orientation.sin_cos();
+    (dx * c + dy * s, -dx * s + dy * c)
+}
+
+fn point_in_form(
+    form: &crate::resources::Form,
+    placement: crate::structure::Placement,
+    x: f64,
+    y: f64,
+) -> bool {
+    match form {
+        crate::resources::Form::Circle { radius } => {
+            (x - placement.x).hypot(y - placement.y) <= *radius
+        }
+        crate::resources::Form::Rectangle { .. }
+        | crate::resources::Form::RegularPolygon { .. }
+        | crate::resources::Form::Polygon { .. } => {
+            let Some(local_vertices) = form.polygon_vertices() else { return false; };
+            let (s, c) = placement.rotation_radians.sin_cos();
+            let local_x = (x - placement.x) * c + (y - placement.y) * s;
+            let local_y = -(x - placement.x) * s + (y - placement.y) * c;
+            let mut inside = false;
+            for i in 0..local_vertices.len() {
+                let a = local_vertices[i];
+                let b = local_vertices[(i + 1) % local_vertices.len()];
+                if (a.1 > local_y) != (b.1 > local_y)
+                    && local_x < (b.0 - a.0) * (local_y - a.1) / (b.1 - a.1) + a.0 {
+                    inside = !inside;
+                }
+            }
+            inside
+        }
+        crate::resources::Form::Line { .. } | crate::resources::Form::Fluid { .. } => false,
+    }
+}
+
+fn endpoint_realized_count(
+    structure: &crate::structure::OrganismStructure,
+    unit: usize,
+    endpoint: crate::structure::ConnectionEndpoint,
+) -> usize {
+    let Some(id) = structure.physical_id(unit) else { return 0; };
+    structure.bonds.iter().filter(|bond| bond.touches(id, endpoint)).count()
+}
+
+fn endpoint_opportunity_count(
+    structure: &crate::structure::OrganismStructure,
+    unit: usize,
+    endpoint: crate::structure::ConnectionEndpoint,
+    catalog: &[BaseResource],
+) -> usize {
+    let mut count = endpoint_realized_count(structure, unit, endpoint);
+    for other in 0..structure.units.len() {
+        if other == unit { continue; }
+        if crate::contact::connection_pair_candidates(structure, unit, other, catalog)
+            .into_iter()
+            .any(|candidate| candidate.available_a && candidate.available_b &&
+                candidate.endpoint_a.same_location(endpoint))
+        {
+            count += 1;
+        }
+    }
+    count.max(1)
 }
 
 pub fn default_developmental_blueprint() -> DevelopmentalFieldBlueprint {
