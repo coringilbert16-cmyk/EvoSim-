@@ -502,7 +502,11 @@ impl Simulation {
                             organisms[index].development_stage,
                             DevelopmentStage::Juvenile
                         ) {
-                            Some((blueprint, origin, orientation))
+                            let preferred_length = blueprint.preferred_developmental_length(
+                                &environment.catalog,
+                                organisms[index].genome.adult_mass(),
+                            );
+                            Some((blueprint, origin, orientation, preferred_length))
                         } else {
                             None
                         };
