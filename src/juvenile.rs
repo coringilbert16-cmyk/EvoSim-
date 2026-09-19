@@ -11,6 +11,78 @@ use crate::state::EnergyLedger;
 use crate::structural_blueprint::StructuralBlueprint;
 use crate::structure::OrganismStructure;
 
+
+/// Confirmed original-seed construction baseline.
+///
+/// This is a construction calibration artifact only. It is not serialized into
+/// the genome and does not prescribe descendant topology or geometry.
+pub(crate) fn confirmed_seed_baseline(catalog: &[BaseResource]) -> Result<StructuralBlueprint, String> {
+    use crate::resources::Material;
+    use crate::structural_blueprint::{BlueprintConnection, BlueprintElement, BlueprintPlacement};
+
+    let resource = catalog
+        .iter()
+        .find(|resource| resource.name == "Carbon")
+        .or_else(|| catalog.first())
+        .ok_or_else(|| "catalog contains no seed material".to_string())?;
+    let radius = resource.shape.form.bounding_radius().max(1e-6);
+    let mut elements = Vec::new();
+    let mut connections = Vec::new();
+    for i in 0..4 {
+        let angle = i as f64 * std::f64::consts::FRAC_PI_2;
+        elements.push(BlueprintElement {
+            material: Material::free_base(&resource.name, 1.0),
+            placement: BlueprintPlacement {
+                x: radius * 1.5 * angle.cos(),
+                y: radius * 1.5 * angle.sin(),
+                rotation_radians: angle,
+            },
+        });
+        connections.push(BlueprintConnection {
+            element_a: i,
+            element_b: (i + 1) % 4,
+        });
+    }
+    for i in 0..8 {
+        let parent = i % 4;
+        let angle = parent as f64 * std::f64::consts::FRAC_PI_2
+            + (i / 4) as f64 * std::f64::consts::FRAC_PI_4;
+        let child = elements.len();
+        elements.push(BlueprintElement {
+            material: Material::free_base(&resource.name, 1.0),
+            placement: BlueprintPlacement {
+                x: 3.0 * radius * angle.cos(),
+                y: 3.0 * radius * angle.sin(),
+                rotation_radians: angle,
+            },
+        });
+        connections.push(BlueprintConnection {
+            element_a: parent,
+            element_b: child,
+        });
+    }
+    let baseline = StructuralBlueprint::with_anchor_elements(elements, connections, vec![0]);
+    baseline.validate()?;
+    Ok(baseline)
+}
+
+pub(crate) fn confirmed_seed_scale_reference(
+    catalog: &[BaseResource],
+) -> Result<(f64, f64), String> {
+    let baseline = confirmed_seed_baseline(catalog)?;
+    let structure = baseline.realize(catalog)?;
+    let mass = structure.structural_mass(catalog);
+    let length = structure
+        .units
+        .iter()
+        .map(|unit| unit.placement.x.hypot(unit.placement.y))
+        .fold(0.0, f64::max);
+    if !mass.is_finite() || mass <= 0.0 || !length.is_finite() || length <= 0.0 {
+        return Err("confirmed seed scale reference is invalid".into());
+    }
+    Ok((mass, length))
+}
+
 pub(crate) const JUVENILE_INITIAL_ENERGY_RESERVE: f64 = 16.0;
 const TRIAL_ENERGY: f64 = 1.0e12;
 const EPS: f64 = 1e-8;
