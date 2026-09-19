@@ -388,7 +388,7 @@ mod tests {
     fn unbonded_structure_is_not_a_genome() {
         let catalog = default_catalog();
         let genome = initial_genome();
-        let blueprint = genome.mature_construction_target().unwrap();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&default_catalog()).unwrap();
         let mut structure = blueprint.realize(&catalog).unwrap();
         structure.bonds.clear();
         assert!(analyze_genome_cavity(&structure, &catalog)
