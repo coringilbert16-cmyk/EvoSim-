@@ -307,32 +307,281 @@ pub(crate) fn try_combine_stored_unit(
                             water,
                         ) {
                             let developmental_score = developmental
-                        .map(|(blueprint, origin, orientation, preferred_length)| {
-                            let wa = candidate
-                                .endpoint_a
-                                .world_point(&organism.structure.units[ua], catalog)?;
-                            let wb = candidate
-                                .endpoint_b
-                                .world_point(&organism.structure.units[ub], catalog)?;
-                            let la = crate::developmental_blueprint::developmental_point(
-                                wa.x,
-                                wa.y,
+                                .map(|(blueprint, origin_ref, orientation, preferred_length)| {
+                                    let local = crate::developmental_blueprint::developmental_point(
+                                        candidate.endpoint_a.world_point(&hypothetical.units[ua], &environment.catalog)?.x,
+                                        candidate.endpoint_a.world_point(&hypothetical.units[ua], &environment.catalog)?.y,
+                                        origin_ref,
+                                        orientation,
+                                    );
+                                    blueprint.material_preference_scaled(
+                                        &first_resource,
+                                        local.0,
+                                        local.1,
+                                        preferred_length,
+                                    ) + blueprint.density_preference_scaled(
+                                        local.0,
+                                        local.1,
+                                        preferred_length,
+                                    ) + 0.25 * blueprint.connectivity_preference_scaled(
+                                        local.0,
+                                        local.1,
+                                        preferred_length,
+                                    )
+                                })
+                                .unwrap_or(0.0);
+                            candidates.push((
+                                ua,
+                                part_index,
                                 origin,
-                                orientation,
-                            );
-                            let lb = crate::developmental_blueprint::developmental_point(
-                                wb.x,
-                                wb.y,
-                                origin,
-                                orientation,
-                            );
-                            blueprint.connectivity_preference_scaled(
-                                (la.0 + lb.0) * 0.5,
-                                (la.1 + lb.1) * 0.5,
-                                preferred_length,
-                            )
-                        })
-                        .unwrap_or(0.0);
+                                evaluation,
+                                candidate.distance,
+                                required,
+                                developmental_score,
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        candidates.sort_by(|a, b| {
+            b.6.partial_cmp(&a.6)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.4.partial_cmp(&b.4).unwrap_or(std::cmp::Ordering::Equal))
+        });
+        for (ua, part_index, origin, evaluation, _, required, _) in candidates {
+            if organism.usable_energy + EPSILON < required {
+                continue;
+            }
+            let mut hypothetical = organism.structure.clone();
+            let indices = crate::material_restoration::restore_material(
+                &mut hypothetical,
+                &instance,
+                origin,
+                &environment.catalog,
+            )?;
+            let ub = *indices.get(part_index)?;
+            let mut candidate_ledger = *ledger;
+            let mut candidate_energy = organism.usable_energy;
+            if let Some(attempt) = form_bond(
+                &mut hypothetical,
+                BondFormationRequest {
+                    unit_a: ua,
+                    unit_b: ub,
+                    endpoint_a: evaluation.candidate.endpoint_a,
+                    endpoint_b: evaluation.candidate.endpoint_b,
+                    investment: evaluation.threshold,
+                    water,
+                },
+                &environment.catalog,
+                cache,
+                &mut candidate_ledger,
+                &mut candidate_energy,
+            ) {
+                organism.stored_material.take_matching_physical(&raw)?;
+                organism.structure = hypothetical;
+                organism.usable_energy = candidate_energy;
+                *ledger = candidate_ledger;
+                organism.add_transaction_stress(attempt.work_cost);
+                return Some(attempt);
+            }
+        }
+        return None;
+    }
+
+    let geometry_source = raw
+        .parts
+        .first()
+        .and_then(|(name, _)| environment.catalog.iter().find(|b| b.name == *name))?;
+    let physical_instance = organism
+        .stored_material
+        .peek_matching_physical(&raw)
+        .filter(|instance| instance.is_realized());
+    let mut candidates = Vec::new();
+    for ua in 0..organism.structure.units.len() {
+        let anchor = organism.structure.units[ua].placement;
+        for placement in crate::construction_runtime::candidate_placements(
+            &organism.structure,
+            geometry_source,
+            anchor,
+            &[ua],
+            &environment.catalog,
+        ) {
+            let mut hypothetical = organism.structure.clone();
+            let ub = if let Some(instance) = physical_instance.as_ref() {
+                let indices = crate::material_restoration::restore_material(
+                    &mut hypothetical,
+                    instance,
+                    placement,
+                    &environment.catalog,
+                )?;
+                *indices.first()?
+            } else {
+                hypothetical.add_unit(physical_material_candidate(
+                    &raw,
+                    placement,
+                    &environment.catalog,
+                )?)
+            };
+            for candidate in crate::contact::connection_pair_candidates_cached(
+                &hypothetical,
+                ua,
+                ub,
+                &environment.catalog,
+                cache,
+            ) {
+                if let Some((evaluation, _, _, _, required)) = evaluate_candidate(
+                    &hypothetical,
+                    ua,
+                    ub,
+                    candidate,
+                    &environment.catalog,
+                    water,
+                ) {
+                    candidates.push((ua, placement, evaluation, candidate.distance, required));
+                }
+            }
+        }
+    }
+    candidates.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap_or(std::cmp::Ordering::Equal));
+    for (ua, placement, evaluation, _, required) in candidates {
+        if organism.usable_energy + EPSILON < required {
+            continue;
+        }
+        let mut hypothetical = organism.structure.clone();
+        let ub = if let Some(instance) = physical_instance.as_ref() {
+            let indices = crate::material_restoration::restore_material(
+                &mut hypothetical,
+                instance,
+                placement,
+                &environment.catalog,
+            )?;
+            *indices.first()?
+        } else {
+            hypothetical.add_unit(physical_material_candidate(
+                &raw,
+                placement,
+                &environment.catalog,
+            )?)
+        };
+        let mut candidate_ledger = *ledger;
+        let mut candidate_energy = organism.usable_energy;
+        if let Some(attempt) = form_bond(
+            &mut hypothetical,
+            BondFormationRequest {
+                unit_a: ua,
+                unit_b: ub,
+                endpoint_a: evaluation.candidate.endpoint_a,
+                endpoint_b: evaluation.candidate.endpoint_b,
+                investment: evaluation.threshold,
+                water,
+            },
+            &environment.catalog,
+            cache,
+            &mut candidate_ledger,
+            &mut candidate_energy,
+        ) {
+            if physical_instance.is_some() {
+                organism.stored_material.take_matching_physical(&raw)?;
+            } else {
+                organism.stored_material.take_matching(&raw)?;
+            }
+            organism.structure = hypothetical;
+            organism.usable_energy = candidate_energy;
+            *ledger = candidate_ledger;
+            organism.add_transaction_stress(attempt.work_cost);
+            return Some(attempt);
+        }
+    }
+    None
+}
+
+pub(crate) fn combine_specific_pair(
+    structure: &mut crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    catalog: &[BaseResource],
+    water: f64,
+    cache: &mut ConnectionCompatibilityCache,
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> Option<CombineAttempt> {
+    if unit_a >= structure.units.len() || unit_b >= structure.units.len() || unit_a == unit_b {
+        return None;
+    }
+    let mut candidates = eligible_candidates(structure, unit_a, unit_b, catalog, cache)
+        .into_iter()
+        .filter_map(|candidate| {
+            let (evaluation, _, _, _, required) =
+                evaluate_candidate(structure, unit_a, unit_b, candidate, catalog, water)?;
+            Some((evaluation, candidate.distance, required))
+        })
+        .collect::<Vec<_>>();
+    candidates.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+    for (evaluation, _, required) in candidates {
+        if *energy + EPSILON < required {
+            continue;
+        }
+        let mut trial_structure = structure.clone();
+        let mut trial_ledger = *ledger;
+        let mut trial_energy = *energy;
+        if let Some(attempt) = form_bond(
+            &mut trial_structure,
+            BondFormationRequest {
+                unit_a,
+                unit_b,
+                endpoint_a: evaluation.candidate.endpoint_a,
+                endpoint_b: evaluation.candidate.endpoint_b,
+                investment: evaluation.threshold,
+                water,
+            },
+            catalog,
+            cache,
+            &mut trial_ledger,
+            &mut trial_energy,
+        ) {
+            *structure = trial_structure;
+            *ledger = trial_ledger;
+            *energy = trial_energy;
+            return Some(attempt);
+        }
+    }
+    None
+}
+
+pub(crate) fn try_combine(
+    organism: &mut Organism,
+    environment: &Environment,
+    cache: &mut ConnectionCompatibilityCache,
+    ledger: &mut EnergyLedger,
+    developmental: Option<DevelopmentalContext<'_>>,
+) -> Option<CombineAttempt> {
+    if !organism.structure.units.is_empty() && !organism.stored_material.is_empty() {
+        if let Some(attempt) =
+            try_combine_stored_unit(organism, environment, cache, ledger, developmental)
+        {
+            return Some(attempt);
+        }
+    }
+    if organism.structure.units.len() < 2 {
+        return None;
+    }
+    let catalog = &environment.catalog;
+    let water = water_field_amount(environment, organism);
+    let mut pairs = Vec::new();
+    for ua in 0..organism.structure.units.len() {
+        for ub in ua + 1..organism.structure.units.len() {
+            for candidate in eligible_candidates(&organism.structure, ua, ub, catalog, cache) {
+                if let Some((evaluation, _, _, _, required)) =
+                    evaluate_candidate(&organism.structure, ua, ub, candidate, catalog, water)
+                {
+                    let developmental_score = developmental.map(|(blueprint, origin, orientation, preferred_length)| {
+                        let wa = candidate.endpoint_a.world_point(&organism.structure.units[ua], catalog)?;
+                        let wb = candidate.endpoint_b.world_point(&organism.structure.units[ub], catalog)?;
+                        let la = crate::developmental_blueprint::developmental_point(wa.x, wa.y, origin, orientation);
+                        let lb = crate::developmental_blueprint::developmental_point(wb.x, wb.y, origin, orientation);
+                        blueprint.connectivity_preference_scaled((la.0 + lb.0) * 0.5, (la.1 + lb.1) * 0.5, preferred_length)
+                    }).unwrap_or(0.0);
                     pairs.push((ua, ub, evaluation, candidate.distance, required, developmental_score));
                 }
             }
