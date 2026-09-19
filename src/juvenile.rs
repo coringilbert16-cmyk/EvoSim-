@@ -87,7 +87,7 @@ pub(crate) fn confirmed_seed_baseline(
 
     // Original eight-unit outer shell.
     let half_segment = side / 2.0;
-    let outer_offset = 1.677_2175;
+    let outer_offset = 1.677_217_5;
     let start = elements.len();
     elements.extend([
         BlueprintElement {
