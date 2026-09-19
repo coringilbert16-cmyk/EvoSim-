@@ -40,6 +40,26 @@ The approved developmental equations are now documented and partially represente
 
 A first transient field-driven construction candidate now exists. It derives material selection, structural density, and juvenile/adult spatial scale from developmental fields; the returned discrete blueprint is explicitly transient and is passed into the existing physical construction/COMBINE machinery. P6.2 now uses field-scored candidate growth from the confirmed-good physical seed. Remaining work is to route those transient candidates through the existing neighborhood/backtracking machinery rather than accepting a single greedy candidate.
 
+## P6.2a — Developmental realization mathematics — COMPLETE
+
+The developmental realization equations are now locked:
+
+- material realization = developmental material-field overlap with realized physical material area;
+- density realization = developmental density-field overlap with realized physical structure area;
+- connectivity realization = realized physical edges versus the union of actual edges and physically admissible connection opportunities;
+- connectivity neighborhood contribution is derived from realized/available connection-site occupancy;
+- overall realization = arithmetic mean of active realization domains;
+- inactive connectivity contributes no penalty;
+- adulthood remains R >= 0.90.
+
+No tunable realization-weight parameter is introduced. Candidate-selection weights remain separate experimental solver parameters.
+
+The mathematical authority is:
+
+> continuous inherited developmental fields + authoritative physical graph -> developmental realization
+
+An authored exact body plan, target coordinate list, or transient structural blueprint cannot serve as the adulthood authority.
+
 ## P6.3 — Growth integration
 
 Route developmental field scoring into the actual ongoing COMBINE construction path. The current transient candidate solver is not yet sufficient.
