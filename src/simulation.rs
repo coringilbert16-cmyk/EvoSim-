@@ -166,14 +166,15 @@ impl Simulation {
         let survival_reserve = parameters.survival_reserve.max(f64::EPSILON);
         let reserve_pressure = (1.0 - organism.usable_energy / survival_reserve).clamp(0.0, 1.0);
         let survival = (reserve_pressure * (1.0 + organism.stress.max(0.0))).clamp(0.0, 1.0);
-        let _ = environment;
+        let development = if matches!(organism.development_stage, DevelopmentStage::Juvenile) {
+            (1.0 - Self::growth_fraction(organism, environment).clamp(0.0, 1.0)).max(0.0)
+        } else {
+            0.0
+        };
         CurrentNeeds {
             survival,
-            reproduction: if matches!(organism.development_stage, DevelopmentStage::Adult) {
-                1.0
-            } else {
-                0.0
-            },
+            reproduction: if matches!(organism.development_stage, DevelopmentStage::Adult) { 1.0 } else { 0.0 },
+            development,
         }
     }
     fn acquisition_targets(organism: &Organism, environment: &Environment) -> Vec<usize> {
