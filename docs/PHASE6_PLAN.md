@@ -53,3 +53,6 @@ Run full tests, architecture checks, formatting, strict Clippy, and final author
 ## Non-goals
 
 P6 does not redesign genome identity/life definition, genome-cavity qualification, chemistry, COMBINE/BREAK chemistry, energy accounting, maintenance/stress, movement/collision/pushing, reproduction, death, decomposition, evolution, or environmental material physics.
+
+
+P6 README authority audit gate: CI must pass and the implementation must be re-audited against README authority before completion.
