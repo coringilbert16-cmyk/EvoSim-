@@ -156,65 +156,77 @@ impl DevelopmentalFieldBlueprint {
     }
 
     fn confirmed_seed_candidate(&self, catalog: &[BaseResource]) -> Result<StructuralBlueprint, String> {
-        // This is deliberately a known-good construction fixture, not a genome
-        // count rule. It is the starting physical realization from which the
-        // solver develops the same field toward the preferred adult mass.
-        let resource = catalog
+        // The confirmed-good juvenile seed is retained as a physical regression
+        // baseline. It is not exposed as a genome count, topology, or body-plan
+        // authority. Development may grow from this realization using the same
+        // developmental field used for adulthood.
+        let mut resources = catalog
             .iter()
-            .find(|r| matches!(r.shape.form, crate::resources::Form::Rectangle { .. }))
-            .or_else(|| catalog.first())
-            .ok_or_else(|| "catalog contains no constructible resource".to_string())?;
-        let (width, height) = match resource.shape.form {
-            crate::resources::Form::Rectangle { width, height } => (width, height),
-            _ => (resource.shape.form.bounding_radius(), resource.shape.form.bounding_radius()),
-        };
-        let radius = (width + height).max(1e-6) * 0.5;
-        let placements = [
-            (0.0, radius, 0.0),
-            (radius, 0.0, std::f64::consts::FRAC_PI_2),
-            (0.0, -radius, 0.0),
-            (-radius, 0.0, std::f64::consts::FRAC_PI_2),
-        ];
-        let mut elements = placements
-            .into_iter()
-            .map(|(x, y, rotation_radians)| BlueprintElement {
-                material: Material::free_base(&resource.name, 1.0),
-                placement: BlueprintPlacement { x, y, rotation_radians },
-            })
+            .filter(|resource| matches!(resource.shape.form, crate::resources::Form::Rectangle { .. }))
             .collect::<Vec<_>>();
-        let mut connections = (0..4)
-            .map(|i| BlueprintConnection { element_a: i, element_b: (i + 1) % 4 })
-            .collect::<Vec<_>>();
-        let step = match resource.shape.form {
-            crate::resources::Form::Rectangle { height, .. } => height,
-            _ => resource.shape.form.bounding_radius().max(1e-6),
-        };
-        for i in 0..8 {
-            let angle = (i as f64) * std::f64::consts::TAU / 8.0;
-            let parent = i % 4;
-            let parent_p = placements[parent];
-            let placement = BlueprintPlacement {
-                x: parent_p.0 + angle.cos() * step,
-                y: parent_p.1 + angle.sin() * step,
-                rotation_radians: angle,
+        if resources.is_empty() { resources = catalog.iter().collect(); }
+        resources.sort_by(|a, b| {
+            self.material_preference(&b.name, 0.0, 0.0)
+                .partial_cmp(&self.material_preference(&a.name, 0.0, 0.0))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        for resource in resources {
+            let ring = match &resource.shape.form {
+                crate::resources::Form::Rectangle { width, height } => {
+                    let radius = (width + height) * 0.5;
+                    vec![
+                        BlueprintPlacement { x: 0.0, y: radius, rotation_radians: 0.0 },
+                        BlueprintPlacement { x: radius, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_2 },
+                        BlueprintPlacement { x: 0.0, y: -radius, rotation_radians: 0.0 },
+                        BlueprintPlacement { x: -radius, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_2 },
+                    ]
+                }
+                _ => {
+                    let Some(vertices) = resource.shape.form.polygon_vertices() else { continue; };
+                    let radius = vertices.iter().map(|(x, y)| x.hypot(*y)).fold(0.0, f64::max);
+                    if radius <= 0.0 { continue; }
+                    let ring_radius = radius / (std::f64::consts::PI / 4.0).sin();
+                    (0..4).map(|i| {
+                        let angle = i as f64 * std::f64::consts::TAU / 4.0;
+                        BlueprintPlacement { x: ring_radius * angle.cos(), y: ring_radius * angle.sin(), rotation_radians: angle + std::f64::consts::FRAC_PI_2 }
+                    }).collect()
+                }
             };
-            let child = elements.len();
-            elements.push(BlueprintElement {
-                material: Material::free_base(&resource.name, 1.0),
-                placement,
-            });
-            connections.push(BlueprintConnection { element_a: parent, element_b: child });
+            let mut elements = ring.iter().copied().map(|placement| BlueprintElement {
+                material: Material::free_base(&resource.name, 1.0), placement,
+            }).collect::<Vec<_>>();
+            let mut connections = (0..4).map(|i| BlueprintConnection {
+                element_a: i, element_b: (i + 1) % 4,
+            }).collect::<Vec<_>>();
+            let first = ring[0];
+            let outward_length = match &resource.shape.form {
+                crate::resources::Form::Rectangle { height, .. } => *height,
+                _ => resource.shape.form.bounding_radius().max(1e-6),
+            };
+            let norm = first.x.hypot(first.y).max(1e-9);
+            let direction = (first.x / norm, first.y / norm);
+            let mut previous = first;
+            for _ in 0..8 {
+                let placement = BlueprintPlacement {
+                    x: previous.x + direction.0 * outward_length.max(1e-6),
+                    y: previous.y + direction.1 * outward_length.max(1e-6),
+                    rotation_radians: first.rotation_radians,
+                };
+                let parent = elements.len() - 1;
+                elements.push(BlueprintElement {
+                    material: Material::free_base(&resource.name, 1.0), placement,
+                });
+                connections.push(BlueprintConnection { element_a: parent, element_b: parent + 1 });
+                previous = placement;
+            }
+            let candidate = StructuralBlueprint::with_anchor_elements(elements, connections, vec![0]);
+            if !candidate.is_valid() { continue; }
+            let Ok(structure) = candidate.realize(catalog) else { continue; };
+            let qualifies = crate::cavity::analyze_genome_cavity(&structure, catalog)
+                .ok().flatten().is_some_and(|cavity| cavity.qualifies());
+            if qualifies { return Ok(candidate); }
         }
-        let candidate = StructuralBlueprint::with_anchor_elements(elements, connections, vec![0]);
-        let structure = candidate.realize(catalog).map_err(|e| format!("seed realization failed: {e}"))?;
-        let qualifies = crate::cavity::analyze_genome_cavity(&structure, catalog)
-            .ok()
-            .flatten()
-            .is_some_and(|cavity| cavity.qualifies());
-        if !qualifies {
-            return Err("confirmed developmental seed does not satisfy the physical cavity contract".into());
-        }
-        Ok(candidate)
+        Err("confirmed developmental seed could not be physically realized".into())
     }
 
     fn best_growth_candidate(
