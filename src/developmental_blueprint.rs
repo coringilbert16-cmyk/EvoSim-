@@ -180,39 +180,16 @@ impl DevelopmentalFieldBlueprint {
                 crate::resources::Form::Rectangle { width, height } => {
                     let radius = (width + height) * 0.5;
                     vec![
-                        BlueprintPlacement {
-                            x: 0.0,
-                            y: radius,
-                            rotation_radians: 0.0,
-                        },
-                        BlueprintPlacement {
-                            x: radius,
-                            y: 0.0,
-                            rotation_radians: std::f64::consts::FRAC_PI_2,
-                        },
-                        BlueprintPlacement {
-                            x: 0.0,
-                            y: -radius,
-                            rotation_radians: 0.0,
-                        },
-                        BlueprintPlacement {
-                            x: -radius,
-                            y: 0.0,
-                            rotation_radians: std::f64::consts::FRAC_PI_2,
-                        },
+                        BlueprintPlacement { x: 0.0, y: radius, rotation_radians: 0.0 },
+                        BlueprintPlacement { x: radius, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_2 },
+                        BlueprintPlacement { x: 0.0, y: -radius, rotation_radians: 0.0 },
+                        BlueprintPlacement { x: -radius, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_2 },
                     ]
                 }
                 _ => {
-                    let Some(vertices) = resource.shape.form.polygon_vertices() else {
-                        continue;
-                    };
-                    let radius = vertices
-                        .iter()
-                        .map(|(x, y)| x.hypot(*y))
-                        .fold(0.0, f64::max);
-                    if radius <= 0.0 {
-                        continue;
-                    };
+                    let Some(vertices) = resource.shape.form.polygon_vertices() else { continue; };
+                    let radius = vertices.iter().map(|(x, y)| x.hypot(*y)).fold(0.0, f64::max);
+                    if radius <= 0.0 { continue; };
                     let ring_radius = radius / (std::f64::consts::PI / 4.0).sin();
                     (0..4).map(|i| {
                         let angle = i as f64 * std::f64::consts::TAU / 4.0;
@@ -252,13 +229,9 @@ impl DevelopmentalFieldBlueprint {
             if !candidate.is_valid() {
                 continue;
             }
-            let Ok(structure) = candidate.realize(catalog) else {
-                continue;
-            };
+            let Ok(structure) = candidate.realize(catalog) else { continue; };
             let qualifies = crate::cavity::analyze_genome_cavity(&structure, catalog)
-                .ok()
-                .flatten()
-                .is_some_and(|cavity| cavity.qualifies());
+                .ok().flatten().is_some_and(|cavity| cavity.qualifies());
             if qualifies {
                 return Ok(candidate);
             }
@@ -319,13 +292,9 @@ impl DevelopmentalFieldBlueprint {
                 let mut candidate = current.clone();
                 let child = candidate.elements.len();
                 candidate.elements.push(BlueprintElement {
-                    material: Material::free_base(&resource.name, 1.0),
-                    placement,
+                    material: Material::free_base(&resource.name, 1.0), placement,
                 });
-                candidate.connections.push(BlueprintConnection {
-                    element_a: parent,
-                    element_b: child,
-                });
+                candidate.connections.push(BlueprintConnection { element_a: parent, element_b: child });
                 if !candidate.is_valid() {
                     continue;
                 }
@@ -333,18 +302,14 @@ impl DevelopmentalFieldBlueprint {
                     continue;
                 };
                 let mass = structure.structural_mass(catalog);
-                let field_score =
-                    self.material_preference(&resource.name, placement.x, placement.y)
-                        + self.density_preference(placement.x, placement.y)
-                        + self.connectivity_preference(placement.x, placement.y) * 0.25;
+                let field_score = self.material_preference(&resource.name, placement.x, placement.y)
+                    + self.density_preference(placement.x, placement.y)
+                    + self.connectivity_preference(placement.x, placement.y) * 0.25;
                 candidates.push((field_score, candidate, mass));
             }
         }
         candidates.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-        Ok(candidates
-            .into_iter()
-            .map(|(_, candidate, mass)| (candidate, mass))
-            .collect())
+        Ok(candidates.into_iter().map(|(_, candidate, mass)| (candidate, mass)).collect())
     }
 
     fn select_material<'a>(&self, catalog: &'a [BaseResource], x: f64, y: f64) -> Result<&'a BaseResource, String> {
