@@ -89,17 +89,6 @@ const EPS: f64 = 1e-8;
 
 /// Realize the juvenile target generated from inherited architecture.
 #[allow(dead_code)]
-pub(crate) fn realize_initial_for_genome(
-    genome: &Genome,
-    catalog: &[BaseResource],
-) -> Result<(OrganismStructure, EnergyLedger, f64), String> {
-    let target = genome.developmental_construction_target(catalog, true)?;
-    realize_initial_with_reserve(&target, catalog, genome.juvenile_energy_reserve)
-}
-
-/// Compatibility entry point for callers that already hold a concrete
-/// developmental target. The target is still only a construction artifact;
-/// physical structure remains authoritative after realization.
 pub(crate) fn realize_initial(
     blueprint: &StructuralBlueprint,
     catalog: &[BaseResource],
