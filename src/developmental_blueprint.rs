@@ -513,6 +513,10 @@ impl DevelopmentalFieldBlueprint {
             .collect())
     }
 
+    pub fn preferred_developmental_length(&self, catalog: &[BaseResource], preferred_mass: f64) -> f64 {
+        self.preferred_length(catalog, preferred_mass)
+    }
+
     fn preferred_length(&self, catalog: &[BaseResource], preferred_mass: f64) -> f64 {
         let seed = self.confirmed_seed_candidate(catalog).ok();
         let seed_mass = seed
