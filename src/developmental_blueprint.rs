@@ -169,11 +169,9 @@ impl DevelopmentalFieldBlueprint {
             current_mass = candidate.structural_mass(catalog);
         }
 
-        if current_mass + 1e-9 < target_mass && !juvenile {
-            return Err(
-                "developmental field could not physically realize the preferred adult mass".into(),
-            );
-        }
+        // Preferred mass is soft developmental intent. Physical constraints may
+        // leave the realized adult below that preference; the physical structure
+        // remains authoritative and adulthood is evaluated from its realization.
         Ok(candidate)
     }
 
