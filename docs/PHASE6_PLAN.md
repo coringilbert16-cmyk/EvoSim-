@@ -23,27 +23,16 @@ The physical graph remains authoritative for realized structure.
 
 ### Approved rules implemented so far
 
-- Added inherited size_preference genome trait normalized to [0, 1].
-- Size-preference mutation is sampled from a bell-shaped distribution centered on the parent's inherited value, then bounded to [0, 1].
-- Missing legacy size-preference data defaults to the center value rather than invalidating the genome.
-- Removed fixed MAX_MEMORY_POINTS as the memory-capacity authority.
-- Memory capacity is derived from the realized qualifying genome cavity's 2D enclosed interior area with square-root diminishing returns.
-- Memory persistence is derived from the same cavity area with diminishing returns.
-- Memories are cleared when the realized organism no longer has a qualifying cavity whose enclosed 2D area is strictly greater than the three-Carbon reference.
-- Existing memory_strength remains the formation/reinforcement-strength parameter and is not repurposed as capacity or persistence.
-- Transformation-driven memory reinforcement now uses the same cavity-derived capacity authority rather than a separate fixed capacity.
-
-### Remaining P6.1 work
-
-- Complete removal of remaining legacy architecture helpers from construction/lifecycle code.
-- Define the minimum inherited information for material-composition and structural-density preference fields.
-- Define how size preference maps to preferred developmental mass/scale without creating a hard size ladder.
+- Restored the existing genome adult_mass concept as the sole preferred developmental-mass authority.
+- Preferred developmental mass is soft intent; actual mass remains derived from realized physical structure.
+- Removed the discrete size/count ladder and canonical juvenile-count authority.
+- Preserved the confirmed-good juvenile seed only as a physically validated solver starting realization, not as a genome body-plan rule.
 - Keep connectivity available as an optional field, inactive until validation demonstrates that material and density fields are insufficient for structural variation.
 - Preserve discrete construction objects only as transient solver artifacts.
 
 ## P6.2 — Developmental solver — IN PROGRESS
 
-A first transient field-driven construction candidate now exists. It derives material selection, structural density, and juvenile/adult spatial scale from developmental fields; the returned discrete blueprint is explicitly transient and is passed into the existing physical construction/COMBINE machinery. Remaining P6.2 work is to replace the candidate ring heuristic with genuine candidate search/backtracking driven by field evaluation and already-realized neighborhood constraints.
+A first transient field-driven construction candidate now exists. It derives material selection, structural density, and juvenile/adult spatial scale from developmental fields; the returned discrete blueprint is explicitly transient and is passed into the existing physical construction/COMBINE machinery. P6.2 now uses field-scored candidate growth from the confirmed-good physical seed. Remaining work is to route those transient candidates through the existing neighborhood/backtracking machinery rather than accepting a single greedy candidate.
 
 ## P6.3 — Growth integration
 
