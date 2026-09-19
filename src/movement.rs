@@ -57,6 +57,8 @@ impl Simulation {
 
         organism.occupied_cells[0].x = new_x;
         organism.occupied_cells[0].y = new_y;
+        organism.developmental_origin.x += dx;
+        organism.developmental_origin.y += dy;
         for unit in &mut organism.structure.units {
             unit.placement.x += dx;
             unit.placement.y += dy;
@@ -386,6 +388,8 @@ fn can_translate_organism(
 }
 
 fn translate_organism(organism: &mut Organism, dx: f64, dy: f64) {
+    organism.developmental_origin.x += dx;
+    organism.developmental_origin.y += dy;
     for point in &mut organism.occupied_cells {
         point.x += dx;
         point.y += dy;
