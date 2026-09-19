@@ -146,7 +146,7 @@ pub(crate) fn begin_reproduction(
     }
     let mut child_genome = parent.genome.clone();
     child_genome.mutate(rng);
-    let blueprint = match child_genome.developmental_construction_target(catalog) {
+    let blueprint = match child_genome.developmental_construction_target(catalog, true) {
         Ok(target) => target,
         Err(_) => return false,
     };
@@ -261,7 +261,7 @@ pub(crate) fn advance_construction(
 ) -> Option<f64> {
     let blueprint = construction
         .child_genome
-        .developmental_construction_target(catalog)
+        .developmental_construction_target(catalog, true)
         .ok()?;
     let target = construction
         .target_elements
@@ -392,10 +392,10 @@ mod tests {
     use crate::genome::initial_genome;
     use crate::resources::default_catalog;
     #[test]
-    fn reproduction_target_is_derived_from_architecture() {
+    fn reproduction_target_is_derived_from_developmental_fields() {
         let g = initial_genome();
         let target = g
-            .developmental_construction_target(&default_catalog())
+            .developmental_construction_target(&default_catalog(), true)
             .unwrap();
         let indices = all_indices(&target);
         assert_eq!(indices.len(), target.elements.len());

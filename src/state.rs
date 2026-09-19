@@ -69,7 +69,6 @@ pub(crate) struct MemoryPoint {
     pub(crate) y: f64,
     pub(crate) strength: f64,
 }
-pub(crate) const MAX_MEMORY_POINTS: usize = 5;
 pub(crate) const MEMORY_DECAY_PER_TICK: f64 = 0.995;
 pub(crate) const MEMORY_MERGE_RADIUS: f64 = 40.0;
 pub(crate) const MEMORY_PRUNE_THRESHOLD: f64 = 0.01;

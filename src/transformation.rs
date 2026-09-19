@@ -76,11 +76,7 @@ fn stress_break_candidate_indices(organism: &Organism, environment: &Environment
         .enumerate()
         .filter_map(|(index, _)| (!genome_bonds.contains(&index)).then_some(index))
         .collect();
-    if candidates.is_empty() {
-        (0..organism.structure.bonds.len()).collect()
-    } else {
-        candidates
-    }
+    candidates
 }
 
 pub(crate) fn resolve_stress_break(
@@ -318,7 +314,17 @@ impl Simulation {
                 .first()
                 .map(|p| (p.x, p.y))
                 .unwrap_or((0.0, 0.0));
-            reinforce_memory_point(organism, x, y, reinforcement)
+            let capacity =
+                crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
+                    .ok()
+                    .flatten()
+                    .filter(|cavity| cavity.qualifies())
+                    .map(|cavity| crate::memory::memory_capacity(&cavity));
+            if let Some(capacity) = capacity {
+                crate::memory::reinforce_memory_point(organism, x, y, reinforcement, capacity);
+            } else {
+                organism.memory.clear();
+            }
         }
     }
 }
@@ -329,22 +335,6 @@ pub(crate) fn break_work_cost(
     complexity: f64,
 ) -> f64 {
     crate::combine::bond_strength(a, b) * complexity.max(0.0)
-}
-
-pub(crate) fn reinforce_memory_point(organism: &mut Organism, x: f64, y: f64, reinforcement: f64) {
-    if let Some(point) = organism
-        .memory
-        .iter_mut()
-        .find(|p| (p.x - x).abs() < f64::EPSILON && (p.y - y).abs() < f64::EPSILON)
-    {
-        point.strength = crate::math::clamp01(point.strength + reinforcement)
-    } else {
-        organism.memory.push(crate::state::MemoryPoint {
-            x,
-            y,
-            strength: crate::math::clamp01(reinforcement),
-        })
-    }
 }
 
 #[cfg(test)]

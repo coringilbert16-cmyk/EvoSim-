@@ -2,6 +2,7 @@
 #![allow(clippy::too_many_arguments)]
 
 // Core environment, resources, and physical material/structure.
+mod developmental_blueprint;
 mod environment;
 mod environmental_materials;
 mod material_geometry;
@@ -14,7 +15,6 @@ mod structure;
 mod structure_authority;
 
 // Active physical geometry authority stack.
-mod architecture;
 mod cavity;
 mod connection_geometry;
 mod construction_runtime;
@@ -54,8 +54,6 @@ mod simulation;
 mod state;
 
 // Integration and contract tests.
-#[cfg(test)]
-mod architecture_contract_tests;
 #[cfg(test)]
 mod blueprint_diagnostics;
 #[cfg(test)]

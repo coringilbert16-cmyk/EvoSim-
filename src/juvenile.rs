@@ -21,7 +21,7 @@ pub(crate) fn realize_initial_for_genome(
     genome: &Genome,
     catalog: &[BaseResource],
 ) -> Result<(OrganismStructure, EnergyLedger, f64), String> {
-    let target = genome.developmental_construction_target(catalog)?;
+    let target = genome.developmental_construction_target(catalog, true)?;
     realize_initial_with_reserve(&target, catalog, genome.juvenile_energy_reserve)
 }
 
