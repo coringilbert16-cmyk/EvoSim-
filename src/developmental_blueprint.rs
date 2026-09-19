@@ -63,7 +63,7 @@ pub struct MaterialPreferenceField {
     /// Additional influences in the initial four-influence representation.
     /// Influence count is experimental; the four-influence starting point is approved.
     #[serde(default)]
-    pub additional_influences: Vec<RadialInfluence>
+    pub additional_influences: Vec<RadialInfluence>,
 }
 
 impl MaterialPreferenceField {
@@ -74,7 +74,9 @@ impl MaterialPreferenceField {
     fn evaluate_scaled(&self, x: f64, y: f64, scale: f64) -> f64 {
         let mut total = if self.center_preference.is_finite() {
             self.primary_influence().evaluate(x, y, scale)
-        } else { 0.0 };
+        } else {
+            0.0
+        };
         total += self
             .additional_influences
             .iter()
@@ -121,7 +123,7 @@ pub struct StructuralDensityField {
     /// Additional influences in the initial four-influence representation.
     /// Influence count is experimental; the four-influence starting point is approved.
     #[serde(default)]
-    pub additional_influences: Vec<RadialInfluence>
+    pub additional_influences: Vec<RadialInfluence>,
 }
 
 impl StructuralDensityField {
@@ -137,7 +139,11 @@ impl StructuralDensityField {
             strength: self.center_preference.max(0.0),
         };
         let mut total = primary.evaluate(x, y, scale);
-        total += self.additional_influences.iter().map(|i| i.evaluate(x, y, scale)).sum::<f64>();
+        total += self
+            .additional_influences
+            .iter()
+            .map(|i| i.evaluate(x, y, scale))
+            .sum::<f64>();
         let strength = primary.strength
             + self
                 .additional_influences
@@ -170,7 +176,7 @@ pub struct ConnectivityField {
     /// Additional influences in the initial four-influence representation.
     /// Influence count is experimental; the four-influence starting point is approved.
     #[serde(default)]
-    pub additional_influences: Vec<RadialInfluence>
+    pub additional_influences: Vec<RadialInfluence>,
 }
 
 impl ConnectivityField {
@@ -187,8 +193,17 @@ impl ConnectivityField {
         };
         let mut total = primary.evaluate(x, y, scale);
         total += self.additional_influences.iter().map(|i| i.evaluate(x, y, scale)).sum::<f64>();
-        let strength = primary.strength + self.additional_influences.iter().map(|i| i.strength).sum::<f64>();
-        if strength <= 0.0 { 0.0 } else { (total / strength).clamp(0.0, 1.0) }
+        let strength = primary.strength
+            + self
+                .additional_influences
+                .iter()
+                .map(|i| i.strength)
+                .sum::<f64>();
+        if strength <= 0.0 {
+            0.0
+        } else {
+            (total / strength).clamp(0.0, 1.0)
+        }
     }
 
     fn validate(&self) -> Result<(), String> {
@@ -479,7 +494,9 @@ impl DevelopmentalFieldBlueprint {
     ) -> Result<Vec<(StructuralBlueprint, f64)>, String> {
         let mut candidates = Vec::new();
         let base_count = current.elements.len();
-        let preferred_length = self.preferred_length(catalog, target_mass.max(1e-9)).max(1e-6);
+        let preferred_length = self
+            .preferred_length(catalog, target_mass.max(1e-9))
+            .max(1e-6);
         const DIRECTION_SAMPLES: usize = 16;
         for parent in 0..base_count {
             let p = current.elements[parent].placement;
@@ -875,8 +892,10 @@ impl DevelopmentalFieldBlueprint {
         let qreal_a = endpoint_realized_count(structure, unit_a, endpoint_a);
         let qreal_b = endpoint_realized_count(structure, unit_b, endpoint_b);
         let n = 0.5
-            * (qreal_a as f64 / qa.max(1) as f64 + qreal_b as f64 / qb.max(1) as f64);
-        const LAMBDA: f64 = 0.25; // EXPERIMENTAL: connectivity neighborhood coefficient.\n        let lambda = LAMBDA;
+            * (qreal_a as f64 / qa.max(1) as f64
+                + qreal_b as f64 / qb.max(1) as f64);
+        const LAMBDA: f64 = 0.25; // EXPERIMENTAL: connectivity neighborhood coefficient.
+        let lambda = LAMBDA;
         ((ka + kb) * 0.5 + lambda * n).max(0.0)
     }
 
