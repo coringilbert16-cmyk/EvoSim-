@@ -557,7 +557,9 @@ pub(crate) fn try_combine(
     developmental: Option<DevelopmentalContext<'_>>,
 ) -> Option<CombineAttempt> {
     if !organism.structure.units.is_empty() && !organism.stored_material.is_empty() {
-        if let Some(attempt) = try_combine_stored_unit(organism, environment, cache, ledger, developmental) {
+        if let Some(attempt) =
+            try_combine_stored_unit(organism, environment, cache, ledger, developmental)
+        {
             return Some(attempt);
         }
     }
