@@ -231,6 +231,7 @@ mod tests {
         let needs = CurrentNeeds {
             survival: 1.0,
             reproduction: 0.0,
+            development: 0.0,
         };
         assert_eq!(
             approve_action_for_current_needs(ActionKind::Break, eligibility, needs),
@@ -247,6 +248,7 @@ mod tests {
         let needs = CurrentNeeds {
             survival: 0.5,
             reproduction: 0.0,
+            development: 0.0,
         };
         assert_eq!(
             approve_action_for_current_needs(ActionKind::Break, eligibility, needs),
@@ -263,6 +265,7 @@ mod tests {
         let needs = CurrentNeeds {
             survival: 0.0,
             reproduction: 0.5,
+            development: 0.0,
         };
         assert_eq!(
             approve_action_for_current_needs(ActionKind::Combine, eligibility, needs),
@@ -280,10 +283,12 @@ mod tests {
         let survival_only = CurrentNeeds {
             survival: 0.5,
             reproduction: 0.0,
+            development: 0.0,
         };
         let reproduction_only = CurrentNeeds {
             survival: 0.0,
             reproduction: 0.5,
+            development: 0.0,
         };
         assert_eq!(
             approve_action_for_current_needs(ActionKind::Move, eligibility, survival_only),
