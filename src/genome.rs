@@ -234,4 +234,3 @@ mod tests {
         assert!(genome.juvenile_energy_reserve.is_finite() && genome.juvenile_energy_reserve > 0.0);
     }
 }
-
