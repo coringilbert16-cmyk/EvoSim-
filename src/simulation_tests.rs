@@ -44,8 +44,10 @@ mod integration_tests {
         assert!(!o.structure.units.is_empty());
         assert!(crate::cavity::analyze_genome_cavity(
             &o.structure,
-            &crate::resources::default_catalog()
-        ).unwrap().is_some());
+            &crate::resources::default_catalog(),
+        )
+        .unwrap()
+        .is_some());
         assert!(!o.structure.units.is_empty());
         assert!(!o.stored_material.is_empty());
         assert!(matches!(o.development_stage, DevelopmentStage::Juvenile));
