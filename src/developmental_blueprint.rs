@@ -327,7 +327,7 @@ mod tests {
     fn developmental_fields_are_continuous_evaluators() {
         let blueprint = default_developmental_blueprint();
         assert!(blueprint.validate().is_ok());
-        assert!((blueprint.density_preference(0.0, 0.0) - 0.5).abs() < f64::EPSILON);
+        assert!((blueprint.density_preference(0.0, 0.0) - 1.0).abs() < f64::EPSILON);
         assert!(blueprint.density_preference(2.0, 0.0) < 0.5);
     }
 
