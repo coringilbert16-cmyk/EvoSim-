@@ -9,7 +9,13 @@ impl DevelopmentalFieldBlueprint {
         developmental_orientation_radians: f64,
         preferred_mass: f64,
     ) -> DevelopmentalRealization {
-        let preferred_length = self.preferred_length(catalog, preferred_mass.max(1e-9));
+        let (seed_mass, seed_length) = crate::juvenile::confirmed_seed_scale_reference(catalog)
+            .unwrap_or((1.0, 1.0));
+        let preferred_length = self.preferred_developmental_length(
+            preferred_mass.max(1e-9),
+            seed_mass,
+            seed_length,
+        );
         let material_available = self.material_available_value(preferred_length);
         let density_available = self.density_available_value(preferred_length);
 
