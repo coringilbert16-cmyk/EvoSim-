@@ -60,10 +60,10 @@ impl Genome {
         self.trait_value("memory_strength", 0.5).clamp(0.0, 1.0)
     }
 
-    /// Inherited developmental preference for adult scale, centered at the
-    /// parent's value when offspring mutation is sampled.
-    pub fn size_preference(&self) -> f64 {
-        self.trait_value("size_preference", 0.5).clamp(0.0, 1.0)
+    /// Preferred structural mass toward which development tends.
+    /// Actual mass always belongs to the realized physical structure.
+    pub fn adult_mass(&self) -> f64 {
+        self.trait_value("adult_mass", 30.0).clamp(4.0, 1_000.0)
     }
 
     pub fn perception_radius(&self) -> f64 {
@@ -92,31 +92,6 @@ impl Genome {
     pub fn reproductive_investment(&self) -> f64 {
         self.trait_value("reproductive_investment", 0.5)
             .clamp(0.15, 1.0)
-    }
-
-    pub fn preferred_developmental_scale(&self) -> f64 {
-        DevelopmentalFieldBlueprint::preferred_developmental_scale(self.size_preference())
-    }
-
-    /// Compatibility accessor for callers that need the adult developmental
-    /// realization. The returned StructuralBlueprint is transient solver state;
-    /// the genome stores only the developmental field blueprint.
-    pub fn mature_construction_target(
-        &self,
-    ) -> Result<crate::structural_blueprint::StructuralBlueprint, String> {
-        self.developmental_construction_target(&crate::resources::default_catalog(), false)
-    }
-
-    pub fn developmental_construction_target(
-        &self,
-        catalog: &[crate::resources::BaseResource],
-        juvenile: bool,
-    ) -> Result<crate::structural_blueprint::StructuralBlueprint, String> {
-        self.developmental_blueprint.construction_candidate(
-            catalog,
-            self.preferred_developmental_scale(),
-            juvenile,
-        )
     }
 
     pub fn mutate(&mut self, rng: &mut ChaCha8Rng) {
@@ -176,7 +151,7 @@ pub fn initial_genome() -> Genome {
     Genome {
         traits: vec![
             trait_def("memory_strength", 0.5, 0.05),
-            trait_def("size_preference", 0.5, 0.05),
+            trait_def("adult_mass", 30.0, 0.5),
             trait_def("perception_radius", 100.0, 1.0),
             trait_def("sensory_resolution", 0.5, 0.05),
             trait_def("directional_resolution", 1.0, 0.05),
@@ -278,5 +253,19 @@ mod size_preference_tests {
             }
         }
         assert!(above > 0 && below > 0);
+    }
+}
+#[cfg(test)]
+mod developmental_mass_tests {
+    use super::*;
+    use rand::SeedableRng;
+    #[test]
+    fn preferred_developmental_mass_is_genome_authority() { assert_eq!(initial_genome().adult_mass(), 30.0); }
+    #[test]
+    fn preferred_developmental_mass_mutation_is_bounded() {
+        let mut genome = initial_genome();
+        genome.traits.iter_mut().find(|t| t.name == "adult_mass").unwrap().mutation_probability = 1.0;
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        for _ in 0..1000 { genome.mutate(&mut rng); assert!((4.0..=1_000.0).contains(&genome.adult_mass())); }
     }
 }
