@@ -179,7 +179,9 @@ impl DevelopmentalFieldBlueprint {
         let mut candidate = self.confirmed_juvenile_candidate(catalog)?;
         let mut current_mass = candidate.structural_mass(catalog);
         if !current_mass.is_finite() || current_mass <= 0.0 {
-            return Err("confirmed juvenile construction baseline has invalid structural mass".into());
+            return Err(
+                "confirmed juvenile construction baseline has invalid structural mass".into(),
+            );
         }
         if current_mass + 1e-9 >= target_mass {
             return Ok(candidate);
@@ -549,7 +551,8 @@ impl DevelopmentalFieldBlueprint {
         gaussian_plane_integral(
             self.structural_density.center_preference,
             self.structural_density.radial_falloff,
-        ).unwrap_or(0.0)
+        )
+        .unwrap_or(0.0)
     }
 
     fn connectivity_realization(
