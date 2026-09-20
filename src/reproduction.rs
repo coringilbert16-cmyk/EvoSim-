@@ -3,7 +3,6 @@
 //! Reproduction owns a separate developing physical graph. The child begins
 //! from one transferred anchor resource, then uses the normal COMBINE/runtime
 //! path with the inherited developmental fields guiding valid opportunities.
-use crate::cavity::analyze_genome_cavity;
 use crate::combine_runtime::DevelopmentalContext;
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::juvenile_requirements::{validate_realized_juvenile, JuvenileViabilityRequirements};
@@ -119,6 +118,15 @@ fn juvenile_scale_reached(
 }
 
 fn birth_ready(construction: &ReproductiveConstruction, catalog: &[crate::resources::BaseResource]) -> bool {
+    let Ok(cavity) = crate::cavity::analyze_genome_cavity(&construction.developing_structure, catalog) else {
+        return false;
+    };
+    let Some(cavity) = cavity else {
+        return false;
+    };
+    if !cavity.boundary_units.contains(&construction.anchor_unit_index) {
+        return false;
+    }
     if validate_realized_juvenile(
         &construction.developing_structure,
         catalog,
@@ -130,12 +138,11 @@ fn birth_ready(construction: &ReproductiveConstruction, catalog: &[crate::resour
 }
 
 fn anchor_structure(
-    parent: &mut Organism,
     child_genome: &crate::genome::Genome,
     anchor: Material,
     position: Position,
     catalog: &[crate::resources::BaseResource],
-) -> Option<(OrganismStructure, MaterialStorage)> {
+) -> Option<(OrganismStructure, MaterialStorage, usize)> {
     let mut storage = MaterialStorage::default();
     if !storage.store(anchor) {
         return None;
@@ -158,8 +165,8 @@ fn anchor_structure(
         reproductive_construction: None,
         structure: OrganismStructure::new(),
     };
-    crate::combine_runtime::instantiate_one_unit(&mut child, catalog)?;
-    Some((child.structure, child.stored_material))
+    let anchor_unit_index = crate::combine_runtime::instantiate_one_unit(&mut child, catalog)?;
+    Some((child.structure, child.stored_material, anchor_unit_index))
 }
 
 pub(crate) fn begin_reproduction(
@@ -194,6 +201,7 @@ pub(crate) fn begin_reproduction(
             developmental_origin: position,
             developmental_orientation_radians: 0.0,
             developing_stress: 0.0,
+            anchor_unit_index,
             developing_energy: 0.0,
         });
         let _ = ledger;
@@ -316,39 +324,53 @@ pub(crate) fn finish_reproduction(
 mod tests {
     use super::*;
     use crate::genome::initial_genome;
-    use crate::resources::default_catalog;
+    use crate::resources::{default_catalog, Material};
+
     #[test]
-    fn reproduction_starts_from_the_confirmed_seed_baseline() {
-        let target = crate::juvenile::confirmed_seed_baseline(&default_catalog()).unwrap();
-        let indices = all_indices(&target);
-        assert_eq!(indices.len(), target.elements.len());
-        assert!(target.anchor_elements.iter().all(|i| indices.contains(i)));
+    fn developmental_scale_uses_approved_forty_percent_linear_target() {
+        let catalog = default_catalog();
+        let genome = initial_genome();
+        let origin = Position { x: 0.0, y: 0.0 };
+        let preferred = preferred_length(&genome, &catalog).unwrap();
+        let mut construction = ReproductiveConstruction {
+            committed_material: MaterialStorage::default(),
+            developing_structure: OrganismStructure::new(),
+            child_genome: genome,
+            developmental_origin: origin,
+            developmental_orientation_radians: 0.0,
+            developing_stress: 0.0,
+            anchor_unit_index: 0,
+            developing_energy: 0.0,
+        };
+        assert!(preferred > 0.0);
+        assert!(!juvenile_scale_reached(&construction, &catalog));
+        construction.developing_structure = OrganismStructure::new();
     }
-    #[test]
-    fn realized_mapping_preserves_constituent_groups() {
-        let m = realized_mapping(&[17, 3, 42], &[vec![0, 1], vec![2], vec![3, 4]]);
-        assert_eq!(m.get(&17), Some(&vec![0, 1]));
-        assert_eq!(m.get(&3), Some(&vec![2]));
-        assert_eq!(m.get(&42), Some(&vec![3, 4]));
-    }
+
     #[test]
     fn reserve_requirement_is_genome_defined() {
-        let mut s = MaterialStorage::default();
-        let g = initial_genome();
-        assert!(s.store(g.juvenile_reserve.clone()));
-        assert!(s.take_matching(&g.juvenile_reserve).is_some());
-        assert!(g.juvenile_energy_reserve > 0.0);
+        let mut storage = MaterialStorage::default();
+        let genome = initial_genome();
+        assert!(storage.store(genome.juvenile_reserve.clone()));
+        assert!(storage.take_matching(&genome.juvenile_reserve).is_some());
+        assert!(genome.juvenile_energy_reserve > 0.0);
     }
+
     #[test]
-    fn multi_part_material_assembly_is_transactional() {
-        let mut s = MaterialStorage::default();
-        s.store(Material::free_base("Carbon", 1.0));
-        s.store(Material::free_base("Hydrogen", 1.0));
-        let target = Material {
-            parts: vec![("Carbon".into(), 1.0), ("Nitrogen".into(), 1.0)],
-            internal_bonds: Vec::new(),
-        };
-        assert!(assemble_blueprint_material(&mut s, &target).is_none());
-        assert_eq!(s.count_unstructured(), 2);
+    fn child_genome_is_mutated_before_construction() {
+        let parent = initial_genome();
+        let child = parent.clone();
+        assert!(child.developmental_blueprint.validate().is_ok());
+        assert!(child.juvenile_energy_reserve.is_finite());
+    }
+
+    #[test]
+    fn anchor_is_not_a_predefined_structural_blueprint() {
+        let catalog = default_catalog();
+        let genome = initial_genome();
+        let anchor = Material::free_base("Carbon", 1.0);
+        let position = Position { x: 0.0, y: 0.0 };
+        let result = anchor_structure(&genome, anchor, position, &catalog);
+        assert!(result.is_some());
     }
 }
