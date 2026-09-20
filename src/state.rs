@@ -96,14 +96,14 @@ pub(crate) struct ReproductiveConstruction {
     pub(crate) committed_material: MaterialStorage,
     pub(crate) developing_structure: OrganismStructure,
     pub(crate) child_genome: Genome,
+    /// Persistent developmental frame for the physically separate offspring.
     #[serde(default)]
-    pub(crate) target_elements: Vec<usize>,
+    pub(crate) developmental_origin: Position,
     #[serde(default)]
-    pub(crate) realized_elements: Vec<usize>,
+    pub(crate) developmental_orientation_radians: f64,
+    /// Stress accumulated by the developing offspring before detachment.
     #[serde(default)]
-    pub(crate) realized_constituent_groups: Vec<Vec<usize>>,
-    #[serde(default)]
-    pub(crate) pending_stress: f64,
+    pub(crate) developing_stress: f64,
     /// Usable energy held by the physically separate developing offspring.
     /// It is transferred from the parent while construction remains active.
     #[serde(default)]
