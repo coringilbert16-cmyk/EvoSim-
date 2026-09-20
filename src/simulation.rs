@@ -663,8 +663,7 @@ impl Simulation {
             .iter()
             .map(|o| {
                 o.usable_energy
-                    + o
-                        .reproductive_construction
+                    + o.reproductive_construction
                         .as_ref()
                         .map(|construction| construction.developing_energy)
                         .unwrap_or(0.0)
