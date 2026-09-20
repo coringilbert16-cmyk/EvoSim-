@@ -16,7 +16,10 @@ use crate::structure::OrganismStructure;
 use rand_chacha::ChaCha8Rng;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[expect(dead_code, reason = "DeadEnd is reserved for the approved P7 terminal construction condition")]
+#[expect(
+    dead_code,
+    reason = "DeadEnd is reserved for the approved P7 terminal construction condition",
+)]
 pub(crate) enum ConstructionStatus {
     Waiting,
     Progress,
