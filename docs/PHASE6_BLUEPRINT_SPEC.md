@@ -129,7 +129,7 @@ The README establishes the required developmental information but does not estab
 
 Existing genome traits such as environmental/resource affinities must not be silently repurposed as developmental genes merely because they are numerically convenient; their current meanings belong to other systems.
 
-The next design step is therefore to identify the minimum remaining inherited information required to express material-composition and structural-density fields, then define the numerical domain and mapping for the size-preference gene before changing Genome.
+The approved P6 implementation now defines the minimum inherited developmental-size authority through `size_preference` and the approved developmental-field parameterization. Material-composition and structural-density fields remain continuous developmental preferences; their numerical starting parameters are experimental and are not additional biological authorities.
 
 ## Non-goals
 
