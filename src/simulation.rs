@@ -598,7 +598,7 @@ impl Simulation {
                         .as_mut()
                         .expect("reproductive construction exists");
                     let parent_boundary =
-                        crate::reproduction::parent_boundary_for_simulation(
+                        crate::reproduction::parent_boundary(
                             organism,
                             &self.environment.catalog,
                         );
