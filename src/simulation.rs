@@ -603,6 +603,7 @@ impl Simulation {
                         .as_mut()
                         .expect("reproductive construction exists");
                     crate::reproduction::advance_construction(
+                        &organism.structure,
                         &mut organism.stored_material,
                         construction,
                         &self.environment,
