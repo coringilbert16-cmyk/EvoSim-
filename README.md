@@ -521,53 +521,41 @@ The objective is:
 
 > Find a physically valid realization consistent with the intended blueprint and already-realized neighborhood.
 
-# 20. The Blueprint
+# 20. The Developmental Blueprint
 
-The blueprint is the organism's structural target.
+The developmental blueprint is the organism's inherited **developmental-intent authority**.
 
-It is not the physical organism itself.
+It is a compact set of continuous developmental preference fields, not the physical organism and not an exact body plan.
 
-The adult blueprint represents the intended adult structure at **100% scale**.
+The adult developmental blueprint represents **100% adult developmental scale**. It does not encode exact material instances, unit counts, coordinates, bonds, angles, rotations, topology, branches, or silhouette.
 
-The blueprint provides the target layout that the physical organism is attempting to realize.
+The authoritative chain is:
 
-The physical structure may temporarily differ from the blueprint during:
+> **Genome → Developmental Field Blueprint → Construction/Development Solver → Physical Structure**
 
-- juvenile growth,
-- construction,
-- repair,
-- reorganization,
-- damage,
-- or other physical processes.
+The physical structure remains authoritative for what actually exists.
 
-The blueprint must not be confused with a hard-coded body-plan category.
+The developmental blueprint may therefore be only partially realized because of resource availability, physical geometry, connection constraints, existing structure, environmental conditions, and developmental history.
 
-# 21. Juvenile Blueprint Construction
+# 21. Juvenile Developmental Realization
 
-The juvenile is generated from the adult blueprint.
+The juvenile possesses the **same 100% adult developmental blueprint** from birth.
 
-The adult blueprint represents **100% size**.
+It does not receive a permanently reduced or separately authored juvenile blueprint.
 
-To construct the initial juvenile:
+The approved initial juvenile realization uses approximately **40% of the preferred adult linear developmental scale**. Under the approved 2-D comparable-density scaling, this corresponds to approximately (0.40^2) of preferred adult mass as a consequence of the scale relationship; it is not a requirement for exact constituent or bond counts.
 
-1. Begin with the adult blueprint.
-2. Reduce the overall spatial layout to approximately **40%**.
-3. Do **not** require the juvenile to contain exactly 40% of the adult's constituents.
-4. Do **not** require exactly 40% of the adult's bonds.
-5. The important target is the reduced **overall layout**.
-6. A constructor or appropriate realization mechanism then attempts to build the closest physically valid structure to that reduced layout.
+The confirmed original seed realization is retained only as a physical construction and scale-calibration baseline. It is not inherited, serialized into the genome, or used as a descendant topology authority.
 
-The exact realization mechanism remains an implementation question to be resolved through the existing construction architecture rather than through invention of a new biological rule.
+The solver finds a physically valid realization through normal construction/COMBINE machinery. Developmental fields rank physically valid opportunities; they do not declare exact placements or bonds.
 
 # 22. Juvenile's Blueprint After Birth
 
-Once the juvenile is born, it possesses the **100% adult blueprint**.
+Once the juvenile is born, it already possesses the **100% adult developmental blueprint**.
 
-It does not receive a permanently reduced 40% blueprint.
+The reduced juvenile realization is a physical developmental state, not a reduced genome blueprint.
 
-The juvenile therefore knows, through its blueprint, what adult structure it is growing toward.
-
-Growth is the process by which physical realization moves toward that adult blueprint.
+Growth is the process by which physical realization moves toward the continuous developmental preferences represented by that adult blueprint.
 
 # 23. Growth Is Not a Decision
 
@@ -696,28 +684,21 @@ The offspring is then constructed within/through the adult's physical reproducti
 
 # 30. Reproductive Juvenile Target
 
-The juvenile must reach:
+The juvenile birth target remains an approximately **40% linear realization of preferred adult developmental scale**.
 
-- approximately **40% of adult structural size**, and
-- approximately **90% visual/functional similarity** to the intended reduced realization,
+This is a developmental-scale requirement, not an exact constituent count, exact bond count, or exact body-plan diagram. The juvenile remains free to differ physically where environmental conditions, geometry, connection constraints, available material, or developmental history require it.
 
-before birth/separation.
+The construction system finds a physically valid realization through the normal physical construction and COMBINE machinery.
 
-The 40% target concerns the overall spatial realization, not a requirement that the juvenile contain exactly 40% of the adult's constituents or bonds.
-
-The constructor is responsible for finding the closest physically valid realization of the reduced target.
-
-The detailed visual/functional similarity system remains subject to the previously established design and must not be replaced with an invented metric.
+Any additional birth criterion must use an already established physical requirement; P6 does not invent a separate visual-similarity body-plan metric.
 
 # 31. Juvenile Separation
 
 Once the juvenile satisfies the established birth requirements, it separates from the adult and becomes a new life.
 
-The new juvenile then possesses its **100% adult blueprint** and proceeds through the normal developmental process.
+The new juvenile then possesses its **100% adult developmental blueprint** and proceeds through the normal developmental process.
 
-The juvenile's physical structure at birth is therefore the reduced realization.
-
-Its blueprint is the full adult target.
+Its physical structure at birth is the reduced developmental realization; its inherited developmental blueprint remains the full adult field representation.
 
 # 32. Maintenance
 
