@@ -104,6 +104,10 @@ pub(crate) struct ReproductiveConstruction {
     /// Stress accumulated by the developing offspring before detachment.
     #[serde(default)]
     pub(crate) developing_stress: f64,
+    /// Unit index of the transferred anchor. The qualifying physical genome
+    /// must retain this unit as part of its realized cavity boundary.
+    #[serde(default)]
+    pub(crate) anchor_unit_index: usize,
     /// Usable energy held by the physically separate developing offspring.
     /// It is transferred from the parent while construction remains active.
     #[serde(default)]
