@@ -349,6 +349,7 @@ pub(crate) fn advance_construction(
     ledger: &mut EnergyLedger,
     parent_energy: &mut f64,
     rng: &mut ChaCha8Rng,
+    parent_boundary: &(Position, f64),
 ) -> (ConstructionStatus, Option<f64>) {
     let reserve_energy = construction.child_genome.juvenile_energy_reserve;
     if reserve_energy.is_finite() && reserve_energy > construction.developing_energy {
@@ -406,7 +407,14 @@ pub(crate) fn advance_construction(
     };
     let before_units = child.structure.units.len();
     let Some((child, candidate_ledger, transferred)) =
-        try_child_construction(&child, parent_storage, environment, ledger, context)
+        try_child_construction(
+            &child,
+            parent_storage,
+            environment,
+            ledger,
+            context,
+            parent_boundary,
+        )
     else {
         if !child.stored_material.is_empty() && child.structure.bonds.is_empty() {
             return (ConstructionStatus::Dead, None);
