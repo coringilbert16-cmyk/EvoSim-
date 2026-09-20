@@ -82,10 +82,6 @@ impl Simulation {
             realize_initial(&seed_baseline, &catalog)
                 .expect("confirmed original seed must be physically realizable");
 
-        // Blueprint coordinates are developmental-local. The organism's
-        // occupied cell is its world-space anchor, so the realized physical
-        // structure must be translated to that anchor before entering the
-        // simulation.
         let anchor = Position { x: 500.0, y: 500.0 };
         for unit in &mut structure.units {
             unit.placement.x += anchor.x;
