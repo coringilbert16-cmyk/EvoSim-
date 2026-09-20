@@ -104,6 +104,10 @@ pub(crate) struct ReproductiveConstruction {
     pub(crate) realized_constituent_groups: Vec<Vec<usize>>,
     #[serde(default)]
     pub(crate) pending_stress: f64,
+    /// Usable energy held by the physically separate developing offspring.
+    /// It is transferred from the parent while construction remains active.
+    #[serde(default)]
+    pub(crate) developing_energy: f64,
 }
 #[derive(Serialize, Deserialize, Clone, Copy, Default)]
 pub(crate) struct EnergyLedger {
