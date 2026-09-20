@@ -450,6 +450,41 @@ mod tests {
     }
 
     #[test]
+    fn move_translates_developing_offspring_with_parent() {
+        let mut simulation = Simulation::new(7, 20.0);
+        let mut environment = empty_environment(&simulation);
+        let mut organism = simulation.organisms.remove(0);
+        organism.development_stage = crate::state::DevelopmentStage::Adult;
+        let mut ledger = crate::state::EnergyLedger::default();
+        assert!(crate::reproduction::begin_reproduction(
+            &mut organism,
+            &mut simulation.rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+        let before = organism
+            .reproductive_construction
+            .as_ref()
+            .unwrap()
+            .developmental_origin
+            .clone();
+        assert!(Simulation::try_move_cell(
+            &mut organism,
+            &mut environment,
+            &mut [],
+            12.0,
+            -7.0,
+        ));
+        let after = &organism
+            .reproductive_construction
+            .as_ref()
+            .unwrap()
+            .developmental_origin;
+        assert!((after.x - before.x - 12.0).abs() < 1e-9);
+        assert!((after.y - before.y + 7.0).abs() < 1e-9);
+    }
+
+    #[test]
     fn move_translates_anchor_and_structure() {
         let simulation = Simulation::new(7, 20.0);
         let mut environment = empty_environment(&simulation);
