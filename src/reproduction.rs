@@ -40,12 +40,7 @@ fn parent_child_position(
     anchor: &Material,
     catalog: &[crate::resources::BaseResource],
 ) -> Option<Position> {
-    let parent_position = parent.occupied_cells.first()?.clone();
-    let parent_radius =
-        crate::organism_geometry::OrganismBodyGeometry::from_structure(&parent.structure, catalog)
-            .map(|g| g.bounding_radius_about(parent_position.x, parent_position.y))
-            .unwrap_or(1.0)
-            .max(0.0);
+    let (center, radius) = parent_boundary(parent, catalog)?;
     let anchor_name = anchor.parts.first()?.0.as_str();
     let anchor_radius = catalog
         .iter()
@@ -53,9 +48,28 @@ fn parent_child_position(
         .map(|r| r.shape.form.bounding_radius())
         .unwrap_or(1.0)
         .max(0.0);
-    Some(Position {
-        x: parent_position.x + parent_radius + anchor_radius + 1.0,
-        y: parent_position.y,
+    (anchor_radius <= radius + 1e-9).then_some(center)
+}
+
+fn structure_within_parent_boundary(
+    structure: &OrganismStructure,
+    center: &Position,
+    radius: f64,
+) -> bool {
+    if !radius.is_finite() || radius <= 0.0 {
+        return false;
+    }
+    structure.units.iter().all(|unit| {
+        let Some(geometry) = unit.geometry.as_ref() else {
+            return false;
+        };
+        let shape_radius = geometry.shape().form.bounding_radius();
+        shape_radius.is_finite()
+            && unit.placement.x.is_finite()
+            && unit.placement.y.is_finite()
+            && (unit.placement.x - center.x).hypot(unit.placement.y - center.y)
+                + shape_radius
+                <= radius + 1e-9
     })
 }
 
