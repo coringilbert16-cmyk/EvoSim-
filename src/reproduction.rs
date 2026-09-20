@@ -428,6 +428,7 @@ mod tests {
     use super::*;
     use crate::genome::initial_genome;
     use crate::resources::{default_catalog, Material};
+    use crate::simulation::Simulation;
 
     #[test]
     fn developmental_scale_uses_approved_forty_percent_linear_target() {
@@ -435,7 +436,7 @@ mod tests {
         let genome = initial_genome();
         let origin = Position { x: 0.0, y: 0.0 };
         let preferred = preferred_length(&genome, &catalog).unwrap();
-        let mut construction = ReproductiveConstruction {
+        let construction = ReproductiveConstruction {
             committed_material: MaterialStorage::default(),
             developing_structure: OrganismStructure::new(),
             child_genome: genome,
@@ -447,7 +448,6 @@ mod tests {
         };
         assert!(preferred > 0.0);
         assert!(!juvenile_scale_reached(&construction, &catalog));
-        construction.developing_structure = OrganismStructure::new();
     }
 
     #[test]
@@ -460,11 +460,52 @@ mod tests {
     }
 
     #[test]
-    fn child_genome_is_mutated_before_construction() {
-        let parent = initial_genome();
-        let child = parent.clone();
-        assert!(child.developmental_blueprint.validate().is_ok());
-        assert!(child.juvenile_energy_reserve.is_finite());
+    fn anchor_starts_a_separate_physical_child_graph() {
+        let mut simulation = Simulation::new(7, 20.0);
+        let mut parent = simulation.organisms.remove(0);
+        parent.development_stage = DevelopmentStage::Adult;
+        let parent_structure = parent.structure.clone();
+        let mut ledger = EnergyLedger::default();
+        assert!(begin_reproduction(
+            &mut parent,
+            &mut simulation.rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+        let construction = parent
+            .reproductive_construction
+            .as_ref()
+            .expect("reproduction is active");
+        assert!(!construction.developing_structure.units.is_empty());
+        assert!(construction.anchor_unit_index < construction.developing_structure.units.len());
+        assert_eq!(parent.structure, parent_structure);
+    }
+
+    #[test]
+    fn developing_offspring_receives_persistent_energy_from_parent() {
+        let mut simulation = Simulation::new(11, 20.0);
+        let mut parent = simulation.organisms.remove(0);
+        parent.development_stage = DevelopmentStage::Adult;
+        let mut ledger = EnergyLedger::default();
+        assert!(begin_reproduction(
+            &mut parent,
+            &mut simulation.rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+        let mut construction = parent.reproductive_construction.take().unwrap();
+        let before_parent_energy = parent.usable_energy;
+        let environment = simulation.environment.clone();
+        let _ = advance_construction(
+            &mut parent.stored_material,
+            &mut construction,
+            &environment,
+            &mut ledger,
+            &mut parent.usable_energy,
+            &mut simulation.rng,
+        );
+        assert!(construction.developing_energy > 0.0);
+        assert!(parent.usable_energy < before_parent_energy);
     }
 
     #[test]
@@ -473,7 +514,6 @@ mod tests {
         let genome = initial_genome();
         let anchor = Material::free_base("Carbon", 1.0);
         let position = Position { x: 0.0, y: 0.0 };
-        let result = anchor_structure(&genome, anchor, position, &catalog);
-        assert!(result.is_some());
+        assert!(anchor_structure(&genome, anchor, position, &catalog).is_some());
     }
 }
