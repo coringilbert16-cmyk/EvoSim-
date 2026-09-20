@@ -180,7 +180,7 @@ pub(crate) fn begin_reproduction(
     }
     let mut child_genome = parent.genome.clone();
     child_genome.mutate(rng);
-    if !child_genome.developmental_blueprint.validate().is_ok()
+    if child_genome.developmental_blueprint.validate().is_err()
         || !child_genome.juvenile_energy_reserve.is_finite()
         || child_genome.juvenile_energy_reserve <= 0.0
     {
