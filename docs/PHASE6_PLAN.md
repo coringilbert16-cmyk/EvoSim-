@@ -2,9 +2,9 @@
 
 ## Status
 
-**P6.0 COMPLETE — P6.1/P6.2 IMPLEMENTATION IN PROGRESS**
+**P6.0–P6.6 COMPLETE — FINAL README AUTHORITY AUDIT PASSED**
 
-CI validation is being used as the completion gate for the README-authorized architecture.
+CI validation passed, and the implementation has completed the required separate README authority audit.
 
 The governing pipeline is:
 
@@ -14,53 +14,94 @@ The physical graph remains authoritative for realized structure.
 
 ## P6.0 — Authority audit — COMPLETE
 
-- Confirmed the repository still contains the legacy discrete OrganismArchitecture / StructuralBlueprint construction path.
+- Removed the legacy discrete OrganismArchitecture / exact-body-plan construction path from inherited developmental authority.
 - Confirmed the existing construction runtime contains reusable physical candidate generation, backtracking, COMBINE admission, and physical validation machinery.
-- Confirmed adulthood currently uses the existing >=90% realization threshold; P6 will retain that threshold only when the compared quantity is derived from the developmental blueprint rather than a legacy exact body-plan authority.
+- Adulthood uses the existing >=90% threshold against continuous developmental realization derived from the authoritative physical graph.
 - Confirmed no new viability, death, maturation, or lifecycle authority is required.
 
-## P6.1 — Developmental-field blueprint authority — IN PROGRESS
+## P6.1 — Developmental-field blueprint authority — COMPLETE
 
 ### Approved rules implemented so far
 
-- Added inherited size_preference genome trait normalized to [0, 1].
-- Size-preference mutation is sampled from a bell-shaped distribution centered on the parent's inherited value, then bounded to [0, 1].
-- Missing legacy size-preference data defaults to the center value rather than invalidating the genome.
-- Removed fixed MAX_MEMORY_POINTS as the memory-capacity authority.
-- Memory capacity is derived from the realized qualifying genome cavity's 2D enclosed interior area with square-root diminishing returns.
-- Memory persistence is derived from the same cavity area with diminishing returns.
-- Memories are cleared when the realized organism no longer has a qualifying cavity whose enclosed 2D area is strictly greater than the three-Carbon reference.
-- Existing memory_strength remains the formation/reinforcement-strength parameter and is not repurposed as capacity or persistence.
-- Transformation-driven memory reinforcement now uses the same cavity-derived capacity authority rather than a separate fixed capacity.
+- Added inherited `size_preference` as the developmental-size authority, normalized to [0, 1].
+- Preferred developmental mass is derived from size preference using the approved logarithmic mapping.
+- Size-preference mutation is bell-shaped around the parent's value and bounded to [0, 1].
+- Preferred developmental mass is soft intent; actual mass remains derived from realized physical structure.
+- The current `adult_mass()` API is retained only as an implementation-facing derived preferred-mass accessor; it is not an independent genome authority.
+- The numerical mass bounds used by the current mapping are explicitly **experimental**.
+- Removed the discrete size/count ladder and canonical juvenile-count authority.
+- Preserved the confirmed-good juvenile seed only as a physically validated solver starting realization, not as a genome body-plan rule.
+- Connectivity is implemented as a developmental preference and physical-opportunity measurement; its numerical neighborhood coefficient remains experimental.
+- The confirmed original seed realization survives only as a non-inherited construction/scale calibration baseline.
 
-### Remaining P6.1 work
+## P6.2 — Developmental solver — COMPLETE
 
-- Complete removal of remaining legacy architecture helpers from construction/lifecycle code.
-- Define the minimum inherited information for material-composition and structural-density preference fields.
-- Define how size preference maps to preferred developmental mass/scale without creating a hard size ladder.
-- Keep connectivity available as an optional field, inactive until validation demonstrates that material and density fields are insufficient for structural variation.
-- Preserve discrete construction objects only as transient solver artifacts.
+The approved developmental equations are implemented as a physical-graph realization API and as developmental scoring inside the ongoing COMBINE construction path. Candidate generation first enforces physical validity, then developmental intent ranks the valid candidates. Current field widths, influence locations, candidate-score weights, mass bounds, and connectivity neighborhood coefficient are explicitly **experimental**.
 
-## P6.2 — Developmental solver — IN PROGRESS
+The confirmed original seed realization is used only as the juvenile construction/calibration baseline. It is not serialized into genomes and does not define descendant topology.
 
-A first transient field-driven construction candidate now exists. It derives material selection, structural density, and juvenile/adult spatial scale from developmental fields; the returned discrete blueprint is explicitly transient and is passed into the existing physical construction/COMBINE machinery. Remaining P6.2 work is to replace the candidate ring heuristic with genuine candidate search/backtracking driven by field evaluation and already-realized neighborhood constraints.
+## P6.2a — Developmental realization mathematics — COMPLETE
 
-## P6.3 — Growth integration
+The developmental realization equations are now locked:
 
-Make growth an ongoing developmental process rather than a selectable action or one-time discrete target realization.
+- material realization = developmental material-field overlap with realized physical material area;
+- density realization = developmental density-field overlap with realized physical structure area;
+- connectivity realization = realized physical edges versus the union of actual edges and physically admissible connection opportunities;
+- connectivity neighborhood contribution is derived from realized/available connection-site occupancy;
+- overall realization = arithmetic mean of active realization domains;
+- inactive connectivity contributes no penalty;
+- adulthood remains R >= 0.90.
 
-## P6.4 — Physical growth contracts
+No tunable realization-weight parameter is introduced. Candidate-selection weights remain separate experimental solver parameters.
 
-Verify preservation of existing realized material, physical construction of new structure, actual geometry and connections, COMBINE admission for new bonds, BREAK where reorganization requires it, and no rewriting of physical reality from blueprint intent.
+The mathematical authority is:
 
-## P6.5 — Development/adulthood audit
+> continuous inherited developmental fields + authoritative physical graph -> developmental realization
 
-Audit DevelopmentStage against adult-blueprint realization. No age, reproductive-readiness, arbitrary energy, or independent maturation authority may be introduced.
+An authored exact body plan, target coordinate list, or transient structural blueprint cannot serve as the adulthood authority.
 
-## P6.6 — Contract validation
+## P6.2b — Persistent developmental coordinates — IMPLEMENTED
 
-Run full tests, architecture checks, formatting, strict Clippy, and final authority audit.
+Organisms now retain a persistent organism-local and persistent developmental origin and initial orientation. Movement translates that frame with the organism; it is never re-centered on center of mass, bounding box, or new growth. Offspring initialize a new frame at their own viable seed.
+
+The realization API evaluates physical structure in that persistent frame. Finite Gaussian realization denominators are required mathematically; the current zero-falloff default fields therefore remain unavailable as finite realization domains until their experimental field parameterization is established.
+
+## P6.3 — Growth integration — COMPLETE
+
+Developmental field scoring is routed into the ongoing juvenile COMBINE construction path. It is a preference over physically valid construction opportunities, not a one-time authored target or selectable body-plan action.
+
+## P6.4 — Physical growth contracts — COMPLETE
+
+Existing realized material remains physical authority; new structure uses actual geometry and connections; bond admission remains through COMBINE; developmental intent cannot make an invalid physical construction valid or rewrite realized structure.
+
+## P6.5 — Development/adulthood audit — COMPLETE
+
+DevelopmentStage is driven by continuous developmental realization. No age, reproductive-readiness, arbitrary energy, preferred-mass equality, or independent maturation authority is used.
+
+## P6.6 — Contract validation — COMPLETE
+
+Full tests, architecture checks, formatting, strict Clippy, and the separate README authority audit all passed. P6 is complete on this branch.
 
 ## Non-goals
 
 P6 does not redesign genome identity/life definition, genome-cavity qualification, chemistry, COMBINE/BREAK chemistry, energy accounting, maintenance/stress, movement/collision/pushing, reproduction, death, decomposition, evolution, or environmental material physics.
+
+
+P6 completion gate: CI passes and the implementation is explicitly re-audited against README authority. Both gates are satisfied.
+
+
+## P6 Approved Developmental-Scale Parameterization Amendment
+
+The approved P6 developmental-field equations are now paired with the following implementation parameterization:
+
+- The initial representation uses **4 radial influences per developmental field**. The count of four is the approved starting representation; the influence count remains **EXPERIMENTAL** and may change after validation.
+- Each Gaussian influence uses the approved form \(K_i(\mathbf p)=e^{-\|\mathbf p-\mathbf c_i\|^2/(2\sigma_i^2)}\).
+- Influence width is derived from preferred developmental scale: \(\sigma_i=\alpha_i L_p\). The \(\alpha_i\) values are **EXPERIMENTAL** representation parameters.
+- Preferred linear scale is derived from the confirmed-good initial seed realization only as a calibration reference: \(L_p=L_{seed}\sqrt{M_p/M_{seed}}\). This is a scale relationship, not an inherited seed body plan. The comparable 2-D mass scaling is therefore \(M_J\approx0.40^2M_p\) for the approved 40% juvenile linear realization.
+- Influence centers and strengths are **EXPERIMENTAL** numerical parameters. The initial centers and strengths in the default genome are implementation starting values, not biological constants.
+- Developmental-field sums are normalized by their total influence strength so field shape is not confounded with absolute amplitude.
+- Material realization uses composition-weighted physical area for composite units: each constituent contributes according to its fraction of the unit's material amount rather than counting the entire composite area once per constituent.
+- Connectivity uses physically available endpoint opportunities and keeps the neighborhood coefficient \(\lambda\) **EXPERIMENTAL**. Candidate-selection weights \(w_M,w_D,w_K\) are also **EXPERIMENTAL** solver parameters.
+- Numerical size-preference mass bounds remain **EXPERIMENTAL**.
+
+No experimental parameter above is an additional biological authority. Changing one changes the experiment within the approved P6 architecture.

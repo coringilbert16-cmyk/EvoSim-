@@ -58,17 +58,14 @@ pub fn validate_realized_juvenile(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genome::initial_genome;
+    use crate::juvenile::confirmed_seed_baseline;
     use crate::resources::default_catalog;
 
     #[test]
     fn viability_does_not_depend_on_a_predefined_piece_count_or_core() {
-        let genome = initial_genome();
         let catalog = default_catalog();
-        let blueprint = genome
-            .developmental_construction_target(&catalog, true)
-            .unwrap();
-        let structure = blueprint.realize(&catalog).unwrap();
+        let blueprint = confirmed_seed_baseline(&catalog).unwrap();
+        let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
         validate_realized_juvenile(
             &structure,
             &catalog,
@@ -79,11 +76,8 @@ mod tests {
 
     #[test]
     fn unsealed_genome_fails_viability() {
-        let genome = initial_genome();
         let catalog = default_catalog();
-        let blueprint = genome
-            .developmental_construction_target(&catalog, true)
-            .unwrap();
+        let blueprint = confirmed_seed_baseline(&catalog).unwrap();
         let mut structure = blueprint.realize(&catalog).unwrap();
         structure.bonds.clear();
         assert!(validate_realized_juvenile(

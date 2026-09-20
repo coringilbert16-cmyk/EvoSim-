@@ -521,53 +521,41 @@ The objective is:
 
 > Find a physically valid realization consistent with the intended blueprint and already-realized neighborhood.
 
-# 20. The Blueprint
+# 20. The Developmental Blueprint
 
-The blueprint is the organism's structural target.
+The developmental blueprint is the organism's inherited **developmental-intent authority**.
 
-It is not the physical organism itself.
+It is a compact set of continuous developmental preference fields, not the physical organism and not an exact body plan.
 
-The adult blueprint represents the intended adult structure at **100% scale**.
+The adult developmental blueprint represents **100% adult developmental scale**. It does not encode exact material instances, unit counts, coordinates, bonds, angles, rotations, topology, branches, or silhouette.
 
-The blueprint provides the target layout that the physical organism is attempting to realize.
+The authoritative chain is:
 
-The physical structure may temporarily differ from the blueprint during:
+> **Genome → Developmental Field Blueprint → Construction/Development Solver → Physical Structure**
 
-- juvenile growth,
-- construction,
-- repair,
-- reorganization,
-- damage,
-- or other physical processes.
+The physical structure remains authoritative for what actually exists.
 
-The blueprint must not be confused with a hard-coded body-plan category.
+The developmental blueprint may therefore be only partially realized because of resource availability, physical geometry, connection constraints, existing structure, environmental conditions, and developmental history.
 
-# 21. Juvenile Blueprint Construction
+# 21. Juvenile Developmental Realization
 
-The juvenile is generated from the adult blueprint.
+The juvenile possesses the **same 100% adult developmental blueprint** from birth.
 
-The adult blueprint represents **100% size**.
+It does not receive a permanently reduced or separately authored juvenile blueprint.
 
-To construct the initial juvenile:
+The approved initial juvenile realization uses approximately **40% of the preferred adult linear developmental scale**. Under the approved 2-D comparable-density scaling, this corresponds to approximately (0.40^2) of preferred adult mass as a consequence of the scale relationship; it is not a requirement for exact constituent or bond counts.
 
-1. Begin with the adult blueprint.
-2. Reduce the overall spatial layout to approximately **40%**.
-3. Do **not** require the juvenile to contain exactly 40% of the adult's constituents.
-4. Do **not** require exactly 40% of the adult's bonds.
-5. The important target is the reduced **overall layout**.
-6. A constructor or appropriate realization mechanism then attempts to build the closest physically valid structure to that reduced layout.
+The confirmed original seed realization is retained only as a physical construction and scale-calibration baseline. It is not inherited, serialized into the genome, or used as a descendant topology authority.
 
-The exact realization mechanism remains an implementation question to be resolved through the existing construction architecture rather than through invention of a new biological rule.
+The solver finds a physically valid realization through normal construction/COMBINE machinery. Developmental fields rank physically valid opportunities; they do not declare exact placements or bonds.
 
 # 22. Juvenile's Blueprint After Birth
 
-Once the juvenile is born, it possesses the **100% adult blueprint**.
+Once the juvenile is born, it already possesses the **100% adult developmental blueprint**.
 
-It does not receive a permanently reduced 40% blueprint.
+The reduced juvenile realization is a physical developmental state, not a reduced genome blueprint.
 
-The juvenile therefore knows, through its blueprint, what adult structure it is growing toward.
-
-Growth is the process by which physical realization moves toward that adult blueprint.
+Growth is the process by which physical realization moves toward the continuous developmental preferences represented by that adult blueprint.
 
 # 23. Growth Is Not a Decision
 
@@ -696,28 +684,21 @@ The offspring is then constructed within/through the adult's physical reproducti
 
 # 30. Reproductive Juvenile Target
 
-The juvenile must reach:
+The juvenile birth target remains an approximately **40% linear realization of preferred adult developmental scale**.
 
-- approximately **40% of adult structural size**, and
-- approximately **90% visual/functional similarity** to the intended reduced realization,
+This is a developmental-scale requirement, not an exact constituent count, exact bond count, or exact body-plan diagram. The juvenile remains free to differ physically where environmental conditions, geometry, connection constraints, available material, or developmental history require it.
 
-before birth/separation.
+The construction system finds a physically valid realization through the normal physical construction and COMBINE machinery.
 
-The 40% target concerns the overall spatial realization, not a requirement that the juvenile contain exactly 40% of the adult's constituents or bonds.
-
-The constructor is responsible for finding the closest physically valid realization of the reduced target.
-
-The detailed visual/functional similarity system remains subject to the previously established design and must not be replaced with an invented metric.
+Any additional birth criterion must use an already established physical requirement; P6 does not invent a separate visual-similarity body-plan metric.
 
 # 31. Juvenile Separation
 
 Once the juvenile satisfies the established birth requirements, it separates from the adult and becomes a new life.
 
-The new juvenile then possesses its **100% adult blueprint** and proceeds through the normal developmental process.
+The new juvenile then possesses its **100% adult developmental blueprint** and proceeds through the normal developmental process.
 
-The juvenile's physical structure at birth is therefore the reduced realization.
-
-Its blueprint is the full adult target.
+Its physical structure at birth is the reduced developmental realization; its inherited developmental blueprint remains the full adult field representation.
 
 # 32. Maintenance
 
@@ -1335,9 +1316,9 @@ Each influence may contain:
 - Strength
 - Falloff
 
-Initial fields should generally use approximately 1–3 influences per field.
+Initial fields may use a small number of radial influences. The exact influence count is an **experimental representation parameter**, not a permanent biological law.
 
-This provides a compact genome representation while allowing nonuniform developmental tendencies.
+This provides a compact genome representation while allowing nonuniform developmental tendencies. The approved initial radial equation is Gaussian; influence centers, widths, strengths, and numerical bounds are experimental until explicitly approved.
 
 Deferred complexity
 
@@ -1404,7 +1385,7 @@ The actual bond graph remains owned by the physical structure.
 
 9. Preferred Developmental Mass
 
-The existing genome "adult_mass" concept is repurposed as the organism's preferred developmental mass.
+The inherited **size-preference gene** is the source of developmental-size variation. Preferred developmental mass is derived from that gene using the approved logarithmic size mapping. The current `adult_mass` concept may remain as an implementation-facing preferred-mass value only if it is not maintained as a second independent inherited authority.
 
 It means:
 
@@ -1416,7 +1397,7 @@ It does not mean:
 
 Actual organism mass is always derived from the realized physical structure.
 
-There must not be a separate authoritative "blueprint_mass" alongside "adult_mass".
+There must not be a second independent authoritative developmental-size gene or mass value alongside the size-preference authority.
 
 Mass authority
 
@@ -1579,3 +1560,183 @@ The blueprint exists to provide the minimum amount of heritable information nece
 The goal is not to encode an organism.
 
 The goal is to encode how development tends to behave.
+
+---
+
+# 57. P6 Developmental Realization Mathematics — APPROVED
+
+The P6 developmental realization model is defined by continuous developmental fields and the authoritative physical graph.
+
+## 57.1 Material realization
+
+For material m, C_m(p) is its developmental material-preference field and A_m(G) is the physical area occupied by that material in the authoritative organism graph G.
+
+\[
+V_{M,R}=\sum_m\int_{A_m(G)}C_m(\mathbf p)\,dA
+\]
+
+\[
+V_{M,A}=\sum_m\int_{\mathbb R^2}C_m(\mathbf p)\,dA
+\]
+
+\[
+R_M=V_{M,R}/V_{M,A}
+\]
+
+when V_{M,A}>0.
+
+## 57.2 Structural-density realization
+
+For density field D(p), let A_G be the physical area occupied by realized organism structure.
+
+\[
+V_{D,R}=\int_{A_G}D(\mathbf p)\,dA
+\]
+
+\[
+V_{D,A}=\int_{\mathbb R^2}D(\mathbf p)\,dA
+\]
+
+\[
+R_D=V_{D,R}/V_{D,A}
+\]
+
+when V_{D,A}>0.
+
+Density is developmental preference. It does not prescribe unit count, thickness, topology, or a body boundary.
+
+## 57.3 Connectivity realization
+
+For an actual or physically admissible connection between endpoints a and b:
+
+\[
+S_K(a,b)=\frac{K(\mathbf a)+K(\mathbf b)}{2}+\lambda N(a,b)
+\]
+
+The neighborhood contribution is:
+
+\[
+N(a,b)=\frac12\left(\frac{q_a}{Q_a}+\frac{q_b}{Q_b}\right)
+\]
+
+where q is realized incident connectivity and Q is the number of physically available connection sites on the corresponding realized material/structure.
+
+The physically admissible opportunity set is:
+
+\[
+O(G)=\{(a,b)\mid\text{one connection between exposed compatible physical sites a,b is physically admissible}\}
+\]
+
+and:
+
+\[
+E_{K,A}(G)=E_G\cup O(G)
+\]
+
+where E_G is the actual physical edge set.
+
+Then:
+
+\[
+V_{K,R}=\sum_{e\in E_G}S_K(e)
+\]
+
+\[
+V_{K,A}=\sum_{e\in E_{K,A}(G)}S_K(e)
+\]
+
+\[
+R_K=V_{K,R}/V_{K,A}
+\]
+
+when V_{K,A}>0.
+
+If V_{K,A}=0, connectivity is inactive and contributes no penalty.
+
+The opportunity set is generated from physical geometry, connection compatibility, and construction rules. It is never generated from an inherited exact topology.
+
+## 57.4 Overall realization
+
+Only active realization domains participate. Define:
+
+\[
+\mathcal A=
+\{M\mid V_{M,A}>0\}
+\cup
+\{D\mid V_{D,A}>0\}
+\cup
+\{K\mid V_{K,A}>0\}
+\]
+
+Then:
+
+\[
+\boxed{
+R=\frac{1}{|\mathcal A|}\sum_{X\in\mathcal A}R_X
+}
+\]
+
+The equal arithmetic mean is the fixed aggregation rule. No tunable realization-weight genes or realization-weight parameters are introduced.
+
+The adulthood rule is:
+
+\[
+\boxed{R\ge0.90\Rightarrow\text{adult}}
+\]
+
+The 0.90 threshold is approved.
+
+All developmental realization values must be calculated from continuous developmental fields plus the authoritative physical graph. An authored exact body plan, target coordinate list, or transient structural blueprint is never an adulthood authority.
+
+For Gaussian realization fields:
+
+\[
+K_i(\mathbf p)=e^{-\|\mathbf p-\mathbf c_i\|^2/(2\sigma_i^2)}
+\]
+
+and:
+
+\[
+\int_{\mathbb R^2}K_i(\mathbf p)\,dA=2\pi\sigma_i^2
+\]
+
+Therefore finite realization denominators require finite positive sigma for every participating Gaussian influence. Infinite-width/zero-falloff fields remain experimental candidate-scoring representations and are not valid finite realization denominators.
+
+### Parameter status
+
+The following are **Approved equations/architecture**:
+
+- material realization as developmental-field overlap with physical material area,
+- density realization as developmental-field overlap with physical structure area,
+- connectivity realization from actual graph edges versus physically admissible connection opportunities,
+- active-domain arithmetic mean,
+- adulthood at R >= 0.90.
+
+The following remain **Experimental**:
+
+- Gaussian influence count,
+- influence centers,
+- sigma values,
+- field strengths,
+- connectivity neighborhood coefficient lambda,
+- candidate-selection weights,
+- numerical size-preference mass bounds.
+
+These experimental values must never be described as established biological constants.
+
+
+## P6 Approved Developmental-Scale Parameterization Amendment
+
+The approved P6 developmental-field equations are now paired with the following implementation parameterization:
+
+- The initial representation uses **4 radial influences per developmental field**. The count of four is the approved starting representation; the influence count remains **EXPERIMENTAL** and may change after validation.
+- Each Gaussian influence uses the approved form \(K_i(\mathbf p)=e^{-\|\mathbf p-\mathbf c_i\|^2/(2\sigma_i^2)}\).
+- Influence width is derived from preferred developmental scale: \(\sigma_i=\alpha_i L_p\). The \(\alpha_i\) values are **EXPERIMENTAL** representation parameters.
+- Preferred linear scale is derived from the confirmed-good initial seed realization only as a calibration reference: \(L_p=L_{seed}\sqrt{M_p/M_{seed}}\). This is a scale relationship, not an inherited seed body plan. The comparable 2-D mass scaling is therefore \(M_J\approx0.40^2M_p\) for the approved 40% juvenile linear realization.
+- Influence centers and strengths are **EXPERIMENTAL** numerical parameters. The initial centers and strengths in the default genome are implementation starting values, not biological constants.
+- Developmental-field sums are normalized by their total influence strength so field shape is not confounded with absolute amplitude.
+- Material realization uses composition-weighted physical area for composite units: each constituent contributes according to its fraction of the unit's material amount rather than counting the entire composite area once per constituent.
+- Connectivity uses physically available endpoint opportunities and keeps the neighborhood coefficient \(\lambda\) **EXPERIMENTAL**. Candidate-selection weights \(w_M,w_D,w_K\) are also **EXPERIMENTAL** solver parameters.
+- Numerical size-preference mass bounds remain **EXPERIMENTAL**.
+
+No experimental parameter above is an additional biological authority. Changing one changes the experiment within the approved P6 architecture.

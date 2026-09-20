@@ -146,7 +146,7 @@ pub(crate) fn begin_reproduction(
     }
     let mut child_genome = parent.genome.clone();
     child_genome.mutate(rng);
-    let blueprint = match child_genome.developmental_construction_target(catalog, true) {
+    let blueprint = match crate::juvenile::confirmed_seed_baseline(catalog) {
         Ok(target) => target,
         Err(_) => return false,
     };
@@ -259,10 +259,7 @@ pub(crate) fn advance_construction(
     ledger: &mut EnergyLedger,
     energy: &mut f64,
 ) -> Option<f64> {
-    let blueprint = construction
-        .child_genome
-        .developmental_construction_target(catalog, true)
-        .ok()?;
+    let blueprint = crate::juvenile::confirmed_seed_baseline(catalog).ok()?;
     let target = construction
         .target_elements
         .iter()
@@ -365,6 +362,8 @@ pub(crate) fn finish_reproduction(
     }
     Some(Organism {
         id: child_id,
+        developmental_origin: child_position.clone(),
+        developmental_orientation_radians: 0.0,
         occupied_cells: vec![child_position],
         genome: construction.child_genome,
         resource_sense: ResourceSense {
@@ -392,11 +391,8 @@ mod tests {
     use crate::genome::initial_genome;
     use crate::resources::default_catalog;
     #[test]
-    fn reproduction_target_is_derived_from_developmental_fields() {
-        let g = initial_genome();
-        let target = g
-            .developmental_construction_target(&default_catalog(), true)
-            .unwrap();
+    fn reproduction_starts_from_the_confirmed_seed_baseline() {
+        let target = crate::juvenile::confirmed_seed_baseline(&default_catalog()).unwrap();
         let indices = all_indices(&target);
         assert_eq!(indices.len(), target.elements.len());
         assert!(target.anchor_elements.iter().all(|i| indices.contains(i)));
