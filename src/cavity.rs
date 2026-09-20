@@ -357,7 +357,6 @@ fn segment_in_polygon_boundary(a: Point, b: Point, polygon: &[Point]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genome::initial_genome;
     use crate::resources::default_catalog;
 
     #[test]
