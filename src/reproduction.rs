@@ -75,7 +75,7 @@ fn child_intersects_realized_parent_region(
     structure: &OrganismStructure,
     parent_body: &crate::organism_geometry::OrganismBodyGeometry,
 ) -> bool {
-    structure.units.iter().any(|unit| {
+    structure.units.iter().enumerate().any(|(unit_index, unit)| {
         let Some(geometry) = unit.geometry.as_ref() else {
             return false;
         };
@@ -109,7 +109,7 @@ fn child_remains_within_realized_parent_boundary(
             return false;
         };
         let child = crate::material_geometry::PlacedMaterialPart {
-            part_index: unit as *const _ as usize,
+            part_index: unit_index,
             form: geometry.shape().form.clone(),
             placement: unit.placement,
         };
