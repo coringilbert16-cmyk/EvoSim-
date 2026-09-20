@@ -437,8 +437,17 @@ impl Simulation {
             organism.apply_maintenance(&environment_snapshot.catalog, &mut self.energy_ledger);
             Self::update_resource_perception(organism, &environment_snapshot);
             Self::update_memory_from_sources(organism, &environment_snapshot);
+            if matches!(organism.development_stage, DevelopmentStage::Adult)
+                && organism.reproductive_construction.is_none()
+            {
+                let _ = crate::reproduction::begin_reproduction(
+                    organism,
+                    &mut self.rng,
+                    &environment_snapshot.catalog,
+                    &mut self.energy_ledger,
+                );
+            }
         }
-        let mut reproduction_requests = Vec::new();
         {
             let (organisms, environment) = (&mut self.organisms, &mut self.environment);
             let mut compatibility_cache = crate::contact::ConnectionCompatibilityCache::new();
@@ -543,9 +552,6 @@ impl Simulation {
                                 crate::decision::OutcomeKind::Harmful
                             },
                         );
-                        if matches!(organisms[index].development_stage, DevelopmentStage::Adult) {
-                            reproduction_requests.push(organisms[index].id.clone());
-                        }
                     }
                     ActionKind::Break => {
                         if let Some(transformation) = Self::try_start_transformation(
@@ -586,16 +592,6 @@ impl Simulation {
             }
         }
         let catalog = self.environment.catalog.clone();
-        for id in reproduction_requests {
-            if let Some(organism) = self.organisms.iter_mut().find(|o| o.id == id) {
-                let _ = crate::reproduction::begin_reproduction(
-                    organism,
-                    &mut self.rng,
-                    &catalog,
-                    &mut self.energy_ledger,
-                );
-            }
-        }
         let mut offspring = Vec::new();
         let mut next_organism_id = self.next_organism_id;
         for organism in &mut self.organisms {
