@@ -655,6 +655,60 @@ mod tests {
     }
 
     #[test]
+    fn fully_outside_parent_boundary_is_detached() {
+        let mut simulation = Simulation::new(23, 20.0);
+        let mut parent = simulation.organisms.remove(0);
+        parent.development_stage = DevelopmentStage::Adult;
+        let mut ledger = EnergyLedger::default();
+        assert!(begin_reproduction(
+            &mut parent,
+            &mut simulation.rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+        let boundary = parent_boundary(&parent, &simulation.environment.catalog).unwrap();
+        let construction = parent
+            .reproductive_construction
+            .as_mut()
+            .expect("reproduction is active");
+        for unit in &mut construction.developing_structure.units {
+            unit.placement.x = boundary.0.x + boundary.1 * 2.0;
+            unit.placement.y = boundary.0.y;
+        }
+        assert!(!child_remains_inside_parent_boundary(
+            &construction.developing_structure,
+            &boundary.0,
+            boundary.1,
+        ));
+    }
+
+    #[test]
+    fn loss_of_parent_contact_is_detachment() {
+        let mut simulation = Simulation::new(29, 20.0);
+        let mut parent = simulation.organisms.remove(0);
+        parent.development_stage = DevelopmentStage::Adult;
+        let mut ledger = EnergyLedger::default();
+        assert!(begin_reproduction(
+            &mut parent,
+            &mut simulation.rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+        let construction = parent
+            .reproductive_construction
+            .as_mut()
+            .expect("reproduction is active");
+        for unit in &mut construction.developing_structure.units {
+            unit.placement.x = parent.occupied_cells[0].x + 2_000.0;
+            unit.placement.y = parent.occupied_cells[0].y;
+        }
+        assert!(!parent_child_in_contact(
+            &parent.structure,
+            &construction.developing_structure,
+        ));
+    }
+
+    #[test]
     fn anchor_is_not_a_predefined_structural_blueprint() {
         let catalog = default_catalog();
         let genome = initial_genome();
