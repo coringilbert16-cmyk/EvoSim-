@@ -500,6 +500,22 @@ mod tests {
             format!("{:?}", parent.structure),
             format!("{:?}", parent_structure)
         );
+        let boundary = parent_boundary(&parent, &simulation.environment.catalog).unwrap();
+        assert!(structure_within_parent_boundary(
+            &construction.developing_structure,
+            &boundary.0,
+            boundary.1,
+        ));
+        assert_eq!(
+            construction.developmental_origin.x,
+            boundary.0.x,
+            "developing offspring must begin inside the parent's boundary"
+        );
+        assert_eq!(
+            construction.developmental_origin.y,
+            boundary.0.y,
+            "developing offspring must begin inside the parent's boundary"
+        );
     }
 
     #[test]
