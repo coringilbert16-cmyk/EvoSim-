@@ -2,9 +2,9 @@
 
 ## Status
 
-**P6.0–P6.5 IMPLEMENTED — P6.6 FINAL VALIDATION IN PROGRESS**
+**P6.0–P6.6 COMPLETE — FINAL README AUTHORITY AUDIT PASSED**
 
-CI validation is being used as the completion gate for the README-authorized architecture.
+CI validation passed, and the implementation has completed the required separate README authority audit.
 
 The governing pipeline is:
 
@@ -78,16 +78,16 @@ Existing realized material remains physical authority; new structure uses actual
 
 DevelopmentStage is driven by continuous developmental realization. No age, reproductive-readiness, arbitrary energy, preferred-mass equality, or independent maturation authority is used.
 
-## P6.6 — Contract validation — IN PROGRESS
+## P6.6 — Contract validation — COMPLETE
 
-Run full tests, architecture checks, formatting, strict Clippy, and final authority audit.
+Full tests, architecture checks, formatting, strict Clippy, and the separate README authority audit all passed. P6 is complete on this branch.
 
 ## Non-goals
 
 P6 does not redesign genome identity/life definition, genome-cavity qualification, chemistry, COMBINE/BREAK chemistry, energy accounting, maintenance/stress, movement/collision/pushing, reproduction, death, decomposition, evolution, or environmental material physics.
 
 
-P6 README authority audit gate: CI must pass and the implementation must be re-audited against README authority before completion.
+P6 completion gate: CI passes and the implementation is explicitly re-audited against README authority. Both gates are satisfied.
 
 
 ## P6 Approved Developmental-Scale Parameterization Amendment
