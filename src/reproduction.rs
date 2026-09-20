@@ -25,7 +25,7 @@ pub(crate) enum ConstructionStatus {
     DeadEnd,
 }
 
-fn parent_body_geometry(
+pub(crate) fn parent_body_geometry(
     parent: &Organism,
     catalog: &[crate::resources::BaseResource],
 ) -> Option<crate::organism_geometry::OrganismBodyGeometry> {
