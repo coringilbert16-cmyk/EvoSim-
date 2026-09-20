@@ -37,7 +37,6 @@ fn parent_child_position(
     anchor: &Material,
     catalog: &[crate::resources::BaseResource],
 ) -> Option<Position> {
-    let origin = parent.occupied_cells.first()?.clone();
     let body = parent_body_geometry(parent, catalog)?;
     let anchor_name = anchor.parts.first()?.0.as_str();
     let anchor_shape = catalog
@@ -46,30 +45,33 @@ fn parent_child_position(
         .shape
         .form
         .clone();
-    let anchor_part = crate::material_geometry::PlacedMaterialPart {
-        part_index: usize::MAX,
-        form: anchor_shape,
-        placement: crate::structure::Placement {
-            x: origin.x,
-            y: origin.y,
-            rotation_radians: 0.0,
-        },
-    };
-    body.parts
-        .iter()
-        .any(|parent_part| {
-            let parent_part = crate::material_geometry::PlacedMaterialPart {
-                part_index: parent_part.unit_index,
-                form: parent_part.form.clone(),
-                placement: crate::structure::Placement {
-                    x: parent_part.x,
-                    y: parent_part.y,
-                    rotation_radians: parent_part.rotation_radians,
-                },
-            };
-            crate::material_geometry::placed_forms_overlap(&parent_part, &anchor_part, 0.0)
-        })
-        .then_some(origin)
+
+    body.parts.iter().find_map(|parent_part| {
+        let origin = Position {
+            x: parent_part.x,
+            y: parent_part.y,
+        };
+        let anchor_part = crate::material_geometry::PlacedMaterialPart {
+            part_index: usize::MAX,
+            form: anchor_shape.clone(),
+            placement: crate::structure::Placement {
+                x: origin.x,
+                y: origin.y,
+                rotation_radians: 0.0,
+            },
+        };
+        let parent_part = crate::material_geometry::PlacedMaterialPart {
+            part_index: parent_part.unit_index,
+            form: parent_part.form.clone(),
+            placement: crate::structure::Placement {
+                x: parent_part.x,
+                y: parent_part.y,
+                rotation_radians: parent_part.rotation_radians,
+            },
+        };
+        crate::material_geometry::placed_forms_overlap(&parent_part, &anchor_part, 0.0)
+            .then_some(origin)
+    })
 }
 fn child_intersects_realized_parent_region(
     structure: &OrganismStructure,
