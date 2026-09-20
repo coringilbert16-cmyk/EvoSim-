@@ -25,17 +25,11 @@ pub(crate) enum ConstructionStatus {
     DeadEnd,
 }
 
-pub(crate) fn parent_boundary(
+fn parent_body_geometry(
     parent: &Organism,
     catalog: &[crate::resources::BaseResource],
-) -> Option<(Position, f64)> {
-    let center = parent.occupied_cells.first()?.clone();
-    let radius =
-        crate::organism_geometry::OrganismBodyGeometry::from_structure(&parent.structure, catalog)
-            .map(|g| g.bounding_radius_about(center.x, center.y))
-            .unwrap_or(0.0)
-            .max(0.0);
-    (radius.is_finite() && radius > 0.0).then_some((center, radius))
+) -> Option<crate::organism_geometry::OrganismBodyGeometry> {
+    crate::organism_geometry::OrganismBodyGeometry::from_structure(&parent.structure, catalog)
 }
 
 fn parent_child_position(
@@ -43,44 +37,37 @@ fn parent_child_position(
     anchor: &Material,
     catalog: &[crate::resources::BaseResource],
 ) -> Option<Position> {
-    let (center, radius) = parent_boundary(parent, catalog)?;
+    let origin = parent.occupied_cells.first()?.clone();
+    let body = parent_body_geometry(parent, catalog)?;
     let anchor_name = anchor.parts.first()?.0.as_str();
-    let anchor_radius = catalog
-        .iter()
-        .find(|r| r.name == anchor_name)
-        .map(|r| r.shape.form.bounding_radius())
-        .unwrap_or(1.0)
-        .max(0.0);
-    (anchor_radius <= radius + 1e-9).then_some(center)
+    let anchor_shape = catalog.iter().find(|r| r.name == anchor_name)?.shape.form.clone();
+    let anchor_point = crate::organism_geometry::PlacedForm {
+        unit_index: usize::MAX,
+        form: anchor_shape,
+        x: origin.x,
+        y: origin.y,
+        rotation_radians: 0.0,
+    };
+    (!body.penetrates_part(&anchor_point) || body.contains_point(origin.x, origin.y))
+        .then_some(origin)
 }
 
-fn child_remains_inside_parent_boundary(
+fn child_remains_within_realized_parent_boundary(
     structure: &OrganismStructure,
-    center: &Position,
-    radius: f64,
+    parent_body: &crate::organism_geometry::OrganismBodyGeometry,
 ) -> bool {
-    if !radius.is_finite() || radius <= 0.0 {
-        return false;
-    }
-    let boundary = crate::material_geometry::PlacedMaterialPart {
-        part_index: 0,
-        form: crate::resources::Form::Circle { radius },
-        placement: crate::structure::Placement {
-            x: center.x,
-            y: center.y,
-            rotation_radians: 0.0,
-        },
-    };
     structure.units.iter().any(|unit| {
         let Some(geometry) = unit.geometry.as_ref() else {
             return false;
         };
-        let child = crate::material_geometry::PlacedMaterialPart {
-            part_index: 0,
+        let child = crate::organism_geometry::PlacedForm {
+            unit_index: usize::MAX,
             form: geometry.shape().form.clone(),
-            placement: unit.placement,
+            x: unit.placement.x,
+            y: unit.placement.y,
+            rotation_radians: unit.placement.rotation_radians,
         };
-        crate::material_geometry::placed_forms_penetrate(&child, &boundary, 0.0)
+        parent_body.penetrates_part(&child)
     })
 }
 
@@ -379,7 +366,7 @@ pub(crate) fn advance_construction(
     ledger: &mut EnergyLedger,
     parent_energy: &mut f64,
     rng: &mut ChaCha8Rng,
-    parent_boundary: &(Position, f64),
+    parent_body: &crate::organism_geometry::OrganismBodyGeometry,
 ) -> (ConstructionStatus, Option<f64>) {
     let reserve_energy = construction.child_genome.juvenile_energy_reserve;
     if reserve_energy.is_finite() && reserve_energy > construction.developing_energy {
