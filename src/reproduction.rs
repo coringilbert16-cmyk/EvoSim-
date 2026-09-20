@@ -8,7 +8,10 @@ use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::juvenile_requirements::{validate_realized_juvenile, JuvenileViabilityRequirements};
 use crate::material_storage::MaterialStorage;
 use crate::resources::Material;
-use crate::state::{DevelopmentStage, EnergyLedger, Environment, Organism, Position, ReproductiveConstruction, ResourceSense};
+use crate::state::{
+    DevelopmentStage, EnergyLedger, Environment, Organism, Position, ReproductiveConstruction,
+    ResourceSense,
+};
 use crate::structure::OrganismStructure;
 use rand_chacha::ChaCha8Rng;
 
@@ -20,15 +23,21 @@ pub(crate) enum ConstructionStatus {
     Dead,
 }
 
-fn parent_child_position(parent: &Organism, anchor: &Material, catalog: &[crate::resources::BaseResource]) -> Option<Position> {
+fn parent_child_position(
+    parent: &Organism,
+    anchor: &Material,
+    catalog: &[crate::resources::BaseResource],
+) -> Option<Position> {
     let parent_position = parent.occupied_cells.first()?.clone();
-    let parent_radius = crate::organism_geometry::OrganismBodyGeometry::from_structure(&parent.structure, catalog)
-        .ok()
-        .map(|g| g.bounding_radius_about(0.0, 0.0))
-        .unwrap_or(1.0)
-        .max(0.0);
+    let parent_radius =
+        crate::organism_geometry::OrganismBodyGeometry::from_structure(&parent.structure, catalog)
+            .ok()
+            .map(|g| g.bounding_radius_about(0.0, 0.0))
+            .unwrap_or(1.0)
+            .max(0.0);
     let anchor_name = anchor.parts.first()?.0.as_str();
-    let anchor_radius = catalog.iter()
+    let anchor_radius = catalog
+        .iter()
         .find(|r| r.name == anchor_name)
         .map(|r| r.shape.form.bounding_radius())
         .unwrap_or(1.0)
@@ -46,7 +55,12 @@ fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
         developmental_orientation_radians: construction.developmental_orientation_radians,
         occupied_cells: vec![construction.developmental_origin.clone()],
         genome: construction.child_genome.clone(),
-        resource_sense: ResourceSense { sensed_resources: Vec::new(), direction_x: 0.0, direction_y: 0.0, direction_strength: 0.0 },
+        resource_sense: ResourceSense {
+            sensed_resources: Vec::new(),
+            direction_x: 0.0,
+            direction_y: 0.0,
+            direction_strength: 0.0,
+        },
         memory: Vec::new(),
         decision_history: crate::decision::DecisionHistory::default(),
         usable_energy: construction.developing_energy,
@@ -73,11 +87,17 @@ fn store_first_available_material(
     child_storage.store(material)
 }
 
-fn preferred_length(genome: &crate::genome::Genome, catalog: &[crate::resources::BaseResource]) -> Option<f64> {
-    let (seed_mass, seed_length) = crate::juvenile::confirmed_seed_scale_reference(catalog).ok()?;
-    Some(genome.developmental_blueprint.preferred_developmental_length(
-        genome.adult_mass(), seed_mass, seed_length,
-    ))
+fn preferred_length(
+    genome: &crate::genome::Genome,
+    catalog: &[crate::resources::BaseResource],
+) -> Option<f64> {
+    let (seed_mass, seed_length) =
+        crate::juvenile::confirmed_seed_scale_reference(catalog).ok()?;
+    Some(
+        genome
+            .developmental_blueprint
+            .preferred_developmental_length(genome.adult_mass(), seed_mass, seed_length),
+    )
 }
 
 fn developmental_context<'a>(
@@ -94,11 +114,10 @@ fn developmental_context<'a>(
     ))
 }
 
-fn developmental_linear_extent(
-    structure: &OrganismStructure,
-    origin: &Position,
-) -> f64 {
-    structure.units.iter()
+fn developmental_linear_extent(structure: &OrganismStructure, origin: &Position) -> f64 {
+    structure
+        .units
+        .iter()
         .map(|unit| (unit.placement.x - origin.x).hypot(unit.placement.y - origin.y))
         .fold(0.0, f64::max)
 }
@@ -113,25 +132,38 @@ fn juvenile_scale_reached(
     if preferred <= 0.0 || !preferred.is_finite() {
         return false;
     }
-    developmental_linear_extent(&construction.developing_structure, &construction.developmental_origin)
-        + 1e-9 >= 0.40 * preferred
+    developmental_linear_extent(
+        &construction.developing_structure,
+        &construction.developmental_origin,
+    ) + 1e-9
+        >= 0.40 * preferred
 }
 
-fn birth_ready(construction: &ReproductiveConstruction, catalog: &[crate::resources::BaseResource]) -> bool {
-    let Ok(cavity) = crate::cavity::analyze_genome_cavity(&construction.developing_structure, catalog) else {
+fn birth_ready(
+    construction: &ReproductiveConstruction,
+    catalog: &[crate::resources::BaseResource],
+) -> bool {
+    let Ok(cavity) =
+        crate::cavity::analyze_genome_cavity(&construction.developing_structure, catalog)
+    else {
         return false;
     };
     let Some(cavity) = cavity else {
         return false;
     };
-    if !cavity.boundary_units.contains(&construction.anchor_unit_index) {
+    if !cavity
+        .boundary_units
+        .contains(&construction.anchor_unit_index)
+    {
         return false;
     }
     if validate_realized_juvenile(
         &construction.developing_structure,
         catalog,
         JuvenileViabilityRequirements::default(),
-    ).is_err() {
+    )
+    .is_err()
+    {
         return false;
     }
     juvenile_scale_reached(construction, catalog)
@@ -175,7 +207,9 @@ pub(crate) fn begin_reproduction(
     catalog: &[crate::resources::BaseResource],
     _ledger: &mut EnergyLedger,
 ) -> bool {
-    if !matches!(parent.development_stage, DevelopmentStage::Adult) || parent.reproductive_construction.is_some() {
+    if !matches!(parent.development_stage, DevelopmentStage::Adult)
+        || parent.reproductive_construction.is_some()
+    {
         return false;
     }
     let mut child_genome = parent.genome.clone();
@@ -219,9 +253,14 @@ pub(crate) fn advance_construction(
 ) -> (ConstructionStatus, Option<f64>) {
     let reserve_energy = construction.child_genome.juvenile_energy_reserve;
     if reserve_energy.is_finite() && reserve_energy > construction.developing_energy {
-        let transfer = (reserve_energy - construction.developing_energy).min(parent_energy.max(0.0));
+        let transfer =
+            (reserve_energy - construction.developing_energy).min(parent_energy.max(0.0));
         if transfer > 0.0 {
-            let _ = ledger.transfer(parent_energy, &mut construction.developing_energy, transfer);
+            let _ = ledger.transfer(
+                parent_energy,
+                &mut construction.developing_energy,
+                transfer,
+            );
         }
     }
 
@@ -271,7 +310,10 @@ pub(crate) fn advance_construction(
         if birth_ready(construction, &environment.catalog) {
             return (ConstructionStatus::Ready, None);
         }
-        return (ConstructionStatus::Progress, result.map(|attempt| attempt.work_cost));
+        return (
+            ConstructionStatus::Progress,
+            result.map(|attempt| attempt.work_cost),
+        );
     }
 
     // Preserve material if the COMBINE attempt was not physically valid. If
