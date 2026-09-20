@@ -59,7 +59,7 @@ fn parent_child_position(
         let parent_part = crate::material_geometry::PlacedMaterialPart {
             part_index: parent_part.unit_index,
             form: parent_part.form.clone(),
-            placement: crate::resources::Placement {
+            placement: crate::structure::Placement {
                 x: parent_part.x,
                 y: parent_part.y,
                 rotation_radians: parent_part.rotation_radians,
@@ -86,7 +86,7 @@ fn child_intersects_realized_parent_region(
             let parent_part = crate::material_geometry::PlacedMaterialPart {
                 part_index: parent_part.unit_index,
                 form: parent_part.form.clone(),
-                placement: crate::resources::Placement {
+                placement: crate::structure::Placement {
                     x: parent_part.x,
                     y: parent_part.y,
                     rotation_radians: parent_part.rotation_radians,
