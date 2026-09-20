@@ -592,16 +592,16 @@ impl Simulation {
         let mut next_organism_id = self.next_organism_id;
         for organism in &mut self.organisms {
             if organism.reproductive_construction.is_some() {
+                let Some(parent_boundary) =
+                    crate::reproduction::parent_boundary(organism, &self.environment.catalog)
+                else {
+                    continue;
+                };
                 let (status, stress) = {
                     let construction = organism
                         .reproductive_construction
                         .as_mut()
                         .expect("reproductive construction exists");
-                    let parent_boundary =
-                        crate::reproduction::parent_boundary(
-                            organism,
-                            &self.environment.catalog,
-                        );
                     crate::reproduction::advance_construction(
                         &mut organism.stored_material,
                         construction,
