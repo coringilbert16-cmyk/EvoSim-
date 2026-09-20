@@ -20,6 +20,7 @@ pub(crate) enum ConstructionStatus {
     Waiting,
     Progress,
     Ready,
+    Detached,
     Dead,
 }
 
@@ -149,11 +150,6 @@ fn try_child_construction(
             context,
         )
         .is_some()
-            && structure_within_parent_boundary(
-                &candidate.structure,
-                &parent_boundary.0,
-                parent_boundary.1,
-            )
         {
             return Some((candidate, candidate_ledger, transferred));
         }
@@ -432,6 +428,16 @@ pub(crate) fn advance_construction(
     construction.developing_structure = child.structure;
     construction.developing_energy = child.usable_energy;
     construction.developing_stress = child.stress;
+    if !structure_within_parent_boundary(
+        &construction.developing_structure,
+        &parent_boundary.0,
+        parent_boundary.1,
+    ) {
+        // The developing child is attached only while its physical structure
+        // remains within the parent's outer boundary. Crossing that boundary
+        // is the physical detachment event; it is not an invalid construction.
+        return (ConstructionStatus::Detached, None);
+    }
     if birth_ready(construction, &environment.catalog) {
         return (ConstructionStatus::Ready, None);
     }
@@ -449,15 +455,6 @@ pub(crate) fn finish_reproduction(
     _ledger: &mut EnergyLedger,
 ) -> Option<Organism> {
     let construction = parent.reproductive_construction.take()?;
-    let boundary = parent_boundary(parent, catalog)?;
-    if !structure_within_parent_boundary(
-        &construction.developing_structure,
-        &boundary.0,
-        boundary.1,
-    ) {
-        parent.reproductive_construction = Some(construction);
-        return None;
-    }
     let ready = birth_ready(&construction, catalog);
     if !ready && construction.developing_structure.units.is_empty() {
         parent.reproductive_construction = Some(construction);
@@ -579,6 +576,7 @@ mod tests {
         let mut construction = parent.reproductive_construction.take().unwrap();
         let before_parent_energy = parent.usable_energy;
         let environment = simulation.environment.clone();
+        let boundary = parent_boundary(&parent, &environment.catalog).unwrap();
         let _ = advance_construction(
             &mut parent.stored_material,
             &mut construction,
@@ -586,6 +584,7 @@ mod tests {
             &mut ledger,
             &mut parent.usable_energy,
             &mut simulation.rng,
+            &boundary,
         );
         assert!(construction.developing_energy > 0.0);
         assert!(parent.usable_energy < before_parent_energy);
