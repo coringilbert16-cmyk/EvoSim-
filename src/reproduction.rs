@@ -589,6 +589,37 @@ mod tests {
     }
 
     #[test]
+    fn crossing_parent_boundary_is_detachment_not_rejection() {
+        let mut simulation = Simulation::new(17, 20.0);
+        let mut parent = simulation.organisms.remove(0);
+        parent.development_stage = DevelopmentStage::Adult;
+        let mut ledger = EnergyLedger::default();
+        assert!(begin_reproduction(
+            &mut parent,
+            &mut simulation.rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+        let boundary = parent_boundary(&parent, &simulation.environment.catalog).unwrap();
+        let construction = parent
+            .reproductive_construction
+            .as_mut()
+            .expect("reproduction is active");
+        for unit in &mut construction.developing_structure.units {
+            unit.placement.x = boundary.0.x + boundary.1 * 2.0;
+            unit.placement.y = boundary.0.y;
+        }
+        let child = finish_reproduction(
+            &mut parent,
+            "detached-child".into(),
+            &simulation.environment.catalog,
+            &mut ledger,
+        );
+        assert!(child.is_some(), "outside the boundary is the detachment state");
+        assert!(parent.reproductive_construction.is_none());
+    }
+
+    #[test]
     fn anchor_is_not_a_predefined_structural_blueprint() {
         let catalog = default_catalog();
         let genome = initial_genome();
