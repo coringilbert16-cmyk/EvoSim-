@@ -75,30 +75,8 @@ fn child_intersects_realized_parent_region(
     structure: &OrganismStructure,
     parent_body: &crate::organism_geometry::OrganismBodyGeometry,
 ) -> bool {
-    structure.units.iter().enumerate().any(|(unit_index, unit)| {
-        let Some(geometry) = unit.geometry.as_ref() else {
-            return false;
-        };
-        let child = crate::material_geometry::PlacedMaterialPart {
-            part_index: 0,
-            form: geometry.shape().form.clone(),
-            placement: unit.placement,
-        };
-        parent_body.parts.iter().any(|parent_part| {
-            let parent_part = crate::material_geometry::PlacedMaterialPart {
-                part_index: parent_part.unit_index,
-                form: parent_part.form.clone(),
-                placement: crate::structure::Placement {
-                    x: parent_part.x,
-                    y: parent_part.y,
-                    rotation_radians: parent_part.rotation_radians,
-                },
-            };
-            crate::material_geometry::placed_forms_overlap(&parent_part, &child, 0.0)
-        })
-    })
+    child_remains_within_realized_parent_boundary(structure, parent_body)
 }
-
 
 fn child_remains_within_realized_parent_boundary(
     structure: &OrganismStructure,
@@ -109,7 +87,7 @@ fn child_remains_within_realized_parent_boundary(
             return false;
         };
         let child = crate::material_geometry::PlacedMaterialPart {
-            part_index: unit_index,
+            part_index: 0,
             form: geometry.shape().form.clone(),
             placement: unit.placement,
         };
