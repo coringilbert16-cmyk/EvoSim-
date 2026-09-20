@@ -580,7 +580,7 @@ mod tests {
             format!("{:?}", parent_structure)
         );
         let boundary = parent_boundary(&parent, &simulation.environment.catalog).unwrap();
-        assert!(structure_within_parent_boundary(
+        assert!(child_remains_inside_parent_boundary(
             &construction.developing_structure,
             &boundary.0,
             boundary.1,
