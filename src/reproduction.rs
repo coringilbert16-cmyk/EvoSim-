@@ -119,7 +119,6 @@ fn try_child_construction(
     environment: &Environment,
     ledger: &EnergyLedger,
     context: Option<DevelopmentalContext<'_>>,
-    parent_boundary: &(Position, f64),
 ) -> Option<(Organism, EnergyLedger, Option<Material>)> {
     let mut candidates = Vec::new();
 
@@ -408,7 +407,6 @@ pub(crate) fn advance_construction(
         environment,
         ledger,
         context,
-        parent_boundary,
     ) else {
         if !child.stored_material.is_empty() && child.structure.bonds.is_empty() {
             return (ConstructionStatus::Dead, None);
