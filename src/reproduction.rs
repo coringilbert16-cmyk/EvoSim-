@@ -31,7 +31,6 @@ fn parent_child_position(
     let parent_position = parent.occupied_cells.first()?.clone();
     let parent_radius =
         crate::organism_geometry::OrganismBodyGeometry::from_structure(&parent.structure, catalog)
-            .ok()
             .map(|g| g.bounding_radius_about(parent_position.x, parent_position.y))
             .unwrap_or(1.0)
             .max(0.0);
@@ -333,7 +332,7 @@ pub(crate) fn advance_construction(
     let dead = child.apply_stress_damage(environment, ledger, rng);
     construction.developing_energy = child.usable_energy;
     construction.developing_stress = child.stress;
-    construction.developing_structure = child.structure;
+    construction.developing_structure = child.structure.clone();
     if dead {
         return (ConstructionStatus::Dead, None);
     }
@@ -444,7 +443,7 @@ mod tests {
     use super::*;
     use crate::genome::initial_genome;
     use crate::resources::{default_catalog, Material};
-    use crate::simulation::Simulation;
+    use crate::state::Simulation;
 
     #[test]
     fn developmental_scale_uses_approved_forty_percent_linear_target() {
