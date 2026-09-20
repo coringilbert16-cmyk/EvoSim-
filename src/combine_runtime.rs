@@ -400,6 +400,7 @@ pub(crate) fn try_combine_stored_unit(
         return None;
     }
 
+    let first_resource = raw.parts.first()?.0.as_str();
     let geometry_source = raw
         .parts
         .first()
@@ -465,7 +466,7 @@ pub(crate) fn try_combine_stored_unit(
                             );
                             crate::developmental_blueprint::CANDIDATE_MATERIAL_WEIGHT
                                 * blueprint.material_preference_scaled(
-                                    raw.parts.first()?.0.as_str(),
+                                    first_resource,
                                     local.0,
                                     local.1,
                                     preferred_length,
