@@ -23,6 +23,18 @@ pub(crate) enum ConstructionStatus {
     Dead,
 }
 
+pub(crate) fn parent_boundary(
+    parent: &Organism,
+    catalog: &[crate::resources::BaseResource],
+) -> Option<(Position, f64)> {
+    let center = parent.occupied_cells.first()?.clone();
+    let radius = crate::organism_geometry::OrganismBodyGeometry::from_structure(&parent.structure, catalog)
+        .map(|g| g.bounding_radius_about(center.x, center.y))
+        .unwrap_or(0.0)
+        .max(0.0);
+    (radius.is_finite() && radius > 0.0).then_some((center, radius))
+}
+
 fn parent_child_position(
     parent: &Organism,
     anchor: &Material,
