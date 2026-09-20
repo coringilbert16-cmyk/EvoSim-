@@ -432,13 +432,9 @@ pub(crate) fn advance_construction(
         None
     };
     let before_units = child.structure.units.len();
-    let Some((child, candidate_ledger, transferred)) = try_child_construction(
-        &child,
-        parent_storage,
-        environment,
-        ledger,
-        context,
-    ) else {
+    let Some((child, candidate_ledger, transferred)) =
+        try_child_construction(&child, parent_storage, environment, ledger, context)
+    else {
         return (ConstructionStatus::Waiting, None);
     };
 
@@ -643,7 +639,10 @@ mod tests {
             &boundary.0,
             boundary.1,
         );
-        assert!(inside, "crossing the boundary while material remains inside must not detach the child");
+        assert!(
+            inside,
+            "crossing the boundary while material remains inside must not detach the child"
+        );
     }
 
     #[test]
