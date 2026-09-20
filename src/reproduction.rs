@@ -473,10 +473,7 @@ pub(crate) fn advance_construction(
     construction.developing_structure = child.structure;
     construction.developing_energy = child.usable_energy;
     construction.developing_stress = child.stress;
-    if !child_intersects_realized_parent_region(
-        &construction.developing_structure,
-        parent_body,
-    ) {
+    if !child_intersects_realized_parent_region(&construction.developing_structure, parent_body) {
         return (ConstructionStatus::Detached, None);
     }
     if !parent_child_in_contact(parent_structure, &construction.developing_structure) {
