@@ -567,20 +567,15 @@ mod tests {
             format!("{:?}", parent.structure),
             format!("{:?}", parent_structure)
         );
-        let boundary = parent_boundary(&parent, &simulation.environment.catalog).unwrap();
-        assert!(child_remains_inside_parent_boundary(
+        let body = parent_body_geometry(&parent, &simulation.environment.catalog).unwrap();
+        assert!(child_remains_within_realized_parent_boundary(
             &construction.developing_structure,
-            &boundary.0,
-            boundary.1,
+            &body,
         ));
-        assert_eq!(
-            construction.developmental_origin.x, boundary.0.x,
-            "developing offspring must begin inside the parent's boundary"
-        );
-        assert_eq!(
-            construction.developmental_origin.y, boundary.0.y,
-            "developing offspring must begin inside the parent's boundary"
-        );
+        assert!(body.contains_point(
+            construction.developmental_origin.x,
+            construction.developmental_origin.y
+        ));
     }
 
     #[test]
@@ -598,7 +593,7 @@ mod tests {
         let mut construction = parent.reproductive_construction.take().unwrap();
         let before_parent_energy = parent.usable_energy;
         let environment = simulation.environment.clone();
-        let boundary = parent_boundary(&parent, &environment.catalog).unwrap();
+        let body = parent_body_geometry(&parent, &environment.catalog).unwrap();
         let _ = advance_construction(
             &parent.structure,
             &mut parent.stored_material,
@@ -607,7 +602,7 @@ mod tests {
             &mut ledger,
             &mut parent.usable_energy,
             &mut simulation.rng,
-            &boundary,
+            &body,
         );
         assert!(construction.developing_energy > 0.0);
         assert!(parent.usable_energy < before_parent_energy);
@@ -625,19 +620,25 @@ mod tests {
             &simulation.environment.catalog,
             &mut ledger,
         ));
-        let boundary = parent_boundary(&parent, &simulation.environment.catalog).unwrap();
+        let body = parent_body_geometry(&parent, &simulation.environment.catalog).unwrap();
         let construction = parent
             .reproductive_construction
             .as_mut()
             .expect("reproduction is active");
-        for unit in &mut construction.developing_structure.units {
-            unit.placement.x = boundary.0.x + boundary.1 * 0.75;
-            unit.placement.y = boundary.0.y;
+        let inside_part = body.parts[0].clone();
+        let outside_x = body.max_x + 100.0;
+        for (index, unit) in construction.developing_structure.units.iter_mut().enumerate() {
+            if index == 0 {
+                unit.placement.x = inside_part.x;
+                unit.placement.y = inside_part.y;
+            } else {
+                unit.placement.x = outside_x;
+                unit.placement.y = inside_part.y;
+            }
         }
-        let inside = child_remains_inside_parent_boundary(
+        let inside = child_remains_within_realized_parent_boundary(
             &construction.developing_structure,
-            &boundary.0,
-            boundary.1,
+            &body,
         );
         assert!(
             inside,
@@ -657,19 +658,18 @@ mod tests {
             &simulation.environment.catalog,
             &mut ledger,
         ));
-        let boundary = parent_boundary(&parent, &simulation.environment.catalog).unwrap();
+        let body = parent_body_geometry(&parent, &simulation.environment.catalog).unwrap();
         let construction = parent
             .reproductive_construction
             .as_mut()
             .expect("reproduction is active");
         for unit in &mut construction.developing_structure.units {
-            unit.placement.x = boundary.0.x + boundary.1 * 2.0;
-            unit.placement.y = boundary.0.y;
+            unit.placement.x = body.max_x + 100.0;
+            unit.placement.y = body.max_y + 100.0;
         }
-        assert!(!child_remains_inside_parent_boundary(
+        assert!(!child_remains_within_realized_parent_boundary(
             &construction.developing_structure,
-            &boundary.0,
-            boundary.1,
+            &body,
         ));
     }
 
