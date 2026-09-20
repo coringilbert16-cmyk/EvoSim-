@@ -133,6 +133,47 @@ impl OrganismBodyGeometry {
     }
 }
 
+fn form_contains_point(form: &Form, placement: Placement, x: f64, y: f64) -> bool {
+    let dx = x - placement.x;
+    let dy = y - placement.y;
+    let (sin, cos) = placement.rotation_radians.sin_cos();
+    let local_x = dx * cos + dy * sin;
+    let local_y = -dx * sin + dy * cos;
+    match form {
+        Form::Circle { radius } => local_x.hypot(local_y) <= *radius + 1e-12,
+        Form::Rectangle { width, height } => {
+            local_x.abs() <= width / 2.0 + 1e-12 && local_y.abs() <= height / 2.0 + 1e-12
+        }
+        Form::RegularPolygon { .. } | Form::Polygon { .. } => {
+            let Some(vertices) = form.polygon_vertices() else { return false; };
+            point_in_polygon((local_x, local_y), &vertices)
+        }
+        Form::Line { length } => {
+            local_x.abs() <= length / 2.0 + 1e-12 && local_y.abs() <= 1e-12
+        }
+        Form::Fluid { .. } => false,
+    }
+}
+
+fn point_in_polygon(point: (f64, f64), vertices: &[(f64, f64)]) -> bool {
+    let (px, py) = point;
+    if vertices.len() < 3 { return false; }
+    let mut inside = false;
+    for i in 0..vertices.len() {
+        let (x1, y1) = vertices[i];
+        let (x2, y2) = vertices[(i + 1) % vertices.len()];
+        let cross = (x2 - x1) * (py - y1) - (y2 - y1) * (px - x1);
+        if cross.abs() <= 1e-12
+            && px >= x1.min(x2) - 1e-12 && px <= x1.max(x2) + 1e-12
+            && py >= y1.min(y2) - 1e-12 && py <= y1.max(y2) + 1e-12
+        { return true; }
+        if (y1 > py) != (y2 > py) && px < (x2 - x1) * (py - y1) / (y2 - y1) + x1 {
+            inside = !inside;
+        }
+    }
+    inside
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
