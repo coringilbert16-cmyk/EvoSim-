@@ -376,6 +376,9 @@ pub(crate) fn advance_construction(
     let Some((child, candidate_ledger, transferred)) =
         try_child_construction(&child, parent_storage, environment, ledger, context)
     else {
+        if !child.stored_material.is_empty() && child.structure.bonds.is_empty() {
+            return (ConstructionStatus::Dead, None);
+        }
         return (ConstructionStatus::Waiting, None);
     };
 
