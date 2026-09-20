@@ -173,7 +173,7 @@ pub(crate) fn begin_reproduction(
     parent: &mut Organism,
     rng: &mut ChaCha8Rng,
     catalog: &[crate::resources::BaseResource],
-    ledger: &mut EnergyLedger,
+    _ledger: &mut EnergyLedger,
 ) -> bool {
     if !matches!(parent.development_stage, DevelopmentStage::Adult) || parent.reproductive_construction.is_some() {
         return false;
@@ -204,7 +204,6 @@ pub(crate) fn begin_reproduction(
             anchor_unit_index,
             developing_energy: 0.0,
         });
-        let _ = ledger;
         return true;
     }
     false
