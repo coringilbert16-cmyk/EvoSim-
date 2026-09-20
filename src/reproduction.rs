@@ -289,13 +289,26 @@ pub(crate) fn advance_construction(
         }
     }
 
-    let Some(context) = developmental_context(
-        &construction.child_genome,
-        &construction.developmental_origin,
-        construction.developmental_orientation_radians,
+    let genome_qualified = crate::cavity::analyze_genome_cavity(
+        &construction.developing_structure,
         &environment.catalog,
-    ) else {
-        return (ConstructionStatus::Dead, None);
+    )
+    .ok()
+    .flatten()
+    .is_some_and(|cavity| cavity.boundary_units.contains(&construction.anchor_unit_index));
+    let context = if genome_qualified {
+        developmental_context(
+            &construction.child_genome,
+            &construction.developmental_origin,
+            construction.developmental_orientation_radians,
+            &environment.catalog,
+        )
+    } else {
+        // Genome construction is deliberately performed through the normal
+        // physical solver without a second genome blueprint. Developmental
+        // fields become active guidance only after a qualifying physical
+        // genome cavity exists.
+        None
     };
     let mut cache = crate::contact::ConnectionCompatibilityCache::new();
     let before_units = child.structure.units.len();
