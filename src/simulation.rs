@@ -600,25 +600,28 @@ impl Simulation {
         let mut next_organism_id = self.next_organism_id;
         for organism in &mut self.organisms {
             if organism.reproductive_construction.is_some() {
-                if let Some(construction) = organism.reproductive_construction.as_mut() {
-                    if let Some(stress) = crate::reproduction::advance_construction(
+                let (status, stress) = {
+                    let construction = organism
+                        .reproductive_construction
+                        .as_mut()
+                        .expect("reproductive construction exists");
+                    crate::reproduction::advance_construction(
                         &mut organism.stored_material,
                         construction,
-                        &catalog,
+                        &self.environment,
                         &mut self.energy_ledger,
                         &mut organism.usable_energy,
-                    ) {
-                        organism.add_transaction_stress(stress);
-                    }
+                        &mut self.rng,
+                    )
+                };
+                if let Some(stress) = stress {
+                    organism.add_transaction_stress(stress);
                 }
-                if organism
-                    .reproductive_construction
-                    .as_ref()
-                    .map(|construction| {
-                        construction.realized_elements.len() == construction.target_elements.len()
-                    })
-                    .unwrap_or(false)
-                {
+                if matches!(
+                    status,
+                    crate::reproduction::ConstructionStatus::Ready
+                        | crate::reproduction::ConstructionStatus::Dead
+                ) {
                     let child_id = next_organism_id.to_string();
                     if let Some(child) = crate::reproduction::finish_reproduction(
                         organism,
