@@ -46,18 +46,30 @@ fn parent_child_position(
         .shape
         .form
         .clone();
-    let anchor_point = crate::organism_geometry::PlacedForm {
-        unit_index: usize::MAX,
+    let anchor_part = crate::material_geometry::PlacedMaterialPart {
+        part_index: usize::MAX,
         form: anchor_shape,
-        x: origin.x,
-        y: origin.y,
-        rotation_radians: 0.0,
+        placement: crate::resources::Placement {
+            x: origin.x,
+            y: origin.y,
+            rotation_radians: 0.0,
+        },
     };
-    (!body.penetrates_part(&anchor_point) || body.contains_point(origin.x, origin.y))
-        .then_some(origin)
+    body.parts.iter().any(|parent_part| {
+        let parent_part = crate::material_geometry::PlacedMaterialPart {
+            part_index: parent_part.unit_index,
+            form: parent_part.form.clone(),
+            placement: crate::resources::Placement {
+                x: parent_part.x,
+                y: parent_part.y,
+                rotation_radians: parent_part.rotation_radians,
+            },
+        };
+        crate::material_geometry::placed_forms_overlap(&parent_part, &anchor_part, 0.0)
+    }).then_some(origin)
 }
 
-fn child_remains_within_realized_parent_boundary(
+fn child_intersects_realized_parent_region(
     structure: &OrganismStructure,
     parent_body: &crate::organism_geometry::OrganismBodyGeometry,
 ) -> bool {
@@ -65,14 +77,23 @@ fn child_remains_within_realized_parent_boundary(
         let Some(geometry) = unit.geometry.as_ref() else {
             return false;
         };
-        let child = crate::organism_geometry::PlacedForm {
-            unit_index: usize::MAX,
+        let child = crate::material_geometry::PlacedMaterialPart {
+            part_index: unit.index,
             form: geometry.shape().form.clone(),
-            x: unit.placement.x,
-            y: unit.placement.y,
-            rotation_radians: unit.placement.rotation_radians,
+            placement: unit.placement,
         };
-        parent_body.penetrates_part(&child)
+        parent_body.parts.iter().any(|parent_part| {
+            let parent_part = crate::material_geometry::PlacedMaterialPart {
+                part_index: parent_part.unit_index,
+                form: parent_part.form.clone(),
+                placement: crate::resources::Placement {
+                    x: parent_part.x,
+                    y: parent_part.y,
+                    rotation_radians: parent_part.rotation_radians,
+                },
+            };
+            crate::material_geometry::placed_forms_overlap(&parent_part, &child, 0.0)
+        })
     })
 }
 
@@ -450,7 +471,7 @@ pub(crate) fn advance_construction(
     construction.developing_structure = child.structure;
     construction.developing_energy = child.usable_energy;
     construction.developing_stress = child.stress;
-    if !child_remains_within_realized_parent_boundary(
+    if !child_intersects_realized_parent_region(
         &construction.developing_structure,
         parent_body,
     ) {
