@@ -248,6 +248,7 @@ pub(crate) fn begin_reproduction(
         realized_elements,
         realized_constituent_groups: realized_groups,
         pending_stress: 0.0,
+        developing_energy: 0.0,
     });
     true
 }
@@ -257,8 +258,22 @@ pub(crate) fn advance_construction(
     construction: &mut ReproductiveConstruction,
     catalog: &[BaseResource],
     ledger: &mut EnergyLedger,
-    energy: &mut f64,
+    parent_energy: &mut f64,
 ) -> Option<f64> {
+    // A developing offspring has its own energy budget while attached.
+    // Transfer only what is needed to restore its genome-defined juvenile reserve.
+    let reserve_energy = construction.child_genome.juvenile_energy_reserve;
+    if reserve_energy.is_finite() && reserve_energy > construction.developing_energy {
+        let needed = reserve_energy - construction.developing_energy;
+        let transfer = needed.min(parent_energy.max(0.0));
+        if transfer > 0.0 {
+            if ledger.transfer(parent_energy, &mut construction.developing_energy, transfer) {
+                // The transfer is intentionally persistent: there is no rollback if
+                // a later construction attempt fails or the offspring detaches.
+            }
+        }
+    }
+
     let blueprint = crate::juvenile::confirmed_seed_baseline(catalog).ok()?;
     let target = construction
         .target_elements
@@ -349,12 +364,9 @@ pub(crate) fn finish_reproduction(
         x: parent_position.x + parent_radius.max(1.0) + child_radius.max(1.0) + 1.0,
         y: parent_position.y,
     };
-    let mut child_energy = 0.0;
-    let reserve_energy = construction.child_genome.juvenile_energy_reserve;
-    if !ledger.transfer(&mut parent.usable_energy, &mut child_energy, reserve_energy) {
-        parent.reproductive_construction = Some(construction);
-        return None;
-    }
+    // Energy already transferred to the developing offspring remains with it.
+    // Detachment does not create a new energy allocation.
+    let child_energy = construction.developing_energy;
     let mut stored_material = MaterialStorage::default();
     if !stored_material.store(reserve) {
         parent.reproductive_construction = Some(construction);
