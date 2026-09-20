@@ -63,6 +63,7 @@ impl Simulation {
             unit.placement.x += dx;
             unit.placement.y += dy;
         }
+        translate_reproductive_construction(organism, dx, dy);
         for (original, trial) in other_organisms.iter_mut().zip(trial_organisms) {
             original.occupied_cells = trial.occupied_cells;
             original.structure = trial.structure;
@@ -387,6 +388,17 @@ fn can_translate_organism(
     })
 }
 
+fn translate_reproductive_construction(organism: &mut Organism, dx: f64, dy: f64) {
+    if let Some(construction) = organism.reproductive_construction.as_mut() {
+        construction.developmental_origin.x += dx;
+        construction.developmental_origin.y += dy;
+        for unit in &mut construction.developing_structure.units {
+            unit.placement.x += dx;
+            unit.placement.y += dy;
+        }
+    }
+}
+
 fn translate_organism(organism: &mut Organism, dx: f64, dy: f64) {
     organism.developmental_origin.x += dx;
     organism.developmental_origin.y += dy;
@@ -398,6 +410,7 @@ fn translate_organism(organism: &mut Organism, dx: f64, dy: f64) {
         unit.placement.x += dx;
         unit.placement.y += dy;
     }
+    translate_reproductive_construction(organism, dx, dy);
 }
 
 #[cfg(test)]
