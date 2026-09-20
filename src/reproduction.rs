@@ -49,7 +49,7 @@ fn parent_child_position(
     let anchor_part = crate::material_geometry::PlacedMaterialPart {
         part_index: usize::MAX,
         form: anchor_shape,
-        placement: crate::resources::Placement {
+        placement: crate::structure::Placement {
             x: origin.x,
             y: origin.y,
             rotation_radians: 0.0,
@@ -78,7 +78,7 @@ fn child_intersects_realized_parent_region(
             return false;
         };
         let child = crate::material_geometry::PlacedMaterialPart {
-            part_index: unit.index,
+            part_index: 0,
             form: geometry.shape().form.clone(),
             placement: unit.placement,
         };
