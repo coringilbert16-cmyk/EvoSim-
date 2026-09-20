@@ -84,16 +84,18 @@ impl OrganismBodyGeometry {
     /// Tests the realized physical envelope at a point. This is derived only from
     /// the actual realized constituent forms; no authored organism radius is used.
     pub fn contains_point(&self, x: f64, y: f64) -> bool {
-        self.parts.iter().any(|part| form_contains_point(
-            &part.form,
-            Placement {
-                x: part.x,
-                y: part.y,
-                rotation_radians: part.rotation_radians,
-            },
-            x,
-            y,
-        ))
+        self.parts.iter().any(|part| {
+            form_contains_point(
+                &part.form,
+                Placement {
+                    x: part.x,
+                    y: part.y,
+                    rotation_radians: part.rotation_radians,
+                },
+                x,
+                y,
+            )
+        })
     }
 
     /// Returns true when the supplied realized form has physical interior overlap
