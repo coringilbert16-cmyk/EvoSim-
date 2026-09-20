@@ -493,7 +493,7 @@ mod tests {
             .expect("reproduction is active");
         assert!(!construction.developing_structure.units.is_empty());
         assert!(construction.anchor_unit_index < construction.developing_structure.units.len());
-        assert_eq!(parent.structure, parent_structure);
+        assert_eq!(format!("{:?}", parent.structure), format!("{:?}", parent_structure));
     }
 
     #[test]
