@@ -87,6 +87,49 @@ fn store_first_available_material(
     child_storage.store(material)
 }
 
+fn try_child_construction(
+    child: &Organism,
+    parent_storage: &MaterialStorage,
+    environment: &Environment,
+    ledger: &EnergyLedger,
+    context: Option<DevelopmentalContext<'_>>,
+) -> Option<(Organism, EnergyLedger, Option<Material>)> {
+    let mut candidates = Vec::new();
+
+    for index in 0..child.stored_material.entries.len() {
+        let mut candidate = child.clone();
+        candidate.stored_material.entries.swap(0, index);
+        candidates.push((candidate, None));
+    }
+
+    for material in parent_storage.materials_snapshot() {
+        let mut candidate = child.clone();
+        if !candidate.stored_material.store(material.clone()) {
+            continue;
+        }
+        let last = candidate.stored_material.entries.len().saturating_sub(1);
+        candidate.stored_material.entries.swap(0, last);
+        candidates.push((candidate, Some(material)));
+    }
+
+    for (mut candidate, transferred) in candidates {
+        let mut candidate_ledger = *ledger;
+        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+        if crate::combine_runtime::try_combine_stored_unit(
+            &mut candidate,
+            environment,
+            &mut cache,
+            &mut candidate_ledger,
+            context,
+        )
+        .is_some()
+        {
+            return Some((candidate, candidate_ledger, transferred));
+        }
+    }
+    None
+}
+
 fn preferred_length(
     genome: &crate::genome::Genome,
     catalog: &[crate::resources::BaseResource],
@@ -310,38 +353,34 @@ pub(crate) fn advance_construction(
         // genome cavity exists.
         None
     };
-    let mut cache = crate::contact::ConnectionCompatibilityCache::new();
     let before_units = child.structure.units.len();
-    let before_storage = child.stored_material.clone();
-    let result = crate::combine_runtime::try_combine_stored_unit(
-        &mut child,
+    let Some((child, candidate_ledger, transferred)) = try_child_construction(
+        &child,
+        parent_storage,
         environment,
-        &mut cache,
         ledger,
-        Some(context),
-    );
-    if result.is_some() {
-        construction.committed_material = child.stored_material;
-        construction.developing_structure = child.structure;
-        construction.developing_energy = child.usable_energy;
-        construction.developing_stress = child.stress;
-        if birth_ready(construction, &environment.catalog) {
-            return (ConstructionStatus::Ready, None);
-        }
-        return (
-            ConstructionStatus::Progress,
-            result.map(|attempt| attempt.work_cost),
-        );
-    }
+        context,
+    ) else {
+        return (ConstructionStatus::Waiting, None);
+    };
 
-    // Preserve material if the COMBINE attempt was not physically valid. If
-    // other parent material is available, the next tick can try a different
-    // material. A blocked structure with existing bonds remains alive because
-    // BREAK/reorganization is still a valid future operation; no false dead
-    // end is declared here.
-    construction.committed_material = before_storage;
-    if before_units == 0 {
-        (ConstructionStatus::Dead, None)
+    if let Some(material) = transferred {
+        let mut parent_trial = parent_storage.clone();
+        if parent_trial.take_matching(&material).is_none() {
+            return (ConstructionStatus::Waiting, None);
+        }
+        *parent_storage = parent_trial;
+    }
+    *ledger = candidate_ledger;
+    construction.committed_material = child.stored_material;
+    construction.developing_structure = child.structure;
+    construction.developing_energy = child.usable_energy;
+    construction.developing_stress = child.stress;
+    if birth_ready(construction, &environment.catalog) {
+        return (ConstructionStatus::Ready, None);
+    }
+    if construction.developing_structure.units.len() > before_units {
+        (ConstructionStatus::Progress, None)
     } else {
         (ConstructionStatus::Waiting, None)
     }
