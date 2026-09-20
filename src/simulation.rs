@@ -587,7 +587,6 @@ impl Simulation {
                 }
             }
         }
-        let catalog = self.environment.catalog.clone();
         let mut offspring = Vec::new();
         let mut next_organism_id = self.next_organism_id;
         for organism in &mut self.organisms {
@@ -627,7 +626,7 @@ impl Simulation {
                     if let Some(child) = crate::reproduction::finish_reproduction(
                         organism,
                         child_id,
-                        &catalog,
+                        &self.environment.catalog,
                         &mut self.energy_ledger,
                     ) {
                         next_organism_id += 1;
