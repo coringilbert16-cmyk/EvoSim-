@@ -341,10 +341,10 @@ pub(crate) fn advance_construction(
         return (ConstructionStatus::Ready, None);
     }
 
-    if child.stored_material.is_empty() {
-        if !store_first_available_material(parent_storage, &mut child.stored_material) {
-            return (ConstructionStatus::Waiting, None);
-        }
+    if child.stored_material.is_empty()
+        && !store_first_available_material(parent_storage, &mut child.stored_material)
+    {
+        return (ConstructionStatus::Waiting, None);
     }
 
     let genome_qualified = crate::cavity::analyze_genome_cavity(
