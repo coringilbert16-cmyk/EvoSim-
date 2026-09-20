@@ -55,20 +55,22 @@ fn parent_child_position(
             rotation_radians: 0.0,
         },
     };
-    body.parts.iter().any(|parent_part| {
-        let parent_part = crate::material_geometry::PlacedMaterialPart {
-            part_index: parent_part.unit_index,
-            form: parent_part.form.clone(),
-            placement: crate::structure::Placement {
-                x: parent_part.x,
-                y: parent_part.y,
-                rotation_radians: parent_part.rotation_radians,
-            },
-        };
-        crate::material_geometry::placed_forms_overlap(&parent_part, &anchor_part, 0.0)
-    }).then_some(origin)
+    body.parts
+        .iter()
+        .any(|parent_part| {
+            let parent_part = crate::material_geometry::PlacedMaterialPart {
+                part_index: parent_part.unit_index,
+                form: parent_part.form.clone(),
+                placement: crate::structure::Placement {
+                    x: parent_part.x,
+                    y: parent_part.y,
+                    rotation_radians: parent_part.rotation_radians,
+                },
+            };
+            crate::material_geometry::placed_forms_overlap(&parent_part, &anchor_part, 0.0)
+        })
+        .then_some(origin)
 }
-
 fn child_intersects_realized_parent_region(
     structure: &OrganismStructure,
     parent_body: &crate::organism_geometry::OrganismBodyGeometry,
