@@ -32,7 +32,7 @@ fn parent_child_position(
     let parent_radius =
         crate::organism_geometry::OrganismBodyGeometry::from_structure(&parent.structure, catalog)
             .ok()
-            .map(|g| g.bounding_radius_about(0.0, 0.0))
+            .map(|g| g.bounding_radius_about(parent_position.x, parent_position.y))
             .unwrap_or(1.0)
             .max(0.0);
     let anchor_name = anchor.parts.first()?.0.as_str();
