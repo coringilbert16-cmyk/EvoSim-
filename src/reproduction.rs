@@ -118,6 +118,7 @@ fn try_child_construction(
     environment: &Environment,
     ledger: &EnergyLedger,
     context: Option<DevelopmentalContext<'_>>,
+    parent_boundary: &(Position, f64),
 ) -> Option<(Organism, EnergyLedger, Option<Material>)> {
     let mut candidates = Vec::new();
 
@@ -148,6 +149,11 @@ fn try_child_construction(
             context,
         )
         .is_some()
+            && structure_within_parent_boundary(
+                &candidate.structure,
+                &parent_boundary.0,
+                parent_boundary.1,
+            )
         {
             return Some((candidate, candidate_ledger, transferred));
         }
