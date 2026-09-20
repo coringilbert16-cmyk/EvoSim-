@@ -40,7 +40,12 @@ fn parent_child_position(
     let origin = parent.occupied_cells.first()?.clone();
     let body = parent_body_geometry(parent, catalog)?;
     let anchor_name = anchor.parts.first()?.0.as_str();
-    let anchor_shape = catalog.iter().find(|r| r.name == anchor_name)?.shape.form.clone();
+    let anchor_shape = catalog
+        .iter()
+        .find(|r| r.name == anchor_name)?
+        .shape
+        .form
+        .clone();
     let anchor_point = crate::organism_geometry::PlacedForm {
         unit_index: usize::MAX,
         form: anchor_shape,
