@@ -597,6 +597,11 @@ impl Simulation {
                         .reproductive_construction
                         .as_mut()
                         .expect("reproductive construction exists");
+                    let parent_boundary =
+                        crate::reproduction::parent_boundary_for_simulation(
+                            organism,
+                            &self.environment.catalog,
+                        );
                     crate::reproduction::advance_construction(
                         &mut organism.stored_material,
                         construction,
@@ -604,6 +609,7 @@ impl Simulation {
                         &mut self.energy_ledger,
                         &mut organism.usable_energy,
                         &mut self.rng,
+                        &parent_boundary,
                     )
                 };
                 if let Some(stress) = stress {
