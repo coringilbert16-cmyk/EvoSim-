@@ -320,21 +320,25 @@ pub(crate) fn try_combine_stored_unit(
                                         origin_ref,
                                         orientation,
                                     );
-                                    blueprint.material_preference_scaled(
-                                        first_resource,
-                                        local.0,
-                                        local.1,
-                                        preferred_length,
-                                    ) + blueprint.density_preference_scaled(
-                                        local.0,
-                                        local.1,
-                                        preferred_length,
-                                    ) + crate::developmental_blueprint::CANDIDATE_CONNECTIVITY_WEIGHT
-                                        * blueprint.connectivity_preference_scaled(
+                                    crate::developmental_blueprint::CANDIDATE_MATERIAL_WEIGHT
+                                        * blueprint.material_preference_scaled(
+                                            first_resource,
                                             local.0,
                                             local.1,
                                             preferred_length,
                                         )
+                                        + crate::developmental_blueprint::CANDIDATE_DENSITY_WEIGHT
+                                            * blueprint.density_preference_scaled(
+                                                local.0,
+                                                local.1,
+                                                preferred_length,
+                                            )
+                                        + crate::developmental_blueprint::CANDIDATE_CONNECTIVITY_WEIGHT
+                                            * blueprint.connectivity_preference_scaled(
+                                                local.0,
+                                                local.1,
+                                                preferred_length,
+                                            )
                                 })
                                 .unwrap_or(0.0);
                             candidates.push((
@@ -445,13 +449,59 @@ pub(crate) fn try_combine_stored_unit(
                     &environment.catalog,
                     water,
                 ) {
-                    candidates.push((ua, placement, evaluation, candidate.distance, required));
+                    let developmental_score = developmental
+                        .map(|(blueprint, origin, orientation, preferred_length)| {
+                            let Some(wa) = candidate
+                                .endpoint_a
+                                .world_point(&hypothetical.units[ua], &environment.catalog)
+                            else {
+                                return 0.0;
+                            };
+                            let local = crate::developmental_blueprint::developmental_point(
+                                wa.x,
+                                wa.y,
+                                origin,
+                                orientation,
+                            );
+                            crate::developmental_blueprint::CANDIDATE_MATERIAL_WEIGHT
+                                * blueprint.material_preference_scaled(
+                                    raw.parts.first()?.0.as_str(),
+                                    local.0,
+                                    local.1,
+                                    preferred_length,
+                                )
+                                + crate::developmental_blueprint::CANDIDATE_DENSITY_WEIGHT
+                                    * blueprint.density_preference_scaled(
+                                        local.0,
+                                        local.1,
+                                        preferred_length,
+                                    )
+                                + crate::developmental_blueprint::CANDIDATE_CONNECTIVITY_WEIGHT
+                                    * blueprint.connectivity_preference_scaled(
+                                        local.0,
+                                        local.1,
+                                        preferred_length,
+                                    )
+                        })
+                        .unwrap_or(0.0);
+                    candidates.push((
+                        ua,
+                        placement,
+                        evaluation,
+                        candidate.distance,
+                        required,
+                        developmental_score,
+                    ));
                 }
             }
         }
     }
-    candidates.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap_or(std::cmp::Ordering::Equal));
-    for (ua, placement, evaluation, _, required) in candidates {
+    candidates.sort_by(|a, b| {
+        b.5.partial_cmp(&a.5)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.3.partial_cmp(&b.3).unwrap_or(std::cmp::Ordering::Equal))
+    });
+    for (ua, placement, evaluation, _, required, _) in candidates {
         if organism.usable_energy + EPSILON < required {
             continue;
         }
