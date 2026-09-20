@@ -671,9 +671,7 @@ impl Simulation {
         ledger: &mut EnergyLedger,
         rng: &mut ChaCha8Rng,
     ) -> bool {
-        // A bondless structure cannot absorb another stress threshold. Preserve
-        // that lethal condition before the ordinary per-tick stress decay so
-        // crossing the threshold cannot be erased solely by decay ordering.
+        // Preserve lethal bondless stress before per-tick decay.
         let threshold = organism
             .stress_threshold
             .max(crate::state::MIN_STRESS_THRESHOLD);
