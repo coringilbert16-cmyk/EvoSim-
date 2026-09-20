@@ -5,7 +5,7 @@
 //! bounds and placed views.
 
 use crate::resources::{BaseResource, Form};
-use crate::structure::OrganismStructure;
+use crate::structure::{OrganismStructure, Placement};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlacedForm {
@@ -79,6 +79,48 @@ impl OrganismBodyGeometry {
     #[allow(dead_code)]
     pub fn bounding_box_contains(&self, x: f64, y: f64) -> bool {
         x >= self.min_x && x <= self.max_x && y >= self.min_y && y <= self.max_y
+    }
+
+    /// Tests the realized physical envelope at a point. This is derived only from
+    /// the actual realized constituent forms; no authored organism radius is used.
+    pub fn contains_point(&self, x: f64, y: f64) -> bool {
+        self.parts.iter().any(|part| form_contains_point(
+            &part.form,
+            Placement {
+                x: part.x,
+                y: part.y,
+                rotation_radians: part.rotation_radians,
+            },
+            x,
+            y,
+        ))
+    }
+
+    /// Returns true when the supplied realized form has physical interior overlap
+    /// with any realized organism constituent. Touching is deliberately not
+    /// counted as penetration; contact is handled by the contact subsystem.
+    pub fn penetrates_part(&self, form: &PlacedForm) -> bool {
+        let candidate = crate::material_geometry::PlacedMaterialPart {
+            part_index: form.unit_index,
+            form: form.form.clone(),
+            placement: Placement {
+                x: form.x,
+                y: form.y,
+                rotation_radians: form.rotation_radians,
+            },
+        };
+        self.parts.iter().any(|part| {
+            let existing = crate::material_geometry::PlacedMaterialPart {
+                part_index: part.unit_index,
+                form: part.form.clone(),
+                placement: Placement {
+                    x: part.x,
+                    y: part.y,
+                    rotation_radians: part.rotation_radians,
+                },
+            };
+            crate::material_geometry::placed_forms_penetrate(&candidate, &existing, 0.0)
+        })
     }
 
     pub fn bounding_radius_about(&self, x: f64, y: f64) -> f64 {
