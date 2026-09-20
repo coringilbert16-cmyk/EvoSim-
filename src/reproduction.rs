@@ -134,8 +134,7 @@ fn preferred_length(
     genome: &crate::genome::Genome,
     catalog: &[crate::resources::BaseResource],
 ) -> Option<f64> {
-    let (seed_mass, seed_length) =
-        crate::juvenile::confirmed_seed_scale_reference(catalog).ok()?;
+    let (seed_mass, seed_length) = crate::juvenile::confirmed_seed_scale_reference(catalog).ok()?;
     Some(
         genome
             .developmental_blueprint
@@ -271,10 +270,18 @@ pub(crate) fn begin_reproduction(
 
     let snapshot = parent.stored_material.materials_snapshot();
     for anchor in snapshot {
-        let Some(position) = parent_child_position(parent, &anchor, catalog) else { continue };
+        let Some(position) = parent_child_position(parent, &anchor, catalog) else {
+            continue;
+        };
         let mut trial_storage = parent.stored_material.clone();
-        let Some(transferred) = trial_storage.take_matching(&anchor) else { continue };
-        let Some((structure, child_storage)) = anchor_structure(parent, &child_genome, transferred, position.clone(), catalog) else { continue };
+        let Some(transferred) = trial_storage.take_matching(&anchor) else {
+            continue;
+        };
+        let Some((structure, child_storage, anchor_unit_index)) =
+            anchor_structure(&child_genome, transferred, position.clone(), catalog)
+        else {
+            continue;
+        };
         parent.stored_material = trial_storage;
         parent.reproductive_construction = Some(ReproductiveConstruction {
             committed_material: child_storage,
@@ -304,11 +311,8 @@ pub(crate) fn advance_construction(
         let transfer =
             (reserve_energy - construction.developing_energy).min(parent_energy.max(0.0));
         if transfer > 0.0 {
-            let _ = ledger.transfer(
-                parent_energy,
-                &mut construction.developing_energy,
-                transfer,
-            );
+            let _ =
+                ledger.transfer(parent_energy, &mut construction.developing_energy, transfer);
         }
     }
 
@@ -338,7 +342,11 @@ pub(crate) fn advance_construction(
     )
     .ok()
     .flatten()
-    .is_some_and(|cavity| cavity.boundary_units.contains(&construction.anchor_unit_index));
+    .is_some_and(|cavity| {
+        cavity
+            .boundary_units
+            .contains(&construction.anchor_unit_index)
+    });
     let context = if genome_qualified {
         developmental_context(
             &construction.child_genome,
@@ -354,13 +362,9 @@ pub(crate) fn advance_construction(
         None
     };
     let before_units = child.structure.units.len();
-    let Some((child, candidate_ledger, transferred)) = try_child_construction(
-        &child,
-        parent_storage,
-        environment,
-        ledger,
-        context,
-    ) else {
+    let Some((child, candidate_ledger, transferred)) =
+        try_child_construction(&child, parent_storage, environment, ledger, context)
+    else {
         return (ConstructionStatus::Waiting, None);
     };
 
