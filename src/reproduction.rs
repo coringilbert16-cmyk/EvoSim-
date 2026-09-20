@@ -311,8 +311,7 @@ pub(crate) fn advance_construction(
         let transfer =
             (reserve_energy - construction.developing_energy).min(parent_energy.max(0.0));
         if transfer > 0.0 {
-            let _ =
-                ledger.transfer(parent_energy, &mut construction.developing_energy, transfer);
+            let _ = ledger.transfer(parent_energy, &mut construction.developing_energy, transfer);
         }
     }
 
