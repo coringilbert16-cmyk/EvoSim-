@@ -451,8 +451,18 @@ pub(crate) fn finish_reproduction(
     _ledger: &mut EnergyLedger,
 ) -> Option<Organism> {
     let construction = parent.reproductive_construction.take()?;
+    let boundary = parent_boundary(parent, catalog)?;
+    if !structure_within_parent_boundary(
+        &construction.developing_structure,
+        &boundary.0,
+        boundary.1,
+    ) {
+        parent.reproductive_construction = Some(construction);
+        return None;
+    }
     let ready = birth_ready(&construction, catalog);
     if !ready && construction.developing_structure.units.is_empty() {
+        parent.reproductive_construction = Some(construction);
         return None;
     }
     let child_position = construction.developmental_origin.clone();
