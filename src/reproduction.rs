@@ -248,6 +248,19 @@ fn anchor_structure(
     Some((child.structure, child.stored_material, anchor_unit_index))
 }
 
+pub(crate) fn total_usable_energy_held(organisms: &[Organism]) -> f64 {
+    organisms
+        .iter()
+        .map(|organism| {
+            organism.usable_energy
+                + organism
+                    .reproductive_construction
+                    .as_ref()
+                    .map_or(0.0, |construction| construction.developing_energy)
+        })
+        .sum()
+}
+
 pub(crate) fn begin_reproduction(
     parent: &mut Organism,
     rng: &mut ChaCha8Rng,
