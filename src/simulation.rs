@@ -592,8 +592,11 @@ impl Simulation {
         let mut next_organism_id = self.next_organism_id;
         for organism in &mut self.organisms {
             if organism.reproductive_construction.is_some() {
-                let Some(parent_boundary) =
-                    crate::reproduction::parent_boundary(organism, &self.environment.catalog)
+                let Some(parent_body) =
+                    crate::organism_geometry::OrganismBodyGeometry::from_structure(
+                        &organism.structure,
+                        &self.environment.catalog,
+                    )
                 else {
                     continue;
                 };
@@ -610,7 +613,7 @@ impl Simulation {
                         &mut self.energy_ledger,
                         &mut organism.usable_energy,
                         &mut self.rng,
-                        &parent_boundary,
+                        &parent_body,
                     )
                 };
                 if let Some(stress) = stress {
@@ -621,6 +624,7 @@ impl Simulation {
                     crate::reproduction::ConstructionStatus::Ready
                         | crate::reproduction::ConstructionStatus::Detached
                         | crate::reproduction::ConstructionStatus::Dead
+                        | crate::reproduction::ConstructionStatus::DeadEnd
                 ) {
                     let child_id = next_organism_id.to_string();
                     if let Some(child) = crate::reproduction::finish_reproduction(
