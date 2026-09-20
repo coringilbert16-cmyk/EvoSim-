@@ -22,6 +22,7 @@ pub(crate) enum ConstructionStatus {
     Ready,
     Detached,
     Dead,
+    DeadEnd,
 }
 
 pub(crate) fn parent_boundary(
@@ -53,7 +54,7 @@ fn parent_child_position(
     (anchor_radius <= radius + 1e-9).then_some(center)
 }
 
-fn structure_within_parent_boundary(
+fn child_remains_inside_parent_boundary(
     structure: &OrganismStructure,
     center: &Position,
     radius: f64,
@@ -61,16 +62,49 @@ fn structure_within_parent_boundary(
     if !radius.is_finite() || radius <= 0.0 {
         return false;
     }
-    structure.units.iter().all(|unit| {
+    let boundary = crate::material_geometry::PlacedMaterialPart {
+        part_index: 0,
+        form: crate::resources::Form::Circle { radius },
+        placement: crate::structure::Placement {
+            x: center.x,
+            y: center.y,
+            rotation_radians: 0.0,
+        },
+    };
+    structure.units.iter().any(|unit| {
         let Some(geometry) = unit.geometry.as_ref() else {
             return false;
         };
-        let shape_radius = geometry.shape().form.bounding_radius();
-        shape_radius.is_finite()
-            && unit.placement.x.is_finite()
-            && unit.placement.y.is_finite()
-            && (unit.placement.x - center.x).hypot(unit.placement.y - center.y) + shape_radius
-                <= radius + 1e-9
+        let child = crate::material_geometry::PlacedMaterialPart {
+            part_index: 0,
+            form: geometry.shape().form.clone(),
+            placement: unit.placement,
+        };
+        crate::material_geometry::placed_forms_penetrate(&child, &boundary, 0.0)
+    })
+}
+
+fn parent_child_in_contact(parent: &OrganismStructure, child: &OrganismStructure) -> bool {
+    parent.units.iter().any(|parent_unit| {
+        let Some(parent_geometry) = parent_unit.geometry.as_ref() else {
+            return false;
+        };
+        let parent_part = crate::material_geometry::PlacedMaterialPart {
+            part_index: 0,
+            form: parent_geometry.shape().form.clone(),
+            placement: parent_unit.placement,
+        };
+        child.units.iter().any(|child_unit| {
+            let Some(child_geometry) = child_unit.geometry.as_ref() else {
+                return false;
+            };
+            let child_part = crate::material_geometry::PlacedMaterialPart {
+                part_index: 0,
+                form: child_geometry.shape().form.clone(),
+                placement: child_unit.placement,
+            };
+            crate::material_geometry::placed_forms_overlap(&parent_part, &child_part, 0.0)
+        })
     })
 }
 
@@ -338,6 +372,7 @@ pub(crate) fn begin_reproduction(
 }
 
 pub(crate) fn advance_construction(
+    parent_structure: &OrganismStructure,
     parent_storage: &mut MaterialStorage,
     construction: &mut ReproductiveConstruction,
     environment: &Environment,
@@ -367,6 +402,10 @@ pub(crate) fn advance_construction(
 
     if birth_ready(construction, &environment.catalog) {
         return (ConstructionStatus::Ready, None);
+    }
+
+    if !parent_child_in_contact(parent_structure, &construction.developing_structure) {
+        return (ConstructionStatus::Detached, None);
     }
 
     if child.stored_material.is_empty()
@@ -408,9 +447,6 @@ pub(crate) fn advance_construction(
         ledger,
         context,
     ) else {
-        if !child.stored_material.is_empty() && child.structure.bonds.is_empty() {
-            return (ConstructionStatus::Dead, None);
-        }
         return (ConstructionStatus::Waiting, None);
     };
 
@@ -426,14 +462,14 @@ pub(crate) fn advance_construction(
     construction.developing_structure = child.structure;
     construction.developing_energy = child.usable_energy;
     construction.developing_stress = child.stress;
-    if !structure_within_parent_boundary(
+    if !child_remains_inside_parent_boundary(
         &construction.developing_structure,
         &parent_boundary.0,
         parent_boundary.1,
     ) {
-        // The developing child is attached only while its physical structure
-        // remains within the parent's outer boundary. Crossing that boundary
-        // is the physical detachment event; it is not an invalid construction.
+        return (ConstructionStatus::Detached, None);
+    }
+    if !parent_child_in_contact(parent_structure, &construction.developing_structure) {
         return (ConstructionStatus::Detached, None);
     }
     if birth_ready(construction, &environment.catalog) {
@@ -576,6 +612,7 @@ mod tests {
         let environment = simulation.environment.clone();
         let boundary = parent_boundary(&parent, &environment.catalog).unwrap();
         let _ = advance_construction(
+            &parent.structure,
             &mut parent.stored_material,
             &mut construction,
             &environment,
@@ -606,17 +643,15 @@ mod tests {
             .as_mut()
             .expect("reproduction is active");
         for unit in &mut construction.developing_structure.units {
-            unit.placement.x = boundary.0.x + boundary.1 * 2.0;
+            unit.placement.x = boundary.0.x + boundary.1 * 0.75;
             unit.placement.y = boundary.0.y;
         }
-        let child = finish_reproduction(
-            &mut parent,
-            "detached-child".into(),
-            &simulation.environment.catalog,
-            &mut ledger,
+        let inside = child_remains_inside_parent_boundary(
+            &construction.developing_structure,
+            &boundary.0,
+            boundary.1,
         );
-        assert!(child.is_some(), "outside the boundary is the detachment state");
-        assert!(parent.reproductive_construction.is_none());
+        assert!(inside, "crossing the boundary while material remains inside must not detach the child");
     }
 
     #[test]
