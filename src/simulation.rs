@@ -592,12 +592,10 @@ impl Simulation {
         let mut next_organism_id = self.next_organism_id;
         for organism in &mut self.organisms {
             if organism.reproductive_construction.is_some() {
-                let Some(parent_body) =
-                    crate::organism_geometry::OrganismBodyGeometry::from_structure(
-                        &organism.structure,
-                        &self.environment.catalog,
-                    )
-                else {
+                let Some(parent_body) = crate::reproduction::parent_body_geometry(
+                    organism,
+                    &self.environment.catalog,
+                ) else {
                     continue;
                 };
                 let (status, stress) = {
