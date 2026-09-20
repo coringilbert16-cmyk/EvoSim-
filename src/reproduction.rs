@@ -68,8 +68,7 @@ fn structure_within_parent_boundary(
         shape_radius.is_finite()
             && unit.placement.x.is_finite()
             && unit.placement.y.is_finite()
-            && (unit.placement.x - center.x).hypot(unit.placement.y - center.y)
-                + shape_radius
+            && (unit.placement.x - center.x).hypot(unit.placement.y - center.y) + shape_radius
                 <= radius + 1e-9
     })
 }
@@ -407,16 +406,14 @@ pub(crate) fn advance_construction(
         None
     };
     let before_units = child.structure.units.len();
-    let Some((child, candidate_ledger, transferred)) =
-        try_child_construction(
-            &child,
-            parent_storage,
-            environment,
-            ledger,
-            context,
-            parent_boundary,
-        )
-    else {
+    let Some((child, candidate_ledger, transferred)) = try_child_construction(
+        &child,
+        parent_storage,
+        environment,
+        ledger,
+        context,
+        parent_boundary,
+    ) else {
         if !child.stored_material.is_empty() && child.structure.bonds.is_empty() {
             return (ConstructionStatus::Dead, None);
         }
@@ -558,13 +555,11 @@ mod tests {
             boundary.1,
         ));
         assert_eq!(
-            construction.developmental_origin.x,
-            boundary.0.x,
+            construction.developmental_origin.x, boundary.0.x,
             "developing offspring must begin inside the parent's boundary"
         );
         assert_eq!(
-            construction.developmental_origin.y,
-            boundary.0.y,
+            construction.developmental_origin.y, boundary.0.y,
             "developing offspring must begin inside the parent's boundary"
         );
     }
