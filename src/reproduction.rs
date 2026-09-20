@@ -450,10 +450,9 @@ pub(crate) fn advance_construction(
     construction.developing_structure = child.structure;
     construction.developing_energy = child.usable_energy;
     construction.developing_stress = child.stress;
-    if !child_remains_inside_parent_boundary(
+    if !child_remains_within_realized_parent_boundary(
         &construction.developing_structure,
-        &parent_boundary.0,
-        parent_boundary.1,
+        parent_body,
     ) {
         return (ConstructionStatus::Detached, None);
     }
