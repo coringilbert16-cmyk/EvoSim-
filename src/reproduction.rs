@@ -626,7 +626,12 @@ mod tests {
             .expect("reproduction is active");
         let inside_part = body.parts[0].clone();
         let outside_x = body.max_x + 100.0;
-        for (index, unit) in construction.developing_structure.units.iter_mut().enumerate() {
+        for (index, unit) in construction
+            .developing_structure
+            .units
+            .iter_mut()
+            .enumerate()
+        {
             if index == 0 {
                 unit.placement.x = inside_part.x;
                 unit.placement.y = inside_part.y;
