@@ -654,16 +654,8 @@ impl Simulation {
         let live_ids: HashSet<String> = self.organisms.iter().map(|o| o.id.clone()).collect();
         self.active_transformations
             .retain(|t| live_ids.contains(&t.organism_id));
-        self.energy_ledger.total_usable_energy_held = self
-            .organisms
-            .iter()
-            .map(|o| {
-                o.usable_energy
-                    + o.reproductive_construction
-                        .as_ref()
-                        .map_or(0.0, |c| c.developing_energy)
-            })
-            .sum();
+        self.energy_ledger.total_usable_energy_held =
+            crate::reproduction::total_usable_energy_held(&self.organisms);
     }
     pub(crate) fn apply_survival_damage(
         organism: &mut Organism,
