@@ -395,6 +395,16 @@ Performance-oriented aggregation is permitted only when it preserves enough info
 
 An optimization must not become a second physical authority.
 
+### 14.4.1 Formation Physical-Resolution Scale
+
+The individually resolved physical portion of an environmental formation extends to a depth of **two times the maximum organism extent** of the world's current largest organism.
+
+Maximum organism extent is the larger of the realized organism's physical width and height, as derived from authoritative realized physical geometry.
+
+This measurement is not derived from genome targets, mass, occupied grid cells, resource count, or an authored organism size. It changes as the world's realized organisms change in physical extent.
+
+The resulting depth is a representation-resolution rule for coarse-grained environmental formations. It does not define a new resource property or environmental material category.
+
 ## 14.5 Environmental Fragmentation and Accumulation
 
 Environmental material may fragment into smaller physical structures and may accumulate into larger structures through established physical processes.
