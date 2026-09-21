@@ -381,6 +381,18 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_composition_entries_are_treated_as_one_local_quantity() {
+        let catalog = default_catalog();
+        let first = realize_pattern(
+            &[("Carbon".to_string(), 2.0), ("Carbon".to_string(), 3.0)],
+            &catalog,
+        )
+        .unwrap();
+        let second = realize_pattern(&[("Carbon".to_string(), 5.0)], &catalog).unwrap();
+        assert_eq!(first, second);
+    }
+
+    #[test]
     fn changing_composition_changes_the_pattern_without_new_resource_types() {
         let catalog = default_catalog();
         let carbon_hydrogen =
