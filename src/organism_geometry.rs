@@ -5,7 +5,7 @@
 //! bounds and placed views.
 
 use crate::resources::{BaseResource, Form};
-use crate::structure::OrganismStructure;
+use crate::structure::{OrganismStructure, Placement};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlacedForm {
@@ -14,6 +14,21 @@ pub struct PlacedForm {
     pub x: f64,
     pub y: f64,
     pub rotation_radians: f64,
+    /// Tests a point against the realized constituent geometry.
+    pub fn contains_point(&self, x: f64, y: f64) -> bool {
+        self.parts.iter().any(|part| {
+            form_contains_point(
+                &part.form,
+                Placement {
+                    x: part.x,
+                    y: part.y,
+                    rotation_radians: part.rotation_radians,
+                },
+                x,
+                y,
+            )
+        })
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
