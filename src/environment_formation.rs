@@ -112,15 +112,15 @@ pub(crate) fn realize_pattern(
                     catalog,
                 )
                 .into_iter()
-                .find(|candidate| candidate.available_a && candidate.available_b)
-                else {
+                .find(|candidate| candidate.available_a && candidate.available_b) else {
                     continue;
                 };
 
                 let id_a = candidate_structure.physical_id(target)?;
                 let id_b = candidate_structure.physical_id(candidate_index)?;
                 let properties_a = candidate_structure.units[target].properties(catalog)?;
-                let properties_b = candidate_structure.units[candidate_index].properties(catalog)?;
+                let properties_b =
+                    candidate_structure.units[candidate_index].properties(catalog)?;
                 let bond = Bond {
                     endpoint_a: BondEndpoint::new(id_a, candidate.endpoint_a),
                     endpoint_b: BondEndpoint::new(id_b, candidate.endpoint_b),
@@ -175,9 +175,15 @@ pub(crate) fn realize_repeating_pattern(
     let material = realize_pattern(composition, catalog)?;
     let placements = material.placements.as_ref()?;
     let min_x = placements.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
-    let max_x = placements.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
+    let max_x = placements
+        .iter()
+        .map(|p| p.x)
+        .fold(f64::NEG_INFINITY, f64::max);
     let min_y = placements.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
-    let max_y = placements.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
+    let max_y = placements
+        .iter()
+        .map(|p| p.y)
+        .fold(f64::NEG_INFINITY, f64::max);
     let width = (max_x - min_x).max(f64::EPSILON);
     let height = (max_y - min_y).max(f64::EPSILON);
     Some(FormationPattern {
@@ -265,14 +271,10 @@ mod tests {
     #[test]
     fn changing_composition_changes_the_pattern_without_new_resource_types() {
         let catalog = default_catalog();
-        let carbon_hydrogen = vec![
-            ("Carbon".to_string(), 3.0),
-            ("Hydrogen".to_string(), 1.0),
-        ];
-        let carbon_sulfur = vec![
-            ("Carbon".to_string(), 3.0),
-            ("Sulfur".to_string(), 1.0),
-        ];
+        let carbon_hydrogen =
+            vec![("Carbon".to_string(), 3.0), ("Hydrogen".to_string(), 1.0)];
+        let carbon_sulfur =
+            vec![("Carbon".to_string(), 3.0), ("Sulfur".to_string(), 1.0)];
 
         let first = realize_pattern(&carbon_hydrogen, &catalog).unwrap();
         let second = realize_pattern(&carbon_sulfur, &catalog).unwrap();
