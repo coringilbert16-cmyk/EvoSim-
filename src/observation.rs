@@ -136,13 +136,7 @@ impl WorldObservation {
                                     rotation_radians: part.rotation_radians,
                                 })
                                 .collect();
-                            (
-                                g.min_x,
-                                g.max_x,
-                                g.min_y,
-                                g.max_y,
-                                silhouette,
-                            )
+                            (g.min_x, g.max_x, g.min_y, g.max_y, silhouette)
                         }
                         None => (position.0, position.0, position.1, position.1, Vec::new()),
                     };
