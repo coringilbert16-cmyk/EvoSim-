@@ -172,12 +172,8 @@ mod tests {
             .material
             .material
             .is_empty()));
-        assert!(field.formations.iter().any(|formation| {
-            formation
-                .bulk
-                .composition
-                .iter()
-                .any(|(name, _)| name == "Water")
+        assert!(field.total_material().iter().any(|(name, amount)| {
+            name == "Water" && *amount > 0.0
         }));
     }
     #[test]
@@ -191,7 +187,13 @@ mod tests {
             .filter_map(|material| structured_signature(&material))
             .collect::<BTreeSet<_>>();
         assert!(signatures.len() > 1);
-        assert!(signatures.len() <= ENVIRONMENTAL_COMPOUND_COUNT);
+        assert!(signatures
+            .iter()
+            .all(|signature| signature.iter().all(|name| {
+                crate::resources::default_catalog()
+                    .iter()
+                    .any(|resource| &resource.name == name)
+            })));
     }
     #[test]
     fn initial_landscape_is_not_globally_uniform() {
