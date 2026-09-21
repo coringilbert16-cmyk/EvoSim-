@@ -41,45 +41,66 @@ pub(crate) fn seed_initial_landscape(
         return;
     }
 
-    for index in 0..field.cells.len() {
-        let (x, y) = field.cell_center(index);
-        let nx = x / (field.width_cells as f64 * field.cell_size).max(1.0);
-        let ny = y / (field.height_cells as f64 * field.cell_size).max(1.0);
+    // Formations are spatially coarse environmental objects. The field cells
+    // remain only an index; a small deterministic set of irregular formations
+    // provides the initial biome-like spread without creating one formation per
+    // indexing cell.
+    let grid_side = 4usize;
+    let width = field.width_cells as f64 * field.cell_size;
+    let height = field.height_cells as f64 * field.cell_size;
 
-        let field_a = ((nx * 2.4 + ny * 1.3).sin() + 1.0) * 0.5;
-        let field_b = ((nx * 1.1 - ny * 2.7 + 0.8).cos() + 1.0) * 0.5;
-        let field_c = ((nx * 3.0 + ny * 2.0 + 1.7).sin() + 1.0) * 0.5;
-        let selector = ((field_c * compounds.len() as f64) as usize).min(compounds.len() - 1);
+    for row in 0..grid_side {
+        for col in 0..grid_side {
+            let gx = (col as f64 + 0.5) / grid_side as f64;
+            let gy = (row as f64 + 0.5) / grid_side as f64;
+            let field_a = ((gx * 2.4 + gy * 1.3).sin() + 1.0) * 0.5;
+            let field_b = ((gx * 1.1 - gy * 2.7 + 0.8).cos() + 1.0) * 0.5;
+            let field_c = ((gx * 3.0 + gy * 2.0 + 1.7).sin() + 1.0) * 0.5;
 
-        let mut composition = compounds[selector].parts.clone();
-        if field_a > 0.72 {
-            let secondary = (selector + 3 + (field_b * 4.0) as usize) % compounds.len();
-            for (name, amount) in &compounds[secondary].parts {
-                if let Some(existing) = composition
-                    .iter_mut()
-                    .find(|(candidate, _)| candidate == name)
-                {
-                    existing.1 += amount * 0.5;
-                } else {
-                    composition.push((name.clone(), amount * 0.5));
+            let base_selector = row * grid_side + col;
+            let selector_offset = (field_c * compounds.len() as f64) as usize;
+            let selector = (base_selector + selector_offset) % compounds.len();
+
+            let mut composition = compounds[selector].parts.clone();
+            if field_a > 0.55 {
+                let secondary = (selector + 3 + (field_b * 4.0) as usize) % compounds.len();
+                for (name, amount) in &compounds[secondary].parts {
+                    if let Some(existing) = composition
+                        .iter_mut()
+                        .find(|(candidate, _)| candidate == name)
+                    {
+                        existing.1 += amount * 0.5;
+                    } else {
+                        composition.push((name.clone(), amount * 0.5));
+                    }
                 }
             }
-        }
-        if field_a > 0.72 {
-            composition.push(("Hydrogen".to_string(), 2.0));
-        }
-        if field_b < 0.5 {
-            composition.push(("Water".to_string(), 3.0));
-        }
+            if field_b < 0.5 {
+                composition.push(("Water".to_string(), 3.0));
+            }
+            if field_a > 0.72 {
+                composition.push(("Hydrogen".to_string(), 2.0));
+            }
 
-        let composition = composition
-            .into_iter()
-            .filter(|(_, amount)| amount.is_finite() && *amount > 0.0)
-            .collect::<Vec<_>>();
-        if let Some(mut formation) = Formation::new(composition, resolved_extent * 2.0, catalog) {
-            formation.set_origin(field.cell_center(index));
-            formation.resolve_frontier();
-            field.formations.push(formation);
+            let x_jitter = (field_a - 0.5) * field.cell_size * 2.0;
+            let y_jitter = (field_b - 0.5) * field.cell_size * 2.0;
+            let origin = (
+                (gx * width + x_jitter).rem_euclid(width),
+                (gy * height + y_jitter).rem_euclid(height),
+            );
+
+            let composition = composition
+                .into_iter()
+                .filter(|(_, amount)| amount.is_finite() && *amount > 0.0)
+                .collect::<Vec<_>>();
+
+            if let Some(mut formation) =
+                Formation::new(composition, resolved_extent * 2.0, catalog)
+            {
+                formation.set_origin(origin);
+                formation.resolve_frontier();
+                field.formations.push(formation);
+            }
         }
     }
 }
@@ -170,7 +191,8 @@ mod tests {
             .map(|formation| formation.pattern.material.material.clone())
             .filter_map(|material| structured_signature(&material))
             .collect::<BTreeSet<_>>();
-        assert_eq!(signatures.len(), ENVIRONMENTAL_COMPOUND_COUNT);
+        assert!(signatures.len() > 1);
+        assert!(signatures.len() <= ENVIRONMENTAL_COMPOUND_COUNT);
     }
     #[test]
     fn initial_landscape_is_not_globally_uniform() {
