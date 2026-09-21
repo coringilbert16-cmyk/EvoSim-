@@ -646,6 +646,22 @@ impl Simulation {
                 &mut self.rng,
             );
             if dead {
+                // Parent death ends physical reproductive support. The developing
+                // child therefore detaches with whatever realized structure and
+                // energy it currently has; no child material is discarded with
+                // the parent's carcass.
+                if organism.reproductive_construction.is_some() {
+                    let child_id = next_organism_id.to_string();
+                    if let Some(child) = crate::reproduction::finish_reproduction(
+                        &mut organism,
+                        child_id,
+                        &self.environment.catalog,
+                        &mut self.energy_ledger,
+                    ) {
+                        next_organism_id += 1;
+                        survivors.push(child);
+                    }
+                }
                 if let Some(body) = Self::recycle_dead_organism(
                     &mut self.environment,
                     &mut organism,
