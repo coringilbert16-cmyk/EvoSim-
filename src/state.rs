@@ -112,6 +112,9 @@ pub(crate) struct ReproductiveConstruction {
     /// It is transferred from the parent while construction remains active.
     #[serde(default)]
     pub(crate) developing_energy: f64,
+    /// The parent needs to reorganize its own structure to make room for the developing offspring.
+    #[serde(default)]
+    pub(crate) needs_space: bool,
 }
 #[derive(Serialize, Deserialize, Clone, Copy, Default)]
 pub(crate) struct EnergyLedger {
