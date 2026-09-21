@@ -18,18 +18,20 @@ mod integration_tests {
 
     fn realized_structured_carbon_hydrogen(
         catalog: &[crate::resources::BaseResource],
+        x: f64,
+        y: f64,
     ) -> PhysicalMaterial {
         PhysicalMaterial::realized(
             structured_carbon_hydrogen(),
             vec![
                 Placement {
-                    x: 500.0,
-                    y: 500.0,
+                    x,
+                    y,
                     rotation_radians: 0.0,
                 },
                 Placement {
-                    x: 501.0,
-                    y: 500.0,
+                    x: x + 0.1,
+                    y,
                     rotation_radians: 0.25,
                 },
             ],
@@ -163,7 +165,12 @@ mod integration_tests {
             .unwrap();
         s.environment.field.cells[i].materials.clear();
         let m = structured_carbon_hydrogen();
-        let physical = realized_structured_carbon_hydrogen(&s.environment.catalog);
+        let anchor = s.organisms[0].structure.units[0].placement;
+        let physical = realized_structured_carbon_hydrogen(
+            &s.environment.catalog,
+            anchor.x,
+            anchor.y,
+        );
         s.environment.field.deposit_physical_at_index(i, physical);
         s.organisms[0].usable_energy = 0.0;
         s.organisms[0].decision_history.record(
