@@ -51,27 +51,32 @@ pub(crate) fn seed_initial_landscape(
         let field_c = ((nx * 3.0 + ny * 2.0 + 1.7).sin() + 1.0) * 0.5;
         let selector = ((field_c * compounds.len() as f64) as usize).min(compounds.len() - 1);
 
-        let primary = scaled_material(&compounds[selector], 4.0);
-        if let Some(formation) =
-            Formation::new(primary.parts.clone(), resolved_extent * 2.0, catalog)
-        {
-            field.cells[index].formations.push(formation);
-        }
-
+        let mut composition = compounds[selector].parts.clone();
         if field_a > 0.72 {
             let secondary = (selector + 3 + (field_b * 4.0) as usize) % compounds.len();
-            field.deposit_at_index(index, scaled_material(&compounds[secondary], 2.0));
+            for (name, amount) in &compounds[secondary].parts {
+                if let Some(existing) = composition.iter_mut().find(|(candidate, _)| candidate == name) {
+                    *existing += amount * 0.5;
+                } else {
+                    composition.push((name.clone(), amount * 0.5));
+                }
+            }
+        }
+        if field_a > 0.72 {
+            composition.push(("Hydrogen".to_string(), 2.0));
+        }
+        if field_b < 0.5 {
+            composition.push(("Water".to_string(), 3.0));
         }
 
-        if field_a > 0.72 {
-            field.deposit_at_index(index, Material::free_base("Hydrogen", 2.0));
-        }
-        // The previous threshold was unreachable for this deterministic field
-        // (field_b never fell below 0.22), so water was never seeded at all.
-        // Keep water as unstructured fluid stock and give it a real spatial
-        // distribution without introducing a terrain category.
-        if field_b < 0.5 {
-            field.deposit_at_index(index, Material::free_base("Water", 3.0));
+        let composition = composition
+            .into_iter()
+            .filter(|(_, amount)| amount.is_finite() && *amount > 0.0)
+            .collect::<Vec<_>>();
+        if let Some(formation) =
+            Formation::new(composition, resolved_extent * 2.0, catalog)
+        {
+            field.cells[index].formations.push(formation);
         }
     }
 }
@@ -155,7 +160,11 @@ mod tests {
     #[test]
     fn initial_landscape_uses_all_compound_varieties() {
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-        seed_initial_landscape(&mut field);
+        seed_initial_landscape(
+            &mut field,
+            10.0,
+            &crate::resources::default_catalog(),
+        );
         let signatures = field
             .cells
             .iter()
@@ -176,13 +185,13 @@ mod tests {
                 let left_index = y * field.width_cells + x;
                 let right_index = left_index + 1;
                 let left = field.cells[left_index]
-                    .materials
+                    .formations
                     .iter()
-                    .find_map(structured_signature);
+                    .find_map(|formation| structured_signature(&formation.pattern.material.material));
                 let right = field.cells[right_index]
-                    .materials
+                    .formations
                     .iter()
-                    .find_map(structured_signature);
+                    .find_map(|formation| structured_signature(&formation.pattern.material.material));
                 if let (Some(left), Some(right)) = (left, right) {
                     comparable_pairs += 1;
                     if left == right {
@@ -201,7 +210,7 @@ mod tests {
         let signatures = field
             .cells
             .iter()
-            .filter_map(|cell| cell.materials.iter().find_map(structured_signature))
+            .filter_map(|cell| cell.formations.iter().find_map(|formation| structured_signature(&formation.pattern.material.material)))
             .collect::<BTreeSet<_>>();
         assert!(signatures.len() > 1);
     }
