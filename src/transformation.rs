@@ -69,9 +69,14 @@ fn stress_break_candidate_indices(organism: &Organism, environment: &Environment
             .flatten()
             .map(|cavity| cavity.boundary_bond_indices(&organism.structure))
             .unwrap_or_default();
-    let non_genome_candidates: Vec<usize> = organism
-        .structure
-        .bonds
+    stress_break_candidates(&organism.structure.bonds, &genome_bonds)
+}
+
+fn stress_break_candidates(
+    bonds: &[crate::structure::Bond],
+    genome_bonds: &[usize],
+) -> Vec<usize> {
+    let non_genome_candidates: Vec<usize> = bonds
         .iter()
         .enumerate()
         .filter_map(|(index, _)| (!genome_bonds.contains(&index)).then_some(index))
@@ -81,9 +86,7 @@ fn stress_break_candidate_indices(organism: &Organism, environment: &Environment
         return non_genome_candidates;
     }
 
-    organism
-        .structure
-        .bonds
+    bonds
         .iter()
         .enumerate()
         .filter_map(|(index, _)| genome_bonds.contains(&index).then_some(index))
@@ -360,52 +363,61 @@ mod tests {
     }
 
     #[test]
-    fn stress_break_candidates_exclude_genome_boundary_bonds() {
-        let genome = crate::genome::initial_genome();
-        let catalog = crate::resources::default_catalog();
-        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
-        let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
-        let organism = crate::state::Organism {
-            id: "test".into(),
-            developmental_origin: crate::state::Position { x: 0.0, y: 0.0 },
-            developmental_orientation_radians: 0.0,
-            occupied_cells: vec![crate::state::Position { x: 0.0, y: 0.0 }],
-            genome,
-            resource_sense: crate::state::ResourceSense {
-                sensed_resources: Vec::new(),
-                direction_x: 0.0,
-                direction_y: 0.0,
-                direction_strength: 0.0,
+    fn stress_break_candidates_prefer_non_genome_bonds() {
+        let bonds = vec![
+            crate::structure::Bond {
+                endpoint_a: crate::structure::BondEndpoint::new(
+                    crate::structure::PhysicalConstituentId(1),
+                    crate::structure::ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+                ),
+                endpoint_b: crate::structure::BondEndpoint::new(
+                    crate::structure::PhysicalConstituentId(2),
+                    crate::structure::ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+                ),
+                bond_energy: 1.0,
             },
-            memory: Vec::new(),
-            decision_history: crate::decision::DecisionHistory::default(),
-            usable_energy: 1_000_000.0,
-            stress: 0.0,
-            stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
-            stored_material: crate::material_storage::MaterialStorage::default(),
-            structure,
-            development_stage: crate::state::DevelopmentStage::Juvenile,
-            active_transformation_id: None,
-            reproductive_construction: None,
-        };
-        let environment = crate::state::Environment {
-            width: 1000.0,
-            height: 1000.0,
-            catalog: catalog.clone(),
-            field: crate::environment::ActiveMaterialField::new(
-                1000.0,
-                1000.0,
-                crate::environment::DEFAULT_CELL_SIZE,
-            ),
-            vents: Vec::new(),
-        };
-        let candidates = stress_break_candidate_indices(&organism, &environment);
-        assert!(!candidates.is_empty());
-        let genome_bonds = crate::cavity::analyze_genome_cavity(&organism.structure, &catalog)
-            .unwrap()
-            .unwrap()
-            .boundary_bond_indices(&organism.structure);
-        assert!(candidates.iter().all(|index| !genome_bonds.contains(index)));
+            crate::structure::Bond {
+                endpoint_a: crate::structure::BondEndpoint::new(
+                    crate::structure::PhysicalConstituentId(2),
+                    crate::structure::ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+                ),
+                endpoint_b: crate::structure::BondEndpoint::new(
+                    crate::structure::PhysicalConstituentId(3),
+                    crate::structure::ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+                ),
+                bond_energy: 1.0,
+            },
+        ];
+        assert_eq!(stress_break_candidates(&bonds, &[0]), vec![1]);
+    }
+
+    #[test]
+    fn stress_break_candidates_use_genome_bonds_when_no_other_bonds_remain() {
+        let bonds = vec![
+            crate::structure::Bond {
+                endpoint_a: crate::structure::BondEndpoint::new(
+                    crate::structure::PhysicalConstituentId(1),
+                    crate::structure::ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+                ),
+                endpoint_b: crate::structure::BondEndpoint::new(
+                    crate::structure::PhysicalConstituentId(2),
+                    crate::structure::ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+                ),
+                bond_energy: 1.0,
+            },
+            crate::structure::Bond {
+                endpoint_a: crate::structure::BondEndpoint::new(
+                    crate::structure::PhysicalConstituentId(2),
+                    crate::structure::ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+                ),
+                endpoint_b: crate::structure::BondEndpoint::new(
+                    crate::structure::PhysicalConstituentId(3),
+                    crate::structure::ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+                ),
+                bond_energy: 1.0,
+            },
+        ];
+        assert_eq!(stress_break_candidates(&bonds, &[0, 1]), vec![0, 1]);
     }
 
     #[test]
