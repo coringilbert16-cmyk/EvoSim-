@@ -147,10 +147,11 @@ mod tests {
         seed_initial_landscape(&mut field, 10.0, &crate::resources::default_catalog());
         assert!(field.total_amount() > 0.0);
         assert!(!field.formations.is_empty());
-        assert!(field
-            .formations
-            .iter()
-            .any(|formation| !formation.pattern.material.material.is_empty()));
+        assert!(field.formations.iter().any(|formation| !formation
+            .pattern
+            .material
+            .material
+            .is_empty()));
         assert!(field.formations.iter().any(|formation| {
             formation
                 .bulk
