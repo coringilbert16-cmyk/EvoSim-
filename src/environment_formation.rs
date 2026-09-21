@@ -80,6 +80,9 @@ pub(crate) struct Formation {
     #[allow(dead_code)]
     pub(crate) resolved_frontier: Vec<PhysicalMaterial>,
     pub(crate) origin: (f64, f64),
+    /// Maximum radial distance currently represented by the resolved frontier.
+    #[serde(default)]
+    pub(crate) resolved_radius: f64,
 }
 
 impl Formation {
@@ -95,6 +98,7 @@ impl Formation {
             pattern,
             resolved_frontier: Vec::new(),
             origin: (0.0, 0.0),
+            resolved_radius: 0.0,
         })
     }
 
@@ -147,16 +151,21 @@ impl Formation {
         {
             return;
         }
-        let radius = self.bulk.resolved_depth * 0.5;
+        let depth = self.bulk.resolved_depth;
+        let radius = depth * 0.5;
+        self.resolve_blob_layer(radius);
+        self.resolved_radius = radius;
+    }
+
+    fn resolve_blob_layer(&mut self, radius: f64) {
         let span_x = (radius / self.pattern.width).ceil() as i64;
         let span_y = (radius / self.pattern.height).ceil() as i64;
         for pattern_y in -span_y..=span_y {
             for pattern_x in -span_x..=span_x {
                 let center_x = pattern_x as f64 * self.pattern.width;
                 let center_y = pattern_y as f64 * self.pattern.height;
-                let normalized_x = center_x / radius;
-                let normalized_y = center_y / radius;
-                if normalized_x * normalized_x + normalized_y * normalized_y > 1.0 {
+                let distance = (center_x * center_x + center_y * center_y).sqrt();
+                if distance > radius * blob_radius_factor(pattern_x, pattern_y) {
                     continue;
                 }
                 if let Some(material) = self.resolve_pattern_instance(pattern_x, pattern_y) {
@@ -164,6 +173,20 @@ impl Formation {
                 }
             }
         }
+    }
+
+    /// Promotes the next deterministic layer from the aggregate side of the
+    /// same formation. No material is spawned at the consumed location.
+    pub(crate) fn promote_frontier(&mut self) {
+        if self.resolved_frontier.is_empty()
+            || self.pattern.width <= 0.0
+            || self.pattern.height <= 0.0
+        {
+            return;
+        }
+        let next_radius = self.resolved_radius + self.pattern.width.max(self.pattern.height);
+        self.resolve_blob_layer(next_radius);
+        self.resolved_radius = next_radius;
     }
 
     pub(crate) fn add_resolved_instance(&mut self, material: PhysicalMaterial) {
@@ -209,6 +232,16 @@ impl FormationPattern {
             internal_connections: self.material.internal_connections.clone(),
         })
     }
+}
+
+fn blob_radius_factor(pattern_x: i64, pattern_y: i64) -> f64 {
+    let mut value = (pattern_x as u64).wrapping_mul(0x9E3779B97F4A7C15)
+        ^ (pattern_y as u64).wrapping_mul(0xBF58476D1CE4E5B9);
+    value ^= value >> 30;
+    value = value.wrapping_mul(0xBF58476D1CE4E5B9);
+    value ^= value >> 27;
+    let unit = (value as f64) / (u64::MAX as f64);
+    0.88 + unit * 0.24
 }
 
 /// Returns the largest realized linear extent among the world's organisms.
