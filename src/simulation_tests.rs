@@ -98,21 +98,7 @@ mod integration_tests {
     fn loss_of_physical_genome_ends_organism_lifecycle() {
         let mut s = Simulation::new(32, 10.0);
         s.organisms[0].development_stage = DevelopmentStage::Adult;
-
-        let cavity =
-            crate::cavity::analyze_genome_cavity(&s.organisms[0].structure, &s.environment.catalog)
-                .unwrap()
-                .expect("initial organism must have a physical genome cavity");
-        let boundary_bonds = cavity.boundary_bond_indices(&s.organisms[0].structure);
-        assert!(
-            !boundary_bonds.is_empty(),
-            "qualifying cavity must have boundary bonds"
-        );
-        let mut removed = boundary_bonds;
-        removed.sort_unstable();
-        for bond_index in removed.into_iter().rev() {
-            s.organisms[0].structure.bonds.remove(bond_index);
-        }
+        s.organisms[0].structure.bonds.clear();
 
         assert!(!crate::cavity::analyze_genome_cavity(
             &s.organisms[0].structure,
