@@ -708,6 +708,12 @@ impl Simulation {
             total += organism.stored_material.total_amount();
             if let Some(construction) = &organism.reproductive_construction {
                 total += construction.committed_material.total_amount();
+                total += construction
+                    .developing_structure
+                    .units
+                    .iter()
+                    .map(|unit| unit.material.total_amount())
+                    .sum::<f64>();
             }
             total += organism
                 .structure
