@@ -36,12 +36,28 @@ fn field_starts_empty() {
 }
 
 #[test]
-fn out_of_bounds_position_is_none() {
+fn_horizontal_bounds_remain_closed_while_vertical_positions_wrap() {
     let field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
     assert!(field.index_for_position(-1.0, 5.0).is_none());
-    assert!(field.index_for_position(5.0, 1000.0).is_none());
+    assert_eq!(
+        field.index_for_position(5.0, 1000.0),
+        field.index_for_position(5.0, 0.0)
+    );
+    assert_eq!(
+        field.index_for_position(5.0, -0.1),
+        field.index_for_position(5.0, 999.9)
+    );
     assert!(field.index_for_position(1000.0, 5.0).is_none());
     assert!(field.index_for_position(f64::NAN, 5.0).is_none());
+}
+
+#[test]
+fn vertical_neighbors_wrap_from_top_to_bottom() {
+    let field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+    let top = field.index_for_position(37.5, 12.5).unwrap();
+    let bottom = field.index_for_position(37.5, 87.5).unwrap();
+    assert!(field.neighbor_indices(top).contains(&bottom));
+    assert!(field.neighbor_indices(bottom).contains(&top));
 }
 
 #[test]
