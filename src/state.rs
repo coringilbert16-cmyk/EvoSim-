@@ -136,6 +136,9 @@ pub(crate) struct Organism {
     /// an explicitly approved orientation mechanism is introduced.
     #[serde(default)]
     pub(crate) developmental_orientation_radians: f64,
+    /// Persistent spatial/developmental reference point for the organism.
+    /// Physical extent and membership are derived from `structure`; this field
+    /// is not a second representation of the organism's body geometry.
     pub(crate) occupied_cells: Vec<Position>,
     pub(crate) genome: Genome,
     pub(crate) resource_sense: ResourceSense,
