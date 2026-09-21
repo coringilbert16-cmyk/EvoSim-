@@ -82,8 +82,7 @@ impl OrganismBodyGeometry {
     }
 
     /// Tests a point against the realized constituent geometry.
-    /// Returns the diagonal extent of the realized organism bounds.
-    /// Callers choose the axis-specific extent when a world-space diameter is required.
+    /// Returns the realized organism bounds' width and height.
     pub fn extent(&self) -> (f64, f64) {
         (self.max_x - self.min_x, self.max_y - self.min_y)
     }
