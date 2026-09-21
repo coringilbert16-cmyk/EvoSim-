@@ -176,9 +176,7 @@ pub(crate) fn realize_pattern(
             .cloned()
             .collect::<Vec<_>>(),
     );
-    let composition = composition
-        .iter()
-        .collect::<Vec<_>>();
+    let composition = composition.iter().collect::<Vec<_>>();
     if composition.is_empty() || catalog.is_empty() {
         return None;
     }
