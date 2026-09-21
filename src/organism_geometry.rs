@@ -87,6 +87,12 @@ impl OrganismBodyGeometry {
         (self.max_x - self.min_x, self.max_y - self.min_y)
     }
 
+    /// Returns the largest realized linear extent of the organism.
+    pub fn maximum_extent(&self) -> f64 {
+        let (width, height) = self.extent();
+        width.max(height)
+    }
+
     pub fn contains_point(&self, x: f64, y: f64) -> bool {
         self.parts.iter().any(|part| {
             form_contains_point(
@@ -222,6 +228,18 @@ mod tests {
         let body = OrganismBodyGeometry::from_structure(&structure, &catalog).unwrap();
         assert!(body.contains_point(10.0, 20.0));
         assert!(!body.contains_point(100.0, 100.0));
+    }
+
+    #[test]
+    fn maximum_extent_uses_the_larger_realized_axis() {
+        let catalog = default_catalog();
+        let mut structure = OrganismStructure::new();
+        structure.add_unit(realized_unit("Carbon", 0.0, 0.0));
+        structure.add_unit(realized_unit("Carbon", 10.0, 0.0));
+        let body = OrganismBodyGeometry::from_structure(&structure, &catalog).unwrap();
+        let (width, height) = body.extent();
+        assert!(width > height);
+        assert_eq!(body.maximum_extent(), width);
     }
 
     #[test]
