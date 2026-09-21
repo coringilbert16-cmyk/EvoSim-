@@ -38,35 +38,30 @@ pub(crate) fn parent_body_geometry(
 
 fn parent_child_position(
     parent: &Organism,
-    child_genome: &crate::genome::Genome,
     anchor: &Material,
     catalog: &[crate::resources::BaseResource],
 ) -> Option<Position> {
     let body = parent_body_geometry(parent, catalog)?;
     let anchor_name = anchor.parts.first()?.0.as_str();
-    let anchor_shape = catalog
-        .iter()
-        .find(|r| r.name == anchor_name)?
-        .shape
-        .form
-        .clone();
+    let anchor_resource = catalog.iter().find(|r| r.name == anchor_name)?;
 
-    let mut candidates = body
-        .parts
-        .iter()
-        .filter_map(|parent_part| {
-            let origin = Position {
-                x: parent_part.x,
-                y: parent_part.y,
-            };
+    for parent_part in &body.parts {
+        let anchor_reference = crate::structure::Placement {
+            x: parent_part.x,
+            y: parent_part.y,
+            rotation_radians: parent_part.rotation_radians,
+        };
+        for candidate in crate::construction_runtime::candidate_placements(
+            &parent.structure,
+            anchor_resource,
+            anchor_reference,
+            &[parent_part.unit_index],
+            catalog,
+        ) {
             let anchor_part = crate::material_geometry::PlacedMaterialPart {
                 part_index: usize::MAX,
-                form: anchor_shape.clone(),
-                placement: crate::structure::Placement {
-                    x: origin.x,
-                    y: origin.y,
-                    rotation_radians: 0.0,
-                },
+                form: anchor_resource.shape.form.clone(),
+                placement: candidate,
             };
             let parent_part_form = crate::material_geometry::PlacedMaterialPart {
                 part_index: parent_part.unit_index,
@@ -77,53 +72,19 @@ fn parent_child_position(
                     rotation_radians: parent_part.rotation_radians,
                 },
             };
-            if !crate::material_geometry::placed_forms_overlap(
+            if crate::material_geometry::placed_forms_overlap(
                 &parent_part_form,
                 &anchor_part,
                 0.0,
             ) {
-                return None;
+                return Some(Position {
+                    x: candidate.x,
+                    y: candidate.y,
+                });
             }
-
-            let local = crate::developmental_blueprint::developmental_point(
-                origin.x,
-                origin.y,
-                (
-                    parent.developmental_origin.x,
-                    parent.developmental_origin.y,
-                ),
-                parent.developmental_orientation_radians,
-            );
-            let (seed_mass, seed_length) =
-                crate::juvenile::confirmed_seed_scale_reference(catalog).ok()?;
-            let preferred_length = child_genome
-                .developmental_blueprint
-                .preferred_developmental_length(child_genome.adult_mass(), seed_mass, seed_length);
-            if !preferred_length.is_finite() || preferred_length <= 0.0 {
-                return None;
-            }
-            let material_score = child_genome
-                .developmental_blueprint
-                .material_preference_scaled(
-                    anchor_name,
-                    local.0,
-                    local.1,
-                    preferred_length,
-                );
-            let density_score = child_genome
-                .developmental_blueprint
-                .density_preference_scaled(local.0, local.1, preferred_length);
-            let score = crate::developmental_blueprint::CANDIDATE_MATERIAL_WEIGHT * material_score
-                + crate::developmental_blueprint::CANDIDATE_DENSITY_WEIGHT * density_score;
-            Some((score, origin))
-        })
-        .collect::<Vec<_>>();
-
-    candidates.sort_by(|a, b| {
-        b.0.partial_cmp(&a.0)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-    candidates.into_iter().map(|(_, position)| position).next()
+        }
+    }
+    None
 }
 fn child_intersects_realized_parent_region(
     structure: &OrganismStructure,
@@ -419,7 +380,7 @@ pub(crate) fn begin_reproduction(
 
     let snapshot = parent.stored_material.materials_snapshot();
     for anchor in snapshot {
-        let Some(position) = parent_child_position(parent, &child_genome, &anchor, catalog) else {
+        let Some(position) = parent_child_position(parent, &anchor, catalog) else {
             continue;
         };
         let mut trial_storage = parent.stored_material.clone();
