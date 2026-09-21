@@ -170,10 +170,7 @@ impl Formation {
         self.resolved_frontier.push(material);
     }
 
-    pub(crate) fn remove_resolved_instance(
-        &mut self,
-        index: usize,
-    ) -> Option<PhysicalMaterial> {
+    pub(crate) fn remove_resolved_instance(&mut self, index: usize) -> Option<PhysicalMaterial> {
         (index < self.resolved_frontier.len()).then(|| self.resolved_frontier.remove(index))
     }
 
