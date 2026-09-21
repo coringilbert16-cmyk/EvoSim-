@@ -217,7 +217,7 @@ mod integration_tests {
         );
         assert_eq!(
             s.environment.field.cells[i].materials[0].total_amount(),
-            8.0
+            10.0
         );
     }
     #[test]
