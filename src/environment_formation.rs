@@ -298,7 +298,8 @@ fn balanced_pattern_names(composition: &[&(String, f64)], total: f64) -> Vec<Str
 mod tests {
     use super::{
         largest_organism_extent, realize_pattern, realize_repeating_pattern,
-        resolved_formation_depth, FORMATION_RESOLUTION_EXTENT_MULTIPLIER, PATTERN_SIZE,
+        resolved_formation_depth, FormationBulk, FORMATION_RESOLUTION_EXTENT_MULTIPLIER,
+        PATTERN_SIZE,
     };
     use crate::resources::default_catalog;
 
@@ -315,6 +316,19 @@ mod tests {
     }
 
     #[test]
+    #[test]
+    fn formation_bulk_tracks_quantity_without_creating_resource_types() {
+        let mut bulk = FormationBulk::new(
+            vec![("Carbon".to_string(), 60.0), ("Hydrogen".to_string(), 25.0)],
+            12.0,
+        )
+        .unwrap();
+        assert_eq!(bulk.total_amount(), 85.0);
+        assert!(bulk.remove_composition(&[("Carbon".to_string(), 1.0)]));
+        assert_eq!(bulk.total_amount(), 84.0);
+        assert!(!bulk.remove_composition(&[("Nitrogen".to_string(), 1.0)]));
+    }
+
     fn mixed_composition_realizes_a_deterministic_pattern() {
         let catalog = default_catalog();
         let composition = vec![
