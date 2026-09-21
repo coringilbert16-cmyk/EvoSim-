@@ -752,6 +752,50 @@ mod tests {
     }
 
     #[test]
+    fn unavailable_physical_next_step_is_dead_end_not_waiting() {
+        let mut simulation = Simulation::new(31, 20.0);
+        let mut parent = simulation.organisms.remove(0);
+        parent.development_stage = DevelopmentStage::Adult;
+        let mut ledger = EnergyLedger::default();
+        let genome = initial_genome();
+        let placement = parent.structure.units[0].placement;
+        let mut child_structure = OrganismStructure::new();
+        let mut water_unit = crate::structure::StructuralUnit::new("Water", placement);
+        assert!(water_unit.realize_default_geometry(&simulation.environment.catalog));
+        let anchor_unit_index = child_structure.add_unit(water_unit);
+        let mut child_storage = MaterialStorage::default();
+        assert!(child_storage.store(Material::free_base("Water", 1.0)));
+        let mut parent_storage = MaterialStorage::default();
+        assert!(parent_storage.store(Material::free_base("Water", 1.0)));
+        let mut construction = ReproductiveConstruction {
+            committed_material: child_storage,
+            developing_structure: child_structure,
+            child_genome: genome,
+            developmental_origin: Position {
+                x: placement.x,
+                y: placement.y,
+            },
+            developmental_orientation_radians: 0.0,
+            developing_stress: 0.0,
+            anchor_unit_index,
+            developing_energy: 1.0,
+        };
+        let environment = simulation.environment.clone();
+        let body = parent_body_geometry(&parent, &environment.catalog).unwrap();
+        let (status, _) = advance_construction(
+            &parent.structure,
+            &mut parent_storage,
+            &mut construction,
+            &environment,
+            &mut ledger,
+            &mut parent.usable_energy,
+            &mut simulation.rng,
+            &body,
+        );
+        assert_eq!(status, ConstructionStatus::DeadEnd);
+    }
+
+    #[test]
     fn anchor_is_not_a_predefined_structural_blueprint() {
         let catalog = default_catalog();
         let genome = initial_genome();
