@@ -353,7 +353,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn formation_bulk_tracks_quantity_without_creating_resource_types() {
         let mut bulk = FormationBulk::new(
             vec![("Carbon".to_string(), 60.0), ("Hydrogen".to_string(), 25.0)],
