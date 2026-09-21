@@ -146,11 +146,18 @@ impl Formation {
         {
             return;
         }
-        let half_depth = self.bulk.resolved_depth * 0.5;
-        let span_x = (half_depth / self.pattern.width).ceil() as i64;
-        let span_y = (half_depth / self.pattern.height).ceil() as i64;
+        let radius = self.bulk.resolved_depth * 0.5;
+        let span_x = (radius / self.pattern.width).ceil() as i64;
+        let span_y = (radius / self.pattern.height).ceil() as i64;
         for pattern_y in -span_y..=span_y {
             for pattern_x in -span_x..=span_x {
+                let center_x = pattern_x as f64 * self.pattern.width;
+                let center_y = pattern_y as f64 * self.pattern.height;
+                let normalized_x = center_x / radius;
+                let normalized_y = center_y / radius;
+                if normalized_x * normalized_x + normalized_y * normalized_y > 1.0 {
+                    continue;
+                }
                 if let Some(material) = self.resolve_pattern_instance(pattern_x, pattern_y) {
                     self.resolved_frontier.push(material);
                 }
@@ -491,6 +498,28 @@ mod tests {
         .unwrap();
         let second = realize_pattern(&[("Carbon".to_string(), 5.0)], &catalog).unwrap();
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn resolved_frontier_is_blob_shaped_not_rectangular() {
+        let catalog = default_catalog();
+        let mut formation = Formation::new(
+            vec![("Carbon".to_string(), 100.0)],
+            100.0,
+            &catalog,
+        )
+        .unwrap();
+        formation.set_origin((0.0, 0.0));
+        formation.resolve_frontier();
+
+        let positions = formation
+            .resolved_frontier()
+            .iter()
+            .filter_map(|material| material.placements.as_ref()?.first().copied())
+            .collect::<Vec<_>>();
+        assert!(!positions.is_empty());
+        assert!(positions.iter().any(|p| p.x.abs() < formation.pattern.width));
+        assert!(positions.iter().any(|p| p.y.abs() < formation.pattern.height));
     }
 
     #[test]
