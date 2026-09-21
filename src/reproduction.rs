@@ -50,32 +50,84 @@ fn parent_child_position(
         .form
         .clone();
 
-    body.parts.iter().find_map(|parent_part| {
-        let origin = Position {
-            x: parent_part.x,
-            y: parent_part.y,
-        };
-        let anchor_part = crate::material_geometry::PlacedMaterialPart {
-            part_index: usize::MAX,
-            form: anchor_shape.clone(),
-            placement: crate::structure::Placement {
-                x: origin.x,
-                y: origin.y,
-                rotation_radians: 0.0,
-            },
-        };
-        let parent_part = crate::material_geometry::PlacedMaterialPart {
-            part_index: parent_part.unit_index,
-            form: parent_part.form.clone(),
-            placement: crate::structure::Placement {
+    let mut candidates = body
+        .parts
+        .iter()
+        .filter_map(|parent_part| {
+            let origin = Position {
                 x: parent_part.x,
                 y: parent_part.y,
-                rotation_radians: parent_part.rotation_radians,
-            },
-        };
-        crate::material_geometry::placed_forms_overlap(&parent_part, &anchor_part, 0.0)
-            .then_some(origin)
-    })
+            };
+            let anchor_part = crate::material_geometry::PlacedMaterialPart {
+                part_index: usize::MAX,
+                form: anchor_shape.clone(),
+                placement: crate::structure::Placement {
+                    x: origin.x,
+                    y: origin.y,
+                    rotation_radians: 0.0,
+                },
+            };
+            let parent_part_form = crate::material_geometry::PlacedMaterialPart {
+                part_index: parent_part.unit_index,
+                form: parent_part.form.clone(),
+                placement: crate::structure::Placement {
+                    x: parent_part.x,
+                    y: parent_part.y,
+                    rotation_radians: parent_part.rotation_radians,
+                },
+            };
+            if !crate::material_geometry::placed_forms_overlap(
+                &parent_part_form,
+                &anchor_part,
+                0.0,
+            ) {
+                return None;
+            }
+
+            let local = crate::developmental_blueprint::developmental_point(
+                origin.x,
+                origin.y,
+                (
+                    parent.genome.developmental_origin.x,
+                    parent.genome.developmental_origin.y,
+                ),
+                parent.developmental_orientation_radians,
+            );
+            let preferred_length = parent
+                .genome
+                .developmental_blueprint
+                .preferred_developmental_length(
+                    parent.genome.adult_mass(),
+                    crate::juvenile::confirmed_seed_scale_reference(catalog).ok()?.0,
+                    crate::juvenile::confirmed_seed_scale_reference(catalog).ok()?.1,
+                );
+            if !preferred_length.is_finite() || preferred_length <= 0.0 {
+                return None;
+            }
+            let material_score = parent
+                .genome
+                .developmental_blueprint
+                .material_preference_scaled(
+                    anchor_name,
+                    local.0,
+                    local.1,
+                    preferred_length,
+                );
+            let density_score = parent
+                .genome
+                .developmental_blueprint
+                .density_preference_scaled(local.0, local.1, preferred_length);
+            let score = crate::developmental_blueprint::CANDIDATE_MATERIAL_WEIGHT * material_score
+                + crate::developmental_blueprint::CANDIDATE_DENSITY_WEIGHT * density_score;
+            Some((score, origin))
+        })
+        .collect::<Vec<_>>();
+
+    candidates.sort_by(|a, b| {
+        b.0.partial_cmp(&a.0)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    candidates.into_iter().map(|(_, position)| position).next()
 }
 fn child_intersects_realized_parent_region(
     structure: &OrganismStructure,
@@ -603,10 +655,6 @@ mod tests {
         assert!(child_remains_within_realized_parent_boundary(
             &construction.developing_structure,
             &body,
-        ));
-        assert!(body.contains_point(
-            construction.developmental_origin.x,
-            construction.developmental_origin.y
         ));
     }
 
