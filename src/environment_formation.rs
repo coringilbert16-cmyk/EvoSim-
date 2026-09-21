@@ -138,8 +138,10 @@ pub(crate) fn realize_repeating_pattern(
     let max_x = placements.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
     let min_y = placements.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
     let max_y = placements.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
-    let width = (max_x - min_x).max(f64::EPSILON);
-    let height = (max_y - min_y).max(f64::EPSILON);
+    let pitch_x = (max_x - min_x) / PATTERN_SIDE.saturating_sub(1).max(1) as f64;
+    let pitch_y = (max_y - min_y) / PATTERN_SIDE.saturating_sub(1).max(1) as f64;
+    let width = (max_x - min_x + pitch_x).max(f64::EPSILON);
+    let height = (max_y - min_y + pitch_y).max(f64::EPSILON);
     Some(FormationPattern {
         material,
         width,
