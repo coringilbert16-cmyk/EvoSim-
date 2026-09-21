@@ -142,21 +142,24 @@ mod tests {
     #[test]
     fn initial_landscape_is_populated_and_structured() {
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-        seed_initial_landscape(
-            &mut field,
-            10.0,
-            &crate::resources::default_catalog(),
-        );
+        seed_initial_landscape(&mut field, 10.0, &crate::resources::default_catalog());
         assert!(field.total_amount() > 0.0);
         assert!(field.cells.iter().all(|cell| !cell.formations.is_empty()));
-        assert!(field.cells.iter().any(|cell| cell
-            .formations
+        assert!(field
+            .cells
             .iter()
-            .any(|formation| !formation.pattern.material.material.is_empty())));
-        assert!(field.cells.iter().any(|cell| cell
-            .formations
-            .iter()
-            .any(|formation| formation.bulk.composition.iter().any(|(name, _)| name == "Water"))));
+            .any(|cell| cell.formations.iter().any(|formation| {
+                !formation.pattern.material.material.is_empty()
+            })));
+        assert!(field.cells.iter().any(|cell| {
+            cell.formations.iter().any(|formation| {
+                formation
+                    .bulk
+                    .composition
+                    .iter()
+                    .any(|(name, _)| name == "Water")
+            })
+        }));
     }
     #[test]
     fn initial_landscape_uses_all_compound_varieties() {
