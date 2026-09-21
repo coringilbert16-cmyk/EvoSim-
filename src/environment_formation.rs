@@ -17,6 +17,7 @@ use crate::structure::{Bond, BondEndpoint, OrganismStructure, Placement, Structu
 /// not a biological constant or a resource property.
 pub(crate) const PATTERN_SIDE: usize = 4;
 pub(crate) const PATTERN_SIZE: usize = PATTERN_SIDE * PATTERN_SIDE;
+
 /// Resolved formation depth is twice the world's largest realized organism extent.
 pub(crate) const FORMATION_RESOLUTION_EXTENT_MULTIPLIER: f64 = 2.0;
 
@@ -249,21 +250,20 @@ fn balanced_pattern_names(composition: &[&(String, f64)], total: f64) -> Vec<Str
 
 #[cfg(test)]
 mod tests {
-    use super::{realize_pattern, realize_repeating_pattern, PATTERN_SIZE};
+    use super::{
+        largest_organism_extent, realize_pattern, realize_repeating_pattern,
+        resolved_formation_depth, FORMATION_RESOLUTION_EXTENT_MULTIPLIER, PATTERN_SIZE,
+    };
     use crate::resources::default_catalog;
 
     #[test]
     fn largest_organism_extent_uses_realized_structure() {
         let catalog = default_catalog();
         let organism = crate::simulation::Simulation::create_initial_organism();
-        let extent = largest_organism_extent(&[organism], &catalog).unwrap();
+        let extent = largest_organism_extent(&[organism.clone()], &catalog).unwrap();
         assert!(extent.is_finite() && extent > 0.0);
         assert_eq!(
-            resolved_formation_depth(
-                &[crate::simulation::Simulation::create_initial_organism()],
-                &catalog,
-            )
-            .unwrap(),
+            resolved_formation_depth(&[organism], &catalog).unwrap(),
             extent * FORMATION_RESOLUTION_EXTENT_MULTIPLIER
         );
     }
