@@ -116,9 +116,7 @@ fn form_contains_point(form: &Form, placement: Placement, x: f64, y: f64) -> boo
             };
             point_in_polygon((local_x, local_y), &vertices)
         }
-        Form::Line { length } => {
-            local_x.abs() <= length / 2.0 + 1e-12 && local_y.abs() <= 1e-12
-        }
+        Form::Line { length } => local_x.abs() <= length / 2.0 + 1e-12 && local_y.abs() <= 1e-12,
         Form::Fluid { .. } => false,
     }
 }
