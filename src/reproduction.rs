@@ -88,18 +88,20 @@ fn parent_child_position(
                 origin.x,
                 origin.y,
                 (
-                    parent.genome.developmental_origin.x,
-                    parent.genome.developmental_origin.y,
+                    parent.developmental_origin.x,
+                    parent.developmental_origin.y,
                 ),
                 parent.developmental_orientation_radians,
             );
+            let (seed_mass, seed_length) =
+                crate::juvenile::confirmed_seed_scale_reference(catalog).ok()?;
             let preferred_length = parent
                 .genome
                 .developmental_blueprint
                 .preferred_developmental_length(
                     parent.genome.adult_mass(),
-                    crate::juvenile::confirmed_seed_scale_reference(catalog).ok()?.0,
-                    crate::juvenile::confirmed_seed_scale_reference(catalog).ok()?.1,
+                    seed_mass,
+                    seed_length,
                 );
             if !preferred_length.is_finite() || preferred_length <= 0.0 {
                 return None;
