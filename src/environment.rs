@@ -294,8 +294,7 @@ impl ActiveMaterialField {
         let world_width = self.width_cells as f64 * self.cell_size;
         let world_height = self.height_cells as f64 * self.cell_size;
         for formation in &mut self.formations {
-            let Some(frontier_index) =
-                formation.resolved_frontier().iter().position(|material| {
+            let Some(frontier_index) = formation.resolved_frontier().iter().position(|material| {
                     material.is_realized()
                         && !material.material.is_empty()
                         && material
