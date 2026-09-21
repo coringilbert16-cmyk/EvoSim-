@@ -131,16 +131,16 @@ impl WorldObservation {
                                 .into_iter()
                                 .map(|part| OrganismSilhouettePart {
                                     form: part.form,
-                                    x: part.x + position.0,
-                                    y: part.y + position.1,
+                                    x: part.x,
+                                    y: part.y,
                                     rotation_radians: part.rotation_radians,
                                 })
                                 .collect();
                             (
-                                g.min_x + position.0,
-                                g.max_x + position.0,
-                                g.min_y + position.1,
-                                g.max_y + position.1,
+                                g.min_x,
+                                g.max_x,
+                                g.min_y,
+                                g.max_y,
                                 silhouette,
                             )
                         }
