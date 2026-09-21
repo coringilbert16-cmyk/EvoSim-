@@ -367,9 +367,36 @@ pub(crate) fn realize_pattern(
                 break;
             }
 
-            let (candidate_structure, internal_bond) = selected?;
-            structure = candidate_structure;
-            bonds.push(internal_bond);
+            if let Some((candidate_structure, internal_bond)) = selected {
+                structure = candidate_structure;
+                bonds.push(internal_bond);
+                continue;
+            }
+
+            // The local composition is not required to imply chemical bonding.
+            // If the existing placement machinery can realize the unit but no
+            // valid connection exists, retain the unit without inventing one.
+            let fallback = crate::construction_runtime::candidate_placements(
+                &structure,
+                resource,
+                anchor,
+                &[target],
+                catalog,
+            )
+            .into_iter()
+            .find_map(|candidate_placement| {
+                let mut candidate_structure = structure.clone();
+                let mut unit = StructuralUnit::from_material(
+                    Material::free_base(name.clone(), 1.0),
+                    candidate_placement,
+                )?;
+                if !unit.realize_default_geometry(catalog) {
+                    return None;
+                }
+                candidate_structure.add_unit(unit);
+                Some(candidate_structure)
+            })?;
+            structure = fallback;
             continue;
         };
 
@@ -550,9 +577,14 @@ mod tests {
         assert!(positions.iter().any(|p| {
             p.x.abs() >= formation.pattern.width && p.y.abs() < formation.pattern.height
         }));
-        assert!(!positions.iter().any(|p| {
-            p.x.abs() >= formation.pattern.width * 5.0
-                && p.y.abs() >= formation.pattern.height * 5.0
+        let max_radius = positions
+            .iter()
+            .map(|p| (p.x * p.x + p.y * p.y).sqrt())
+            .fold(0.0_f64, f64::max);
+        assert!(max_radius <= formation.resolved_radius * 1.25);
+        assert!(positions.iter().any(|p| {
+            let distance = (p.x * p.x + p.y * p.y).sqrt();
+            distance > formation.resolved_radius * 0.5
         }));
     }
 
