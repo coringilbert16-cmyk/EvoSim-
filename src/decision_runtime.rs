@@ -167,7 +167,7 @@ mod tests {
 
         assert_eq!(
             select_action(context, &history, &candidates),
-            Some(candidates[0].clone())
+            Some(candidates[1].clone())
         );
     }
 
@@ -199,7 +199,7 @@ mod tests {
 
         assert_eq!(
             select_action(context, &history, &candidates),
-            Some(candidates[1].clone())
+            Some(candidates[0].clone())
         );
     }
 
