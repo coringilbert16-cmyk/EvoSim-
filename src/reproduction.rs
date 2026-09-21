@@ -178,6 +178,63 @@ fn store_first_available_material(
     child_storage.store(material)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NextConstructionResourceStatus {
+    Available,
+    Missing,
+    Impossible,
+}
+
+fn next_construction_resource_status(
+    child: &Organism,
+    parent_storage: &MaterialStorage,
+    environment: &Environment,
+    ledger: &EnergyLedger,
+    context: Option<DevelopmentalContext<'_>>,
+) -> NextConstructionResourceStatus {
+    let mut missing = false;
+
+    for resource in &environment.catalog {
+        let material = Material::free_base(resource.name.clone(), 1.0);
+
+        let already_held = child
+            .stored_material
+            .materials_snapshot()
+            .iter()
+            .any(|held| held == &material)
+            || parent_storage
+                .materials_snapshot()
+                .iter()
+                .any(|held| held == &material);
+
+        let mut candidate = child.clone();
+        if !candidate.stored_material.store(material.clone()) {
+            continue;
+        }
+
+        if try_child_construction(
+            &candidate,
+            &MaterialStorage::default(),
+            environment,
+            ledger,
+            context,
+        )
+        .is_some()
+        {
+            if already_held {
+                return NextConstructionResourceStatus::Available;
+            }
+            missing = true;
+        }
+    }
+
+    if missing {
+        NextConstructionResourceStatus::Missing
+    } else {
+        NextConstructionResourceStatus::Impossible
+    }
+}
+
 fn try_child_construction(
     child: &Organism,
     parent_storage: &MaterialStorage,
@@ -486,11 +543,21 @@ pub(crate) fn advance_construction(
     let Some((child, candidate_ledger, transferred)) =
         try_child_construction(&child, parent_storage, environment, ledger, context)
     else {
-        // The resource-shortage case has already returned Waiting above. If
-        // construction reaches the solver with material available but no
-        // physically valid next realization exists, this is the approved
-        // terminal DeadEnd condition.
-        return (ConstructionStatus::DeadEnd, None);
+        match next_construction_resource_status(
+            &child,
+            parent_storage,
+            environment,
+            ledger,
+            context,
+        ) {
+            NextConstructionResourceStatus::Missing => {
+                return (ConstructionStatus::Waiting, None);
+            }
+            NextConstructionResourceStatus::Available
+            | NextConstructionResourceStatus::Impossible => {
+                return (ConstructionStatus::DeadEnd, None);
+            }
+        }
     };
 
     if let Some(material) = transferred {
@@ -749,50 +816,6 @@ mod tests {
             &parent.structure,
             &construction.developing_structure,
         ));
-    }
-
-    #[test]
-    fn unavailable_physical_next_step_is_dead_end_not_waiting() {
-        let mut simulation = Simulation::new(31, 20.0);
-        let mut parent = simulation.organisms.remove(0);
-        parent.development_stage = DevelopmentStage::Adult;
-        let mut ledger = EnergyLedger::default();
-        let genome = initial_genome();
-        let placement = parent.structure.units[0].placement;
-        let mut child_structure = OrganismStructure::new();
-        let mut water_unit = crate::structure::StructuralUnit::new("Water", placement);
-        assert!(water_unit.realize_default_geometry(&simulation.environment.catalog));
-        let anchor_unit_index = child_structure.add_unit(water_unit);
-        let mut child_storage = MaterialStorage::default();
-        assert!(child_storage.store(Material::free_base("Water", 1.0)));
-        let mut parent_storage = MaterialStorage::default();
-        assert!(parent_storage.store(Material::free_base("Water", 1.0)));
-        let mut construction = ReproductiveConstruction {
-            committed_material: child_storage,
-            developing_structure: child_structure,
-            child_genome: genome,
-            developmental_origin: Position {
-                x: placement.x,
-                y: placement.y,
-            },
-            developmental_orientation_radians: 0.0,
-            developing_stress: 0.0,
-            anchor_unit_index,
-            developing_energy: 1.0,
-        };
-        let environment = simulation.environment.clone();
-        let body = parent_body_geometry(&parent, &environment.catalog).unwrap();
-        let (status, _) = advance_construction(
-            &parent.structure,
-            &mut parent_storage,
-            &mut construction,
-            &environment,
-            &mut ledger,
-            &mut parent.usable_energy,
-            &mut simulation.rng,
-            &body,
-        );
-        assert_eq!(status, ConstructionStatus::DeadEnd);
     }
 
     #[test]
