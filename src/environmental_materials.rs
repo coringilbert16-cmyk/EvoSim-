@@ -56,7 +56,10 @@ pub(crate) fn seed_initial_landscape(
         if field_a > 0.72 {
             let secondary = (selector + 3 + (field_b * 4.0) as usize) % compounds.len();
             for (name, amount) in &compounds[secondary].parts {
-                if let Some(existing) = composition.iter_mut().find(|(candidate, _)| candidate == name) {
+                if let Some(existing) = composition
+                    .iter_mut()
+                    .find(|(candidate, _)| candidate == name)
+                {
                     *existing += amount * 0.5;
                 } else {
                     composition.push((name.clone(), amount * 0.5));
@@ -191,11 +194,15 @@ mod tests {
                 let left = field.cells[left_index]
                     .formations
                     .iter()
-                    .find_map(|formation| {\n                        structured_signature(&formation.pattern.material.material)\n                    });
+                    .find_map(|formation| {
+                        structured_signature(&formation.pattern.material.material)
+                    });
                 let right = field.cells[right_index]
                     .formations
                     .iter()
-                    .find_map(|formation| structured_signature(&formation.pattern.material.material));
+                    .find_map(|formation| {
+                        structured_signature(&formation.pattern.material.material)
+                    });
                 if let (Some(left), Some(right)) = (left, right) {
                     comparable_pairs += 1;
                     if left == right {
@@ -214,7 +221,11 @@ mod tests {
         let signatures = field
             .cells
             .iter()
-            .filter_map(|cell| cell.formations.iter().find_map(|formation| structured_signature(&formation.pattern.material.material)))
+            .filter_map(|cell| {
+                cell.formations
+                    .iter()
+                    .find_map(|formation| structured_signature(&formation.pattern.material.material))
+            })
             .collect::<BTreeSet<_>>();
         assert!(signatures.len() > 1);
     }
