@@ -14,8 +14,41 @@ use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 /// not a biological constant or a resource property.
 pub(crate) const PATTERN_SIDE: usize = 4;
 pub(crate) const PATTERN_SIZE: usize = PATTERN_SIDE * PATTERN_SIDE;
-const PATTERN_SPACING: f64 = 1.0;
-const CONNECTION_DISTANCE: f64 = 1.0;
+
+/// A deterministic local pattern that can be repeated through a continuous
+/// formation. Coordinates are pattern-local; the owning formation supplies
+/// world position and repetition.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct FormationPattern {
+    pub(crate) material: PhysicalMaterial,
+    pub(crate) width: f64,
+    pub(crate) height: f64,
+}
+
+impl FormationPattern {
+    pub(crate) fn repeated_local_placement(
+        &self,
+        pattern_x: i64,
+        pattern_y: i64,
+    ) -> Option<PhysicalMaterial> {
+        let placements = self.material.placements.as_ref()?;
+        let dx = pattern_x as f64 * self.width;
+        let dy = pattern_y as f64 * self.height;
+        let placements = placements
+            .iter()
+            .map(|placement| crate::structure::Placement {
+                x: placement.x + dx,
+                y: placement.y + dy,
+                rotation_radians: placement.rotation_radians,
+            })
+            .collect();
+        Some(PhysicalMaterial {
+            material: self.material.material.clone(),
+            placements: Some(placements),
+            internal_connections: self.material.internal_connections.clone(),
+        })
+    }
+}
 
 /// Deterministically converts a local composition into a finite repeated
 /// physical pattern.  The composition is expressed as resource quantities;
@@ -91,7 +124,27 @@ pub(crate) fn realize_pattern(
         internal_bonds: bonds,
     };
     let placements = structure.units.iter().map(|unit| unit.placement).collect();
-    PhysicalMaterial::realized(material, placements, catalog)
+    let physical = PhysicalMaterial::realized(material, placements, catalog)?;
+    Some(physical)
+}
+
+pub(crate) fn realize_repeating_pattern(
+    composition: &[(String, f64)],
+    catalog: &[BaseResource],
+) -> Option<FormationPattern> {
+    let material = realize_pattern(composition, catalog)?;
+    let placements = material.placements.as_ref()?;
+    let min_x = placements.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
+    let max_x = placements.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
+    let min_y = placements.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
+    let max_y = placements.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
+    let width = (max_x - min_x).max(f64::EPSILON);
+    let height = (max_y - min_y).max(f64::EPSILON);
+    Some(FormationPattern {
+        material,
+        width,
+        height,
+    })
 }
 
 fn balanced_pattern_names(
@@ -146,7 +199,7 @@ fn add_first_contact_bond(
 
 #[cfg(test)]
 mod tests {
-    use super::{realize_pattern, PATTERN_SIZE};
+    use super::{realize_pattern, realize_repeating_pattern, PATTERN_SIZE};
     use crate::resources::default_catalog;
 
     #[test]
@@ -166,6 +219,30 @@ mod tests {
         assert_eq!(first, second);
         assert_eq!(first.placements.as_ref().unwrap().len(), PATTERN_SIZE);
         assert!(!first.material.internal_bonds.is_empty());
+    }
+
+    #[test]
+    fn deterministic_pattern_can_be_repeated_without_rebuilding_its_geometry() {
+        let catalog = default_catalog();
+        let composition = vec![
+            ("Carbon".to_string(), 60.0),
+            ("Hydrogen".to_string(), 25.0),
+            ("Methane".to_string(), 10.0),
+            ("Sulfur".to_string(), 5.0),
+        ];
+        let pattern = realize_repeating_pattern(&composition, &catalog).unwrap();
+        let repeated = pattern.repeated_local_placement(7, -3).unwrap();
+        let original = pattern.material.placements.as_ref().unwrap();
+        let shifted = repeated.placements.as_ref().unwrap();
+        assert_eq!(original.len(), shifted.len());
+        let dx = 7.0 * pattern.width;
+        let dy = -3.0 * pattern.height;
+        for (a, b) in original.iter().zip(shifted.iter()) {
+            assert!((b.x - a.x - dx).abs() < 1e-12);
+            assert!((b.y - a.y - dy).abs() < 1e-12);
+            assert_eq!(a.rotation_radians, b.rotation_radians);
+        }
+        assert_eq!(pattern.material.internal_connections, repeated.internal_connections);
     }
 
     #[test]
