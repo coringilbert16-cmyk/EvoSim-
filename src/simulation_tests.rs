@@ -166,11 +166,8 @@ mod integration_tests {
         s.environment.field.cells[i].materials.clear();
         let m = structured_carbon_hydrogen();
         let anchor = s.organisms[0].structure.units[0].placement;
-        let physical = realized_structured_carbon_hydrogen(
-            &s.environment.catalog,
-            anchor.x,
-            anchor.y,
-        );
+        let physical =
+            realized_structured_carbon_hydrogen(&s.environment.catalog, anchor.x, anchor.y);
         s.environment.field.deposit_physical_at_index(i, physical);
         s.organisms[0].usable_energy = 0.0;
         s.organisms[0].decision_history.record(
