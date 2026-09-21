@@ -255,34 +255,14 @@ mod tests {
     #[test]
     fn largest_organism_extent_uses_realized_structure() {
         let catalog = default_catalog();
-        let mut structure = OrganismStructure::new();
-        let mut first = StructuralUnit::from_material(
-            Material::free_base("Carbon".to_string(), 1.0),
-            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-        ).unwrap();
-        assert!(first.realize_default_geometry(&catalog));
-        structure.add_unit(first);
-        let organism = Organism {
-            id: "test".to_string(),
-            developmental_origin: crate::state::Position::default(),
-            developmental_orientation_radians: 0.0,
-            occupied_cells: Vec::new(),
-            genome: crate::genome::initial_genome(),
-            resource_sense: crate::state::ResourceSense { sensed_resources: Vec::new(), direction_x: 0.0, direction_y: 0.0, direction_strength: 0.0 },
-            memory: Vec::new(),
-            decision_history: crate::decision::DecisionHistory::default(),
-            usable_energy: 0.0,
-            stress: 0.0,
-            stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
-            stored_material: crate::material_storage::MaterialStorage::new(),
-            structure,
-            development_stage: crate::state::DevelopmentStage::Juvenile,
-            active_transformation_id: None,
-            reproductive_construction: None,
-        };
+        let organism = crate::simulation::Simulation::create_initial_organism();
         let extent = largest_organism_extent(&[organism], &catalog).unwrap();
-        assert!(extent > 0.0);
-        assert_eq!(resolved_formation_depth(&[organism], &catalog).unwrap(), extent * 2.0);
+        assert!(extent.is_finite() && extent > 0.0);
+        assert_eq!(
+            resolved_formation_depth(&[crate::simulation::Simulation::create_initial_organism()], &catalog)
+                .unwrap(),
+            extent * FORMATION_RESOLUTION_EXTENT_MULTIPLIER
+        );
     }
 
     #[test]
