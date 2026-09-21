@@ -74,6 +74,10 @@ impl FormationBulk {
 pub(crate) struct Formation {
     pub(crate) bulk: FormationBulk,
     pub(crate) pattern: FormationPattern,
+    /// Already-resolved physical material belonging to this same formation.
+    /// This is a frontier representation, not additional material.
+    #[allow(dead_code)]
+    pub(crate) resolved_frontier: Vec<PhysicalMaterial>,
 }
 
 impl Formation {
@@ -84,7 +88,11 @@ impl Formation {
     ) -> Option<Self> {
         let bulk = FormationBulk::new(composition, resolved_depth)?;
         let pattern = realize_repeating_pattern(&bulk.composition, catalog)?;
-        Some(Self { bulk, pattern })
+        Some(Self {
+            bulk,
+            pattern,
+            resolved_frontier: Vec::new(),
+        })
     }
 
     pub(crate) fn total_amount(&self) -> f64 {
@@ -95,11 +103,18 @@ impl Formation {
         self.bulk.resolved_depth
     }
 
-    /// Removes material from the formation's backing quantity. The caller is
-    /// responsible for removing the corresponding already-resolved physical
-    /// material through the normal physical interaction path.
+    /// Removes material from the formation's backing quantity. The resolved
+    /// frontier is a representation of this same quantity, so its physical
+    /// separation must be performed before the backing quantity is reduced.
     pub(crate) fn consume(&mut self, removed: &[(String, f64)]) -> bool {
         self.bulk.remove_composition(removed)
+    }
+
+    pub(crate) fn resolved_amount(&self) -> f64 {
+        self.resolved_frontier
+            .iter()
+            .map(|material| material.material.total_amount())
+            .sum()
     }
 }
 
