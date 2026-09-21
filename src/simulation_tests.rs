@@ -108,7 +108,9 @@ mod integration_tests {
             .first()
             .copied()
             .expect("qualifying genome cavity must have boundary units");
-        s.organisms[0].structure.units[boundary_unit].placement.x += 1_000.0;
+        for unit_index in cavity.boundary_units {
+            s.organisms[0].structure.units[unit_index].placement.x += 1_000.0;
+        }
 
         assert!(!crate::cavity::analyze_genome_cavity(
             &s.organisms[0].structure,
@@ -408,7 +410,7 @@ mod integration_tests {
         let maintenance = s.organisms[0].structural_mass(&s.environment.catalog)
             * crate::state::MAINTENANCE_ENERGY_PER_MASS;
         let expected = 12.5 + break_interaction - work - maintenance;
-        assert!(s.organisms[0].structure.bonds.is_empty());
+        assert_eq!(s.organisms[0].structure.bonds.len(), expected_bond_count);
         assert!((s.organisms[0].usable_energy - expected).abs() < 1e-12);
         assert!(s.organisms[0]
             .decision_history
