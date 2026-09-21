@@ -77,9 +77,11 @@ pub(crate) fn seed_initial_landscape(
             .into_iter()
             .filter(|(_, amount)| amount.is_finite() && *amount > 0.0)
             .collect::<Vec<_>>();
-        if let Some(formation) =
+        if let Some(mut formation) =
             Formation::new(composition, resolved_extent * 2.0, catalog)
         {
+            formation.set_origin(field.cell_center(index));
+            formation.resolve_frontier();
             field.cells[index].formations.push(formation);
         }
     }
