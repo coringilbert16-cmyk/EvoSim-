@@ -697,8 +697,7 @@ impl Simulation {
         ledger: &mut EnergyLedger,
         rng: &mut ChaCha8Rng,
     ) -> bool {
-        // Physical genome qualification is the organism's viability authority.
-        // No separate health/viability score is introduced.
+        // Physical genome qualification is the viability authority.
         let genome_qualified =
             crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
                 .ok()
