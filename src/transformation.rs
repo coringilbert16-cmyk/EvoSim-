@@ -69,14 +69,25 @@ fn stress_break_candidate_indices(organism: &Organism, environment: &Environment
             .flatten()
             .map(|cavity| cavity.boundary_bond_indices(&organism.structure))
             .unwrap_or_default();
-    let candidates: Vec<usize> = organism
+    let non_genome_candidates: Vec<usize> = organism
         .structure
         .bonds
         .iter()
         .enumerate()
         .filter_map(|(index, _)| (!genome_bonds.contains(&index)).then_some(index))
         .collect();
-    candidates
+
+    if !non_genome_candidates.is_empty() {
+        return non_genome_candidates;
+    }
+
+    organism
+        .structure
+        .bonds
+        .iter()
+        .enumerate()
+        .filter_map(|(index, _)| genome_bonds.contains(&index).then_some(index))
+        .collect()
 }
 
 pub(crate) fn resolve_stress_break(
