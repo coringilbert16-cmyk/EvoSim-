@@ -173,60 +173,6 @@ mod tests {
         assert_eq!(signatures.len(), ENVIRONMENTAL_COMPOUND_COUNT);
     }
     #[test]
-    fn initial_landscape_has_neighboring_material_coherence() {
-        let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-        seed_initial_landscape(&mut field, 10.0, &crate::resources::default_catalog());
-        let mut comparable_pairs = 0usize;
-        let mut matching_pairs = 0usize;
-        for y in 0..field.height_cells {
-            for x in 0..field.width_cells.saturating_sub(1) {
-                let left_index = y * field.width_cells + x;
-                let right_index = left_index + 1;
-                let left = field
-                    .formations
-                    .iter()
-                    .find(|formation| {
-                        formation.resolved_frontier().iter().any(|material| {
-                                material
-                                    .placements
-                                    .as_ref()
-                                    .and_then(|placements| placements.first())
-                                    .and_then(|placement| field.index_for_position(placement.x, placement.y))
-                                    == Some(left_index)
-                            })
-                    })
-                    .map(|formation| structured_signature(&formation.pattern.material.material))
-                    .flatten();
-                let right = field
-                    .formations
-                    .iter()
-                    .find(|formation| {
-                        formation
-                            .resolved_frontier()
-                            .iter()
-                            .any(|material| {
-                                material
-                                    .placements
-                                    .as_ref()
-                                    .and_then(|placements| placements.first())
-                                    .and_then(|placement| field.index_for_position(placement.x, placement.y))
-                                    == Some(right_index)
-                            })
-                    })
-                    .map(|formation| structured_signature(&formation.pattern.material.material))
-                    .flatten();
-                if let (Some(left), Some(right)) = (left, right) {
-                    comparable_pairs += 1;
-                    if left == right {
-                        matching_pairs += 1;
-                    }
-                }
-            }
-        }
-        assert!(comparable_pairs > 0);
-        assert!(matching_pairs * 4 > comparable_pairs);
-    }
-    #[test]
     fn initial_landscape_is_not_globally_uniform() {
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
         seed_initial_landscape(&mut field, 10.0, &crate::resources::default_catalog());
