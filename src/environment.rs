@@ -318,7 +318,9 @@ impl ActiveMaterialField {
                 formation.add_resolved_instance(material.clone());
                 continue;
             }
-            formation.promote_frontier();
+            if formation.total_amount() > 0.0 {
+                formation.promote_frontier();
+            }
             return Some(material);
         }
         None
