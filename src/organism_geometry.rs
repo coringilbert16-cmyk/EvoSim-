@@ -14,21 +14,6 @@ pub struct PlacedForm {
     pub x: f64,
     pub y: f64,
     pub rotation_radians: f64,
-    /// Tests a point against the realized constituent geometry.
-    pub fn contains_point(&self, x: f64, y: f64) -> bool {
-        self.parts.iter().any(|part| {
-            form_contains_point(
-                &part.form,
-                Placement {
-                    x: part.x,
-                    y: part.y,
-                    rotation_radians: part.rotation_radians,
-                },
-                x,
-                y,
-            )
-        })
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -94,5 +79,154 @@ impl OrganismBodyGeometry {
     #[allow(dead_code)]
     pub fn bounding_box_contains(&self, x: f64, y: f64) -> bool {
         x >= self.min_x && x <= self.max_x && y >= self.min_y && y <= self.max_y
+    }
+
+    /// Tests a point against the realized constituent geometry.
+    pub fn contains_point(&self, x: f64, y: f64) -> bool {
+        self.parts.iter().any(|part| {
+            form_contains_point(
+                &part.form,
+                Placement {
+                    x: part.x,
+                    y: part.y,
+                    rotation_radians: part.rotation_radians,
+                },
+                x,
+                y,
+            )
+        })
+    }
+}
+
+fn form_contains_point(form: &Form, placement: Placement, x: f64, y: f64) -> bool {
+    let dx = x - placement.x;
+    let dy = y - placement.y;
+    let (sin, cos) = placement.rotation_radians.sin_cos();
+    let local_x = dx * cos + dy * sin;
+    let local_y = -dx * sin + dy * cos;
+
+    match form {
+        Form::Circle { radius } => local_x.hypot(local_y) <= *radius + 1e-12,
+        Form::Rectangle { width, height } => {
+            local_x.abs() <= width / 2.0 + 1e-12 && local_y.abs() <= height / 2.0 + 1e-12
+        }
+        Form::RegularPolygon { .. } | Form::Polygon { .. } => {
+            let Some(vertices) = form.polygon_vertices() else {
+                return false;
+            };
+            point_in_polygon((local_x, local_y), &vertices)
+        }
+        Form::Line { length } => {
+            local_x.abs() <= length / 2.0 + 1e-12 && local_y.abs() <= 1e-12
+        }
+        Form::Fluid { .. } => false,
+    }
+}
+
+fn point_in_polygon(point: (f64, f64), vertices: &[(f64, f64)]) -> bool {
+    if vertices.len() < 3 {
+        return false;
+    }
+    let (px, py) = point;
+    let mut inside = false;
+    for i in 0..vertices.len() {
+        let (x1, y1) = vertices[i];
+        let (x2, y2) = vertices[(i + 1) % vertices.len()];
+        let cross = (x2 - x1) * (py - y1) - (y2 - y1) * (px - x1);
+        if cross.abs() <= 1e-12
+            && px >= x1.min(x2) - 1e-12
+            && px <= x1.max(x2) + 1e-12
+            && py >= y1.min(y2) - 1e-12
+            && py <= y1.max(y2) + 1e-12
+        {
+            return true;
+        }
+        if (y1 > py) != (y2 > py) && px < (x2 - x1) * (py - y1) / (y2 - y1) + x1 {
+            inside = !inside;
+        }
+    }
+    inside
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::physical_geometry::PhysicalGeometry;
+    use crate::resources::{default_catalog, Shape};
+    use crate::structure::{Placement, StructuralUnit};
+
+    fn realized_unit(name: &str, x: f64, y: f64) -> StructuralUnit {
+        let mut unit = StructuralUnit::new(
+            name,
+            Placement {
+                x,
+                y,
+                rotation_radians: 0.0,
+            },
+        );
+        let shape = default_catalog()
+            .into_iter()
+            .find(|resource| resource.name == name)
+            .unwrap()
+            .shape;
+        unit.geometry = Some(PhysicalGeometry::from_default(&shape));
+        unit
+    }
+
+    #[test]
+    fn body_geometry_uses_realized_unit_geometry() {
+        let catalog = default_catalog();
+        let mut structure = OrganismStructure::new();
+        structure.add_unit(realized_unit("Carbon", 10.0, 20.0));
+        structure.add_unit(realized_unit("Hydrogen", 30.0, 20.0));
+        let body = OrganismBodyGeometry::from_structure(&structure, &catalog).unwrap();
+        assert_eq!(body.parts.len(), 2);
+        assert!(body.max_x > body.min_x);
+    }
+
+    #[test]
+    fn missing_realized_geometry_is_rejected() {
+        let mut structure = OrganismStructure::new();
+        structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        assert!(OrganismBodyGeometry::from_structure(&structure, &default_catalog()).is_none());
+    }
+
+    #[test]
+    fn realized_geometry_can_differ_from_catalog_default() {
+        let mut structure = OrganismStructure::new();
+        let mut unit = realized_unit("Carbon", 0.0, 0.0);
+        unit.geometry = Some(PhysicalGeometry::from_default(&Shape {
+            form: Form::Circle { radius: 7.0 },
+        }));
+        structure.add_unit(unit);
+        let body = OrganismBodyGeometry::from_structure(&structure, &default_catalog()).unwrap();
+        assert_eq!(body.parts[0].form, Form::Circle { radius: 7.0 });
+        assert_eq!(body.max_x, 7.0);
+    }
+
+    #[test]
+    fn realized_geometry_contains_points_inside_its_actual_shape() {
+        let catalog = default_catalog();
+        let mut structure = OrganismStructure::new();
+        structure.add_unit(realized_unit("Carbon", 10.0, 20.0));
+        let body = OrganismBodyGeometry::from_structure(&structure, &catalog).unwrap();
+        assert!(body.contains_point(10.0, 20.0));
+        assert!(!body.contains_point(100.0, 100.0));
+    }
+
+    #[test]
+    fn empty_structure_has_no_body() {
+        assert!(OrganismBodyGeometry::from_structure(
+            &OrganismStructure::new(),
+            &default_catalog()
+        )
+        .is_none());
     }
 }
