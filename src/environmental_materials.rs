@@ -228,9 +228,9 @@ mod tests {
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
         seed_initial_landscape(&mut field);
         assert!(field.cells.iter().any(|cell| {
-            cell.formations.iter().any(|formation| {
-                !formation.pattern.material.material.has_internal_structure()
-            })
+            cell.formations
+                .iter()
+                .any(|formation| !formation.pattern.material.material.has_internal_structure())
         }));
     }
     #[test]
