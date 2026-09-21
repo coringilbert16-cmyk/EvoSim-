@@ -172,9 +172,10 @@ mod tests {
             .material
             .material
             .is_empty()));
-        assert!(field.total_material().iter().any(|(name, amount)| {
-            name == "Water" && *amount > 0.0
-        }));
+        assert!(field
+            .total_material()
+            .iter()
+            .any(|(name, amount)| { name == "Water" && *amount > 0.0 }));
     }
     #[test]
     fn initial_landscape_uses_all_compound_varieties() {
