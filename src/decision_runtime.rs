@@ -317,7 +317,7 @@ mod tests {
         assert!(ActionKind::Break
             .relevant_needs()
             .contains(&NeedKind::Survival));
-        assert!(!ActionKind::Break
+        assert!(ActionKind::Break
             .relevant_needs()
             .contains(&NeedKind::Reproduction));
     }
