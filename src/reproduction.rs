@@ -755,7 +755,11 @@ mod tests {
         let catalog = default_catalog();
         let genome = initial_genome();
         let anchor = Material::free_base("Carbon", 1.0);
-        let position = Position { x: 0.0, y: 0.0 };
-        assert!(anchor_structure(&genome, anchor, position, &catalog).is_some());
+        let placement = crate::structure::Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        assert!(anchor_structure(&genome, anchor, placement, &catalog).is_some());
     }
 }
