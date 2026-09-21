@@ -68,7 +68,6 @@ impl FormationBulk {
     }
 }
 
-
 /// A deterministic local pattern that can be repeated through a continuous
 /// formation. Coordinates are pattern-local; the owning formation supplies
 /// world position and repetition.
@@ -415,8 +414,8 @@ fn balanced_pattern_names(composition: &[&(String, f64)], total: f64) -> Vec<Str
 mod tests {
     use super::{
         largest_organism_extent, realize_pattern, realize_repeating_pattern,
-        resolved_formation_depth, Formation, FormationBulk,
-        FORMATION_RESOLUTION_EXTENT_MULTIPLIER, PATTERN_SIZE,
+        resolved_formation_depth, Formation, FormationBulk, FORMATION_RESOLUTION_EXTENT_MULTIPLIER,
+        PATTERN_SIZE,
     };
     use crate::resources::default_catalog;
 
