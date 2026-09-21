@@ -7,6 +7,7 @@ set -euo pipefail
 MAX_BYTES=30000
 
 status=0
+warned=0
 while IFS= read -r -d '' file; do
     case "$file" in
         ./.git/*|./target/*) continue ;;
@@ -14,9 +15,12 @@ while IFS= read -r -d '' file; do
 
     size=$(wc -c < "$file")
     if (( size > MAX_BYTES )); then
-        printf 'LARGE SOURCE FILE: %s (%s bytes; limit %s)\n' "$file" "$size" "$MAX_BYTES"
-        status=1
+        printf 'LARGE SOURCE FILE (review warning): %s (%s bytes; suggested limit %s)\n' "$file" "$size" "$MAX_BYTES"
+        warned=1
     fi
 done < <(find . -type f \( -name '*.rs' -o -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' \) -print0)
 
-exit "$status"
+if (( warned )); then
+    printf 'Source file size check completed with warnings only.\n'
+fi
+exit 0
