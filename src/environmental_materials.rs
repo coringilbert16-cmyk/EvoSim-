@@ -106,7 +106,6 @@ pub(crate) fn seed_initial_landscape(
     // Keep a small unstructured water stock in the active field as well.
     // Water is fluid, so it does not require an authored rigid formation shape.
     field.deposit_at_index(0, Material::free_base("Water", 1.0));
-
 }
 
 fn compound(parts: &[(&str, f64)]) -> Material {
