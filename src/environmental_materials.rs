@@ -185,10 +185,7 @@ mod tests {
                     .formations
                     .iter()
                     .find(|formation| {
-                        formation
-                            .resolved_frontier()
-                            .iter()
-                            .any(|material| {
+                        formation.resolved_frontier().iter().any(|material| {
                                 material
                                     .placements
                                     .as_ref()
