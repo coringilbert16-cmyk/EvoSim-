@@ -7,6 +7,7 @@
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
+use crate::environment_formation::Formation;
 use crate::material_transfer::take_whole_unstructured;
 use crate::physical_material::PhysicalMaterial;
 use crate::resources::{merge_parts, Material};
@@ -31,6 +32,7 @@ impl FieldCell {
         Self {
             materials: Vec::new(),
             physical_materials: Vec::new(),
+            formations: Vec::new(),
         }
     }
 
@@ -39,6 +41,11 @@ impl FieldCell {
             .iter()
             .map(Material::total_amount)
             .sum::<f64>()
+            + self
+                .formations
+                .iter()
+                .map(Formation::total_amount)
+                .sum::<f64>()
             + self
                 .physical_materials
                 .iter()
@@ -50,6 +57,15 @@ impl FieldCell {
         let mut totals = Vec::new();
         for material in &self.materials {
             for (name, amount) in &material.parts {
+                if let Some(existing) = totals.iter_mut().find(|(n, _)| n == name) {
+                    existing.1 += amount;
+                } else {
+                    totals.push((name.clone(), *amount));
+                }
+            }
+        }
+        for formation in &self.formations {
+            for (name, amount) in &formation.bulk.composition {
                 if let Some(existing) = totals.iter_mut().find(|(n, _)| n == name) {
                     existing.1 += amount;
                 } else {
