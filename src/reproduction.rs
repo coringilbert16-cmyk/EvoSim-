@@ -465,6 +465,7 @@ pub(crate) fn begin_reproduction(
             developing_stress: 0.0,
             anchor_unit_index,
             developing_energy: 0.0,
+            needs_space: false,
         });
         return true;
     }
