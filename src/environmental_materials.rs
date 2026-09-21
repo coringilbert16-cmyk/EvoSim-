@@ -1,5 +1,7 @@
 #![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 use crate::environment::ActiveMaterialField;
+use crate::environment_formation::Formation;
+use crate::resources::BaseResource;
 use crate::resources::{combine_materials, Material};
 
 /// Small, reusable structured-material seeds for the initial environment.
@@ -29,7 +31,11 @@ pub(crate) fn seed_compounds() -> Vec<Material> {
 /// Populate the active field with a deterministic, spatially correlated
 /// starting landscape. No terrain categories are introduced: local character
 /// comes entirely from material composition, quantity, and neighboring cells.
-pub(crate) fn seed_initial_landscape(field: &mut ActiveMaterialField) {
+pub(crate) fn seed_initial_landscape(
+    field: &mut ActiveMaterialField,
+    resolved_extent: f64,
+    catalog: &[BaseResource],
+) {
     let compounds = seed_compounds();
     if compounds.is_empty() {
         return;
@@ -45,7 +51,12 @@ pub(crate) fn seed_initial_landscape(field: &mut ActiveMaterialField) {
         let field_c = ((nx * 3.0 + ny * 2.0 + 1.7).sin() + 1.0) * 0.5;
         let selector = ((field_c * compounds.len() as f64) as usize).min(compounds.len() - 1);
 
-        field.deposit_at_index(index, scaled_material(&compounds[selector], 4.0));
+        let primary = scaled_material(&compounds[selector], 4.0);
+        if let Some(formation) =
+            Formation::new(primary.parts.clone(), resolved_extent * 2.0, catalog)
+        {
+            field.cells[index].formations.push(formation);
+        }
 
         if field_a > 0.72 {
             let secondary = (selector + 3 + (field_b * 4.0) as usize) % compounds.len();
@@ -125,17 +136,21 @@ mod tests {
     #[test]
     fn initial_landscape_is_populated_and_structured() {
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-        seed_initial_landscape(&mut field);
+        seed_initial_landscape(
+            &mut field,
+            10.0,
+            &crate::resources::default_catalog(),
+        );
         assert!(field.total_amount() > 0.0);
-        assert!(field.cells.iter().all(|cell| !cell.materials.is_empty()));
+        assert!(field.cells.iter().all(|cell| !cell.formations.is_empty()));
         assert!(field.cells.iter().any(|cell| cell
-            .materials
+            .formations
             .iter()
-            .any(|material| material.has_internal_structure())));
+            .any(|formation| !formation.pattern.material.material.is_empty())));
         assert!(field.cells.iter().any(|cell| cell
-            .materials
+            .formations
             .iter()
-            .any(|material| material.parts.iter().any(|(name, _)| name == "Water"))));
+            .any(|formation| formation.bulk.composition.iter().any(|(name, _)| name == "Water"))));
     }
     #[test]
     fn initial_landscape_uses_all_compound_varieties() {
@@ -144,8 +159,9 @@ mod tests {
         let signatures = field
             .cells
             .iter()
-            .flat_map(|cell| cell.materials.iter())
-            .filter_map(structured_signature)
+            .flat_map(|cell| cell.formations.iter())
+            .map(|formation| formation.pattern.material.material.clone())
+            .filter_map(|material| structured_signature(&material))
             .collect::<BTreeSet<_>>();
         assert_eq!(signatures.len(), ENVIRONMENTAL_COMPOUND_COUNT);
     }
@@ -194,9 +210,9 @@ mod tests {
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
         seed_initial_landscape(&mut field);
         assert!(field.cells.iter().any(|cell| cell
-            .materials
+            .formations
             .iter()
-            .any(|material| !material.has_internal_structure())));
+            .any(|formation| !formation.pattern.material.material.has_internal_structure())));
     }
     #[test]
     fn initial_landscape_totals_are_finite_and_positive() {
@@ -214,18 +230,7 @@ mod tests {
         seed_initial_landscape(&mut second);
         assert_eq!(first.total_amount(), second.total_amount());
         for (first_cell, second_cell) in first.cells.iter().zip(second.cells.iter()) {
-            assert_eq!(first_cell.materials.len(), second_cell.materials.len());
-            for (first_material, second_material) in first_cell
-                .materials
-                .iter()
-                .zip(second_cell.materials.iter())
-            {
-                assert_eq!(first_material.parts, second_material.parts);
-                assert_eq!(
-                    first_material.internal_bonds,
-                    second_material.internal_bonds
-                );
-            }
+            assert_eq!(first_cell.formations, second_cell.formations);
         }
     }
 }
