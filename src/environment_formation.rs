@@ -308,13 +308,14 @@ pub(crate) fn realize_pattern(
         // that existing physical rule by allowing them to share the local
         // realization without inventing a rigid bond or shape.
         if index > 0
-            && matches!(resource.physical_state, crate::resources::PhysicalState::Fluid)
+            && matches!(
+                resource.physical_state,
+                crate::resources::PhysicalState::Fluid
+            )
         {
             let anchor = structure.units[0].placement;
-            let mut unit = StructuralUnit::from_material(
-                Material::free_base(name.clone(), 1.0),
-                anchor,
-            )?;
+            let mut unit =
+                StructuralUnit::from_material(Material::free_base(name.clone(), 1.0), anchor)?;
             if !unit.realize_default_geometry(catalog) {
                 return None;
             }
