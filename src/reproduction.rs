@@ -178,6 +178,63 @@ fn store_first_available_material(
     child_storage.store(material)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NextConstructionResourceStatus {
+    Available,
+    Missing,
+    Impossible,
+}
+
+fn next_construction_resource_status(
+    child: &Organism,
+    parent_storage: &MaterialStorage,
+    environment: &Environment,
+    ledger: &EnergyLedger,
+    context: Option<DevelopmentalContext<'_>>,
+) -> NextConstructionResourceStatus {
+    let mut missing = false;
+
+    for resource in &environment.catalog {
+        let material = Material::free_base(resource.name.clone(), 1.0);
+
+        let already_held = child
+            .stored_material
+            .materials_snapshot()
+            .iter()
+            .any(|held| held == &material)
+            || parent_storage
+                .materials_snapshot()
+                .iter()
+                .any(|held| held == &material);
+
+        let mut candidate = child.clone();
+        if !candidate.stored_material.store(material.clone()) {
+            continue;
+        }
+
+        if try_child_construction(
+            &candidate,
+            &MaterialStorage::default(),
+            environment,
+            ledger,
+            context,
+        )
+        .is_some()
+        {
+            if already_held {
+                return NextConstructionResourceStatus::Available;
+            }
+            missing = true;
+        }
+    }
+
+    if missing {
+        NextConstructionResourceStatus::Missing
+    } else {
+        NextConstructionResourceStatus::Impossible
+    }
+}
+
 fn try_child_construction(
     child: &Organism,
     parent_storage: &MaterialStorage,
@@ -483,109 +540,27 @@ pub(crate) fn advance_construction(
         None
     };
     let before_units = child.structure.units.len();
-
-    // Construction options are evaluated independently. A failed option is
-    // closed, not the entire construction. Only exhaustion of every option is
-    // a terminal DeadEnd.
-    let mut options = Vec::new();
-    for index in 0..child.stored_material.entries.len() {
-        let mut candidate = child.clone();
-        candidate.stored_material.entries.swap(0, index);
-        options.push((candidate, None));
-    }
-    for material in parent_storage.materials_snapshot() {
-        let mut candidate = child.clone();
-        if !candidate.stored_material.store(material.clone()) {
-            continue;
-        }
-        let last = candidate.stored_material.entries.len().saturating_sub(1);
-        candidate.stored_material.entries.swap(0, last);
-        options.push((candidate, Some(material)));
-    }
-
-    let mut waiting_for_resource = false;
-    let mut attempted_option = false;
-
-    for (mut candidate, transferred) in options {
-        attempted_option = true;
-        let mut candidate_ledger = *ledger;
-        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-        if crate::combine_runtime::try_combine_stored_unit(
-            &mut candidate,
+    let Some((child, candidate_ledger, transferred)) =
+        try_child_construction(&child, parent_storage, environment, ledger, context)
+    else {
+        match next_construction_resource_status(
+            &child,
+            parent_storage,
             environment,
-            &mut cache,
-            &mut candidate_ledger,
+            ledger,
             context,
-        )
-        .is_some()
-        {
-            if let Some(material) = transferred {
-                let mut parent_trial = parent_storage.clone();
-                if parent_trial.take_matching(&material).is_none() {
-                    continue;
-                }
-                *parent_storage = parent_trial;
+        ) {
+            NextConstructionResourceStatus::Missing => {
+                return (ConstructionStatus::Waiting, None);
             }
-            *ledger = candidate_ledger;
-            construction.committed_material = candidate.stored_material;
-            construction.developing_structure = candidate.structure;
-            construction.developing_energy = candidate.usable_energy;
-            construction.developing_stress = candidate.stress;
-            if birth_ready(construction, &environment.catalog) {
-                return (ConstructionStatus::Ready, None);
-            }
-            if construction.developing_structure.units.len() > before_units {
-                return (ConstructionStatus::Progress, None);
+            NextConstructionResourceStatus::Available
+            | NextConstructionResourceStatus::Impossible => {
+                return (ConstructionStatus::DeadEnd, None);
             }
         }
-    }
+    };
 
-    // All currently available options have been exhausted. Only now inspect
-    // unavailable resource options. A resource that could advance construction
-    // is Waiting, not DeadEnd.
-    for resource in &environment.catalog {
-        let material = Material::free_base(resource.name.clone(), 1.0);
-        let already_available = child
-            .stored_material
-            .materials_snapshot()
-            .iter()
-            .any(|held| held == &material)
-            || parent_storage
-                .materials_snapshot()
-                .iter()
-                .any(|held| held == &material);
-        if already_available {
-            continue;
-        }
-
-        let mut candidate = child.clone();
-        if !candidate.stored_material.store(material) {
-            continue;
-        }
-        let mut candidate_ledger = *ledger;
-        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-        if crate::combine_runtime::try_combine_stored_unit(
-            &mut candidate,
-            environment,
-            &mut cache,
-            &mut candidate_ledger,
-            context,
-        )
-        .is_some()
-        {
-            waiting_for_resource = true;
-            break;
-        }
-    }
-
-    if waiting_for_resource || !attempted_option {
-        (ConstructionStatus::Waiting, None)
-    } else {
-        (ConstructionStatus::DeadEnd, None)
-    }
-}
- 
-pub(crate) fn finish_reproduction(
+    if let Some(material) = transferred {
         let mut parent_trial = parent_storage.clone();
         if parent_trial.take_matching(&material).is_none() {
             return (ConstructionStatus::Waiting, None);
