@@ -449,6 +449,7 @@ impl Simulation {
             Self::update_memory_from_sources(organism, &environment_snapshot);
             if matches!(organism.development_stage, DevelopmentStage::Adult)
                 && organism.reproductive_construction.is_none()
+                && Self::has_qualifying_genome(organism, &environment_snapshot)
             {
                 let _ = crate::reproduction::begin_reproduction(
                     organism,
@@ -691,6 +692,13 @@ impl Simulation {
         self.energy_ledger.total_usable_energy_held =
             crate::reproduction::total_usable_energy_held(&self.organisms);
     }
+    fn has_qualifying_genome(organism: &Organism, environment: &Environment) -> bool {
+        crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
+            .ok()
+            .flatten()
+            .is_some_and(|cavity| cavity.qualifies())
+    }
+
     pub(crate) fn apply_survival_damage(
         organism: &mut Organism,
         environment: &Environment,
@@ -698,11 +706,7 @@ impl Simulation {
         rng: &mut ChaCha8Rng,
     ) -> bool {
         // Physical genome qualification is the viability authority.
-        if !crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
-            .ok()
-            .flatten()
-            .is_some_and(|cavity| cavity.qualifies())
-        {
+        if !Self::has_qualifying_genome(organism, environment) {
             return true;
         }
 
