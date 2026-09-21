@@ -203,7 +203,10 @@ impl Simulation {
                         .placements
                         .as_ref()
                         .and_then(|placements| placements.first())
-                        .is_some_and(|placement| body.contains_point(placement.x, placement.y))
+                        .is_some_and(|placement| {
+                            let (cell_x, cell_y) = environment.field.cell_center(field_index);
+                            body.contains_point(cell_x + placement.x, cell_y + placement.y)
+                        })
             })
         });
         let has_logical_material = cell.materials.iter().any(|material| {
