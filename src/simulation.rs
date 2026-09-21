@@ -699,13 +699,11 @@ impl Simulation {
     ) -> bool {
         // Physical genome qualification is the organism's viability authority.
         // No separate health/viability score is introduced.
-        let genome_qualified = crate::cavity::analyze_genome_cavity(
-            &organism.structure,
-            &environment.catalog,
-        )
-        .ok()
-        .flatten()
-        .is_some_and(|cavity| cavity.qualifies());
+        let genome_qualified =
+            crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
+                .ok()
+                .flatten()
+                .is_some_and(|cavity| cavity.qualifies());
         if !genome_qualified {
             return true;
         }
