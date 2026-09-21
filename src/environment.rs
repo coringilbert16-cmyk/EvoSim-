@@ -308,7 +308,7 @@ impl ActiveMaterialField {
                             let row = (wrapped_y / self.cell_size).floor() as usize;
                             (row * self.width_cells + col).into()
                         })
-                    == Some(index)
+                        == Some(index)
             })?;
             let material = formation.remove_resolved_instance(frontier_index)?;
             let removed = material.material.parts.clone();
