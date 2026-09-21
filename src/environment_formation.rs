@@ -259,8 +259,11 @@ mod tests {
         let extent = largest_organism_extent(&[organism], &catalog).unwrap();
         assert!(extent.is_finite() && extent > 0.0);
         assert_eq!(
-            resolved_formation_depth(&[crate::simulation::Simulation::create_initial_organism()], &catalog)
-                .unwrap(),
+            resolved_formation_depth(
+                &[crate::simulation::Simulation::create_initial_organism()],
+                &catalog,
+            )
+            .unwrap(),
             extent * FORMATION_RESOLUTION_EXTENT_MULTIPLIER
         );
     }
