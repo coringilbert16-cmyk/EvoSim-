@@ -103,13 +103,12 @@ mod integration_tests {
             crate::cavity::analyze_genome_cavity(&s.organisms[0].structure, &s.environment.catalog)
                 .unwrap()
                 .expect("initial organism must have a physical genome cavity");
-        let boundary_unit = cavity
-            .boundary_units
-            .first()
-            .copied()
-            .expect("qualifying genome cavity must have boundary units");
-        for unit_index in cavity.boundary_units {
-            s.organisms[0].structure.units[unit_index].placement.x += 1_000.0;
+        let boundary_bonds = cavity.boundary_bond_indices(&s.organisms[0].structure);
+        assert!(!boundary_bonds.is_empty(), "qualifying cavity must have boundary bonds");
+        let mut removed = boundary_bonds;
+        removed.sort_unstable();
+        for bond_index in removed.into_iter().rev() {
+            s.organisms[0].structure.bonds.remove(bond_index);
         }
 
         assert!(!crate::cavity::analyze_genome_cavity(
