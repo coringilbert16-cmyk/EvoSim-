@@ -609,16 +609,16 @@ This is fundamentally different from:
 
 # 25. Juvenile Requirements
 
-The juvenile's fundamental requirements are:
+The organism has two true biological needs:
 
 1. **Survive**
-2. **Maintain suitable energy**
-3. **Construct toward adulthood**
-4. **Eventually reproduce once adulthood is reached**
+2. **Reproduce**
 
-Growth is not a separate biological decision.
+These are the only fundamental needs that drive organism behavior.
 
-The organism does not need an invented "growth motivation" variable.
+A juvenile does not yet have reproductive pressure because reproduction begins once adulthood is reached. Juvenile development therefore produces a separate **developmental pressure**: the physical organism is below the realization required by its inherited adult developmental blueprint.
+
+Developmental pressure is not a third biological need and does not imply a separate authored "growth motivation" variable.
 
 The physical/developmental state itself determines what remains necessary to reach the blueprint.
 
