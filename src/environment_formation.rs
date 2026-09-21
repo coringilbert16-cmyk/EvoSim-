@@ -158,6 +158,7 @@ impl Formation {
     }
 
     fn resolve_blob_layer(&mut self, radius: f64) {
+        let inner_radius = self.resolved_radius;
         let span_x = (radius / self.pattern.width).ceil() as i64;
         let span_y = (radius / self.pattern.height).ceil() as i64;
         for pattern_y in -span_y..=span_y {
@@ -165,7 +166,8 @@ impl Formation {
                 let center_x = pattern_x as f64 * self.pattern.width;
                 let center_y = pattern_y as f64 * self.pattern.height;
                 let distance = (center_x * center_x + center_y * center_y).sqrt();
-                if distance > radius * blob_radius_factor(pattern_x, pattern_y) {
+                let boundary = radius * blob_radius_factor(pattern_x, pattern_y);
+                if distance > boundary || distance <= inner_radius {
                     continue;
                 }
                 if let Some(material) = self.resolve_pattern_instance(pattern_x, pattern_y) {
