@@ -698,7 +698,6 @@ impl Simulation {
         ledger: &mut EnergyLedger,
         rng: &mut ChaCha8Rng,
     ) -> bool {
-        // Preserve lethal bondless stress before per-tick decay.
         let threshold = organism
             .stress_threshold
             .max(crate::state::MIN_STRESS_THRESHOLD);
