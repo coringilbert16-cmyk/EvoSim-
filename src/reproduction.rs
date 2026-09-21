@@ -486,7 +486,14 @@ pub(crate) fn advance_construction(
     let Some((child, candidate_ledger, transferred)) =
         try_child_construction(&child, parent_storage, environment, ledger, context)
     else {
-        return (ConstructionStatus::Waiting, None);
+        // Waiting is reserved for a genuine resource shortfall. If material is
+        // available but the physical constructor cannot find any valid next
+        // realization, the approved terminal condition is DeadEnd rather than
+        // silently retrying the same impossible state forever.
+        if parent_storage.is_empty() {
+            return (ConstructionStatus::Waiting, None);
+        }
+        return (ConstructionStatus::DeadEnd, None);
     };
 
     if let Some(material) = transferred {
