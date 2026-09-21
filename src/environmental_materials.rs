@@ -102,6 +102,32 @@ pub(crate) fn seed_initial_landscape(
             }
         }
     }
+
+    // Water is fluid rather than rigidly connected, so guarantee that the
+    // initial active field contains a physically realizable water formation.
+    if !field.formations.iter().any(|formation| {
+        formation
+            .bulk
+            .composition
+            .iter()
+            .any(|(name, _)| name == "Water")
+    }) {
+        let mut water = Formation::new(
+            vec![(
+                "Water".to_string(),
+                crate::environment_formation::PATTERN_SIZE as f64,
+            )],
+            resolved_extent * 2.0,
+            catalog,
+        );
+        if let Some(formation) = water.as_mut() {
+            formation.set_origin(field.cell_center(0));
+            formation.resolve_frontier();
+        }
+        if let Some(formation) = water {
+            field.formations.push(formation);
+        }
+    }
 }
 
 fn compound(parts: &[(&str, f64)]) -> Material {
