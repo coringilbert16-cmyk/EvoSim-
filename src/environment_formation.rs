@@ -187,10 +187,7 @@ pub(crate) fn realize_repeating_pattern(
     })
 }
 
-fn balanced_pattern_names(
-    composition: &[&(String, f64)],
-    total: f64,
-) -> Vec<String> {
+fn balanced_pattern_names(composition: &[&(String, f64)], total: f64) -> Vec<String> {
     let mut assigned = vec![0.0; composition.len()];
     let mut names = Vec::with_capacity(PATTERN_SIZE);
 
@@ -259,7 +256,10 @@ mod tests {
             assert!((b.y - a.y - dy).abs() < 1e-12);
             assert_eq!(a.rotation_radians, b.rotation_radians);
         }
-        assert_eq!(pattern.material.internal_connections, repeated.internal_connections);
+        assert_eq!(
+            pattern.material.internal_connections,
+            repeated.internal_connections
+        );
     }
 
     #[test]
