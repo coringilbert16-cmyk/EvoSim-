@@ -38,6 +38,7 @@ pub(crate) fn parent_body_geometry(
 
 fn parent_child_position(
     parent: &Organism,
+    child_genome: &crate::genome::Genome,
     anchor: &Material,
     catalog: &[crate::resources::BaseResource],
 ) -> Option<Position> {
@@ -95,19 +96,13 @@ fn parent_child_position(
             );
             let (seed_mass, seed_length) =
                 crate::juvenile::confirmed_seed_scale_reference(catalog).ok()?;
-            let preferred_length = parent
-                .genome
+            let preferred_length = child_genome
                 .developmental_blueprint
-                .preferred_developmental_length(
-                    parent.genome.adult_mass(),
-                    seed_mass,
-                    seed_length,
-                );
+                .preferred_developmental_length(child_genome.adult_mass(), seed_mass, seed_length);
             if !preferred_length.is_finite() || preferred_length <= 0.0 {
                 return None;
             }
-            let material_score = parent
-                .genome
+            let material_score = child_genome
                 .developmental_blueprint
                 .material_preference_scaled(
                     anchor_name,
@@ -115,8 +110,7 @@ fn parent_child_position(
                     local.1,
                     preferred_length,
                 );
-            let density_score = parent
-                .genome
+            let density_score = child_genome
                 .developmental_blueprint
                 .density_preference_scaled(local.0, local.1, preferred_length);
             let score = crate::developmental_blueprint::CANDIDATE_MATERIAL_WEIGHT * material_score
@@ -425,7 +419,7 @@ pub(crate) fn begin_reproduction(
 
     let snapshot = parent.stored_material.materials_snapshot();
     for anchor in snapshot {
-        let Some(position) = parent_child_position(parent, &anchor, catalog) else {
+        let Some(position) = parent_child_position(parent, &child_genome, &anchor, catalog) else {
             continue;
         };
         let mut trial_storage = parent.stored_material.clone();
