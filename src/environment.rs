@@ -128,11 +128,15 @@ impl ActiveMaterialField {
     }
 
     pub fn row_col_for_position(&self, x: f64, y: f64) -> Option<(usize, usize)> {
-        if !x.is_finite() || !y.is_finite() || x < 0.0 || y < 0.0 {
+        if !x.is_finite() || !y.is_finite() {
             return None;
         }
-        let col = (x / self.cell_size).floor() as usize;
-        let row = (y / self.cell_size).floor() as usize;
+        let world_width = self.width_cells as f64 * self.cell_size;
+        let world_height = self.height_cells as f64 * self.cell_size;
+        let wrapped_x = x.rem_euclid(world_width);
+        let wrapped_y = y.rem_euclid(world_height);
+        let col = (wrapped_x / self.cell_size).floor() as usize;
+        let row = (wrapped_y / self.cell_size).floor() as usize;
         if col >= self.width_cells || row >= self.height_cells {
             return None;
         }
