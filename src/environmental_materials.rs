@@ -49,8 +49,7 @@ pub(crate) fn seed_initial_landscape(
         let field_a = ((nx * 2.4 + ny * 1.3).sin() + 1.0) * 0.5;
         let field_b = ((nx * 1.1 - ny * 2.7 + 0.8).cos() + 1.0) * 0.5;
         let field_c = ((nx * 3.0 + ny * 2.0 + 1.7).sin() + 1.0) * 0.5;
-        let selector = ((field_c * compounds.len() as f64) as usize)
-            .min(compounds.len() - 1);
+        let selector = ((field_c * compounds.len() as f64) as usize).min(compounds.len() - 1);
 
         let mut composition = compounds[selector].parts.clone();
         if field_a > 0.72 {
@@ -77,9 +76,7 @@ pub(crate) fn seed_initial_landscape(
             .into_iter()
             .filter(|(_, amount)| amount.is_finite() && *amount > 0.0)
             .collect::<Vec<_>>();
-        if let Some(mut formation) =
-            Formation::new(composition, resolved_extent * 2.0, catalog)
-        {
+        if let Some(mut formation) = Formation::new(composition, resolved_extent * 2.0, catalog) {
             formation.set_origin(field.cell_center(index));
             formation.resolve_frontier();
             field.cells[index].formations.push(formation);
@@ -150,12 +147,11 @@ mod tests {
         seed_initial_landscape(&mut field, 10.0, &crate::resources::default_catalog());
         assert!(field.total_amount() > 0.0);
         assert!(field.cells.iter().all(|cell| !cell.formations.is_empty()));
-        assert!(field
-            .cells
-            .iter()
-            .any(|cell| cell.formations.iter().any(|formation| {
-                !formation.pattern.material.material.is_empty()
-            })));
+        assert!(field.cells.iter().any(|cell| {
+            cell.formations
+                .iter()
+                .any(|formation| !formation.pattern.material.material.is_empty())
+        }));
         assert!(field.cells.iter().any(|cell| {
             cell.formations.iter().any(|formation| {
                 formation
@@ -169,11 +165,7 @@ mod tests {
     #[test]
     fn initial_landscape_uses_all_compound_varieties() {
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-        seed_initial_landscape(
-            &mut field,
-            10.0,
-            &crate::resources::default_catalog(),
-        );
+        seed_initial_landscape(&mut field, 10.0, &crate::resources::default_catalog());
         let signatures = field
             .cells
             .iter()
@@ -224,9 +216,9 @@ mod tests {
             .cells
             .iter()
             .filter_map(|cell| {
-                cell.formations
-                    .iter()
-                    .find_map(|formation| structured_signature(&formation.pattern.material.material))
+                cell.formations.iter().find_map(|formation| {
+                    structured_signature(&formation.pattern.material.material)
+                })
             })
             .collect::<BTreeSet<_>>();
         assert!(signatures.len() > 1);
@@ -235,10 +227,11 @@ mod tests {
     fn initial_landscape_retains_unstructured_material() {
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
         seed_initial_landscape(&mut field);
-        assert!(field.cells.iter().any(|cell| cell
-            .formations
-            .iter()
-            .any(|formation| !formation.pattern.material.material.has_internal_structure())));
+        assert!(field.cells.iter().any(|cell| {
+            cell.formations.iter().any(|formation| {
+                !formation.pattern.material.material.has_internal_structure()
+            })
+        }));
     }
     #[test]
     fn initial_landscape_totals_are_finite_and_positive() {
