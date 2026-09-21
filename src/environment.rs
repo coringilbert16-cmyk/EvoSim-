@@ -292,6 +292,8 @@ impl ActiveMaterialField {
     /// the backing quantity.
     pub fn take_formation_for_acquisition(&mut self, index: usize) -> Option<PhysicalMaterial> {
         self.cells.get(index)?;
+        let world_width = self.width_cells as f64 * self.cell_size;
+        let world_height = self.height_cells as f64 * self.cell_size;
         for formation in &mut self.formations {
             let frontier_index = formation
                 .resolved_frontier()
@@ -304,7 +306,11 @@ impl ActiveMaterialField {
                             .as_ref()
                             .and_then(|placements| placements.first())
                             .and_then(|placement| {
-                                self.index_for_position(placement.x, placement.y)
+                                let wrapped_x = placement.x.rem_euclid(world_width);
+                                let wrapped_y = placement.y.rem_euclid(world_height);
+                                let col = (wrapped_x / self.cell_size).floor() as usize;
+                                let row = (wrapped_y / self.cell_size).floor() as usize;
+                                (row * self.width_cells + col).into()
                             })
                             == Some(index)
                 })?;
