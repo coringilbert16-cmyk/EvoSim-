@@ -22,8 +22,15 @@ const ADULTHOOD_GROWTH_FRACTION: f64 = 0.90;
 impl Simulation {
     pub(crate) fn new(seed: u64, ticks_per_second: f64) -> Self {
         let rng = ChaCha8Rng::seed_from_u64(seed);
-        let environment = Self::create_environment();
         let organism = Self::create_initial_organism();
+        let catalog = crate::resources::default_catalog();
+        let initial_extent = crate::organism_geometry::OrganismBodyGeometry::from_structure(
+            &organism.structure,
+            &catalog,
+        )
+        .expect("initial organism must have realized geometry")
+        .maximum_extent();
+        let environment = Self::create_environment(initial_extent);
         Self {
             tick: 0,
             ticks_per_second,
@@ -39,12 +46,12 @@ impl Simulation {
             decision_parameters: DecisionParameters::default(),
         }
     }
-    fn create_environment() -> Environment {
+    fn create_environment(initial_extent: f64) -> Environment {
         let catalog = crate::resources::default_catalog();
         let width = 1000.0;
         let height = 1000.0;
         let mut field = ActiveMaterialField::new(width, height, DEFAULT_CELL_SIZE);
-        crate::environmental_materials::seed_initial_landscape(&mut field);
+        crate::environmental_materials::seed_initial_landscape(&mut field, initial_extent, &catalog);
         let vents = vec![
             Vent {
                 x: 250.0,
