@@ -202,20 +202,16 @@ impl ActiveMaterialField {
 
     pub fn neighbor_indices(&self, index: usize) -> Vec<usize> {
         let (row, col) = self.row_col_for_index(index);
-        let mut out = Vec::with_capacity(4);
-        if row > 0 {
-            out.push((row - 1) * self.width_cells + col);
-        }
-        if row + 1 < self.height_cells {
-            out.push((row + 1) * self.width_cells + col);
-        }
-        if col > 0 {
-            out.push(row * self.width_cells + (col - 1));
-        }
-        if col + 1 < self.width_cells {
-            out.push(row * self.width_cells + (col + 1));
-        }
-        out
+        let left = (col + self.width_cells - 1) % self.width_cells;
+        let right = (col + 1) % self.width_cells;
+        let up = (row + self.height_cells - 1) % self.height_cells;
+        let down = (row + 1) % self.height_cells;
+        vec![
+            up * self.width_cells + col,
+            down * self.width_cells + col,
+            row * self.width_cells + left,
+            row * self.width_cells + right,
+        ]
     }
 
     pub(crate) fn deposit<T: Into<FieldDeposit>>(&mut self, x: f64, y: f64, material: T) -> bool {
