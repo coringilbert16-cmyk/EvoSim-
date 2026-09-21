@@ -705,5 +705,4 @@ impl Simulation {
     pub(crate) fn total_material_in_system(&self) -> f64 {
         simulation_material_tests::total_material_in_system(self)
     }
-
 }
