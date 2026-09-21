@@ -136,9 +136,15 @@ pub(crate) fn realize_pattern(
     composition: &[(String, f64)],
     catalog: &[BaseResource],
 ) -> Option<PhysicalMaterial> {
+    let composition = crate::resources::merge_parts(
+        &composition
+            .iter()
+            .filter(|(_, amount)| amount.is_finite() && *amount > 0.0)
+            .cloned()
+            .collect::<Vec<_>>(),
+    );
     let composition = composition
         .iter()
-        .filter(|(_, amount)| amount.is_finite() && *amount > 0.0)
         .collect::<Vec<_>>();
     if composition.is_empty() || catalog.is_empty() {
         return None;
