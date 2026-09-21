@@ -2,6 +2,9 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashSet;
 
+#[cfg(test)]
+mod simulation_material_tests;
+
 use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
 use crate::decision_runtime::{select_action, ActionCandidate, DecisionContext};
 use crate::energy_ledger::EnergyLedgerAuthority;
@@ -700,36 +703,7 @@ impl Simulation {
     }
     #[cfg(test)]
     pub(crate) fn total_material_in_system(&self) -> f64 {
-        let mut total = self.environment.field.total_amount();
-        for transformation in &self.active_transformations {
-            total += transformation.material.total_amount();
-        }
-        for organism in &self.organisms {
-            total += organism.stored_material.total_amount();
-            if let Some(construction) = &organism.reproductive_construction {
-                total += construction.committed_material.total_amount();
-                total += construction
-                    .developing_structure
-                    .units
-                    .iter()
-                    .map(|unit| unit.material.total_amount())
-                    .sum::<f64>();
-            }
-            total += organism
-                .structure
-                .units
-                .iter()
-                .map(|unit| unit.material.total_amount())
-                .sum::<f64>();
-        }
-        for body in &self.decomposing_bodies {
-            total += body
-                .structure
-                .units
-                .iter()
-                .map(|unit| unit.material.total_amount())
-                .sum::<f64>();
-        }
-        total
+        simulation_material_tests::total_material_in_system(self)
     }
+
 }
