@@ -40,7 +40,7 @@ fn parent_child_position(
     parent: &Organism,
     anchor: &Material,
     catalog: &[crate::resources::BaseResource],
-) -> Option<Position> {
+) -> Option<crate::structure::Placement> {
     let body = parent_body_geometry(parent, catalog)?;
     let anchor_name = anchor.parts.first()?.0.as_str();
     let anchor_resource = catalog.iter().find(|r| r.name == anchor_name)?;
@@ -77,10 +77,7 @@ fn parent_child_position(
                 &anchor_part,
                 0.0,
             ) {
-                return Some(Position {
-                    x: candidate.x,
-                    y: candidate.y,
-                });
+                return Some(candidate);
             }
         }
     }
@@ -311,7 +308,7 @@ fn birth_ready(
 fn anchor_structure(
     child_genome: &crate::genome::Genome,
     anchor: Material,
-    position: Position,
+    placement: crate::structure::Placement,
     catalog: &[crate::resources::BaseResource],
 ) -> Option<(OrganismStructure, MaterialStorage, usize)> {
     let mut storage = MaterialStorage::default();
@@ -320,9 +317,15 @@ fn anchor_structure(
     }
     let mut child = Organism {
         id: "developing-offspring".into(),
-        developmental_origin: position.clone(),
+        developmental_origin: Position {
+            x: placement.x,
+            y: placement.y,
+        },
         developmental_orientation_radians: 0.0,
-        occupied_cells: vec![position],
+        occupied_cells: vec![Position {
+            x: placement.x,
+            y: placement.y,
+        }],
         genome: child_genome.clone(),
         resource_sense: ResourceSense {
             sensed_resources: Vec::new(),
@@ -342,6 +345,9 @@ fn anchor_structure(
         structure: OrganismStructure::new(),
     };
     let anchor_unit_index = crate::combine_runtime::instantiate_one_unit(&mut child, catalog)?;
+    if let Some(anchor_unit) = child.structure.units.get_mut(anchor_unit_index) {
+        anchor_unit.placement.rotation_radians = placement.rotation_radians;
+    }
     Some((child.structure, child.stored_material, anchor_unit_index))
 }
 
@@ -380,7 +386,7 @@ pub(crate) fn begin_reproduction(
 
     let snapshot = parent.stored_material.materials_snapshot();
     for anchor in snapshot {
-        let Some(position) = parent_child_position(parent, &anchor, catalog) else {
+        let Some(placement) = parent_child_position(parent, &anchor, catalog) else {
             continue;
         };
         let mut trial_storage = parent.stored_material.clone();
@@ -388,7 +394,7 @@ pub(crate) fn begin_reproduction(
             continue;
         };
         let Some((structure, child_storage, anchor_unit_index)) =
-            anchor_structure(&child_genome, transferred, position.clone(), catalog)
+            anchor_structure(&child_genome, transferred, placement, catalog)
         else {
             continue;
         };
@@ -397,7 +403,10 @@ pub(crate) fn begin_reproduction(
             committed_material: child_storage,
             developing_structure: structure,
             child_genome,
-            developmental_origin: position,
+            developmental_origin: Position {
+                x: placement.x,
+                y: placement.y,
+            },
             developmental_orientation_radians: 0.0,
             developing_stress: 0.0,
             anchor_unit_index,
