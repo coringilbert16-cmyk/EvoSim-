@@ -98,7 +98,6 @@ mod integration_tests {
     fn loss_of_physical_genome_ends_organism_lifecycle() {
         let mut s = Simulation::new(32, 10.0);
         s.organisms[0].development_stage = DevelopmentStage::Adult;
-        s.organisms[0].structure.units.clear();
         s.organisms[0].structure.bonds.clear();
 
         s.step();
