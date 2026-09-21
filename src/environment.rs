@@ -291,12 +291,23 @@ impl ActiveMaterialField {
     /// physical composition and geometry. The formation remains the owner of
     /// the backing quantity.
     pub fn take_formation_for_acquisition(&mut self, index: usize) -> Option<PhysicalMaterial> {
-        let _cell = self.cells.get(index)?;
+        self.cells.get(index)?;
         for formation in &mut self.formations {
             let frontier_index = formation
                 .resolved_frontier()
                 .iter()
-                .position(|material| material.is_realized() && !material.material.is_empty())?;
+                .position(|material| {
+                    material.is_realized()
+                        && !material.material.is_empty()
+                        && material
+                            .placements
+                            .as_ref()
+                            .and_then(|placements| placements.first())
+                            .and_then(|placement| {
+                                self.index_for_position(placement.x, placement.y)
+                            })
+                            == Some(index)
+                })?;
             let material = formation.remove_resolved_instance(frontier_index)?;
             let removed = material.material.parts.clone();
             if !formation.consume(&removed) {
