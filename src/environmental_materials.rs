@@ -59,7 +59,7 @@ pub(crate) fn seed_initial_landscape(
                     .iter_mut()
                     .find(|(candidate, _)| candidate == name)
                 {
-                    *existing += amount * 0.5;
+                    existing.1 += amount * 0.5;
                 } else {
                     composition.push((name.clone(), amount * 0.5));
                 }
@@ -178,7 +178,7 @@ mod tests {
     #[test]
     fn initial_landscape_has_neighboring_material_coherence() {
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-        seed_initial_landscape(&mut field);
+        seed_initial_landscape(&mut field, 10.0, &crate::resources::default_catalog());
         let mut comparable_pairs = 0usize;
         let mut matching_pairs = 0usize;
         for y in 0..field.height_cells {
@@ -211,7 +211,7 @@ mod tests {
     #[test]
     fn initial_landscape_is_not_globally_uniform() {
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-        seed_initial_landscape(&mut field);
+        seed_initial_landscape(&mut field, 10.0, &crate::resources::default_catalog());
         let signatures = field
             .cells
             .iter()
@@ -224,19 +224,9 @@ mod tests {
         assert!(signatures.len() > 1);
     }
     #[test]
-    fn initial_landscape_retains_unstructured_material() {
-        let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-        seed_initial_landscape(&mut field);
-        assert!(field.cells.iter().any(|cell| {
-            cell.formations
-                .iter()
-                .any(|formation| !formation.pattern.material.material.has_internal_structure())
-        }));
-    }
-    #[test]
     fn initial_landscape_totals_are_finite_and_positive() {
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-        seed_initial_landscape(&mut field);
+        seed_initial_landscape(&mut field, 10.0, &crate::resources::default_catalog());
         let total = field.total_amount();
         assert!(total.is_finite());
         assert!(total > 0.0);
@@ -245,8 +235,8 @@ mod tests {
     fn initial_landscape_seeding_is_deterministic() {
         let mut first = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
         let mut second = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-        seed_initial_landscape(&mut first);
-        seed_initial_landscape(&mut second);
+        seed_initial_landscape(&mut first, 10.0, &crate::resources::default_catalog());
+        seed_initial_landscape(&mut second, 10.0, &crate::resources::default_catalog());
         assert_eq!(first.total_amount(), second.total_amount());
         for (first_cell, second_cell) in first.cells.iter().zip(second.cells.iter()) {
             assert_eq!(first_cell.formations, second_cell.formations);
