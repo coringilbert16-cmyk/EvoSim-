@@ -28,7 +28,11 @@ impl ActionKind {
                 NeedKind::Development,
             ],
             ActionKind::Combine => &[NeedKind::Reproduction, NeedKind::Development],
-            ActionKind::Break => &[NeedKind::Survival, NeedKind::Reproduction, NeedKind::Development],
+            ActionKind::Break => &[
+                NeedKind::Survival,
+                NeedKind::Reproduction,
+                NeedKind::Development,
+            ],
             ActionKind::Expel => &[NeedKind::Survival],
         }
     }
