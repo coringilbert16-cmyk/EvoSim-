@@ -130,7 +130,9 @@ impl Formation {
         pattern_x: i64,
         pattern_y: i64,
     ) -> Option<PhysicalMaterial> {
-        let mut material = self.pattern.repeated_local_placement(pattern_x, pattern_y)?;
+        let mut material = self
+            .pattern
+            .repeated_local_placement(pattern_x, pattern_y)?;
         let placements = material.placements.as_mut()?;
         for placement in placements {
             placement.x += self.origin.0;
@@ -503,12 +505,8 @@ mod tests {
     #[test]
     fn resolved_frontier_is_blob_shaped_not_rectangular() {
         let catalog = default_catalog();
-        let mut formation = Formation::new(
-            vec![("Carbon".to_string(), 100.0)],
-            100.0,
-            &catalog,
-        )
-        .unwrap();
+        let mut formation =
+            Formation::new(vec![("Carbon".to_string(), 100.0)], 100.0, &catalog).unwrap();
         formation.set_origin((0.0, 0.0));
         formation.resolve_frontier();
 
@@ -530,10 +528,8 @@ mod tests {
     #[test]
     fn changing_composition_changes_the_pattern_without_new_resource_types() {
         let catalog = default_catalog();
-        let carbon_hydrogen =
-            vec![("Carbon".to_string(), 3.0), ("Hydrogen".to_string(), 1.0)];
-        let carbon_sulfur =
-            vec![("Carbon".to_string(), 3.0), ("Sulfur".to_string(), 1.0)];
+        let carbon_hydrogen = vec![("Carbon".to_string(), 3.0), ("Hydrogen".to_string(), 1.0)];
+        let carbon_sulfur = vec![("Carbon".to_string(), 3.0), ("Sulfur".to_string(), 1.0)];
 
         let first = realize_pattern(&carbon_hydrogen, &catalog).unwrap();
         let second = realize_pattern(&carbon_sulfur, &catalog).unwrap();
