@@ -551,10 +551,15 @@ pub(crate) fn advance_construction(
             context,
         ) {
             NextConstructionResourceStatus::Missing => {
+                construction.needs_space = false;
                 return (ConstructionStatus::Waiting, None);
             }
-            NextConstructionResourceStatus::Available
-            | NextConstructionResourceStatus::Impossible => {
+            NextConstructionResourceStatus::Available => {
+                construction.needs_space = true;
+                return (ConstructionStatus::Waiting, None);
+            }
+            NextConstructionResourceStatus::Impossible => {
+                construction.needs_space = false;
                 return (ConstructionStatus::DeadEnd, None);
             }
         }
@@ -570,6 +575,7 @@ pub(crate) fn advance_construction(
     *ledger = candidate_ledger;
     construction.committed_material = child.stored_material;
     construction.developing_structure = child.structure;
+    construction.needs_space = false;
     construction.developing_energy = child.usable_energy;
     construction.developing_stress = child.stress;
     if !child_intersects_realized_parent_region(&construction.developing_structure, parent_body) {
@@ -648,6 +654,7 @@ mod tests {
             developing_stress: 0.0,
             anchor_unit_index: 0,
             developing_energy: 0.0,
+            needs_space: false,
         };
         assert!(preferred > 0.0);
         assert!(!juvenile_scale_reached(&construction, &catalog));
