@@ -419,7 +419,7 @@ mod tests {
     #[test]
     fn largest_organism_extent_uses_realized_structure() {
         let catalog = default_catalog();
-        let organism = crate::simulation::Simulation::create_initial_organism();
+        let organism = crate::state::Simulation::create_initial_organism();
         let extent = largest_organism_extent(&[organism.clone()], &catalog).unwrap();
         assert!(extent.is_finite() && extent > 0.0);
         assert_eq!(
