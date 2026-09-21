@@ -698,12 +698,11 @@ impl Simulation {
         rng: &mut ChaCha8Rng,
     ) -> bool {
         // Physical genome qualification is the viability authority.
-        let genome_qualified =
-            crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
-                .ok()
-                .flatten()
-                .is_some_and(|cavity| cavity.qualifies());
-        if !genome_qualified {
+        if !crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
+            .ok()
+            .flatten()
+            .is_some_and(|cavity| cavity.qualifies())
+        {
             return true;
         }
 
