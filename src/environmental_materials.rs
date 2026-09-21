@@ -79,7 +79,7 @@ pub(crate) fn seed_initial_landscape(
         if let Some(mut formation) = Formation::new(composition, resolved_extent * 2.0, catalog) {
             formation.set_origin(field.cell_center(index));
             formation.resolve_frontier();
-            field.cells[index].formations.push(formation);
+            field.formations.push(formation);
         }
     }
 }
@@ -146,20 +146,17 @@ mod tests {
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
         seed_initial_landscape(&mut field, 10.0, &crate::resources::default_catalog());
         assert!(field.total_amount() > 0.0);
-        assert!(field.cells.iter().all(|cell| !cell.formations.is_empty()));
-        assert!(field.cells.iter().any(|cell| {
-            cell.formations
+        assert!(!field.formations.is_empty());
+        assert!(field
+            .formations
+            .iter()
+            .any(|formation| !formation.pattern.material.material.is_empty()));
+        assert!(field.formations.iter().any(|formation| {
+            formation
+                .bulk
+                .composition
                 .iter()
-                .any(|formation| !formation.pattern.material.material.is_empty())
-        }));
-        assert!(field.cells.iter().any(|cell| {
-            cell.formations.iter().any(|formation| {
-                formation
-                    .bulk
-                    .composition
-                    .iter()
-                    .any(|(name, _)| name == "Water")
-            })
+                .any(|(name, _)| name == "Water")
         }));
     }
     #[test]
@@ -167,9 +164,8 @@ mod tests {
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
         seed_initial_landscape(&mut field, 10.0, &crate::resources::default_catalog());
         let signatures = field
-            .cells
+            .formations
             .iter()
-            .flat_map(|cell| cell.formations.iter())
             .map(|formation| formation.pattern.material.material.clone())
             .filter_map(|material| structured_signature(&material))
             .collect::<BTreeSet<_>>();
@@ -185,18 +181,42 @@ mod tests {
             for x in 0..field.width_cells.saturating_sub(1) {
                 let left_index = y * field.width_cells + x;
                 let right_index = left_index + 1;
-                let left = field.cells[left_index]
+                let left = field
                     .formations
                     .iter()
-                    .find_map(|formation| {
-                        structured_signature(&formation.pattern.material.material)
-                    });
-                let right = field.cells[right_index]
+                    .find(|formation| {
+                        formation
+                            .resolved_frontier()
+                            .iter()
+                            .any(|material| {
+                                material
+                                    .placements
+                                    .as_ref()
+                                    .and_then(|placements| placements.first())
+                                    .and_then(|placement| field.index_for_position(placement.x, placement.y))
+                                    == Some(left_index)
+                            })
+                    })
+                    .map(|formation| structured_signature(&formation.pattern.material.material))
+                    .flatten();
+                let right = field
                     .formations
                     .iter()
-                    .find_map(|formation| {
-                        structured_signature(&formation.pattern.material.material)
-                    });
+                    .find(|formation| {
+                        formation
+                            .resolved_frontier()
+                            .iter()
+                            .any(|material| {
+                                material
+                                    .placements
+                                    .as_ref()
+                                    .and_then(|placements| placements.first())
+                                    .and_then(|placement| field.index_for_position(placement.x, placement.y))
+                                    == Some(right_index)
+                            })
+                    })
+                    .map(|formation| structured_signature(&formation.pattern.material.material))
+                    .flatten();
                 if let (Some(left), Some(right)) = (left, right) {
                     comparable_pairs += 1;
                     if left == right {
@@ -213,13 +233,9 @@ mod tests {
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
         seed_initial_landscape(&mut field, 10.0, &crate::resources::default_catalog());
         let signatures = field
-            .cells
+            .formations
             .iter()
-            .filter_map(|cell| {
-                cell.formations.iter().find_map(|formation| {
-                    structured_signature(&formation.pattern.material.material)
-                })
-            })
+            .filter_map(|formation| structured_signature(&formation.pattern.material.material))
             .collect::<BTreeSet<_>>();
         assert!(signatures.len() > 1);
     }
