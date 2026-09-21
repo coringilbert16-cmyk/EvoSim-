@@ -49,7 +49,8 @@ pub(crate) fn seed_initial_landscape(
         let field_a = ((nx * 2.4 + ny * 1.3).sin() + 1.0) * 0.5;
         let field_b = ((nx * 1.1 - ny * 2.7 + 0.8).cos() + 1.0) * 0.5;
         let field_c = ((nx * 3.0 + ny * 2.0 + 1.7).sin() + 1.0) * 0.5;
-        let selector = ((field_c * compounds.len() as f64) as usize).min(compounds.len() - 1);
+        let selector = ((field_c * compounds.len() as f64) as usize)
+            .min(compounds.len() - 1);
 
         let mut composition = compounds[selector].parts.clone();
         if field_a > 0.72 {
@@ -187,7 +188,7 @@ mod tests {
                 let left = field.cells[left_index]
                     .formations
                     .iter()
-                    .find_map(|formation| structured_signature(&formation.pattern.material.material));
+                    .find_map(|formation| {\n                        structured_signature(&formation.pattern.material.material)\n                    });
                 let right = field.cells[right_index]
                     .formations
                     .iter()
