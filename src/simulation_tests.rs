@@ -23,13 +23,13 @@ mod integration_tests {
             structured_carbon_hydrogen(),
             vec![
                 Placement {
-                    x: 0.0,
-                    y: 0.0,
+                    x: 500.0,
+                    y: 500.0,
                     rotation_radians: 0.0,
                 },
                 Placement {
-                    x: 1.0,
-                    y: 0.0,
+                    x: 501.0,
+                    y: 500.0,
                     rotation_radians: 0.25,
                 },
             ],
