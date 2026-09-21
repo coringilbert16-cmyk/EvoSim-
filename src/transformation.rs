@@ -371,6 +371,7 @@ mod tests {
                     crate::structure::PhysicalConstituentId(2),
                     crate::structure::ConnectionEndpoint::Boundary { angle_radians: 0.0 },
                 ),
+                strength: 1.0,
                 bond_energy: 1.0,
             },
             crate::structure::Bond {
@@ -382,6 +383,7 @@ mod tests {
                     crate::structure::PhysicalConstituentId(3),
                     crate::structure::ConnectionEndpoint::Boundary { angle_radians: 0.0 },
                 ),
+                strength: 1.0,
                 bond_energy: 1.0,
             },
         ];
@@ -400,6 +402,7 @@ mod tests {
                     crate::structure::PhysicalConstituentId(2),
                     crate::structure::ConnectionEndpoint::Boundary { angle_radians: 0.0 },
                 ),
+                strength: 1.0,
                 bond_energy: 1.0,
             },
             crate::structure::Bond {
@@ -411,6 +414,7 @@ mod tests {
                     crate::structure::PhysicalConstituentId(3),
                     crate::structure::ConnectionEndpoint::Boundary { angle_radians: 0.0 },
                 ),
+                strength: 1.0,
                 bond_energy: 1.0,
             },
         ];
