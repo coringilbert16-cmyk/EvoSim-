@@ -312,10 +312,7 @@ impl ActiveMaterialField {
     /// ACQUIRE from a resolved formation frontier while preserving its
     /// physical composition and geometry. The formation remains the owner of
     /// the backing quantity.
-    pub fn take_formation_for_acquisition(
-        &mut self,
-        index: usize,
-    ) -> Option<PhysicalMaterial> {
+    pub fn take_formation_for_acquisition(&mut self, index: usize) -> Option<PhysicalMaterial> {
         let cell = self.cells.get_mut(index)?;
         for formation in &mut cell.formations {
             let frontier_index = formation
