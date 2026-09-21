@@ -254,8 +254,6 @@ mod tests {
         seed_initial_landscape(&mut first, 10.0, &crate::resources::default_catalog());
         seed_initial_landscape(&mut second, 10.0, &crate::resources::default_catalog());
         assert_eq!(first.total_amount(), second.total_amount());
-        for (first_cell, second_cell) in first.cells.iter().zip(second.cells.iter()) {
-            assert_eq!(first_cell.formations, second_cell.formations);
-        }
+        assert_eq!(first.formations, second.formations);
     }
 }
