@@ -95,16 +95,16 @@ mod integration_tests {
     }
 
     #[test]
-    fn adulthood_is_irreversible_after_structural_loss() {
+    fn loss_of_physical_genome_ends_organism_lifecycle() {
         let mut s = Simulation::new(32, 10.0);
         s.organisms[0].development_stage = DevelopmentStage::Adult;
         s.organisms[0].structure.units.clear();
         s.organisms[0].structure.bonds.clear();
+
         s.step();
-        assert!(matches!(
-            s.organisms[0].development_stage,
-            DevelopmentStage::Adult
-        ));
+
+        assert!(s.organisms.is_empty());
+        assert_eq!(s.decomposing_bodies.len(), 1);
     }
     #[test]
     fn storage_contains_discrete_independent_material_objects() {
