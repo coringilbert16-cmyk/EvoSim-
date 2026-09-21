@@ -112,11 +112,12 @@ impl ActiveMaterialField {
     }
 
     pub fn row_col_for_position(&self, x: f64, y: f64) -> Option<(usize, usize)> {
-        if !x.is_finite() || !y.is_finite() || x < 0.0 || y < 0.0 {
+        if !x.is_finite() || !y.is_finite() || x < 0.0 || x >= self.width_cells as f64 * self.cell_size {
             return None;
         }
+        let wrapped_y = y.rem_euclid(self.height_cells as f64 * self.cell_size);
         let col = (x / self.cell_size).floor() as usize;
-        let row = (y / self.cell_size).floor() as usize;
+        let row = (wrapped_y / self.cell_size).floor() as usize;
         if col >= self.width_cells || row >= self.height_cells {
             return None;
         }
@@ -153,29 +154,24 @@ impl ActiveMaterialField {
         }
         let min_x = (x - radius).max(0.0);
         let max_x = x + radius;
-        let min_y = (y - radius).max(0.0);
-        let max_y = y + radius;
         let min_col = (min_x / self.cell_size).floor() as usize;
         let max_col =
             ((max_x / self.cell_size).floor() as usize).min(self.width_cells.saturating_sub(1));
-        let min_row = (min_y / self.cell_size).floor() as usize;
-        let max_row =
-            ((max_y / self.cell_size).floor() as usize).min(self.height_cells.saturating_sub(1));
-        if min_col >= self.width_cells
-            || min_row >= self.height_cells
-            || min_col > max_col
-            || min_row > max_row
-        {
+        if min_col >= self.width_cells || min_col > max_col {
             return Vec::new();
         }
+
+        let field_height = self.height_cells as f64 * self.cell_size;
+        let wrapped_y = y.rem_euclid(field_height);
         let radius_squared = radius * radius;
         let mut indices = Vec::new();
-        for row in min_row..=max_row {
+        for row in 0..self.height_cells {
             for col in min_col..=max_col {
                 let index = row * self.width_cells + col;
                 let (cell_x, cell_y) = self.cell_center(index);
                 let dx = cell_x - x;
-                let dy = cell_y - y;
+                let direct_dy = (cell_y - wrapped_y).abs();
+                let dy = direct_dy.min(field_height - direct_dy);
                 if dx * dx + dy * dy <= radius_squared {
                     indices.push(index);
                 }
@@ -187,12 +183,18 @@ impl ActiveMaterialField {
     pub fn neighbor_indices(&self, index: usize) -> Vec<usize> {
         let (row, col) = self.row_col_for_index(index);
         let mut out = Vec::with_capacity(4);
-        if row > 0 {
-            out.push((row - 1) * self.width_cells + col);
-        }
-        if row + 1 < self.height_cells {
-            out.push((row + 1) * self.width_cells + col);
-        }
+        let above = if row == 0 {
+            self.height_cells.saturating_sub(1)
+        } else {
+            row - 1
+        };
+        let below = if row + 1 == self.height_cells {
+            0
+        } else {
+            row + 1
+        };
+        out.push(above * self.width_cells + col);
+        out.push(below * self.width_cells + col);
         if col > 0 {
             out.push(row * self.width_cells + (col - 1));
         }
