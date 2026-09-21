@@ -36,11 +36,20 @@ fn field_starts_empty() {
 }
 
 #[test]
-fn out_of_bounds_position_is_none() {
+fn wrapped_positions_remain_on_the_continuous_field() {
     let field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-    assert!(field.index_for_position(-1.0, 5.0).is_none());
-    assert!(field.index_for_position(5.0, 1000.0).is_none());
-    assert!(field.index_for_position(1000.0, 5.0).is_none());
+    assert_eq!(
+        field.index_for_position(-1.0, 5.0),
+        field.index_for_position(999.0, 5.0)
+    );
+    assert_eq!(
+        field.index_for_position(5.0, 1000.0),
+        field.index_for_position(5.0, 0.0)
+    );
+    assert_eq!(
+        field.index_for_position(1000.0, 5.0),
+        field.index_for_position(0.0, 5.0)
+    );
     assert!(field.index_for_position(f64::NAN, 5.0).is_none());
 }
 
