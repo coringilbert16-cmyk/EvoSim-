@@ -51,7 +51,11 @@ impl Simulation {
         let width = 1000.0;
         let height = 1000.0;
         let mut field = ActiveMaterialField::new(width, height, DEFAULT_CELL_SIZE);
-        crate::environmental_materials::seed_initial_landscape(&mut field, initial_extent, &catalog);
+        crate::environmental_materials::seed_initial_landscape(
+            &mut field,
+            initial_extent,
+            &catalog,
+        );
         let vents = vec![
             Vent {
                 x: 250.0,
