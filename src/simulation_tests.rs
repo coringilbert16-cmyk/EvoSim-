@@ -99,12 +99,10 @@ mod integration_tests {
         let mut s = Simulation::new(32, 10.0);
         s.organisms[0].development_stage = DevelopmentStage::Adult;
 
-        let cavity = crate::cavity::analyze_genome_cavity(
-            &s.organisms[0].structure,
-            &s.environment.catalog,
-        )
-        .unwrap()
-        .expect("initial organism must have a physical genome cavity");
+        let cavity =
+            crate::cavity::analyze_genome_cavity(&s.organisms[0].structure, &s.environment.catalog)
+                .unwrap()
+                .expect("initial organism must have a physical genome cavity");
         let boundary_unit = cavity
             .boundary_units
             .first()
@@ -266,14 +264,8 @@ mod integration_tests {
         s.organisms[0].structure.bonds.insert(
             0,
             Bond {
-                endpoint_a: BondEndpoint::new(
-                    id_a,
-                    ConnectionEndpoint::Corner { point_index: 0 },
-                ),
-                endpoint_b: BondEndpoint::new(
-                    id_b,
-                    ConnectionEndpoint::Corner { point_index: 0 },
-                ),
+                endpoint_a: BondEndpoint::new(id_a, ConnectionEndpoint::Corner { point_index: 0 }),
+                endpoint_b: BondEndpoint::new(id_b, ConnectionEndpoint::Corner { point_index: 0 }),
                 strength: 0.8,
                 bond_energy: 12.5,
             },
