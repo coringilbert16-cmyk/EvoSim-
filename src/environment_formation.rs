@@ -21,6 +21,52 @@ pub(crate) const PATTERN_SIZE: usize = PATTERN_SIDE * PATTERN_SIDE;
 /// Resolved formation depth is twice the world's largest realized organism extent.
 pub(crate) const FORMATION_RESOLUTION_EXTENT_MULTIPLIER: f64 = 2.0;
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct FormationBulk {
+    pub(crate) composition: Vec<(String, f64)>,
+    pub(crate) resolved_depth: f64,
+}
+
+impl FormationBulk {
+    pub(crate) fn new(composition: Vec<(String, f64)>, resolved_depth: f64) -> Option<Self> {
+        if !resolved_depth.is_finite() || resolved_depth <= 0.0 || composition.is_empty() {
+            return None;
+        }
+        if composition
+            .iter()
+            .any(|(_, amount)| !amount.is_finite() || *amount <= 0.0)
+        {
+            return None;
+        }
+        Some(Self {
+            composition,
+            resolved_depth,
+        })
+    }
+
+    pub(crate) fn total_amount(&self) -> f64 {
+        self.composition.iter().map(|(_, amount)| *amount).sum()
+    }
+
+    pub(crate) fn remove_composition(&mut self, removed: &[(String, f64)]) -> bool {
+        let mut next = self.composition.clone();
+        for (name, amount) in removed {
+            let Some((_, available)) = next.iter_mut().find(|(candidate, _)| candidate == name)
+            else {
+                return false;
+            };
+            if !amount.is_finite() || *amount <= 0.0 || *available + f64::EPSILON < *amount {
+                return false;
+            }
+            *available -= *amount;
+        }
+        next.retain(|(_, amount)| *amount > f64::EPSILON);
+        self.composition = next;
+        true
+    }
+}
+
+
 /// A deterministic local pattern that can be repeated through a continuous
 /// formation. Coordinates are pattern-local; the owning formation supplies
 /// world position and repetition.
