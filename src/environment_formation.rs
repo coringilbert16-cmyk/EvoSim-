@@ -6,6 +6,8 @@
 //! pattern can then be repeated by a formation representation without
 //! instantiating its entire bulk.
 
+use serde::{Deserialize, Serialize};
+
 use crate::combine::bond_strength;
 use crate::contact::connection_pair_candidates;
 use crate::physical_material::PhysicalMaterial;
@@ -21,7 +23,7 @@ pub(crate) const PATTERN_SIZE: usize = PATTERN_SIDE * PATTERN_SIDE;
 /// Resolved formation depth is twice the world's largest realized organism extent.
 pub(crate) const FORMATION_RESOLUTION_EXTENT_MULTIPLIER: f64 = 2.0;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct FormationBulk {
     pub(crate) composition: Vec<(String, f64)>,
     pub(crate) resolved_depth: f64,
@@ -70,7 +72,7 @@ impl FormationBulk {
 /// A deterministic local pattern that can be repeated through a continuous
 /// formation. Coordinates are pattern-local; the owning formation supplies
 /// world position and repetition.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct Formation {
     pub(crate) bulk: FormationBulk,
     pub(crate) pattern: FormationPattern,
@@ -118,7 +120,7 @@ impl Formation {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct FormationPattern {
     pub(crate) material: PhysicalMaterial,
     pub(crate) width: f64,
