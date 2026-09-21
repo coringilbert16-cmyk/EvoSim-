@@ -660,7 +660,6 @@ impl Simulation {
                 &mut self.rng,
             );
             if dead {
-                // Parent death ends reproductive support; the developing child detaches.
                 if organism.reproductive_construction.is_some() {
                     let child_id = next_organism_id.to_string();
                     if let Some(child) = crate::reproduction::finish_reproduction(
