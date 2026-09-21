@@ -10,12 +10,15 @@ use crate::combine::bond_strength;
 use crate::contact::connection_pair_candidates;
 use crate::physical_material::PhysicalMaterial;
 use crate::resources::{BaseResource, InternalBond, Material};
+use crate::state::Organism;
 use crate::structure::{Bond, BondEndpoint, OrganismStructure, Placement, StructuralUnit};
 
 /// Initial experimental pattern period. This is a representation parameter,
 /// not a biological constant or a resource property.
 pub(crate) const PATTERN_SIDE: usize = 4;
 pub(crate) const PATTERN_SIZE: usize = PATTERN_SIDE * PATTERN_SIDE;
+/// Resolved formation depth is twice the world's largest realized organism extent.
+pub(crate) const FORMATION_RESOLUTION_EXTENT_MULTIPLIER: f64 = 2.0;
 
 /// A deterministic local pattern that can be repeated through a continuous
 /// formation. Coordinates are pattern-local; the owning formation supplies
@@ -50,6 +53,33 @@ impl FormationPattern {
             internal_connections: self.material.internal_connections.clone(),
         })
     }
+}
+
+/// Returns the largest realized linear extent among the world's organisms.
+pub(crate) fn largest_organism_extent(
+    organisms: &[Organism],
+    catalog: &[BaseResource],
+) -> Option<f64> {
+    organisms
+        .iter()
+        .filter_map(|organism| {
+            crate::organism_geometry::OrganismBodyGeometry::from_structure(
+                &organism.structure,
+                catalog,
+            )
+            .map(|body| body.maximum_extent())
+        })
+        .filter(|extent| extent.is_finite() && *extent > 0.0)
+        .max_by(f64::total_cmp)
+}
+
+/// Returns the world-relative depth for individually resolved formation material.
+pub(crate) fn resolved_formation_depth(
+    organisms: &[Organism],
+    catalog: &[BaseResource],
+) -> Option<f64> {
+    largest_organism_extent(organisms, catalog)
+        .map(|extent| extent * FORMATION_RESOLUTION_EXTENT_MULTIPLIER)
 }
 
 /// Deterministically converts a local composition into a finite repeated
@@ -221,6 +251,39 @@ fn balanced_pattern_names(composition: &[&(String, f64)], total: f64) -> Vec<Str
 mod tests {
     use super::{realize_pattern, realize_repeating_pattern, PATTERN_SIZE};
     use crate::resources::default_catalog;
+
+    #[test]
+    fn largest_organism_extent_uses_realized_structure() {
+        let catalog = default_catalog();
+        let mut structure = OrganismStructure::new();
+        let mut first = StructuralUnit::from_material(
+            Material::free_base("Carbon".to_string(), 1.0),
+            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+        ).unwrap();
+        assert!(first.realize_default_geometry(&catalog));
+        structure.add_unit(first);
+        let organism = Organism {
+            id: "test".to_string(),
+            developmental_origin: crate::state::Position::default(),
+            developmental_orientation_radians: 0.0,
+            occupied_cells: Vec::new(),
+            genome: crate::genome::initial_genome(),
+            resource_sense: crate::state::ResourceSense { sensed_resources: Vec::new(), direction_x: 0.0, direction_y: 0.0, direction_strength: 0.0 },
+            memory: Vec::new(),
+            decision_history: crate::decision::DecisionHistory::default(),
+            usable_energy: 0.0,
+            stress: 0.0,
+            stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
+            stored_material: crate::material_storage::MaterialStorage::new(),
+            structure,
+            development_stage: crate::state::DevelopmentStage::Juvenile,
+            active_transformation_id: None,
+            reproductive_construction: None,
+        };
+        let extent = largest_organism_extent(&[organism], &catalog).unwrap();
+        assert!(extent > 0.0);
+        assert_eq!(resolved_formation_depth(&[organism], &catalog).unwrap(), extent * 2.0);
+    }
 
     #[test]
     fn mixed_composition_realizes_a_deterministic_pattern() {
