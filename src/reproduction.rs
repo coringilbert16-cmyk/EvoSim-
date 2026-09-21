@@ -18,7 +18,7 @@ use rand_chacha::ChaCha8Rng;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[expect(
     dead_code,
-    reason = "DeadEnd is reserved for the approved P7 terminal construction condition",
+    reason = "DeadEnd is reserved for the approved P7 terminal construction condition"
 )]
 pub(crate) enum ConstructionStatus {
     Waiting,
@@ -72,11 +72,8 @@ fn parent_child_position(
                     rotation_radians: parent_part.rotation_radians,
                 },
             };
-            if crate::material_geometry::placed_forms_overlap(
-                &parent_part_form,
-                &anchor_part,
-                0.0,
-            ) {
+            if crate::material_geometry::placed_forms_overlap(&parent_part_form, &anchor_part, 0.0)
+            {
                 return Some(candidate);
             }
         }
