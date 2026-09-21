@@ -72,10 +72,7 @@ fn stress_break_candidate_indices(organism: &Organism, environment: &Environment
     stress_break_candidates(&organism.structure.bonds, &genome_bonds)
 }
 
-fn stress_break_candidates(
-    bonds: &[crate::structure::Bond],
-    genome_bonds: &[usize],
-) -> Vec<usize> {
+fn stress_break_candidates(bonds: &[crate::structure::Bond], genome_bonds: &[usize]) -> Vec<usize> {
     let non_genome_candidates: Vec<usize> = bonds
         .iter()
         .enumerate()
