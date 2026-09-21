@@ -1,3 +1,4 @@
+#![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 //! Deterministic coarse-grained physical formation realization.
 //!
 //! A formation is not an authored molecule or terrain type. Its local
@@ -502,7 +503,7 @@ mod tests {
     fn largest_organism_extent_uses_realized_structure() {
         let catalog = default_catalog();
         let organism = crate::state::Simulation::create_initial_organism();
-        let extent = largest_organism_extent(&[organism.clone()], &catalog).unwrap();
+        let extent = largest_organism_extent(std::slice::from_ref(&organism), &catalog).unwrap();
         assert!(extent.is_finite() && extent > 0.0);
         assert_eq!(
             resolved_formation_depth(&[organism], &catalog).unwrap(),
@@ -523,6 +524,7 @@ mod tests {
         assert!(!bulk.remove_composition(&[("Nitrogen".to_string(), 1.0)]));
     }
 
+    #[test]
     fn mixed_composition_realizes_a_deterministic_pattern() {
         let catalog = default_catalog();
         let composition = vec![
