@@ -140,7 +140,10 @@ impl Formation {
     }
 
     pub(crate) fn resolve_frontier(&mut self) {
-        if !self.resolved_frontier.is_empty() || self.pattern.width <= 0.0 || self.pattern.height <= 0.0 {
+        if !self.resolved_frontier.is_empty()
+            || self.pattern.width <= 0.0
+            || self.pattern.height <= 0.0
+        {
             return;
         }
         let half_depth = self.bulk.resolved_depth * 0.5;
