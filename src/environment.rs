@@ -178,13 +178,19 @@ impl ActiveMaterialField {
 
         let world_width = self.width_cells as f64 * self.cell_size;
         let world_height = self.height_cells as f64 * self.cell_size;
+        let wrapped_x = x.rem_euclid(world_width);
+        let wrapped_y = y.rem_euclid(world_height);
         let radius_squared = radius * radius;
         let mut indices = Vec::new();
 
         for index in 0..self.cells.len() {
             let (cell_x, cell_y) = self.cell_center(index);
-            let dx = (cell_x - x).abs().min(world_width - (cell_x - x).abs());
-            let dy = (cell_y - y).abs().min(world_height - (cell_y - y).abs());
+            let dx = (cell_x - wrapped_x)
+                .abs()
+                .min(world_width - (cell_x - wrapped_x).abs());
+            let dy = (cell_y - wrapped_y)
+                .abs()
+                .min(world_height - (cell_y - wrapped_y).abs());
             if dx * dx + dy * dy <= radius_squared {
                 indices.push(index);
             }
