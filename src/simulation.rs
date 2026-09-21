@@ -207,7 +207,11 @@ impl Simulation {
     fn acquisition_context_key(field_index: usize) -> String {
         format!("target:{field_index}")
     }
-    fn action_eligibility(organism: &Organism, environment: &Environment) -> ActionEligibility {
+    fn action_eligibility(
+        organism: &Organism,
+        environment: &Environment,
+        needs: CurrentNeeds,
+    ) -> ActionEligibility {
         let can_build_from_storage =
             !organism.structure.units.is_empty() && !organism.stored_material.is_empty();
         let can_join_existing_structure = organism.structure.units.len() >= 2;
@@ -218,7 +222,14 @@ impl Simulation {
             can_combine: organism.active_transformation_id.is_none()
                 && (can_build_from_storage || can_join_existing_structure),
             can_break: organism.active_transformation_id.is_none()
-                && !organism.structure.bonds.is_empty(),
+                && !organism.structure.bonds.is_empty()
+                && (organism.reproductive_construction.is_none()
+                    || needs.survival > 0.0
+                    || needs.development > 0.0
+                    || organism
+                        .reproductive_construction
+                        .as_ref()
+                        .is_some_and(|construction| construction.needs_space)),
             can_expel: false,
         }
     }
@@ -464,7 +475,7 @@ impl Simulation {
                 }
                 let needs =
                     Self::current_needs(&organisms[index], environment, decision_parameters);
-                let eligibility = Self::action_eligibility(&organisms[index], environment);
+                let eligibility = Self::action_eligibility(&organisms[index], environment, needs);
                 let context = DecisionContext { needs, eligibility };
                 let candidates =
                     Self::decision_candidates(&organisms[index], environment, needs, eligibility);
