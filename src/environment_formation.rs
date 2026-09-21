@@ -71,6 +71,39 @@ impl FormationBulk {
 /// formation. Coordinates are pattern-local; the owning formation supplies
 /// world position and repetition.
 #[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Formation {
+    pub(crate) bulk: FormationBulk,
+    pub(crate) pattern: FormationPattern,
+}
+
+impl Formation {
+    pub(crate) fn new(
+        composition: Vec<(String, f64)>,
+        resolved_depth: f64,
+        catalog: &[BaseResource],
+    ) -> Option<Self> {
+        let bulk = FormationBulk::new(composition, resolved_depth)?;
+        let pattern = realize_repeating_pattern(&bulk.composition, catalog)?;
+        Some(Self { bulk, pattern })
+    }
+
+    pub(crate) fn total_amount(&self) -> f64 {
+        self.bulk.total_amount()
+    }
+
+    pub(crate) fn resolved_depth(&self) -> f64 {
+        self.bulk.resolved_depth
+    }
+
+    /// Removes material from the formation's backing quantity. The caller is
+    /// responsible for removing the corresponding already-resolved physical
+    /// material through the normal physical interaction path.
+    pub(crate) fn consume(&mut self, removed: &[(String, f64)]) -> bool {
+        self.bulk.remove_composition(removed)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct FormationPattern {
     pub(crate) material: PhysicalMaterial,
     pub(crate) width: f64,
@@ -304,8 +337,8 @@ fn balanced_pattern_names(composition: &[&(String, f64)], total: f64) -> Vec<Str
 mod tests {
     use super::{
         largest_organism_extent, realize_pattern, realize_repeating_pattern,
-        resolved_formation_depth, FormationBulk, FORMATION_RESOLUTION_EXTENT_MULTIPLIER,
-        PATTERN_SIZE,
+        resolved_formation_depth, Formation, FormationBulk,
+        FORMATION_RESOLUTION_EXTENT_MULTIPLIER, PATTERN_SIZE,
     };
     use crate::resources::default_catalog;
 
