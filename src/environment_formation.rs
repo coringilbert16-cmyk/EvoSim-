@@ -118,6 +118,29 @@ impl Formation {
             .map(|material| material.material.total_amount())
             .sum()
     }
+
+    pub(crate) fn resolve_pattern_instance(
+        &self,
+        pattern_x: i64,
+        pattern_y: i64,
+    ) -> Option<PhysicalMaterial> {
+        self.pattern.repeated_local_placement(pattern_x, pattern_y)
+    }
+
+    pub(crate) fn add_resolved_instance(&mut self, material: PhysicalMaterial) {
+        self.resolved_frontier.push(material);
+    }
+
+    pub(crate) fn remove_resolved_instance(
+        &mut self,
+        index: usize,
+    ) -> Option<PhysicalMaterial> {
+        (index < self.resolved_frontier.len()).then(|| self.resolved_frontier.remove(index))
+    }
+
+    pub(crate) fn resolved_frontier(&self) -> &[PhysicalMaterial] {
+        &self.resolved_frontier
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
