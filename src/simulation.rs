@@ -191,14 +191,25 @@ impl Simulation {
             return Vec::new();
         };
         let cell = &environment.field.cells[field_index];
-        if cell
-            .physical_materials
-            .iter()
-            .any(|material| material.is_realized() && !material.material.is_empty())
-            || cell.materials.iter().any(|material| {
-                !material.is_empty() && material.is_valid() && !material.has_internal_structure()
+        let body_geometry = crate::organism_geometry::OrganismBodyGeometry::from_structure(
+            &organism.structure,
+            &environment.catalog,
+        );
+        let has_contained_physical_material = body_geometry.as_ref().is_some_and(|body| {
+            cell.physical_materials.iter().any(|material| {
+                material.is_realized()
+                    && !material.material.is_empty()
+                    && material
+                        .placements
+                        .as_ref()
+                        .and_then(|placements| placements.first())
+                        .is_some_and(|placement| body.contains_point(placement.x, placement.y))
             })
-        {
+        });
+        let has_logical_material = cell.materials.iter().any(|material| {
+            !material.is_empty() && material.is_valid() && !material.has_internal_structure()
+        });
+        if has_contained_physical_material || has_logical_material {
             vec![field_index]
         } else {
             Vec::new()
