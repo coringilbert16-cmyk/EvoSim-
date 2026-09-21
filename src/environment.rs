@@ -25,6 +25,10 @@ pub struct FieldCell {
     /// internal bonds, and relative realization travel together during ACQUIRE.
     #[serde(default)]
     pub physical_materials: Vec<PhysicalMaterial>,
+    /// Continuous environmental formations indexed by this cell. The formation
+    /// owns its resolved frontier; the cell is only a spatial index.
+    #[serde(default)]
+    pub formations: Vec<Formation>,
 }
 
 impl FieldCell {
