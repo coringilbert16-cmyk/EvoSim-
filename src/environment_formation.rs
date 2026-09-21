@@ -1,16 +1,20 @@
 //! Deterministic coarse-grained physical formation realization.
 //!
-//! A formation is not an authored molecule or terrain type.  Its local
+//! A formation is not an authored molecule or terrain type. Its local
 //! composition is realized as a small physical pattern using the existing
-//! resource geometry and contact rules.  The pattern can then be repeated by
-//! a formation representation without instantiating its entire bulk.
+//! resource geometry, placement, contact, and bond-validation rules. The
+//! pattern can then be repeated by a formation representation without
+//! instantiating its entire bulk.
 
+use crate::combine::bond_strength;
 use crate::contact::connection_pair_candidates;
 use crate::physical_material::PhysicalMaterial;
 use crate::resources::{BaseResource, InternalBond, Material};
-use crate::structure::{OrganismStructure, Placement, StructuralUnit};
+use crate::structure::{
+    Bond, BondEndpoint, ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit,
+};
 
-/// Initial experimental pattern period.  This is a representation parameter,
+/// Initial experimental pattern period. This is a representation parameter,
 /// not a biological constant or a resource property.
 pub(crate) const PATTERN_SIDE: usize = 4;
 pub(crate) const PATTERN_SIZE: usize = PATTERN_SIDE * PATTERN_SIDE;
@@ -36,7 +40,7 @@ impl FormationPattern {
         let dy = pattern_y as f64 * self.height;
         let placements = placements
             .iter()
-            .map(|placement| crate::structure::Placement {
+            .map(|placement| Placement {
                 x: placement.x + dx,
                 y: placement.y + dy,
                 rotation_radians: placement.rotation_radians,
@@ -51,7 +55,7 @@ impl FormationPattern {
 }
 
 /// Deterministically converts a local composition into a finite repeated
-/// physical pattern.  The composition is expressed as resource quantities;
+/// physical pattern. The composition is expressed as resource quantities;
 /// the pattern contains one resolved unit per slot.
 pub(crate) fn realize_pattern(
     composition: &[(String, f64)],
@@ -72,47 +76,85 @@ pub(crate) fn realize_pattern(
 
     let names = balanced_pattern_names(&composition, total);
     let mut structure = OrganismStructure::new();
-    let origin = -(PATTERN_SIDE as f64 - 1.0) * PATTERN_SPACING / 2.0;
+    let mut bonds = Vec::with_capacity(PATTERN_SIZE.saturating_sub(1));
 
     for (index, name) in names.iter().enumerate() {
-        let row = index / PATTERN_SIDE;
-        let col = index % PATTERN_SIDE;
-        let placement = Placement {
-            x: origin + col as f64 * PATTERN_SPACING,
-            y: origin + row as f64 * PATTERN_SPACING,
-            rotation_radians: 0.0,
+        let resource = catalog.iter().find(|resource| resource.name == *name)?;
+        let placement = if index == 0 {
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }
+        } else {
+            let target = index - 1;
+            let anchor = structure.units[target].placement;
+            let mut selected = None;
+
+            for candidate_placement in crate::construction_runtime::candidate_placements(
+                &structure,
+                resource,
+                anchor,
+                &[target],
+                catalog,
+            ) {
+                let mut candidate_structure = structure.clone();
+                let mut unit = StructuralUnit::from_material(
+                    Material::free_base(name.clone(), 1.0),
+                    candidate_placement,
+                )?;
+                if !unit.realize_default_geometry(catalog) {
+                    continue;
+                }
+                let candidate_index = candidate_structure.add_unit(unit);
+                let Some(candidate) = connection_pair_candidates(
+                    &candidate_structure,
+                    target,
+                    candidate_index,
+                    catalog,
+                )
+                .into_iter()
+                .find(|candidate| candidate.available_a && candidate.available_b)
+                else {
+                    continue;
+                };
+
+                let id_a = candidate_structure.physical_id(target)?;
+                let id_b = candidate_structure.physical_id(candidate_index)?;
+                let properties_a = candidate_structure.units[target].properties(catalog)?;
+                let properties_b = candidate_structure.units[candidate_index].properties(catalog)?;
+                let bond = Bond {
+                    endpoint_a: BondEndpoint::new(id_a, candidate.endpoint_a),
+                    endpoint_b: BondEndpoint::new(id_b, candidate.endpoint_b),
+                    strength: bond_strength(properties_a, properties_b),
+                    bond_energy: 0.0,
+                };
+                if !candidate_structure.is_valid_bond(&bond, catalog) {
+                    continue;
+                }
+
+                let endpoint_a = candidate.endpoint_a;
+                let endpoint_b = candidate.endpoint_b;
+                candidate_structure.push_bond_unchecked(bond);
+                selected = Some((candidate_structure, InternalBond {
+                    part_a: target,
+                    part_b: candidate_index,
+                }, endpoint_a, endpoint_b));
+                break;
+            }
+
+            let (candidate_structure, internal_bond, _, _) = selected?;
+            structure = candidate_structure;
+            bonds.push(internal_bond);
+            continue;
         };
+
         let mut unit =
             StructuralUnit::from_material(Material::free_base(name.clone(), 1.0), placement)?;
         if !unit.realize_default_geometry(catalog) {
             return None;
         }
         structure.add_unit(unit);
-    }
-
-    let mut bonds = Vec::new();
-    for row in 0..PATTERN_SIDE {
-        for col in 0..PATTERN_SIDE {
-            let a = row * PATTERN_SIDE + col;
-            if col + 1 < PATTERN_SIDE {
-                add_first_contact_bond(
-                    &structure,
-                    a,
-                    a + 1,
-                    catalog,
-                    &mut bonds,
-                )?;
-            }
-            if row + 1 < PATTERN_SIDE {
-                add_first_contact_bond(
-                    &structure,
-                    a,
-                    a + PATTERN_SIDE,
-                    catalog,
-                    &mut bonds,
-                )?;
-            }
-        }
     }
 
     let parts = names
@@ -124,8 +166,7 @@ pub(crate) fn realize_pattern(
         internal_bonds: bonds,
     };
     let placements = structure.units.iter().map(|unit| unit.placement).collect();
-    let physical = PhysicalMaterial::realized(material, placements, catalog)?;
-    Some(physical)
+    PhysicalMaterial::realized(material, placements, catalog)
 }
 
 pub(crate) fn realize_repeating_pattern(
@@ -138,10 +179,8 @@ pub(crate) fn realize_repeating_pattern(
     let max_x = placements.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max);
     let min_y = placements.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
     let max_y = placements.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
-    let pitch_x = (max_x - min_x) / PATTERN_SIDE.saturating_sub(1).max(1) as f64;
-    let pitch_y = (max_y - min_y) / PATTERN_SIDE.saturating_sub(1).max(1) as f64;
-    let width = (max_x - min_x + pitch_x).max(f64::EPSILON);
-    let height = (max_y - min_y + pitch_y).max(f64::EPSILON);
+    let width = (max_x - min_x).max(f64::EPSILON);
+    let height = (max_y - min_y).max(f64::EPSILON);
     Some(FormationPattern {
         material,
         width,
@@ -150,7 +189,7 @@ pub(crate) fn realize_repeating_pattern(
 }
 
 fn balanced_pattern_names(
-    composition: &[& (String, f64)],
+    composition: &[&(String, f64)],
     total: f64,
 ) -> Vec<String> {
     let mut assigned = vec![0.0; composition.len()];
@@ -174,29 +213,6 @@ fn balanced_pattern_names(
     }
 
     names
-}
-
-fn add_first_contact_bond(
-    structure: &OrganismStructure,
-    a: usize,
-    b: usize,
-    catalog: &[BaseResource],
-    bonds: &mut Vec<InternalBond>,
-) -> Option<()> {
-    let candidate = connection_pair_candidates(structure, a, b, catalog)
-        .into_iter()
-        .find(|candidate| {
-            candidate.available_a
-                && candidate.available_b
-                && candidate.distance <= CONNECTION_DISTANCE
-        })?;
-
-    let _ = candidate;
-    bonds.push(InternalBond {
-        part_a: a,
-        part_b: b,
-    });
-    Some(())
 }
 
 #[cfg(test)]
