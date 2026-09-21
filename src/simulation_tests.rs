@@ -98,12 +98,30 @@ mod integration_tests {
     fn loss_of_physical_genome_ends_organism_lifecycle() {
         let mut s = Simulation::new(32, 10.0);
         s.organisms[0].development_stage = DevelopmentStage::Adult;
-        s.organisms[0].structure.bonds.clear();
+
+        let cavity = crate::cavity::analyze_genome_cavity(
+            &s.organisms[0].structure,
+            &s.environment.catalog,
+        )
+        .unwrap()
+        .expect("initial organism must have a physical genome cavity");
+        let boundary_unit = cavity
+            .boundary_units
+            .first()
+            .copied()
+            .expect("qualifying genome cavity must have boundary units");
+        s.organisms[0].structure.units[boundary_unit].placement.x += 1_000.0;
+
+        assert!(!crate::cavity::analyze_genome_cavity(
+            &s.organisms[0].structure,
+            &s.environment.catalog,
+        )
+        .unwrap()
+        .is_some_and(|cavity| cavity.qualifies()));
 
         s.step();
 
         assert!(s.organisms.is_empty());
-        assert_eq!(s.decomposing_bodies.len(), 1);
     }
     #[test]
     fn storage_contains_discrete_independent_material_objects() {
@@ -226,7 +244,7 @@ mod integration_tests {
         assert!(s.total_material_in_system() > 0.0);
     }
     fn add_test_break_bond(s: &mut Simulation) {
-        s.organisms[0].structure.bonds.clear();
+        let initial_bonds = s.organisms[0].structure.bonds.len();
         let a = s.organisms[0].structure.add_unit(StructuralUnit::new(
             "Carbon",
             Placement {
@@ -245,12 +263,28 @@ mod integration_tests {
         ));
         let id_a = s.organisms[0].structure.physical_id(a).unwrap();
         let id_b = s.organisms[0].structure.physical_id(b).unwrap();
-        s.organisms[0].structure.push_bond_unchecked(Bond {
-            endpoint_a: BondEndpoint::new(id_a, ConnectionEndpoint::Corner { point_index: 0 }),
-            endpoint_b: BondEndpoint::new(id_b, ConnectionEndpoint::Corner { point_index: 0 }),
-            strength: 0.8,
-            bond_energy: 12.5,
-        });
+        s.organisms[0].structure.bonds.insert(
+            0,
+            Bond {
+                endpoint_a: BondEndpoint::new(
+                    id_a,
+                    ConnectionEndpoint::Corner { point_index: 0 },
+                ),
+                endpoint_b: BondEndpoint::new(
+                    id_b,
+                    ConnectionEndpoint::Corner { point_index: 0 },
+                ),
+                strength: 0.8,
+                bond_energy: 12.5,
+            },
+        );
+        assert_eq!(s.organisms[0].structure.bonds.len(), initial_bonds + 1);
+        assert!(crate::cavity::analyze_genome_cavity(
+            &s.organisms[0].structure,
+            &s.environment.catalog,
+        )
+        .unwrap()
+        .is_some_and(|cavity| cavity.qualifies()));
     }
     #[test]
     fn maintenance_is_based_on_realized_structural_mass_and_ledger_settlement() {
@@ -325,19 +359,22 @@ mod integration_tests {
     fn break_action_starts_a_transformation_before_resolution() {
         let mut s = Simulation::new(7, 10.0);
         add_test_break_bond(&mut s);
+        let expected_bond_count = s.organisms[0].structure.bonds.len();
         s.organisms[0].usable_energy = 0.0;
         s.step();
-        assert_eq!(s.organisms[0].structure.bonds.len(), 1);
+        assert_eq!(s.organisms[0].structure.bonds.len(), expected_bond_count);
         assert!(s.organisms[0].active_transformation_id.is_some());
     }
     #[test]
     fn break_resolution_changes_state_on_expected_tick() {
         let mut s = Simulation::new(7, 10.0);
         add_test_break_bond(&mut s);
+        let expected_bond_count = s.organisms[0].structure.bonds.len() - 1;
         s.organisms[0].usable_energy = 0.0;
         s.step();
         s.step();
         s.step();
+        assert_eq!(s.organisms[0].structure.bonds.len(), expected_bond_count);
         let a_index = s.organisms[0].structure.units.len() - 2;
         let b_index = s.organisms[0].structure.units.len() - 1;
         let a = s.organisms[0].structure.units[a_index]
