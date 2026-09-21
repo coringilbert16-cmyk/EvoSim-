@@ -295,21 +295,21 @@ impl ActiveMaterialField {
         let world_height = self.height_cells as f64 * self.cell_size;
         for formation in &mut self.formations {
             let frontier_index = formation.resolved_frontier().iter().position(|material| {
-                    material.is_realized()
-                        && !material.material.is_empty()
-                        && material
-                            .placements
-                            .as_ref()
-                            .and_then(|placements| placements.first())
-                            .and_then(|placement| {
-                                let wrapped_x = placement.x.rem_euclid(world_width);
-                                let wrapped_y = placement.y.rem_euclid(world_height);
-                                let col = (wrapped_x / self.cell_size).floor() as usize;
-                                let row = (wrapped_y / self.cell_size).floor() as usize;
-                                (row * self.width_cells + col).into()
-                            })
-                            == Some(index)
-                })?;
+                material.is_realized()
+                    && !material.material.is_empty()
+                    && material
+                        .placements
+                        .as_ref()
+                        .and_then(|placements| placements.first())
+                        .and_then(|placement| {
+                            let wrapped_x = placement.x.rem_euclid(world_width);
+                            let wrapped_y = placement.y.rem_euclid(world_height);
+                            let col = (wrapped_x / self.cell_size).floor() as usize;
+                            let row = (wrapped_y / self.cell_size).floor() as usize;
+                            (row * self.width_cells + col).into()
+                        })
+                    == Some(index)
+            })?;
             let material = formation.remove_resolved_instance(frontier_index)?;
             let removed = material.material.parts.clone();
             if !formation.consume(&removed) {
