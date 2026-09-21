@@ -518,8 +518,13 @@ mod tests {
             .filter_map(|material| material.placements.as_ref()?.first().copied())
             .collect::<Vec<_>>();
         assert!(!positions.is_empty());
-        assert!(positions.iter().any(|p| p.x.abs() < formation.pattern.width));
-        assert!(positions.iter().any(|p| p.y.abs() < formation.pattern.height));
+        assert!(positions.iter().any(|p| {
+            p.x.abs() >= formation.pattern.width && p.y.abs() < formation.pattern.height
+        }));
+        assert!(!positions.iter().any(|p| {
+            p.x.abs() >= formation.pattern.width * 5.0
+                && p.y.abs() >= formation.pattern.height * 5.0
+        }));
     }
 
     #[test]
