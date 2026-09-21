@@ -80,6 +80,7 @@ pub(crate) struct Formation {
     /// This is a frontier representation, not additional material.
     #[allow(dead_code)]
     pub(crate) resolved_frontier: Vec<PhysicalMaterial>,
+    pub(crate) origin: (f64, f64),
 }
 
 impl Formation {
@@ -94,6 +95,7 @@ impl Formation {
             bulk,
             pattern,
             resolved_frontier: Vec::new(),
+            origin: (0.0, 0.0),
         })
     }
 
@@ -119,12 +121,38 @@ impl Formation {
             .sum()
     }
 
+    pub(crate) fn set_origin(&mut self, origin: (f64, f64)) {
+        self.origin = origin;
+    }
+
     pub(crate) fn resolve_pattern_instance(
         &self,
         pattern_x: i64,
         pattern_y: i64,
     ) -> Option<PhysicalMaterial> {
-        self.pattern.repeated_local_placement(pattern_x, pattern_y)
+        let mut material = self.pattern.repeated_local_placement(pattern_x, pattern_y)?;
+        let placements = material.placements.as_mut()?;
+        for placement in placements {
+            placement.x += self.origin.0;
+            placement.y += self.origin.1;
+        }
+        Some(material)
+    }
+
+    pub(crate) fn resolve_frontier(&mut self) {
+        if !self.resolved_frontier.is_empty() || self.pattern.width <= 0.0 || self.pattern.height <= 0.0 {
+            return;
+        }
+        let half_depth = self.bulk.resolved_depth * 0.5;
+        let span_x = (half_depth / self.pattern.width).ceil() as i64;
+        let span_y = (half_depth / self.pattern.height).ceil() as i64;
+        for pattern_y in -span_y..=span_y {
+            for pattern_x in -span_x..=span_x {
+                if let Some(material) = self.resolve_pattern_instance(pattern_x, pattern_y) {
+                    self.resolved_frontier.push(material);
+                }
+            }
+        }
     }
 
     pub(crate) fn add_resolved_instance(&mut self, material: PhysicalMaterial) {
