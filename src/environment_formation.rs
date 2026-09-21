@@ -10,9 +10,7 @@ use crate::combine::bond_strength;
 use crate::contact::connection_pair_candidates;
 use crate::physical_material::PhysicalMaterial;
 use crate::resources::{BaseResource, InternalBond, Material};
-use crate::structure::{
-    Bond, BondEndpoint, ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit,
-};
+use crate::structure::{Bond, BondEndpoint, OrganismStructure, Placement, StructuralUnit};
 
 /// Initial experimental pattern period. This is a representation parameter,
 /// not a biological constant or a resource property.
@@ -133,17 +131,18 @@ pub(crate) fn realize_pattern(
                     continue;
                 }
 
-                let endpoint_a = candidate.endpoint_a;
-                let endpoint_b = candidate.endpoint_b;
                 candidate_structure.push_bond_unchecked(bond);
-                selected = Some((candidate_structure, InternalBond {
-                    part_a: target,
-                    part_b: candidate_index,
-                }, endpoint_a, endpoint_b));
+                selected = Some((
+                    candidate_structure,
+                    InternalBond {
+                        part_a: target,
+                        part_b: candidate_index,
+                    },
+                ));
                 break;
             }
 
-            let (candidate_structure, internal_bond, _, _) = selected?;
+            let (candidate_structure, internal_bond) = selected?;
             structure = candidate_structure;
             bonds.push(internal_bond);
             continue;
