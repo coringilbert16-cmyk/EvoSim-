@@ -305,6 +305,30 @@ impl ActiveMaterialField {
         Some(taken)
     }
 
+    /// ACQUIRE from a resolved formation frontier while preserving its
+    /// physical composition and geometry. The formation remains the owner of
+    /// the backing quantity.
+    pub fn take_formation_for_acquisition(
+        &mut self,
+        index: usize,
+    ) -> Option<PhysicalMaterial> {
+        let cell = self.cells.get_mut(index)?;
+        for formation in &mut cell.formations {
+            let frontier_index = formation
+                .resolved_frontier()
+                .iter()
+                .position(|material| material.is_realized() && !material.material.is_empty())?;
+            let material = formation.remove_resolved_instance(frontier_index)?;
+            let removed = material.material.parts.clone();
+            if !formation.consume(&removed) {
+                formation.add_resolved_instance(material.clone());
+                return None;
+            }
+            return Some(material);
+        }
+        None
+    }
+
     /// ACQUIRE a physically existing material without reducing it to a
     /// composition-only value. This is the organism-facing physical transfer.
     pub fn take_physical_for_acquisition(&mut self, index: usize) -> Option<PhysicalMaterial> {
