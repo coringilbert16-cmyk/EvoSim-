@@ -2,9 +2,9 @@
 set -euo pipefail
 
 # GitHub's file/code views can truncate large source files. Keep source files
-# below the review-safe threshold so future changes remain inspectable as a
-# complete unit. This is an architecture guard, not a runtime limit.
-MAX_BYTES=30000
+# near the review-safe threshold so future changes remain easier to inspect as a
+# complete unit. This is a review guideline, not an architecture or runtime limit.
+MAX_BYTES=30000 # Suggested review threshold
 
 status=0
 warned=0
