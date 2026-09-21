@@ -25,10 +25,6 @@ pub struct FieldCell {
     /// internal bonds, and relative realization travel together during ACQUIRE.
     #[serde(default)]
     pub physical_materials: Vec<PhysicalMaterial>,
-    /// Continuous environmental formations indexed by this cell. The formation
-    /// owns its resolved frontier; the cell is only a spatial index.
-    #[serde(default)]
-    pub formations: Vec<Formation>,
 }
 
 impl FieldCell {
@@ -36,7 +32,6 @@ impl FieldCell {
         Self {
             materials: Vec::new(),
             physical_materials: Vec::new(),
-            formations: Vec::new(),
         }
     }
 
@@ -45,11 +40,7 @@ impl FieldCell {
             .iter()
             .map(Material::total_amount)
             .sum::<f64>()
-            + self
-                .formations
-                .iter()
-                .map(Formation::total_amount)
-                .sum::<f64>()
+
             + self
                 .physical_materials
                 .iter()
@@ -61,15 +52,6 @@ impl FieldCell {
         let mut totals = Vec::new();
         for material in &self.materials {
             for (name, amount) in &material.parts {
-                if let Some(existing) = totals.iter_mut().find(|(n, _)| n == name) {
-                    existing.1 += amount;
-                } else {
-                    totals.push((name.clone(), *amount));
-                }
-            }
-        }
-        for formation in &self.formations {
-            for (name, amount) in &formation.bulk.composition {
                 if let Some(existing) = totals.iter_mut().find(|(n, _)| n == name) {
                     existing.1 += amount;
                 } else {
@@ -96,6 +78,10 @@ pub struct ActiveMaterialField {
     pub width_cells: usize,
     pub height_cells: usize,
     pub cells: Vec<FieldCell>,
+    /// Continuous environmental formations. Field cells index space; formations
+    /// own their bulk and resolved physical frontier across that space.
+    #[serde(default)]
+    pub(crate) formations: Vec<Formation>,
 }
 
 pub(crate) enum FieldDeposit {
@@ -128,6 +114,7 @@ impl ActiveMaterialField {
             width_cells,
             height_cells,
             cells,
+            formations: Vec::new(),
         }
     }
 
@@ -304,8 +291,8 @@ impl ActiveMaterialField {
     /// physical composition and geometry. The formation remains the owner of
     /// the backing quantity.
     pub fn take_formation_for_acquisition(&mut self, index: usize) -> Option<PhysicalMaterial> {
-        let cell = self.cells.get_mut(index)?;
-        for formation in &mut cell.formations {
+        let _cell = self.cells.get(index)?;
+        for formation in &mut self.formations {
             let frontier_index = formation
                 .resolved_frontier()
                 .iter()
@@ -409,11 +396,25 @@ impl ActiveMaterialField {
                 }
             }
         }
+        for formation in &self.formations {
+            for (name, amount) in &formation.bulk.composition {
+                if let Some(existing) = totals.iter_mut().find(|(n, _)| n == name) {
+                    existing.1 += amount;
+                } else {
+                    totals.push((name.clone(), *amount));
+                }
+            }
+        }
         totals
     }
 
     pub fn total_amount(&self) -> f64 {
-        self.cells.iter().map(FieldCell::total_amount).sum()
+        self.cells.iter().map(FieldCell::total_amount).sum::<f64>()
+            + self
+                .formations
+                .iter()
+                .map(Formation::total_amount)
+                .sum::<f64>()
     }
 }
 
