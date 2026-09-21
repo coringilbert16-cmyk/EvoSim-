@@ -5,7 +5,7 @@
 //! bounds and placed views.
 
 use crate::resources::{BaseResource, Form};
-use crate::structure::{OrganismStructure, Placement};
+use crate::structure::OrganismStructure;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlacedForm {
