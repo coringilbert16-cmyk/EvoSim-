@@ -175,36 +175,21 @@ impl ActiveMaterialField {
         {
             return Vec::new();
         }
-        let min_x = (x - radius).max(0.0);
-        let max_x = x + radius;
-        let min_y = (y - radius).max(0.0);
-        let max_y = y + radius;
-        let min_col = (min_x / self.cell_size).floor() as usize;
-        let max_col =
-            ((max_x / self.cell_size).floor() as usize).min(self.width_cells.saturating_sub(1));
-        let min_row = (min_y / self.cell_size).floor() as usize;
-        let max_row =
-            ((max_y / self.cell_size).floor() as usize).min(self.height_cells.saturating_sub(1));
-        if min_col >= self.width_cells
-            || min_row >= self.height_cells
-            || min_col > max_col
-            || min_row > max_row
-        {
-            return Vec::new();
-        }
+
+        let world_width = self.width_cells as f64 * self.cell_size;
+        let world_height = self.height_cells as f64 * self.cell_size;
         let radius_squared = radius * radius;
         let mut indices = Vec::new();
-        for row in min_row..=max_row {
-            for col in min_col..=max_col {
-                let index = row * self.width_cells + col;
-                let (cell_x, cell_y) = self.cell_center(index);
-                let dx = cell_x - x;
-                let dy = cell_y - y;
-                if dx * dx + dy * dy <= radius_squared {
-                    indices.push(index);
-                }
+
+        for index in 0..self.cells.len() {
+            let (cell_x, cell_y) = self.cell_center(index);
+            let dx = (cell_x - x).abs().min(world_width - (cell_x - x).abs());
+            let dy = (cell_y - y).abs().min(world_height - (cell_y - y).abs());
+            if dx * dx + dy * dy <= radius_squared {
+                indices.push(index);
             }
         }
+
         indices
     }
 
