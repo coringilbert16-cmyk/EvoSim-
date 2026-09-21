@@ -82,6 +82,12 @@ impl OrganismBodyGeometry {
     }
 
     /// Tests a point against the realized constituent geometry.
+    /// Returns the diagonal extent of the realized organism bounds.
+    /// Callers choose the axis-specific extent when a world-space diameter is required.
+    pub fn extent(&self) -> (f64, f64) {
+        (self.max_x - self.min_x, self.max_y - self.min_y)
+    }
+
     pub fn contains_point(&self, x: f64, y: f64) -> bool {
         self.parts.iter().any(|part| {
             form_contains_point(
