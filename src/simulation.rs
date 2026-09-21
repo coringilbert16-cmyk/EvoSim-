@@ -2,6 +2,9 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashSet;
 
+#[cfg(test)]
+mod simulation_material_tests;
+
 use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
 use crate::decision_runtime::{select_action, ActionCandidate, DecisionContext};
 use crate::energy_ledger::EnergyLedgerAuthority;
@@ -82,10 +85,6 @@ impl Simulation {
             realize_initial(&seed_baseline, &catalog)
                 .expect("confirmed original seed must be physically realizable");
 
-        // Blueprint coordinates are developmental-local. The organism's
-        // occupied cell is its world-space anchor, so the realized physical
-        // structure must be translated to that anchor before entering the
-        // simulation.
         let anchor = Position { x: 500.0, y: 500.0 };
         for unit in &mut structure.units {
             unit.placement.x += anchor.x;
@@ -208,7 +207,11 @@ impl Simulation {
     fn acquisition_context_key(field_index: usize) -> String {
         format!("target:{field_index}")
     }
-    fn action_eligibility(organism: &Organism, environment: &Environment) -> ActionEligibility {
+    fn action_eligibility(
+        organism: &Organism,
+        environment: &Environment,
+        needs: CurrentNeeds,
+    ) -> ActionEligibility {
         let can_build_from_storage =
             !organism.structure.units.is_empty() && !organism.stored_material.is_empty();
         let can_join_existing_structure = organism.structure.units.len() >= 2;
@@ -219,7 +222,14 @@ impl Simulation {
             can_combine: organism.active_transformation_id.is_none()
                 && (can_build_from_storage || can_join_existing_structure),
             can_break: organism.active_transformation_id.is_none()
-                && !organism.structure.bonds.is_empty(),
+                && !organism.structure.bonds.is_empty()
+                && (organism.reproductive_construction.is_none()
+                    || needs.survival > 0.0
+                    || needs.development > 0.0
+                    || organism
+                        .reproductive_construction
+                        .as_ref()
+                        .is_some_and(|construction| construction.needs_space)),
             can_expel: false,
         }
     }
@@ -437,8 +447,17 @@ impl Simulation {
             organism.apply_maintenance(&environment_snapshot.catalog, &mut self.energy_ledger);
             Self::update_resource_perception(organism, &environment_snapshot);
             Self::update_memory_from_sources(organism, &environment_snapshot);
+            if matches!(organism.development_stage, DevelopmentStage::Adult)
+                && organism.reproductive_construction.is_none()
+            {
+                let _ = crate::reproduction::begin_reproduction(
+                    organism,
+                    &mut self.rng,
+                    &environment_snapshot.catalog,
+                    &mut self.energy_ledger,
+                );
+            }
         }
-        let mut reproduction_requests = Vec::new();
         {
             let (organisms, environment) = (&mut self.organisms, &mut self.environment);
             let mut compatibility_cache = crate::contact::ConnectionCompatibilityCache::new();
@@ -456,7 +475,7 @@ impl Simulation {
                 }
                 let needs =
                     Self::current_needs(&organisms[index], environment, decision_parameters);
-                let eligibility = Self::action_eligibility(&organisms[index], environment);
+                let eligibility = Self::action_eligibility(&organisms[index], environment, needs);
                 let context = DecisionContext { needs, eligibility };
                 let candidates =
                     Self::decision_candidates(&organisms[index], environment, needs, eligibility);
@@ -543,9 +562,6 @@ impl Simulation {
                                 crate::decision::OutcomeKind::Harmful
                             },
                         );
-                        if matches!(organisms[index].development_stage, DevelopmentStage::Adult) {
-                            reproduction_requests.push(organisms[index].id.clone());
-                        }
                     }
                     ActionKind::Break => {
                         if let Some(transformation) = Self::try_start_transformation(
@@ -585,45 +601,46 @@ impl Simulation {
                 }
             }
         }
-        let catalog = self.environment.catalog.clone();
-        for id in reproduction_requests {
-            if let Some(organism) = self.organisms.iter_mut().find(|o| o.id == id) {
-                let _ = crate::reproduction::begin_reproduction(
-                    organism,
-                    &mut self.rng,
-                    &catalog,
-                    &mut self.energy_ledger,
-                );
-            }
-        }
         let mut offspring = Vec::new();
         let mut next_organism_id = self.next_organism_id;
         for organism in &mut self.organisms {
             if organism.reproductive_construction.is_some() {
-                if let Some(construction) = organism.reproductive_construction.as_mut() {
-                    if let Some(stress) = crate::reproduction::advance_construction(
+                let Some(parent_body) =
+                    crate::reproduction::parent_body_geometry(organism, &self.environment.catalog)
+                else {
+                    continue;
+                };
+                let (status, stress) = {
+                    let construction = organism
+                        .reproductive_construction
+                        .as_mut()
+                        .expect("reproductive construction exists");
+                    crate::reproduction::advance_construction(
+                        &organism.structure,
                         &mut organism.stored_material,
                         construction,
-                        &catalog,
+                        &self.environment,
                         &mut self.energy_ledger,
                         &mut organism.usable_energy,
-                    ) {
-                        organism.add_transaction_stress(stress);
-                    }
+                        &mut self.rng,
+                        &parent_body,
+                    )
+                };
+                if let Some(stress) = stress {
+                    organism.add_transaction_stress(stress);
                 }
-                if organism
-                    .reproductive_construction
-                    .as_ref()
-                    .map(|construction| {
-                        construction.realized_elements.len() == construction.target_elements.len()
-                    })
-                    .unwrap_or(false)
-                {
+                if matches!(
+                    status,
+                    crate::reproduction::ConstructionStatus::Ready
+                        | crate::reproduction::ConstructionStatus::Detached
+                        | crate::reproduction::ConstructionStatus::Dead
+                        | crate::reproduction::ConstructionStatus::DeadEnd
+                ) {
                     let child_id = next_organism_id.to_string();
                     if let Some(child) = crate::reproduction::finish_reproduction(
                         organism,
                         child_id,
-                        &catalog,
+                        &self.environment.catalog,
                         &mut self.energy_ledger,
                     ) {
                         next_organism_id += 1;
@@ -643,6 +660,18 @@ impl Simulation {
                 &mut self.rng,
             );
             if dead {
+                if organism.reproductive_construction.is_some() {
+                    let child_id = next_organism_id.to_string();
+                    if let Some(child) = crate::reproduction::finish_reproduction(
+                        &mut organism,
+                        child_id,
+                        &self.environment.catalog,
+                        &mut self.energy_ledger,
+                    ) {
+                        next_organism_id += 1;
+                        survivors.push(child);
+                    }
+                }
                 if let Some(body) = Self::recycle_dead_organism(
                     &mut self.environment,
                     &mut organism,
@@ -660,7 +689,7 @@ impl Simulation {
         self.active_transformations
             .retain(|t| live_ids.contains(&t.organism_id));
         self.energy_ledger.total_usable_energy_held =
-            self.organisms.iter().map(|o| o.usable_energy).sum();
+            crate::reproduction::total_usable_energy_held(&self.organisms);
     }
     pub(crate) fn apply_survival_damage(
         organism: &mut Organism,
@@ -668,9 +697,6 @@ impl Simulation {
         ledger: &mut EnergyLedger,
         rng: &mut ChaCha8Rng,
     ) -> bool {
-        // A bondless structure cannot absorb another stress threshold. Preserve
-        // that lethal condition before the ordinary per-tick stress decay so
-        // crossing the threshold cannot be erased solely by decay ordering.
         let threshold = organism
             .stress_threshold
             .max(crate::state::MIN_STRESS_THRESHOLD);
@@ -683,30 +709,6 @@ impl Simulation {
     }
     #[cfg(test)]
     pub(crate) fn total_material_in_system(&self) -> f64 {
-        let mut total = self.environment.field.total_amount();
-        for transformation in &self.active_transformations {
-            total += transformation.material.total_amount();
-        }
-        for organism in &self.organisms {
-            total += organism.stored_material.total_amount();
-            if let Some(construction) = &organism.reproductive_construction {
-                total += construction.committed_material.total_amount();
-            }
-            total += organism
-                .structure
-                .units
-                .iter()
-                .map(|unit| unit.material.total_amount())
-                .sum::<f64>();
-        }
-        for body in &self.decomposing_bodies {
-            total += body
-                .structure
-                .units
-                .iter()
-                .map(|unit| unit.material.total_amount())
-                .sum::<f64>();
-        }
-        total
+        simulation_material_tests::total_material_in_system(self)
     }
 }

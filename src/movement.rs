@@ -63,6 +63,7 @@ impl Simulation {
             unit.placement.x += dx;
             unit.placement.y += dy;
         }
+        translate_reproductive_construction(organism, dx, dy);
         for (original, trial) in other_organisms.iter_mut().zip(trial_organisms) {
             original.occupied_cells = trial.occupied_cells;
             original.structure = trial.structure;
@@ -387,6 +388,17 @@ fn can_translate_organism(
     })
 }
 
+fn translate_reproductive_construction(organism: &mut Organism, dx: f64, dy: f64) {
+    if let Some(construction) = organism.reproductive_construction.as_mut() {
+        construction.developmental_origin.x += dx;
+        construction.developmental_origin.y += dy;
+        for unit in &mut construction.developing_structure.units {
+            unit.placement.x += dx;
+            unit.placement.y += dy;
+        }
+    }
+}
+
 fn translate_organism(organism: &mut Organism, dx: f64, dy: f64) {
     organism.developmental_origin.x += dx;
     organism.developmental_origin.y += dy;
@@ -398,6 +410,7 @@ fn translate_organism(organism: &mut Organism, dx: f64, dy: f64) {
         unit.placement.x += dx;
         unit.placement.y += dy;
     }
+    translate_reproductive_construction(organism, dx, dy);
 }
 
 #[cfg(test)]
@@ -434,6 +447,41 @@ mod tests {
         let simulation = Simulation::new(7, 20.0);
         let organism = simulation.organisms[0].clone();
         assert!(movement_direction(&organism).is_none());
+    }
+
+    #[test]
+    fn move_translates_developing_offspring_with_parent() {
+        let mut simulation = Simulation::new(7, 20.0);
+        let mut environment = empty_environment(&simulation);
+        let mut organism = simulation.organisms.remove(0);
+        organism.development_stage = crate::state::DevelopmentStage::Adult;
+        let mut ledger = crate::state::EnergyLedger::default();
+        assert!(crate::reproduction::begin_reproduction(
+            &mut organism,
+            &mut simulation.rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+        let before = organism
+            .reproductive_construction
+            .as_ref()
+            .unwrap()
+            .developmental_origin
+            .clone();
+        assert!(Simulation::try_move_cell(
+            &mut organism,
+            &mut environment,
+            &mut [],
+            12.0,
+            -7.0,
+        ));
+        let after = &organism
+            .reproductive_construction
+            .as_ref()
+            .unwrap()
+            .developmental_origin;
+        assert!((after.x - before.x - 12.0).abs() < 1e-9);
+        assert!((after.y - before.y + 7.0).abs() < 1e-9);
     }
 
     #[test]

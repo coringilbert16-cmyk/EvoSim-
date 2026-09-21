@@ -199,7 +199,7 @@ mod tests {
 
         assert_eq!(
             select_action(context, &history, &candidates),
-            Some(candidates[1].clone())
+            Some(candidates[0].clone())
         );
     }
 
@@ -317,7 +317,7 @@ mod tests {
         assert!(ActionKind::Break
             .relevant_needs()
             .contains(&NeedKind::Survival));
-        assert!(!ActionKind::Break
+        assert!(ActionKind::Break
             .relevant_needs()
             .contains(&NeedKind::Reproduction));
     }

@@ -96,14 +96,25 @@ pub(crate) struct ReproductiveConstruction {
     pub(crate) committed_material: MaterialStorage,
     pub(crate) developing_structure: OrganismStructure,
     pub(crate) child_genome: Genome,
+    /// Persistent developmental frame for the physically separate offspring.
     #[serde(default)]
-    pub(crate) target_elements: Vec<usize>,
+    pub(crate) developmental_origin: Position,
     #[serde(default)]
-    pub(crate) realized_elements: Vec<usize>,
+    pub(crate) developmental_orientation_radians: f64,
+    /// Stress accumulated by the developing offspring before detachment.
     #[serde(default)]
-    pub(crate) realized_constituent_groups: Vec<Vec<usize>>,
+    pub(crate) developing_stress: f64,
+    /// Unit index of the transferred anchor. The qualifying physical genome
+    /// must retain this unit as part of its realized cavity boundary.
     #[serde(default)]
-    pub(crate) pending_stress: f64,
+    pub(crate) anchor_unit_index: usize,
+    /// Usable energy held by the physically separate developing offspring.
+    /// It is transferred from the parent while construction remains active.
+    #[serde(default)]
+    pub(crate) developing_energy: f64,
+    /// The parent needs to reorganize its own structure to make room for the developing offspring.
+    #[serde(default)]
+    pub(crate) needs_space: bool,
 }
 #[derive(Serialize, Deserialize, Clone, Copy, Default)]
 pub(crate) struct EnergyLedger {

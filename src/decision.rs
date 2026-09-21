@@ -28,13 +28,19 @@ impl ActionKind {
                 NeedKind::Development,
             ],
             ActionKind::Combine => &[NeedKind::Reproduction, NeedKind::Development],
-            ActionKind::Break => &[NeedKind::Survival, NeedKind::Development],
+            ActionKind::Break => &[
+                NeedKind::Survival,
+                NeedKind::Reproduction,
+                NeedKind::Development,
+            ],
             ActionKind::Expel => &[NeedKind::Survival],
         }
     }
 }
 
-/// The two continuous internal pressures used by the decision system.
+/// The two true biological needs used by the decision system are survival and reproduction.
+/// Development remains a juvenile developmental pressure so juveniles can advance toward
+/// adulthood before reproduction is biologically available.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum NeedKind {
     Survival,
@@ -123,6 +129,8 @@ impl DecisionHistory {
 pub struct CurrentNeeds {
     pub survival: f64,
     pub reproduction: f64,
+    /// Juvenile developmental pressure. This is a developmental drive, not a third
+    /// true biological need; adults have zero developmental pressure.
     pub development: f64,
 }
 
