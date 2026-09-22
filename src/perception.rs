@@ -4,7 +4,7 @@ use crate::state::{
     DESIRABILITY_AMOUNT_HALF_SATURATION, DESIRABILITY_MAX,
 };
 
-fn wrapped_delta(target: f64, origin: f64, period: f64) -> f64 {
+pub(crate) fn wrapped_delta(target: f64, origin: f64, period: f64) -> f64 {
     let direct = target - origin;
     if period > 0.0 {
         return (direct + period * 0.5).rem_euclid(period) - period * 0.5;
