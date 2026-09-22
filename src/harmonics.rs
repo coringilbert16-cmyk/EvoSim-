@@ -277,6 +277,30 @@ pub(crate) fn genome_cavity_spectrum(
 }
 
 
+
+impl crate::state::Simulation {
+    /// Refresh the harmonic state from the organism's actual realized genome
+    /// cavity. A non-qualifying physical structure has no genome harmonic
+    /// memory surface.
+    pub(crate) fn update_organism_harmonics(
+        organism: &mut crate::state::Organism,
+        environment: &crate::state::Environment,
+    ) {
+        let boundary_units = crate::cavity::analyze_genome_cavity(
+            &organism.structure,
+            &environment.catalog,
+        )
+        .ok()
+        .flatten()
+        .filter(|cavity| cavity.qualifies())
+        .map(|cavity| cavity.boundary_units)
+        .unwrap_or_default();
+
+        organism.harmonic_spectrum =
+            genome_cavity_spectrum(&organism.structure, &environment.catalog, &boundary_units);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
