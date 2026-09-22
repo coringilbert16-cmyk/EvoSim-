@@ -115,9 +115,6 @@ fn resolve_push_chain(
     let mut organism_visited = vec![false; other_organisms.len()];
     let mut physical_visited = std::collections::HashSet::new();
     let moving_destination = organism_parts_at(moving, environment, dx, dy);
-    if static_material_blocks(&moving_destination, environment) {
-        return false;
-    }
     push_blockers_for_parts(
         &moving_destination,
         other_organisms,
@@ -151,9 +148,6 @@ fn push_blockers_for_parts(
             return false;
         }
         let destination = organism_parts_at(&candidate, environment, dx, dy);
-        if static_material_blocks(&destination, environment) {
-            return false;
-        }
         organism_visited[index] = true;
         if !push_blockers_for_parts(
             &destination,
@@ -189,9 +183,6 @@ fn push_blockers_for_parts(
                 return false;
             }
             let destination = physical_parts_at(&candidate, environment, dx, dy);
-            if static_material_blocks(&destination, environment) {
-                return false;
-            }
             physical_visited.insert(key);
             if !push_blockers_for_parts(
                 &destination,
