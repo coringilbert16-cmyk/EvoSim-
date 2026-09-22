@@ -106,6 +106,7 @@ impl Simulation {
                 direction_y: 0.0,
                 direction_strength: 0.0,
             },
+            harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
             memory: Vec::new(),
             decision_history: crate::decision::DecisionHistory::default(),
             usable_energy: initial_energy,
