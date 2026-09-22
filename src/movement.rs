@@ -166,7 +166,12 @@ fn push_blockers_for_parts(
         ) {
             return false;
         }
-        translate_organism(&mut other_organisms[index], dx, dy);
+        translate_organism(
+            &mut other_organisms[index],
+            dx,
+            dy,
+            environment.height,
+        );
     }
 
     for cell_index in 0..environment.field.cells.len() {
