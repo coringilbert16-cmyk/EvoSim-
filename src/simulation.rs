@@ -373,26 +373,23 @@ impl Simulation {
         }
         let dx = direction.0 * translation;
         let dy = direction.1 * translation;
+        let first_placement = placements.first().expect("validated placements are non-empty");
+        let destination_x = first_placement.x + origin.x + dx;
+        let destination_y =
+            (first_placement.y + origin.y + dy).rem_euclid(environment.height);
+        let Some(index) = environment
+            .field
+            .index_for_position(destination_x, destination_y)
+        else {
+            let _ = organism.stored_material.store_physical_instance(physical);
+            return false;
+        };
         if let Some(world_placements) = physical.placements.as_mut() {
             for placement in world_placements {
                 placement.x += origin.x + dx;
                 placement.y = (placement.y + origin.y + dy).rem_euclid(environment.height);
             }
         }
-
-        let Some(placement) = physical
-            .placements
-            .as_ref()
-            .and_then(|placements| placements.first())
-        else {
-            return false;
-        };
-        let Some(index) = environment
-            .field
-            .index_for_position(placement.x, placement.y)
-        else {
-            return false;
-        };
         environment
             .field
             .deposit_physical_at_index(index, physical)
