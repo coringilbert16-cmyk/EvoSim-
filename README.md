@@ -344,6 +344,41 @@ COMBINE may use physically available material directly. BREAK may act on existin
 
 The environment-grid system may remain the spatial indexing mechanism used to locate candidate material, but the grid is not itself the ultimate authority for physical geometry or containment.
 
+## 14.1 Organism-Directed EXPEL
+
+EXPEL is an organism-directed behavioral action.
+
+Unlike material availability, which requires no ACQUIRE action, EXPEL is an explicit decision that causes selected contained physical material to move outward from the organism.
+
+The action operates on an existing realized physical-material instance. It must not reconstruct the material from composition.
+
+The exit direction is:
+1. the organism's current movement direction when one exists;
+2. otherwise, the direction from the organism's current anchor toward the selected material;
+3. if neither direction exists, EXPEL is ineligible rather than inventing a random direction.
+
+The material is translated through the organism's realized physical boundary until its physical constituents are outside the organism's boundary in the selected direction.
+
+The placement calculation uses the realized constituent geometry of the organism. The organism bounding box is not physical authority.
+
+The translation distance is the minimum distance required to place the expelled material outside the organism in that direction. There is no authored ejection distance.
+
+The material retains its:
+- constituents,
+- internal relationships,
+- bonds,
+- geometry,
+- relative placement,
+- orientation,
+- physical state,
+- and other information required to preserve its physical identity.
+
+If the existing physical material cannot be validly placed outside the organism under the existing physical geometry and field topology, EXPEL fails without consuming the material.
+
+After successful expulsion, the existing physical material becomes owned by the active environmental field. The environment grid only indexes the resulting physical realization.
+
+EXPEL does not silently BREAK, deform, dissolve, or otherwise transform the material merely to make expulsion possible.
+
 ## 14.1 The Active Field Is a Physical Material Layer
 
 The active field is not merely a collection of independent resource quantities.
