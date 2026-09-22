@@ -379,9 +379,7 @@ mod tests {
         let coupled_fundamental = coupled
             .components
             .iter()
-            .find(|component| {
-                (component.frequency_hz - WORLD_TONE_HZ).abs() < f64::EPSILON
-            })
+            .find(|component| (component.frequency_hz - WORLD_TONE_HZ).abs() < f64::EPSILON)
             .map(|component| component.amplitude)
             .unwrap_or(0.0);
         assert!(coupled_fundamental > baseline_fundamental);
