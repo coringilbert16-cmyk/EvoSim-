@@ -19,7 +19,7 @@ pub(crate) fn growth_fraction(organism: &Organism, environment: &Environment) ->
 fn growth_fraction_for_structure(
     organism: &Organism,
     environment: &Environment,
-    structure: &crate::structure::PhysicalStructure,
+    structure: &crate::structure::OrganismStructure,
 ) -> f64 {
     organism
         .genome
