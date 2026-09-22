@@ -122,8 +122,12 @@ impl crate::state::Simulation {
         let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
         let ranges = crate::resources::property_ranges(&environment.catalog);
         for cell_index in environment
-            .field
-            .cells_within_radius(px, py, perception_radius)
+             .field
+            .cells_within_radius(
+                px,
+                py,
+                perception_radius + environment.field.cell_size * 2.0_f64.sqrt() * 0.5,
+            )
         {
             let (cell_x, cell_y) = environment.field.cell_center(cell_index);
             let cell = &environment.field.cells[cell_index];
@@ -154,6 +158,9 @@ impl crate::state::Simulation {
                 } else {
                     0.0
                 };
+                if source_distance > perception_radius {
+                    continue;
+                }
                 let perceived_amount = Self::perceived_amount(material, sensory_resolution);
                 if perceived_amount <= 0.0 {
                     continue;
