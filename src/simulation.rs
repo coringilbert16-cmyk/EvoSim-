@@ -170,10 +170,21 @@ impl Simulation {
         ) else {
             return;
         };
+        let anchor = organism
+            .occupied_cells
+            .first()
+            .copied()
+            .unwrap_or(Position { x: 0.0, y: 0.0 });
         for physical in environment.field.take_contained_physical_materials(&body) {
             if organism
                 .stored_material
-                .store_physical_instance(physical.clone())
+                .store_physical_instance_at_owner_anchor(
+                    physical.clone(),
+                    Position {
+                        x: anchor.x,
+                        y: anchor.y,
+                    },
+                )
             {
                 continue;
             }
@@ -307,15 +318,11 @@ impl Simulation {
             let crate::material_storage::StoredMaterial::Physical(instance) = stored else {
                 return false;
             };
-            let Some(placement) = instance
-                .placements
-                .as_ref()
-                .and_then(|placements| placements.first())
-            else {
+            let Some(relative) = instance.owner_relative_origin else {
                 return false;
             };
-            let dx = placement.x;
-            let dy = placement.y;
+            let dx = relative.x;
+            let dy = relative.y;
             let magnitude = dx.hypot(dy);
             if magnitude <= f64::EPSILON {
                 return false;
@@ -395,10 +402,22 @@ impl Simulation {
         }
         let dx = direction.0 * translation;
         let dy = direction.1 * translation;
+        let relative_origin = physical.owner_relative_origin.unwrap_or(Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        });
+        let (sin, cos) = relative_origin.rotation_radians.sin_cos();
         let first_placement = placements.first().expect("validated placements are non-empty");
-        let destination_x = first_placement.x + origin.x + dx;
+        let first_local_x =
+            first_placement.x * cos - first_placement.y * sin;
+        let first_local_y =
+            first_placement.x * sin + first_placement.y * cos;
+        let destination_x =
+            origin.x + relative_origin.x + first_local_x + dx;
         let destination_y =
-            (first_placement.y + origin.y + dy).rem_euclid(environment.height);
+            (origin.y + relative_origin.y + first_local_y + dy)
+                .rem_euclid(environment.height);
         let Some(index) = environment
             .field
             .index_for_position(destination_x, destination_y)
@@ -408,8 +427,12 @@ impl Simulation {
         };
         if let Some(world_placements) = physical.placements.as_mut() {
             for placement in world_placements {
-                placement.x += origin.x + dx;
-                placement.y = (placement.y + origin.y + dy).rem_euclid(environment.height);
+                let local_x = placement.x * cos - placement.y * sin;
+                let local_y = placement.x * sin + placement.y * cos;
+                placement.x = origin.x + relative_origin.x + local_x + dx;
+                placement.y = (origin.y + relative_origin.y + local_y + dy)
+                    .rem_euclid(environment.height);
+                placement.rotation_radians += relative_origin.rotation_radians;
             }
         }
         environment
