@@ -159,7 +159,6 @@ pub(crate) fn material_response(
     spectrum
 }
 
-
 /// Combine two spectral components at the same frequency as phasors.
 ///
 /// Frequency is the physical identity of a component. Amplitude and phase
@@ -316,12 +315,10 @@ pub(crate) fn genome_cavity_spectrum(
     spectrum
 }
 
-
-
 /// Refresh the harmonic state from the organism's actual realized genome
-    /// cavity. A non-qualifying physical structure has no genome harmonic
-    /// memory surface.
-    pub(crate) fn update_organism_harmonics(
+/// cavity. A non-qualifying physical structure has no genome harmonic
+/// memory surface.
+pub(crate) fn update_organism_harmonics(
         organism: &mut crate::state::Organism,
         environment: &crate::state::Environment,
     ) {
@@ -335,9 +332,8 @@ pub(crate) fn genome_cavity_spectrum(
         .map(|cavity| cavity.boundary_units)
         .unwrap_or_default();
 
-        organism.harmonic_spectrum =
-            genome_cavity_spectrum(&organism.structure, &environment.catalog, &boundary_units);
-    }
+    organism.harmonic_spectrum =
+        genome_cavity_spectrum(&organism.structure, &environment.catalog, &boundary_units);
 }
 
 #[cfg(test)]
