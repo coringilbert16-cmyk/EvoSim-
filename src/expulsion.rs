@@ -88,10 +88,28 @@ pub(crate) fn expel_physical_material(
             let _ = organism.stored_material.store_physical_instance(physical);
             return false;
         };
-        let extent = resource.shape.form.bounding_radius();
-        let projection =
-            owner_offset_projection + placement.x * direction.0 + placement.y * direction.1
-                - extent;
+        let total_rotation = relative_origin.rotation_radians + placement.rotation_radians;
+        let (sin, cos) = total_rotation.sin_cos();
+        let local_dx = direction.0 * cos + direction.1 * sin;
+        let local_dy = -direction.0 * sin + direction.1 * cos;
+        let Some(boundary) = crate::surface_geometry::boundary_point_toward(
+            &crate::resources::Shape {
+                form: resource.shape.form.clone(),
+            },
+            local_dx,
+            local_dy,
+        ) else {
+            let _ = organism.stored_material.store_physical_instance(physical);
+            return false;
+        };
+        let boundary_projection =
+            boundary.x * direction.0 * cos - boundary.y * direction.0 * sin
+                + boundary.x * direction.1 * sin
+                + boundary.y * direction.1 * cos;
+        let center_projection =
+            placement.x * (direction.0 * cos - direction.1 * sin)
+                + placement.y * (direction.0 * sin + direction.1 * cos);
+        let projection = owner_offset_projection + center_projection + boundary_projection;
         material_near = material_near.min(projection);
     }
     if !material_near.is_finite() {
