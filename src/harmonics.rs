@@ -365,7 +365,9 @@ mod tests {
 
     #[test]
     fn natural_frequency_follows_cohesion_over_mass() {
-        assert!((natural_frequency_hz(properties(1.0, 0.0, 1.0), baselines()) - 440.0).abs() < 1e-9);
+        assert!(
+            (natural_frequency_hz(properties(1.0, 0.0, 1.0), baselines()) - 440.0).abs() < 1e-9
+        );
         assert!(natural_frequency_hz(properties(0.5, 0.0, 1.0), baselines()) > 440.0);
         assert!(natural_frequency_hz(properties(1.0, 0.0, 0.5), baselines()) < 440.0);
     }
@@ -390,7 +392,9 @@ mod tests {
         assert!(spectrum
             .components
             .iter()
-            .any(|component| (component.frequency_hz - 2.0 * WORLD_TONE_HZ).abs() < f64::EPSILON));
+            .any(|component| {
+                (component.frequency_hz - 2.0 * WORLD_TONE_HZ).abs() < f64::EPSILON
+            }));
         assert!(spectrum.components.len() <= MAX_SPECTRAL_COMPONENTS);
     }
 }
