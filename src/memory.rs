@@ -64,14 +64,11 @@ impl Simulation {
         let ranges = crate::resources::property_ranges(&environment.catalog);
 
         let mut strongest_source: Option<(f64, f64, f64)> = None;
-        for cell_index in environment
-            .field
-            .cells_within_radius(
-                px,
-                py,
-                perception_radius + environment.field.cell_size * 2.0_f64.sqrt() * 0.5,
-            )
-        {
+        for cell_index in environment.field.cells_within_radius(
+            px,
+            py,
+            perception_radius + environment.field.cell_size * 2.0_f64.sqrt() * 0.5,
+        ) {
             let (cell_x, cell_y) = environment.field.cell_center(cell_index);
             let cell = &environment.field.cells[cell_index];
             let physical_sources = cell.physical_materials.iter().filter_map(|physical| {
