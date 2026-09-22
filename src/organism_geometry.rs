@@ -87,7 +87,9 @@ impl OrganismBodyGeometry {
         if !x.is_finite() || !y.is_finite() {
             return false;
         }
-        self.parts.iter().any(|part| form_contains_point(&part.form, part.x, part.y, part.rotation_radians, x, y))
+        self.parts.iter().any(|part| {
+            form_contains_point(&part.form, part.x, part.y, part.rotation_radians, x, y)
+        })
     }
 
     #[allow(dead_code)]
@@ -116,19 +118,20 @@ fn form_contains_point(
             local_x.abs() <= *width / 2.0 + f64::EPSILON
                 && local_y.abs() <= *height / 2.0 + f64::EPSILON
         }
-        Form::RegularPolygon { sides, radius } => {
-            polygon_contains_point(local_x, local_y, &Form::RegularPolygon {
+        Form::RegularPolygon { sides, radius } => polygon_contains_point(
+            local_x,
+            local_y,
+            &Form::RegularPolygon {
                 sides: *sides,
                 radius: *radius,
-            })
-        }
+            },
+        ),
         Form::Polygon { vertices } => polygon_contains_vertices(local_x, local_y, vertices),
         // A line has no interior area. It can form part of the boundary but
         // cannot by itself contain a constituent point.
         Form::Line { .. } => false,
         Form::Fluid { nominal_area } => {
-            local_x.hypot(local_y)
-                <= (nominal_area / std::f64::consts::PI).sqrt() + f64::EPSILON
+            local_x.hypot(local_y) <= (nominal_area / std::f64::consts::PI).sqrt() + f64::EPSILON
         }
     }
 }
@@ -175,8 +178,17 @@ mod tests {
 
     fn body(form: Form) -> OrganismBodyGeometry {
         OrganismBodyGeometry {
-            parts: vec![PlacedForm { unit_index: 0, form, x: 0.0, y: 0.0, rotation_radians: 0.0 }],
-            min_x: -10.0, max_x: 10.0, min_y: -10.0, max_y: 10.0,
+            parts: vec![PlacedForm {
+                unit_index: 0,
+                form,
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: -10.0,
+            max_x: 10.0,
+            min_y: -10.0,
+            max_y: 10.0,
         }
     }
 
@@ -190,7 +202,10 @@ mod tests {
 
     #[test]
     fn containment_respects_rotation_for_polygon_geometry() {
-        let mut geometry = body(Form::Rectangle { width: 4.0, height: 1.0 });
+        let mut geometry = body(Form::Rectangle {
+            width: 4.0,
+            height: 1.0,
+        });
         geometry.parts[0].rotation_radians = std::f64::consts::FRAC_PI_2;
         assert!(geometry.contains_point(0.0, 1.9));
         assert!(!geometry.contains_point(1.9, 0.0));
@@ -200,10 +215,25 @@ mod tests {
     fn containment_is_union_of_realized_parts() {
         let geometry = OrganismBodyGeometry {
             parts: vec![
-                PlacedForm { unit_index: 0, form: Form::Circle { radius: 1.0 }, x: -1.0, y: 0.0, rotation_radians: 0.0 },
-                PlacedForm { unit_index: 1, form: Form::Circle { radius: 1.0 }, x: 1.0, y: 0.0, rotation_radians: 0.0 },
+                PlacedForm {
+                    unit_index: 0,
+                    form: Form::Circle { radius: 1.0 },
+                    x: -1.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                PlacedForm {
+                    unit_index: 1,
+                    form: Form::Circle { radius: 1.0 },
+                    x: 1.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
             ],
-            min_x: -2.0, max_x: 2.0, min_y: -1.0, max_y: 1.0,
+            min_x: -2.0,
+            max_x: 2.0,
+            min_y: -1.0,
+            max_y: 1.0,
         };
         assert!(geometry.contains_point(-1.5, 0.0));
         assert!(geometry.contains_point(1.5, 0.0));
