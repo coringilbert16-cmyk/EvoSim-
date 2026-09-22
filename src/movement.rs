@@ -77,10 +77,6 @@ impl Simulation {
     }
 }
 
-fn movement_direction(organism: &Organism) -> Option<(f64, f64)> {
-    crate::movement_direction::movement_direction_periodic(organism, 0.0)
-}
-
 fn reindex_physical_materials(environment: &mut Environment) {
     let mut physical_materials = Vec::new();
     for cell in &mut environment.field.cells {
@@ -400,7 +396,8 @@ mod tests {
             y: organism.occupied_cells[0].y - 20.0,
             strength: 1.0,
         });
-        let (x, y) = movement_direction(&organism).expect("direction should exist");
+        let (x, y) = crate::movement_direction::movement_direction_periodic(&organism, 20.0)
+            .expect("direction should exist");
         assert!(x > 0.0);
         assert!(y < 0.0);
     }
@@ -409,7 +406,7 @@ mod tests {
     fn movement_direction_without_inputs_is_rejected() {
         let simulation = Simulation::new(7, 20.0);
         let organism = simulation.organisms[0].clone();
-        assert!(movement_direction(&organism).is_none());
+        assert!(crate::movement_direction::movement_direction_periodic(&organism, 20.0).is_none());
     }
 
     #[test]
