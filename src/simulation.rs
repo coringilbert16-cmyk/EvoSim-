@@ -130,7 +130,9 @@ impl Simulation {
                 }
             }
             DevelopmentStage::Juvenile => {
-                if crate::developmental_decision::growth_fraction(organism, environment) >= ADULTHOOD_GROWTH_FRACTION {
+                if crate::developmental_decision::growth_fraction(organism, environment)
+                    >= ADULTHOOD_GROWTH_FRACTION
+                {
                     organism.development_stage = DevelopmentStage::Adult
                 }
             }
@@ -187,7 +189,10 @@ impl Simulation {
         let reserve_pressure = (1.0 - organism.usable_energy / survival_reserve).clamp(0.0, 1.0);
         let survival = (reserve_pressure * (1.0 + organism.stress.max(0.0))).clamp(0.0, 1.0);
         let development = if matches!(organism.development_stage, DevelopmentStage::Juvenile) {
-            (1.0 - crate::developmental_decision::growth_fraction(organism, environment).clamp(0.0, 1.0)).max(0.0)
+            (1.0
+                - crate::developmental_decision::growth_fraction(organism, environment)
+                    .clamp(0.0, 1.0))
+                .max(0.0)
         } else {
             0.0
         };

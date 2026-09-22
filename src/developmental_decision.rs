@@ -1,4 +1,7 @@
-#![expect(dead_code, reason = "Staged developmental action bridge retained for simulation integration")]
+#![expect(
+    dead_code,
+    reason = "Staged developmental action bridge retained for simulation integration"
+)]
 //! Physical developmental previews used by organism action selection.
 //!
 //! This module evaluates candidate actions through the existing realized
@@ -34,9 +37,7 @@ pub(crate) fn developmental_action_scores(
     candidates: &[ActionCandidate],
     ledger: &EnergyLedger,
 ) -> Vec<Option<f64>> {
-    if !matches!(organism.development_stage, DevelopmentStage::Juvenile)
-        || needs.development <= 0.0
-    {
+    if !matches!(organism.development_stage, DevelopmentStage::Juvenile) || needs.development <= 0.0 {
         return vec![None; candidates.len()];
     }
 
