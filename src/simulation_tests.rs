@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod integration_tests {
-    use crate::decision::{ActionKind, OutcomeKind};
+    use crate::decision::ActionKind;
     use crate::physical_material::PhysicalMaterial;
     use crate::resources::{InternalBond, Material};
     use crate::state::{DevelopmentStage, Simulation};
@@ -123,94 +123,74 @@ mod integration_tests {
         assert_eq!(o.stored_material.count_structured(), 1);
     }
     #[test]
-    fn acquire_moves_one_free_unit_into_storage_and_conserves_material_when_vents_are_disabled() {
+    fn contained_physical_material_becomes_storage_without_an_acquire_action() {
         let mut s = Simulation::new(21, 10.0);
         s.environment.vents.clear();
-        let i = s
-            .environment
-            .field
-            .index_for_position(500.0, 500.0)
-            .unwrap();
-        s.environment.field.cells[i].materials.clear();
-        s.environment
-            .field
-            .deposit_at_index(i, Material::free_base("Carbon", 10.0));
-        s.organisms[0].usable_energy = 0.0;
-        s.organisms[0].decision_history.record(
-            ActionKind::Acquire,
-            Some(format!("target:{i}")),
-            OutcomeKind::Beneficial,
+        let organism = s.organisms[0].clone();
+        let anchor = organism.structure.units[0].placement;
+        let physical = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![anchor],
+            &s.environment.catalog,
+        )
+        .expect("carbon should have a valid physical realization");
+        let before = s.organisms[0].stored_material.total_amount();
+        s.environment.field.deposit(anchor.x, anchor.y, physical);
+        Simulation::absorb_contained_environmental_material(
+            &mut s.organisms[0],
+            &mut s.environment,
         );
-        let before = s.total_material_in_system();
-        s.step();
-        let after = s.total_material_in_system();
-        assert!((after - before).abs() < 1e-3);
-        assert_eq!(s.organisms[0].stored_material.total_amount(), 2.0);
-    }
-    #[test]
-    fn acquire_accepts_and_preserves_structured_material() {
-        let mut s = Simulation::new(23, 10.0);
-        s.environment.vents.clear();
-        let i = s
-            .environment
-            .field
-            .index_for_position(500.0, 500.0)
-            .unwrap();
-        s.environment.field.cells[i].materials.clear();
-        let m = structured_carbon_hydrogen();
-        let physical = realized_structured_carbon_hydrogen(&s.environment.catalog);
-        s.environment.field.deposit_physical_at_index(i, physical);
-        s.organisms[0].usable_energy = 0.0;
-        s.organisms[0].decision_history.record(
-            ActionKind::Acquire,
-            Some(format!("target:{i}")),
-            OutcomeKind::Beneficial,
-        );
-        s.step();
-        assert!(s.environment.field.cells[i].physical_materials.is_empty());
-        assert!(s.environment.field.cells[i].materials.is_empty());
-        assert!(s.organisms[0]
-            .stored_material
-            .materials_snapshot()
-            .contains(&m));
-    }
-    #[test]
-    fn acquire_only_considers_the_currently_occupied_field_cell() {
-        let mut s = Simulation::new(22, 10.0);
-        s.environment.vents.clear();
-        let i = s
-            .environment
-            .field
-            .index_for_position(600.0, 500.0)
-            .unwrap();
-        s.environment
-            .field
-            .deposit_at_index(i, Material::free_base("Carbon", 10.0));
-        let occupied_index = s
-            .environment
-            .field
-            .index_for_position(500.0, 500.0)
-            .unwrap();
-        s.environment
-            .field
-            .deposit_at_index(occupied_index, Material::free_base("Carbon", 10.0));
-        s.organisms[0].usable_energy = 0.0;
-        let initial_stored = s.organisms[0].stored_material.total_amount();
-        s.organisms[0].decision_history.record(
-            ActionKind::Acquire,
-            Some(format!("target:{occupied_index}")),
-            OutcomeKind::Beneficial,
-        );
-        s.step();
         assert_eq!(
             s.organisms[0].stored_material.total_amount(),
-            initial_stored + 1.0
+            before + 1.0
         );
-        assert_eq!(
-            s.environment.field.cells[i].materials[0].total_amount(),
-            8.0
-        );
+        assert!(s.environment.field.total_amount() < 1.0);
     }
+
+    #[test]
+    fn a_composite_crossing_the_boundary_is_partitioned_at_constituent_scale() {
+        let mut s = Simulation::new(23, 10.0);
+        s.environment.vents.clear();
+        let organism = s.organisms[0].clone();
+        let anchor = organism.structure.units[0].placement;
+        let material = structured_carbon_hydrogen();
+        let physical = PhysicalMaterial::realized(
+            material.clone(),
+            vec![
+                Placement {
+                    x: anchor.x,
+                    y: anchor.y,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: anchor.x + 0.8,
+                    y: anchor.y,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &s.environment.catalog,
+        )
+        .expect("test composite must have a valid physical realization");
+        s.environment.field.deposit(anchor.x, anchor.y, physical);
+        Simulation::absorb_contained_environmental_material(
+            &mut s.organisms[0],
+            &mut s.environment,
+        );
+        assert_eq!(s.organisms[0].stored_material.total_amount(), 2.0);
+        let stored = s.organisms[0].stored_material.materials_snapshot();
+        assert!(stored.iter().any(|m| m.parts == vec![("Carbon".into(), 1.0)]));
+        let remaining: Vec<_> = s
+            .environment
+            .field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .collect();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].material.parts, vec![("Hydrogen".into(), 1.0)]);
+        assert!(remaining[0].material.internal_bonds.is_empty());
+    }
+
     #[test]
     fn structural_material_is_not_opened_by_storage() {
         let mut o = Simulation::create_initial_organism();
