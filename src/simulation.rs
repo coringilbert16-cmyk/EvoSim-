@@ -414,16 +414,14 @@ impl Simulation {
             rotation_radians: 0.0,
         });
         let (sin, cos) = relative_origin.rotation_radians.sin_cos();
-        let first_placement = placements.first().expect("validated placements are non-empty");
-        let first_local_x =
-            first_placement.x * cos - first_placement.y * sin;
-        let first_local_y =
-            first_placement.x * sin + first_placement.y * cos;
-        let destination_x =
-            origin.x + relative_origin.x + first_local_x + dx;
+        let first_placement = placements
+            .first()
+            .expect("validated placements are non-empty");
+        let first_local_x = first_placement.x * cos - first_placement.y * sin;
+        let first_local_y = first_placement.x * sin + first_placement.y * cos;
+        let destination_x = origin.x + relative_origin.x + first_local_x + dx;
         let destination_y =
-            (origin.y + relative_origin.y + first_local_y + dy)
-                .rem_euclid(environment.height);
+            (origin.y + relative_origin.y + first_local_y + dy).rem_euclid(environment.height);
         let Some(index) = environment
             .field
             .index_for_position(destination_x, destination_y)
@@ -436,14 +434,12 @@ impl Simulation {
                 let local_x = placement.x * cos - placement.y * sin;
                 let local_y = placement.x * sin + placement.y * cos;
                 placement.x = origin.x + relative_origin.x + local_x + dx;
-                placement.y = (origin.y + relative_origin.y + local_y + dy)
-                    .rem_euclid(environment.height);
+                placement.y =
+                    (origin.y + relative_origin.y + local_y + dy).rem_euclid(environment.height);
                 placement.rotation_radians += relative_origin.rotation_radians;
             }
         }
-        environment
-            .field
-            .deposit_physical_at_index(index, physical)
+        environment.field.deposit_physical_at_index(index, physical)
     }
 
     fn recycle_dead_organism(
