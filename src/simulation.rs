@@ -6,9 +6,7 @@ use std::collections::HashSet;
 mod simulation_material_tests;
 
 use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
-use crate::decision_runtime::{
-    select_action_with_developmental_scores, ActionCandidate, DecisionContext,
-};
+use crate::decision_runtime::{ActionCandidate, DecisionContext};
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::environment::{
     apply_vents, ActiveMaterialField, Vent, DEFAULT_CELL_SIZE, DEFAULT_DIFFUSION_FRACTION,
@@ -124,23 +122,6 @@ impl Simulation {
             .field
             .diffuse_step(DEFAULT_DIFFUSION_FRACTION);
     }
-    fn growth_fraction(organism: &Organism, environment: &Environment) -> f64 {
-        organism
-            .genome
-            .developmental_blueprint
-            .realization(
-                &organism.structure,
-                &environment.catalog,
-                (
-                    organism.developmental_origin.x,
-                    organism.developmental_origin.y,
-                ),
-                organism.developmental_orientation_radians,
-                organism.genome.adult_mass(),
-            )
-            .overall
-            .clamp(0.0, 1.0)
-    }
     fn update_development_stage(organism: &mut Organism, environment: &Environment) {
         match organism.development_stage {
             DevelopmentStage::Offspring => {
@@ -149,7 +130,7 @@ impl Simulation {
                 }
             }
             DevelopmentStage::Juvenile => {
-                if Self::growth_fraction(organism, environment) >= ADULTHOOD_GROWTH_FRACTION {
+                if crate::developmental_decision::growth_fraction(organism, environment) >= ADULTHOOD_GROWTH_FRACTION {
                     organism.development_stage = DevelopmentStage::Adult
                 }
             }
@@ -206,7 +187,7 @@ impl Simulation {
         let reserve_pressure = (1.0 - organism.usable_energy / survival_reserve).clamp(0.0, 1.0);
         let survival = (reserve_pressure * (1.0 + organism.stress.max(0.0))).clamp(0.0, 1.0);
         let development = if matches!(organism.development_stage, DevelopmentStage::Juvenile) {
-            (1.0 - Self::growth_fraction(organism, environment).clamp(0.0, 1.0)).max(0.0)
+            (1.0 - crate::developmental_decision::growth_fraction(organism, environment).clamp(0.0, 1.0)).max(0.0)
         } else {
             0.0
         };
@@ -386,84 +367,6 @@ impl Simulation {
             self.decomposing_bodies.remove(index);
         }
     }
-    fn developmental_action_scores(
-        organism: &Organism,
-        environment: &Environment,
-        needs: CurrentNeeds,
-        candidates: &[ActionCandidate],
-        ledger: &EnergyLedger,
-    ) -> Vec<Option<f64>> {
-        if !matches!(organism.development_stage, DevelopmentStage::Juvenile)
-            || needs.development <= 0.0
-        {
-            return vec![None; candidates.len()];
-        }
-
-        let blueprint = &organism.genome.developmental_blueprint;
-        let (seed_mass, seed_length) =
-            crate::juvenile::confirmed_seed_scale_reference(&environment.catalog)
-                .expect("confirmed seed scale reference must be valid");
-        let preferred_length = blueprint.preferred_developmental_length(
-            organism.genome.adult_mass(),
-            seed_mass,
-            seed_length,
-        );
-        let developmental = Some((
-            blueprint,
-            (
-                organism.developmental_origin.x,
-                organism.developmental_origin.y,
-            ),
-            organism.developmental_orientation_radians,
-            preferred_length,
-        ));
-
-        candidates
-            .iter()
-            .map(|candidate| {
-                let mut trial = organism.clone();
-                let mut trial_ledger = *ledger;
-                let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-
-                match candidate.action {
-                    ActionKind::Combine => {
-                        crate::combine_runtime::try_combine(
-                            &mut trial,
-                            environment,
-                            &mut cache,
-                            &mut trial_ledger,
-                            developmental,
-                        )?;
-                    }
-                    ActionKind::Break => {
-                        let index = candidate
-                            .context_key
-                            .as_deref()
-                            .and_then(|key| key.strip_prefix("bond:"))
-                            .and_then(|index| index.parse::<usize>().ok())?;
-                        let bond = *trial.structure.bonds.get(index)?;
-                        trial.structure.break_matching_bond(bond)?;
-
-                        // BREAK is evaluated by the construction opportunity it
-                        // creates. This lets a membrane-opening break win only
-                        // when the resulting physical structure enables a
-                        // better developmental construction result.
-                        let _ = crate::combine_runtime::try_combine(
-                            &mut trial,
-                            environment,
-                            &mut cache,
-                            &mut trial_ledger,
-                            developmental,
-                        );
-                    }
-                    _ => return None,
-                }
-
-                Some(Self::growth_fraction(&trial, environment))
-            })
-            .collect()
-    }
-
     pub(crate) fn step(&mut self) {
         self.tick += 1;
         self.step_environment();

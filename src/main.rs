@@ -36,6 +36,7 @@ mod energy_ledger;
 // Organism genome, behavior, and lifecycle.
 mod decision;
 mod decision_runtime;
+mod developmental_decision;
 mod genome;
 mod harmonics;
 mod memory;
