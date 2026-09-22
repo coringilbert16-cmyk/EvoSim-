@@ -6,7 +6,9 @@ use std::collections::HashSet;
 mod simulation_material_tests;
 
 use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
-use crate::decision_runtime::{select_action, ActionCandidate, DecisionContext};
+use crate::decision_runtime::{
+    select_action_with_developmental_scores, ActionCandidate, DecisionContext,
+};
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::environment::{
     apply_vents, ActiveMaterialField, Vent, DEFAULT_CELL_SIZE, DEFAULT_DIFFUSION_FRACTION,
@@ -384,6 +386,84 @@ impl Simulation {
             self.decomposing_bodies.remove(index);
         }
     }
+    fn developmental_action_scores(
+        organism: &Organism,
+        environment: &Environment,
+        needs: CurrentNeeds,
+        candidates: &[ActionCandidate],
+        ledger: &EnergyLedger,
+    ) -> Vec<Option<f64>> {
+        if !matches!(organism.development_stage, DevelopmentStage::Juvenile)
+            || needs.development <= 0.0
+        {
+            return vec![None; candidates.len()];
+        }
+
+        let blueprint = &organism.genome.developmental_blueprint;
+        let (seed_mass, seed_length) =
+            crate::juvenile::confirmed_seed_scale_reference(&environment.catalog)
+                .expect("confirmed seed scale reference must be valid");
+        let preferred_length = blueprint.preferred_developmental_length(
+            organism.genome.adult_mass(),
+            seed_mass,
+            seed_length,
+        );
+        let developmental = Some((
+            blueprint,
+            (
+                organism.developmental_origin.x,
+                organism.developmental_origin.y,
+            ),
+            organism.developmental_orientation_radians,
+            preferred_length,
+        ));
+
+        candidates
+            .iter()
+            .map(|candidate| {
+                let mut trial = organism.clone();
+                let mut trial_ledger = *ledger;
+                let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+
+                match candidate.action {
+                    ActionKind::Combine => {
+                        crate::combine_runtime::try_combine(
+                            &mut trial,
+                            environment,
+                            &mut cache,
+                            &mut trial_ledger,
+                            developmental,
+                        )?;
+                    }
+                    ActionKind::Break => {
+                        let index = candidate
+                            .context_key
+                            .as_deref()
+                            .and_then(|key| key.strip_prefix("bond:"))
+                            .and_then(|index| index.parse::<usize>().ok())?;
+                        let bond = *trial.structure.bonds.get(index)?;
+                        trial.structure.break_matching_bond(bond)?;
+
+                        // BREAK is evaluated by the construction opportunity it
+                        // creates. This lets a membrane-opening break win only
+                        // when the resulting physical structure enables a
+                        // better developmental construction result.
+                        let _ = crate::combine_runtime::try_combine(
+                            &mut trial,
+                            environment,
+                            &mut cache,
+                            &mut trial_ledger,
+                            developmental,
+                        );
+                    }
+                    _ => return None,
+                }
+
+                Some(Self::growth_fraction(&trial, environment))
+            })
+            .collect()
+    }
+
     pub(crate) fn step(&mut self) {
         self.tick += 1;
         self.step_environment();
@@ -456,9 +536,19 @@ impl Simulation {
                 let context = DecisionContext { needs, eligibility };
                 let candidates =
                     Self::decision_candidates(&organisms[index], environment, needs, eligibility);
-                let Some(selected) =
-                    select_action(context, &organisms[index].decision_history, &candidates)
-                else {
+                let developmental_scores = Self::developmental_action_scores(
+                    &organisms[index],
+                    environment,
+                    needs,
+                    &candidates,
+                    &self.energy_ledger,
+                );
+                let Some(selected) = select_action_with_developmental_scores(
+                    context,
+                    &organisms[index].decision_history,
+                    &candidates,
+                    &developmental_scores,
+                ) else {
                     continue;
                 };
                 match selected.action {
