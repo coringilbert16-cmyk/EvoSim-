@@ -9,7 +9,7 @@ impl Simulation {
         other_organisms: &mut [Organism],
     ) -> bool {
         let movement_efficiency = organism.genome.movement_efficiency();
-        let (x, y) = match movement_direction(organism, environment.height) {
+        let (x, y) = match movement_direction_periodic(organism, environment.height) {
             Some(direction) => direction,
             None => return false,
         };
@@ -74,7 +74,11 @@ impl Simulation {
     }
 }
 
-fn movement_direction(organism: &Organism, environment_height: f64) -> Option<(f64, f64)> {
+fn movement_direction(organism: &Organism) -> Option<(f64, f64)> {
+    movement_direction_periodic(organism, 0.0)
+}
+
+fn movement_direction_periodic(organism: &Organism, environment_height: f64) -> Option<(f64, f64)> {
     let memory_strength = organism.genome.memory_strength();
     let perception_weight = 1.0 - (0.5 + memory_strength * 0.5);
     let memory_weight = 1.0 - perception_weight;
