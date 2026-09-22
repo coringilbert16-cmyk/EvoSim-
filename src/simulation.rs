@@ -173,7 +173,7 @@ impl Simulation {
         let anchor = organism
             .occupied_cells
             .first()
-            .copied()
+            .cloned()
             .unwrap_or(Position { x: 0.0, y: 0.0 });
         for physical in environment.field.take_contained_physical_materials(&body) {
             if organism
@@ -562,7 +562,7 @@ impl Simulation {
                             .and_then(|key| key.strip_prefix("stored:"))
                             .and_then(|index| index.parse::<usize>().ok())
                             .map(|storage_index| {
-                                Self::expel_physical_material(
+                                crate::expulsion::expel_physical_material(
                                     &mut organisms[index],
                                     environment,
                                     storage_index,
