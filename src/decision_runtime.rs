@@ -106,13 +106,11 @@ pub fn select_action_with_developmental_scores(
                         .relevant_needs()
                         .contains(&crate::decision::NeedKind::Development)
                 {
-                    compare_optional_score(developmental, *best_developmental)
-                        .then_with(|| {
-                            history
-                                .partial_cmp(best_history)
-                                .unwrap_or(std::cmp::Ordering::Equal)
-                        })
-                        == std::cmp::Ordering::Greater
+                    compare_optional_score(developmental, *best_developmental).then_with(|| {
+                        history
+                            .partial_cmp(best_history)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    }) == std::cmp::Ordering::Greater
                 } else {
                     history
                         .partial_cmp(best_history)
