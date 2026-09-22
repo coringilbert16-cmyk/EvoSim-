@@ -123,6 +123,7 @@ mod integration_tests {
         assert_eq!(o.stored_material.count_structured(), 1);
     }
     #[test]
+    // Containment is automatic; there is no organism-side acquisition action.
     fn contained_physical_material_becomes_storage_without_an_acquire_action() {
         let mut s = Simulation::new(21, 10.0);
         s.environment.vents.clear();
