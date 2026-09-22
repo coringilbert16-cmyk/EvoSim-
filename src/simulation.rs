@@ -6,7 +6,9 @@ use std::collections::HashSet;
 mod simulation_material_tests;
 
 use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
-use crate::decision_runtime::{ActionCandidate, DecisionContext};
+use crate::decision_runtime::{
+    select_action_with_developmental_scores, ActionCandidate, DecisionContext,
+};
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::environment::{
     apply_vents, ActiveMaterialField, Vent, DEFAULT_CELL_SIZE, DEFAULT_DIFFUSION_FRACTION,
@@ -443,7 +445,7 @@ impl Simulation {
                 let context = DecisionContext { needs, eligibility };
                 let candidates =
                     Self::decision_candidates(&organisms[index], environment, needs, eligibility);
-                let developmental_scores = Self::developmental_action_scores(
+                let developmental_scores = crate::developmental_decision::developmental_action_scores(
                     &organisms[index],
                     environment,
                     needs,
