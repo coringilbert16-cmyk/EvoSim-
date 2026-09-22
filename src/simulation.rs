@@ -160,6 +160,35 @@ impl Simulation {
             DevelopmentStage::Adult => {}
         }
     }
+    fn absorb_contained_environmental_material(
+        organism: &mut Organism,
+        environment: &mut Environment,
+    ) {
+        let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_structure(
+            &organism.structure,
+            &environment.catalog,
+        ) else {
+            return;
+        };
+        for physical in environment.field.take_contained_physical_materials(&body) {
+            if organism
+                .stored_material
+                .store_physical_instance(physical.clone())
+            {
+                continue;
+            }
+            if let Some(placement) = physical
+                .placements
+                .as_ref()
+                .and_then(|placements| placements.first())
+            {
+                let _ = environment
+                    .field
+                    .deposit(placement.x, placement.y, physical);
+            }
+        }
+    }
+
     fn current_needs(
         organism: &Organism,
         environment: &Environment,
@@ -445,7 +474,8 @@ impl Simulation {
         for organism in &mut self.organisms {
             Self::update_development_stage(organism, &environment_snapshot);
             organism.apply_maintenance(&environment_snapshot.catalog, &mut self.energy_ledger);
-            Self::update_resource_perception(organism, &environment_snapshot);
+            Self::absorb_contained_environmental_material(organism, &mut self.environment);
+            Self::update_resource_perception(organism, &self.environment);
             Self::update_memory_from_sources(organism, &environment_snapshot);
             if matches!(organism.development_stage, DevelopmentStage::Adult)
                 && organism.reproductive_construction.is_none()
