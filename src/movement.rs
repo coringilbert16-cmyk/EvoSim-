@@ -610,14 +610,8 @@ mod tests {
         let mut second = simulation.organisms[0].clone();
         first.id = "first".to_string();
         second.id = "second".to_string();
-        let x = environment.width - 17.0;
+        let x = organism.structure.units[0].placement.x;
         let y = organism.structure.units[0].placement.y;
-        for unit in &mut organism.structure.units {
-            unit.placement.x = x;
-            unit.placement.y = y;
-        }
-        organism.occupied_cells[0].x = x;
-        organism.occupied_cells[0].y = y;
         for unit in &mut first.structure.units {
             unit.placement.x = x + 6.0;
             unit.placement.y = y;
@@ -719,8 +713,14 @@ mod tests {
         let mut second = simulation.organisms[0].clone();
         first.id = "first".to_string();
         second.id = "second".to_string();
-        let x = organism.structure.units[0].placement.x;
+        let x = environment.width - 17.0;
         let y = organism.structure.units[0].placement.y;
+        for unit in &mut organism.structure.units {
+            unit.placement.x = x;
+            unit.placement.y = y;
+        }
+        organism.occupied_cells[0].x = x;
+        organism.occupied_cells[0].y = y;
         for unit in &mut first.structure.units {
             unit.placement.x = x + 6.0;
             unit.placement.y = y;
@@ -729,22 +729,6 @@ mod tests {
             unit.placement.x = x + 12.0;
             unit.placement.y = y;
         }
-        let aggregate_x = x + 17.0;
-        let physical = crate::physical_material::PhysicalMaterial::realized(
-            crate::resources::Material {
-                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
-                internal_bonds: vec![crate::resources::InternalBond {
-                    part_a: 0,
-                    part_b: 1,
-                }],
-            },
-            vec![
-                crate::structure::Placement { x: aggregate_x, y, rotation_radians: 0.0 },
-                crate::structure::Placement { x: aggregate_x + 0.8, y, rotation_radians: 0.0 },
-            ],
-            &environment.catalog,
-        ).expect("realized aggregate should be valid");
-        environment.field.deposit(aggregate_x, y, physical);
         let organism_before = organism.structure.clone();
         let first_before = first.structure.clone();
         let second_before = second.structure.clone();
