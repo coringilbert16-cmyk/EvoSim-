@@ -180,6 +180,17 @@ impl MaterialStorage {
         Some(self.entries.swap_remove(index).into_material())
     }
 
+    pub(crate) fn take_physical_at(&mut self, index: usize) -> Option<PhysicalMaterial> {
+        match self.entries.get(index)? {
+            StoredMaterial::Physical(instance) if instance.is_realized() => {}
+            _ => return None,
+        }
+        match self.entries.swap_remove(index) {
+            StoredMaterial::Physical(instance) => Some(instance),
+            StoredMaterial::Logical(_) => None,
+        }
+    }
+
     pub(crate) fn take_matching_physical(&mut self, target: &Material) -> Option<PhysicalMaterial> {
         let index = self.entries.iter().position(|entry| {
             matches!(entry, StoredMaterial::Physical(instance)
