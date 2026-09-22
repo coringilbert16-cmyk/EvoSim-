@@ -53,6 +53,7 @@ mod math;
 mod resource_visualization;
 mod server;
 mod simulation;
+mod simulation_runner;
 mod state;
 
 // Integration and contract tests.
@@ -73,5 +74,10 @@ mod simulation_tests;
 
 #[tokio::main]
 async fn main() {
+    if std::env::args().nth(1).as_deref() == Some("--headless") {
+        simulation_runner::run_from_args(std::env::args());
+        return;
+    }
+
     server::run().await;
 }
