@@ -194,16 +194,10 @@ fn add_spectrum(target: &mut ToneSpectrum, source: &ToneSpectrum, scale: f64) {
     }
 }
 
-/// Generate the spectrum produced by the actual realized organism graph.
-///
-/// Every realized unit receives the analytical world tone through its own
-/// material response. Existing physical bonds then transmit a portion of the
-/// response between their actual physical endpoints. No blueprint, genome
-/// target, or abstract sensor participates in this calculation.
-pub(crate) fn realized_structure_spectrum(
+fn realized_unit_spectra(
     structure: &crate::structure::OrganismStructure,
     catalog: &[crate::resources::BaseResource],
-) -> ToneSpectrum {
+) -> Vec<ToneSpectrum> {
     let baselines = ResourceBaselines::from_catalog(catalog);
     let mut local = Vec::with_capacity(structure.units.len());
 
@@ -227,9 +221,22 @@ pub(crate) fn realized_structure_spectrum(
         add_spectrum(&mut received[a], &local[b], coupling);
         add_spectrum(&mut received[b], &local[a], coupling);
     }
+    received
+}
 
+/// Generate the spectrum produced by the actual realized organism graph.
+///
+/// Every realized unit receives the analytical world tone through its own
+/// material response. Existing physical bonds then transmit a portion of the
+/// response between their actual physical endpoints. No blueprint, genome
+/// target, or abstract sensor participates in this calculation.
+pub(crate) fn realized_structure_spectrum(
+    structure: &crate::structure::OrganismStructure,
+    catalog: &[crate::resources::BaseResource],
+) -> ToneSpectrum {
+    let received = realized_unit_spectra(structure, catalog);
     let mut spectrum = ToneSpectrum::empty();
-    for unit_spectrum in received.iter() {
+    for unit_spectrum in &received {
         add_spectrum(&mut spectrum, unit_spectrum, 1.0);
     }
     spectrum.retain_strongest();
@@ -247,16 +254,28 @@ pub(crate) fn genome_cavity_spectrum(
     if boundary_units.is_empty() {
         return ToneSpectrum::empty();
     }
-    let structure_spectrum = realized_structure_spectrum(structure, catalog);
-    let divisor = boundary_units.len() as f64;
+    let received = realized_unit_spectra(structure, catalog);
     let mut spectrum = ToneSpectrum::empty();
+    let mut count = 0usize;
 
-    for _unit_index in boundary_units {
-        add_spectrum(&mut spectrum, &structure_spectrum, 1.0 / divisor);
+    for &unit_index in boundary_units {
+        let Some(unit_spectrum) = received.get(unit_index) else {
+            continue;
+        };
+        add_spectrum(&mut spectrum, unit_spectrum, 1.0);
+        count += 1;
+    }
+
+    if count == 0 {
+        return ToneSpectrum::empty();
+    }
+    for component in &mut spectrum.components {
+        component.amplitude /= count as f64;
     }
     spectrum.retain_strongest();
     spectrum
 }
+
 
 #[cfg(test)]
 mod tests {
