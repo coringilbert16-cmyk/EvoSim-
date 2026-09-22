@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod tests {
     use crate::environment::ActiveMaterialField;
+    use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
     use crate::physical_material::PhysicalMaterial;
     use crate::resources::{
         BaseResource, Form, InternalBond, Material, PhysicalState, ResourceProperties, Shape,
     };
-    use crate::state::Simulation;
     use crate::structure::Placement;
 
     fn catalog() -> Vec<BaseResource> {
@@ -39,114 +39,80 @@ mod tests {
         ]
     }
 
-    fn compound() -> (Material, Vec<Placement>) {
-        (
-            Material {
-                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
-                internal_bonds: vec![InternalBond {
-                    part_a: 0,
-                    part_b: 1,
-                }],
-            },
-            vec![
-                Placement {
-                    x: 0.0,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                },
-                Placement {
-                    x: 2.0,
-                    y: 0.5,
-                    rotation_radians: 0.0,
-                },
-            ],
-        )
+    fn body() -> OrganismBodyGeometry {
+        OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 0,
+                form: Form::Circle { radius: 0.5 },
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: -0.5,
+            max_x: 0.5,
+            min_y: -0.5,
+            max_y: 0.5,
+        }
     }
 
-    fn default_compound() -> (Material, Vec<Placement>) {
-        (
-            Material {
-                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
-                internal_bonds: vec![InternalBond {
-                    part_a: 0,
-                    part_b: 1,
-                }],
-            },
-            vec![
-                Placement {
-                    x: 0.0,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                },
-                Placement {
-                    x: 1.0,
-                    y: 0.0,
-                    rotation_radians: 0.25,
-                },
-            ],
-        )
+    fn compound() -> Material {
+        Material {
+            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+            internal_bonds: vec![InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
+        }
     }
 
     #[test]
-    fn acquisition_transfers_realized_composite_intact() {
+    fn logical_material_is_not_promoted_into_physical_containment() {
+        let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
+        field.deposit_at_index(0, compound());
+        let contained = field.take_contained_physical_materials(&body());
+        assert!(contained.is_empty());
+        assert_eq!(field.cells[0].materials.len(), 1);
+    }
+
+    #[test]
+    fn composite_is_partitioned_at_constituent_boundary() {
         let catalog = catalog();
-        let (material, placements) = compound();
-        let physical =
-            PhysicalMaterial::realized(material.clone(), placements.clone(), &catalog).unwrap();
-        let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
-        assert!(field.deposit_physical_at_index(0, physical));
-        let acquired = field.take_physical_for_acquisition(0).unwrap();
-        assert_eq!(acquired.material, material);
-        assert_eq!(acquired.placements, Some(placements));
-        assert_eq!(field.cells[0].physical_materials.len(), 0);
-    }
-
-    #[test]
-    fn logical_structured_material_is_not_promoted_to_physical_acquisition() {
-        let (material, _) = compound();
-        let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
-        field.deposit_at_index(0, material);
-        assert!(field.take_physical_for_acquisition(0).is_none());
-    }
-
-    #[test]
-    fn organism_acquire_target_preserves_realized_composite_in_storage_frame() {
-        let mut simulation = Simulation::new(7, 20.0);
-        let organism_position = simulation.organisms[0].occupied_cells[0].clone();
-        let field_index = simulation
-            .environment
-            .field
-            .index_for_position(organism_position.x, organism_position.y)
-            .unwrap();
-        let (material, placements) = default_compound();
         let physical = PhysicalMaterial::realized(
-            material.clone(),
-            placements.clone(),
-            &simulation.environment.catalog,
+            compound(),
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.8,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
         )
-        .unwrap();
-        assert!(simulation
-            .environment
-            .field
-            .deposit_physical_at_index(field_index, physical));
-        assert!(Simulation::acquire_target(
-            &mut simulation.organisms[0],
-            &mut simulation.environment,
-            field_index
-        ));
-        let acquired = simulation.organisms[0]
-            .stored_material
-            .peek_matching_physical(&material)
-            .unwrap();
-        assert_eq!(acquired.material, material);
-        let stored = acquired.placements.expect("intrinsic realization");
-        assert!(stored[0].x.abs() <= 1e-12);
-        assert!(stored[0].y.abs() <= 1e-12);
-        assert!(stored[0].rotation_radians.abs() <= 1e-12);
-        assert!((stored[1].x.hypot(stored[1].y) - 1.0).abs() <= 1e-9);
-        assert!((stored[1].rotation_radians - 0.25).abs() <= 1e-9);
-        assert!(simulation.environment.field.cells[field_index]
-            .physical_materials
-            .is_empty());
+        .expect("test composite must have a valid physical realization");
+
+        let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
+        field.deposit(0.0, 0.0, physical);
+        let contained = field.take_contained_physical_materials(&body());
+
+        assert_eq!(contained.len(), 1);
+        assert_eq!(contained[0].material.parts, vec![("Carbon".into(), 1.0)]);
+        assert!(contained[0].material.internal_bonds.is_empty());
+
+        let remaining: Vec<_> = field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .collect();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(
+            remaining[0].material.parts,
+            vec![("Hydrogen".into(), 1.0)]
+        );
+        assert!(remaining[0].material.internal_bonds.is_empty());
     }
 }
