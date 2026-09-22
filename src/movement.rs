@@ -9,7 +9,10 @@ impl Simulation {
         other_organisms: &mut [Organism],
     ) -> bool {
         let movement_efficiency = organism.genome.movement_efficiency();
-        let (x, y) = match crate::movement_direction::movement_direction_periodic(organism, environment.height) {
+        let (x, y) = match crate::movement_direction::movement_direction_periodic(
+            organism,
+            environment.height,
+        ) {
             Some(direction) => direction,
             None => return false,
         };
