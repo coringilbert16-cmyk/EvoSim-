@@ -126,18 +126,34 @@ impl crate::state::Simulation {
             .cells_within_radius(px, py, perception_radius)
         {
             let (cell_x, cell_y) = environment.field.cell_center(cell_index);
-            let dx = cell_x - px;
-            let dy = wrapped_delta(cell_y, py, environment.height);
-            let distance = (dx * dx + dy * dy).sqrt();
-            let direction_x = if distance > 0.0 { dx / distance } else { 0.0 };
-            let direction_y = if distance > 0.0 { dy / distance } else { 0.0 };
             let cell = &environment.field.cells[cell_index];
-
-            for material in cell
+            let physical_sources = cell.physical_materials.iter().filter_map(|physical| {
+                physical
+                    .placements
+                    .as_ref()
+                    .and_then(|placements| placements.first())
+                    .map(|placement| (&physical.material, placement.x, placement.y))
+            });
+            let material_sources = cell
                 .materials
                 .iter()
-                .chain(cell.physical_materials.iter().map(|physical| &physical.material))
-            {
+                .map(|material| (material, cell_x, cell_y))
+                .chain(physical_sources);
+
+            for (material, source_x, source_y) in material_sources {
+                let source_dx = source_x - px;
+                let source_dy = wrapped_delta(source_y, py, environment.height);
+                let source_distance = (source_dx * source_dx + source_dy * source_dy).sqrt();
+                let source_direction_x = if source_distance > 0.0 {
+                    source_dx / source_distance
+                } else {
+                    0.0
+                };
+                let source_direction_y = if source_distance > 0.0 {
+                    source_dy / source_distance
+                } else {
+                    0.0
+                };
                 let perceived_amount = Self::perceived_amount(material, sensory_resolution);
                 if perceived_amount <= 0.0 {
                     continue;
@@ -176,13 +192,13 @@ impl crate::state::Simulation {
                         amount_factor,
                         potential_energy_need_factor: energy_need_factor,
                         desirability,
-                        distance,
-                        source_x: cell_x,
-                        source_y: cell_y,
+                        distance: source_distance,
+                        source_x,
+                        source_y,
                         field_index: cell_index,
                     });
-                organism.resource_sense.direction_x += direction_x * desirability;
-                organism.resource_sense.direction_y += direction_y * desirability;
+                organism.resource_sense.direction_x += source_direction_x * desirability;
+                organism.resource_sense.direction_y += source_direction_y * desirability;
             }
         }
 
