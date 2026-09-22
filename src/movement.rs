@@ -9,7 +9,7 @@ impl Simulation {
         other_organisms: &mut [Organism],
     ) -> bool {
         let movement_efficiency = organism.genome.movement_efficiency();
-        let (x, y) = match movement_direction(organism) {
+        let (x, y) = match movement_direction(organism, environment.height) {
             Some(direction) => direction,
             None => return false,
         };
@@ -74,7 +74,7 @@ impl Simulation {
     }
 }
 
-fn movement_direction(organism: &Organism) -> Option<(f64, f64)> {
+fn movement_direction(organism: &Organism, environment_height: f64) -> Option<(f64, f64)> {
     let memory_strength = organism.genome.memory_strength();
     let perception_weight = 1.0 - (0.5 + memory_strength * 0.5);
     let memory_weight = 1.0 - perception_weight;
@@ -85,7 +85,7 @@ fn movement_direction(organism: &Organism) -> Option<(f64, f64)> {
     let mut total = 0.0;
     for point in &organism.memory {
         let dx = point.x - px;
-        let dy = point.y - py;
+        let dy = wrapped_delta(point.y, py, environment_height);
         let distance = (dx * dx + dy * dy).sqrt();
         if distance <= f64::EPSILON {
             continue;
@@ -325,6 +325,14 @@ fn parts_penetrate(
             crate::material_geometry::placed_forms_penetrate(part_a, &wrapped, 0.0)
         })
     })
+}
+
+fn wrapped_delta(target: f64, origin: f64, period: f64) -> f64 {
+    let direct = target - origin;
+    if period > 0.0 {
+        return (direct + period * 0.5).rem_euclid(period) - period * 0.5;
+    }
+    direct
 }
 
 fn wrap_y(y: f64, height: f64) -> f64 {
