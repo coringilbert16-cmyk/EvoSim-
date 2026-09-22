@@ -204,7 +204,7 @@ impl Simulation {
 
     fn current_needs(
         organism: &Organism,
-        _environment: &Environment,
+        environment: &Environment,
         parameters: DecisionParameters,
     ) -> CurrentNeeds {
         let survival_reserve = parameters.survival_reserve.max(f64::EPSILON);
@@ -676,7 +676,7 @@ impl Simulation {
     }
     pub(crate) fn apply_survival_damage(
         organism: &mut Organism,
-        _environment: &Environment,
+        environment: &Environment,
         ledger: &mut EnergyLedger,
         rng: &mut ChaCha8Rng,
     ) -> bool {
