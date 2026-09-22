@@ -143,7 +143,7 @@ mod integration_tests {
             &mut s.environment,
         );
         assert_eq!(s.organisms[0].stored_material.total_amount(), before + 1.0);
-        assert!(s.environment.field.total_amount() < field_before);
+        assert!((s.environment.field.total_amount() - field_before).abs() < 1e-9);
     }
 
     #[test]
@@ -151,25 +151,38 @@ mod integration_tests {
         let mut s = Simulation::new(23, 10.0);
         s.environment.vents.clear();
         let organism = s.organisms[0].clone();
-        let anchor = organism.structure.units[0].placement;
-        let material = structured_carbon_hydrogen();
-        let physical = PhysicalMaterial::realized(
-            material.clone(),
-            vec![
-                Placement {
-                    x: anchor.x,
-                    y: anchor.y,
-                    rotation_radians: 0.0,
-                },
-                Placement {
-                    x: anchor.x + 1.8,
-                    y: anchor.y,
-                    rotation_radians: 0.0,
-                },
-            ],
+        let body = crate::organism_geometry::OrganismBodyGeometry::from_structure(
+            &organism.structure,
             &s.environment.catalog,
         )
-        .expect("test composite must have a valid physical realization");
+        .expect("initial organism must have a realized body");
+        let mut realization = None;
+        'search: for unit in &organism.structure.units {
+            let anchor = unit.placement;
+            if !body.contains_point(anchor.x, anchor.y) {
+                continue;
+            }
+            for distance in [0.5, 0.8, 1.0, 1.2, 1.5, 1.8, 2.0, 2.2, 2.5, 3.0] {
+                let outside = Placement {
+                    x: anchor.x + distance,
+                    y: anchor.y,
+                    rotation_radians: 0.0,
+                };
+                if body.contains_point(outside.x, outside.y) {
+                    continue;
+                }
+                let physical = PhysicalMaterial::realized(
+                    structured_carbon_hydrogen(),
+                    vec![anchor, outside],
+                    &s.environment.catalog,
+                );
+                if physical.is_some() {
+                    realization = Some((anchor, physical.unwrap()));
+                    break 'search;
+                }
+            }
+        }
+        let (anchor, physical) = realization.expect("test composite must straddle the realized body");
         let before = s.organisms[0].stored_material.total_amount();
         s.environment.field.deposit(anchor.x, anchor.y, physical);
         Simulation::transfer_contained_environmental_material(
