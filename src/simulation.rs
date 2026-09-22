@@ -160,7 +160,7 @@ impl Simulation {
             DevelopmentStage::Adult => {}
         }
     }
-    pub(crate) fn absorb_contained_environmental_material(
+    pub(crate) fn transfer_contained_environmental_material(
         organism: &mut Organism,
         environment: &mut Environment,
     ) {
@@ -404,7 +404,7 @@ impl Simulation {
         for organism in &mut self.organisms {
             Self::update_development_stage(organism, &environment_snapshot);
             organism.apply_maintenance(&environment_snapshot.catalog, &mut self.energy_ledger);
-            Self::absorb_contained_environmental_material(organism, &mut self.environment);
+            Self::transfer_contained_environmental_material(organism, &mut self.environment);
             Self::update_resource_perception(organism, &self.environment);
             Self::update_memory_from_sources(organism, &environment_snapshot);
             if matches!(organism.development_stage, DevelopmentStage::Adult)
