@@ -576,7 +576,7 @@ mod tests {
     }
 
     #[test]
-    fn movement_pushes_another_organism_atomically {
+    fn movement_pushes_another_organism_atomically() {
         let simulation = Simulation::new(7, 20.0);
         let mut environment = empty_environment(&simulation);
         let mut organism = simulation.organisms[0].clone();
