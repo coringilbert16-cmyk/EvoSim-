@@ -97,17 +97,26 @@ pub fn select_action_with_developmental_scores(
                 } else if need < *best_need {
                     false
                 } else if context.needs.development > 0.0
-                    && candidate.action.relevant_needs().contains(&crate::decision::NeedKind::Development)
+                    && candidate
+                        .action
+                        .relevant_needs()
+                        .contains(&crate::decision::NeedKind::Development)
                     && best_candidate
                         .action
                         .relevant_needs()
                         .contains(&crate::decision::NeedKind::Development)
                 {
                     compare_optional_score(developmental, *best_developmental)
-                        .then_with(|| history.partial_cmp(best_history).unwrap_or(std::cmp::Ordering::Equal))
+                        .then_with(|| {
+                            history
+                                .partial_cmp(best_history)
+                                .unwrap_or(std::cmp::Ordering::Equal)
+                        })
                         == std::cmp::Ordering::Greater
                 } else {
-                    history.partial_cmp(best_history).unwrap_or(std::cmp::Ordering::Equal)
+                    history
+                        .partial_cmp(best_history)
+                        .unwrap_or(std::cmp::Ordering::Equal)
                         == std::cmp::Ordering::Greater
                 }
             }
@@ -344,7 +353,6 @@ mod tests {
         assert_eq!(select_action(context, &history, &candidates), None);
     }
 
-
     #[test]
     fn physical_developmental_result_breaks_equal_need_tie() {
         let context = DecisionContext {
@@ -407,7 +415,10 @@ mod tests {
             },
         ];
 
-        assert_eq!(select_action(context, &DecisionHistory::default(), &candidates), None);
+        assert_eq!(
+            select_action(context, &DecisionHistory::default(), &candidates),
+            None
+        );
     }
 
     #[test]
