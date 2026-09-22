@@ -1,6 +1,7 @@
 #![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 use crate::environment::ActiveMaterialField;
 use crate::resources::{combine_materials, Material};
+use crate::structure::Placement;
 
 /// Small, reusable structured-material seeds for the initial environment.
 ///
@@ -24,6 +25,14 @@ pub(crate) fn seed_compounds() -> Vec<Material> {
         compound(&[("Carbon", 1.0), ("Hydrogen", 1.0), ("Nitrogen", 1.0)]),
         compound(&[("Carbon", 1.0), ("Sulfur", 1.0), ("Phosphorus", 1.0)]),
     ]
+}
+
+fn compound(parts: &[(&str, f64)]) -> Material {
+    let inputs = parts
+        .iter()
+        .map(|(name, amount)| Material::free_base(*name, *amount))
+        .collect::<Vec<_>>();
+    combine_materials(&inputs)
 }
 
 /// Populate the active field with a deterministic, spatially correlated
@@ -50,7 +59,6 @@ pub(crate) fn seed_initial_landscape(
     catalog: &[crate::resources::BaseResource],
 ) {
     use crate::physical_material::PhysicalMaterial;
-    use crate::structure::Placement;
     use rand::{rngs::StdRng, Rng, SeedableRng};
 
     let compounds = seed_compounds();
@@ -229,8 +237,9 @@ mod tests {
     fn initial_landscape_seeding_is_deterministic() {
         let mut first = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
         let mut second = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-        seed_initial_landscape(&mut first);
-        seed_initial_landscape(&mut second);
+        let catalog = crate::resources::default_catalog();
+        seed_initial_landscape(&mut first, &catalog);
+        seed_initial_landscape(&mut second, &catalog);
         assert_eq!(first.cells, second.cells);
     }
 }
