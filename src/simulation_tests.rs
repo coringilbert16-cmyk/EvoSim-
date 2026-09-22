@@ -16,28 +16,6 @@ mod integration_tests {
         }
     }
 
-    fn realized_structured_carbon_hydrogen(
-        catalog: &[crate::resources::BaseResource],
-    ) -> PhysicalMaterial {
-        PhysicalMaterial::realized(
-            structured_carbon_hydrogen(),
-            vec![
-                Placement {
-                    x: 0.0,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                },
-                Placement {
-                    x: 1.0,
-                    y: 0.0,
-                    rotation_radians: 0.25,
-                },
-            ],
-            catalog,
-        )
-        .expect("test composite must have a valid physical realization")
-    }
-
     #[test]
     fn fresh_organism_is_a_physically_realized_juvenile() {
         let o = Simulation::create_initial_organism();
@@ -180,8 +158,8 @@ mod integration_tests {
                     vec![anchor, outside],
                     &s.environment.catalog,
                 );
-                if physical.is_some() {
-                    realization = Some((anchor, physical.unwrap()));
+                if let Some(physical) = physical {
+                    realization = Some((anchor, physical));
                     break 'search;
                 }
             }
