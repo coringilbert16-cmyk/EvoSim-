@@ -167,3 +167,52 @@ fn polygon_contains_vertices(x: f64, y: f64, vertices: &[(f64, f64)]) -> bool {
     }
     inside
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::resources::Form;
+
+    fn body(form: Form) -> OrganismBodyGeometry {
+        OrganismBodyGeometry {
+            parts: vec![PlacedForm { unit_index: 0, form, x: 0.0, y: 0.0, rotation_radians: 0.0 }],
+            min_x: -10.0, max_x: 10.0, min_y: -10.0, max_y: 10.0,
+        }
+    }
+
+    #[test]
+    fn containment_uses_real_circle_geometry_not_bounding_box() {
+        let geometry = body(Form::Circle { radius: 2.0 });
+        assert!(geometry.contains_point(2.0, 0.0));
+        assert!(!geometry.contains_point(1.5, 1.5));
+        assert!(geometry.bounding_box_contains(1.5, 1.5));
+    }
+
+    #[test]
+    fn containment_respects_rotation_for_polygon_geometry() {
+        let mut geometry = body(Form::Rectangle { width: 4.0, height: 1.0 });
+        geometry.parts[0].rotation_radians = std::f64::consts::FRAC_PI_2;
+        assert!(geometry.contains_point(0.0, 1.9));
+        assert!(!geometry.contains_point(1.9, 0.0));
+    }
+
+    #[test]
+    fn containment_is_union_of_realized_parts() {
+        let geometry = OrganismBodyGeometry {
+            parts: vec![
+                PlacedForm { unit_index: 0, form: Form::Circle { radius: 1.0 }, x: -1.0, y: 0.0, rotation_radians: 0.0 },
+                PlacedForm { unit_index: 1, form: Form::Circle { radius: 1.0 }, x: 1.0, y: 0.0, rotation_radians: 0.0 },
+            ],
+            min_x: -2.0, max_x: 2.0, min_y: -1.0, max_y: 1.0,
+        };
+        assert!(geometry.contains_point(-1.5, 0.0));
+        assert!(geometry.contains_point(1.5, 0.0));
+        assert!(!geometry.contains_point(0.0, 1.0));
+    }
+
+    #[test]
+    fn non_area_line_does_not_create_containment() {
+        let geometry = body(Form::Line { length: 4.0 });
+        assert!(!geometry.contains_point(0.0, 0.0));
+    }
+}
