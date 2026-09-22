@@ -132,6 +132,35 @@ mod tests {
     use super::*;
 
     #[test]
+    fn harmonic_experience_is_stored_with_its_outcome() {
+        let mut organism = Simulation::create_initial_organism();
+        let spectrum = crate::harmonics::ToneSpectrum {
+            components: vec![crate::harmonics::ToneComponent {
+                frequency_hz: 440.0,
+                amplitude: 0.75,
+                phase_radians: 0.25,
+            }],
+        };
+
+        reinforce_memory_point(
+            &mut organism,
+            12.0,
+            34.0,
+            0.5,
+            1,
+            &spectrum,
+            crate::decision::OutcomeKind::Beneficial,
+        );
+
+        assert_eq!(organism.memory.len(), 1);
+        assert_eq!(organism.memory[0].spectrum, spectrum);
+        assert_eq!(
+            organism.memory[0].outcome,
+            Some(crate::decision::OutcomeKind::Beneficial)
+        );
+    }
+
+    #[test]
     fn memory_capacity_uses_diminishing_area_returns() {
         let minimum = crate::cavity::GenomeCavity {
             area: 10.0,
