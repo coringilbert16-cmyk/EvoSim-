@@ -77,7 +77,11 @@ pub(crate) fn damping_ratio(properties: ResourceProperties, baselines: ResourceB
     let reactivity = properties.reactivity.max(0.0);
     let baseline = baselines.reactivity.max(0.0);
     let normalized = if baseline <= f64::EPSILON {
-        if reactivity <= f64::EPSILON { 0.0 } else { 1.0 }
+        if reactivity <= f64::EPSILON {
+            0.0
+        } else {
+            1.0
+        }
     } else {
         reactivity / (reactivity + baseline)
     };
