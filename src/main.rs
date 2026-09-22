@@ -4,6 +4,7 @@
 // Core environment, resources, and physical material/structure.
 mod developmental_blueprint;
 mod environment;
+mod expulsion;
 mod environmental_materials;
 mod material_geometry;
 mod material_restoration;
@@ -38,6 +39,7 @@ mod decision_runtime;
 mod genome;
 mod memory;
 mod movement;
+mod movement_direction;
 mod observation;
 mod perception;
 mod reproduction;
