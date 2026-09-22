@@ -375,6 +375,10 @@ impl Simulation {
             return false;
         }
 
+        let owner_offset_projection = physical
+            .owner_relative_origin
+            .map(|origin| origin.x * direction.0 + origin.y * direction.1)
+            .unwrap_or(0.0);
         let mut material_near = f64::INFINITY;
         for (index, placement) in placements.iter().enumerate() {
             let Some((name, _)) = physical.material.parts.get(index) else {
@@ -386,8 +390,10 @@ impl Simulation {
                 return false;
             };
             let extent = resource.shape.form.bounding_radius();
-            let projection =
-                placement.x * direction.0 + placement.y * direction.1 - extent;
+            let projection = owner_offset_projection
+                + placement.x * direction.0
+                + placement.y * direction.1
+                - extent;
             material_near = material_near.min(projection);
         }
         if !material_near.is_finite() {
