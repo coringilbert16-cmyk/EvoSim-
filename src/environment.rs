@@ -21,7 +21,8 @@ pub struct FieldCell {
     /// optimization only; it is not used to represent an existing composite.
     pub materials: Vec<Material>,
     /// Existing physically realized material objects. Their composition,
-    /// internal bonds, and relative realization travel together during ACQUIRE.
+    /// internal bonds, and relative realization travel together during physical
+    /// boundary transfer and environmental movement.
     #[serde(default)]
     pub physical_materials: Vec<PhysicalMaterial>,
 }
@@ -291,8 +292,9 @@ impl ActiveMaterialField {
         Some(taken)
     }
 
-    /// ACQUIRE a physically existing material without reducing it to a
-    /// composition-only value. This is the organism-facing physical transfer.
+    /// Remove a physically existing material object without reducing it to a
+    /// composition-only value. This legacy transfer primitive is retained only
+    /// for migration; physical availability is now determined by containment.
     pub fn take_physical_for_acquisition(&mut self, index: usize) -> Option<PhysicalMaterial> {
         let cell = self.cells.get_mut(index)?;
         let material_index = cell
