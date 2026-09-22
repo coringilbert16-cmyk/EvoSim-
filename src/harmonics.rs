@@ -320,6 +320,9 @@ pub(crate) fn update_organism_harmonics(
     );
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
     #[test]
     fn genome_cavity_receives_environmental_material_at_realized_boundary() {
         let catalog = crate::resources::default_catalog();
@@ -399,9 +402,6 @@ pub(crate) fn update_organism_harmonics(
         assert!(absent.components.is_empty());
     }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
     fn properties(mass: f64, reactivity: f64, cohesion: f64) -> ResourceProperties {
         ResourceProperties {
