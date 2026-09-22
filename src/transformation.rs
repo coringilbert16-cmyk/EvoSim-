@@ -321,13 +321,14 @@ impl Simulation {
                     .filter(|cavity| cavity.qualifies())
                     .map(|cavity| crate::memory::memory_capacity(&cavity));
             if let Some(capacity) = capacity {
+                let spectrum = organism.harmonic_spectrum.clone();
                 crate::memory::reinforce_memory_point(
                     organism,
                     x,
                     y,
                     reinforcement,
                     capacity,
-                    &organism.harmonic_spectrum,
+                    &spectrum,
                     outcome,
                 );
             } else {
