@@ -206,7 +206,7 @@ mod tests {
     #[test]
     fn initial_landscape_contains_empty_field_between_formations() {
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-        seed_initial_landscape(&mut field);
+        seed_initial_landscape(&mut field, &crate::resources::default_catalog());
         let occupied = field
             .cells
             .iter()
@@ -218,7 +218,7 @@ mod tests {
     #[test]
     fn formations_contain_multiple_compositions() {
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-        seed_initial_landscape(&mut field);
+        seed_initial_landscape(&mut field, &crate::resources::default_catalog());
         let signatures = field
             .cells
             .iter()
@@ -231,7 +231,7 @@ mod tests {
     #[test]
     fn initial_landscape_is_physically_realized() {
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-        seed_initial_landscape(&mut field);
+        seed_initial_landscape(&mut field, &crate::resources::default_catalog());
         assert!(field
             .cells
             .iter()
