@@ -3,10 +3,10 @@ use crate::organism::Organism;
 use crate::structure::Placement;
 
 pub(crate) fn expel_physical_material(
-        organism: &mut Organism,
-        environment: &mut Environment,
-        storage_index: usize,
-    ) -> bool {
+    organism: &mut Organism,
+    environment: &mut Environment,
+    storage_index: usize,
+) -> bool {
         let Some(origin) = organism.occupied_cells.first() else {
             return false;
         };
