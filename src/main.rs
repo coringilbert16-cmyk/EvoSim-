@@ -39,7 +39,6 @@ mod decision_runtime;
 mod genome;
 mod memory;
 mod movement;
-mod movement_direction;
 mod observation;
 mod perception;
 mod reproduction;
