@@ -65,7 +65,7 @@ impl Simulation {
 
         let mut strongest_source: Option<(f64, f64, f64)> = None;
         for cell_index in environment
-             .field
+            .field
             .cells_within_radius(
                 px,
                 py,
