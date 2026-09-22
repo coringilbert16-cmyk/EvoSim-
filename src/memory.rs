@@ -65,16 +65,34 @@ impl Simulation {
 
         let mut strongest_source: Option<(f64, f64, f64)> = None;
         for cell_index in environment
-            .field
-            .cells_within_radius(px, py, perception_radius)
+             .field
+            .cells_within_radius(
+                px,
+                py,
+                perception_radius + environment.field.cell_size * 2.0_f64.sqrt() * 0.5,
+            )
         {
             let (cell_x, cell_y) = environment.field.cell_center(cell_index);
             let cell = &environment.field.cells[cell_index];
-            for material in cell
+            let physical_sources = cell.physical_materials.iter().filter_map(|physical| {
+                physical
+                    .placements
+                    .as_ref()
+                    .and_then(|placements| placements.first())
+                    .map(|placement| (&physical.material, placement.x, placement.y))
+            });
+            let material_sources = cell
                 .materials
                 .iter()
-                .chain(cell.physical_materials.iter().map(|physical| &physical.material))
-            {
+                .map(|material| (material, cell_x, cell_y))
+                .chain(physical_sources);
+            for (material, source_x, source_y) in material_sources {
+                let source_dx = source_x - px;
+                let source_dy = crate::perception::wrapped_delta(source_y, py, environment.height);
+                let source_distance = (source_dx * source_dx + source_dy * source_dy).sqrt();
+                if source_distance > perception_radius {
+                    continue;
+                }
                 let perceived_amount = Self::perceived_amount(material, sensory_resolution);
                 if perceived_amount <= 0.0 {
                     continue;
@@ -94,7 +112,7 @@ impl Simulation {
                     .map(|(_, _, current)| desirability > current)
                     .unwrap_or(true)
                 {
-                    strongest_source = Some((cell_x, cell_y, desirability));
+                    strongest_source = Some((source_x, source_y, desirability));
                 }
             }
         }
