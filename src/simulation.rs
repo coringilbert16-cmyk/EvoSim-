@@ -160,7 +160,7 @@ impl Simulation {
             DevelopmentStage::Adult => {}
         }
     }
-    fn absorb_contained_environmental_material(
+    pub(crate) fn absorb_contained_environmental_material(
         organism: &mut Organism,
         environment: &mut Environment,
     ) {
