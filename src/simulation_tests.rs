@@ -383,3 +383,5 @@ mod integration_tests {
             .has_knowledge(ActionKind::Break, Some("bond:0")));
     }
 }
+
+// CI format verification.
