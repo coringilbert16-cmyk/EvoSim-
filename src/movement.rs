@@ -78,7 +78,10 @@ fn movement_direction(organism: &Organism) -> Option<(f64, f64)> {
     movement_direction_periodic(organism, 0.0)
 }
 
-pub(crate) fn movement_direction_periodic(organism: &Organism, environment_height: f64) -> Option<(f64, f64)> {
+pub(crate) fn movement_direction_periodic(
+    organism: &Organism,
+    environment_height: f64,
+) -> Option<(f64, f64)> {
     let memory_strength = organism.genome.memory_strength();
     let perception_weight = 1.0 - (0.5 + memory_strength * 0.5);
     let memory_weight = 1.0 - perception_weight;
@@ -354,7 +357,9 @@ fn static_material_blocks(parts: &[PlacedMaterialPart], environment: &Environmen
     for cell in &environment.field.cells {
         for physical in &cell.physical_materials {
             let candidate_parts = physical_parts_at(physical, environment, 0.0, 0.0);
-            if !candidate_parts.is_empty() && parts_penetrate(parts, &candidate_parts, environment.height) {
+            if !candidate_parts.is_empty()
+                && parts_penetrate(parts, &candidate_parts, environment.height)
+            {
                 return true;
             }
         }
