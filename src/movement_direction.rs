@@ -12,9 +12,6 @@ pub(crate) fn movement_direction_periodic(
     organism: &Organism,
     environment_height: f64,
 ) -> Option<(f64, f64)> {
-    let memory_strength = organism.genome.memory_strength();
-    let perception_weight = 1.0 - (0.5 + memory_strength * 0.5);
-    let memory_weight = 1.0 - perception_weight;
     let (px, py) = organism.occupied_cells.first().map(|p| (p.x, p.y))?;
 
     let mut memory_x = 0.0;
@@ -37,8 +34,8 @@ pub(crate) fn movement_direction_periodic(
         memory_y /= total;
     }
 
-    let x = memory_weight * memory_x + perception_weight * organism.resource_sense.direction_x;
-    let y = memory_weight * memory_y + perception_weight * organism.resource_sense.direction_y;
+    let x = memory_x;
+    let y = memory_y;
     let magnitude = (x * x + y * y).sqrt();
     if magnitude <= f64::EPSILON {
         None
