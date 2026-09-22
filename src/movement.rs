@@ -58,10 +58,8 @@ impl Simulation {
         organism.occupied_cells[0].x = new_x;
         organism.occupied_cells[0].y = new_y;
         organism.developmental_origin.x += dx;
-        organism.developmental_origin.y = wrap_y(
-            organism.developmental_origin.y + 0.0,
-            environment.height,
-        );
+        organism.developmental_origin.y =
+            wrap_y(organism.developmental_origin.y + dy, environment.height);
         for unit in &mut organism.structure.units {
             unit.placement.x += dx;
             unit.placement.y = wrap_y(unit.placement.y + dy, environment.height);
@@ -429,10 +427,11 @@ fn translate_organism(
     environment_height: f64,
 ) {
     organism.developmental_origin.x += dx;
-    organism.developmental_origin.y += dy;
+    organism.developmental_origin.y =
+        wrap_y(organism.developmental_origin.y + dy, environment_height);
     for point in &mut organism.occupied_cells {
         point.x += dx;
-        point.y = wrap_y(point.y + 0.0, environment_height);
+        point.y = wrap_y(point.y + dy, environment_height);
     }
     for unit in &mut organism.structure.units {
         unit.placement.x += dx;
