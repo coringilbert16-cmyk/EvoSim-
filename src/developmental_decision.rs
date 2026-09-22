@@ -37,8 +37,7 @@ pub(crate) fn developmental_action_scores(
     candidates: &[ActionCandidate],
     ledger: &EnergyLedger,
 ) -> Vec<Option<f64>> {
-    if !matches!(organism.development_stage, DevelopmentStage::Juvenile)
-        || needs.development <= 0.0
+    if !matches!(organism.development_stage, DevelopmentStage::Juvenile) || needs.development <= 0.0
     {
         return vec![None; candidates.len()];
     }
