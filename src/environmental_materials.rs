@@ -96,7 +96,7 @@ pub(crate) fn seed_initial_landscape(
                 rng.gen_range(0.25..0.65),
             );
             let Some(physical) =
-                PhysicalMaterial::realized(material.clone(), placements, &catalog)
+                PhysicalMaterial::realized(material.clone(), placements, catalog)
             else {
                 continue;
             };
