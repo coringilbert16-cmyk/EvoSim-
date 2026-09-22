@@ -35,7 +35,7 @@ impl Simulation {
             None => return false,
         };
         let new_x = (old_x + delta_x).clamp(0.0, environment.width);
-        let new_y = (old_y + delta_y).clamp(0.0, environment.height);
+        let new_y = wrap_y(old_y + delta_y, environment.height);
         let dx = new_x - old_x;
         let dy = new_y - old_y;
         if dx.abs() <= f64::EPSILON && dy.abs() <= f64::EPSILON {
@@ -173,7 +173,7 @@ fn push_blockers_for_parts(
         }
         let candidate = other_organisms[index].clone();
         let candidate_parts = organism_parts_at(&candidate, environment, 0.0, 0.0);
-        if !parts_penetrate(moving_destination, &candidate_parts) {
+        if !parts_penetrate(moving_destination, &candidate_parts, environment.height) {
             continue;
         }
         if !can_translate_organism(&candidate, environment, dx, dy) {
@@ -211,7 +211,7 @@ fn push_blockers_for_parts(
                 continue;
             }
             let candidate_parts = physical_parts_at(&candidate, environment, 0.0, 0.0);
-            if !parts_penetrate(moving_destination, &candidate_parts) {
+            if !parts_penetrate(moving_destination, &candidate_parts, environment.height) {
                 continue;
             }
             if !can_translate_physical(&candidate, environment, dx, dy) {
@@ -299,11 +299,39 @@ fn physical_parts_at(
         .collect()
 }
 
-fn parts_penetrate(a: &[PlacedMaterialPart], b: &[PlacedMaterialPart]) -> bool {
+fn parts_penetrate(
+    a: &[PlacedMaterialPart],
+    b: &[PlacedMaterialPart],
+    environment_height: f64,
+) -> bool {
     a.iter().any(|part_a| {
-        b.iter()
-            .any(|part_b| crate::material_geometry::placed_forms_penetrate(part_a, part_b, 0.0))
+        b.iter().any(|part_b| {
+            if crate::material_geometry::placed_forms_penetrate(part_a, part_b, 0.0) {
+                return true;
+            }
+            // The active field is vertically periodic. Test the two wrapped
+            // images needed to detect contact across the seam without making
+            // the seam itself a physical wall.
+            if environment_height <= 0.0 {
+                return false;
+            }
+            let mut wrapped = part_b.clone();
+            wrapped.placement.y += environment_height;
+            if crate::material_geometry::placed_forms_penetrate(part_a, &wrapped, 0.0) {
+                return true;
+            }
+            wrapped.placement.y -= 2.0 * environment_height;
+            crate::material_geometry::placed_forms_penetrate(part_a, &wrapped, 0.0)
+        })
     })
+}
+
+fn wrap_y(y: f64, height: f64) -> f64 {
+    if height > 0.0 {
+        y.rem_euclid(height)
+    } else {
+        y
+    }
 }
 
 fn static_material_blocks(parts: &[PlacedMaterialPart], environment: &Environment) -> bool {
@@ -313,7 +341,7 @@ fn static_material_blocks(parts: &[PlacedMaterialPart], environment: &Environmen
     for cell in &environment.field.cells {
         for physical in &cell.physical_materials {
             let candidate_parts = physical_parts_at(physical, environment, 0.0, 0.0);
-            if !candidate_parts.is_empty() && parts_penetrate(parts, &candidate_parts) {
+            if !candidate_parts.is_empty() && parts_penetrate(parts, &candidate_parts, environment.height) {
                 return true;
             }
         }
@@ -336,13 +364,15 @@ fn can_translate_physical(
             x.is_finite()
                 && y.is_finite()
                 && x - radius >= 0.0
-                && y - radius >= 0.0
                 && x + radius <= environment.width
-                && y + radius <= environment.height
         })
 }
 
-fn translate_physical(physical: &mut crate::physical_material::PhysicalMaterial, dx: f64, dy: f64) {
+fn translate_physical(
+    physical: &mut crate::physical_material::PhysicalMaterial,
+    dx: f64,
+    dy: f64,
+) {
     if let Some(placements) = physical.placements.as_mut() {
         for placement in placements {
             placement.x += dx;
@@ -366,9 +396,7 @@ fn can_translate_organism(
         x.is_finite()
             && y.is_finite()
             && x - radius >= 0.0
-            && y - radius >= 0.0
             && x + radius <= environment.width
-            && y + radius <= environment.height
     })
 }
 
