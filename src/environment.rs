@@ -181,6 +181,54 @@ impl ActiveMaterialField {
         indices
     }
 
+    /// Remove the already-realized physical constituents whose placement points
+    /// are inside the organism's realized body geometry. The grid is only an
+    /// index: every field cell is examined for physical candidates, and a
+    /// composite may be partitioned at constituent boundaries.
+    pub(crate) fn take_contained_physical_materials(
+        &mut self,
+        body: &crate::organism_geometry::OrganismBodyGeometry,
+    ) -> Vec<PhysicalMaterial> {
+        let mut contained = Vec::new();
+        for cell in &mut self.cells {
+            let mut remaining = Vec::with_capacity(cell.physical_materials.len());
+            for physical in cell.physical_materials.drain(..) {
+                let Some(placements) = physical.placements.as_ref() else {
+                    remaining.push(physical);
+                    continue;
+                };
+                if placements.len() != physical.material.parts.len() {
+                    remaining.push(physical);
+                    continue;
+                }
+                let selected: Vec<usize> = placements
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, placement)| {
+                        body.contains_point(placement.x, placement.y).then_some(index)
+                    })
+                    .collect();
+                if selected.is_empty() {
+                    remaining.push(physical);
+                    continue;
+                }
+                if selected.len() == placements.len() {
+                    contained.push(physical);
+                    continue;
+                }
+                match crate::material_transfer::split_physical_material(&physical, &selected) {
+                    Some((inside, outside)) => {
+                        contained.push(inside);
+                        remaining.push(outside);
+                    }
+                    None => remaining.push(physical),
+                }
+            }
+            cell.physical_materials = remaining;
+        }
+        contained
+    }
+
     pub fn neighbor_indices(&self, index: usize) -> Vec<usize> {
         let (row, col) = self.row_col_for_index(index);
         let mut out = Vec::with_capacity(4);
