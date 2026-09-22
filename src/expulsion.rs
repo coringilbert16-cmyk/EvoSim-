@@ -10,7 +10,7 @@ pub(crate) fn expel_physical_material(
         return false;
     };
     let mut direction =
-        crate::movement_direction::movement_direction_periodic(organism, environment.height);
+        crate::movement::movement_direction_periodic(organism, environment.height);
     if direction.is_none() {
         let Some(stored) = organism.stored_material.entries.get(storage_index) else {
             return false;
