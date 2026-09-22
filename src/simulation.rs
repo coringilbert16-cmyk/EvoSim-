@@ -390,10 +390,9 @@ impl Simulation {
                 return false;
             };
             let extent = resource.shape.form.bounding_radius();
-            let projection = owner_offset_projection
-                + placement.x * direction.0
-                + placement.y * direction.1
-                - extent;
+            let projection =
+                owner_offset_projection + placement.x * direction.0 + placement.y * direction.1
+                    - extent;
             material_near = material_near.min(projection);
         }
         if !material_near.is_finite() {
