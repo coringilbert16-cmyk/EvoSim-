@@ -4,8 +4,8 @@
 // Core environment, resources, and physical material/structure.
 mod developmental_blueprint;
 mod environment;
-mod expulsion;
 mod environmental_materials;
+mod expulsion;
 mod material_geometry;
 mod material_restoration;
 mod material_storage;
