@@ -23,6 +23,8 @@ pub(crate) struct PhysicalMaterial {
     pub(crate) placements: Option<Vec<Placement>>,
     #[serde(default)]
     pub(crate) internal_connections: Option<Vec<PhysicalMaterialBond>>,
+    #[serde(default)]
+    pub(crate) owner_relative_origin: Option<Placement>,
 }
 
 impl PhysicalMaterial {
@@ -31,6 +33,7 @@ impl PhysicalMaterial {
             material,
             placements: None,
             internal_connections: None,
+            owner_relative_origin: None,
         }
     }
 
@@ -91,6 +94,7 @@ impl PhysicalMaterial {
             material,
             placements: Some(placements),
             internal_connections: Some(internal_connections),
+            owner_relative_origin: None,
         })
     }
 
@@ -122,6 +126,7 @@ impl PhysicalMaterial {
             material: self.material,
             placements: Some(rebased),
             internal_connections: self.internal_connections,
+            owner_relative_origin: self.owner_relative_origin,
         })
     }
 }
