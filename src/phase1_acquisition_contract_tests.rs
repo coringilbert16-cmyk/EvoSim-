@@ -86,7 +86,7 @@ mod tests {
                     rotation_radians: 0.0,
                 },
                 Placement {
-                    x: 0.8,
+                    x: 1.8,
                     y: 0.0,
                     rotation_radians: 0.0,
                 },
