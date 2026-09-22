@@ -509,8 +509,8 @@ mod tests {
             &mut organism,
             &mut environment,
             &mut [],
-            -10.0,
-            -10.0
+            0.0,
+            0.0
         ));
         assert!(!Simulation::try_move_cell(
             &mut organism,
