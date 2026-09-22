@@ -180,9 +180,10 @@ impl Simulation {
                 .stored_material
                 .store_physical_instance_at_owner_anchor(
                     physical.clone(),
-                    Position {
+                    Placement {
                         x: anchor.x,
                         y: anchor.y,
+                        rotation_radians: 0.0,
                     },
                 )
             {
