@@ -379,10 +379,7 @@ fn can_translate_physical(
             let radius = part.form.bounding_radius();
             let x = part.placement.x;
             let y = part.placement.y;
-            x.is_finite()
-                && y.is_finite()
-                && x - radius >= 0.0
-                && x + radius <= environment.width
+            x.is_finite() && y.is_finite() && x - radius >= 0.0 && x + radius <= environment.width
         })
 }
 
@@ -413,10 +410,7 @@ fn can_translate_organism(
         let radius = shape.form.bounding_radius();
         let x = unit.placement.x + dx;
         let y = unit.placement.y + dy;
-        x.is_finite()
-            && y.is_finite()
-            && x - radius >= 0.0
-            && x + radius <= environment.width
+        x.is_finite() && y.is_finite() && x - radius >= 0.0 && x + radius <= environment.width
     })
 }
 
@@ -437,12 +431,7 @@ fn translate_reproductive_construction(
     }
 }
 
-fn translate_organism(
-    organism: &mut Organism,
-    dx: f64,
-    dy: f64,
-    environment_height: f64,
-) {
+fn translate_organism(organism: &mut Organism, dx: f64, dy: f64, environment_height: f64) {
     organism.developmental_origin.x += dx;
     organism.developmental_origin.y =
         wrap_y(organism.developmental_origin.y + dy, environment_height);
