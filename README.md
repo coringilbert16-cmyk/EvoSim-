@@ -1796,3 +1796,101 @@ The approved P6 developmental-field equations are now paired with the following 
 - Numerical size-preference mass bounds remain **EXPERIMENTAL**.
 
 No experimental parameter above is an additional biological authority. Changing one changes the experiment within the approved P6 architecture.
+
+# 58. Harmonics / World Tone Architecture — APPROVED
+
+The organism does not use a separate authored resource-perception system.
+
+The approved causal model is:
+
+**World tone / environmental harmonic activity → physical material response → physical bond propagation → realized organism structure → physical genome cavity → organism memory / internal state**
+
+The organism does not receive an abstract resource-desirability signal. Its physically realized structure is the interaction surface.
+
+## 58.1 World tone
+
+The world reference tone is **440 Hz**.
+
+It is represented analytically as a spectral drive. The simulation does not generate 440 waveform cycles per tick.
+
+## 58.2 Material response
+
+Existing physical resource properties provide the harmonic behavior.
+
+- Mass supplies inertia.
+- Cohesion supplies the restoring/coupling tendency.
+- Reactivity supplies damping and nonlinear harmonic response.
+- No new damping-only resource property is introduced.
+
+The intrinsic natural-frequency relationship uses the existing cohesion/mass relationship and is normalized against catalog baselines while remaining anchored to the 440 Hz world reference.
+
+## 58.3 Spectral representation
+
+Harmonic state uses a compact spectrum:
+
+- frequency
+- amplitude
+- phase
+
+The representation is intentionally bounded rather than a full waveform simulation.
+
+Nonlinear material response may produce integer harmonic components. The exact spectrum is a consequence of realized material properties and structure.
+
+## 58.4 Physical propagation
+
+Physical bonds permit harmonic propagation.
+
+The realized physical graph is authoritative for structural harmonic interaction. Blueprint fields, inherited body plans, and abstract sensor geometry are not used as harmonic propagation authorities.
+
+Composite harmonic behavior is modeled as a compact coupled-oscillator approximation rather than a separate acoustic-fluid simulation.
+
+## 58.5 Genome cavity
+
+The actual qualifying genome cavity is the organism's physical harmonic reception surface.
+
+Cavity membership comes from realized cavity geometry and its actual boundary units. No predefined genome core or blueprint-only receptor exists.
+
+A non-qualifying realized structure has no qualifying genome harmonic memory surface.
+
+## 58.6 Memory
+
+Harmonic experiences use the existing organism memory architecture.
+
+A remembered experience contains:
+
+- spatial context
+- memory strength
+- the received spectral content
+- the observed outcome
+
+Cavity geometry determines memory capacity and persistence.
+
+The inherited `memory_strength` trait controls memory formation/reinforcement strength. It does not determine cavity capacity or replace the physical cavity as authority.
+
+Actual outcomes affect reinforcement. Learned harmonic memories are organism internal state and are not inherited genome traits.
+
+## 58.7 Perception retirement
+
+The legacy resource-perception architecture is retired.
+
+The following are no longer part of the organism's behavioral authority:
+
+- perception radius
+- sensory resolution
+- directional resolution
+- resource-property affinity genes
+- resource desirability calculations
+- abstract resource observations
+- resource-desirability directional vectors
+
+Movement and later behavior must emerge from physically generated harmonic information and learned internal state rather than from a resource-value oracle.
+
+The genome does not contain a replacement `harmonic preference` or `frequency preference` sensor gene. If harmonic differences produce behavioral differences, those differences must arise through realized physical structure and its interaction with the harmonic environment.
+
+## 58.8 Authority rule
+
+The governing principle is:
+
+> **An organism does not perceive the world. Its physically realized structure interacts with the world, and whatever information that interaction produces becomes available to the organism.**
+
+No mechanism may be introduced solely to restore the behavior previously supplied by the retired resource-perception oracle. If an exact harmonic-to-action relationship is not specified, implementation stops at the physical information boundary rather than inventing a behavioral shortcut.
