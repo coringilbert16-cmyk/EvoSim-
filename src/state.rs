@@ -139,6 +139,9 @@ pub(crate) struct Organism {
     pub(crate) occupied_cells: Vec<Position>,
     pub(crate) genome: Genome,
     pub(crate) resource_sense: ResourceSense,
+    /// Spectrum currently present at the organism's physically realized genome cavity.
+    #[serde(default)]
+    pub(crate) harmonic_spectrum: crate::harmonics::ToneSpectrum,
     pub(crate) memory: Vec<MemoryPoint>,
     pub(crate) decision_history: DecisionHistory,
     pub(crate) usable_energy: f64,
