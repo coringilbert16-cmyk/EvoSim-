@@ -36,7 +36,7 @@ fn field_starts_empty() {
 }
 
 #[test]
-fn_horizontal_bounds_remain_closed_while_vertical_positions_wrap() {
+fn horizontal_bounds_remain_closed_while_vertical_positions_wrap() {
     let field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
     assert!(field.index_for_position(-1.0, 5.0).is_none());
     assert_eq!(
