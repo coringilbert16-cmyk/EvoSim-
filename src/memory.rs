@@ -53,75 +53,6 @@ impl Simulation {
             });
             organism.memory.truncate(capacity);
         }
-
-        let (px, py) = {
-            let p = &organism.occupied_cells[0];
-            (p.x, p.y)
-        };
-        let perception_radius = organism.genome.perception_radius();
-        let sensory_resolution = organism.genome.sensory_resolution();
-        let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
-        let ranges = crate::resources::property_ranges(&environment.catalog);
-
-        let mut strongest_source: Option<(f64, f64, f64)> = None;
-        for cell_index in environment.field.cells_within_radius(
-            px,
-            py,
-            perception_radius + environment.field.cell_size * 2.0_f64.sqrt() * 0.5,
-        ) {
-            let (cell_x, cell_y) = environment.field.cell_center(cell_index);
-            let cell = &environment.field.cells[cell_index];
-            let physical_sources = cell.physical_materials.iter().filter_map(|physical| {
-                physical
-                    .placements
-                    .as_ref()
-                    .and_then(|placements| placements.first())
-                    .map(|placement| (&physical.material, placement.x, placement.y))
-            });
-            let material_sources = cell
-                .materials
-                .iter()
-                .map(|material| (material, cell_x, cell_y))
-                .chain(physical_sources);
-            for (material, source_x, source_y) in material_sources {
-                let source_dx = source_x - px;
-                let source_dy = crate::perception::wrapped_delta(source_y, py, environment.height);
-                let source_distance = (source_dx * source_dx + source_dy * source_dy).sqrt();
-                if source_distance > perception_radius {
-                    continue;
-                }
-                let perceived_amount = Self::perceived_amount(material, sensory_resolution);
-                if perceived_amount <= 0.0 {
-                    continue;
-                }
-                let properties = material.weighted_properties(&environment.catalog);
-                let (_, _, _, _, _, desirability) = Self::calculate_desirability(
-                    organism,
-                    &properties,
-                    perceived_amount,
-                    &baselines,
-                    &ranges,
-                );
-                if desirability <= 0.0 {
-                    continue;
-                }
-                if strongest_source
-                    .map(|(_, _, current)| desirability > current)
-                    .unwrap_or(true)
-                {
-                    strongest_source = Some((source_x, source_y, desirability));
-                }
-            }
-        }
-
-        let Some((sx, sy, desirability)) = strongest_source else {
-            return;
-        };
-        let memory_strength = (desirability * organism.genome.memory_strength()).clamp(0.0, 1.0);
-        if memory_strength <= 0.0 {
-            return;
-        }
-        reinforce_memory_point(organism, sx, sy, memory_strength, capacity);
     }
 
     pub(crate) fn reinforce_memory_point(
@@ -130,6 +61,8 @@ impl Simulation {
         sy: f64,
         memory_strength: f64,
         capacity: usize,
+        spectrum: &crate::harmonics::ToneSpectrum,
+        outcome: crate::decision::OutcomeKind,
     ) {
         let merged = organism.memory.iter_mut().find(|p| {
             let dx = p.x - sx;
@@ -142,6 +75,8 @@ impl Simulation {
                 existing.x = sx;
                 existing.y = sy;
                 existing.strength = (existing.strength + memory_strength).min(1.0);
+                existing.spectrum = spectrum.clone();
+                existing.outcome = Some(outcome);
             }
             None => {
                 if organism.memory.len() < capacity {
@@ -149,6 +84,8 @@ impl Simulation {
                         x: sx,
                         y: sy,
                         strength: memory_strength,
+                        spectrum: spectrum.clone(),
+                        outcome: Some(outcome),
                     });
                 } else if let Some(weakest) = organism
                     .memory
@@ -160,6 +97,8 @@ impl Simulation {
                             x: sx,
                             y: sy,
                             strength: memory_strength,
+                            spectrum: spectrum.clone(),
+                            outcome: Some(outcome),
                         };
                     }
                 }
@@ -174,8 +113,18 @@ pub(crate) fn reinforce_memory_point(
     sy: f64,
     memory_strength: f64,
     capacity: usize,
+    spectrum: &crate::harmonics::ToneSpectrum,
+    outcome: crate::decision::OutcomeKind,
 ) {
-    Simulation::reinforce_memory_point(organism, sx, sy, memory_strength, capacity);
+    Simulation::reinforce_memory_point(
+        organism,
+        sx,
+        sy,
+        memory_strength,
+        capacity,
+        spectrum,
+        outcome,
+    );
 }
 
 #[cfg(test)]
