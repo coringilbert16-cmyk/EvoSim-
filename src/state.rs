@@ -68,6 +68,13 @@ pub(crate) struct MemoryPoint {
     pub(crate) x: f64,
     pub(crate) y: f64,
     pub(crate) strength: f64,
+    /// Spectral content physically received by the genome cavity when this
+    /// memory was formed or reinforced.
+    #[serde(default)]
+    pub(crate) spectrum: crate::harmonics::ToneSpectrum,
+    /// The observed consequence associated with the remembered spectrum.
+    #[serde(default)]
+    pub(crate) outcome: Option<crate::decision::OutcomeKind>,
 }
 pub(crate) const MEMORY_DECAY_PER_TICK: f64 = 0.995;
 pub(crate) const MEMORY_MERGE_RADIUS: f64 = 40.0;
