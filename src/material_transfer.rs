@@ -13,13 +13,19 @@ pub(crate) fn split_physical_material(
     crate::physical_material::PhysicalMaterial,
 )> {
     let placements = instance.placements.as_ref()?;
-    if !instance.is_realized() || placements.len() != instance.material.parts.len() { return None; }
+    if !instance.is_realized() || placements.len() != instance.material.parts.len() {
+        return None;
+    }
     let mut flags = vec![false; instance.material.parts.len()];
     for &index in selected {
-        if index >= flags.len() || flags[index] { return None; }
+        if index >= flags.len() || flags[index] {
+            return None;
+        }
         flags[index] = true;
     }
-    if selected.is_empty() || selected.len() == flags.len() { return None; }
+    if selected.is_empty() || selected.len() == flags.len() {
+        return None;
+    }
 
     fn build(
         instance: &crate::physical_material::PhysicalMaterial,
@@ -29,31 +35,62 @@ pub(crate) fn split_physical_material(
         let mut remap = vec![usize::MAX; flags.len()];
         let mut parts = Vec::new();
         let mut placements = Vec::new();
-        for (old, ((name, amount), placement)) in instance.material.parts.iter().zip(instance.placements.as_ref()?.iter()).enumerate() {
-            if flags[old] != selected_side { continue; }
+        for (old, ((name, amount), placement)) in instance
+            .material
+            .parts
+            .iter()
+            .zip(instance.placements.as_ref()?.iter())
+            .enumerate()
+        {
+            if flags[old] != selected_side {
+                continue;
+            }
             remap[old] = parts.len();
             parts.push((name.clone(), *amount));
             placements.push(*placement);
         }
-        if parts.is_empty() { return None; }
+        if parts.is_empty() {
+            return None;
+        }
         let connections = instance.internal_connections.as_ref()?;
-        if connections.len() != instance.material.internal_bonds.len() { return None; }
+        if connections.len() != instance.material.internal_bonds.len() {
+            return None;
+        }
         let mut bonds = Vec::new();
         let mut physical = Vec::new();
-        for (bond, connection) in instance.material.internal_bonds.iter().zip(connections.iter()) {
-            if flags[bond.part_a] != selected_side || flags[bond.part_b] != selected_side { continue; }
-            bonds.push(crate::resources::InternalBond { part_a: remap[bond.part_a], part_b: remap[bond.part_b] });
+        for (bond, connection) in instance
+            .material
+            .internal_bonds
+            .iter()
+            .zip(connections.iter())
+        {
+            if flags[bond.part_a] != selected_side || flags[bond.part_b] != selected_side {
+                continue;
+            }
+            bonds.push(crate::resources::InternalBond {
+                part_a: remap[bond.part_a],
+                part_b: remap[bond.part_b],
+            });
             physical.push(crate::physical_material::PhysicalMaterialBond {
-                part_a: remap[connection.part_a], endpoint_a: connection.endpoint_a,
-                part_b: remap[connection.part_b], endpoint_b: connection.endpoint_b,
+                part_a: remap[connection.part_a],
+                endpoint_a: connection.endpoint_a,
+                part_b: remap[connection.part_b],
+                endpoint_b: connection.endpoint_b,
             });
         }
         Some(crate::physical_material::PhysicalMaterial {
-            material: crate::resources::Material { parts, internal_bonds: bonds },
-            placements: Some(placements), internal_connections: Some(physical),
+            material: crate::resources::Material {
+                parts,
+                internal_bonds: bonds,
+            },
+            placements: Some(placements),
+            internal_connections: Some(physical),
         })
     }
-    Some((build(instance, &flags, true)?, build(instance, &flags, false)?))
+    Some((
+        build(instance, &flags, true)?,
+        build(instance, &flags, false)?,
+    ))
 }
 /// Extract up to `requested` whole unstructured units from an ecological aggregate.
 ///
@@ -177,18 +214,51 @@ mod tests {
     fn splits_composite_at_constituent_boundary() {
         let catalog = crate::resources::default_catalog();
         let material = Material {
-            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0), ("Nitrogen".into(), 1.0)],
-            internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }, InternalBond { part_a: 1, part_b: 2 }],
+            parts: vec![
+                ("Carbon".into(), 1.0),
+                ("Hydrogen".into(), 1.0),
+                ("Nitrogen".into(), 1.0),
+            ],
+            internal_bonds: vec![
+                InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                },
+                InternalBond {
+                    part_a: 1,
+                    part_b: 2,
+                },
+            ],
         };
         let placements = vec![
-            crate::structure::Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-            crate::structure::Placement { x: 0.8, y: 0.0, rotation_radians: 0.0 },
-            crate::structure::Placement { x: 1.6, y: 0.0, rotation_radians: 0.0 },
+            crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            crate::structure::Placement {
+                x: 0.8,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            crate::structure::Placement {
+                x: 1.6,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
         ];
-        let physical = crate::physical_material::PhysicalMaterial::realized(material, placements, &catalog).unwrap();
+        let physical =
+            crate::physical_material::PhysicalMaterial::realized(material, placements, &catalog)
+                .unwrap();
         let (inside, outside) = super::split_physical_material(&physical, &[0, 1]).unwrap();
         assert_eq!(inside.material.parts.len(), 2);
-        assert_eq!(inside.material.internal_bonds, vec![InternalBond { part_a: 0, part_b: 1 }]);
+        assert_eq!(
+            inside.material.internal_bonds,
+            vec![InternalBond {
+                part_a: 0,
+                part_b: 1
+            }]
+        );
         assert_eq!(outside.material.parts, vec![("Nitrogen".into(), 1.0)]);
         assert!(outside.material.internal_bonds.is_empty());
         assert!(inside.is_realized());
@@ -200,9 +270,14 @@ mod tests {
         let catalog = crate::resources::default_catalog();
         let physical = crate::physical_material::PhysicalMaterial::realized(
             Material::free_base("Carbon", 1.0),
-            vec![crate::structure::Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }],
+            vec![crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
             &catalog,
-        ).unwrap();
+        )
+        .unwrap();
         assert!(super::split_physical_material(&physical, &[0]).is_none());
     }
 }
