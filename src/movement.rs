@@ -529,7 +529,7 @@ mod tests {
         let x = organism.structure.units[0].placement.x;
         let y = organism.structure.units[0].placement.y;
         let placement = crate::structure::Placement {
-            x: x + 5.0,
+            x: x + 6.0,
             y,
             rotation_radians: 0.0,
         };
