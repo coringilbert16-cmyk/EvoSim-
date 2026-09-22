@@ -226,25 +226,6 @@ fn realized_unit_spectra(
     received
 }
 
-/// Generate the spectrum produced by the actual realized organism graph.
-///
-/// Every realized unit receives the analytical world tone through its own
-/// material response. Existing physical bonds then transmit a portion of the
-/// response between their actual physical endpoints. No blueprint, genome
-/// target, or abstract sensor participates in this calculation.
-pub(crate) fn realized_structure_spectrum(
-    structure: &crate::structure::OrganismStructure,
-    catalog: &[crate::resources::BaseResource],
-) -> ToneSpectrum {
-    let received = realized_unit_spectra(structure, catalog);
-    let mut spectrum = ToneSpectrum::empty();
-    for unit_spectrum in &received {
-        add_spectrum(&mut spectrum, unit_spectrum, 1.0);
-    }
-    spectrum.retain_strongest();
-    spectrum
-}
-
 /// The physical genome cavity receives the spectrum present at its realized
 /// boundary. Boundary membership comes only from the actual cavity analysis;
 /// it is never inferred from a blueprint or a hard-coded genome core.
