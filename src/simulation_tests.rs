@@ -182,8 +182,7 @@ mod integration_tests {
                 }
             }
         }
-        let (anchor, physical) = realization
-            .expect("test composite must straddle the realized body");
+        let (anchor, physical) = realization.expect("test composite must straddle the realized body");
         let before = s.organisms[0].stored_material.total_amount();
         s.environment.field.deposit(anchor.x, anchor.y, physical);
         Simulation::transfer_contained_environmental_material(
