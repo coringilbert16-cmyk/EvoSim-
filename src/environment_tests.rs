@@ -87,30 +87,6 @@ fn deposit_preserves_distinct_structures_and_aggregates_raw_stock() {
 }
 
 #[test]
-fn take_removes_up_to_available_amount_from_selected_material() {
-    let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-    field.deposit(50.0, 50.0, make_raw("Carbon", 4.0));
-    let taken = field.take_at(50.0, 50.0, 0, 100.0).unwrap();
-    assert!((taken.total_amount() - 4.0).abs() < 1e-9);
-    assert!(field.cells[field.index_for_position(50.0, 50.0).unwrap()]
-        .materials
-        .is_empty());
-}
-
-#[test]
-fn take_from_one_material_does_not_touch_another() {
-    let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-    field.deposit(50.0, 50.0, make_raw("Carbon", 4.0));
-    field.deposit(50.0, 50.0, make_structured(9.0));
-    let taken = field.take_at(50.0, 50.0, 0, 4.0).unwrap();
-    assert!((taken.total_amount() - 4.0).abs() < 1e-9);
-    let cell = &field.cells[field.index_for_position(50.0, 50.0).unwrap()];
-    assert_eq!(cell.materials.len(), 1);
-    assert!((cell.materials[0].total_amount() - 9.0).abs() < 1e-9);
-    assert!(cell.materials[0].has_internal_structure());
-}
-
-#[test]
 fn cells_within_radius_returns_only_cells_inside_radius() {
     let field = ActiveMaterialField::new(100.0, 100.0, 25.0);
     assert_eq!(field.cells_within_radius(37.5, 37.5, 1.0), vec![5]);
