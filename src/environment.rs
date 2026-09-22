@@ -15,7 +15,7 @@ pub const DEFAULT_CELL_SIZE: f64 = 25.0;
 pub const DEFAULT_DIFFUSION_FRACTION: f64 = 0.05;
 const MATERIAL_EPSILON: f64 = 1e-9;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct FieldCell {
     /// Aggregate stock for unstructured material. Aggregation is a spatial
     /// optimization only; it is not used to represent an existing composite.
