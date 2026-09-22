@@ -67,8 +67,7 @@ pub(crate) fn expel_physical_material(
         };
         let world_x = boundary.x * cos - boundary.y * sin + part.x;
         let world_y = boundary.x * sin + boundary.y * cos + part.y;
-        let projection =
-            (world_x - origin.x) * direction.0 + (world_y - origin.y) * direction.1;
+        let projection = (world_x - origin.x) * direction.0 + (world_y - origin.y) * direction.1;
         body_support = body_support.max(projection);
     }
     if !body_support.is_finite() {
