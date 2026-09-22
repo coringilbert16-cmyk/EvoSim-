@@ -318,8 +318,7 @@ pub(crate) fn genome_cavity_spectrum(
 
 
 
-impl crate::state::Simulation {
-    /// Refresh the harmonic state from the organism's actual realized genome
+/// Refresh the harmonic state from the organism's actual realized genome
     /// cavity. A non-qualifying physical structure has no genome harmonic
     /// memory surface.
     pub(crate) fn update_organism_harmonics(
