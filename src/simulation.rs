@@ -100,12 +100,6 @@ impl Simulation {
             developmental_orientation_radians: 0.0,
             occupied_cells: vec![anchor],
             genome,
-            resource_sense: ResourceSense {
-                sensed_resources: Vec::new(),
-                direction_x: 0.0,
-                direction_y: 0.0,
-                direction_strength: 0.0,
-            },
             harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
             memory: Vec::new(),
             decision_history: crate::decision::DecisionHistory::default(),
