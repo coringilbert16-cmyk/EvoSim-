@@ -109,10 +109,7 @@ mod tests {
             .flat_map(|cell| cell.physical_materials.iter())
             .collect();
         assert_eq!(remaining.len(), 1);
-        assert_eq!(
-            remaining[0].material.parts,
-            vec![("Hydrogen".into(), 1.0)]
-        );
+        assert_eq!(remaining[0].material.parts, vec![("Hydrogen".into(), 1.0)]);
         assert!(remaining[0].material.internal_bonds.is_empty());
     }
 }
