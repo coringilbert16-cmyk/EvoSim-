@@ -51,34 +51,101 @@ fn history_adjustment(history: &DecisionHistory, candidate: &ActionCandidate) ->
 
 /// Select exactly one approved action from candidates.
 ///
-/// Current need pressure provides the primary action relevance. Recorded
-/// consequences can strengthen or weaken that pressure, but the decision
-/// layer never predicts an unobserved physical outcome. Ties remain stable by
-/// candidate order so seeded simulations stay deterministic.
+/// Need pressure is the primary relevance signal. When developmental pressure
+/// is active and two candidates have equal need pressure, a supplied physical
+/// developmental result breaks the tie before learned history is consulted.
+/// Exact ties remain unresolved rather than inheriting the caller's candidate
+/// ordering.
 pub fn select_action(
     context: DecisionContext,
     history: &DecisionHistory,
     candidates: &[ActionCandidate],
 ) -> Option<ActionCandidate> {
-    let mut best: Option<(f64, ActionCandidate)> = None;
+    let scores = vec![None; candidates.len()];
+    select_action_with_developmental_scores(context, history, candidates, &scores)
+}
 
-    for candidate in candidates {
+/// Select an action using physical developmental results when they are
+/// available. The scores are candidate-specific results produced by the
+/// physical/developmental subsystem; this module does not calculate them.
+pub fn select_action_with_developmental_scores(
+    context: DecisionContext,
+    history: &DecisionHistory,
+    candidates: &[ActionCandidate],
+    developmental_scores: &[Option<f64>],
+) -> Option<ActionCandidate> {
+    let mut best: Option<(f64, Option<f64>, f64, ActionCandidate)> = None;
+
+    for (index, candidate) in candidates.iter().enumerate() {
         if approve(context, candidate.action) != DecisionResult::Approve {
             continue;
         }
 
-        let score =
-            need_pressure(candidate.action, context.needs) + history_adjustment(history, candidate);
+        let need = need_pressure(candidate.action, context.needs);
+        let developmental = developmental_scores
+            .get(index)
+            .copied()
+            .flatten()
+            .filter(|value| value.is_finite());
+        let history = history_adjustment(history, candidate);
 
-        if best
-            .as_ref()
-            .map_or(true, |(best_score, _)| score > *best_score)
-        {
-            best = Some((score, candidate.clone()));
+        let replace = match best.as_ref() {
+            None => true,
+            Some((best_need, best_developmental, best_history, _)) => {
+                if need > *best_need {
+                    true
+                } else if need < *best_need {
+                    false
+                } else if context.needs.development > 0.0
+                    && candidate.action.relevant_needs().contains(&crate::decision::NeedKind::Development)
+                    && best.3_action_is_developmental()
+                {
+                    compare_optional_score(developmental, *best_developmental)
+                        .then_with(|| history.partial_cmp(best_history).unwrap_or(std::cmp::Ordering::Equal))
+                        == std::cmp::Ordering::Greater
+                } else {
+                    history.partial_cmp(best_history).unwrap_or(std::cmp::Ordering::Equal)
+                        == std::cmp::Ordering::Greater
+                }
+            }
+        };
+
+        if replace {
+            best = Some((need, developmental, history, candidate.clone()));
         }
     }
 
-    best.map(|(_, candidate)| candidate)
+    best.map(|(_, _, _, candidate)| candidate)
+}
+
+fn compare_optional_score(a: Option<f64>, b: Option<f64>) -> std::cmp::Ordering {
+    match (a, b) {
+        (Some(a), Some(b)) => a.partial_cmp(&b).unwrap_or(std::cmp::Ordering::Equal),
+        (Some(_), None) => std::cmp::Ordering::Greater,
+        (None, Some(_)) => std::cmp::Ordering::Less,
+        (None, None) => std::cmp::Ordering::Equal,
+    }
+}
+
+trait DevelopmentalCandidate {
+    fn is_developmental(&self) -> bool;
+}
+
+impl DevelopmentalCandidate for ActionKind {
+    fn is_developmental(&self) -> bool {
+        self.relevant_needs()
+            .contains(&crate::decision::NeedKind::Development)
+    }
+}
+
+trait BestCandidateAction {
+    fn action_is_developmental(&self) -> bool;
+}
+
+impl BestCandidateAction for (f64, Option<f64>, f64, ActionCandidate) {
+    fn action_is_developmental(&self) -> bool {
+        self.3.action.is_developmental()
+    }
 }
 
 pub fn record_outcome(
@@ -296,6 +363,72 @@ mod tests {
         ];
 
         assert_eq!(select_action(context, &history, &candidates), None);
+    }
+
+
+    #[test]
+    fn physical_developmental_result_breaks_equal_need_tie() {
+        let context = DecisionContext {
+            needs: CurrentNeeds {
+                survival: 0.0,
+                reproduction: 0.0,
+                development: 1.0,
+            },
+            eligibility: ActionEligibility {
+                can_break: true,
+                can_combine: true,
+                ..Default::default()
+            },
+        };
+        let candidates = vec![
+            ActionCandidate {
+                action: ActionKind::Break,
+                context_key: Some("bond:0".into()),
+            },
+            ActionCandidate {
+                action: ActionKind::Combine,
+                context_key: None,
+            },
+        ];
+        let scores = vec![Some(0.2), Some(0.8)];
+
+        assert_eq!(
+            select_action_with_developmental_scores(
+                context,
+                &DecisionHistory::default(),
+                &candidates,
+                &scores,
+            ),
+            Some(candidates[1].clone())
+        );
+    }
+
+    #[test]
+    fn unresolved_equal_candidates_do_not_use_candidate_order() {
+        let context = DecisionContext {
+            needs: CurrentNeeds {
+                survival: 0.0,
+                reproduction: 1.0,
+                development: 0.0,
+            },
+            eligibility: ActionEligibility {
+                can_break: true,
+                can_combine: true,
+                ..Default::default()
+            },
+        };
+        let candidates = vec![
+            ActionCandidate {
+                action: ActionKind::Break,
+                context_key: Some("bond:0".into()),
+            },
+            ActionCandidate {
+                action: ActionKind::Combine,
+                context_key: None,
+            },
+        ];
+
+        assert_eq!(select_action(context, &DecisionHistory::default(), &candidates), None);
     }
 
     #[test]
