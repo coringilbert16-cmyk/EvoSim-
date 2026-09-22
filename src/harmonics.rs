@@ -260,7 +260,11 @@ fn environmental_spectrum_at_position(
         if material.is_valid() && !material.is_empty() {
             let mass = material.mass(catalog);
             let response = material_response(material.weighted_properties(catalog), baselines, 0.0);
-            add_spectrum(&mut spectrum, &response, environmental_mass_scale(mass, baselines.mass));
+            add_spectrum(
+                &mut spectrum,
+                &response,
+                environmental_mass_scale(mass, baselines.mass),
+            );
         }
     }
     for physical in &cell.physical_materials {
