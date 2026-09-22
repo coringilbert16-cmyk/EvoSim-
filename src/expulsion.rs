@@ -88,6 +88,11 @@ pub(crate) fn expel_physical_material(
             let _ = organism.stored_material.store_physical_instance(physical);
             return false;
         };
+        let relative_origin = physical.owner_relative_origin.unwrap_or(Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        });
         let total_rotation = relative_origin.rotation_radians + placement.rotation_radians;
         let (sin, cos) = total_rotation.sin_cos();
         let local_dx = direction.0 * cos + direction.1 * sin;
