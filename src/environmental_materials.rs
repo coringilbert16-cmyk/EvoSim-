@@ -45,13 +45,15 @@ const FORMATION_CENTER_FRACTIONS: [(f64, f64); INITIAL_FORMATION_COUNT] = [
 /// composition-driven formations. Empty field remains between formations.
 /// Each formation uses a composition-specific repeating pattern with bounded
 /// random variation so its physical outline is irregular rather than circular.
-pub(crate) fn seed_initial_landscape(field: &mut ActiveMaterialField) {
+pub(crate) fn seed_initial_landscape(
+    field: &mut ActiveMaterialField,
+    catalog: &[crate::resources::BaseResource],
+) {
     use crate::physical_material::PhysicalMaterial;
     use crate::structure::Placement;
     use rand::{rngs::StdRng, Rng, SeedableRng};
 
     let compounds = seed_compounds();
-    let catalog = crate::resources::default_catalog();
     if compounds.is_empty() || field.width_cells == 0 || field.height_cells == 0 {
         return;
     }
@@ -191,7 +193,7 @@ mod tests {
     #[test]
     fn initial_landscape_uses_a_small_number_of_physical_formations() {
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-        seed_initial_landscape(&mut field);
+        seed_initial_landscape(&mut field, &crate::resources::default_catalog());
         let physical_count: usize = field
             .cells
             .iter()
