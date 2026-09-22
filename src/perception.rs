@@ -122,7 +122,7 @@ impl crate::state::Simulation {
         let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
         let ranges = crate::resources::property_ranges(&environment.catalog);
         for cell_index in environment
-             .field
+            .field
             .cells_within_radius(
                 px,
                 py,
