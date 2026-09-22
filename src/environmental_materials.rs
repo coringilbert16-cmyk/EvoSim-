@@ -29,59 +29,133 @@ pub(crate) fn seed_compounds() -> Vec<Material> {
 /// Populate the active field with a deterministic, spatially correlated
 /// starting landscape. No terrain categories are introduced: local character
 /// comes entirely from material composition, quantity, and neighboring cells.
+pub(crate) const INITIAL_FORMATION_COUNT: usize = 6;
+const FORMATION_PARTICLES: usize = 120;
+const FORMATION_RADIUS: f64 = 45.0;
+const FORMATION_CENTER_FRACTIONS: [(f64, f64); INITIAL_FORMATION_COUNT] = [
+    (0.18, 0.18),
+    (0.50, 0.18),
+    (0.82, 0.18),
+    (0.18, 0.82),
+    (0.50, 0.82),
+    (0.82, 0.82),
+];
+
+/// Populate the active field with a small number of physically realized,
+/// composition-driven formations. Empty field remains between formations.
+/// Each formation uses a composition-specific repeating pattern with bounded
+/// random variation so its physical outline is irregular rather than circular.
 pub(crate) fn seed_initial_landscape(field: &mut ActiveMaterialField) {
+    use crate::physical_material::PhysicalMaterial;
+    use crate::structure::Placement;
+    use rand::{rngs::StdRng, Rng, SeedableRng};
+
     let compounds = seed_compounds();
-    if compounds.is_empty() {
+    if compounds.is_empty() || field.width_cells == 0 || field.height_cells == 0 {
         return;
     }
 
-    for index in 0..field.cells.len() {
-        let (x, y) = field.cell_center(index);
-        let nx = x / (field.width_cells as f64 * field.cell_size).max(1.0);
-        let ny = y / (field.height_cells as f64 * field.cell_size).max(1.0);
+    let width = field.width_cells as f64 * field.cell_size;
+    let height = field.height_cells as f64 * field.cell_size;
 
-        let field_a = ((nx * 2.4 + ny * 1.3).sin() + 1.0) * 0.5;
-        let field_b = ((nx * 1.1 - ny * 2.7 + 0.8).cos() + 1.0) * 0.5;
-        let field_c = ((nx * 3.0 + ny * 2.0 + 1.7).sin() + 1.0) * 0.5;
-        let selector = ((field_c * compounds.len() as f64) as usize).min(compounds.len() - 1);
+    for (formation_index, &(fx, fy)) in FORMATION_CENTER_FRACTIONS.iter().enumerate() {
+        let center_x = fx * width;
+        let center_y = fy * height;
+        let composition_indices = formation_material_indices(&compounds, formation_index);
+        let seed = formation_seed(&compounds, &composition_indices, formation_index);
+        let mut rng = StdRng::seed_from_u64(seed);
 
-        field.deposit_at_index(index, scaled_material(&compounds[selector], 4.0));
+        for particle_index in 0..FORMATION_PARTICLES {
+            let t = particle_index as f64 / FORMATION_PARTICLES as f64;
+            let angle = t * std::f64::consts::TAU * (1.0 + (seed % 3) as f64 * 0.05)
+                + rng.gen_range(-0.08..0.08);
+            let radial = t.sqrt();
+            let harmonic = 1.0
+                + 0.12 * (angle * (2.0 + (seed % 4) as f64)).sin()
+                + 0.07 * (angle * (3.0 + (seed % 3) as f64) + 1.1).cos();
+            let jitter = rng.gen_range(-0.12..0.12);
+            let radius = FORMATION_RADIUS * radial * (harmonic + jitter).max(0.25);
+            let x = center_x + radius * angle.cos();
+            let y = (center_y + radius * angle.sin()).rem_euclid(height);
+            if x < 0.0 || x >= width {
+                continue;
+            }
 
-        if field_a > 0.72 {
-            let secondary = (selector + 3 + (field_b * 4.0) as usize) % compounds.len();
-            field.deposit_at_index(index, scaled_material(&compounds[secondary], 2.0));
-        }
+            let material_index = composition_indices
+                [((particle_index as u64 + seed) as usize) % composition_indices.len()];
+            let material = &compounds[material_index];
+            let local_rotation = angle + rng.gen_range(-0.35..0.35);
+            let placements = compound_placements(
+                material,
+                x,
+                y,
+                local_rotation,
+                rng.gen_range(0.25..0.65),
+            );
+            let Some(physical) =
+                PhysicalMaterial::realized(material.clone(), placements, &crate::resources::default_catalog())
+            else {
+                continue;
+            };
 
-        if field_a > 0.72 {
-            field.deposit_at_index(index, Material::free_base("Hydrogen", 2.0));
-        }
-        // The previous threshold was unreachable for this deterministic field
-        // (field_b never fell below 0.22), so water was never seeded at all.
-        // Keep water as unstructured fluid stock and give it a real spatial
-        // distribution without introducing a terrain category.
-        if field_b < 0.5 {
-            field.deposit_at_index(index, Material::free_base("Water", 3.0));
+            let Some(index) = field.index_for_position(x, y) else {
+                continue;
+            };
+            field.deposit_physical_at_index(index, physical);
         }
     }
 }
 
-fn compound(parts: &[(&str, f64)]) -> Material {
-    let inputs = parts
-        .iter()
-        .map(|(name, amount)| Material::free_base(*name, *amount))
-        .collect::<Vec<_>>();
-    combine_materials(&inputs)
+fn formation_material_indices(
+    compounds: &[Material],
+    formation_index: usize,
+) -> Vec<usize> {
+    let count = compounds.len();
+    let first = (formation_index * 5 + 1) % count;
+    let second = (first + 3 + formation_index % 4) % count;
+    let third = (second + 4 + formation_index % 3) % count;
+    let mut indices = vec![first, second];
+    if third != first && third != second {
+        indices.push(third);
+    }
+    indices
 }
 
-fn scaled_material(material: &Material, scale: f64) -> Material {
-    Material {
-        parts: material
-            .parts
-            .iter()
-            .map(|(name, amount)| (name.clone(), amount * scale))
-            .collect(),
-        internal_bonds: material.internal_bonds.clone(),
+fn formation_seed(
+    compounds: &[Material],
+    indices: &[usize],
+    formation_index: usize,
+) -> u64 {
+    let mut seed = 0x9E37_79B9_7F4A_7C15u64 ^ formation_index as u64;
+    for &index in indices {
+        for (name, amount) in &compounds[index].parts {
+            for byte in name.bytes() {
+                seed = seed.rotate_left(7) ^ u64::from(byte);
+            }
+            seed ^= amount.to_bits().rotate_left(17);
+        }
     }
+    seed
+}
+
+fn compound_placements(
+    material: &Material,
+    x: f64,
+    y: f64,
+    rotation: f64,
+    spacing: f64,
+) -> Vec<crate::structure::Placement> {
+    let count = material.parts.len();
+    (0..count)
+        .map(|index| {
+            let angle = rotation + index as f64 * std::f64::consts::TAU / count.max(1) as f64;
+            Placement {
+                x: x + spacing * angle.cos(),
+                y: y + spacing * angle.sin(),
+                rotation_radians: angle,
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
