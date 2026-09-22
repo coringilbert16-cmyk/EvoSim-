@@ -102,13 +102,11 @@ pub(crate) fn expel_physical_material(
             let _ = organism.stored_material.store_physical_instance(physical);
             return false;
         };
-        let boundary_projection =
-            boundary.x * direction.0 * cos - boundary.y * direction.0 * sin
-                + boundary.x * direction.1 * sin
-                + boundary.y * direction.1 * cos;
-        let center_projection =
-            placement.x * (direction.0 * cos - direction.1 * sin)
-                + placement.y * (direction.0 * sin + direction.1 * cos);
+        let boundary_projection = boundary.x * direction.0 * cos - boundary.y * direction.0 * sin
+            + boundary.x * direction.1 * sin
+            + boundary.y * direction.1 * cos;
+        let center_projection = placement.x * (direction.0 * cos - direction.1 * sin)
+            + placement.y * (direction.0 * sin + direction.1 * cos);
         let projection = owner_offset_projection + center_projection + boundary_projection;
         material_near = material_near.min(projection);
     }
