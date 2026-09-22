@@ -602,12 +602,6 @@ pub(crate) fn finish_reproduction(
         developmental_orientation_radians: construction.developmental_orientation_radians,
         occupied_cells: vec![child_position],
         genome: construction.child_genome,
-        resource_sense: ResourceSense {
-            sensed_resources: Vec::new(),
-            direction_x: 0.0,
-            direction_y: 0.0,
-            direction_strength: 0.0,
-        },
         memory: Vec::new(),
         decision_history: crate::decision::DecisionHistory::default(),
         usable_energy: construction.developing_energy,
