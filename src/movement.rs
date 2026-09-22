@@ -522,7 +522,7 @@ mod tests {
     }
 
     #[test]
-    fn movement_is_blocked_by_realized_physical_material() {
+    fn movement_pushes_realized_physical_material() {
         let simulation = Simulation::new(7, 20.0);
         let mut environment = empty_environment(&simulation);
         let mut organism = simulation.organisms[0].clone();
@@ -557,19 +557,26 @@ mod tests {
             .index_for_position(placement.x, placement.y)
             .expect("physical material must be in bounds");
         assert!(environment.field.deposit_physical_at_index(index, physical));
-        let old_anchor = organism.occupied_cells[0].clone();
-        assert!(!Simulation::try_move_cell(
+        assert!(Simulation::try_move_cell(
             &mut organism,
             &mut environment,
             &mut [],
             5.0,
             0.0
         ));
-        assert_eq!(organism.occupied_cells[0], old_anchor);
+        let moved_index = environment
+            .field
+            .index_for_position(x + 11.0, y)
+            .expect("pushed material must remain in bounds");
+        let pushed = environment.field.cells[moved_index]
+            .physical_materials
+            .first()
+            .expect("pushed material must remain in the field");
+        assert_eq!(pushed.placements.as_ref().unwrap()[0].x, x + 11.0);
     }
 
     #[test]
-    fn movement_pushes_another_organism_atomically() {
+    fn movement_pushes_another_organism_atomically {
         let simulation = Simulation::new(7, 20.0);
         let mut environment = empty_environment(&simulation);
         let mut organism = simulation.organisms[0].clone();
@@ -603,8 +610,14 @@ mod tests {
         let mut second = simulation.organisms[0].clone();
         first.id = "first".to_string();
         second.id = "second".to_string();
-        let x = organism.structure.units[0].placement.x;
+        let x = environment.width - 17.0;
         let y = organism.structure.units[0].placement.y;
+        for unit in &mut organism.structure.units {
+            unit.placement.x = x;
+            unit.placement.y = y;
+        }
+        organism.occupied_cells[0].x = x;
+        organism.occupied_cells[0].y = y;
         for unit in &mut first.structure.units {
             unit.placement.x = x + 6.0;
             unit.placement.y = y;
@@ -717,9 +730,7 @@ mod tests {
             unit.placement.y = y;
         }
         let aggregate_x = x + 17.0;
-        environment.field.deposit(
-            aggregate_x,
-            y,
+        let physical = crate::physical_material::PhysicalMaterial::realized(
             crate::resources::Material {
                 parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
                 internal_bonds: vec![crate::resources::InternalBond {
@@ -727,7 +738,13 @@ mod tests {
                     part_b: 1,
                 }],
             },
-        );
+            vec![
+                crate::structure::Placement { x: aggregate_x, y, rotation_radians: 0.0 },
+                crate::structure::Placement { x: aggregate_x + 0.8, y, rotation_radians: 0.0 },
+            ],
+            &environment.catalog,
+        ).expect("realized aggregate should be valid");
+        environment.field.deposit(aggregate_x, y, physical);
         let organism_before = organism.structure.clone();
         let first_before = first.structure.clone();
         let second_before = second.structure.clone();
