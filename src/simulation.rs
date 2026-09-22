@@ -212,30 +212,6 @@ impl Simulation {
             development,
         }
     }
-    fn acquisition_targets(organism: &Organism, environment: &Environment) -> Vec<usize> {
-        let Some(position) = organism.occupied_cells.first() else {
-            return Vec::new();
-        };
-        let Some(field_index) = environment.field.index_for_position(position.x, position.y) else {
-            return Vec::new();
-        };
-        let cell = &environment.field.cells[field_index];
-        if cell
-            .physical_materials
-            .iter()
-            .any(|material| material.is_realized() && !material.material.is_empty())
-            || cell.materials.iter().any(|material| {
-                !material.is_empty() && material.is_valid() && !material.has_internal_structure()
-            })
-        {
-            vec![field_index]
-        } else {
-            Vec::new()
-        }
-    }
-    fn acquisition_context_key(field_index: usize) -> String {
-        format!("target:{field_index}")
-    }
     fn action_eligibility(
         organism: &Organism,
         environment: &Environment,
@@ -246,8 +222,6 @@ impl Simulation {
         let can_join_existing_structure = organism.structure.units.len() >= 2;
         ActionEligibility {
             can_move: organism.active_transformation_id.is_none(),
-            can_acquire: organism.active_transformation_id.is_none()
-                && !Self::acquisition_targets(organism, environment).is_empty(),
             can_combine: organism.active_transformation_id.is_none()
                 && (can_build_from_storage || can_join_existing_structure),
             can_break: organism.active_transformation_id.is_none()
@@ -297,16 +271,6 @@ impl Simulation {
                 context_key: None,
             });
         }
-        if relevant(ActionKind::Acquire) {
-            candidates.extend(
-                Self::acquisition_targets(organism, environment)
-                    .into_iter()
-                    .map(|field_index| ActionCandidate {
-                        action: ActionKind::Acquire,
-                        context_key: Some(Self::acquisition_context_key(field_index)),
-                    }),
-            );
-        }
         if relevant(ActionKind::Expel) {
             candidates.push(ActionCandidate {
                 action: ActionKind::Expel,
@@ -314,40 +278,6 @@ impl Simulation {
             });
         }
         candidates
-    }
-    pub(crate) fn acquire_target(
-        organism: &mut Organism,
-        environment: &mut Environment,
-        field_index: usize,
-    ) -> bool {
-        let Some(position) = organism.occupied_cells.first() else {
-            return false;
-        };
-        let Some(expected_index) = environment.field.index_for_position(position.x, position.y)
-        else {
-            return false;
-        };
-        if expected_index != field_index {
-            return false;
-        }
-        if let Some(physical) = environment.field.take_physical_for_acquisition(field_index) {
-            let material = physical.material.clone();
-            let placements = physical.placements.clone().unwrap_or_default();
-            if organism
-                .stored_material
-                .store_physical(material, placements, &environment.catalog)
-            {
-                return true;
-            }
-            let _ = environment
-                .field
-                .deposit_physical_at_index(field_index, physical);
-            return false;
-        }
-        let Some(material) = environment.field.take_for_acquisition(field_index) else {
-            return false;
-        };
-        organism.store_material(material)
     }
     fn recycle_dead_organism(
         environment: &mut Environment,
@@ -602,30 +532,6 @@ impl Simulation {
                         ) {
                             self.active_transformations.push(transformation);
                         }
-                    }
-                    ActionKind::Acquire => {
-                        let success = selected
-                            .context_key
-                            .as_deref()
-                            .and_then(|key| key.strip_prefix("target:"))
-                            .and_then(|index| index.parse::<usize>().ok())
-                            .map(|field_index| {
-                                Self::acquire_target(
-                                    &mut organisms[index],
-                                    environment,
-                                    field_index,
-                                )
-                            })
-                            .unwrap_or(false);
-                        crate::decision_runtime::record_outcome(
-                            &mut organisms[index].decision_history,
-                            &selected,
-                            if success {
-                                crate::decision::OutcomeKind::Neutral
-                            } else {
-                                crate::decision::OutcomeKind::Harmful
-                            },
-                        );
                     }
                     ActionKind::Expel => {}
                 }
