@@ -267,15 +267,12 @@ pub(crate) fn genome_cavity_spectrum(
         let Some(unit_spectrum) = received.get(unit_index) else {
             continue;
         };
-        add_spectrum(&mut spectrum, unit_spectrum, 1.0);
+        add_spectrum(&mut spectrum, unit_spectrum, 1.0 / boundary_units.len() as f64);
         count += 1;
     }
 
     if count == 0 {
         return ToneSpectrum::empty();
-    }
-    for component in &mut spectrum.components {
-        component.amplitude /= count as f64;
     }
     spectrum.retain_strongest();
     spectrum
