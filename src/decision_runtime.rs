@@ -75,6 +75,7 @@ pub fn select_action_with_developmental_scores(
     developmental_scores: &[Option<f64>],
 ) -> Option<ActionCandidate> {
     let mut best: Option<(f64, Option<f64>, f64, ActionCandidate)> = None;
+    let mut unresolved_tie = false;
 
     for (index, candidate) in candidates.iter().enumerate() {
         if approve(context, candidate.action) != DecisionResult::Approve {
@@ -90,13 +91,16 @@ pub fn select_action_with_developmental_scores(
             .flatten()
             .filter(|value| value.is_finite());
 
-        let replace = match best.as_ref() {
-            None => true,
+        match best.as_ref() {
+            None => {
+                best = Some((decision_score, developmental, history, candidate.clone()));
+                unresolved_tie = false;
+            }
             Some((best_score, best_developmental, _, best_candidate)) => {
-                if decision_score > *best_score {
-                    true
+                let ordering = if decision_score > *best_score {
+                    std::cmp::Ordering::Greater
                 } else if decision_score < *best_score {
-                    false
+                    std::cmp::Ordering::Less
                 } else if context.needs.development > 0.0
                     && candidate
                         .action
@@ -108,19 +112,29 @@ pub fn select_action_with_developmental_scores(
                         .contains(&crate::decision::NeedKind::Development)
                 {
                     compare_optional_score(developmental, *best_developmental)
-                        == std::cmp::Ordering::Greater
                 } else {
-                    false
+                    std::cmp::Ordering::Equal
+                };
+
+                match ordering {
+                    std::cmp::Ordering::Greater => {
+                        best = Some((decision_score, developmental, history, candidate.clone()));
+                        unresolved_tie = false;
+                    }
+                    std::cmp::Ordering::Equal => {
+                        unresolved_tie = true;
+                    }
+                    std::cmp::Ordering::Less => {}
                 }
             }
-        };
-
-        if replace {
-            best = Some((decision_score, developmental, history, candidate.clone()));
         }
     }
 
-    best.map(|(_, _, _, candidate)| candidate)
+    if unresolved_tie {
+        None
+    } else {
+        best.map(|(_, _, _, candidate)| candidate)
+    }
 }
 
 fn compare_optional_score(a: Option<f64>, b: Option<f64>) -> std::cmp::Ordering {
