@@ -13,11 +13,19 @@ use crate::decision_runtime::ActionCandidate;
 use crate::state::{DevelopmentStage, EnergyLedger, Environment, Organism};
 
 pub(crate) fn growth_fraction(organism: &Organism, environment: &Environment) -> f64 {
+    growth_fraction_for_structure(organism, environment, &organism.structure)
+}
+
+fn growth_fraction_for_structure(
+    organism: &Organism,
+    environment: &Environment,
+    structure: &crate::structure::PhysicalStructure,
+) -> f64 {
     organism
         .genome
         .developmental_blueprint
         .realization(
-            &organism.structure,
+            structure,
             &environment.catalog,
             (
                 organism.developmental_origin.x,
@@ -64,12 +72,11 @@ pub(crate) fn developmental_action_scores(
     candidates
         .iter()
         .map(|candidate| {
-            let mut trial = organism.clone();
-            let mut trial_ledger = *ledger;
-            let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-
             match candidate.action {
                 ActionKind::Combine => {
+                    let mut trial = organism.clone();
+                    let mut trial_ledger = *ledger;
+                    let mut cache = crate::contact::ConnectionCompatibilityCache::new();
                     crate::combine_runtime::try_combine(
                         &mut trial,
                         environment,
@@ -77,6 +84,7 @@ pub(crate) fn developmental_action_scores(
                         &mut trial_ledger,
                         developmental,
                     )?;
+                    Some(growth_fraction(&trial, environment))
                 }
                 ActionKind::Break => {
                     let index = candidate
@@ -84,25 +92,17 @@ pub(crate) fn developmental_action_scores(
                         .as_deref()
                         .and_then(|key| key.strip_prefix("bond:"))
                         .and_then(|index| index.parse::<usize>().ok())?;
-                    let bond = *trial.structure.bonds.get(index)?;
-                    trial.structure.break_matching_bond(bond)?;
-
-                    // A developmental BREAK is evaluated by the construction
-                    // opportunity its physical result creates. This permits a
-                    // membrane-opening break to win when the altered structure
-                    // enables a better developmental construction result.
-                    let _ = crate::combine_runtime::try_combine(
-                        &mut trial,
+                    let bond = *organism.structure.bonds.get(index)?;
+                    let mut structure = organism.structure.clone();
+                    structure.break_matching_bond(bond)?;
+                    Some(growth_fraction_for_structure(
+                        organism,
                         environment,
-                        &mut cache,
-                        &mut trial_ledger,
-                        developmental,
-                    );
+                        &structure,
+                    ))
                 }
-                _ => return None,
+                _ => None,
             }
-
-            Some(growth_fraction(&trial, environment))
         })
         .collect()
 }
