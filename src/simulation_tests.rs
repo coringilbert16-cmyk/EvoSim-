@@ -137,7 +137,7 @@ mod integration_tests {
         .expect("carbon should have a valid physical realization");
         let before = s.organisms[0].stored_material.total_amount();
         s.environment.field.deposit(anchor.x, anchor.y, physical);
-        Simulation::absorb_contained_environmental_material(
+        Simulation::transfer_contained_environmental_material(
             &mut s.organisms[0],
             &mut s.environment,
         );
@@ -170,7 +170,7 @@ mod integration_tests {
         )
         .expect("test composite must have a valid physical realization");
         s.environment.field.deposit(anchor.x, anchor.y, physical);
-        Simulation::absorb_contained_environmental_material(
+        Simulation::transfer_contained_environmental_material(
             &mut s.organisms[0],
             &mut s.environment,
         );
