@@ -300,7 +300,7 @@ The initial organism must have enough physical structure to:
 1. fully encompass the genome,
 2. provide the required genome cavity,
 3. exist as a physical organism,
-4. and have sufficient internal space to acquire material from the environment.
+4. and have sufficient internal space to contain material from the environment.
 
 The seed is therefore not simply a data structure marked "alive."
 
@@ -324,7 +324,7 @@ This does not itself break the composite or dissolve an existing bond. The physi
 
 When a transformation acts on only the constituents within the organism, the material system may partition the existing physical material at constituent boundaries. Internal bonds are preserved only when both bonded constituents remain in the same resulting partition. A bond crossing the boundary is not silently recreated or destroyed merely because of containment.
 
-The organism therefore does not "pick up" a composite through an ACQUIRE action. Physical containment makes constituent material available to the organism's existing transformation machinery.
+The organism therefore does not "pick up" a composite through a transfer action. Physical containment makes constituent material available to the organism's existing transformation machinery.
 
 This applies to both base and composite material.
 
@@ -383,9 +383,9 @@ When material crosses from the environment into an organism, the transfer change
 
 Knowing that an environmental material contains particular constituents is not sufficient authorization to choose a particular physical arrangement for that material instance.
 
-For example, knowing that a material contains Carbon, Methane, and Water does not authorize ACQUIRE to arbitrarily choose their relative positions or orientations.
+For example, knowing that a material contains Carbon, Methane, and Water does not authorize a transfer to arbitrarily choose their relative positions or orientations.
 
-If a physically existing material instance has no authoritative physical realization, ACQUIRE must not silently invent one merely to complete the transfer.
+If a physically existing material instance has no authoritative physical realization, the transfer system must not silently invent one merely to complete the transfer.
 
 Physical realization must instead come from an authoritative physical process.
 
@@ -463,7 +463,7 @@ Stored material must be available to both:
 
 There are no special exclusions where the established rules say all stored material is available.
 
-The storage system must preserve an acquired physical material instance rather than reducing it to composition-only state.
+The storage system must preserve a physically contained material instance rather than reducing it to composition-only state.
 
 # 17. BREAK
 
@@ -574,7 +574,7 @@ However, the individual actions required to advance growth may require organism 
 For example, the organism may need to determine:
 
 - whether it has the required material,
-- whether it needs to acquire additional material,
+- whether additional material needs to become physically available,
 - whether the required space is available,
 - whether an existing bond must be broken,
 - whether existing material is unnecessary,
@@ -594,7 +594,7 @@ Growth must not be reduced to COMBINE.
 
 A growing organism may need to:
 
-- acquire material,
+- make additional environmental material physically available,
 - store material,
 - BREAK existing structure,
 - free physical space,
@@ -926,7 +926,7 @@ Composition alone does not authorize the simulation to choose a physical arrange
 
 If a composite physically exists in the active field, its existing physical realization is authoritative.
 
-If an implementation has only composition and no authoritative physical realization, it must not silently invent one solely to make ACQUIRE or another transfer operation possible.
+If an implementation has only composition and no authoritative physical realization, it must not silently invent one solely to make physical transfer possible.
 
 Physical realization must come from an authoritative physical process.
 
@@ -1057,7 +1057,7 @@ However, it must not be used to invent a "growth action."
 
 The organism can decide:
 
-- whether to acquire,
+
 - whether to break,
 - whether to combine,
 - whether to rearrange,
@@ -1071,7 +1071,7 @@ The distinction is:
 
 > **Growth is a goal/state transition.**
 >
-> **BREAK, COMBINE, ACQUIRE, and related operations are mechanisms that may be selected to accomplish it.**
+> **BREAK, COMBINE, and related physical operations are mechanisms that may be selected to accomplish it.**
 
 # 50. Experimental vs Authoritative Rules
 
@@ -1148,7 +1148,7 @@ The absence of a specification is not permission to create one.
 
 The immediate architectural objective is to make one initialized cell capable of progressing through the actual physical lifecycle without violating the established rules:
 
-> **A physically authoritative organism with a genome can acquire environmental material, incorporate material through physically valid COMBINE operations, use BREAK where necessary, maintain itself, grow toward its adult blueprint, reproduce through the established anchor/blueprint process, and eventually die and decompose without violating material or energy conservation.**
+> **A physically authoritative organism with a genome can make environmental material physically available through containment, incorporate material through physically valid COMBINE operations, use BREAK where necessary, maintain itself, grow toward its adult blueprint, reproduce through the established anchor/blueprint process, and eventually die and decompose without violating material or energy conservation.**
 
 The system should be developed toward this objective incrementally.
 
