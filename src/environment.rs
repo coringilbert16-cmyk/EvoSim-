@@ -348,39 +348,6 @@ impl ActiveMaterialField {
     /// Remove a physically existing material object without reducing it to a
     /// composition-only value. This legacy transfer primitive is retained only
     /// for migration; physical availability is now determined by containment.
-    pub fn take_physical_for_acquisition(&mut self, index: usize) -> Option<PhysicalMaterial> {
-        let cell = self.cells.get_mut(index)?;
-        let material_index = cell
-            .physical_materials
-            .iter()
-            .position(|material| material.is_realized() && !material.material.is_empty())?;
-        Some(cell.physical_materials.swap_remove(material_index))
-    }
-
-    /// Legacy logical ACQUIRE for unstructured aggregate stock. Existing
-    /// structured material without a physical realization is intentionally not
-    /// promoted into a physical object here.
-    pub fn take_for_acquisition(&mut self, index: usize) -> Option<Material> {
-        let cell = self.cells.get_mut(index)?;
-        let material_index = cell.materials.iter().position(|material| {
-            !material.has_internal_structure() && !material.is_empty() && material.is_valid()
-        })?;
-        let part_index = cell.materials[material_index]
-            .parts
-            .iter()
-            .position(|(_, amount)| {
-                amount.is_finite() && *amount >= 1.0 && amount.fract().abs() <= MATERIAL_EPSILON
-            })?;
-        let name = cell.materials[material_index].parts[part_index].0.clone();
-        cell.materials[material_index].parts[part_index].1 -= 1.0;
-        cell.materials[material_index]
-            .parts
-            .retain(|(_, amount)| *amount > MATERIAL_EPSILON);
-        let material = Material::free_base(name, 1.0);
-        cell.materials.retain(|material| !material.is_empty());
-        Some(material)
-    }
-
     pub fn diffuse_step(&mut self, fraction: f64) {
         let fraction = fraction.clamp(0.0, 1.0);
         if fraction <= 0.0 {
