@@ -101,7 +101,7 @@ pub(crate) fn resonance_response(
     let denominator = ((1.0 - ratio * ratio).powi(2)
         + (2.0 * zeta * ratio).powi(2))
     .sqrt();
-    (1.0 / denominator.max(f64::EPSILON)).min(1.0 / (2.0 * zeta));
+    (1.0 / denominator.max(f64::EPSILON)).min(1.0 / (2.0 * zeta))
 }
 
 /// Reactivity-driven nonlinear content. Integer multiples are used because
