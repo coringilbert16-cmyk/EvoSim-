@@ -113,7 +113,11 @@ impl ActiveMaterialField {
     }
 
     pub fn row_col_for_position(&self, x: f64, y: f64) -> Option<(usize, usize)> {
-        if !x.is_finite() || !y.is_finite() || x < 0.0 || x >= self.width_cells as f64 * self.cell_size {
+        if !x.is_finite()
+            || !y.is_finite()
+            || x < 0.0
+            || x >= self.width_cells as f64 * self.cell_size
+        {
             return None;
         }
         let wrapped_y = y.rem_euclid(self.height_cells as f64 * self.cell_size);
@@ -205,7 +209,8 @@ impl ActiveMaterialField {
                     .iter()
                     .enumerate()
                     .filter_map(|(index, placement)| {
-                        body.contains_point(placement.x, placement.y).then_some(index)
+                        body.contains_point(placement.x, placement.y)
+                            .then_some(index)
                     })
                     .collect();
                 if selected.is_empty() {
