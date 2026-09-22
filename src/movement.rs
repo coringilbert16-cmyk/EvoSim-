@@ -58,12 +58,15 @@ impl Simulation {
         organism.occupied_cells[0].x = new_x;
         organism.occupied_cells[0].y = new_y;
         organism.developmental_origin.x += dx;
-        organism.developmental_origin.y += dy;
+        organism.developmental_origin.y = wrap_y(
+            organism.developmental_origin.y + 0.0,
+            environment.height,
+        );
         for unit in &mut organism.structure.units {
             unit.placement.x += dx;
-            unit.placement.y += dy;
+            unit.placement.y = wrap_y(unit.placement.y + dy, environment.height);
         }
-        translate_reproductive_construction(organism, dx, dy);
+        translate_reproductive_construction(organism, dx, dy, environment.height);
         for (original, trial) in other_organisms.iter_mut().zip(trial_organisms) {
             original.occupied_cells = trial.occupied_cells;
             original.structure = trial.structure;
@@ -234,7 +237,7 @@ fn push_blockers_for_parts(
                 return false;
             }
             let mut pushed = candidate;
-            translate_physical(&mut pushed, dx, dy);
+            translate_physical(&mut pushed, dx, dy, environment.height);
             environment.field.cells[cell_index].physical_materials[material_index] = pushed;
         }
     }
@@ -372,14 +375,16 @@ fn translate_physical(
     physical: &mut crate::physical_material::PhysicalMaterial,
     dx: f64,
     dy: f64,
+    environment_height: f64,
 ) {
     if let Some(placements) = physical.placements.as_mut() {
         for placement in placements {
             placement.x += dx;
-            placement.y += dy;
+            placement.y = wrap_y(placement.y + dy, environment_height);
         }
     }
 }
+
 fn can_translate_organism(
     organism: &Organism,
     environment: &Environment,
@@ -400,29 +405,40 @@ fn can_translate_organism(
     })
 }
 
-fn translate_reproductive_construction(organism: &mut Organism, dx: f64, dy: f64) {
+fn translate_reproductive_construction(
+    organism: &mut Organism,
+    dx: f64,
+    dy: f64,
+    environment_height: f64,
+) {
     if let Some(construction) = organism.reproductive_construction.as_mut() {
         construction.developmental_origin.x += dx;
-        construction.developmental_origin.y += dy;
+        construction.developmental_origin.y =
+            wrap_y(construction.developmental_origin.y + dy, environment_height);
         for unit in &mut construction.developing_structure.units {
             unit.placement.x += dx;
-            unit.placement.y += dy;
+            unit.placement.y = wrap_y(unit.placement.y + dy, environment_height);
         }
     }
 }
 
-fn translate_organism(organism: &mut Organism, dx: f64, dy: f64) {
+fn translate_organism(
+    organism: &mut Organism,
+    dx: f64,
+    dy: f64,
+    environment_height: f64,
+) {
     organism.developmental_origin.x += dx;
     organism.developmental_origin.y += dy;
     for point in &mut organism.occupied_cells {
         point.x += dx;
-        point.y += dy;
+        point.y = wrap_y(point.y + 0.0, environment_height);
     }
     for unit in &mut organism.structure.units {
         unit.placement.x += dx;
-        unit.placement.y += dy;
+        unit.placement.y = wrap_y(unit.placement.y + dy, environment_height);
     }
-    translate_reproductive_construction(organism, dx, dy);
+    translate_reproductive_construction(organism, dx, dy, environment_height);
 }
 
 #[cfg(test)]
