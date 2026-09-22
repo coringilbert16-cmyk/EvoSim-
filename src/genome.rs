@@ -38,6 +38,28 @@ impl Genome {
             .unwrap_or(default)
     }
 
+    pub fn memory_strength(&self) -> f64 {
+        self.trait_value("memory_strength", 0.5).clamp(0.0, 1.0)
+    }
+
+    /// Inherited developmental-size preference.
+    ///
+    /// The normalized value is the inherited authority. Preferred mass is derived
+    /// from it; actual mass always belongs to the realized physical structure.
+    pub fn size_preference(&self) -> f64 {
+        self.trait_value("size_preference", 0.5).clamp(0.0, 1.0)
+    }
+
+    /// Preferred structural mass derived from the inherited size preference.
+    ///
+    /// M_MIN and M_MAX are experimental P6 parameter values, not permanent
+    /// biological constants. The logarithmic mapping is the approved equation.
+    pub fn adult_mass(&self) -> f64 {
+        const M_MIN: f64 = 4.0; // EXPERIMENTAL: P6 developmental-size bound.
+        const M_MAX: f64 = 225.0; // EXPERIMENTAL: chosen so default s=0.5 preserves 30.0.
+        M_MIN * (M_MAX / M_MIN).powf(self.size_preference())
+    }
+
     pub fn processing_efficiency(&self) -> f64 {
         self.trait_value("processing_efficiency", 0.8)
             .clamp(0.05, 1.0)
