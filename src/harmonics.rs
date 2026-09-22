@@ -320,6 +320,85 @@ pub(crate) fn update_organism_harmonics(
     );
 }
 
+    #[test]
+    fn genome_cavity_receives_environmental_material_at_realized_boundary() {
+        let catalog = crate::resources::default_catalog();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
+        let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
+        let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
+            .unwrap()
+            .expect("confirmed seed must contain a genome cavity");
+        let mut field = crate::environment::ActiveMaterialField::new(
+            1000.0,
+            1000.0,
+            crate::environment::DEFAULT_CELL_SIZE,
+        );
+
+        let baseline = genome_cavity_spectrum(
+            &structure,
+            &catalog,
+            &field,
+            &cavity.boundary_units,
+        );
+        let boundary = &structure.units[cavity.boundary_units[0]].placement;
+        assert!(field.deposit(
+            boundary.x,
+            boundary.y,
+            crate::resources::Material::free_base("Carbon", 1.0),
+        ));
+        let coupled = genome_cavity_spectrum(
+            &structure,
+            &catalog,
+            &field,
+            &cavity.boundary_units,
+        );
+
+        let baseline_fundamental = baseline
+            .components
+            .iter()
+            .find(|component| {
+                (component.frequency_hz - WORLD_TONE_HZ).abs() < f64::EPSILON
+            })
+            .map(|component| component.amplitude)
+            .unwrap_or(0.0);
+        let coupled_fundamental = coupled
+            .components
+            .iter()
+            .find(|component| {
+                (component.frequency_hz - WORLD_TONE_HZ).abs() < f64::EPSILON
+            })
+            .map(|component| component.amplitude)
+            .unwrap_or(0.0);
+        assert!(coupled_fundamental > baseline_fundamental);
+    }
+
+    #[test]
+    fn harmonic_reception_depends_on_qualifying_realized_cavity() {
+        let catalog = crate::resources::default_catalog();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
+        let (mut structure, _, _) =
+            crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
+        let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
+            .unwrap()
+            .expect("confirmed seed must contain a genome cavity");
+        let field = crate::environment::ActiveMaterialField::new(
+            1000.0,
+            1000.0,
+            crate::environment::DEFAULT_CELL_SIZE,
+        );
+
+        let received =
+            genome_cavity_spectrum(&structure, &catalog, &field, &cavity.boundary_units);
+        assert!(!received.components.is_empty());
+
+        structure.bonds.clear();
+        assert!(crate::cavity::analyze_genome_cavity(&structure, &catalog)
+            .unwrap()
+            .is_none());
+        let absent = genome_cavity_spectrum(&structure, &catalog, &field, &[]);
+        assert!(absent.components.is_empty());
+    }
+
 #[cfg(test)]
 mod tests {
     use super::*;
