@@ -4,6 +4,14 @@ use crate::state::{
     DESIRABILITY_AMOUNT_HALF_SATURATION, DESIRABILITY_MAX,
 };
 
+fn wrapped_delta(target: f64, origin: f64, period: f64) -> f64 {
+    let direct = target - origin;
+    if period > 0.0 {
+        return (direct + period * 0.5).rem_euclid(period) - period * 0.5;
+    }
+    direct
+}
+
 /// Below this amount, an unstructured ecological stock is perceived as
 /// individual whole units rather than as a continuous quantity. This changes
 /// perception only; the field remains aggregate and storage remains discrete.
@@ -119,7 +127,7 @@ impl crate::state::Simulation {
         {
             let (cell_x, cell_y) = environment.field.cell_center(cell_index);
             let dx = cell_x - px;
-            let dy = cell_y - py;
+            let dy = wrapped_delta(cell_y, py, environment.height);
             let distance = (dx * dx + dy * dy).sqrt();
             let direction_x = if distance > 0.0 { dx / distance } else { 0.0 };
             let direction_y = if distance > 0.0 { dy / distance } else { 0.0 };
