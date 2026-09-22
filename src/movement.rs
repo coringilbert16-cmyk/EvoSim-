@@ -401,7 +401,7 @@ mod tests {
             outcome: None,
         });
         let (x, y) = movement_direction(&organism).expect("direction should exist");
-        assert!(x > 0.0);
+        assert!(x.abs() < f64::EPSILON);
         assert!(y < 0.0);
     }
 
