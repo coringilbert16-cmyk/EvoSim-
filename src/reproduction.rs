@@ -10,7 +10,6 @@ use crate::material_storage::MaterialStorage;
 use crate::resources::Material;
 use crate::state::{
     DevelopmentStage, EnergyLedger, Environment, Organism, Position, ReproductiveConstruction,
-    ResourceSense,
 };
 use crate::structure::OrganismStructure;
 use rand_chacha::ChaCha8Rng;
@@ -146,12 +145,6 @@ fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
         developmental_orientation_radians: construction.developmental_orientation_radians,
         occupied_cells: vec![construction.developmental_origin.clone()],
         genome: construction.child_genome.clone(),
-        resource_sense: ResourceSense {
-            sensed_resources: Vec::new(),
-            direction_x: 0.0,
-            direction_y: 0.0,
-            direction_strength: 0.0,
-        },
         harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
         memory: Vec::new(),
         decision_history: crate::decision::DecisionHistory::default(),
