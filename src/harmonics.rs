@@ -73,10 +73,7 @@ pub(crate) fn natural_frequency_hz(
 /// The returned value is a dimensionless damping ratio. Higher reactivity
 /// produces broader, weaker resonance and stronger nonlinear harmonic content;
 /// no new damping resource property is introduced.
-pub(crate) fn damping_ratio(
-    properties: ResourceProperties,
-    baselines: ResourceBaselines,
-) -> f64 {
+pub(crate) fn damping_ratio(properties: ResourceProperties, baselines: ResourceBaselines) -> f64 {
     let reactivity = properties.reactivity.max(0.0);
     let baseline = baselines.reactivity.max(0.0);
     let normalized = if baseline <= f64::EPSILON {
@@ -103,9 +100,7 @@ pub(crate) fn resonance_response(
     }
     let zeta = damping.clamp(MIN_DAMPING, 0.5);
     let ratio = drive_frequency_hz / natural_frequency_hz;
-    let denominator = ((1.0 - ratio * ratio).powi(2)
-        + (2.0 * zeta * ratio).powi(2))
-    .sqrt();
+    let denominator = ((1.0 - ratio * ratio).powi(2) + (2.0 * zeta * ratio).powi(2)).sqrt();
     (1.0 / denominator.max(f64::EPSILON)).min(1.0 / (2.0 * zeta))
 }
 
@@ -120,10 +115,7 @@ pub(crate) fn nonlinear_harmonic_amplitude(
         return 0.0;
     }
     let nonlinear = (reactivity.max(0.0) / (1.0 + reactivity.max(0.0))).clamp(0.0, 1.0);
-    fundamental_amplitude
-        * 0.25
-        * nonlinear.powi((harmonic_order - 1) as i32)
-        / harmonic_order as f64
+    fundamental_amplitude * 0.25 * nonlinear.powi((harmonic_order - 1) as i32) / harmonic_order as f64
 }
 
 /// Generate the local spectrum produced by one realized material response to
@@ -146,8 +138,7 @@ pub(crate) fn material_response(
     };
 
     for order in 2..=MAX_SPECTRAL_COMPONENTS {
-        let amplitude =
-            nonlinear_harmonic_amplitude(fundamental, properties.reactivity, order);
+        let amplitude = nonlinear_harmonic_amplitude(fundamental, properties.reactivity, order);
         if amplitude > f64::EPSILON {
             spectrum.components.push(ToneComponent {
                 frequency_hz: WORLD_TONE_HZ * order as f64,
@@ -188,9 +179,11 @@ fn add_spectrum(target: &mut ToneSpectrum, source: &ToneSpectrum, scale: f64) {
             amplitude: component.amplitude * scale,
             phase_radians: component.phase_radians,
         };
-        if let Some(existing) = target.components.iter_mut().find(|existing| {
-            (existing.frequency_hz - contribution.frequency_hz).abs() <= 1e-9
-        }) {
+        if let Some(existing) = target
+            .components
+            .iter_mut()
+            .find(|existing| (existing.frequency_hz - contribution.frequency_hz).abs() <= 1e-9)
+        {
             *existing = combine_component(*existing, contribution);
         } else {
             target.components.push(contribution);
@@ -271,8 +264,11 @@ fn environmental_spectrum_at_position(
     }
     for physical in &cell.physical_materials {
         if physical.material.is_valid() && !physical.material.is_empty() {
-            let response =
-                material_response(physical.material.weighted_properties(catalog), baselines, 0.0);
+            let response = material_response(
+                physical.material.weighted_properties(catalog),
+                baselines,
+                0.0,
+            );
             add_spectrum(&mut spectrum, &response, 1.0);
         }
     }
@@ -319,18 +315,16 @@ pub(crate) fn genome_cavity_spectrum(
 /// cavity. A non-qualifying physical structure has no genome harmonic
 /// memory surface.
 pub(crate) fn update_organism_harmonics(
-        organism: &mut crate::state::Organism,
-        environment: &crate::state::Environment,
-    ) {
-        let boundary_units = crate::cavity::analyze_genome_cavity(
-            &organism.structure,
-            &environment.catalog,
-        )
-        .ok()
-        .flatten()
-        .filter(|cavity| cavity.qualifies())
-        .map(|cavity| cavity.boundary_units)
-        .unwrap_or_default();
+    organism: &mut crate::state::Organism,
+    environment: &crate::state::Environment,
+) {
+    let boundary_units =
+        crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
+            .ok()
+            .flatten()
+            .filter(|cavity| cavity.qualifies())
+            .map(|cavity| cavity.boundary_units)
+            .unwrap_or_default();
 
     organism.harmonic_spectrum =
         genome_cavity_spectrum(&organism.structure, &environment.catalog, &boundary_units);
@@ -389,12 +383,9 @@ mod tests {
             .components
             .iter()
             .any(|component| (component.frequency_hz - WORLD_TONE_HZ).abs() < f64::EPSILON));
-        assert!(spectrum
-            .components
-            .iter()
-            .any(|component| {
-                (component.frequency_hz - 2.0 * WORLD_TONE_HZ).abs() < f64::EPSILON
-            }));
+        assert!(spectrum.components.iter().any(|component| {
+            (component.frequency_hz - 2.0 * WORLD_TONE_HZ).abs() < f64::EPSILON
+        }));
         assert!(spectrum.components.len() <= MAX_SPECTRAL_COMPONENTS);
     }
 }
