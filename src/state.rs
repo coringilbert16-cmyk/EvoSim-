@@ -16,43 +16,6 @@ pub(crate) struct AppState {
     pub(crate) simulation: Arc<Mutex<Simulation>>,
 }
 #[derive(Serialize, Deserialize, Clone)]
-pub(crate) struct PropertyDeviations {
-    pub(crate) mass: f64,
-    pub(crate) potential_energy: f64,
-    pub(crate) reactivity: f64,
-    pub(crate) cohesion: f64,
-}
-#[derive(Serialize, Deserialize, Clone)]
-pub(crate) struct AffinityResponses {
-    pub(crate) mass: f64,
-    pub(crate) potential_energy: f64,
-    pub(crate) reactivity: f64,
-    pub(crate) cohesion: f64,
-}
-#[derive(Serialize, Deserialize, Clone)]
-pub(crate) struct ResourceObservation {
-    pub(crate) name: String,
-    pub(crate) properties: crate::resources::ResourceProperties,
-    pub(crate) perceived_amount: f64,
-    pub(crate) deviations: PropertyDeviations,
-    pub(crate) affinity_responses: AffinityResponses,
-    pub(crate) base_desirability: f64,
-    pub(crate) amount_factor: f64,
-    pub(crate) potential_energy_need_factor: f64,
-    pub(crate) desirability: f64,
-    pub(crate) distance: f64,
-    pub(crate) source_x: f64,
-    pub(crate) source_y: f64,
-    pub(crate) field_index: usize,
-}
-#[derive(Serialize, Deserialize, Clone)]
-pub(crate) struct ResourceSense {
-    pub(crate) sensed_resources: Vec<ResourceObservation>,
-    pub(crate) direction_x: f64,
-    pub(crate) direction_y: f64,
-    pub(crate) direction_strength: f64,
-}
-#[derive(Serialize, Deserialize, Clone)]
 pub(crate) enum DevelopmentStage {
     Offspring,
     Juvenile,
@@ -145,7 +108,6 @@ pub(crate) struct Organism {
     pub(crate) developmental_orientation_radians: f64,
     pub(crate) occupied_cells: Vec<Position>,
     pub(crate) genome: Genome,
-    pub(crate) resource_sense: ResourceSense,
     /// Spectrum currently present at the organism's physically realized genome cavity.
     #[serde(default)]
     pub(crate) harmonic_spectrum: crate::harmonics::ToneSpectrum,
