@@ -401,6 +401,21 @@ Performance-oriented aggregation is permitted only when it preserves enough info
 
 An optimization must not become a second physical authority.
 
+### 14.5 Initial Physical Formation Seeding
+
+The initial active field is seeded with a **small number of physical formations separated by empty field space**.
+
+Each formation:
+- is physically realized rather than remaining composition-only,
+- may contain multiple different aggregate material compositions,
+- uses a repeating spatial pattern derived from its elemental composition,
+- receives bounded random variation in that pattern so formations develop irregular outlines, protrusions, and other non-circular features,
+- is represented through the existing physical-material realization rather than a hard-coded terrain category.
+
+Formation extent is described by its realized width and height; when a single scale value is required, the larger of those two extents is used. There is no separate authoritative diameter.
+
+The environment grid remains a spatial index. The physical realization and its geometry remain authoritative.
+
 ## 14.5 Environmental Fragmentation and Accumulation
 
 Environmental material may fragment into smaller physical structures and may accumulate into larger structures through established physical processes.
