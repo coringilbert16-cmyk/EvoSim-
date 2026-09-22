@@ -75,7 +75,7 @@ impl Simulation {
                 existing.x = sx;
                 existing.y = sy;
                 existing.strength = (existing.strength + memory_strength).min(1.0);
-                existing.spectrum = spectrum.clone();
+                existing.spectrum.merge_from(spectrum, 1.0);
                 existing.outcome = Some(outcome);
             }
             None => {
