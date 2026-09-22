@@ -251,9 +251,40 @@ pub(crate) fn realized_structure_spectrum(
 /// The physical genome cavity receives the spectrum present at its realized
 /// boundary. Boundary membership comes only from the actual cavity analysis;
 /// it is never inferred from a blueprint or a hard-coded genome core.
+fn environmental_spectrum_at_position(
+    field: &crate::environment::ActiveMaterialField,
+    catalog: &[crate::resources::BaseResource],
+    x: f64,
+    y: f64,
+) -> ToneSpectrum {
+    let Some(index) = field.index_for_position(x, y) else {
+        return ToneSpectrum::empty();
+    };
+    let cell = &field.cells[index];
+    let baselines = ResourceBaselines::from_catalog(catalog);
+    let mut spectrum = ToneSpectrum::empty();
+
+    for material in &cell.materials {
+        if material.is_valid() && !material.is_empty() {
+            let response = material_response(material.weighted_properties(catalog), baselines, 0.0);
+            add_spectrum(&mut spectrum, &response, 1.0);
+        }
+    }
+    for physical in &cell.physical_materials {
+        if physical.material.is_valid() && !physical.material.is_empty() {
+            let response =
+                material_response(physical.material.weighted_properties(catalog), baselines, 0.0);
+            add_spectrum(&mut spectrum, &response, 1.0);
+        }
+    }
+    spectrum.retain_strongest();
+    spectrum
+}
+
 pub(crate) fn genome_cavity_spectrum(
     structure: &crate::structure::OrganismStructure,
     catalog: &[crate::resources::BaseResource],
+    field: &crate::environment::ActiveMaterialField,
     boundary_units: &[usize],
 ) -> ToneSpectrum {
     if boundary_units.is_empty() {
@@ -264,10 +295,17 @@ pub(crate) fn genome_cavity_spectrum(
     let mut count = 0usize;
 
     for &unit_index in boundary_units {
+        let Some(unit) = structure.units.get(unit_index) else {
+            continue;
+        };
         let Some(unit_spectrum) = received.get(unit_index) else {
             continue;
         };
-        add_spectrum(&mut spectrum, unit_spectrum, 1.0 / boundary_units.len() as f64);
+        let environmental =
+            environmental_spectrum_at_position(field, catalog, unit.placement.x, unit.placement.y);
+        let mut coupled = unit_spectrum.clone();
+        coupled.merge_from(&environmental, 1.0);
+        add_spectrum(&mut spectrum, &coupled, 1.0 / boundary_units.len() as f64);
         count += 1;
     }
 
