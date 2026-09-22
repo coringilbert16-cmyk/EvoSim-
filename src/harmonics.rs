@@ -28,6 +28,11 @@ impl ToneSpectrum {
         Self::default()
     }
 
+    pub(crate) fn merge_from(&mut self, other: &ToneSpectrum, scale: f64) {
+        add_spectrum(self, other, scale);
+        self.retain_strongest();
+    }
+
     pub(crate) fn retain_strongest(&mut self) {
         self.components.retain(|component| {
             component.frequency_hz.is_finite()
