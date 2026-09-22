@@ -150,6 +150,10 @@ mod integration_tests {
     fn a_composite_crossing_the_boundary_is_partitioned_at_constituent_scale() {
         let mut s = Simulation::new(23, 10.0);
         s.environment.vents.clear();
+        for cell in &mut s.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
         let organism = s.organisms[0].clone();
         let body = crate::organism_geometry::OrganismBodyGeometry::from_structure(
             &organism.structure,
