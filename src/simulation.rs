@@ -233,7 +233,8 @@ impl Simulation {
                         .reproductive_construction
                         .as_ref()
                         .is_some_and(|construction| construction.needs_space)),
-            can_expel: false,
+            can_expel: organism.active_transformation_id.is_none()
+                && organism.stored_material.physical_count() > 0,
         }
     }
     fn decision_candidates(
@@ -272,13 +273,131 @@ impl Simulation {
             });
         }
         if relevant(ActionKind::Expel) {
-            candidates.push(ActionCandidate {
-                action: ActionKind::Expel,
-                context_key: None,
-            });
+            candidates.extend(
+                organism
+                    .stored_material
+                    .entries
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, entry)| {
+                        matches!(entry, crate::material_storage::StoredMaterial::Physical(_))
+                    })
+                    .map(|(index, _)| ActionCandidate {
+                        action: ActionKind::Expel,
+                        context_key: Some(format!("stored:{index}")),
+                    }),
+            );
         }
         candidates
     }
+    fn expel_physical_material(
+        organism: &mut Organism,
+        environment: &mut Environment,
+        storage_index: usize,
+    ) -> bool {
+        let Some(direction) =
+            crate::movement::movement_direction_periodic(organism, environment.height)
+        else {
+            return false;
+        };
+        let Some(origin) = organism.occupied_cells.first() else {
+            return false;
+        };
+        let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_structure(
+            &organism.structure,
+            &environment.catalog,
+        ) else {
+            return false;
+        };
+        let Some(mut physical) = organism.stored_material.take_physical_at(storage_index) else {
+            return false;
+        };
+        let Some(placements) = physical.placements.as_ref() else {
+            let _ = organism.stored_material.store_physical_instance(physical);
+            return false;
+        };
+        if placements.len() != physical.material.parts.len() {
+            let _ = organism.stored_material.store_physical_instance(physical);
+            return false;
+        }
+
+        let mut body_support = f64::NEG_INFINITY;
+        for part in &body.parts {
+            let (sin, cos) = part.rotation_radians.sin_cos();
+            let local_dx = direction.0 * cos + direction.1 * sin;
+            let local_dy = -direction.0 * sin + direction.1 * cos;
+            let Some(boundary) = crate::surface_geometry::boundary_point_toward(
+                &crate::resources::Shape {
+                    form: part.form.clone(),
+                },
+                local_dx,
+                local_dy,
+            ) else {
+                continue;
+            };
+            let world_x = boundary.x * cos - boundary.y * sin + part.x;
+            let world_y = boundary.x * sin + boundary.y * cos + part.y;
+            let projection =
+                (world_x - origin.x) * direction.0 + (world_y - origin.y) * direction.1;
+            body_support = body_support.max(projection);
+        }
+        if !body_support.is_finite() {
+            let _ = organism.stored_material.store_physical_instance(physical);
+            return false;
+        }
+
+        let mut material_near = f64::INFINITY;
+        for (index, placement) in placements.iter().enumerate() {
+            let Some((name, _)) = physical.material.parts.get(index) else {
+                let _ = organism.stored_material.store_physical_instance(physical);
+                return false;
+            };
+            let Some(resource) = environment.catalog.iter().find(|r| r.name == *name) else {
+                let _ = organism.stored_material.store_physical_instance(physical);
+                return false;
+            };
+            let extent = resource.shape.form.bounding_radius();
+            let projection =
+                placement.x * direction.0 + placement.y * direction.1 - extent;
+            material_near = material_near.min(projection);
+        }
+        if !material_near.is_finite() {
+            let _ = organism.stored_material.store_physical_instance(physical);
+            return false;
+        }
+
+        let translation = body_support - material_near + f64::EPSILON;
+        if !translation.is_finite() || translation <= 0.0 {
+            let _ = organism.stored_material.store_physical_instance(physical);
+            return false;
+        }
+        let dx = direction.0 * translation;
+        let dy = direction.1 * translation;
+        if let Some(world_placements) = physical.placements.as_mut() {
+            for placement in world_placements {
+                placement.x += origin.x + dx;
+                placement.y = (placement.y + origin.y + dy).rem_euclid(environment.height);
+            }
+        }
+
+        let Some(placement) = physical
+            .placements
+            .as_ref()
+            .and_then(|placements| placements.first())
+        else {
+            return false;
+        };
+        let Some(index) = environment
+            .field
+            .index_for_position(placement.x, placement.y)
+        else {
+            return false;
+        };
+        environment
+            .field
+            .deposit_physical_at_index(index, physical)
+    }
+
     fn recycle_dead_organism(
         environment: &mut Environment,
         organism: &mut Organism,
@@ -533,7 +652,30 @@ impl Simulation {
                             self.active_transformations.push(transformation);
                         }
                     }
-                    ActionKind::Expel => {}
+                    ActionKind::Expel => {
+                        let expelled = selected
+                            .context_key
+                            .as_deref()
+                            .and_then(|key| key.strip_prefix("stored:"))
+                            .and_then(|index| index.parse::<usize>().ok())
+                            .map(|storage_index| {
+                                Self::expel_physical_material(
+                                    &mut organisms[index],
+                                    environment,
+                                    storage_index,
+                                )
+                            })
+                            .unwrap_or(false);
+                        crate::decision_runtime::record_outcome(
+                            &mut organisms[index].decision_history,
+                            &selected,
+                            if expelled {
+                                crate::decision::OutcomeKind::Neutral
+                            } else {
+                                crate::decision::OutcomeKind::Harmful
+                            },
+                        );
+                    }
                 }
             }
         }
