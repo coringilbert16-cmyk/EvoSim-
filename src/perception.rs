@@ -133,7 +133,11 @@ impl crate::state::Simulation {
             let direction_y = if distance > 0.0 { dy / distance } else { 0.0 };
             let cell = &environment.field.cells[cell_index];
 
-            for material in &cell.materials {
+            for material in cell
+                .materials
+                .iter()
+                .chain(cell.physical_materials.iter().map(|physical| &physical.material))
+            {
                 let perceived_amount = Self::perceived_amount(material, sensory_resolution);
                 if perceived_amount <= 0.0 {
                     continue;
