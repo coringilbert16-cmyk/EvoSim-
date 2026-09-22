@@ -1,5 +1,4 @@
-use crate::environment::Environment;
-use crate::organism::Organism;
+use crate::state::{Environment, Organism};
 use crate::structure::Placement;
 
 pub(crate) fn expel_physical_material(
