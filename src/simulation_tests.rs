@@ -178,7 +178,9 @@ mod integration_tests {
         );
         assert_eq!(s.organisms[0].stored_material.total_amount(), 2.0);
         let stored = s.organisms[0].stored_material.materials_snapshot();
-        assert!(stored.iter().any(|m| m.parts == vec![("Carbon".into(), 1.0)]));
+        assert!(stored
+            .iter()
+            .any(|m| m.parts == vec![("Carbon".into(), 1.0)]));
         let remaining: Vec<_> = s
             .environment
             .field
