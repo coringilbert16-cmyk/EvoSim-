@@ -375,12 +375,6 @@ fn anchor_structure(
             y: placement.y,
         }],
         genome: child_genome.clone(),
-        resource_sense: ResourceSense {
-            sensed_resources: Vec::new(),
-            direction_x: 0.0,
-            direction_y: 0.0,
-            direction_strength: 0.0,
-        },
         memory: Vec::new(),
         decision_history: crate::decision::DecisionHistory::default(),
         usable_energy: 0.0,
