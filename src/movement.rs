@@ -307,30 +307,14 @@ fn parts_penetrate(a: &[PlacedMaterialPart], b: &[PlacedMaterialPart]) -> bool {
 }
 
 fn static_material_blocks(parts: &[PlacedMaterialPart], environment: &Environment) -> bool {
-    for part in parts {
-        let radius = part.form.bounding_radius().max(0.0);
-        let min_col =
-            ((part.placement.x - radius).max(0.0) / environment.field.cell_size).floor() as usize;
-        let max_col =
-            ((part.placement.x + radius).max(0.0) / environment.field.cell_size).floor() as usize;
-        let min_row =
-            ((part.placement.y - radius).max(0.0) / environment.field.cell_size).floor() as usize;
-        let max_row =
-            ((part.placement.y + radius).max(0.0) / environment.field.cell_size).floor() as usize;
-        let max_col = max_col.min(environment.field.width_cells.saturating_sub(1));
-        let max_row = max_row.min(environment.field.height_cells.saturating_sub(1));
-        if min_col >= environment.field.width_cells || min_row >= environment.field.height_cells {
-            continue;
-        }
-        for row in min_row..=max_row {
-            for col in min_col..=max_col {
-                if environment.field.cells[row * environment.field.width_cells + col]
-                    .materials
-                    .iter()
-                    .any(|m| m.is_valid() && !m.is_empty() && m.has_internal_structure())
-                {
-                    return true;
-                }
+    // The field grid is an index, not the physical authority. Structured
+    // aggregate Material values therefore cannot act as collision geometry;
+    // only already-realized physical material can block movement.
+    for cell in &environment.field.cells {
+        for physical in &cell.physical_materials {
+            let candidate_parts = physical_parts_at(physical, environment, 0.0, 0.0);
+            if !candidate_parts.is_empty() && parts_penetrate(parts, &candidate_parts) {
+                return true;
             }
         }
     }
@@ -535,15 +519,18 @@ mod tests {
     }
 
     #[test]
-    fn movement_is_blocked_by_structured_aggregate_material() {
+    fn movement_is_blocked_by_realized_physical_material() {
         let simulation = Simulation::new(7, 20.0);
         let mut environment = empty_environment(&simulation);
         let mut organism = simulation.organisms[0].clone();
         let x = organism.structure.units[0].placement.x;
         let y = organism.structure.units[0].placement.y;
-        environment.field.deposit(
-            x + 5.0,
+        let placement = crate::structure::Placement {
+            x: x + 5.0,
             y,
+            rotation_radians: 0.0,
+        };
+        let physical = crate::physical_material::PhysicalMaterial::realized(
             crate::resources::Material {
                 parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
                 internal_bonds: vec![crate::resources::InternalBond {
@@ -551,7 +538,22 @@ mod tests {
                     part_b: 1,
                 }],
             },
-        );
+            vec![
+                placement.clone(),
+                crate::structure::Placement {
+                    x: x + 6.0,
+                    y,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &environment.catalog,
+        )
+        .expect("realized composite should be valid");
+        let index = environment
+            .field
+            .index_for_position(placement.x, placement.y)
+            .expect("physical material must be in bounds");
+        assert!(environment.field.deposit_physical_at_index(index, physical));
         let old_anchor = organism.occupied_cells[0].clone();
         assert!(!Simulation::try_move_cell(
             &mut organism,
