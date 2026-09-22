@@ -323,6 +323,7 @@ pub(crate) fn update_organism_harmonics(
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn genome_cavity_receives_environmental_material_at_realized_boundary() {
         let catalog = crate::resources::default_catalog();
