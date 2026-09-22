@@ -445,13 +445,14 @@ impl Simulation {
                 let context = DecisionContext { needs, eligibility };
                 let candidates =
                     Self::decision_candidates(&organisms[index], environment, needs, eligibility);
-                let developmental_scores = crate::developmental_decision::developmental_action_scores(
-                    &organisms[index],
-                    environment,
-                    needs,
-                    &candidates,
-                    &self.energy_ledger,
-                );
+                let developmental_scores =
+                    crate::developmental_decision::developmental_action_scores(
+                        &organisms[index],
+                        environment,
+                        needs,
+                        &candidates,
+                        &self.energy_ledger,
+                    );
                 let Some(selected) = select_action_with_developmental_scores(
                     context,
                     &organisms[index].decision_history,
