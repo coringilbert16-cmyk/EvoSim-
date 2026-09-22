@@ -332,7 +332,12 @@ pub(crate) fn update_organism_harmonics(
             .unwrap_or_default();
 
     organism.harmonic_spectrum =
-        genome_cavity_spectrum(&organism.structure, &environment.catalog, &boundary_units);
+        genome_cavity_spectrum(
+            &organism.structure,
+            &environment.catalog,
+            &environment.field,
+            &boundary_units,
+        );
 }
 
 #[cfg(test)]
