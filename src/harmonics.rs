@@ -9,7 +9,10 @@ use crate::resources::{ResourceBaselines, ResourceProperties};
 
 pub(crate) const WORLD_TONE_HZ: f64 = 440.0;
 pub(crate) const MAX_SPECTRAL_COMPONENTS: usize = 4;
-const MIN_DAMPING: f64 = 0.05;
+
+/// EXPERIMENTAL: absolute damping calibration for the harmonic model.
+/// Reactivity determines relative damping; this constant sets the model scale.
+pub(crate) const BASELINE_DAMPING_RATIO: f64 = 0.10;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
 pub(crate) struct ToneComponent {
@@ -70,22 +73,20 @@ pub(crate) fn natural_frequency_hz(
 
 /// Reactivity supplies the existing dissipative/nonlinear response scale.
 ///
-/// The returned value is a dimensionless damping ratio. Higher reactivity
-/// produces broader, weaker resonance and stronger nonlinear harmonic content;
-/// no new damping resource property is introduced.
+/// The absolute scale is experimental; relative damping is derived from the
+/// material's reactivity relative to the catalog baseline. No new
+/// damping-only resource property is introduced.
 pub(crate) fn damping_ratio(properties: ResourceProperties, baselines: ResourceBaselines) -> f64 {
     let reactivity = properties.reactivity.max(0.0);
     let baseline = baselines.reactivity.max(0.0);
-    let normalized = if baseline <= f64::EPSILON {
-        if reactivity <= f64::EPSILON {
+    if baseline <= f64::EPSILON {
+        return if reactivity <= f64::EPSILON {
             0.0
         } else {
-            1.0
-        }
-    } else {
-        reactivity / (reactivity + baseline)
-    };
-    (MIN_DAMPING + 0.45 * normalized).clamp(MIN_DAMPING, 0.5)
+            BASELINE_DAMPING_RATIO
+        };
+    }
+    BASELINE_DAMPING_RATIO * (reactivity / baseline)
 }
 
 /// A compact forced-oscillator response centered on the material's natural
@@ -102,10 +103,10 @@ pub(crate) fn resonance_response(
     {
         return 0.0;
     }
-    let zeta = damping.clamp(MIN_DAMPING, 0.5);
+    let zeta = damping.max(f64::EPSILON);
     let ratio = drive_frequency_hz / natural_frequency_hz;
     let denominator = ((1.0 - ratio * ratio).powi(2) + (2.0 * zeta * ratio).powi(2)).sqrt();
-    (1.0 / denominator.max(f64::EPSILON)).min(1.0 / (2.0 * zeta))
+    1.0 / denominator.max(f64::EPSILON)
 }
 
 /// Reactivity-driven nonlinear content. Integer multiples are used because
@@ -118,8 +119,13 @@ pub(crate) fn nonlinear_harmonic_amplitude(
     if harmonic_order < 2 || !fundamental_amplitude.is_finite() {
         return 0.0;
     }
-    let nonlinear = (reactivity.max(0.0) / (1.0 + reactivity.max(0.0))).clamp(0.0, 1.0);
-    fundamental_amplitude * 0.25 * nonlinear.powi((harmonic_order - 1) as i32)
+    let reactivity = reactivity.max(0.0);
+    let nonlinear = if reactivity <= f64::EPSILON {
+        0.0
+    } else {
+        reactivity / (reactivity + 1.0)
+    };
+    fundamental_amplitude * nonlinear.powi((harmonic_order - 1) as i32)
         / harmonic_order as f64
 }
 
@@ -226,6 +232,14 @@ fn realized_unit_spectra(
     received
 }
 
+/// Environmental quantity scales excitation using absolute material mass.
+/// This is a response scale, not a new material property.
+fn environmental_mass_scale(mass: f64, baseline_mass: f64) -> f64 {
+    let mass = mass.max(0.0);
+    let baseline = baseline_mass.max(f64::EPSILON);
+    mass / (mass + baseline)
+}
+
 /// The physical genome cavity receives the spectrum present at its realized
 /// boundary. Boundary membership comes only from the actual cavity analysis;
 /// it is never inferred from a blueprint or a hard-coded genome core.
@@ -244,18 +258,24 @@ fn environmental_spectrum_at_position(
 
     for material in &cell.materials {
         if material.is_valid() && !material.is_empty() {
+            let mass = material.mass(catalog);
             let response = material_response(material.weighted_properties(catalog), baselines, 0.0);
-            add_spectrum(&mut spectrum, &response, 1.0);
+            add_spectrum(&mut spectrum, &response, environmental_mass_scale(mass, baselines.mass));
         }
     }
     for physical in &cell.physical_materials {
         if physical.material.is_valid() && !physical.material.is_empty() {
+            let mass = physical.material.mass(catalog);
             let response = material_response(
                 physical.material.weighted_properties(catalog),
                 baselines,
                 0.0,
             );
-            add_spectrum(&mut spectrum, &response, 1.0);
+            add_spectrum(
+                &mut spectrum,
+                &response,
+                environmental_mass_scale(mass, baselines.mass),
+            );
         }
     }
     spectrum.retain_strongest();
@@ -437,12 +457,22 @@ mod tests {
     }
 
     #[test]
-    fn reactivity_broadens_damping_and_adds_nonlinear_content() {
-        let low = damping_ratio(properties(1.0, 0.0, 1.0), baselines());
+    fn reactivity_sets_relative_damping_and_nonlinear_content() {
+        let baseline = damping_ratio(properties(1.0, 1.0, 1.0), baselines());
         let high = damping_ratio(properties(1.0, 4.0, 1.0), baselines());
-        assert!(high > low);
+        assert!((baseline - BASELINE_DAMPING_RATIO).abs() < 1e-12);
+        assert!((high - 4.0 * BASELINE_DAMPING_RATIO).abs() < 1e-12);
+        assert_eq!(damping_ratio(properties(1.0, 0.0, 1.0), baselines()), 0.0);
         assert_eq!(nonlinear_harmonic_amplitude(1.0, 0.0, 2), 0.0);
+        assert!((nonlinear_harmonic_amplitude(1.0, 1.0, 2) - 0.25).abs() < 1e-12);
         assert!(nonlinear_harmonic_amplitude(1.0, 4.0, 2) > 0.0);
+    }
+
+    #[test]
+    fn environmental_mass_scale_is_quantity_sensitive() {
+        assert!((environmental_mass_scale(1.0, 1.0) - 0.5).abs() < 1e-12);
+        assert!(environmental_mass_scale(10.0, 1.0) > environmental_mass_scale(1.0, 1.0));
+        assert!(environmental_mass_scale(0.1, 1.0) < environmental_mass_scale(1.0, 1.0));
     }
 
     #[test]
