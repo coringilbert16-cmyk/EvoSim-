@@ -306,23 +306,29 @@ The seed is therefore not simply a data structure marked "alive."
 
 It must be an actual physically realized organism.
 
-# 14. Material Acquisition
+# 14. Physical Material Availability
 
-ACQUIRE is a physical environmental interaction and ownership-transfer mechanism.
+There is no ACQUIRE action.
+
+Material availability is a consequence of physical containment rather than a separate organism action.
 
 The environment is a physical material system. The active field may contain individual resources, bonded composites, larger connected structures, loose material, fluid material, and other physical arrangements that emerge from the underlying resource and material rules.
 
-The authoritative acquisition rule is:
+The authoritative rule is evaluated at the constituent scale:
 
-> A resource or physical material is acquired only when the material being acquired is fully within the organism's outer boundary.
+> A physical constituent is available to the organism when that constituent is physically within the organism's outer boundary.
+
+A composite material does **not** have to be entirely within the organism to interact with it. A composite may straddle the organism boundary, with some constituents inside and others outside.
+
+This does not itself break the composite or dissolve an existing bond. The physical material remains one structure until an actual physical transformation changes its connectivity.
+
+When a transformation acts on only the constituents within the organism, the material system may partition the existing physical material at constituent boundaries. Internal bonds are preserved only when both bonded constituents remain in the same resulting partition. A bond crossing the boundary is not silently recreated or destroyed merely because of containment.
+
+The organism therefore does not "pick up" a composite through an ACQUIRE action. Physical containment makes constituent material available to the organism's existing transformation machinery.
 
 This applies to both base and composite material.
 
-ACQUIRE must not be treated as a mechanism that converts an abstract composition into a newly invented physical object.
-
-If a composite material already physically exists in the environment, ACQUIRE transfers that existing physical material rather than reconstructing it from its composition.
-
-The acquired material must preserve, where applicable:
+No transfer operation may convert abstract composition into a newly invented physical object. Existing physical material must preserve, where applicable:
 
 - constituents,
 - quantities,
@@ -334,9 +340,9 @@ The acquired material must preserve, where applicable:
 - physical state,
 - and other information required to preserve its physical identity.
 
-ACQUIRE does **not** create new internal bonds merely because material crossed the environment/organism boundary. Restoration of bonds that already existed in the acquired material is not a new COMBINE event and must not incur a new COMBINE energy transaction.
+COMBINE may use physically available material directly. BREAK may act on existing physical bonds, and any resulting disconnected material remains governed by its actual physical location.
 
-The environment-grid system may remain the spatial mechanism used to locate candidate material, but the grid is not itself the ultimate authority for physical geometry. Physical-material acquisition must respect actual containment and the physical realization of the material being transferred.
+The environment-grid system may remain the spatial indexing mechanism used to locate candidate material, but the grid is not itself the ultimate authority for physical geometry or containment.
 
 ## 14.1 The Active Field Is a Physical Material Layer
 
