@@ -13,9 +13,7 @@ use crate::environment::{
 };
 use crate::genome::initial_genome;
 use crate::juvenile::realize_initial;
-use crate::state::{
-    DevelopmentStage, EnergyLedger, Environment, Organism, Position, Simulation,
-};
+use crate::state::{DevelopmentStage, EnergyLedger, Environment, Organism, Position, Simulation};
 use crate::structure::Placement;
 
 const ADULTHOOD_GROWTH_FRACTION: f64 = 0.90;
