@@ -10,7 +10,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ActionKind {
     Move,
-    Acquire,
     Combine,
     Break,
     Expel,
@@ -22,11 +21,6 @@ impl ActionKind {
     pub fn relevant_needs(self) -> &'static [NeedKind] {
         match self {
             ActionKind::Move => &[NeedKind::Survival, NeedKind::Reproduction],
-            ActionKind::Acquire => &[
-                NeedKind::Survival,
-                NeedKind::Reproduction,
-                NeedKind::Development,
-            ],
             ActionKind::Combine => &[NeedKind::Reproduction, NeedKind::Development],
             ActionKind::Break => &[
                 NeedKind::Survival,
@@ -171,7 +165,6 @@ impl Default for DecisionParameters {
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ActionEligibility {
     pub can_move: bool,
-    pub can_acquire: bool,
     pub can_combine: bool,
     pub can_break: bool,
     pub can_expel: bool,
@@ -181,7 +174,6 @@ impl ActionEligibility {
     pub fn permits(self, action: ActionKind) -> bool {
         match action {
             ActionKind::Move => self.can_move,
-            ActionKind::Acquire => self.can_acquire,
             ActionKind::Combine => self.can_combine,
             ActionKind::Break => self.can_break,
             ActionKind::Expel => self.can_expel,
@@ -282,28 +274,14 @@ mod tests {
     }
 
     #[test]
-    fn move_and_acquire_are_relevant_to_either_need() {
+    fn move_is_relevant_to_survival() {
         let eligibility = ActionEligibility {
             can_move: true,
-            can_acquire: true,
             ..Default::default()
         };
-        let survival_only = CurrentNeeds {
-            survival: 0.5,
-            reproduction: 0.0,
-            development: 0.0,
-        };
-        let reproduction_only = CurrentNeeds {
-            survival: 0.0,
-            reproduction: 0.5,
-            development: 0.0,
-        };
+        let needs = CurrentNeeds { survival: 0.5, ..Default::default() };
         assert_eq!(
-            approve_action_for_current_needs(ActionKind::Move, eligibility, survival_only),
-            DecisionResult::Approve
-        );
-        assert_eq!(
-            approve_action_for_current_needs(ActionKind::Acquire, eligibility, reproduction_only),
+            approve_action_for_current_needs(ActionKind::Move, eligibility, needs),
             DecisionResult::Approve
         );
     }
