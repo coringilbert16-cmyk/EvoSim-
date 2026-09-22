@@ -111,26 +111,34 @@ impl MaterialStorage {
         true
     }
 
+    /// Store an already-realized physical instance without reconstructing its
+    /// geometry or internal connection endpoints. The world realization is
+    /// rebased only into storage's intrinsic frame.
+    pub(crate) fn store_physical_instance(&mut self, instance: PhysicalMaterial) -> bool {
+        if !instance.is_realized()
+            || instance.material.parts.is_empty()
+            || !instance.material.is_valid()
+            || !Self::is_discrete(&instance.material)
+        {
+            return false;
+        }
+        let Some(instance) = instance.into_intrinsic_frame() else {
+            return false;
+        };
+        self.entries.insert(0, StoredMaterial::Physical(instance));
+        true
+    }
+
     pub(crate) fn store_physical(
         &mut self,
         material: Material,
         placements: Vec<Placement>,
         catalog: &[crate::resources::BaseResource],
     ) -> bool {
-        let instance = match PhysicalMaterial::realized(material.clone(), placements, catalog)
-            .and_then(PhysicalMaterial::into_intrinsic_frame)
-        {
-            Some(instance) => instance,
-            None => return false,
-        };
-        if material.parts.is_empty() || !material.is_valid() || !Self::is_discrete(&material) {
+        let Some(instance) = PhysicalMaterial::realized(material, placements, catalog) else {
             return false;
-        }
-        // Keep the Phase 2 selection semantics: a newly acquired realized
-        // entry is first so COMBINE cannot silently bypass it with an older
-        // logical entry of the same composition.
-        self.entries.insert(0, StoredMaterial::Physical(instance));
-        true
+        };
+        self.store_physical_instance(instance)
     }
 
     pub(crate) fn peek_one_unstructured(&self) -> Option<Material> {
