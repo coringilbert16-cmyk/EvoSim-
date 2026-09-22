@@ -77,8 +77,6 @@ impl Simulation {
 fn movement_direction(organism: &Organism) -> Option<(f64, f64)> {
     movement_direction_periodic(organism, 0.0)
 }
-
-
 pub(crate) fn movement_direction_periodic(
     organism: &Organism,
     environment_height: f64,
@@ -117,8 +115,6 @@ pub(crate) fn movement_direction_periodic(
         Some((x / magnitude, y / magnitude))
     }
 }
-
-
 fn reindex_physical_materials(environment: &mut Environment) {
     let mut physical_materials = Vec::new();
     for cell in &mut environment.field.cells {
