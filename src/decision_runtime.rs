@@ -82,19 +82,20 @@ pub fn select_action_with_developmental_scores(
         }
 
         let need = need_pressure(candidate.action, context.needs);
+        let history = history_adjustment(history, candidate);
+        let decision_score = need + history;
         let developmental = developmental_scores
             .get(index)
             .copied()
             .flatten()
             .filter(|value| value.is_finite());
-        let history = history_adjustment(history, candidate);
 
         let replace = match best.as_ref() {
             None => true,
-            Some((best_need, best_developmental, best_history, best_candidate)) => {
-                if need > *best_need {
+            Some((best_score, best_developmental, _, best_candidate)) => {
+                if decision_score > *best_score {
                     true
-                } else if need < *best_need {
+                } else if decision_score < *best_score {
                     false
                 } else if context.needs.development > 0.0
                     && candidate
@@ -106,22 +107,16 @@ pub fn select_action_with_developmental_scores(
                         .relevant_needs()
                         .contains(&crate::decision::NeedKind::Development)
                 {
-                    compare_optional_score(developmental, *best_developmental).then_with(|| {
-                        history
-                            .partial_cmp(best_history)
-                            .unwrap_or(std::cmp::Ordering::Equal)
-                    }) == std::cmp::Ordering::Greater
-                } else {
-                    history
-                        .partial_cmp(best_history)
-                        .unwrap_or(std::cmp::Ordering::Equal)
+                    compare_optional_score(developmental, *best_developmental)
                         == std::cmp::Ordering::Greater
+                } else {
+                    false
                 }
             }
         };
 
         if replace {
-            best = Some((need, developmental, history, candidate.clone()));
+            best = Some((decision_score, developmental, history, candidate.clone()));
         }
     }
 
