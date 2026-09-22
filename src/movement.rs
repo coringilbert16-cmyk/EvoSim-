@@ -77,9 +77,6 @@ impl Simulation {
     }
 }
 
-fn movement_direction(organism: &Organism) -> Option<(f64, f64)> {
-    crate::movement_direction::movement_direction_periodic(organism, 0.0)
-}
 fn reindex_physical_materials(environment: &mut Environment) {
     let mut physical_materials = Vec::new();
     for cell in &mut environment.field.cells {
@@ -288,37 +285,12 @@ fn parts_penetrate(
     })
 }
 
-fn wrapped_delta(target: f64, origin: f64, period: f64) -> f64 {
-    let direct = target - origin;
-    if period > 0.0 {
-        return (direct + period * 0.5).rem_euclid(period) - period * 0.5;
-    }
-    direct
-}
-
 fn wrap_y(y: f64, height: f64) -> f64 {
     if height > 0.0 {
         y.rem_euclid(height)
     } else {
         y
     }
-}
-
-fn static_material_blocks(parts: &[PlacedMaterialPart], environment: &Environment) -> bool {
-    // The field grid is an index, not the physical authority. Structured
-    // aggregate Material values therefore cannot act as collision geometry;
-    // only already-realized physical material can block movement.
-    for cell in &environment.field.cells {
-        for physical in &cell.physical_materials {
-            let candidate_parts = physical_parts_at(physical, environment, 0.0, 0.0);
-            if !candidate_parts.is_empty()
-                && parts_penetrate(parts, &candidate_parts, environment.height)
-            {
-                return true;
-            }
-        }
-    }
-    false
 }
 
 fn can_translate_physical(
@@ -542,7 +514,7 @@ mod tests {
                 }],
             },
             vec![
-                placement.clone(),
+                placement,
                 crate::structure::Placement {
                     x: x + 6.0,
                     y,
