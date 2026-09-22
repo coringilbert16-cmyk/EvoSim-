@@ -119,7 +119,8 @@ pub(crate) fn nonlinear_harmonic_amplitude(
         return 0.0;
     }
     let nonlinear = (reactivity.max(0.0) / (1.0 + reactivity.max(0.0))).clamp(0.0, 1.0);
-    fundamental_amplitude * 0.25 * nonlinear.powi((harmonic_order - 1) as i32) / harmonic_order as f64
+    fundamental_amplitude * 0.25 * nonlinear.powi((harmonic_order - 1) as i32)
+        / harmonic_order as f64
 }
 
 /// Generate the local spectrum produced by one realized material response to
