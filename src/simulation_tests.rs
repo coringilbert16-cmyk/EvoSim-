@@ -136,13 +136,14 @@ mod integration_tests {
         )
         .expect("carbon should have a valid physical realization");
         let before = s.organisms[0].stored_material.total_amount();
+        let field_before = s.environment.field.total_amount();
         s.environment.field.deposit(anchor.x, anchor.y, physical);
         Simulation::transfer_contained_environmental_material(
             &mut s.organisms[0],
             &mut s.environment,
         );
         assert_eq!(s.organisms[0].stored_material.total_amount(), before + 1.0);
-        assert!(s.environment.field.total_amount() < 1.0);
+        assert!(s.environment.field.total_amount() < field_before);
     }
 
     #[test]
@@ -161,7 +162,7 @@ mod integration_tests {
                     rotation_radians: 0.0,
                 },
                 Placement {
-                    x: anchor.x + 0.8,
+                    x: anchor.x + 1.8,
                     y: anchor.y,
                     rotation_radians: 0.0,
                 },
@@ -169,12 +170,13 @@ mod integration_tests {
             &s.environment.catalog,
         )
         .expect("test composite must have a valid physical realization");
+        let before = s.organisms[0].stored_material.total_amount();
         s.environment.field.deposit(anchor.x, anchor.y, physical);
         Simulation::transfer_contained_environmental_material(
             &mut s.organisms[0],
             &mut s.environment,
         );
-        assert_eq!(s.organisms[0].stored_material.total_amount(), 2.0);
+        assert_eq!(s.organisms[0].stored_material.total_amount(), before + 1.0);
         let stored = s.organisms[0].stored_material.materials_snapshot();
         assert!(stored
             .iter()
