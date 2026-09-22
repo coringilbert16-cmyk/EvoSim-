@@ -295,12 +295,34 @@ impl Simulation {
         environment: &mut Environment,
         storage_index: usize,
     ) -> bool {
-        let Some(direction) =
-            crate::movement::movement_direction_periodic(organism, environment.height)
-        else {
+        let Some(origin) = organism.occupied_cells.first() else {
             return false;
         };
-        let Some(origin) = organism.occupied_cells.first() else {
+        let direction =
+            crate::movement::movement_direction_periodic(organism, environment.height);
+        if direction.is_none() {
+            let Some(stored) = organism.stored_material.entries.get(storage_index) else {
+                return false;
+            };
+            let crate::material_storage::StoredMaterial::Physical(instance) = stored else {
+                return false;
+            };
+            let Some(placement) = instance
+                .placements
+                .as_ref()
+                .and_then(|placements| placements.first())
+            else {
+                return false;
+            };
+            let dx = placement.x;
+            let dy = placement.y;
+            let magnitude = dx.hypot(dy);
+            if magnitude <= f64::EPSILON {
+                return false;
+            }
+            direction = Some((dx / magnitude, dy / magnitude));
+        }
+        let Some(direction) = direction else {
             return false;
         };
         let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_structure(
