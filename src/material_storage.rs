@@ -129,6 +129,37 @@ impl MaterialStorage {
         true
     }
 
+    pub(crate) fn store_physical_instance_at_owner_anchor(
+        &mut self,
+        instance: PhysicalMaterial,
+        anchor: Placement,
+    ) -> bool {
+        let Some(origin) = instance
+            .placements
+            .as_ref()
+            .and_then(|placements| placements.first())
+            .copied()
+        else {
+            return false;
+        };
+        let Some(mut instance) = instance.into_intrinsic_frame() else {
+            return false;
+        };
+        instance.owner_relative_origin = Some(Placement {
+            x: origin.x - anchor.x,
+            y: origin.y - anchor.y,
+            rotation_radians: origin.rotation_radians,
+        });
+        if instance.material.parts.is_empty()
+            || !instance.material.is_valid()
+            || !Self::is_discrete(&instance.material)
+        {
+            return false;
+        }
+        self.entries.insert(0, StoredMaterial::Physical(instance));
+        true
+    }
+
     pub(crate) fn store_physical(
         &mut self,
         material: Material,
