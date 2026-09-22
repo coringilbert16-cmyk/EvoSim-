@@ -88,15 +88,9 @@ pub(crate) fn seed_initial_landscape(
                 [((particle_index as u64 + seed) as usize) % composition_indices.len()];
             let material = &compounds[material_index];
             let local_rotation = angle + rng.gen_range(-0.35..0.35);
-            let placements = compound_placements(
-                material,
-                x,
-                y,
-                local_rotation,
-                rng.gen_range(0.25..0.65),
-            );
-            let Some(physical) =
-                PhysicalMaterial::realized(material.clone(), placements, catalog)
+            let placements =
+                compound_placements(material, x, y, local_rotation, rng.gen_range(0.25..0.65));
+            let Some(physical) = PhysicalMaterial::realized(material.clone(), placements, catalog)
             else {
                 continue;
             };
@@ -109,10 +103,7 @@ pub(crate) fn seed_initial_landscape(
     }
 }
 
-fn formation_material_indices(
-    compounds: &[Material],
-    formation_index: usize,
-) -> Vec<usize> {
+fn formation_material_indices(compounds: &[Material], formation_index: usize) -> Vec<usize> {
     let count = compounds.len();
     let first = (formation_index * 5 + 1) % count;
     let second = (first + 3 + formation_index % 4) % count;
@@ -124,11 +115,7 @@ fn formation_material_indices(
     indices
 }
 
-fn formation_seed(
-    compounds: &[Material],
-    indices: &[usize],
-    formation_index: usize,
-) -> u64 {
+fn formation_seed(compounds: &[Material], indices: &[usize], formation_index: usize) -> u64 {
     let mut seed = 0x9E37_79B9_7F4A_7C15u64 ^ formation_index as u64;
     for &index in indices {
         for (name, amount) in &compounds[index].parts {
@@ -164,8 +151,7 @@ fn compound_placements(
 #[cfg(test)]
 mod tests {
     use super::{
-        seed_compounds, seed_initial_landscape, FORMATION_PARTICLES,
-        INITIAL_FORMATION_COUNT,
+        seed_compounds, seed_initial_landscape, FORMATION_PARTICLES, INITIAL_FORMATION_COUNT,
     };
     use crate::environment::ActiveMaterialField;
     use std::collections::BTreeSet;
