@@ -154,6 +154,110 @@ pub(crate) fn material_response(
     spectrum
 }
 
+
+/// Combine two spectral components at the same frequency as phasors.
+///
+/// Frequency is the physical identity of a component. Amplitude and phase
+/// combine through the existing harmonic representation rather than creating
+/// a new time-domain simulation.
+fn combine_component(a: ToneComponent, b: ToneComponent) -> ToneComponent {
+    let ax = a.amplitude * a.phase_radians.cos();
+    let ay = a.amplitude * a.phase_radians.sin();
+    let bx = b.amplitude * b.phase_radians.cos();
+    let by = b.amplitude * b.phase_radians.sin();
+    let x = ax + bx;
+    let y = ay + by;
+    ToneComponent {
+        frequency_hz: a.frequency_hz,
+        amplitude: x.hypot(y),
+        phase_radians: y.atan2(x),
+    }
+}
+
+fn add_spectrum(target: &mut ToneSpectrum, source: &ToneSpectrum, scale: f64) {
+    if !scale.is_finite() || scale <= f64::EPSILON {
+        return;
+    }
+    for component in &source.components {
+        let contribution = ToneComponent {
+            frequency_hz: component.frequency_hz,
+            amplitude: component.amplitude * scale,
+            phase_radians: component.phase_radians,
+        };
+        if let Some(existing) = target.components.iter_mut().find(|existing| {
+            (existing.frequency_hz - contribution.frequency_hz).abs() <= 1e-9
+        }) {
+            *existing = combine_component(*existing, contribution);
+        } else {
+            target.components.push(contribution);
+        }
+    }
+}
+
+/// Generate the spectrum produced by the actual realized organism graph.
+///
+/// Every realized unit receives the analytical world tone through its own
+/// material response. Existing physical bonds then transmit a portion of the
+/// response between their actual physical endpoints. No blueprint, genome
+/// target, or abstract sensor participates in this calculation.
+pub(crate) fn realized_structure_spectrum(
+    structure: &crate::structure::OrganismStructure,
+    catalog: &[crate::resources::BaseResource],
+) -> ToneSpectrum {
+    let baselines = ResourceBaselines::from_catalog(catalog);
+    let mut local = Vec::with_capacity(structure.units.len());
+
+    for unit in &structure.units {
+        let Some(properties) = unit.properties(catalog) else {
+            local.push(ToneSpectrum::empty());
+            continue;
+        };
+        local.push(material_response(properties, baselines, 0.0));
+    }
+
+    let mut received = local.clone();
+    for bond in &structure.bonds {
+        let Some(a) = structure.unit_index(bond.endpoint_a.constituent_id) else {
+            continue;
+        };
+        let Some(b) = structure.unit_index(bond.endpoint_b.constituent_id) else {
+            continue;
+        };
+        let coupling = bond.strength.clamp(0.0, 1.0);
+        add_spectrum(&mut received[a], &local[b], coupling);
+        add_spectrum(&mut received[b], &local[a], coupling);
+    }
+
+    let mut spectrum = ToneSpectrum::empty();
+    for unit_spectrum in received.iter() {
+        add_spectrum(&mut spectrum, unit_spectrum, 1.0);
+    }
+    spectrum.retain_strongest();
+    spectrum
+}
+
+/// The physical genome cavity receives the spectrum present at its realized
+/// boundary. Boundary membership comes only from the actual cavity analysis;
+/// it is never inferred from a blueprint or a hard-coded genome core.
+pub(crate) fn genome_cavity_spectrum(
+    structure: &crate::structure::OrganismStructure,
+    catalog: &[crate::resources::BaseResource],
+    boundary_units: &[usize],
+) -> ToneSpectrum {
+    if boundary_units.is_empty() {
+        return ToneSpectrum::empty();
+    }
+    let structure_spectrum = realized_structure_spectrum(structure, catalog);
+    let divisor = boundary_units.len() as f64;
+    let mut spectrum = ToneSpectrum::empty();
+
+    for _unit_index in boundary_units {
+        add_spectrum(&mut spectrum, &structure_spectrum, 1.0 / divisor);
+    }
+    spectrum.retain_strongest();
+    spectrum
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
