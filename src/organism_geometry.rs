@@ -76,8 +76,94 @@ impl OrganismBodyGeometry {
         })
     }
 
+    /// Test physical containment against the realized constituent geometry.
+    ///
+    /// The organism boundary is the union of its realized material geometry;
+    /// the aggregate bounding box is only a spatial index and is never used as
+    /// the physical authority. Boundary points count as contained so that a
+    /// constituent touching the organism surface is available at constituent
+    /// scale.
+    pub fn contains_point(&self, x: f64, y: f64) -> bool {
+        if !x.is_finite() || !y.is_finite() {
+            return false;
+        }
+        self.parts.iter().any(|part| form_contains_point(&part.form, part.x, part.y, part.rotation_radians, x, y))
+    }
+
     #[allow(dead_code)]
     pub fn bounding_box_contains(&self, x: f64, y: f64) -> bool {
         x >= self.min_x && x <= self.max_x && y >= self.min_y && y <= self.max_y
     }
+}
+
+fn form_contains_point(
+    form: &Form,
+    origin_x: f64,
+    origin_y: f64,
+    rotation_radians: f64,
+    x: f64,
+    y: f64,
+) -> bool {
+    let dx = x - origin_x;
+    let dy = y - origin_y;
+    let (sin, cos) = rotation_radians.sin_cos();
+    let local_x = dx * cos + dy * sin;
+    let local_y = -dx * sin + dy * cos;
+
+    match form {
+        Form::Circle { radius } => local_x.hypot(local_y) <= *radius + f64::EPSILON,
+        Form::Rectangle { width, height } => {
+            local_x.abs() <= *width / 2.0 + f64::EPSILON
+                && local_y.abs() <= *height / 2.0 + f64::EPSILON
+        }
+        Form::RegularPolygon { sides, radius } => {
+            polygon_contains_point(local_x, local_y, &Form::RegularPolygon {
+                sides: *sides,
+                radius: *radius,
+            })
+        }
+        Form::Polygon { vertices } => polygon_contains_vertices(local_x, local_y, vertices),
+        // A line has no interior area. It can form part of the boundary but
+        // cannot by itself contain a constituent point.
+        Form::Line { .. } => false,
+        Form::Fluid { nominal_area } => {
+            local_x.hypot(local_y)
+                <= (nominal_area / std::f64::consts::PI).sqrt() + f64::EPSILON
+        }
+    }
+}
+
+fn polygon_contains_point(x: f64, y: f64, form: &Form) -> bool {
+    let Some(vertices) = form.polygon_vertices() else {
+        return false;
+    };
+    polygon_contains_vertices(x, y, &vertices)
+}
+
+fn polygon_contains_vertices(x: f64, y: f64, vertices: &[(f64, f64)]) -> bool {
+    if vertices.len() < 3 {
+        return false;
+    }
+
+    let point_on_segment = |ax: f64, ay: f64, bx: f64, by: f64| {
+        let cross = (x - ax) * (by - ay) - (y - ay) * (bx - ax);
+        if cross.abs() > 1e-10 {
+            return false;
+        }
+        let dot = (x - ax) * (x - bx) + (y - ay) * (y - by);
+        dot <= 1e-10
+    };
+
+    let mut inside = false;
+    for index in 0..vertices.len() {
+        let (x1, y1) = vertices[index];
+        let (x2, y2) = vertices[(index + 1) % vertices.len()];
+        if point_on_segment(x1, y1, x2, y2) {
+            return true;
+        }
+        if (y1 > y) != (y2 > y) && x < (x2 - x1) * (y - y1) / (y2 - y1) + x1 {
+            inside = !inside;
+        }
+    }
+    inside
 }
