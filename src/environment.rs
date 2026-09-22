@@ -311,40 +311,6 @@ impl ActiveMaterialField {
         self.deposit_physical_at_index(index, material)
     }
 
-    pub fn take_at(
-        &mut self,
-        x: f64,
-        y: f64,
-        material_index: usize,
-        amount: f64,
-    ) -> Option<Material> {
-        let index = self.index_for_position(x, y)?;
-        self.take_at_index(index, material_index, amount)
-    }
-
-    pub fn take_at_index(
-        &mut self,
-        index: usize,
-        material_index: usize,
-        amount: f64,
-    ) -> Option<Material> {
-        let material = self
-            .cells
-            .get_mut(index)?
-            .materials
-            .get_mut(material_index)?;
-        let requested = if amount.is_finite() && amount >= 1.0 {
-            amount.floor() as usize
-        } else {
-            return None;
-        };
-        let taken = take_whole_unstructured(material, requested)?;
-        self.cells[index]
-            .materials
-            .retain(|material| !material.is_empty());
-        Some(taken)
-    }
-
     /// Remove a physically existing material object without reducing it to a
     /// composition-only value. This legacy transfer primitive is retained only
     /// for migration; physical availability is now determined by containment.
