@@ -204,7 +204,7 @@ impl Simulation {
 
     fn current_needs(
         organism: &Organism,
-        environment: &Environment,
+        _environment: &Environment,
         parameters: DecisionParameters,
     ) -> CurrentNeeds {
         let survival_reserve = parameters.survival_reserve.max(f64::EPSILON);
@@ -227,7 +227,7 @@ impl Simulation {
     }
     fn action_eligibility(
         organism: &Organism,
-        environment: &Environment,
+        _environment: &Environment,
         needs: CurrentNeeds,
     ) -> ActionEligibility {
         let can_build_from_storage =
@@ -252,7 +252,7 @@ impl Simulation {
     }
     fn decision_candidates(
         organism: &Organism,
-        environment: &Environment,
+        _environment: &Environment,
         needs: CurrentNeeds,
         eligibility: ActionEligibility,
     ) -> Vec<ActionCandidate> {
@@ -676,7 +676,7 @@ impl Simulation {
     }
     pub(crate) fn apply_survival_damage(
         organism: &mut Organism,
-        environment: &Environment,
+        _environment: &Environment,
         ledger: &mut EnergyLedger,
         rng: &mut ChaCha8Rng,
     ) -> bool {
