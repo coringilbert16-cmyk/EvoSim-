@@ -91,14 +91,17 @@ pub fn select_action_with_developmental_scores(
 
         let replace = match best.as_ref() {
             None => true,
-            Some((best_need, best_developmental, best_history, _)) => {
+            Some((best_need, best_developmental, best_history, best_candidate)) => {
                 if need > *best_need {
                     true
                 } else if need < *best_need {
                     false
                 } else if context.needs.development > 0.0
                     && candidate.action.relevant_needs().contains(&crate::decision::NeedKind::Development)
-                    && best.3_action_is_developmental()
+                    && best_candidate
+                        .action
+                        .relevant_needs()
+                        .contains(&crate::decision::NeedKind::Development)
                 {
                     compare_optional_score(developmental, *best_developmental)
                         .then_with(|| history.partial_cmp(best_history).unwrap_or(std::cmp::Ordering::Equal))
@@ -124,27 +127,6 @@ fn compare_optional_score(a: Option<f64>, b: Option<f64>) -> std::cmp::Ordering 
         (Some(_), None) => std::cmp::Ordering::Greater,
         (None, Some(_)) => std::cmp::Ordering::Less,
         (None, None) => std::cmp::Ordering::Equal,
-    }
-}
-
-trait DevelopmentalCandidate {
-    fn is_developmental(&self) -> bool;
-}
-
-impl DevelopmentalCandidate for ActionKind {
-    fn is_developmental(&self) -> bool {
-        self.relevant_needs()
-            .contains(&crate::decision::NeedKind::Development)
-    }
-}
-
-trait BestCandidateAction {
-    fn action_is_developmental(&self) -> bool;
-}
-
-impl BestCandidateAction for (f64, Option<f64>, f64, ActionCandidate) {
-    fn action_is_developmental(&self) -> bool {
-        self.3.action.is_developmental()
     }
 }
 
@@ -264,10 +246,7 @@ mod tests {
             },
         ];
 
-        assert_eq!(
-            select_action(context, &history, &candidates),
-            Some(candidates[0].clone())
-        );
+        assert_eq!(select_action(context, &history, &candidates), None);
     }
 
     #[test]
