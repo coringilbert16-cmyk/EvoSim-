@@ -123,7 +123,7 @@ pub(crate) struct EnergyLedger {
     pub(crate) total_heat_dissipated: f64,
     pub(crate) total_usable_energy_held: f64,
 }
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Clone)]
 pub(crate) struct HarmonicCache {
     pub(crate) structure_key: u64,
     pub(crate) environment_key: u64,
