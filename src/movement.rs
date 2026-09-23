@@ -1,3 +1,6 @@
+use rand::Rng;
+use rand_chacha::ChaCha8Rng;
+
 use crate::material_geometry::PlacedMaterialPart;
 use crate::state::{Environment, Organism, Simulation};
 use crate::structure::Placement;
@@ -7,11 +10,15 @@ impl Simulation {
         organism: &mut Organism,
         environment: &mut Environment,
         other_organisms: &mut [Organism],
+        rng: &mut ChaCha8Rng,
     ) -> bool {
         let movement_efficiency = organism.genome.movement_efficiency();
-        let (x, y) = match crate::movement_direction::movement_direction_periodic(
+        let angle = rng.gen_range(0.0..std::f64::consts::TAU);
+        let random_push = (angle.cos() * 0.1, angle.sin() * 0.1);
+        let (x, y) = match crate::movement_direction::movement_direction_periodic_with_push(
             organism,
             environment.height,
+            random_push,
         ) {
             Some(direction) => direction,
             None => return false,
