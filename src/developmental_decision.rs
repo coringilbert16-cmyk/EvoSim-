@@ -11,8 +11,8 @@ use crate::decision::{ActionKind, CurrentNeeds};
 use crate::decision_runtime::ActionCandidate;
 use crate::state::{DevelopmentStage, EnergyLedger, Environment, Organism};
 
-pub(crate) struct DevelopmentalContext<'a> {
-    pub(crate) blueprint: &'a crate::developmental_blueprint::DevelopmentalFieldBlueprint,
+pub(crate) struct DevelopmentalContext {
+    pub(crate) blueprint: crate::developmental_blueprint::DevelopmentalFieldBlueprint,
     pub(crate) origin: (f64, f64),
     pub(crate) orientation: f64,
     pub(crate) preferred_length: f64,
@@ -21,8 +21,8 @@ pub(crate) struct DevelopmentalContext<'a> {
     pub(crate) current_density_realized: Option<f64>,
 }
 
-pub(crate) fn context<'a>(
-    organism: &'a mut Organism,
+pub(crate) fn context(
+    organism: &mut Organism,
     environment: &Environment,
     seed_reference: (f64, f64),
 ) -> Option<DevelopmentalContext<'a>> {
@@ -40,7 +40,7 @@ pub(crate) fn context<'a>(
                 overall: 0.0,
             },
         );
-    let blueprint = &organism.genome.developmental_blueprint;
+    let blueprint = organism.genome.developmental_blueprint.clone();
     let origin = (
         organism.developmental_origin.x,
         organism.developmental_origin.y,
@@ -74,12 +74,12 @@ pub(crate) fn growth_fraction_for_context(
     _organism: &Organism,
     environment: &Environment,
     structure: &crate::structure::OrganismStructure,
-    developmental: &DevelopmentalContext<'_>,
+    developmental: &DevelopmentalContext,
 ) -> f64 {
     growth_fraction_for_structure(
         structure,
         environment,
-        developmental.blueprint,
+        &developmental.blueprint,
         developmental.origin,
         developmental.orientation,
         developmental.preferred_length,
@@ -143,7 +143,7 @@ pub(crate) fn developmental_action_scores(
                         &mut cache,
                         &mut trial_ledger,
                         Some((
-                            developmental.blueprint,
+                            &developmental.blueprint,
                             developmental.origin,
                             developmental.orientation,
                             developmental.preferred_length,
