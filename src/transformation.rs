@@ -382,6 +382,8 @@ mod tests {
             active_transformation_id: None,
             reproductive_construction: None,
             structure_revision: 0,
+        position_revision: 0,
+            position_revision: 0,
             cached_cavity_revision: None,
             cached_cavity: None,
             cached_developmental_revision: None,
