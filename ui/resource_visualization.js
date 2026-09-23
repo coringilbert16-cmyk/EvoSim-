@@ -70,12 +70,6 @@
   }
 
   function drawWorldPoints(world, viewport) {
-    for (const point of world.vents || []) {
-      const p = camera.worldToScreen(point.x, point.y, viewport.width, viewport.height);
-      ctx.save(); ctx.strokeStyle = '#CFCFCF'; ctx.lineWidth = 1.5; ctx.beginPath();
-      ctx.moveTo(p.x - 5, p.y); ctx.lineTo(p.x + 5, p.y);
-      ctx.moveTo(p.x, p.y - 5); ctx.lineTo(p.x, p.y + 5); ctx.stroke(); ctx.restore();
-    }
     for (const point of world.decomposing_bodies || []) {
       const p = camera.worldToScreen(point.x, point.y, viewport.width, viewport.height);
       ctx.save(); ctx.strokeStyle = '#8B8B8B'; ctx.setLineDash([3, 3]); ctx.beginPath();
