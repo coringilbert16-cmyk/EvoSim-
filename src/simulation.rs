@@ -227,23 +227,32 @@ impl Simulation {
                 context_key: None,
             });
         }
-        if relevant(ActionKind::Expel) {
-            candidates.extend(
-                organism
-                    .stored_material
-                    .entries
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, entry)| {
-                        matches!(entry, crate::material_storage::StoredMaterial::Physical(_))
-                    })
-                    .map(|(index, _)| ActionCandidate {
-                        action: ActionKind::Expel,
-                        context_key: Some(format!("stored:{index}")),
-                    }),
-            );
-        }
         candidates
+    }
+
+    fn expulsion_candidates(
+        organism: &Organism,
+        needs: CurrentNeeds,
+        eligibility: ActionEligibility,
+    ) -> Vec<ActionCandidate> {
+        if !eligibility.permits(ActionKind::Expel)
+            || !needs.any_for(ActionKind::Expel.relevant_needs())
+        {
+            return Vec::new();
+        }
+        organism
+            .stored_material
+            .entries
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| {
+                matches!(entry, crate::material_storage::StoredMaterial::Physical(_))
+            })
+            .map(|(index, _)| ActionCandidate {
+                action: ActionKind::Expel,
+                context_key: Some(format!("stored:{index}")),
+            })
+            .collect()
     }
     fn recycle_dead_organism(
         environment: &mut Environment,
@@ -556,6 +565,55 @@ impl Simulation {
                             );
                         }
                         ActionKind::Move => unreachable!("movement is evaluated independently"),
+                    }
+                } else {
+                    let expulsion_candidates =
+                        Self::expulsion_candidates(&organisms[index], needs, eligibility);
+                    let expulsion_competition =
+                        crate::decision_runtime::developmental_competition_indices(
+                            context,
+                            &organisms[index].decision_history,
+                            &expulsion_candidates,
+                        );
+                    let expulsion_scores =
+                        crate::developmental_decision::developmental_action_scores(
+                            &organisms[index],
+                            environment,
+                            needs,
+                            &expulsion_candidates,
+                            &expulsion_competition,
+                            developmental.as_ref(),
+                            &self.energy_ledger,
+                        );
+                    if let Some(selected) = select_action_with_developmental_scores(
+                        context,
+                        &organisms[index].decision_history,
+                        &expulsion_candidates,
+                        &expulsion_scores,
+                        &mut self.rng,
+                    ) {
+                        let expelled = selected
+                            .context_key
+                            .as_deref()
+                            .and_then(|key| key.strip_prefix("stored:"))
+                            .and_then(|index| index.parse::<usize>().ok())
+                            .map(|storage_index| {
+                                crate::expulsion::expel_physical_material(
+                                    &mut organisms[index],
+                                    environment,
+                                    storage_index,
+                                )
+                            })
+                            .unwrap_or(false);
+                        crate::decision_runtime::record_outcome(
+                            &mut organisms[index].decision_history,
+                            &selected,
+                            if expelled {
+                                crate::decision::OutcomeKind::Neutral
+                            } else {
+                                crate::decision::OutcomeKind::Harmful
+                            },
+                        );
                     }
                 }
 
