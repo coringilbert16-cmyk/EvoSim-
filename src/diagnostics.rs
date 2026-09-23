@@ -226,7 +226,9 @@ impl DiagnosticsRecorder {
         for transformation in after.transformations.values() {
             if !before.transformations.contains_key(&transformation.id) {
                 self.summary.transformation_starts += 1;
-                self.summary.first_transformation_tick.get_or_insert(after.tick);
+                self.summary
+                    .first_transformation_tick
+                    .get_or_insert(after.tick);
                 self.summary.last_transformation_tick = Some(after.tick);
                 let kind = serde_json::to_string(&transformation.kind)
                     .unwrap_or_else(|_| "unknown".to_string());
@@ -342,7 +344,9 @@ impl DiagnosticsRecorder {
             let new = after.organisms.get(&id).map(|o| o.stage.clone());
             if old != new {
                 self.summary.lifecycle_changes += 1;
-                self.summary.first_lifecycle_change_tick.get_or_insert(after.tick);
+                self.summary
+                    .first_lifecycle_change_tick
+                    .get_or_insert(after.tick);
                 self.summary.last_lifecycle_change_tick = Some(after.tick);
                 self.write_event(json!({
                     "event": "lifecycle_change",
@@ -368,10 +372,7 @@ impl DiagnosticsRecorder {
             .summary
             .max_active_transformations
             .max(simulation.active_transformations.len());
-        self.summary.max_population = self
-            .summary
-            .max_population
-            .max(simulation.organisms.len());
+        self.summary.max_population = self.summary.max_population.max(simulation.organisms.len());
         for organism in snapshot.organisms.values() {
             update_min_max(
                 &mut self.summary.min_growth_fraction,
@@ -485,7 +486,11 @@ impl DiagnosticsRecorder {
         writeln!(file)?;
         writeln!(file, "TRANSFORMATIONS")?;
         writeln!(file, "starts: {}", self.summary.transformation_starts)?;
-        writeln!(file, "completions: {}", self.summary.transformation_completions)?;
+        writeln!(
+            file,
+            "completions: {}",
+            self.summary.transformation_completions
+        )?;
         writeln!(
             file,
             "first_tick: {:?}",
@@ -501,7 +506,11 @@ impl DiagnosticsRecorder {
         }
         writeln!(file)?;
         writeln!(file, "LIFECYCLE / STRUCTURE")?;
-        writeln!(file, "lifecycle_changes: {}", self.summary.lifecycle_changes)?;
+        writeln!(
+            file,
+            "lifecycle_changes: {}",
+            self.summary.lifecycle_changes
+        )?;
         writeln!(
             file,
             "first_lifecycle_change_tick: {:?}",
@@ -512,7 +521,11 @@ impl DiagnosticsRecorder {
             "last_lifecycle_change_tick: {:?}",
             self.summary.last_lifecycle_change_tick
         )?;
-        writeln!(file, "structure_changes: {}", self.summary.structure_changes)?;
+        writeln!(
+            file,
+            "structure_changes: {}",
+            self.summary.structure_changes
+        )?;
         writeln!(file)?;
         writeln!(file, "RANGES OBSERVED")?;
         write_range(
@@ -536,10 +549,8 @@ impl DiagnosticsRecorder {
         writeln!(file)?;
         writeln!(file, "FINAL ORGANISMS")?;
         for (index, organism) in simulation.organisms.iter_mut().enumerate() {
-            let growth = crate::developmental_decision::growth_fraction(
-                organism,
-                &simulation.environment,
-            );
+            let growth =
+                crate::developmental_decision::growth_fraction(organism, &simulation.environment);
             writeln!(
                 file,
                 "#{index} id={} stage={:?} growth={:.6} energy={:.6} stress={:.6} units={} bonds={} components={} stored={}",
