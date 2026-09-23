@@ -5,8 +5,9 @@ use std::collections::HashSet;
 #[cfg(test)]
 mod simulation_material_tests;
 
-use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters, OutcomeKind};
-use crate::transformation::break_candidate_is_executable;
+use crate::decision::{
+    ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters, OutcomeKind,
+};
 use crate::decision_runtime::{select_action, ActionCandidate, DecisionContext};
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::environment::{
@@ -17,6 +18,7 @@ use crate::juvenile::realize_initial;
 use crate::state::{
     DevelopmentStage, EnergyLedger, Environment, Organism, Position, ResourceSense, Simulation,
 };
+use crate::transformation::break_candidate_is_executable;
 
 const ADULTHOOD_GROWTH_FRACTION: f64 = 0.90;
 
@@ -230,13 +232,11 @@ impl Simulation {
                         .reproductive_construction
                         .as_ref()
                         .is_some_and(|construction| construction.needs_space))
-                && organism.structure.bonds.iter().any(|bond| {
-                    break_candidate_is_executable(
-                        organism,
-                        environment,
-                        *bond,
-                    )
-                }),
+                && organism
+                    .structure
+                    .bonds
+                    .iter()
+                    .any(|bond| break_candidate_is_executable(organism, environment, *bond)),
             can_expel: false,
         }
     }
