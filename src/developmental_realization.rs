@@ -13,6 +13,23 @@ impl DevelopmentalFieldBlueprint {
             .expect("confirmed seed scale reference must be valid");
         let preferred_length =
             self.preferred_developmental_length(preferred_mass.max(1e-9), seed_mass, seed_length);
+        self.realization_at_length(
+            structure,
+            catalog,
+            developmental_origin,
+            developmental_orientation_radians,
+            preferred_length,
+        )
+    }
+
+    pub(crate) fn realization_at_length(
+        &self,
+        structure: &crate::structure::OrganismStructure,
+        catalog: &[BaseResource],
+        developmental_origin: (f64, f64),
+        developmental_orientation_radians: f64,
+        preferred_length: f64,
+    ) -> DevelopmentalRealization {
         let material_available = self.material_available_value(preferred_length);
         let density_available = self.density_available_value(preferred_length);
 
