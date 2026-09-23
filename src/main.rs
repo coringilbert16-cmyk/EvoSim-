@@ -31,6 +31,7 @@ mod surface_geometry;
 mod combine;
 mod combine_runtime;
 mod decomposition;
+mod diagnostics;
 mod energy_ledger;
 
 // Organism genome, behavior, and lifecycle.
