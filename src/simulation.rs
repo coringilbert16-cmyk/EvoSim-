@@ -192,14 +192,13 @@ impl Simulation {
         let reserve_pressure = (1.0 - organism.usable_energy / survival_reserve).clamp(0.0, 1.0);
         let survival = (reserve_pressure * (1.0 + organism.stress.max(0.0))).clamp(0.0, 1.0);
         let development = if let Some(developmental) = developmental {
-            (1.0
-                - crate::developmental_decision::growth_fraction_for_context(
-                    organism,
-                    environment,
-                    &organism.structure,
-                    developmental,
-                )
-                .clamp(0.0, 1.0))
+            (1.0 - crate::developmental_decision::growth_fraction_for_context(
+                organism,
+                environment,
+                &organism.structure,
+                developmental,
+            )
+            .clamp(0.0, 1.0))
             .max(0.0)
         } else {
             0.0
@@ -458,12 +457,11 @@ impl Simulation {
                 let context = DecisionContext { needs, eligibility };
                 let candidates =
                     Self::decision_candidates(&organisms[index], environment, needs, eligibility);
-                let competing_indices =
-                    crate::decision_runtime::developmental_competition_indices(
-                        context,
-                        &organisms[index].decision_history,
-                        &candidates,
-                    );
+                let competing_indices = crate::decision_runtime::developmental_competition_indices(
+                    context,
+                    &organisms[index].decision_history,
+                    &candidates,
+                );
                 let developmental_scores =
                     crate::developmental_decision::developmental_action_scores(
                         &organisms[index],

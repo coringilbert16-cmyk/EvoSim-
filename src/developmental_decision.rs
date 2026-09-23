@@ -46,12 +46,7 @@ pub(crate) fn context<'a>(
 pub(crate) fn growth_fraction(organism: &Organism, environment: &Environment) -> f64 {
     context(organism, environment)
         .map(|developmental| {
-            growth_fraction_for_context(
-                organism,
-                environment,
-                &organism.structure,
-                &developmental,
-            )
+            growth_fraction_for_context(organism, environment, &organism.structure, &developmental)
         })
         .unwrap_or(0.0)
 }
