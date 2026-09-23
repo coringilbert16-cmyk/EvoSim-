@@ -9,6 +9,8 @@ use crate::decision::{
     approve_action_for_current_needs, outcome_is_known, ActionEligibility, ActionKind,
     CurrentNeeds, DecisionHistory, DecisionResult, OutcomeKind,
 };
+use rand::Rng;
+use rand_chacha::ChaCha8Rng;
 
 /// Maximum influence a recorded consequence has on action selection.
 ///
@@ -113,18 +115,18 @@ pub fn developmental_competition_indices(
 
 /// Select exactly one approved action from candidates.
 ///
-/// Need pressure is the primary relevance signal. When developmental pressure
-/// is active and two candidates have equal need pressure, a supplied physical
-/// developmental result breaks the tie before learned history is consulted.
-/// Exact ties remain unresolved rather than inheriting the caller's candidate
-/// ordering.
+/// Need pressure is the primary relevance signal. Learned consequences refine
+/// that score. Physical developmental results are used only when all tied
+/// candidates have comparable results. Any remaining genuine tie is resolved
+/// randomly rather than by candidate ordering.
 pub fn select_action(
     context: DecisionContext,
     history: &DecisionHistory,
     candidates: &[ActionCandidate],
+    rng: &mut ChaCha8Rng,
 ) -> Option<ActionCandidate> {
     let scores = vec![None; candidates.len()];
-    select_action_with_developmental_scores(context, history, candidates, &scores)
+    select_action_with_developmental_scores(context, history, candidates, &scores, rng)
 }
 
 /// Select an action using physical developmental results when they are
@@ -135,77 +137,49 @@ pub fn select_action_with_developmental_scores(
     history: &DecisionHistory,
     candidates: &[ActionCandidate],
     developmental_scores: &[Option<f64>],
+    rng: &mut ChaCha8Rng,
 ) -> Option<ActionCandidate> {
-    let mut best: Option<(f64, Option<f64>, f64, ActionCandidate)> = None;
-    let mut unresolved_tie = false;
-
+    let mut scored = Vec::new();
     for (index, candidate) in candidates.iter().enumerate() {
         if approve(context, candidate.action) != DecisionResult::Approve {
             continue;
         }
-
-        let need = need_pressure(candidate.action, context.needs);
-        let history = history_adjustment(history, candidate);
-        let decision_score = need + history;
-        let developmental = developmental_scores
-            .get(index)
-            .copied()
-            .flatten()
-            .filter(|value| value.is_finite());
-
-        match best.as_ref() {
-            None => {
-                best = Some((decision_score, developmental, history, candidate.clone()));
-                unresolved_tie = false;
-            }
-            Some((best_score, best_developmental, _, best_candidate)) => {
-                let ordering = if decision_score > *best_score {
-                    std::cmp::Ordering::Greater
-                } else if decision_score < *best_score {
-                    std::cmp::Ordering::Less
-                } else if context.needs.development > 0.0
-                    && candidate
-                        .action
-                        .relevant_needs()
-                        .contains(&crate::decision::NeedKind::Development)
-                    && best_candidate
-                        .action
-                        .relevant_needs()
-                        .contains(&crate::decision::NeedKind::Development)
-                {
-                    compare_optional_score(developmental, *best_developmental)
-                } else {
-                    std::cmp::Ordering::Equal
-                };
-
-                match ordering {
-                    std::cmp::Ordering::Greater => {
-                        best = Some((decision_score, developmental, history, candidate.clone()));
-                        unresolved_tie = false;
-                    }
-                    std::cmp::Ordering::Equal => {
-                        unresolved_tie = true;
-                    }
-                    std::cmp::Ordering::Less => {}
-                }
-            }
-        }
+        scored.push((
+            index,
+            need_pressure(candidate.action, context.needs)
+                + history_adjustment(history, candidate),
+            developmental_scores
+                .get(index)
+                .copied()
+                .flatten()
+                .filter(|value| value.is_finite()),
+        ));
     }
 
-    if unresolved_tie {
-        None
-    } else {
-        best.map(|(_, _, _, candidate)| candidate)
-    }
-}
+    let Some(best_score) = scored
+        .iter()
+        .map(|(_, score, _)| *score)
+        .max_by(f64::total_cmp)
+    else {
+        return None;
+    };
 
-fn compare_optional_score(a: Option<f64>, b: Option<f64>) -> std::cmp::Ordering {
-    match (a, b) {
-        (Some(a), Some(b)) => a.partial_cmp(&b).unwrap_or(std::cmp::Ordering::Equal),
-        (Some(_), None) => std::cmp::Ordering::Greater,
-        (None, Some(_)) => std::cmp::Ordering::Less,
-        (None, None) => std::cmp::Ordering::Equal,
+    let mut tied: Vec<_> = scored
+        .into_iter()
+        .filter(|(_, score, _)| score.total_cmp(&best_score).is_eq())
+        .collect();
+
+    if tied.len() > 1 && tied.iter().all(|(_, _, score)| score.is_some()) {
+        let best_developmental = tied
+            .iter()
+            .filter_map(|(_, _, score)| *score)
+            .max_by(f64::total_cmp)
+            .expect("all tied candidates have developmental scores");
+        tied.retain(|(_, _, score)| score.is_some_and(|score| score == best_developmental));
     }
+
+    let selected_index = rng.gen_range(0..tied.len());
+    candidates.get(tied[selected_index].0).cloned()
 }
 
 pub fn record_outcome(
@@ -293,7 +267,7 @@ mod tests {
         ];
 
         assert_eq!(
-            select_action(context, &history, &candidates),
+            select_action(context, &history, &candidates, &mut ChaCha8Rng::seed_from_u64(1)),
             Some(candidates[1].clone())
         );
     }
@@ -324,7 +298,7 @@ mod tests {
             },
         ];
 
-        assert_eq!(select_action(context, &history, &candidates), None);
+        assert_eq!(select_action(context, &history, &candidates, &mut ChaCha8Rng::seed_from_u64(1)), None);
     }
 
     #[test]
@@ -355,7 +329,7 @@ mod tests {
         history.record(ActionKind::Combine, None, OutcomeKind::Beneficial);
 
         assert_eq!(
-            select_action(context, &history, &candidates),
+            select_action(context, &history, &candidates, &mut ChaCha8Rng::seed_from_u64(1)),
             Some(candidates[1].clone())
         );
     }
@@ -392,7 +366,7 @@ mod tests {
         );
 
         assert_eq!(
-            select_action(context, &history, &candidates),
+            select_action(context, &history, &candidates, &mut ChaCha8Rng::seed_from_u64(1)),
             Some(candidates[1].clone())
         );
     }
@@ -419,7 +393,7 @@ mod tests {
             },
         ];
 
-        assert_eq!(select_action(context, &history, &candidates), None);
+        assert_eq!(select_action(context, &history, &candidates, &mut ChaCha8Rng::seed_from_u64(1)), None);
     }
 
     #[test]
@@ -454,6 +428,7 @@ mod tests {
                 &DecisionHistory::default(),
                 &candidates,
                 &scores,
+                &mut ChaCha8Rng::seed_from_u64(1),
             ),
             Some(candidates[1].clone())
         );
@@ -484,10 +459,13 @@ mod tests {
             },
         ];
 
-        assert_eq!(
-            select_action(context, &DecisionHistory::default(), &candidates),
-            None
+        let selected = select_action(
+            context,
+            &DecisionHistory::default(),
+            &candidates,
+            &mut ChaCha8Rng::seed_from_u64(1),
         );
+        assert!(selected.is_some_and(|candidate| candidates.contains(&candidate)));
     }
 
     #[test]
