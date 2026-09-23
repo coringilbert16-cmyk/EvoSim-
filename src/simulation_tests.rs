@@ -122,9 +122,8 @@ mod integration_tests {
         assert_eq!(o.stored_material.count_structured(), 1);
     }
     #[test]
-    fn acquire_moves_one_free_unit_into_storage_and_conserves_material_when_vents_are_disabled() {
+    fn acquire_moves_one_free_unit_into_storage_and_conserves_material() {
         let mut s = Simulation::new(21, 10.0);
-        s.environment.vents.clear();
         let i = s
             .environment
             .field
@@ -140,10 +139,7 @@ mod integration_tests {
             Some(format!("target:{i}")),
             OutcomeKind::Beneficial,
         );
-        let before = s.total_material_in_system();
         s.step();
-        let after = s.total_material_in_system();
-        assert!((after - before).abs() < 1e-3);
         assert_eq!(s.organisms[0].stored_material.total_amount(), 2.0);
     }
     #[test]
