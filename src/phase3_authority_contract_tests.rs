@@ -20,7 +20,6 @@ mod tests {
             height: 100.0,
             catalog: catalog.clone(),
             field: ActiveMaterialField::new(100.0, 100.0, 10.0),
-            vents: Vec::new(),
         };
         let mut ledger = EnergyLedger::default();
 
