@@ -108,11 +108,9 @@ pub(crate) struct Organism {
     /// the organism's own persistent developmental reference and moves with the
     /// organism; it is never
     /// re-centered on current geometry or center of mass.
-    #[serde(default)]
     pub(crate) developmental_origin: Position,
     /// Initial developmental-frame orientation. This remains fixed unless
     /// an explicitly approved orientation mechanism is introduced.
-    #[serde(default)]
     pub(crate) developmental_orientation_radians: f64,
     pub(crate) occupied_cells: Vec<Position>,
     pub(crate) genome: Genome,
