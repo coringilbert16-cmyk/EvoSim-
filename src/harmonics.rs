@@ -327,7 +327,7 @@ pub(crate) fn update_organism_harmonics(
     organism: &mut crate::state::Organism,
     environment: &crate::state::Environment,
 ) {
-    let key = (organism.structure_revision, environment.field.revision);
+    let key = (organism.structure_revision.wrapping_add(organism.position_revision), environment.field.revision);
     if organism.cached_harmonic_key == Some(key) {
         return;
     }
