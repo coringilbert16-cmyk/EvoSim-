@@ -458,31 +458,16 @@ impl Simulation {
                 };
                 match selected.action {
                     ActionKind::Move => {
-                        let organism_count = organisms.len();
                         let (before, rest) = organisms.split_at_mut(index);
                         let (organism, after) =
                             rest.split_first_mut().expect("index is in organisms");
-                        let mut others = Vec::with_capacity(organism_count.saturating_sub(1));
-                        for other in before.iter() {
-                            others.push((*other).clone());
-                        }
-                        for other in after.iter() {
-                            others.push((*other).clone());
-                        }
                         let moved = Self::update_movement(
                             organism,
                             environment,
-                            &mut others,
+                            before,
+                            after,
                             &mut self.rng,
                         );
-                        if moved {
-                            for (original, trial) in
-                                before.iter_mut().chain(after.iter_mut()).zip(others)
-                            {
-                                original.occupied_cells = trial.occupied_cells;
-                                original.structure = trial.structure;
-                            }
-                        }
                         crate::decision_runtime::record_outcome(
                             &mut organism.decision_history,
                             &selected,
