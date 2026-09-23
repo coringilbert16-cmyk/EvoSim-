@@ -2,7 +2,7 @@
 use crate::decision::{DecisionHistory, DecisionParameters};
 use crate::decomposition::DecomposingBody;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
-use crate::environment::{ActiveMaterialField, Vent};
+use crate::environment::ActiveMaterialField;
 use crate::genome::Genome;
 use crate::material_storage::MaterialStorage;
 use crate::resources::{BaseResource, Material};
@@ -209,7 +209,6 @@ pub(crate) struct Environment {
     pub(crate) height: f64,
     pub(crate) catalog: Vec<BaseResource>,
     pub(crate) field: ActiveMaterialField,
-    pub(crate) vents: Vec<Vent>,
 }
 pub(crate) struct Simulation {
     pub(crate) tick: u64,
