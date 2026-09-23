@@ -36,10 +36,9 @@ pub(crate) fn context<'a>(
     let orientation = organism.developmental_orientation_radians;
     let preferred_length =
         blueprint.preferred_developmental_length(organism.genome.adult_mass(), seed_mass, seed_length);
-    let current_growth_fraction = growth_fraction_for_context(
-        organism,
-        environment,
+    let current_growth_fraction = growth_fraction_for_structure(
         &organism.structure,
+        environment,
         blueprint,
         origin,
         orientation,
@@ -115,6 +114,15 @@ pub(crate) fn developmental_action_scores(
         return vec![None; candidates.len()];
     }
 
+    let (material_realized, density_realized) =
+        developmental.blueprint.material_and_density_realization(
+            &organism.structure,
+            &environment.catalog,
+            developmental.origin,
+            developmental.orientation,
+            developmental.preferred_length,
+        );
+
     candidates
         .iter()
         .enumerate()
@@ -156,13 +164,15 @@ pub(crate) fn developmental_action_scores(
                         .and_then(|index| index.parse::<usize>().ok())?;
                     let bond = *organism.structure.bonds.get(bond_index)?;
                     Some(
-                        developmental.blueprint.realization_after_break(
+                        developmental.blueprint.realization_after_break_with_components(
                             &organism.structure,
                             &environment.catalog,
                             developmental.origin,
                             developmental.orientation,
                             developmental.preferred_length,
                             bond_index,
+                            material_realized,
+                            density_realized,
                         )?
                         .overall
                         .clamp(0.0, 1.0),
