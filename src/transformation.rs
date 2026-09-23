@@ -162,10 +162,16 @@ pub(crate) fn break_candidate_is_executable(
     {
         return false;
     }
-    let Some(ia) = organism.structure.unit_index(target.endpoint_a.constituent_id) else {
+    let Some(ia) = organism
+        .structure
+        .unit_index(target.endpoint_a.constituent_id)
+    else {
         return false;
     };
-    let Some(ib) = organism.structure.unit_index(target.endpoint_b.constituent_id) else {
+    let Some(ib) = organism
+        .structure
+        .unit_index(target.endpoint_b.constituent_id)
+    else {
         return false;
     };
     let Some(a) = organism
