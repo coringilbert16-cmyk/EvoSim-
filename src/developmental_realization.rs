@@ -30,64 +30,20 @@ impl DevelopmentalFieldBlueprint {
         developmental_orientation_radians: f64,
         preferred_length: f64,
     ) -> DevelopmentalRealization {
-        let material_available = self.material_available_value(preferred_length);
-        let density_available = self.density_available_value(preferred_length);
-
-        let material_realized = if material_available > 0.0 {
-            let mut realized = 0.0;
-            for unit in &structure.units {
-                let Some(shape) = unit.shape(catalog) else {
-                    continue;
-                };
-                let total_amount = unit
-                    .material
-                    .parts
-                    .iter()
-                    .map(|(_, amount)| *amount)
-                    .sum::<f64>();
-                if !total_amount.is_finite() || total_amount <= 0.0 {
-                    continue;
-                }
-                realized += self.integrate_shape_field(
-                    &shape.form,
-                    unit.placement,
-                    developmental_origin,
-                    developmental_orientation_radians,
-                    |x, y| {
-                        unit.material
-                            .parts
-                            .iter()
-                            .map(|(name, amount)| {
-                                (amount / total_amount)
-                                    * self.material_preference_scaled(name, x, y, preferred_length)
-                            })
-                            .sum::<f64>()
-                    },
-                );
-            }
-            Some((realized / material_available).clamp(0.0, 1.0))
-        } else {
-            None
-        };
-
-        let density_realized = if density_available > 0.0 {
-            let mut realized = 0.0;
-            for unit in &structure.units {
-                let Some(shape) = unit.shape(catalog) else {
-                    continue;
-                };
-                realized += self.integrate_shape_field(
-                    &shape.form,
-                    unit.placement,
-                    developmental_origin,
-                    developmental_orientation_radians,
-                    |x, y| self.density_preference_scaled(x, y, preferred_length),
-                );
-            }
-            Some((realized / density_available).clamp(0.0, 1.0))
-        } else {
-            None
-        };
+        let material_realized = self.material_realization(
+            structure,
+            catalog,
+            developmental_origin,
+            developmental_orientation_radians,
+            preferred_length,
+        );
+        let density_realized = self.density_realization(
+            structure,
+            catalog,
+            developmental_origin,
+            developmental_orientation_radians,
+            preferred_length,
+        );
 
         let connectivity = self.connectivity_realization(
             structure,
@@ -119,6 +75,134 @@ impl DevelopmentalFieldBlueprint {
                 (sum / active as f64).clamp(0.0, 1.0)
             },
         }
+    }
+
+    pub(crate) fn realization_after_break(
+        &self,
+        structure: &crate::structure::OrganismStructure,
+        catalog: &[BaseResource],
+        developmental_origin: (f64, f64),
+        developmental_orientation_radians: f64,
+        preferred_length: f64,
+        bond_index: usize,
+    ) -> Option<DevelopmentalRealization> {
+        if bond_index >= structure.bonds.len() {
+            return None;
+        }
+        let material_realized =
+            self.material_realization(structure, catalog, developmental_origin,
+                developmental_orientation_radians, preferred_length);
+        let density_realized =
+            self.density_realization(structure, catalog, developmental_origin,
+                developmental_orientation_radians, preferred_length);
+        let connectivity = self.connectivity_realization_excluding(
+            structure,
+            catalog,
+            developmental_origin,
+            developmental_orientation_radians,
+            preferred_length,
+            Some(bond_index),
+        );
+        let mut sum = 0.0;
+        let mut active = 0usize;
+        for value in [material_realized, density_realized, connectivity]
+            .into_iter()
+            .flatten()
+        {
+            if value.is_finite() {
+                sum += value;
+                active += 1;
+            }
+        }
+        Some(DevelopmentalRealization {
+            material: material_realized,
+            density: density_realized,
+            connectivity,
+            overall: if active == 0 {
+                0.0
+            } else {
+                (sum / active as f64).clamp(0.0, 1.0)
+            },
+        })
+    }
+
+    fn material_realization(
+        &self,
+        structure: &crate::structure::OrganismStructure,
+        catalog: &[BaseResource],
+        origin: (f64, f64),
+        orientation: f64,
+        preferred_length: f64,
+    ) -> Option<f64> {
+        let available = self.material_available_value(preferred_length);
+        if available <= 0.0 {
+            return None;
+        }
+        let mut realized = 0.0;
+        for unit in &structure.units {
+            let Some(shape) = unit.shape(catalog) else {
+                continue;
+            };
+            let total_amount = unit
+                .material
+                .parts
+                .iter()
+                .map(|(_, amount)| *amount)
+                .sum::<f64>();
+            if !total_amount.is_finite() || total_amount <= 0.0 {
+                continue;
+            }
+            realized += self.integrate_shape_field(
+                &shape.form,
+                unit.placement,
+                origin,
+                orientation,
+                |x, y| {
+                    unit.material
+                        .parts
+                        .iter()
+                        .map(|(name, amount)| {
+                            (amount / total_amount)
+                                * self.material_preference_scaled(
+                                    name,
+                                    x,
+                                    y,
+                                    preferred_length,
+                                )
+                        })
+                        .sum::<f64>()
+                },
+            );
+        }
+        Some((realized / available).clamp(0.0, 1.0))
+    }
+
+    fn density_realization(
+        &self,
+        structure: &crate::structure::OrganismStructure,
+        catalog: &[BaseResource],
+        origin: (f64, f64),
+        orientation: f64,
+        preferred_length: f64,
+    ) -> Option<f64> {
+        let available = self.density_available_value(preferred_length);
+        if available <= 0.0 {
+            return None;
+        }
+        let mut realized = 0.0;
+        for unit in &structure.units {
+            let Some(shape) = unit.shape(catalog) else {
+                continue;
+            };
+            realized += self.integrate_shape_field(
+                &shape.form,
+                unit.placement,
+                origin,
+                orientation,
+                |x, y| self.density_preference_scaled(x, y, preferred_length),
+            );
+        }
+        Some((realized / available).clamp(0.0, 1.0))
     }
 
     fn material_available_value(&self, preferred_length: f64) -> f64 {
@@ -182,9 +266,31 @@ impl DevelopmentalFieldBlueprint {
         orientation: f64,
         preferred_length: f64,
     ) -> Option<f64> {
+        self.connectivity_realization_excluding(
+            structure,
+            catalog,
+            origin,
+            orientation,
+            preferred_length,
+            None,
+        )
+    }
+
+    fn connectivity_realization_excluding(
+        &self,
+        structure: &crate::structure::OrganismStructure,
+        catalog: &[BaseResource],
+        origin: (f64, f64),
+        orientation: f64,
+        preferred_length: f64,
+        excluded_bond: Option<usize>,
+    ) -> Option<f64> {
         let mut actual_value = 0.0;
         let mut available_value = 0.0;
-        for bond in &structure.bonds {
+        for (bond_index, bond) in structure.bonds.iter().enumerate() {
+            if excluded_bond == Some(bond_index) {
+                continue;
+            }
             let Some(a) = structure.unit_index(bond.endpoint_a.constituent_id) else {
                 continue;
             };
