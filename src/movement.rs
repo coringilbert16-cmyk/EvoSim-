@@ -45,9 +45,24 @@ impl Simulation {
             return false;
         }
 
-        if !resolve_push_chain(organism, other_organisms, environment, dx, dy) {
-            return false;
-        }
+        let push_plan = match resolve_push_chain(
+            organism,
+            other_organisms,
+            environment,
+            dx,
+            dy,
+        ) {
+            Some(plan) => plan,
+            None => return false,
+        };
+
+        apply_push_plan(
+            other_organisms,
+            environment,
+            push_plan,
+            dx,
+            dy,
+        );
 
         organism.occupied_cells[0].x = new_x;
         organism.occupied_cells[0].y = new_y;
@@ -63,102 +78,170 @@ impl Simulation {
     }
 }
 
+#[derive(Default)]
+struct PushPlan {
+    organisms: Vec<usize>,
+    physical: Vec<(usize, usize)>,
+}
+
 fn resolve_push_chain(
     moving: &Organism,
-    other_organisms: &mut [Organism],
-    environment: &mut Environment,
+    other_organisms: &[Organism],
+    environment: &Environment,
     dx: f64,
     dy: f64,
-) -> bool {
+) -> Option<PushPlan> {
     let mut organism_visited = vec![false; other_organisms.len()];
     let mut physical_visited = std::collections::HashSet::new();
+    let physical_keys: Vec<(usize, usize)> = environment
+        .field
+        .cells
+        .iter()
+        .enumerate()
+        .flat_map(|(cell_index, cell)| {
+            (0..cell.physical_materials.len()).map(move |material_index| {
+                (cell_index, material_index)
+            })
+        })
+        .collect();
     let moving_destination = organism_parts_at(moving, environment, dx, dy);
-    push_blockers_for_parts(
+    let mut plan = PushPlan::default();
+    if push_blockers_for_parts(
         &moving_destination,
         other_organisms,
         environment,
+        &physical_keys,
         dx,
         dy,
         &mut organism_visited,
         &mut physical_visited,
-    )
+        &mut plan,
+    ) {
+        Some(plan)
+    } else {
+        None
+    }
 }
 
 fn push_blockers_for_parts(
     moving_destination: &[PlacedMaterialPart],
-    other_organisms: &mut [Organism],
-    environment: &mut Environment,
+    other_organisms: &[Organism],
+    environment: &Environment,
+    physical_keys: &[(usize, usize)],
     dx: f64,
     dy: f64,
     organism_visited: &mut [bool],
     physical_visited: &mut std::collections::HashSet<(usize, usize)>,
+    plan: &mut PushPlan,
 ) -> bool {
     for index in 0..other_organisms.len() {
         if organism_visited[index] {
             continue;
         }
-        let candidate = other_organisms[index].clone();
-        let candidate_parts = organism_parts_at(&candidate, environment, 0.0, 0.0);
+        let candidate = &other_organisms[index];
+        let candidate_parts = organism_parts_at(candidate, environment, 0.0, 0.0);
         if !parts_penetrate(moving_destination, &candidate_parts, environment.height) {
             continue;
         }
-        if !can_translate_organism(&candidate, environment, dx, dy) {
+        if !can_translate_organism(candidate, environment, dx, dy) {
             return false;
         }
-        let destination = organism_parts_at(&candidate, environment, dx, dy);
+        let destination = organism_parts_at(candidate, environment, dx, dy);
         organism_visited[index] = true;
         if !push_blockers_for_parts(
             &destination,
             other_organisms,
             environment,
+            physical_keys,
             dx,
             dy,
             organism_visited,
             physical_visited,
+            plan,
         ) {
             return false;
         }
+        plan.organisms.push(index);
+    }
+
+    for &(cell_index, material_index) in physical_keys {
+        let key = (cell_index, material_index);
+        if physical_visited.contains(&key) {
+            continue;
+        }
+        let Some(candidate) = environment
+            .field
+            .cells
+            .get(cell_index)
+            .and_then(|cell| cell.physical_materials.get(material_index))
+        else {
+            continue;
+        };
+        if !candidate.is_realized() || candidate.material.is_empty() {
+            continue;
+        }
+        let candidate_parts = physical_parts_at(candidate, environment, 0.0, 0.0);
+        if !parts_penetrate(moving_destination, &candidate_parts, environment.height) {
+            continue;
+        }
+        if !can_translate_physical(candidate, environment, dx, dy) {
+            return false;
+        }
+        let destination = physical_parts_at(candidate, environment, dx, dy);
+        physical_visited.insert(key);
+        if !push_blockers_for_parts(
+            &destination,
+            other_organisms,
+            environment,
+            physical_keys,
+            dx,
+            dy,
+            organism_visited,
+            physical_visited,
+            plan,
+        ) {
+            return false;
+        }
+        plan.physical.push(key);
+    }
+    true
+}
+
+fn apply_push_plan(
+    other_organisms: &mut [Organism],
+    environment: &mut Environment,
+    mut plan: PushPlan,
+    dx: f64,
+    dy: f64,
+) {
+    for index in plan.organisms.drain(..) {
         translate_organism(&mut other_organisms[index], dx, dy, environment.height);
     }
 
-    for cell_index in 0..environment.field.cells.len() {
-        let material_count = environment.field.cells[cell_index].physical_materials.len();
-        for material_index in 0..material_count {
-            let key = (cell_index, material_index);
-            if physical_visited.contains(&key) {
-                continue;
+    plan.physical.sort_unstable_by(|a, b| b.cmp(a));
+    let mut pushed = Vec::with_capacity(plan.physical.len());
+    for (cell_index, material_index) in plan.physical {
+        let physical = environment.field.cells[cell_index]
+            .physical_materials
+            .remove(material_index);
+        let mut physical = physical;
+        translate_physical(&mut physical, dx, dy, environment.height);
+        pushed.push(physical);
+    }
+    for physical in pushed {
+        if let Some(placement) = physical
+            .placements
+            .as_ref()
+            .and_then(|placements| placements.first())
+        {
+            if let Some(index) = environment
+                .field
+                .index_for_position(placement.x, placement.y)
+            {
+                environment.field.cells[index].physical_materials.push(physical);
             }
-            let candidate =
-                environment.field.cells[cell_index].physical_materials[material_index].clone();
-            if !candidate.is_realized() || candidate.material.is_empty() {
-                continue;
-            }
-            let candidate_parts = physical_parts_at(&candidate, environment, 0.0, 0.0);
-            if !parts_penetrate(moving_destination, &candidate_parts, environment.height) {
-                continue;
-            }
-            if !can_translate_physical(&candidate, environment, dx, dy) {
-                return false;
-            }
-            let destination = physical_parts_at(&candidate, environment, dx, dy);
-            physical_visited.insert(key);
-            if !push_blockers_for_parts(
-                &destination,
-                other_organisms,
-                environment,
-                dx,
-                dy,
-                organism_visited,
-                physical_visited,
-            ) {
-                return false;
-            }
-            let mut pushed = candidate;
-            translate_physical(&mut pushed, dx, dy, environment.height);
-            environment.field.cells[cell_index].physical_materials[material_index] = pushed;
         }
     }
-    true
 }
 
 fn organism_parts_at(
