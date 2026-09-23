@@ -350,10 +350,11 @@ pub(crate) fn update_organism_harmonics(
 
     let environment_key =
         environment_fingerprint(&environment.field, &organism.structure, &boundary_units);
-    if organism.harmonic_cache.as_ref().is_some_and(|cache| {
-        cache.structure_key == structure_key
-            && cache.environment_key == environment_key
-    }) {
+    if organism
+        .harmonic_cache
+        .as_ref()
+        .is_some_and(|cache| cache.structure_key == structure_key && cache.environment_key == environment_key)
+    {
         if let Some(cache) = organism.harmonic_cache.as_ref() {
             organism.harmonic_spectrum = cache.spectrum.clone();
         }
