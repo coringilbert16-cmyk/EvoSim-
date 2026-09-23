@@ -141,6 +141,9 @@ fn parent_child_in_contact(parent: &OrganismStructure, child: &OrganismStructure
 
 fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
     Organism {
+        calculation_cache: crate::state::CalculationCache::default(),
+        structure_revision: 0,
+        position_revision: 0,
         id: "developing-offspring".into(),
         developmental_origin: construction.developmental_origin.clone(),
         developmental_orientation_radians: construction.developmental_orientation_radians,
@@ -370,6 +373,9 @@ fn anchor_structure(
         return None;
     }
     let mut child = Organism {
+        calculation_cache: crate::state::CalculationCache::default(),
+        structure_revision: 0,
+        position_revision: 0,
         id: "developing-offspring".into(),
         developmental_origin: Position {
             x: placement.x,
@@ -609,6 +615,9 @@ pub(crate) fn finish_reproduction(
     }
     let child_position = construction.developmental_origin.clone();
     Some(Organism {
+        calculation_cache: crate::state::CalculationCache::default(),
+        structure_revision: 0,
+        position_revision: 0,
         id: child_id,
         developmental_origin: child_position.clone(),
         developmental_orientation_radians: construction.developmental_orientation_radians,
