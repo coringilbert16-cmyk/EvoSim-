@@ -188,25 +188,15 @@ impl Organism {
             let preferred_length = self
                 .genome
                 .developmental_blueprint
-                .preferred_developmental_length(
-                    self.genome.adult_mass(),
-                    seed_mass,
-                    seed_length,
-                );
-            self.cached_developmental_realization = Some(
-                self.genome
-                    .developmental_blueprint
-                    .realization_at_length(
-                        &self.structure,
-                        catalog,
-                        (
-                            self.developmental_origin.x,
-                            self.developmental_origin.y,
-                        ),
-                        self.developmental_orientation_radians,
-                        preferred_length,
-                    ),
-            );
+                .preferred_developmental_length(self.genome.adult_mass(), seed_mass, seed_length);
+            self.cached_developmental_realization =
+                Some(self.genome.developmental_blueprint.realization_at_length(
+                    &self.structure,
+                    catalog,
+                    (self.developmental_origin.x, self.developmental_origin.y),
+                    self.developmental_orientation_radians,
+                    preferred_length,
+                ));
             self.cached_developmental_revision = Some(self.structure_revision);
         }
         self.cached_developmental_realization
