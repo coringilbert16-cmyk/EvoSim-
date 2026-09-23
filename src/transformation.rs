@@ -58,6 +58,7 @@ fn settle_break_energy(
         return false;
     }
     organism.structure = trial_structure;
+    organism.mark_structure_changed();
     organism.add_transaction_stress(work);
     true
 }
