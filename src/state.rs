@@ -10,7 +10,6 @@ use crate::structure::{Bond, OrganismStructure};
 use parking_lot::Mutex;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
-use std::hash::Hasher;
 use std::sync::Arc;
 #[derive(Clone)]
 pub(crate) struct AppState {
