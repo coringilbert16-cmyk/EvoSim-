@@ -266,7 +266,12 @@ mod tests {
         ];
 
         assert_eq!(
-            select_action(context, &history, &candidates, &mut ChaCha8Rng::seed_from_u64(1)),
+            select_action(
+                context,
+                &history,
+                &candidates,
+                &mut ChaCha8Rng::seed_from_u64(1),
+            ),
             Some(candidates[1].clone())
         );
     }
@@ -334,7 +339,12 @@ mod tests {
         history.record(ActionKind::Combine, None, OutcomeKind::Beneficial);
 
         assert_eq!(
-            select_action(context, &history, &candidates, &mut ChaCha8Rng::seed_from_u64(1)),
+            select_action(
+                context,
+                &history,
+                &candidates,
+                &mut ChaCha8Rng::seed_from_u64(1),
+            ),
             Some(candidates[1].clone())
         );
     }
@@ -371,7 +381,12 @@ mod tests {
         );
 
         assert_eq!(
-            select_action(context, &history, &candidates, &mut ChaCha8Rng::seed_from_u64(1)),
+            select_action(
+                context,
+                &history,
+                &candidates,
+                &mut ChaCha8Rng::seed_from_u64(1),
+            ),
             Some(candidates[1].clone())
         );
     }
