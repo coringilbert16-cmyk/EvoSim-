@@ -37,6 +37,7 @@ mod energy_ledger;
 mod decision;
 mod decision_runtime;
 mod genome;
+mod harmonics;
 mod memory;
 mod movement;
 mod observation;
