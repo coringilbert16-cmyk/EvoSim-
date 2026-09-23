@@ -1,6 +1,4 @@
-use crate::state::{DevelopmentStage, Simulation};
-use crate::transformation::TransformationKind;
-use serde::Serialize;
+use crate::state::Simulation;
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
@@ -456,18 +454,3 @@ fn bond_json_for_transformation(structure: &Value, transformation_bond: &Value) 
     }).cloned()
 }
 
-#[allow(dead_code)]
-fn transformation_kind_name(kind: TransformationKind) -> &'static str {
-    match kind {
-        TransformationKind::Break => "Break",
-    }
-}
-
-#[allow(dead_code)]
-fn stage_name(stage: &DevelopmentStage) -> &'static str {
-    match stage {
-        DevelopmentStage::Offspring => "Offspring",
-        DevelopmentStage::Juvenile => "Juvenile",
-        DevelopmentStage::Adult => "Adult",
-    }
-}
