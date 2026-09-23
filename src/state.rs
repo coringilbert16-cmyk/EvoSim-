@@ -124,7 +124,22 @@ pub(crate) struct EnergyLedger {
     pub(crate) total_usable_energy_held: f64,
 }
 #[derive(Serialize, Deserialize, Clone)]
+#[derive(Clone, Debug, Default)]
+pub(crate) struct CalculationCache {
+    pub(crate) growth: Option<(u64, u64, f64)>,
+    pub(crate) break_candidates: Option<(u64, u64, u64, Vec<usize>)>,
+    pub(crate) perception: Option<(u64, u64, u64)>,
+}
+
 pub(crate) struct Organism {
+    #[serde(skip)]
+    pub(crate) calculation_cache: CalculationCache,
+    /// Monotonic revision of physical structure. Increment when structure/bonds change.
+    #[serde(default)]
+    pub(crate) structure_revision: u64,
+    /// Monotonic revision of organism position/geometry in the environment.
+    #[serde(default)]
+    pub(crate) position_revision: u64,
     pub(crate) id: String,
     /// Persistent organism-local developmental origin. This is anchored at
     /// the organism's own persistent developmental reference and moves with the
@@ -233,6 +248,9 @@ impl Organism {
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct Environment {
+    /// Monotonic revision of active environmental material/geometry.
+    #[serde(default)]
+    pub(crate) revision: u64,
     pub(crate) width: f64,
     pub(crate) height: f64,
     pub(crate) catalog: Vec<BaseResource>,
