@@ -113,8 +113,14 @@ fn default_juvenile_reserve() -> Material {
             ("Sulfur".into(), 1.0),
         ],
         internal_bonds: vec![
-            crate::resources::InternalBond { part_a: 0, part_b: 1 },
-            crate::resources::InternalBond { part_a: 1, part_b: 2 },
+            crate::resources::InternalBond {
+                part_a: 0,
+                part_b: 1,
+            },
+            crate::resources::InternalBond {
+                part_a: 1,
+                part_b: 2,
+            },
         ],
     }
 }
