@@ -60,49 +60,55 @@ impl Simulation {
         capacity: usize,
         spectrum: &crate::harmonics::ToneSpectrum,
     ) {
-        let merged = organism.memory.iter_mut().find(|p| {
+        let merged_index = organism.memory.iter().position(|p| {
             let dx = p.x - sx;
             let dy = p.y - sy;
             (dx * dx + dy * dy).sqrt() < MEMORY_MERGE_RADIUS
         });
 
-        match merged {
-            Some(existing) => {
-                existing.x = sx;
-                existing.y = sy;
-                existing.strength = (existing.strength + memory_strength).min(1.0);
-                existing.spectrum.merge_from(spectrum, 1.0);
-            }
-            None if organism.memory.len() < capacity => {
-                organism.memory.push(MemoryPoint {
+        if let Some(index) = merged_index {
+            let existing = &mut organism.memory[index];
+            existing.x = sx;
+            existing.y = sy;
+            existing.strength = (existing.strength + memory_strength).min(1.0);
+            existing.spectrum.merge_from(spectrum, 1.0);
+        } else if organism.memory.len() < capacity {
+            organism.memory.push(MemoryPoint {
+                x: sx,
+                y: sy,
+                strength: memory_strength,
+                spectrum: spectrum.clone(),
+                outcome: None,
+            });
+        } else if let Some(weakest) = organism
+            .memory
+            .iter_mut()
+            .min_by(|a, b| a.strength.partial_cmp(&b.strength).unwrap())
+        {
+            if memory_strength > weakest.strength && weakest.outcome.is_none() {
+                *weakest = MemoryPoint {
                     x: sx,
                     y: sy,
                     strength: memory_strength,
                     spectrum: spectrum.clone(),
                     outcome: None,
-                });
-            }
-            None => {
-                if let Some(weakest) = organism
-                    .memory
-                    .iter_mut()
-                    .min_by(|a, b| a.strength.partial_cmp(&b.strength).unwrap())
-                {
-                    if memory_strength > weakest.strength && weakest.outcome.is_none() {
-                        *weakest = MemoryPoint {
-                            x: sx,
-                            y: sy,
-                            strength: memory_strength,
-                            spectrum: spectrum.clone(),
-                            outcome: None,
-                        };
-                    }
-                }
+                };
             }
         }
     }
 
-    pub(crate) fn reinforce_memory_point(
+    pub(crate) fn remember_perception(
+    organism: &mut Organism,
+    sx: f64,
+    sy: f64,
+    memory_strength: f64,
+    capacity: usize,
+    spectrum: &crate::harmonics::ToneSpectrum,
+) {
+    Simulation::remember_perception(organism, sx, sy, memory_strength, capacity, spectrum);
+}
+
+pub(crate) fn reinforce_memory_point(
         organism: &mut Organism,
         sx: f64,
         sy: f64,
