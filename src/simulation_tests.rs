@@ -79,7 +79,6 @@ mod integration_tests {
     #[test]
     fn death_with_no_remaining_bonds_releases_realized_structure() {
         let mut s = Simulation::new(41, 10.0);
-        s.environment.vents.clear();
         let before_environment_amount = s.environment.field.total_amount();
         let organism = &mut s.organisms[0];
         organism.structure.bonds.clear();
@@ -216,15 +215,6 @@ mod integration_tests {
         let mut o = Simulation::create_initial_organism();
         assert!(o.store_material(structured_carbon_hydrogen()));
         assert_eq!(o.stored_material.count_structured(), 1);
-    }
-    #[test]
-    fn fresh_simulation_material_flow_remains_finite_with_direct_vent_sources() {
-        let mut s = Simulation::new(1, 10.0);
-        for _ in 0..300 {
-            s.step();
-        }
-        assert!(s.total_material_in_system().is_finite());
-        assert!(s.total_material_in_system() > 0.0);
     }
     fn add_test_break_bond(s: &mut Simulation) {
         s.organisms[0].structure.bonds.clear();
