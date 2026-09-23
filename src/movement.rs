@@ -1,3 +1,5 @@
+use rand::Rng;
+
 use crate::material_geometry::PlacedMaterialPart;
 use crate::state::{Environment, Organism, Simulation};
 use crate::structure::Placement;
@@ -7,11 +9,13 @@ impl Simulation {
         organism: &mut Organism,
         environment: &mut Environment,
         other_organisms: &mut [Organism],
+        rng: &mut impl Rng,
     ) -> bool {
         let movement_efficiency = organism.genome.movement_efficiency();
-        let (x, y) = match crate::movement_direction::movement_direction_periodic(
+        let (x, y) = match crate::movement_direction::movement_direction_with_intrinsic(
             organism,
             environment.height,
+            rng,
         ) {
             Some(direction) => direction,
             None => return false,
