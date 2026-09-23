@@ -45,24 +45,12 @@ impl Simulation {
             return false;
         }
 
-        let push_plan = match resolve_push_chain(
-            organism,
-            other_organisms,
-            environment,
-            dx,
-            dy,
-        ) {
+        let push_plan = match resolve_push_chain(organism, other_organisms, environment, dx, dy) {
             Some(plan) => plan,
             None => return false,
         };
 
-        apply_push_plan(
-            other_organisms,
-            environment,
-            push_plan,
-            dx,
-            dy,
-        );
+        apply_push_plan(other_organisms, environment, push_plan, dx, dy);
 
         organism.occupied_cells[0].x = new_x;
         organism.occupied_cells[0].y = new_y;
