@@ -50,8 +50,6 @@ struct OrganismSnapshot {
     energy: f64,
     stress: f64,
     stress_threshold: f64,
-    structure_revision: u64,
-    position_revision: u64,
     structural_mass: f64,
     unit_count: usize,
     bond_count: usize,
@@ -136,7 +134,6 @@ impl DiagnosticsRecorder {
             "completed_births": simulation.next_organism_id.saturating_sub(2),
             "active_transformations": simulation.active_transformations.len(),
             "decomposing_bodies": simulation.decomposing_bodies.len(),
-            "field_revision": simulation.environment.field.revision
         }))?;
         self.writer.flush()
     }
@@ -154,8 +151,6 @@ impl DiagnosticsRecorder {
                         energy: organism.usable_energy,
                         stress: organism.stress,
                         stress_threshold: organism.stress_threshold,
-                        structure_revision: organism.structure_revision,
-                        position_revision: organism.position_revision,
                         structural_mass: organism.structural_mass(&simulation.environment.catalog),
                         unit_count: organism.structure.units.len(),
                         bond_count: organism.structure.bonds.len(),
@@ -296,7 +291,9 @@ impl DiagnosticsRecorder {
             let Some(before_organism) = before.organisms.get(id) else {
                 continue;
             };
-            if before_organism.structure_revision == after_organism.structure_revision {
+            if before_organism.structure != after_organism.structure {
+                // The realized structure itself is the authoritative structural state.
+            } else {
                 continue;
             }
             self.summary.structure_changes += 1;
@@ -414,8 +411,6 @@ impl DiagnosticsRecorder {
             "energy": state.energy,
             "stress": state.stress,
             "stress_threshold": state.stress_threshold,
-            "structure_revision": state.structure_revision,
-            "position_revision": state.position_revision,
             "structural_mass": state.structural_mass,
             "unit_count": state.unit_count,
             "bond_count": state.bond_count,
@@ -453,11 +448,6 @@ impl DiagnosticsRecorder {
             file,
             "decomposing_bodies_final: {}",
             simulation.decomposing_bodies.len()
-        )?;
-        writeln!(
-            file,
-            "field_revision: {}",
-            simulation.environment.field.revision
         )?;
         writeln!(file)?;
         writeln!(file, "TRANSFORMATIONS")?;
@@ -574,13 +564,6 @@ fn structural_delta(before: Option<&OrganismSnapshot>, after: Option<&OrganismSn
             before.map(|o| o.structural_mass),
             after.map(|o| o.structural_mass),
         ),
-        "structure_revision": match (
-            before.map(|o| o.structure_revision),
-            after.map(|o| o.structure_revision),
-        ) {
-            (Some(a), Some(b)) => json!(b as i128 - a as i128),
-            _ => Value::Null,
-        },
     })
 }
 
