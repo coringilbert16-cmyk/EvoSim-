@@ -393,19 +393,21 @@ impl Simulation {
     }
     pub(crate) fn step(&mut self) {
         self.tick += 1;
-        let mut still_active = Vec::new();
         let mut completed = Vec::new();
-        for mut transformation in self.active_transformations.drain(..) {
-            if transformation.remaining_ticks > 0 {
-                transformation.remaining_ticks -= 1
+        if !self.active_transformations.is_empty() {
+            let mut still_active = Vec::with_capacity(self.active_transformations.len());
+            for mut transformation in self.active_transformations.drain(..) {
+                if transformation.remaining_ticks > 0 {
+                    transformation.remaining_ticks -= 1
+                }
+                if transformation.remaining_ticks == 0 {
+                    completed.push(transformation)
+                } else {
+                    still_active.push(transformation)
+                }
             }
-            if transformation.remaining_ticks == 0 {
-                completed.push(transformation)
-            } else {
-                still_active.push(transformation)
-            }
+            self.active_transformations = still_active;
         }
-        self.active_transformations = still_active;
         let mut completed_organisms = HashSet::new();
         for transformation in &completed {
             completed_organisms.insert(transformation.organism_id.clone());
