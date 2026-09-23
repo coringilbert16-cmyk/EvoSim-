@@ -327,15 +327,19 @@ impl DiagnosticsRecorder {
             .cells
             .iter()
             .flat_map(|cell| cell.materials.iter())
-            .map(|material| material.mass)
+            .map(|material| material.mass(&simulation.environment.catalog))
             .sum();
         let total_stored_mass: f64 = simulation
             .organisms
             .iter()
             .flat_map(|organism| organism.stored_material.entries.iter())
             .map(|entry| match entry {
-                crate::material_storage::StoredMaterial::Logical(material)
-                | crate::material_storage::StoredMaterial::Physical(material) => material.mass(),
+                crate::material_storage::StoredMaterial::Logical(material) => {
+                    material.mass(&simulation.environment.catalog)
+                }
+                crate::material_storage::StoredMaterial::Physical(instance) => {
+                    instance.material.mass(&simulation.environment.catalog)
+                }
             })
             .sum();
         self.write_event(json!({
