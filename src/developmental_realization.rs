@@ -77,29 +77,51 @@ impl DevelopmentalFieldBlueprint {
         }
     }
 
-    pub(crate) fn realization_after_break(
+    pub(crate) fn material_and_density_realization(
         &self,
         structure: &crate::structure::OrganismStructure,
         catalog: &[BaseResource],
-        developmental_origin: (f64, f64),
-        developmental_orientation_radians: f64,
+        origin: (f64, f64),
+        orientation: f64,
+        preferred_length: f64,
+    ) -> (Option<f64>, Option<f64>) {
+        (
+            self.material_realization(
+                structure,
+                catalog,
+                origin,
+                orientation,
+                preferred_length,
+            ),
+            self.density_realization(
+                structure,
+                catalog,
+                origin,
+                orientation,
+                preferred_length,
+            ),
+        )
+    }
+
+    pub(crate) fn realization_after_break_with_components(
+        &self,
+        structure: &crate::structure::OrganismStructure,
+        catalog: &[BaseResource],
+        origin: (f64, f64),
+        orientation: f64,
         preferred_length: f64,
         bond_index: usize,
+        material_realized: Option<f64>,
+        density_realized: Option<f64>,
     ) -> Option<DevelopmentalRealization> {
         if bond_index >= structure.bonds.len() {
             return None;
         }
-        let material_realized =
-            self.material_realization(structure, catalog, developmental_origin,
-                developmental_orientation_radians, preferred_length);
-        let density_realized =
-            self.density_realization(structure, catalog, developmental_origin,
-                developmental_orientation_radians, preferred_length);
         let connectivity = self.connectivity_realization_excluding(
             structure,
             catalog,
-            developmental_origin,
-            developmental_orientation_radians,
+            origin,
+            orientation,
             preferred_length,
             Some(bond_index),
         );
@@ -124,6 +146,34 @@ impl DevelopmentalFieldBlueprint {
                 (sum / active as f64).clamp(0.0, 1.0)
             },
         })
+    }
+
+    pub(crate) fn realization_after_break(
+        &self,
+        structure: &crate::structure::OrganismStructure,
+        catalog: &[BaseResource],
+        developmental_origin: (f64, f64),
+        developmental_orientation_radians: f64,
+        preferred_length: f64,
+        bond_index: usize,
+    ) -> Option<DevelopmentalRealization> {
+        let (material_realized, density_realized) = self.material_and_density_realization(
+            structure,
+            catalog,
+            developmental_origin,
+            developmental_orientation_radians,
+            preferred_length,
+        );
+        self.realization_after_break_with_components(
+            structure,
+            catalog,
+            developmental_origin,
+            developmental_orientation_radians,
+            preferred_length,
+            bond_index,
+            material_realized,
+            density_realized,
+        )
     }
 
     fn material_realization(
