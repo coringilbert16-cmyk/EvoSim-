@@ -392,7 +392,7 @@ mod tests {
     }
 
     #[test]
-    fn no_action_is_selected_when_all_candidates_are_ineligible_or_irrelevant() {
+    fn zero_pressure_candidates_are_resolved_by_the_universal_tie_breaker() {
         let context = DecisionContext {
             needs: CurrentNeeds::default(),
             eligibility: ActionEligibility {
