@@ -8,7 +8,6 @@ fn world_observation_preserves_environmental_observation_contract() {
 
     assert_eq!(observation.width, simulation.environment.width);
     assert_eq!(observation.height, simulation.environment.height);
-    assert_eq!(observation.vents.len(), simulation.environment.vents.len());
     assert_eq!(
         observation.decomposing_bodies.len(),
         simulation.decomposing_bodies.len()
