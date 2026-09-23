@@ -19,7 +19,6 @@ pub(crate) struct DiagnosticsRecorder {
 #[derive(Clone)]
 struct SimulationSnapshot {
     tick: u64,
-    field_revision: u64,
     organisms: HashMap<String, OrganismSnapshot>,
     transformations: HashMap<u64, TransformationSnapshot>,
 }
@@ -62,7 +61,11 @@ struct TransformationSnapshot {
 }
 
 impl DiagnosticsRecorder {
-    pub(crate) fn new(path: &str, interval: u64, simulation: &mut Simulation) -> std::io::Result<Self> {
+    pub(crate) fn new(
+        path: &str,
+        interval: u64,
+        simulation: &mut Simulation,
+    ) -> std::io::Result<Self> {
         let file = File::create(path)?;
         let mut recorder = Self {
             writer: BufWriter::new(file),
@@ -187,7 +190,6 @@ impl DiagnosticsRecorder {
 
         SimulationSnapshot {
             tick: simulation.tick,
-            field_revision: simulation.environment.field.revision,
             organisms,
             transformations,
         }
