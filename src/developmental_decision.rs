@@ -60,8 +60,7 @@ pub(crate) fn context<'a>(
 }
 
 pub(crate) fn growth_fraction(organism: &Organism, environment: &Environment) -> f64 {
-    let seed_reference =
-        crate::juvenile::confirmed_seed_scale_reference(&environment.catalog).ok();
+    let seed_reference = crate::juvenile::confirmed_seed_scale_reference(&environment.catalog).ok();
     seed_reference
         .and_then(|reference| context(organism, environment, reference))
         .map(|developmental| developmental.current_growth_fraction)
@@ -124,7 +123,10 @@ pub(crate) fn developmental_action_scores(
         .iter()
         .enumerate()
         .map(|(index, candidate)| {
-            if !competing_indices.iter().any(|&competing| competing == index) {
+            if !competing_indices
+                .iter()
+                .any(|&competing| competing == index)
+            {
                 return None;
             }
             match candidate.action {
@@ -160,18 +162,20 @@ pub(crate) fn developmental_action_scores(
                         .and_then(|key| key.strip_prefix("bond:"))
                         .and_then(|index| index.parse::<usize>().ok())?;
                     Some(
-                        developmental.blueprint.realization_after_break_with_components(
-                            &organism.structure,
-                            &environment.catalog,
-                            developmental.origin,
-                            developmental.orientation,
-                            developmental.preferred_length,
-                            bond_index,
-                            developmental.current_material_realized,
-                            developmental.current_density_realized,
-                        )?
-                        .overall
-                        .clamp(0.0, 1.0),
+                        developmental
+                            .blueprint
+                            .realization_after_break_with_components(
+                                &organism.structure,
+                                &environment.catalog,
+                                developmental.origin,
+                                developmental.orientation,
+                                developmental.preferred_length,
+                                bond_index,
+                                developmental.current_material_realized,
+                                developmental.current_density_realized,
+                            )?
+                            .overall
+                            .clamp(0.0, 1.0),
                     )
                 }
                 _ => None,
