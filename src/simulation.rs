@@ -486,11 +486,7 @@ impl Simulation {
                         crate::decision_runtime::record_outcome(
                             &mut organism.decision_history,
                             &selected,
-                            if moved {
-                                crate::decision::OutcomeKind::Neutral
-                            } else {
-                                crate::decision::OutcomeKind::Harmful
-                            },
+                            crate::decision::OutcomeKind::Neutral,
                         );
                     }
                     ActionKind::Combine => {
