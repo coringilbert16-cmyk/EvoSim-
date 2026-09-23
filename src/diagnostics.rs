@@ -393,7 +393,6 @@ impl DiagnosticsRecorder {
             "population": simulation.organisms.len(),
             "active_transformations": simulation.active_transformations.len(),
             "decomposing_bodies": simulation.decomposing_bodies.len(),
-            "field_revision": simulation.environment.field.revision,
             "field_total_mass": total_field_mass,
             "stored_total_mass": total_stored_mass,
             "energy_ledger": simulation.energy_ledger,
