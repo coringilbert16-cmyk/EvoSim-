@@ -411,7 +411,7 @@ impl Simulation {
                         .ok()
                         .and_then(|reference| {
                             crate::developmental_decision::context(
-                                &organisms[index],
+                                &mut organisms[index],
                                 environment,
                                 reference,
                             )
