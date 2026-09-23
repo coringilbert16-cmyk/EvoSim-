@@ -282,8 +282,6 @@ fn try_child_construction(
 
 fn preferred_length(
     genome: &crate::genome::Genome,
-        harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
-        harmonic_cache: None,
     catalog: &[crate::resources::BaseResource],
 ) -> Option<f64> {
     let (seed_mass, seed_length) = crate::juvenile::confirmed_seed_scale_reference(catalog).ok()?;
@@ -296,8 +294,6 @@ fn preferred_length(
 
 fn developmental_context<'a>(
     genome: &'a crate::genome::Genome,
-        harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
-        harmonic_cache: None,
     origin: &Position,
     orientation: f64,
     catalog: &[crate::resources::BaseResource],
