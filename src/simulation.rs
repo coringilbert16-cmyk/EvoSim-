@@ -416,6 +416,23 @@ impl Simulation {
                 {
                     continue;
                 }
+                let developmental =
+                    crate::juvenile::confirmed_seed_scale_reference(&environment.catalog)
+                        .ok()
+                        .and_then(|reference| {
+                            crate::developmental_decision::context(
+                                &mut organisms[index],
+                                environment,
+                                reference,
+                            )
+                        });
+                let needs = Self::current_needs(
+                    &organisms[index],
+                    environment,
+                    decision_parameters,
+                    developmental.as_ref(),
+                );
+                let eligibility = Self::action_eligibility(&organisms[index], environment, needs);
                 if eligibility.can_move && needs.any_for(ActionKind::Move.relevant_needs()) {
                     let move_candidate = ActionCandidate {
                         action: ActionKind::Move,
@@ -449,23 +466,6 @@ impl Simulation {
                         );
                     }
                 }
-                let developmental =
-                    crate::juvenile::confirmed_seed_scale_reference(&environment.catalog)
-                        .ok()
-                        .and_then(|reference| {
-                            crate::developmental_decision::context(
-                                &mut organisms[index],
-                                environment,
-                                reference,
-                            )
-                        });
-                let needs = Self::current_needs(
-                    &organisms[index],
-                    environment,
-                    decision_parameters,
-                    developmental.as_ref(),
-                );
-                let eligibility = Self::action_eligibility(&organisms[index], environment, needs);
                 let context = DecisionContext { needs, eligibility };
                 let candidates =
                     Self::decision_candidates(&organisms[index], environment, needs, eligibility);
