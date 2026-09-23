@@ -6,13 +6,10 @@ use crate::state::{
 pub(crate) const MEMORY_CAPACITY_GROWTH_EXPONENT: f64 = 0.5;
 
 fn qualifying_genome_cavity(
-    organism: &Organism,
+    organism: &mut Organism,
     environment: &Environment,
 ) -> Option<crate::cavity::GenomeCavity> {
-    crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
-        .ok()
-        .flatten()
-        .filter(|cavity| cavity.qualifies())
+    organism.genome_cavity_cached(&environment.catalog)
 }
 
 pub(crate) fn memory_capacity(cavity: &crate::cavity::GenomeCavity) -> usize {
@@ -53,56 +50,6 @@ impl Simulation {
             });
             organism.memory.truncate(capacity);
         }
-
-        let (px, py) = {
-            let p = &organism.occupied_cells[0];
-            (p.x, p.y)
-        };
-        let perception_radius = organism.genome.perception_radius();
-        let sensory_resolution = organism.genome.sensory_resolution();
-        let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
-        let ranges = crate::resources::property_ranges(&environment.catalog);
-
-        let mut strongest_source: Option<(f64, f64, f64)> = None;
-        for cell_index in environment
-            .field
-            .cells_within_radius(px, py, perception_radius)
-        {
-            let (cell_x, cell_y) = environment.field.cell_center(cell_index);
-            let cell = &environment.field.cells[cell_index];
-            for material in &cell.materials {
-                let perceived_amount = Self::perceived_amount(material, sensory_resolution);
-                if perceived_amount <= 0.0 {
-                    continue;
-                }
-                let properties = material.weighted_properties(&environment.catalog);
-                let (_, _, _, _, _, desirability) = Self::calculate_desirability(
-                    organism,
-                    &properties,
-                    perceived_amount,
-                    &baselines,
-                    &ranges,
-                );
-                if desirability <= 0.0 {
-                    continue;
-                }
-                if strongest_source
-                    .map(|(_, _, current)| desirability > current)
-                    .unwrap_or(true)
-                {
-                    strongest_source = Some((cell_x, cell_y, desirability));
-                }
-            }
-        }
-
-        let Some((sx, sy, desirability)) = strongest_source else {
-            return;
-        };
-        let memory_strength = (desirability * organism.genome.memory_strength()).clamp(0.0, 1.0);
-        if memory_strength <= 0.0 {
-            return;
-        }
-        reinforce_memory_point(organism, sx, sy, memory_strength, capacity);
     }
 
     pub(crate) fn reinforce_memory_point(
@@ -111,6 +58,8 @@ impl Simulation {
         sy: f64,
         memory_strength: f64,
         capacity: usize,
+        spectrum: &crate::harmonics::ToneSpectrum,
+        outcome: crate::decision::OutcomeKind,
     ) {
         let merged = organism.memory.iter_mut().find(|p| {
             let dx = p.x - sx;
@@ -123,6 +72,8 @@ impl Simulation {
                 existing.x = sx;
                 existing.y = sy;
                 existing.strength = (existing.strength + memory_strength).min(1.0);
+                existing.spectrum.merge_from(spectrum, 1.0);
+                existing.outcome = Some(outcome);
             }
             None => {
                 if organism.memory.len() < capacity {
@@ -130,6 +81,8 @@ impl Simulation {
                         x: sx,
                         y: sy,
                         strength: memory_strength,
+                        spectrum: spectrum.clone(),
+                        outcome: Some(outcome),
                     });
                 } else if let Some(weakest) = organism
                     .memory
@@ -141,6 +94,8 @@ impl Simulation {
                             x: sx,
                             y: sy,
                             strength: memory_strength,
+                            spectrum: spectrum.clone(),
+                            outcome: Some(outcome),
                         };
                     }
                 }
@@ -155,13 +110,52 @@ pub(crate) fn reinforce_memory_point(
     sy: f64,
     memory_strength: f64,
     capacity: usize,
+    spectrum: &crate::harmonics::ToneSpectrum,
+    outcome: crate::decision::OutcomeKind,
 ) {
-    Simulation::reinforce_memory_point(organism, sx, sy, memory_strength, capacity);
+    Simulation::reinforce_memory_point(
+        organism,
+        sx,
+        sy,
+        memory_strength,
+        capacity,
+        spectrum,
+        outcome,
+    );
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn harmonic_experience_is_stored_with_its_outcome() {
+        let mut organism = Simulation::create_initial_organism();
+        let spectrum = crate::harmonics::ToneSpectrum {
+            components: vec![crate::harmonics::ToneComponent {
+                frequency_hz: 440.0,
+                amplitude: 0.75,
+                phase_radians: 0.25,
+            }],
+        };
+
+        reinforce_memory_point(
+            &mut organism,
+            12.0,
+            34.0,
+            0.5,
+            1,
+            &spectrum,
+            crate::decision::OutcomeKind::Beneficial,
+        );
+
+        assert_eq!(organism.memory.len(), 1);
+        assert_eq!(organism.memory[0].spectrum, spectrum);
+        assert_eq!(
+            organism.memory[0].outcome,
+            Some(crate::decision::OutcomeKind::Beneficial)
+        );
+    }
 
     #[test]
     fn memory_capacity_uses_diminishing_area_returns() {
