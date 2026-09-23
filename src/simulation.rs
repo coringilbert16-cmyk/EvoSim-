@@ -586,8 +586,7 @@ impl Simulation {
                         )
                         .is_some();
                         if combined {
-                            organisms[index].structure_revision =
-                                organisms[index].structure_revision.wrapping_add(1);
+                            organisms[index].mark_structure_changed();
                         }
                         crate::decision_runtime::record_outcome(
                             &mut organisms[index].decision_history,
