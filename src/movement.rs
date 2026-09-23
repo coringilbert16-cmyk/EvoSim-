@@ -102,8 +102,8 @@ fn movement_direction(organism: &Organism, rng: &mut impl Rng) -> (f64, f64) {
         memory_y /= total;
     }
 
-    let x = memory_weight * memory_x;
-    let y = memory_weight * memory_y;
+    let x = memory_weight * memory_x + perception_weight * organism.resource_sense.direction_x;
+    let y = memory_weight * memory_y + perception_weight * organism.resource_sense.direction_y;
     let magnitude = (x * x + y * y).sqrt();
     if magnitude <= f64::EPSILON {
         let angle = rng.gen_range(0.0..std::f64::consts::TAU);
@@ -431,9 +431,11 @@ mod tests {
     }
 
     #[test]
-    fn movement_direction_uses_existing_memory() {
+    fn movement_direction_uses_existing_memory_and_resource_sense() {
         let simulation = Simulation::new(7, 20.0);
         let mut organism = simulation.organisms[0].clone();
+        organism.resource_sense.direction_x = 1.0;
+        organism.resource_sense.direction_y = 0.0;
         organism.memory.push(crate::state::MemoryPoint {
             x: organism.occupied_cells[0].x,
             y: organism.occupied_cells[0].y - 20.0,
@@ -441,12 +443,12 @@ mod tests {
         });
         let mut rng = simulation.rng.clone();
         let (x, y) = movement_direction(&organism, &mut rng);
-        assert!(x.abs() < 1e-12);
+        assert!(x > 0.0);
         assert!(y < 0.0);
     }
 
     #[test]
-    fn movement_direction_without_memory_uses_intrinsic_variation() {
+    fn movement_direction_without_inputs_uses_intrinsic_variation() {
         let simulation = Simulation::new(7, 20.0);
         let organism = simulation.organisms[0].clone();
         let mut rng = simulation.rng.clone();
