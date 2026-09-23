@@ -1,3 +1,5 @@
+use rand::Rng;
+
 use crate::material_geometry::PlacedMaterialPart;
 use crate::state::{Environment, Organism, Simulation};
 use crate::structure::Placement;
@@ -7,12 +9,10 @@ impl Simulation {
         organism: &mut Organism,
         environment: &mut Environment,
         other_organisms: &mut [Organism],
+        rng: &mut impl Rng,
     ) -> bool {
         let movement_efficiency = organism.genome.movement_efficiency();
-        let (x, y) = match movement_direction(organism) {
-            Some(direction) => direction,
-            None => return false,
-        };
+        let (x, y) = movement_direction(organism, rng);
         if organism.active_transformation_id.is_some() {
             return false;
         }
@@ -73,11 +73,14 @@ impl Simulation {
     }
 }
 
-fn movement_direction(organism: &Organism) -> Option<(f64, f64)> {
+fn movement_direction(organism: &Organism, rng: &mut impl Rng) -> (f64, f64) {
     let memory_strength = organism.genome.memory_strength();
     let perception_weight = 1.0 - (0.5 + memory_strength * 0.5);
     let memory_weight = 1.0 - perception_weight;
-    let (px, py) = organism.occupied_cells.first().map(|p| (p.x, p.y))?;
+    let Some((px, py)) = organism.occupied_cells.first().map(|p| (p.x, p.y)) else {
+        let angle = rng.gen_range(0.0..std::f64::consts::TAU);
+        return (angle.cos(), angle.sin());
+    };
 
     let mut memory_x = 0.0;
     let mut memory_y = 0.0;
@@ -103,9 +106,10 @@ fn movement_direction(organism: &Organism) -> Option<(f64, f64)> {
     let y = memory_weight * memory_y + perception_weight * organism.resource_sense.direction_y;
     let magnitude = (x * x + y * y).sqrt();
     if magnitude <= f64::EPSILON {
-        None
+        let angle = rng.gen_range(0.0..std::f64::consts::TAU);
+        (angle.cos(), angle.sin())
     } else {
-        Some((x / magnitude, y / magnitude))
+        (x / magnitude, y / magnitude)
     }
 }
 
