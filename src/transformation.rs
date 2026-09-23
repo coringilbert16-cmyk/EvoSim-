@@ -381,6 +381,12 @@ mod tests {
             development_stage: crate::state::DevelopmentStage::Juvenile,
             active_transformation_id: None,
             reproductive_construction: None,
+            structure_revision: 0,
+            cached_cavity_revision: None,
+            cached_cavity: None,
+            cached_developmental_revision: None,
+            cached_developmental_realization: None,
+            cached_harmonic_key: None,
         };
         let environment = crate::state::Environment {
             width: 1000.0,
