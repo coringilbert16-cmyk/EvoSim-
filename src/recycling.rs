@@ -1,6 +1,5 @@
 use crate::energy_ledger::EnergyLedgerAuthority;
-use crate::environment::Environment;
-use crate::state::{EnergyLedger, Organism};
+use crate::state::{EnergyLedger, Environment, Organism};
 
 pub(crate) fn recycle_dead_organism(
     environment: &mut Environment,
