@@ -153,7 +153,7 @@ impl DiagnosticsRecorder {
                             .unwrap_or(Value::Null),
                         energy: organism.usable_energy,
                         stress: organism.stress,
-                        stress_threshold: organism.stress_threshold,
+                        structural_mass: organism.structural_mass(&simulation.environment.catalog),
                         structure_revision: organism.structure_revision,
                         position_revision: organism.position_revision,
                         structural_mass: organism
@@ -161,7 +161,7 @@ impl DiagnosticsRecorder {
                         unit_count: organism.structure.units.len(),
                         bond_count: organism.structure.bonds.len(),
                         component_count: organism.structure.connected_components().len(),
-                        stored_material_count: organism.stored_material.physical_count(),
+                        structure: serde_json::to_value(&organism.structure).unwrap_or(Value::Null),
                         stored_material: serde_json::to_value(&organism.stored_material)
                             .unwrap_or(Value::Null),
                         structure: serde_json::to_value(&organism.structure)
