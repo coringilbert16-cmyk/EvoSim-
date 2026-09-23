@@ -25,7 +25,7 @@ pub(crate) fn context(
     organism: &mut Organism,
     environment: &Environment,
     seed_reference: (f64, f64),
-) -> Option<DevelopmentalContext<'a>> {
+) -> Option<DevelopmentalContext> {
     if !matches!(organism.development_stage, DevelopmentStage::Juvenile) {
         return None;
     }
@@ -112,7 +112,7 @@ pub(crate) fn developmental_action_scores(
     needs: CurrentNeeds,
     candidates: &[ActionCandidate],
     competing_indices: &[usize],
-    developmental: Option<&DevelopmentalContext<'_>>,
+    developmental: Option<&DevelopmentalContext>,
     ledger: &EnergyLedger,
 ) -> Vec<Option<f64>> {
     let Some(developmental) = developmental else {
@@ -152,7 +152,7 @@ pub(crate) fn developmental_action_scores(
                     Some(growth_fraction_for_structure(
                         &trial.structure,
                         environment,
-                        developmental.blueprint,
+                        &developmental.blueprint,
                         developmental.origin,
                         developmental.orientation,
                         developmental.preferred_length,
