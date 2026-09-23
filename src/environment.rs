@@ -75,6 +75,8 @@ pub struct ActiveMaterialField {
     pub width_cells: usize,
     pub height_cells: usize,
     pub cells: Vec<FieldCell>,
+    #[serde(default)]
+    pub(crate) revision: u64,
 }
 
 pub(crate) enum FieldDeposit {
@@ -107,6 +109,7 @@ impl ActiveMaterialField {
             width_cells,
             height_cells,
             cells,
+            revision: 0,
         }
     }
 
@@ -282,6 +285,9 @@ impl ActiveMaterialField {
             }
             cell.physical_materials = remaining;
         }
+        if !contained.is_empty() {
+            self.revision = self.revision.wrapping_add(1);
+        }
         contained
     }
 
@@ -326,6 +332,7 @@ impl ActiveMaterialField {
         if material.is_empty() || !material.is_valid() {
             return;
         }
+        self.revision = self.revision.wrapping_add(1);
         let cell = &mut self.cells[index];
         if material.has_internal_structure() {
             cell.materials.push(material);
@@ -352,6 +359,7 @@ impl ActiveMaterialField {
             return false;
         }
         self.cells[index].physical_materials.push(material);
+        self.revision = self.revision.wrapping_add(1);
         true
     }
 
