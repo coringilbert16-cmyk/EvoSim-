@@ -186,14 +186,20 @@ impl Simulation {
             can_combine: organism.active_transformation_id.is_none()
                 && (can_build_from_storage || can_join_existing_structure),
             can_break: organism.active_transformation_id.is_none()
-                && !organism.structure.bonds.is_empty()
                 && (organism.reproductive_construction.is_none()
                     || needs.survival > 0.0
                     || needs.development > 0.0
                     || organism
                         .reproductive_construction
                         .as_ref()
-                        .is_some_and(|construction| construction.needs_space)),
+                        .is_some_and(|construction| construction.needs_space))
+                && organism.structure.bonds.iter().any(|bond| {
+                    crate::transformation::break_candidate_is_executable(
+                        organism,
+                        _environment,
+                        *bond,
+                    )
+                }),
             can_expel: organism.active_transformation_id.is_none()
                 && organism.stored_material.physical_count() > 0,
         }
@@ -215,6 +221,13 @@ impl Simulation {
                     .bonds
                     .iter()
                     .enumerate()
+                    .filter(|(_, bond)| {
+                        crate::transformation::break_candidate_is_executable(
+                            organism,
+                            _environment,
+                            **bond,
+                        )
+                    })
                     .map(|(index, _)| ActionCandidate {
                         action: ActionKind::Break,
                         context_key: Some(format!("bond:{index}")),
@@ -460,7 +473,7 @@ impl Simulation {
                         for other in after.iter() {
                             others.push((*other).clone());
                         }
-                        let moved = Self::update_movement(organism, environment, &mut others);
+                        let moved = Self::update_movement(organism, environment, &mut others, &mut self.rng);
                         if moved {
                             for (original, trial) in
                                 before.iter_mut().chain(after.iter_mut()).zip(others)
