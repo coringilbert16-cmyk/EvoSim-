@@ -146,8 +146,7 @@ impl DiagnosticsRecorder {
                         stored_material_count: organism.stored_material.physical_count(),
                         stored_material: serde_json::to_value(&organism.stored_material)
                             .unwrap_or(Value::Null),
-                        structure: serde_json::to_value(&organism.structure)
-                            .unwrap_or(Value::Null),
+                        structure: serde_json::to_value(&organism.structure).unwrap_or(Value::Null),
                         genome: serde_json::to_value(&organism.genome).unwrap_or(Value::Null),
                         harmonic_spectrum: serde_json::to_value(&organism.harmonic_spectrum)
                             .unwrap_or(Value::Null),
@@ -175,10 +174,8 @@ impl DiagnosticsRecorder {
                     TransformationSnapshot {
                         id: transformation.id,
                         organism_id: transformation.organism_id.clone(),
-                        kind: serde_json::to_value(transformation.kind)
-                            .unwrap_or(Value::Null),
-                        bond: serde_json::to_value(transformation.bond)
-                            .unwrap_or(Value::Null),
+                        kind: serde_json::to_value(transformation.kind).unwrap_or(Value::Null),
+                        bond: serde_json::to_value(transformation.bond).unwrap_or(Value::Null),
                         complexity: transformation.complexity,
                         duration_ticks: transformation.duration_ticks,
                         remaining_ticks: transformation.remaining_ticks,
@@ -404,10 +401,7 @@ fn scalar_delta(before: Option<f64>, after: Option<f64>) -> Option<f64> {
     }
 }
 
-fn structural_delta(
-    before: Option<&OrganismSnapshot>,
-    after: Option<&OrganismSnapshot>,
-) -> Value {
+fn structural_delta(before: Option<&OrganismSnapshot>, after: Option<&OrganismSnapshot>) -> Value {
     json!({
         "unit_count": scalar_usize_delta(
             before.map(|o| o.unit_count),
@@ -448,11 +442,14 @@ fn bond_json_for_transformation(structure: &Value, transformation_bond: &Value) 
     let endpoint_b = bond.get("endpoint_b")?;
     let bonds = structure.get("bonds")?.as_array()?;
 
-    bonds.iter().find(|candidate| {
-        candidate.get("endpoint_a") == Some(endpoint_a)
-            && candidate.get("endpoint_b") == Some(endpoint_b)
-            || candidate.get("endpoint_a") == Some(endpoint_b)
-                && candidate.get("endpoint_b") == Some(endpoint_a)
-    }).cloned()
+    bonds
+        .iter()
+        .find(|candidate| {
+            candidate.get("endpoint_a") == Some(endpoint_a)
+                && candidate.get("endpoint_b") == Some(endpoint_b)
+                || candidate.get("endpoint_a") == Some(endpoint_b)
+                    && candidate.get("endpoint_b") == Some(endpoint_a)
+        })
+        .cloned()
 }
 
