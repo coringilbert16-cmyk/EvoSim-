@@ -148,20 +148,22 @@ impl DiagnosticsRecorder {
             .map(|organism| {
                 (
                     organism.id.clone(),
+                    OrganismSnapshot {
+                        stage: serde_json::to_value(&organism.development_stage)
+                            .unwrap_or(Value::Null),
                         energy: organism.usable_energy,
                         stress: organism.stress,
-                        structural_mass: organism.structural_mass(&simulation.environment.catalog),
+                        stress_threshold: organism.stress_threshold,
                         structure_revision: organism.structure_revision,
                         position_revision: organism.position_revision,
-                        structural_mass: organism
-                            .structural_mass(&simulation.environment.catalog),
+                        structural_mass: organism.structural_mass(&simulation.environment.catalog),
                         unit_count: organism.structure.units.len(),
                         bond_count: organism.structure.bonds.len(),
                         component_count: organism.structure.connected_components().len(),
+                        stored_material_count: organism.stored_material.physical_count(),
                         stored_material: serde_json::to_value(&organism.stored_material)
                             .unwrap_or(Value::Null),
-                        structure: serde_json::to_value(&organism.structure)
-                            .unwrap_or(Value::Null),
+                        structure: serde_json::to_value(&organism.structure).unwrap_or(Value::Null),
                         genome: serde_json::to_value(&organism.genome).unwrap_or(Value::Null),
                         memory: serde_json::to_value(&organism.memory).unwrap_or(Value::Null),
                         decision_history: serde_json::to_value(&organism.decision_history)
