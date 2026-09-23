@@ -124,6 +124,14 @@ pub(crate) struct EnergyLedger {
     pub(crate) total_usable_energy_held: f64,
 }
 #[derive(Serialize, Deserialize, Clone)]
+pub(crate) struct HarmonicCache {
+    pub(crate) structure_key: u64,
+    pub(crate) environment_key: u64,
+    pub(crate) boundary_units: Vec<usize>,
+    pub(crate) spectrum: crate::harmonics::ToneSpectrum,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct Organism {
     pub(crate) id: String,
     /// Persistent organism-local developmental origin. This is anchored at
@@ -138,6 +146,10 @@ pub(crate) struct Organism {
     pub(crate) developmental_orientation_radians: f64,
     pub(crate) occupied_cells: Vec<Position>,
     pub(crate) genome: Genome,
+    #[serde(default)]
+    pub(crate) harmonic_spectrum: crate::harmonics::ToneSpectrum,
+    #[serde(skip)]
+    pub(crate) harmonic_cache: Option<HarmonicCache>,
     pub(crate) resource_sense: ResourceSense,
     pub(crate) memory: Vec<MemoryPoint>,
     pub(crate) decision_history: DecisionHistory,
