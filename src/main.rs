@@ -45,6 +45,7 @@ mod movement;
 mod movement_direction;
 mod observation;
 mod reproduction;
+mod recycling;
 #[path = "structural_blueprint_unified.rs"]
 #[allow(clippy::needless_range_loop, unused_variables)]
 mod structural_blueprint;
