@@ -481,6 +481,48 @@ mod tests {
     }
 
     #[test]
+    fn universal_tie_breaker_handles_different_action_kinds() {
+        let context = DecisionContext {
+            needs: CurrentNeeds {
+                survival: 1.0,
+                reproduction: 0.0,
+                development: 0.0,
+            },
+            eligibility: ActionEligibility {
+                can_move: true,
+                can_break: true,
+                ..Default::default()
+            },
+        };
+        let candidates = vec![
+            ActionCandidate {
+                action: ActionKind::Move,
+                context_key: None,
+            },
+            ActionCandidate {
+                action: ActionKind::Break,
+                context_key: Some("bond:0".into()),
+            },
+        ];
+        let mut first_rng = ChaCha8Rng::seed_from_u64(7);
+        let mut second_rng = ChaCha8Rng::seed_from_u64(7);
+        let first = select_action(
+            context,
+            &DecisionHistory::default(),
+            &candidates,
+            &mut first_rng,
+        );
+        let second = select_action(
+            context,
+            &DecisionHistory::default(),
+            &candidates,
+            &mut second_rng,
+        );
+        assert_eq!(first, second);
+        assert!(first.is_some_and(|candidate| candidates.contains(&candidate)));
+    }
+
+    #[test]
     fn recorded_outcome_is_available_to_future_decisions() {
         let mut history = DecisionHistory::default();
         let candidate = ActionCandidate {
