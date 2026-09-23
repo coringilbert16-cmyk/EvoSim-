@@ -73,6 +73,8 @@ impl Simulation {
             developmental_orientation_radians: 0.0,
             occupied_cells: vec![anchor],
             genome,
+            harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
+            harmonic_cache: None,
             resource_sense: ResourceSense {
                 sensed_resources: Vec::new(),
                 direction_x: 0.0,
