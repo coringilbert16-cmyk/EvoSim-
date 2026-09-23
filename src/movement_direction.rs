@@ -12,6 +12,14 @@ pub(crate) fn movement_direction_periodic(
     organism: &Organism,
     environment_height: f64,
 ) -> Option<(f64, f64)> {
+    movement_direction_periodic_with_push(organism, environment_height, (0.0, 0.0))
+}
+
+pub(crate) fn movement_direction_periodic_with_push(
+    organism: &Organism,
+    environment_height: f64,
+    random_push: (f64, f64),
+) -> Option<(f64, f64)> {
     let (px, py) = organism.occupied_cells.first().map(|p| (p.x, p.y))?;
 
     let mut memory_x = 0.0;
@@ -34,8 +42,8 @@ pub(crate) fn movement_direction_periodic(
         memory_y /= total;
     }
 
-    let x = memory_x;
-    let y = memory_y;
+    let x = memory_x + random_push.0;
+    let y = memory_y + random_push.1;
     let magnitude = (x * x + y * y).sqrt();
     if magnitude <= f64::EPSILON {
         None
