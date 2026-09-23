@@ -226,9 +226,12 @@ impl DiagnosticsRecorder {
         for transformation in after.transformations.values() {
             if !before.transformations.contains_key(&transformation.id) {
                 self.summary.transformation_starts += 1;
-                self.summary.first_transformation_tick.get_or_insert(after.tick);
+                self.summary
+                    .first_transformation_tick
+                    .get_or_insert(after.tick);
                 self.summary.last_transformation_tick = Some(after.tick);
-                let kind = serde_json::to_string(&transformation.kind).unwrap_or_else(|_| "unknown".to_string());
+                let kind = serde_json::to_string(&transformation.kind)
+                    .unwrap_or_else(|_| "unknown".to_string());
                 *self.summary.transformation_types.entry(kind).or_default() += 1;
                 let organism = after.organisms.get(&transformation.organism_id);
                 self.write_event(json!({
@@ -335,7 +338,9 @@ impl DiagnosticsRecorder {
             let new = after.organisms.get(&id).map(|o| o.stage.clone());
             if old != new {
                 self.summary.lifecycle_changes += 1;
-                self.summary.first_lifecycle_change_tick.get_or_insert(after.tick);
+                self.summary
+                    .first_lifecycle_change_tick
+                    .get_or_insert(after.tick);
                 self.summary.last_lifecycle_change_tick = Some(after.tick);
                 self.write_event(json!({
                     "event": "lifecycle_change",
@@ -357,12 +362,30 @@ impl DiagnosticsRecorder {
 
     fn write_snapshot(&mut self, simulation: &mut Simulation, reason: &str) -> std::io::Result<()> {
         let snapshot = self.capture(simulation);
-        self.summary.max_active_transformations = self.summary.max_active_transformations.max(simulation.active_transformations.len());
-        self.summary.max_population = self.summary.max_population.max(simulation.organisms.len());
+        self.summary.max_active_transformations = self
+            .summary
+            .max_active_transformations
+            .max(simulation.active_transformations.len());
+        self.summary.max_population = self
+            .summary
+            .max_population
+            .max(simulation.organisms.len());
         for organism in snapshot.organisms.values() {
-            update_min_max(&mut self.summary.min_growth_fraction, &mut self.summary.max_growth_fraction, organism.developmental_growth_fraction);
-            update_min_max(&mut self.summary.min_energy, &mut self.summary.max_energy, Some(organism.energy));
-            update_min_max(&mut self.summary.min_stress, &mut self.summary.max_stress, Some(organism.stress));
+            update_min_max(
+                &mut self.summary.min_growth_fraction,
+                &mut self.summary.max_growth_fraction,
+                organism.developmental_growth_fraction,
+            );
+            update_min_max(
+                &mut self.summary.min_energy,
+                &mut self.summary.max_energy,
+                Some(organism.energy),
+            );
+            update_min_max(
+                &mut self.summary.min_stress,
+                &mut self.summary.max_stress,
+                Some(organism.stress),
+            );
         }
         let total_field_mass: f64 = simulation
             .environment
@@ -436,8 +459,16 @@ impl DiagnosticsRecorder {
         writeln!(file, "population: {}", simulation.organisms.len())?;
         writeln!(file, "max_population: {}", self.summary.max_population)?;
         writeln!(file, "active_transformations_final: {}", simulation.active_transformations.len())?;
-        writeln!(file, "max_active_transformations: {}", self.summary.max_active_transformations)?;
-        writeln!(file, "decomposing_bodies_final: {}", simulation.decomposing_bodies.len())?;
+        writeln!(
+            file,
+            "max_active_transformations: {}",
+            self.summary.max_active_transformations
+        )?;
+        writeln!(
+            file,
+            "decomposing_bodies_final: {}",
+            simulation.decomposing_bodies.len()
+        )?;
         writeln!(file, "field_revision: {}", simulation.environment.field.revision)?;
         writeln!(file)?;
         writeln!(file, "TRANSFORMATIONS")?;
@@ -456,17 +487,36 @@ impl DiagnosticsRecorder {
         writeln!(file, "structure_changes: {}", self.summary.structure_changes)?;
         writeln!(file)?;
         writeln!(file, "RANGES OBSERVED")?;
-        write_range(&mut file, "growth_fraction", self.summary.min_growth_fraction, self.summary.max_growth_fraction)?;
-        write_range(&mut file, "energy", self.summary.min_energy, self.summary.max_energy)?;
-        write_range(&mut file, "stress", self.summary.min_stress, self.summary.max_stress)?;
+        write_range(
+            &mut file,
+            "growth_fraction",
+            self.summary.min_growth_fraction,
+            self.summary.max_growth_fraction,
+        )?;
+        write_range(
+            &mut file,
+            "energy",
+            self.summary.min_energy,
+            self.summary.max_energy,
+        )?;
+        write_range(
+            &mut file,
+            "stress",
+            self.summary.min_stress,
+            self.summary.max_stress,
+        )?;
         writeln!(file)?;
         writeln!(file, "FINAL ORGANISMS")?;
         for (index, organism) in simulation.organisms.iter_mut().enumerate() {
             let growth = crate::developmental_decision::growth_fraction(organism, &simulation.environment);
-            writeln!(file, "#{index} id={} stage={:?} growth={:.6} energy={:.6} stress={:.6} units={} bonds={} components={} stored={}",
+            writeln!(
+                file,
+                "#{index} id={} stage={:?} growth={:.6} energy={:.6} stress={:.6} units={} bonds={} components={} stored={}",
                 organism.id, organism.development_stage, growth, organism.usable_energy, organism.stress,
                 organism.structure.units.len(), organism.structure.bonds.len(),
-                organism.structure.connected_components().len(), organism.stored_material.physical_count())?;
+                organism.structure.connected_components().len(),
+                organism.stored_material.physical_count()
+            )?;
         }
         Ok(())
     }
@@ -491,7 +541,10 @@ fn scalar_delta(before: Option<f64>, after: Option<f64>) -> Option<f64> {
     }
 }
 
-fn structural_delta(before: Option<&OrganismSnapshot>, after: Option<&OrganismSnapshot>) -> Value {
+fn structural_delta(
+    before: Option<&OrganismSnapshot>,
+    after: Option<&OrganismSnapshot>,
+) -> Value {
     json!({
         "unit_count": scalar_usize_delta(
             before.map(|o| o.unit_count),
@@ -526,7 +579,10 @@ fn scalar_usize_delta(before: Option<usize>, after: Option<usize>) -> Option<i64
     }
 }
 
-fn bond_json_for_transformation(structure: &Value, transformation_bond: &Value) -> Option<Value> {
+fn bond_json_for_transformation(
+    structure: &Value,
+    transformation_bond: &Value,
+) -> Option<Value> {
     let bond = transformation_bond.as_object()?;
     let endpoint_a = bond.get("endpoint_a")?;
     let endpoint_b = bond.get("endpoint_b")?;
@@ -543,12 +599,21 @@ fn bond_json_for_transformation(structure: &Value, transformation_bond: &Value) 
         .cloned()
 }
 
-fn update_min_max(min: &mut Option<f64>, max: &mut Option<f64>, value: Option<f64>) {
+fn update_min_max(
+    min: &mut Option<f64>,
+    max: &mut Option<f64>,
+    value: Option<f64>,
+) {
     let Some(value) = value.filter(|v| v.is_finite()) else { return; };
     *min = Some(min.map_or(value, |current| current.min(value)));
     *max = Some(max.map_or(value, |current| current.max(value)));
 }
 
-fn write_range(file: &mut File, name: &str, min: Option<f64>, max: Option<f64>) -> std::io::Result<()> {
+fn write_range(
+    file: &mut File,
+    name: &str,
+    min: Option<f64>,
+    max: Option<f64>,
+) -> std::io::Result<()> {
     writeln!(file, "{name}: {:?} .. {:?}", min, max)
 }
