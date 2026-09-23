@@ -146,6 +146,8 @@ fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
         developmental_orientation_radians: construction.developmental_orientation_radians,
         occupied_cells: vec![construction.developmental_origin.clone()],
         genome: construction.child_genome.clone(),
+        harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
+        harmonic_cache: None,
         resource_sense: ResourceSense {
             sensed_resources: Vec::new(),
             direction_x: 0.0,
@@ -280,6 +282,8 @@ fn try_child_construction(
 
 fn preferred_length(
     genome: &crate::genome::Genome,
+        harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
+        harmonic_cache: None,
     catalog: &[crate::resources::BaseResource],
 ) -> Option<f64> {
     let (seed_mass, seed_length) = crate::juvenile::confirmed_seed_scale_reference(catalog).ok()?;
@@ -292,6 +296,8 @@ fn preferred_length(
 
 fn developmental_context<'a>(
     genome: &'a crate::genome::Genome,
+        harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
+        harmonic_cache: None,
     origin: &Position,
     orientation: f64,
     catalog: &[crate::resources::BaseResource],
@@ -381,6 +387,8 @@ fn anchor_structure(
             y: placement.y,
         }],
         genome: child_genome.clone(),
+        harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
+        harmonic_cache: None,
         resource_sense: ResourceSense {
             sensed_resources: Vec::new(),
             direction_x: 0.0,
@@ -614,6 +622,8 @@ pub(crate) fn finish_reproduction(
         developmental_orientation_radians: construction.developmental_orientation_radians,
         occupied_cells: vec![child_position],
         genome: construction.child_genome,
+        harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
+        harmonic_cache: None,
         resource_sense: ResourceSense {
             sensed_resources: Vec::new(),
             direction_x: 0.0,
