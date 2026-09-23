@@ -44,6 +44,7 @@ impl Simulation {
         let mut field = ActiveMaterialField::new(width, height, DEFAULT_CELL_SIZE);
         crate::environmental_materials::seed_initial_landscape(&mut field);
         Environment {
+            revision: 0,
             width,
             height,
             catalog,
@@ -68,6 +69,9 @@ impl Simulation {
         let mut stored_material = crate::material_storage::MaterialStorage::default();
         assert!(stored_material.store(genome.juvenile_reserve.clone()));
         Organism {
+            calculation_cache: crate::state::CalculationCache::default(),
+            structure_revision: 0,
+            position_revision: 0,
             id: "1".into(),
             developmental_origin: anchor.clone(),
             developmental_orientation_radians: 0.0,
@@ -91,8 +95,15 @@ impl Simulation {
             reproductive_construction: None,
         }
     }
-    fn growth_fraction(organism: &Organism, environment: &Environment) -> f64 {
-        organism
+    fn growth_fraction(organism: &mut Organism, environment: &Environment) -> f64 {
+        let genome_mass = organism.genome.adult_mass();
+        let key = (organism.structure_revision, genome_mass.to_bits());
+        if let Some((cached_structure, cached_mass, value)) = organism.calculation_cache.growth {
+            if (cached_structure, cached_mass) == key {
+                return value;
+            }
+        }
+        let value = organism
             .genome
             .developmental_blueprint
             .realization(
@@ -103,10 +114,12 @@ impl Simulation {
                     organism.developmental_origin.y,
                 ),
                 organism.developmental_orientation_radians,
-                organism.genome.adult_mass(),
+                genome_mass,
             )
             .overall
-            .clamp(0.0, 1.0)
+            .clamp(0.0, 1.0);
+        organism.calculation_cache.growth = Some((key.0, key.1, value));
+        value
     }
     fn update_development_stage(organism: &mut Organism, growth_fraction: f64) {
         match organism.development_stage {
@@ -213,14 +226,28 @@ impl Simulation {
         if !break_allowed {
             return Vec::new();
         }
-        organism
+        let key = (
+            organism.structure_revision,
+            environment.revision,
+            organism.usable_energy.to_bits(),
+        );
+        if let Some((cached_structure, cached_environment, cached_energy, candidates)) =
+            &organism.calculation_cache.break_candidates
+        {
+            if (*cached_structure, *cached_environment, *cached_energy) == key {
+                return candidates.clone();
+            }
+        }
+        let candidates: Vec<usize> = organism
             .structure
             .bonds
             .iter()
             .enumerate()
             .filter(|(_, bond)| break_candidate_is_executable(organism, environment, **bond))
             .map(|(index, _)| index)
-            .collect()
+            .collect();
+        organism.calculation_cache.break_candidates = Some((key.0, key.1, key.2, candidates.clone()));
+        candidates
     }
     fn decision_candidates(
         organism: &Organism,
@@ -453,7 +480,15 @@ impl Simulation {
             growth_fractions.push(growth_fraction);
             Self::update_development_stage(organism, growth_fraction);
             organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
-            Self::update_resource_perception(organism, &self.environment);
+            let perception_key = (
+                self.environment.revision,
+                organism.position_revision,
+                organism.usable_energy.to_bits(),
+            );
+            if organism.calculation_cache.perception != Some(perception_key) {
+                Self::update_resource_perception(organism, &self.environment);
+                organism.calculation_cache.perception = Some(perception_key);
+            }
             Self::update_memory_from_sources(organism, &self.environment);
             if matches!(organism.development_stage, DevelopmentStage::Adult)
                 && organism.reproductive_construction.is_none()
@@ -558,6 +593,10 @@ impl Simulation {
                             developmental,
                         )
                         .is_some();
+                        if combined {
+                            organisms[index].structure_revision =
+                                organisms[index].structure_revision.wrapping_add(1);
+                        }
                         crate::decision_runtime::record_outcome(
                             &mut organisms[index].decision_history,
                             &selected,
@@ -585,11 +624,15 @@ impl Simulation {
                             .and_then(|key| key.strip_prefix("target:"))
                             .and_then(|index| index.parse::<usize>().ok())
                             .map(|field_index| {
-                                Self::acquire_target(
+                                let success = Self::acquire_target(
                                     &mut organisms[index],
                                     environment,
                                     field_index,
-                                )
+                                );
+                                if success {
+                                    environment.revision = environment.revision.wrapping_add(1);
+                                }
+                                success
                             })
                             .unwrap_or(false);
                         crate::decision_runtime::record_outcome(
