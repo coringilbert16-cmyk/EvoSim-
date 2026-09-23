@@ -6,13 +6,10 @@ use crate::state::{
 pub(crate) const MEMORY_CAPACITY_GROWTH_EXPONENT: f64 = 0.5;
 
 fn qualifying_genome_cavity(
-    organism: &Organism,
+    organism: &mut Organism,
     environment: &Environment,
 ) -> Option<crate::cavity::GenomeCavity> {
-    crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
-        .ok()
-        .flatten()
-        .filter(|cavity| cavity.qualifies())
+    organism.genome_cavity_cached(&environment.catalog)
 }
 
 pub(crate) fn memory_capacity(cavity: &crate::cavity::GenomeCavity) -> usize {
