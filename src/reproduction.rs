@@ -393,6 +393,13 @@ fn anchor_structure(
         active_transformation_id: None,
         reproductive_construction: None,
         structure: OrganismStructure::new(),
+        structure_revision: 0,
+        position_revision: 0,
+        cached_cavity_revision: None,
+        cached_cavity: None,
+        cached_developmental_revision: None,
+        cached_developmental_realization: None,
+        cached_harmonic_key: None,
     };
     let anchor_unit_index = crate::combine_runtime::instantiate_one_unit(&mut child, catalog)?;
     if let Some(anchor_unit) = child.structure.units.get_mut(anchor_unit_index) {
