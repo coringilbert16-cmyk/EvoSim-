@@ -123,31 +123,6 @@ fn movement_direction(organism: &Organism, rng: &mut impl Rng) -> (f64, f64) {
     }
 }
 
-fn reindex_physical_materials(environment: &mut Environment) {
-    let mut physical_materials = Vec::new();
-    for cell in &mut environment.field.cells {
-        physical_materials.append(&mut cell.physical_materials);
-    }
-    for physical in physical_materials {
-        let Some(placement) = physical
-            .placements
-            .as_ref()
-            .and_then(|placements| placements.first())
-        else {
-            continue;
-        };
-        let Some(index) = environment
-            .field
-            .index_for_position(placement.x, placement.y)
-        else {
-            continue;
-        };
-        environment.field.cells[index]
-            .physical_materials
-            .push(physical);
-    }
-}
-
 struct PushPlan {
     organism_indices: Vec<(bool, usize)>,
     physical_materials: Vec<(usize, usize)>,
@@ -297,14 +272,50 @@ fn apply_push_plan(
     }
 
     if !plan.physical_materials.is_empty() {
+        let mut moves = Vec::with_capacity(plan.physical_materials.len());
         for &(cell_index, material_index) in &plan.physical_materials {
-            translate_physical(
-                &mut environment.field.cells[cell_index].physical_materials[material_index],
-                dx,
-                dy,
-            );
+            let physical = environment.field.cells[cell_index]
+                .physical_materials
+                .get(material_index)
+                .cloned();
+            if let Some(mut physical) = physical {
+                translate_physical(&mut physical, dx, dy);
+                let target_index = physical
+                    .placements
+                    .as_ref()
+                    .and_then(|placements| placements.first())
+                    .and_then(|placement| {
+                        environment
+                            .field
+                            .index_for_position(placement.x, placement.y)
+                    });
+                moves.push((cell_index, material_index, target_index, physical));
+            }
         }
-        reindex_physical_materials(environment);
+
+        moves.sort_by_key(|(cell_index, material_index, _, _)| (*cell_index, std::cmp::Reverse(*material_index)));
+        for (cell_index, material_index, target_index, _) in &moves {
+            if *target_index != Some(*cell_index) {
+                environment.field.cells[*cell_index]
+                    .physical_materials
+                    .swap_remove(*material_index);
+            }
+        }
+
+        for (cell_index, material_index, target_index, physical) in moves {
+            if target_index == Some(cell_index) {
+                if let Some(slot) = environment.field.cells[cell_index]
+                    .physical_materials
+                    .get_mut(material_index)
+                {
+                    *slot = physical;
+                }
+            } else if let Some(target_index) = target_index {
+                environment.field.cells[target_index]
+                    .physical_materials
+                    .push(physical);
+            }
+        }
     }
 }
 
