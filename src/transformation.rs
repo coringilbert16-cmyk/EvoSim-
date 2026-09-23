@@ -308,33 +308,31 @@ impl Simulation {
             &candidate,
             outcome,
         );
-        if net > 0.0 {
-            let reinforcement = (net * organism.genome.memory_strength()).clamp(0.0, 1.0);
-            let (x, y) = organism
-                .occupied_cells
-                .first()
-                .map(|p| (p.x, p.y))
-                .unwrap_or((0.0, 0.0));
-            let capacity =
-                crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
-                    .ok()
-                    .flatten()
-                    .filter(|cavity| cavity.qualifies())
-                    .map(|cavity| crate::memory::memory_capacity(&cavity));
-            if let Some(capacity) = capacity {
-                let spectrum = organism.harmonic_spectrum.clone();
-                crate::memory::reinforce_memory_point(
-                    organism,
-                    x,
-                    y,
-                    reinforcement,
-                    capacity,
-                    &spectrum,
-                    outcome,
-                );
-            } else {
-                organism.memory.clear();
-            }
+        let (x, y) = organism
+            .occupied_cells
+            .first()
+            .map(|p| (p.x, p.y))
+            .unwrap_or((0.0, 0.0));
+        let reinforcement = organism.genome.memory_strength().clamp(0.0, 1.0);
+        let capacity =
+            crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
+                .ok()
+                .flatten()
+                .filter(|cavity| cavity.qualifies())
+                .map(|cavity| crate::memory::memory_capacity(&cavity));
+        if let Some(capacity) = capacity {
+            let spectrum = organism.harmonic_spectrum.clone();
+            crate::memory::reinforce_memory_point(
+                organism,
+                x,
+                y,
+                reinforcement,
+                capacity,
+                &spectrum,
+                outcome,
+            );
+        } else {
+            organism.memory.clear();
         }
     }
 }
