@@ -280,5 +280,3 @@ pub(crate) struct Simulation {
     pub(crate) rng: ChaCha8Rng,
     pub(crate) decision_parameters: DecisionParameters,
 }
-pub(crate) const DESIRABILITY_AMOUNT_HALF_SATURATION: f64 = 100.0;
-pub(crate) const DESIRABILITY_MAX: f64 = 1.0;
