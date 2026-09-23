@@ -221,6 +221,22 @@ mod integration_tests {
             bond_energy: 12.5,
         });
     }
+
+    fn start_test_break_transformation(s: &mut Simulation) {
+        let candidate = crate::decision_runtime::ActionCandidate {
+            action: ActionKind::Break,
+            context_key: Some("bond:0".into()),
+        };
+        let transformation = Simulation::try_start_transformation(
+            &mut s.organisms[0],
+            &s.environment.catalog,
+            &mut s.next_transformation_id,
+            &candidate,
+        )
+        .expect("test break candidate must start a transformation");
+        s.active_transformations.push(transformation);
+    }
+
     #[test]
     fn maintenance_is_based_on_realized_structural_mass_and_ledger_settlement() {
         let mut organism = Simulation::create_initial_organism();
@@ -295,7 +311,7 @@ mod integration_tests {
         let mut s = Simulation::new(7, 10.0);
         add_test_break_bond(&mut s);
         s.organisms[0].usable_energy = 0.0;
-        s.step();
+        start_test_break_transformation(&mut s);
         assert_eq!(s.organisms[0].structure.bonds.len(), 1);
         assert!(s.organisms[0].active_transformation_id.is_some());
     }
@@ -304,7 +320,7 @@ mod integration_tests {
         let mut s = Simulation::new(7, 10.0);
         add_test_break_bond(&mut s);
         s.organisms[0].usable_energy = 0.0;
-        s.step();
+        start_test_break_transformation(&mut s);
         s.step();
         s.step();
         let a_index = s.organisms[0].structure.units.len() - 2;
