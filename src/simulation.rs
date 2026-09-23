@@ -413,6 +413,8 @@ impl Simulation {
         }
         let environment_snapshot = self.environment.clone();
         let decision_parameters = self.decision_parameters;
+        let seed_reference =
+            crate::juvenile::confirmed_seed_scale_reference(&environment_snapshot.catalog).ok();
         for organism in &mut self.organisms {
             Self::update_development_stage(organism, &environment_snapshot);
             organism.apply_maintenance(&environment_snapshot.catalog, &mut self.energy_ledger);
@@ -445,8 +447,13 @@ impl Simulation {
                 {
                     continue;
                 }
-                let developmental =
-                    crate::developmental_decision::context(&organisms[index], environment);
+                let developmental = seed_reference.and_then(|reference| {
+                    crate::developmental_decision::context(
+                        &organisms[index],
+                        environment,
+                        reference,
+                    )
+                });
                 let needs = Self::current_needs(
                     &organisms[index],
                     environment,
