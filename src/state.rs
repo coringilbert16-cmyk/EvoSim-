@@ -16,43 +16,6 @@ pub(crate) struct AppState {
     pub(crate) simulation: Arc<Mutex<Simulation>>,
 }
 #[derive(Serialize, Deserialize, Clone)]
-pub(crate) struct PropertyDeviations {
-    pub(crate) mass: f64,
-    pub(crate) potential_energy: f64,
-    pub(crate) reactivity: f64,
-    pub(crate) cohesion: f64,
-}
-#[derive(Serialize, Deserialize, Clone)]
-pub(crate) struct AffinityResponses {
-    pub(crate) mass: f64,
-    pub(crate) potential_energy: f64,
-    pub(crate) reactivity: f64,
-    pub(crate) cohesion: f64,
-}
-#[derive(Serialize, Deserialize, Clone)]
-pub(crate) struct ResourceObservation {
-    pub(crate) name: String,
-    pub(crate) properties: crate::resources::ResourceProperties,
-    pub(crate) perceived_amount: f64,
-    pub(crate) deviations: PropertyDeviations,
-    pub(crate) affinity_responses: AffinityResponses,
-    pub(crate) base_desirability: f64,
-    pub(crate) amount_factor: f64,
-    pub(crate) potential_energy_need_factor: f64,
-    pub(crate) desirability: f64,
-    pub(crate) distance: f64,
-    pub(crate) source_x: f64,
-    pub(crate) source_y: f64,
-    pub(crate) field_index: usize,
-}
-#[derive(Serialize, Deserialize, Clone)]
-pub(crate) struct ResourceSense {
-    pub(crate) sensed_resources: Vec<ResourceObservation>,
-    pub(crate) direction_x: f64,
-    pub(crate) direction_y: f64,
-    pub(crate) direction_strength: f64,
-}
-#[derive(Serialize, Deserialize, Clone)]
 pub(crate) enum DevelopmentStage {
     Offspring,
     Juvenile,
@@ -68,6 +31,12 @@ pub(crate) struct MemoryPoint {
     pub(crate) x: f64,
     pub(crate) y: f64,
     pub(crate) strength: f64,
+    /// Spectral content physically received by the genome cavity.
+    #[serde(default)]
+    pub(crate) spectrum: crate::harmonics::ToneSpectrum,
+    /// The observed consequence associated with the remembered spectrum.
+    #[serde(default)]
+    pub(crate) outcome: Option<crate::decision::OutcomeKind>,
 }
 pub(crate) const MEMORY_DECAY_PER_TICK: f64 = 0.995;
 pub(crate) const MEMORY_MERGE_RADIUS: f64 = 40.0;
@@ -97,9 +66,7 @@ pub(crate) struct ReproductiveConstruction {
     pub(crate) developing_structure: OrganismStructure,
     pub(crate) child_genome: Genome,
     /// Persistent developmental frame for the physically separate offspring.
-    #[serde(default)]
     pub(crate) developmental_origin: Position,
-    #[serde(default)]
     pub(crate) developmental_orientation_radians: f64,
     /// Stress accumulated by the developing offspring before detachment.
     #[serde(default)]
@@ -123,49 +90,48 @@ pub(crate) struct EnergyLedger {
     pub(crate) total_heat_dissipated: f64,
     pub(crate) total_usable_energy_held: f64,
 }
-#[derive(Serialize, Deserialize, Clone)]
-#[derive(Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub(crate) struct CalculationCache {
     pub(crate) growth: Option<(u64, u64, f64)>,
     pub(crate) break_candidates: Option<(u64, u64, u64, Vec<usize>)>,
-    pub(crate) perception: Option<(u64, u64, u64)>,
 }
 
+#[derive(Clone)]
 pub(crate) struct Organism {
-    #[serde(skip)]
     pub(crate) calculation_cache: CalculationCache,
     /// Monotonic revision of physical structure. Increment when structure/bonds change.
-    #[serde(default)]
     pub(crate) structure_revision: u64,
     /// Monotonic revision of organism position/geometry in the environment.
-    #[serde(default)]
     pub(crate) position_revision: u64,
     pub(crate) id: String,
     /// Persistent organism-local developmental origin. This is anchored at
     /// the organism's own persistent developmental reference and moves with the
     /// organism; it is never
     /// re-centered on current geometry or center of mass.
-    #[serde(default)]
     pub(crate) developmental_origin: Position,
     /// Initial developmental-frame orientation. This remains fixed unless
     /// an explicitly approved orientation mechanism is introduced.
-    #[serde(default)]
     pub(crate) developmental_orientation_radians: f64,
     pub(crate) occupied_cells: Vec<Position>,
     pub(crate) genome: Genome,
-    pub(crate) resource_sense: ResourceSense,
+    /// Spectrum currently present at the organism's physically realized genome cavity.
+    pub(crate) harmonic_spectrum: crate::harmonics::ToneSpectrum,
     pub(crate) memory: Vec<MemoryPoint>,
     pub(crate) decision_history: DecisionHistory,
     pub(crate) usable_energy: f64,
     pub(crate) stress: f64,
-    #[serde(default = "default_stress_threshold")]
     pub(crate) stress_threshold: f64,
     pub(crate) stored_material: MaterialStorage,
     pub(crate) structure: OrganismStructure,
     pub(crate) development_stage: DevelopmentStage,
     pub(crate) active_transformation_id: Option<u64>,
-    #[serde(default)]
     pub(crate) reproductive_construction: Option<ReproductiveConstruction>,
+    pub(crate) cached_cavity_revision: Option<u64>,
+    pub(crate) cached_cavity: Option<Option<crate::cavity::GenomeCavity>>,
+    pub(crate) cached_developmental_revision: Option<u64>,
+    pub(crate) cached_developmental_realization:
+        Option<crate::developmental_blueprint::DevelopmentalRealization>,
+    pub(crate) cached_harmonic_key: Option<(u64, u64, u64)>,
 }
 pub(crate) const STRESS_DECAY_PER_TICK: f64 = 0.98;
 pub(crate) const INITIAL_STRESS_THRESHOLD: f64 = 100.0;
@@ -176,6 +142,35 @@ fn default_stress_threshold() -> f64 {
     INITIAL_STRESS_THRESHOLD
 }
 impl Organism {
+    pub(crate) fn mark_structure_changed(&mut self) {
+        self.structure_revision = self.structure_revision.wrapping_add(1);
+        self.cached_cavity_revision = None;
+        self.cached_cavity = None;
+        self.cached_developmental_revision = None;
+        self.cached_developmental_realization = None;
+        self.cached_harmonic_key = None;
+    }
+
+    pub(crate) fn mark_position_changed(&mut self) {
+        self.position_revision = self.position_revision.wrapping_add(1);
+        self.cached_harmonic_key = None;
+    }
+
+    pub(crate) fn genome_cavity_cached(
+        &mut self,
+        catalog: &[BaseResource],
+    ) -> Option<crate::cavity::GenomeCavity> {
+        if self.cached_cavity_revision != Some(self.structure_revision) {
+            let cavity = crate::cavity::analyze_genome_cavity(&self.structure, catalog)
+                .ok()
+                .flatten()
+                .filter(|cavity| cavity.qualifies());
+            self.cached_cavity = Some(cavity);
+            self.cached_cavity_revision = Some(self.structure_revision);
+        }
+        self.cached_cavity.clone().flatten()
+    }
+
     pub(crate) fn store_material(&mut self, material: Material) -> bool {
         self.stored_material.store(material)
     }
@@ -270,5 +265,3 @@ pub(crate) struct Simulation {
     pub(crate) rng: ChaCha8Rng,
     pub(crate) decision_parameters: DecisionParameters,
 }
-pub(crate) const DESIRABILITY_AMOUNT_HALF_SATURATION: f64 = 100.0;
-pub(crate) const DESIRABILITY_MAX: f64 = 1.0;

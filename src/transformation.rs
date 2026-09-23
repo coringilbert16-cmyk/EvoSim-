@@ -58,7 +58,7 @@ fn settle_break_energy(
         return false;
     }
     organism.structure = trial_structure;
-    organism.structure_revision = organism.structure_revision.wrapping_add(1);
+    organism.mark_structure_changed();
     organism.add_transaction_stress(work);
     true
 }
@@ -389,7 +389,16 @@ impl Simulation {
                     .filter(|cavity| cavity.qualifies())
                     .map(|cavity| crate::memory::memory_capacity(&cavity));
             if let Some(capacity) = capacity {
-                crate::memory::reinforce_memory_point(organism, x, y, reinforcement, capacity);
+                let spectrum = organism.harmonic_spectrum.clone();
+                crate::memory::reinforce_memory_point(
+                    organism,
+                    x,
+                    y,
+                    reinforcement,
+                    capacity,
+                    &spectrum,
+                    outcome,
+                );
             } else {
                 organism.memory.clear();
             }
@@ -431,12 +440,7 @@ mod tests {
             developmental_orientation_radians: 0.0,
             occupied_cells: vec![crate::state::Position { x: 0.0, y: 0.0 }],
             genome,
-            resource_sense: crate::state::ResourceSense {
-                sensed_resources: Vec::new(),
-                direction_x: 0.0,
-                direction_y: 0.0,
-                direction_strength: 0.0,
-            },
+            harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
             memory: Vec::new(),
             decision_history: crate::decision::DecisionHistory::default(),
             usable_energy: 1_000_000.0,
@@ -447,6 +451,11 @@ mod tests {
             development_stage: crate::state::DevelopmentStage::Juvenile,
             active_transformation_id: None,
             reproductive_construction: None,
+            cached_cavity_revision: None,
+            cached_cavity: None,
+            cached_developmental_revision: None,
+            cached_developmental_realization: None,
+            cached_harmonic_key: None,
         };
         let environment = crate::state::Environment {
             revision: 0,

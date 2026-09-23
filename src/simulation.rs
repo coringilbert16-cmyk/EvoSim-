@@ -10,9 +10,7 @@ use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
 use crate::genome::initial_genome;
 use crate::juvenile::realize_initial;
-use crate::state::{
-    DevelopmentStage, EnergyLedger, Environment, Organism, Position, ResourceSense, Simulation,
-};
+use crate::state::{DevelopmentStage, EnergyLedger, Environment, Organism, Position, Simulation};
 use crate::transformation::break_candidate_is_executable;
 
 const ADULTHOOD_GROWTH_FRACTION: f64 = 0.90;
@@ -77,12 +75,7 @@ impl Simulation {
             developmental_orientation_radians: 0.0,
             occupied_cells: vec![anchor],
             genome,
-            resource_sense: ResourceSense {
-                sensed_resources: Vec::new(),
-                direction_x: 0.0,
-                direction_y: 0.0,
-                direction_strength: 0.0,
-            },
+            harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
             memory: Vec::new(),
             decision_history: crate::decision::DecisionHistory::default(),
             usable_energy: initial_energy,
@@ -93,6 +86,11 @@ impl Simulation {
             development_stage: DevelopmentStage::Juvenile,
             active_transformation_id: None,
             reproductive_construction: None,
+            cached_cavity_revision: None,
+            cached_cavity: None,
+            cached_developmental_revision: None,
+            cached_developmental_realization: None,
+            cached_harmonic_key: None,
         }
     }
     fn growth_fraction(organism: &mut Organism, environment: &Environment) -> f64 {
@@ -211,7 +209,7 @@ impl Simulation {
         }
     }
     fn executable_break_candidates(
-        organism: &Organism,
+        organism: &mut Organism,
         environment: &Environment,
         needs: CurrentNeeds,
     ) -> Vec<usize> {
@@ -246,7 +244,8 @@ impl Simulation {
             .filter(|(_, bond)| break_candidate_is_executable(organism, environment, **bond))
             .map(|(index, _)| index)
             .collect();
-        organism.calculation_cache.break_candidates = Some((key.0, key.1, key.2, candidates.clone()));
+        organism.calculation_cache.break_candidates =
+            Some((key.0, key.1, key.2, candidates.clone()));
         candidates
     }
     fn decision_candidates(
@@ -480,15 +479,7 @@ impl Simulation {
             growth_fractions.push(growth_fraction);
             Self::update_development_stage(organism, growth_fraction);
             organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
-            let perception_key = (
-                self.environment.revision,
-                organism.position_revision,
-                organism.usable_energy.to_bits(),
-            );
-            if organism.calculation_cache.perception != Some(perception_key) {
-                Self::update_resource_perception(organism, &self.environment);
-                organism.calculation_cache.perception = Some(perception_key);
-            }
+            crate::harmonics::update_organism_harmonics(organism, &self.environment);
             Self::update_memory_from_sources(organism, &self.environment);
             if matches!(organism.development_stage, DevelopmentStage::Adult)
                 && organism.reproductive_construction.is_none()
@@ -522,7 +513,7 @@ impl Simulation {
                     decision_parameters,
                 );
                 let executable_breaks =
-                    Self::executable_break_candidates(&organisms[index], environment, needs);
+                    Self::executable_break_candidates(&mut organisms[index], environment, needs);
                 let eligibility = Self::action_eligibility(
                     &organisms[index],
                     environment,
@@ -547,7 +538,7 @@ impl Simulation {
                         let (before, rest) = organisms.split_at_mut(index);
                         let (organism, after) =
                             rest.split_first_mut().expect("index is in organisms");
-                        let moved = Self::update_movement(
+                        let _moved = Self::update_movement(
                             organism,
                             environment,
                             before,
@@ -594,8 +585,7 @@ impl Simulation {
                         )
                         .is_some();
                         if combined {
-                            organisms[index].structure_revision =
-                                organisms[index].structure_revision.wrapping_add(1);
+                            organisms[index].mark_structure_changed();
                         }
                         crate::decision_runtime::record_outcome(
                             &mut organisms[index].decision_history,

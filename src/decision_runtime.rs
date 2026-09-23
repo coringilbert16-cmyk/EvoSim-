@@ -326,11 +326,26 @@ mod tests {
             },
         };
         let candidates = vec![
-            ActionCandidate { action: ActionKind::Move, context_key: None },
-            ActionCandidate { action: ActionKind::Acquire, context_key: Some("target:1".into()) },
-            ActionCandidate { action: ActionKind::Combine, context_key: None },
-            ActionCandidate { action: ActionKind::Expel, context_key: None },
-            ActionCandidate { action: ActionKind::Break, context_key: Some("bond:0".into()) },
+            ActionCandidate {
+                action: ActionKind::Move,
+                context_key: None,
+            },
+            ActionCandidate {
+                action: ActionKind::Acquire,
+                context_key: Some("target:1".into()),
+            },
+            ActionCandidate {
+                action: ActionKind::Combine,
+                context_key: None,
+            },
+            ActionCandidate {
+                action: ActionKind::Expel,
+                context_key: None,
+            },
+            ActionCandidate {
+                action: ActionKind::Break,
+                context_key: Some("bond:0".into()),
+            },
         ];
         assert_eq!(
             select_action(context, &DecisionHistory::default(), &candidates),

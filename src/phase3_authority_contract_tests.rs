@@ -18,6 +18,7 @@ mod tests {
         let mut environment = Environment {
             width: 100.0,
             height: 100.0,
+            revision: 0,
             catalog: catalog.clone(),
             field: ActiveMaterialField::new(100.0, 100.0, 10.0),
         };

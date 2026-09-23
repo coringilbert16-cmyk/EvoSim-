@@ -10,7 +10,6 @@ use crate::material_storage::MaterialStorage;
 use crate::resources::Material;
 use crate::state::{
     DevelopmentStage, EnergyLedger, Environment, Organism, Position, ReproductiveConstruction,
-    ResourceSense,
 };
 use crate::structure::OrganismStructure;
 use rand_chacha::ChaCha8Rng;
@@ -149,12 +148,7 @@ fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
         developmental_orientation_radians: construction.developmental_orientation_radians,
         occupied_cells: vec![construction.developmental_origin.clone()],
         genome: construction.child_genome.clone(),
-        resource_sense: ResourceSense {
-            sensed_resources: Vec::new(),
-            direction_x: 0.0,
-            direction_y: 0.0,
-            direction_strength: 0.0,
-        },
+        harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
         memory: Vec::new(),
         decision_history: crate::decision::DecisionHistory::default(),
         usable_energy: construction.developing_energy,
@@ -164,6 +158,11 @@ fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
         development_stage: DevelopmentStage::Juvenile,
         active_transformation_id: None,
         reproductive_construction: None,
+        cached_cavity_revision: None,
+        cached_cavity: None,
+        cached_developmental_revision: None,
+        cached_developmental_realization: None,
+        cached_harmonic_key: None,
         structure: construction.developing_structure.clone(),
     }
 }
@@ -387,12 +386,7 @@ fn anchor_structure(
             y: placement.y,
         }],
         genome: child_genome.clone(),
-        resource_sense: ResourceSense {
-            sensed_resources: Vec::new(),
-            direction_x: 0.0,
-            direction_y: 0.0,
-            direction_strength: 0.0,
-        },
+        harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
         memory: Vec::new(),
         decision_history: crate::decision::DecisionHistory::default(),
         usable_energy: 0.0,
@@ -402,6 +396,11 @@ fn anchor_structure(
         development_stage: DevelopmentStage::Juvenile,
         active_transformation_id: None,
         reproductive_construction: None,
+        cached_cavity_revision: None,
+        cached_cavity: None,
+        cached_developmental_revision: None,
+        cached_developmental_realization: None,
+        cached_harmonic_key: None,
         structure: OrganismStructure::new(),
     };
     let anchor_unit_index = crate::combine_runtime::instantiate_one_unit(&mut child, catalog)?;
@@ -623,12 +622,7 @@ pub(crate) fn finish_reproduction(
         developmental_orientation_radians: construction.developmental_orientation_radians,
         occupied_cells: vec![child_position],
         genome: construction.child_genome,
-        resource_sense: ResourceSense {
-            sensed_resources: Vec::new(),
-            direction_x: 0.0,
-            direction_y: 0.0,
-            direction_strength: 0.0,
-        },
+        harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
         memory: Vec::new(),
         decision_history: crate::decision::DecisionHistory::default(),
         usable_energy: construction.developing_energy,
@@ -638,6 +632,11 @@ pub(crate) fn finish_reproduction(
         development_stage: DevelopmentStage::Juvenile,
         active_transformation_id: None,
         reproductive_construction: None,
+        cached_cavity_revision: None,
+        cached_cavity: None,
+        cached_developmental_revision: None,
+        cached_developmental_realization: None,
+        cached_harmonic_key: None,
         structure: construction.developing_structure,
     })
 }

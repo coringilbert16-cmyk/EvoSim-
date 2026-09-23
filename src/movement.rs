@@ -72,7 +72,7 @@ impl Simulation {
 
         organism.occupied_cells[0].x = new_x;
         organism.occupied_cells[0].y = new_y;
-        organism.position_revision = organism.position_revision.wrapping_add(1);
+        organism.mark_position_changed();
         organism.developmental_origin.x += dx;
         organism.developmental_origin.y += dy;
         for unit in &mut organism.structure.units {
@@ -85,9 +85,6 @@ impl Simulation {
 }
 
 fn movement_direction(organism: &Organism, rng: &mut impl Rng) -> (f64, f64) {
-    let memory_strength = organism.genome.memory_strength();
-    let perception_weight = 1.0 - (0.5 + memory_strength * 0.5);
-    let memory_weight = 1.0 - perception_weight;
     let Some((px, py)) = organism.occupied_cells.first().map(|p| (p.x, p.y)) else {
         let angle = rng.gen_range(0.0..std::f64::consts::TAU);
         return (angle.cos(), angle.sin());
@@ -108,20 +105,14 @@ fn movement_direction(organism: &Organism, rng: &mut impl Rng) -> (f64, f64) {
         memory_y += dy / distance * weight;
         total += weight;
     }
+
     if total > 0.0 {
-        memory_x /= total;
-        memory_y /= total;
+        return (memory_x / total, memory_y / total);
     }
 
-    let x = memory_weight * memory_x + perception_weight * organism.resource_sense.direction_x;
-    let y = memory_weight * memory_y + perception_weight * organism.resource_sense.direction_y;
-    let magnitude = (x * x + y * y).sqrt();
-    if magnitude <= f64::EPSILON {
-        let angle = rng.gen_range(0.0..std::f64::consts::TAU);
-        (angle.cos(), angle.sin())
-    } else {
-        (x / magnitude, y / magnitude)
-    }
+    // No remembered direction is not movement failure. Wandering remains possible.
+    let angle = rng.gen_range(0.0..std::f64::consts::TAU);
+    (angle.cos(), angle.sin())
 }
 
 struct PushPlan {
@@ -312,6 +303,7 @@ fn apply_push_plan(
                     .push(physical);
             }
         }
+        environment.revision = environment.revision.wrapping_add(1);
     }
 }
 
@@ -485,6 +477,7 @@ fn translate_organism(organism: &mut Organism, dx: f64, dy: f64) {
         unit.placement.y += dy;
     }
     translate_reproductive_construction(organism, dx, dy);
+    organism.mark_position_changed();
 }
 
 #[cfg(test)]
@@ -501,19 +494,19 @@ mod tests {
     }
 
     #[test]
-    fn movement_direction_uses_existing_memory_and_resource_sense() {
+    fn movement_direction_uses_existing_memory() {
         let simulation = Simulation::new(7, 20.0);
         let mut organism = simulation.organisms[0].clone();
-        organism.resource_sense.direction_x = 1.0;
-        organism.resource_sense.direction_y = 0.0;
         organism.memory.push(crate::state::MemoryPoint {
             x: organism.occupied_cells[0].x,
             y: organism.occupied_cells[0].y - 20.0,
             strength: 1.0,
+            spectrum: crate::harmonics::ToneSpectrum::empty(),
+            outcome: None,
         });
         let mut rng = simulation.rng.clone();
         let (x, y) = movement_direction(&organism, &mut rng);
-        assert!(x > 0.0);
+        assert!(x.abs() < f64::EPSILON);
         assert!(y < 0.0);
     }
 

@@ -37,10 +37,10 @@ mod energy_ledger;
 mod decision;
 mod decision_runtime;
 mod genome;
+mod harmonics;
 mod memory;
 mod movement;
 mod observation;
-mod perception;
 mod reproduction;
 #[path = "structural_blueprint_unified.rs"]
 #[allow(clippy::needless_range_loop, unused_variables)]
