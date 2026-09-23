@@ -321,7 +321,6 @@ impl ActiveMaterialField {
         Some(material)
     }
 
-
     pub fn total_material(&self) -> Vec<(String, f64)> {
         let mut totals: Vec<(String, f64)> = Vec::new();
         for cell in &self.cells {
