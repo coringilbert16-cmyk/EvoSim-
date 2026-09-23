@@ -11,7 +11,7 @@ use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
 use crate::genome::initial_genome;
 use crate::juvenile::realize_initial;
 use crate::state::{
-    DevelopmentStage, EnergyLedger, Environment, Organism, Position, ResourceSense, Simulation,
+    DevelopmentStage, EnergyLedger, Environment, Organism, Position, Simulation,
 };
 use crate::transformation::break_candidate_is_executable;
 
@@ -77,12 +77,6 @@ impl Simulation {
             developmental_orientation_radians: 0.0,
             occupied_cells: vec![anchor],
             genome,
-            resource_sense: ResourceSense {
-                sensed_resources: Vec::new(),
-                direction_x: 0.0,
-                direction_y: 0.0,
-                direction_strength: 0.0,
-            },
             harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
             memory: Vec::new(),
             decision_history: crate::decision::DecisionHistory::default(),
