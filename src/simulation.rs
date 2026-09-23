@@ -246,7 +246,8 @@ impl Simulation {
             .filter(|(_, bond)| break_candidate_is_executable(organism, environment, **bond))
             .map(|(index, _)| index)
             .collect();
-        organism.calculation_cache.break_candidates = Some((key.0, key.1, key.2, candidates.clone()));
+        organism.calculation_cache.break_candidates =
+            Some((key.0, key.1, key.2, candidates.clone()));
         candidates
     }
     fn decision_candidates(
