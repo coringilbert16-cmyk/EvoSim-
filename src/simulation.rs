@@ -94,7 +94,6 @@ impl Simulation {
             reproductive_construction: None,
         }
     }
-    pub(crate) fn step_environment(&mut self) {}
     fn growth_fraction(organism: &Organism, environment: &Environment) -> f64 {
         organism
             .genome
@@ -388,7 +387,6 @@ impl Simulation {
     }
     pub(crate) fn step(&mut self) {
         self.tick += 1;
-        self.step_environment();
         let mut still_active = Vec::new();
         let mut completed = Vec::new();
         for mut transformation in self.active_transformations.drain(..) {
@@ -418,20 +416,19 @@ impl Simulation {
                 );
             }
         }
-        let environment_snapshot = self.environment.clone();
         let decision_parameters = self.decision_parameters;
         for organism in &mut self.organisms {
-            Self::update_development_stage(organism, &environment_snapshot);
-            organism.apply_maintenance(&environment_snapshot.catalog, &mut self.energy_ledger);
-            Self::update_resource_perception(organism, &environment_snapshot);
-            Self::update_memory_from_sources(organism, &environment_snapshot);
+            Self::update_development_stage(organism, &self.environment);
+            organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
+            Self::update_resource_perception(organism, &self.environment);
+            Self::update_memory_from_sources(organism, &self.environment);
             if matches!(organism.development_stage, DevelopmentStage::Adult)
                 && organism.reproductive_construction.is_none()
             {
                 let _ = crate::reproduction::begin_reproduction(
                     organism,
                     &mut self.rng,
-                    &environment_snapshot.catalog,
+                    &self.environment.catalog,
                     &mut self.energy_ledger,
                 );
             }
