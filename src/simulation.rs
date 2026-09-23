@@ -10,9 +10,7 @@ use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
 use crate::genome::initial_genome;
 use crate::juvenile::realize_initial;
-use crate::state::{
-    DevelopmentStage, EnergyLedger, Environment, Organism, Position, Simulation,
-};
+use crate::state::{DevelopmentStage, EnergyLedger, Environment, Organism, Position, Simulation};
 use crate::transformation::break_candidate_is_executable;
 
 const ADULTHOOD_GROWTH_FRACTION: f64 = 0.90;
