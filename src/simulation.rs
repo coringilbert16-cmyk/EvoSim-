@@ -526,17 +526,14 @@ impl Simulation {
                     }
                 }
 
-                if eligibility.can_move
-                    && needs.any_for(ActionKind::Move.relevant_needs())
-                {
+                if eligibility.can_move && needs.any_for(ActionKind::Move.relevant_needs()) {
                     let move_candidate = ActionCandidate {
                         action: ActionKind::Move,
                         context_key: None,
                     };
                     let organism_count = organisms.len();
                     let (before, rest) = organisms.split_at_mut(index);
-                    let (organism, after) =
-                        rest.split_first_mut().expect("index is in organisms");
+                    let (organism, after) = rest.split_first_mut().expect("index is in organisms");
                     let mut others = Vec::with_capacity(organism_count.saturating_sub(1));
                     for other in before.iter() {
                         others.push((*other).clone());
