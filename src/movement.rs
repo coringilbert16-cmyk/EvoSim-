@@ -85,9 +85,6 @@ impl Simulation {
 }
 
 fn movement_direction(organism: &Organism, rng: &mut impl Rng) -> (f64, f64) {
-    let memory_strength = organism.genome.memory_strength();
-    let perception_weight = 1.0 - (0.5 + memory_strength * 0.5);
-    let memory_weight = 1.0 - perception_weight;
     let Some((px, py)) = organism.occupied_cells.first().map(|p| (p.x, p.y)) else {
         let angle = rng.gen_range(0.0..std::f64::consts::TAU);
         return (angle.cos(), angle.sin());
@@ -108,20 +105,14 @@ fn movement_direction(organism: &Organism, rng: &mut impl Rng) -> (f64, f64) {
         memory_y += dy / distance * weight;
         total += weight;
     }
+
     if total > 0.0 {
-        memory_x /= total;
-        memory_y /= total;
+        return (memory_x / total, memory_y / total);
     }
 
-    let x = memory_weight * memory_x + perception_weight * organism.resource_sense.direction_x;
-    let y = memory_weight * memory_y + perception_weight * organism.resource_sense.direction_y;
-    let magnitude = (x * x + y * y).sqrt();
-    if magnitude <= f64::EPSILON {
-        let angle = rng.gen_range(0.0..std::f64::consts::TAU);
-        (angle.cos(), angle.sin())
-    } else {
-        (x / magnitude, y / magnitude)
-    }
+    // No remembered direction is not movement failure. Wandering remains possible.
+    let angle = rng.gen_range(0.0..std::f64::consts::TAU);
+    (angle.cos(), angle.sin())
 }
 
 struct PushPlan {
