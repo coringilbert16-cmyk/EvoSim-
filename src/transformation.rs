@@ -423,6 +423,9 @@ mod tests {
         let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
         let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
         let organism = crate::state::Organism {
+            calculation_cache: crate::state::CalculationCache::default(),
+            structure_revision: 0,
+            position_revision: 0,
             id: "test".into(),
             developmental_origin: crate::state::Position { x: 0.0, y: 0.0 },
             developmental_orientation_radians: 0.0,
@@ -446,6 +449,7 @@ mod tests {
             reproductive_construction: None,
         };
         let environment = crate::state::Environment {
+            revision: 0,
             width: 1000.0,
             height: 1000.0,
             catalog: catalog.clone(),
