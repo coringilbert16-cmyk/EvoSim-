@@ -108,7 +108,6 @@ pub(crate) struct WorldObservation {
     pub(crate) height: f64,
     pub(crate) organisms: Vec<WorldOrganismObservation>,
     pub(crate) field: Vec<WorldFieldObservation>,
-    pub(crate) vents: Vec<WorldPointObservation>,
     pub(crate) decomposing_bodies: Vec<WorldPointObservation>,
 }
 impl WorldObservation {
@@ -178,12 +177,6 @@ impl WorldObservation {
                 })
             })
             .collect();
-        let vents = simulation
-            .environment
-            .vents
-            .iter()
-            .map(|v| WorldPointObservation { x: v.x, y: v.y })
-            .collect();
         let decomposing_bodies = simulation
             .decomposing_bodies
             .iter()
@@ -197,7 +190,6 @@ impl WorldObservation {
             height: simulation.environment.height,
             organisms,
             field,
-            vents,
             decomposing_bodies,
         }
     }
