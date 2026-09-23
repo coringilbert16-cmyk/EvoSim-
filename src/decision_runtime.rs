@@ -310,6 +310,35 @@ mod tests {
     }
 
     #[test]
+    fn candidate_order_is_the_tie_break_for_equal_pressure() {
+        let context = DecisionContext {
+            needs: CurrentNeeds {
+                survival: 1.0,
+                reproduction: 0.0,
+                development: 0.0,
+            },
+            eligibility: ActionEligibility {
+                can_move: true,
+                can_acquire: true,
+                can_combine: true,
+                can_expel: true,
+                can_break: true,
+            },
+        };
+        let candidates = vec![
+            ActionCandidate { action: ActionKind::Move, context_key: None },
+            ActionCandidate { action: ActionKind::Acquire, context_key: Some("target:1".into()) },
+            ActionCandidate { action: ActionKind::Combine, context_key: None },
+            ActionCandidate { action: ActionKind::Expel, context_key: None },
+            ActionCandidate { action: ActionKind::Break, context_key: Some("bond:0".into()) },
+        ];
+        assert_eq!(
+            select_action(context, &DecisionHistory::default(), &candidates),
+            Some(candidates[0].clone())
+        );
+    }
+
+    #[test]
     fn action_need_mapping_is_owned_by_decision_layer() {
         assert!(ActionKind::Combine
             .relevant_needs()
