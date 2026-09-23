@@ -156,6 +156,12 @@ fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
         active_transformation_id: None,
         reproductive_construction: None,
         structure: construction.developing_structure.clone(),
+        structure_revision: 0,
+        cached_cavity_revision: None,
+        cached_cavity: None,
+        cached_developmental_revision: None,
+        cached_developmental_realization: None,
+        cached_harmonic_key: None,
     }
 }
 
@@ -614,6 +620,12 @@ pub(crate) fn finish_reproduction(
         active_transformation_id: None,
         reproductive_construction: None,
         structure: construction.developing_structure,
+        structure_revision: 0,
+        cached_cavity_revision: None,
+        cached_cavity: None,
+        cached_developmental_revision: None,
+        cached_developmental_realization: None,
+        cached_harmonic_key: None,
     })
 }
 
