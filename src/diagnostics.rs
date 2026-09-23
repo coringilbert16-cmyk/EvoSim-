@@ -14,6 +14,29 @@ pub(crate) struct DiagnosticsRecorder {
     writer: BufWriter<File>,
     interval: u64,
     before: Option<SimulationSnapshot>,
+    summary_path: String,
+    summary: DiagnosticSummary,
+}
+
+#[derive(Default)]
+struct DiagnosticSummary {
+    transformation_starts: u64,
+    transformation_completions: u64,
+    transformation_types: HashMap<String, u64>,
+    structure_changes: u64,
+    lifecycle_changes: u64,
+    max_active_transformations: usize,
+    max_population: usize,
+    min_growth_fraction: Option<f64>,
+    max_growth_fraction: Option<f64>,
+    min_energy: Option<f64>,
+    max_energy: Option<f64>,
+    min_stress: Option<f64>,
+    max_stress: Option<f64>,
+    first_lifecycle_change_tick: Option<u64>,
+    last_lifecycle_change_tick: Option<u64>,
+    first_transformation_tick: Option<u64>,
+    last_transformation_tick: Option<u64>,
 }
 
 #[derive(Clone)]
@@ -69,8 +92,10 @@ impl DiagnosticsRecorder {
         let file = File::create(path)?;
         let mut recorder = Self {
             writer: BufWriter::new(file),
+            summary_path: format!("{path}.summary.txt"),
             interval: interval.max(1),
             before: None,
+            summary: DiagnosticSummary::default(),
         };
         recorder.write_event(json!({
             "event": "diagnostic_header",
@@ -107,6 +132,7 @@ impl DiagnosticsRecorder {
 
     pub(crate) fn finish(&mut self, simulation: &mut Simulation) -> std::io::Result<()> {
         self.write_snapshot(simulation, "final")?;
+        self.write_summary_file(simulation)?;
         self.write_event(json!({
             "event": "diagnostic_end",
             "tick": simulation.tick,
@@ -199,6 +225,11 @@ impl DiagnosticsRecorder {
     ) -> std::io::Result<()> {
         for transformation in after.transformations.values() {
             if !before.transformations.contains_key(&transformation.id) {
+                self.summary.transformation_starts += 1;
+                self.summary.first_transformation_tick.get_or_insert(after.tick);
+                self.summary.last_transformation_tick = Some(after.tick);
+                let kind = serde_json::to_string(&transformation.kind).unwrap_or_else(|_| "unknown".to_string());
+                *self.summary.transformation_types.entry(kind).or_default() += 1;
                 let organism = after.organisms.get(&transformation.organism_id);
                 self.write_event(json!({
                     "event": "transformation_started",
@@ -229,6 +260,7 @@ impl DiagnosticsRecorder {
             if after.transformations.contains_key(&transformation.id) {
                 continue;
             }
+            self.summary.transformation_completions += 1;
             let before_organism = before.organisms.get(&transformation.organism_id);
             let after_organism = after.organisms.get(&transformation.organism_id);
             let before_bond = before_organism
@@ -273,6 +305,7 @@ impl DiagnosticsRecorder {
             if before_organism.structure_revision == after_organism.structure_revision {
                 continue;
             }
+            self.summary.structure_changes += 1;
             self.write_event(json!({
                 "event": "structure_changed",
                 "tick": after.tick,
@@ -301,6 +334,9 @@ impl DiagnosticsRecorder {
             let old = before.organisms.get(&id).map(|o| o.stage.clone());
             let new = after.organisms.get(&id).map(|o| o.stage.clone());
             if old != new {
+                self.summary.lifecycle_changes += 1;
+                self.summary.first_lifecycle_change_tick.get_or_insert(after.tick);
+                self.summary.last_lifecycle_change_tick = Some(after.tick);
                 self.write_event(json!({
                     "event": "lifecycle_change",
                     "tick": after.tick,
@@ -321,6 +357,13 @@ impl DiagnosticsRecorder {
 
     fn write_snapshot(&mut self, simulation: &mut Simulation, reason: &str) -> std::io::Result<()> {
         let snapshot = self.capture(simulation);
+        self.summary.max_active_transformations = self.summary.max_active_transformations.max(simulation.active_transformations.len());
+        self.summary.max_population = self.summary.max_population.max(simulation.organisms.len());
+        for organism in snapshot.organisms.values() {
+            update_min_max(&mut self.summary.min_growth_fraction, &mut self.summary.max_growth_fraction, organism.developmental_growth_fraction);
+            update_min_max(&mut self.summary.min_energy, &mut self.summary.max_energy, Some(organism.energy));
+            update_min_max(&mut self.summary.min_stress, &mut self.summary.max_stress, Some(organism.stress));
+        }
         let total_field_mass: f64 = simulation
             .environment
             .field
@@ -383,6 +426,49 @@ impl DiagnosticsRecorder {
             "active_transformation_id": state.active_transformation_id,
             "reproductive_construction": state.reproductive_construction,
         })
+    }
+
+    fn write_summary_file(&self, simulation: &mut Simulation) -> std::io::Result<()> {
+        let mut file = File::create(&self.summary_path)?;
+        writeln!(file, "EVOSIM DIAGNOSTIC SUMMARY")?;
+        writeln!(file, "==========================")?;
+        writeln!(file, "tick: {}", simulation.tick)?;
+        writeln!(file, "population: {}", simulation.organisms.len())?;
+        writeln!(file, "max_population: {}", self.summary.max_population)?;
+        writeln!(file, "active_transformations_final: {}", simulation.active_transformations.len())?;
+        writeln!(file, "max_active_transformations: {}", self.summary.max_active_transformations)?;
+        writeln!(file, "decomposing_bodies_final: {}", simulation.decomposing_bodies.len())?;
+        writeln!(file, "field_revision: {}", simulation.environment.field.revision)?;
+        writeln!(file)?;
+        writeln!(file, "TRANSFORMATIONS")?;
+        writeln!(file, "starts: {}", self.summary.transformation_starts)?;
+        writeln!(file, "completions: {}", self.summary.transformation_completions)?;
+        writeln!(file, "first_tick: {:?}", self.summary.first_transformation_tick)?;
+        writeln!(file, "last_tick: {:?}", self.summary.last_transformation_tick)?;
+        for (kind, count) in &self.summary.transformation_types {
+            writeln!(file, "type {kind}: {count}")?;
+        }
+        writeln!(file)?;
+        writeln!(file, "LIFECYCLE / STRUCTURE")?;
+        writeln!(file, "lifecycle_changes: {}", self.summary.lifecycle_changes)?;
+        writeln!(file, "first_lifecycle_change_tick: {:?}", self.summary.first_lifecycle_change_tick)?;
+        writeln!(file, "last_lifecycle_change_tick: {:?}", self.summary.last_lifecycle_change_tick)?;
+        writeln!(file, "structure_changes: {}", self.summary.structure_changes)?;
+        writeln!(file)?;
+        writeln!(file, "RANGES OBSERVED")?;
+        write_range(&mut file, "growth_fraction", self.summary.min_growth_fraction, self.summary.max_growth_fraction)?;
+        write_range(&mut file, "energy", self.summary.min_energy, self.summary.max_energy)?;
+        write_range(&mut file, "stress", self.summary.min_stress, self.summary.max_stress)?;
+        writeln!(file)?;
+        writeln!(file, "FINAL ORGANISMS")?;
+        for (index, organism) in simulation.organisms.iter_mut().enumerate() {
+            let growth = crate::developmental_decision::growth_fraction(organism, &simulation.environment);
+            writeln!(file, "#{index} id={} stage={:?} growth={:.6} energy={:.6} stress={:.6} units={} bonds={} components={} stored={}",
+                organism.id, organism.development_stage, growth, organism.usable_energy, organism.stress,
+                organism.structure.units.len(), organism.structure.bonds.len(),
+                organism.structure.connected_components().len(), organism.stored_material.physical_count())?;
+        }
+        Ok(())
     }
 
     fn write_event(&mut self, event: Value) -> std::io::Result<()> {
@@ -455,4 +541,14 @@ fn bond_json_for_transformation(structure: &Value, transformation_bond: &Value) 
                     && candidate.get("endpoint_b") == Some(endpoint_a)
         })
         .cloned()
+}
+
+fn update_min_max(min: &mut Option<f64>, max: &mut Option<f64>, value: Option<f64>) {
+    let Some(value) = value.filter(|v| v.is_finite()) else { return; };
+    *min = Some(min.map_or(value, |current| current.min(value)));
+    *max = Some(max.map_or(value, |current| current.max(value)));
+}
+
+fn write_range(file: &mut File, name: &str, min: Option<f64>, max: Option<f64>) -> std::io::Result<()> {
+    writeln!(file, "{name}: {:?} .. {:?}", min, max)
 }
