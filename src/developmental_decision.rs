@@ -30,6 +30,16 @@ pub(crate) fn context<'a>(
         return None;
     }
     let (seed_mass, seed_length) = seed_reference;
+    let current_realization = organism
+        .developmental_realization_cached(&environment.catalog)
+        .unwrap_or_else(
+            || crate::developmental_blueprint::DevelopmentalRealization {
+                material: None,
+                density: None,
+                connectivity: None,
+                overall: 0.0,
+            },
+        );
     let blueprint = &organism.genome.developmental_blueprint;
     let origin = (
         organism.developmental_origin.x,
@@ -41,16 +51,6 @@ pub(crate) fn context<'a>(
         seed_mass,
         seed_length,
     );
-    let current_realization = organism
-        .developmental_realization_cached(&environment.catalog)
-        .unwrap_or_else(
-            || crate::developmental_blueprint::DevelopmentalRealization {
-                material: None,
-                density: None,
-                connectivity: None,
-                overall: 0.0,
-            },
-        );
     Some(DevelopmentalContext {
         blueprint,
         origin,
