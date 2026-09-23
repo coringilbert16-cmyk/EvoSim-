@@ -486,15 +486,7 @@ impl Simulation {
             growth_fractions.push(growth_fraction);
             Self::update_development_stage(organism, growth_fraction);
             organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
-            let perception_key = (
-                self.environment.revision,
-                organism.position_revision,
-                organism.usable_energy.to_bits(),
-            );
-            if organism.calculation_cache.perception != Some(perception_key) {
-                Self::update_resource_perception(organism, &self.environment);
-                organism.calculation_cache.perception = Some(perception_key);
-            }
+            crate::harmonics::update_organism_harmonics(organism, &self.environment);
             Self::update_memory_from_sources(organism, &self.environment);
             if matches!(organism.development_stage, DevelopmentStage::Adult)
                 && organism.reproductive_construction.is_none()
