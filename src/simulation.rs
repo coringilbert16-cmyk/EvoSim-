@@ -10,9 +10,7 @@ use crate::decision::{
 };
 use crate::decision_runtime::{select_action, ActionCandidate, DecisionContext};
 use crate::energy_ledger::EnergyLedgerAuthority;
-use crate::environment::{
-    apply_vents, ActiveMaterialField, Vent, DEFAULT_CELL_SIZE, DEFAULT_DIFFUSION_FRACTION,
-};
+use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
 use crate::genome::initial_genome;
 use crate::juvenile::realize_initial;
 use crate::state::{
@@ -48,35 +46,11 @@ impl Simulation {
         let height = 1000.0;
         let mut field = ActiveMaterialField::new(width, height, DEFAULT_CELL_SIZE);
         crate::environmental_materials::seed_initial_landscape(&mut field);
-        let vents = vec![
-            Vent {
-                x: 250.0,
-                y: 250.0,
-                emission_amount: 50.0,
-                emission_interval: 20,
-                emission_timer: 0,
-            },
-            Vent {
-                x: 750.0,
-                y: 300.0,
-                emission_amount: 50.0,
-                emission_interval: 30,
-                emission_timer: 0,
-            },
-            Vent {
-                x: 520.0,
-                y: 550.0,
-                emission_amount: 50.0,
-                emission_interval: 25,
-                emission_timer: 0,
-            },
-        ];
         Environment {
             width,
             height,
             catalog,
             field,
-            vents,
         }
     }
     pub(crate) fn create_initial_organism() -> Organism {
@@ -120,17 +94,7 @@ impl Simulation {
             reproductive_construction: None,
         }
     }
-    pub(crate) fn step_environment(&mut self) {
-        apply_vents(
-            &mut self.environment.field,
-            &self.environment.catalog,
-            &mut self.environment.vents,
-            &mut self.rng,
-        );
-        self.environment
-            .field
-            .diffuse_step(DEFAULT_DIFFUSION_FRACTION);
-    }
+    pub(crate) fn step_environment(&mut self) {}
     fn growth_fraction(organism: &Organism, environment: &Environment) -> f64 {
         organism
             .genome
