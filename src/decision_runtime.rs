@@ -146,8 +146,7 @@ pub fn select_action_with_developmental_scores(
         }
         scored.push((
             index,
-            need_pressure(candidate.action, context.needs)
-                + history_adjustment(history, candidate),
+            need_pressure(candidate.action, context.needs) + history_adjustment(history, candidate),
             developmental_scores
                 .get(index)
                 .copied()
