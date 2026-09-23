@@ -551,8 +551,7 @@ impl DiagnosticsRecorder {
         for (index, organism) in simulation.organisms.iter_mut().enumerate() {
             let growth =
                 crate::developmental_decision::growth_fraction(organism, &simulation.environment);
-            let stage =
-                serde_json::to_value(&organism.development_stage).unwrap_or(Value::Null);
+            let stage = serde_json::to_value(&organism.development_stage).unwrap_or(Value::Null);
             writeln!(
                 file,
                 "#{index} id={} stage={} growth={:.6} energy={:.6} stress={:.6} units={} bonds={} components={} stored={}",
