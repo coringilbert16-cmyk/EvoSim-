@@ -446,6 +446,7 @@ impl Simulation {
             growth_fractions.push(growth_fraction);
             Self::update_development_stage(organism, growth_fraction);
             organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
+            crate::harmonics::update_organism_harmonics(organism, &self.environment);
             Self::update_resource_perception(organism, &self.environment);
             Self::update_memory_from_sources(organism, &self.environment);
             if matches!(organism.development_stage, DevelopmentStage::Adult)
