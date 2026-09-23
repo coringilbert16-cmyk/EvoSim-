@@ -453,7 +453,6 @@ mod tests {
                 1000.0,
                 crate::environment::DEFAULT_CELL_SIZE,
             ),
-            vents: Vec::new(),
         };
         let candidates = stress_break_candidate_indices(&organism, &environment);
         assert!(!candidates.is_empty());
