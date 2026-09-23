@@ -233,29 +233,19 @@ impl Simulation {
         let relevant = |action: ActionKind| {
             eligibility.permits(action) && needs.any_for(action.relevant_needs())
         };
-        if relevant(ActionKind::Break) {
-            candidates.extend(
-                executable_breaks
-                    .iter()
-                    .copied()
-                    .map(|index| ActionCandidate {
-                        action: ActionKind::Break,
-                        context_key: Some(format!("bond:{index}")),
-                    }),
-            );
-        }
-        if relevant(ActionKind::Combine) {
-            candidates.push(ActionCandidate {
-                action: ActionKind::Combine,
-                context_key: None,
-            });
-        }
+        // Candidate order is the deterministic tie-break order for actions with
+        // equal need pressure. Movement comes first so a stationary organism is
+        // not systematically diverted into structural transformation when
+        // both actions address the same need.
         if relevant(ActionKind::Move) {
             candidates.push(ActionCandidate {
                 action: ActionKind::Move,
                 context_key: None,
             });
         }
+        // Acquisition is an interaction consequence of physical contact with
+        // material at the organism's current geometry. It is not a prescribed
+        // behavioral role.
         if relevant(ActionKind::Acquire) {
             candidates.extend(
                 Self::acquisition_targets(organism, environment)
@@ -266,11 +256,28 @@ impl Simulation {
                     }),
             );
         }
+        if relevant(ActionKind::Combine) {
+            candidates.push(ActionCandidate {
+                action: ActionKind::Combine,
+                context_key: None,
+            });
+        }
         if relevant(ActionKind::Expel) {
             candidates.push(ActionCandidate {
                 action: ActionKind::Expel,
                 context_key: None,
             });
+        }
+        if relevant(ActionKind::Break) {
+            candidates.extend(
+                executable_breaks
+                    .iter()
+                    .copied()
+                    .map(|index| ActionCandidate {
+                        action: ActionKind::Break,
+                        context_key: Some(format!("bond:{index}")),
+                    }),
+            );
         }
         candidates
     }
