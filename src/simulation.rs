@@ -5,7 +5,8 @@ use std::collections::HashSet;
 #[cfg(test)]
 mod simulation_material_tests;
 
-use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
+use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters, OutcomeKind};
+use crate::transformation::break_candidate_is_executable;
 use crate::decision_runtime::{select_action, ActionCandidate, DecisionContext};
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::environment::{
@@ -230,7 +231,7 @@ impl Simulation {
                         .as_ref()
                         .is_some_and(|construction| construction.needs_space))
                 && organism.structure.bonds.iter().any(|bond| {
-                    crate::transformation::break_candidate_is_executable(
+                    break_candidate_is_executable(
                         organism,
                         environment,
                         *bond,
@@ -527,7 +528,7 @@ impl Simulation {
                         crate::decision_runtime::record_outcome(
                             &mut organism.decision_history,
                             &selected,
-                            crate::decision::OutcomeKind::Neutral,
+                            OutcomeKind::Neutral,
                         );
                     }
                     ActionKind::Combine => {
