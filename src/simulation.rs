@@ -460,44 +460,44 @@ impl Simulation {
                 ) {
                     match selected.action {
                         ActionKind::Combine => {
-                        let developmental_blueprint =
-                            organisms[index].genome.developmental_blueprint.clone();
-                        let developmental = developmental.as_ref().map(|context| {
-                            (
-                                &developmental_blueprint,
-                                context.origin,
-                                context.orientation,
-                                context.preferred_length,
+                            let developmental_blueprint =
+                                organisms[index].genome.developmental_blueprint.clone();
+                            let developmental = developmental.as_ref().map(|context| {
+                                (
+                                    &developmental_blueprint,
+                                    context.origin,
+                                    context.orientation,
+                                    context.preferred_length,
+                                )
+                            });
+                            let combined = crate::combine_runtime::try_combine(
+                                &mut organisms[index],
+                                environment,
+                                &mut compatibility_cache,
+                                &mut self.energy_ledger,
+                                developmental,
                             )
-                        });
-                        let combined = crate::combine_runtime::try_combine(
-                            &mut organisms[index],
-                            environment,
-                            &mut compatibility_cache,
-                            &mut self.energy_ledger,
-                            developmental,
-                        )
-                        .is_some();
-                        crate::decision_runtime::record_outcome(
-                            &mut organisms[index].decision_history,
-                            &selected,
-                            if combined {
-                                crate::decision::OutcomeKind::Neutral
-                            } else {
-                                crate::decision::OutcomeKind::Harmful
-                            },
-                        );
-                    }
-                    ActionKind::Break => {
-                        if let Some(transformation) = Self::try_start_transformation(
-                            &mut organisms[index],
-                            &environment.catalog,
-                            &mut self.next_transformation_id,
-                            &selected,
-                        ) {
-                            self.active_transformations.push(transformation);
+                            .is_some();
+                            crate::decision_runtime::record_outcome(
+                                &mut organisms[index].decision_history,
+                                &selected,
+                                if combined {
+                                    crate::decision::OutcomeKind::Neutral
+                                } else {
+                                    crate::decision::OutcomeKind::Harmful
+                                },
+                            );
                         }
-                    }
+                        ActionKind::Break => {
+                            if let Some(transformation) = Self::try_start_transformation(
+                                &mut organisms[index],
+                                &environment.catalog,
+                                &mut self.next_transformation_id,
+                                &selected,
+                            ) {
+                                self.active_transformations.push(transformation);
+                            }
+                        }
                         ActionKind::Expel => {
                             let expelled = selected
                                 .context_key
