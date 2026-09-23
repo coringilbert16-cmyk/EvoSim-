@@ -492,11 +492,9 @@ mod tests {
     }
 
     #[test]
-    fn movement_direction_uses_existing_memory_and_resource_sense() {
+    fn movement_direction_uses_existing_memory() {
         let simulation = Simulation::new(7, 20.0);
         let mut organism = simulation.organisms[0].clone();
-        organism.resource_sense.direction_x = 1.0;
-        organism.resource_sense.direction_y = 0.0;
         organism.memory.push(crate::state::MemoryPoint {
             x: organism.occupied_cells[0].x,
             y: organism.occupied_cells[0].y - 20.0,
@@ -506,7 +504,7 @@ mod tests {
         });
         let mut rng = simulation.rng.clone();
         let (x, y) = movement_direction(&organism, &mut rng);
-        assert!(x > 0.0);
+        assert!(x.abs() < f64::EPSILON);
         assert!(y < 0.0);
     }
 
