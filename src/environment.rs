@@ -1,18 +1,15 @@
 #![expect(dead_code, reason = "Staged API retained for subsystem integration")]
-//! Environment subsystem: active ecological material field and environmental vents.
+//! Environment subsystem: the persistent active ecological material field.
 //!
-//! The active field is the complete environmental material layer. Vents are
-//! independent sources that inject valid materials directly into that field.
+//! The active field is the complete environmental material layer. It remains
+//! stable until an organism or an explicit environmental event changes it.
 
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-use crate::material_transfer::take_whole_unstructured;
 use crate::physical_material::PhysicalMaterial;
 use crate::resources::{merge_parts, Material};
 
 pub const DEFAULT_CELL_SIZE: f64 = 25.0;
-pub const DEFAULT_DIFFUSION_FRACTION: f64 = 0.05;
 const MATERIAL_EPSILON: f64 = 1e-9;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -311,51 +308,6 @@ impl ActiveMaterialField {
         self.deposit_physical_at_index(index, material)
     }
 
-    /// Remove a physically existing material object without reducing it to a
-    /// composition-only value. This legacy transfer primitive is retained only
-    /// for migration; physical availability is now determined by containment.
-    pub fn diffuse_step(&mut self, fraction: f64) {
-        let fraction = fraction.clamp(0.0, 1.0);
-        if fraction <= 0.0 {
-            return;
-        }
-        let n = self.cells.len();
-        let mut outgoing: Vec<Vec<Material>> = (0..n).map(|_| Vec::new()).collect();
-        for (i, outgoing_cell) in outgoing.iter_mut().enumerate() {
-            if self.neighbor_indices(i).is_empty() {
-                continue;
-            }
-            let material_count = self.cells[i].materials.len();
-            for material_index in 0..material_count {
-                if self.cells[i].materials[material_index].has_internal_structure() {
-                    continue;
-                }
-                let total = self.cells[i].materials[material_index].total_amount();
-                if total <= MATERIAL_EPSILON {
-                    continue;
-                }
-                let outflow = (total * fraction).floor() as usize;
-                if outflow >= 1 {
-                    if let Some(piece) = take_whole_unstructured(
-                        &mut self.cells[i].materials[material_index],
-                        outflow,
-                    ) {
-                        outgoing_cell.push(piece);
-                    }
-                }
-            }
-            self.cells[i]
-                .materials
-                .retain(|material| !material.is_empty());
-        }
-        for (i, outgoing_cell) in outgoing.iter_mut().enumerate() {
-            let neighbors = self.neighbor_indices(i);
-            for material in outgoing_cell.drain(..) {
-                distribute_evenly(self, material, &neighbors);
-            }
-        }
-    }
-
     pub fn total_material(&self) -> Vec<(String, f64)> {
         let mut totals: Vec<(String, f64)> = Vec::new();
         for cell in &self.cells {
@@ -401,76 +353,6 @@ fn distribute_evenly(field: &mut ActiveMaterialField, mut mat: Material, neighbo
         if !piece.is_empty() {
             field.deposit_at_index(neighbor_index, piece);
         }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Vent {
-    pub x: f64,
-    pub y: f64,
-    pub emission_amount: f64,
-    pub emission_interval: u64,
-    pub emission_timer: u64,
-}
-
-fn scale_material(material: &Material, amount: f64) -> Material {
-    let base_amount = material.total_amount();
-    if base_amount <= f64::EPSILON {
-        return material.clone();
-    }
-    let scale = amount / base_amount;
-    Material {
-        parts: material
-            .parts
-            .iter()
-            .map(|(name, part_amount)| (name.clone(), part_amount * scale))
-            .collect(),
-        internal_bonds: material.internal_bonds.clone(),
-    }
-}
-
-pub fn valid_vent_materials(catalog: &[crate::resources::BaseResource]) -> Vec<Material> {
-    let mut materials = catalog
-        .iter()
-        .map(|resource| Material::free_base(resource.name.clone(), 1.0))
-        .filter(Material::is_valid)
-        .collect::<Vec<_>>();
-    materials.extend(
-        crate::environmental_materials::seed_compounds()
-            .into_iter()
-            .filter(Material::is_valid),
-    );
-    materials
-}
-
-pub fn apply_vents<R: Rng + ?Sized>(
-    field: &mut ActiveMaterialField,
-    catalog: &[crate::resources::BaseResource],
-    vents: &mut [Vent],
-    rng: &mut R,
-) {
-    let available = valid_vent_materials(catalog);
-    if available.is_empty() {
-        return;
-    }
-
-    for vent in vents.iter_mut() {
-        if vent.emission_timer > 0 {
-            vent.emission_timer -= 1;
-            continue;
-        }
-        vent.emission_timer = vent.emission_interval;
-
-        let Some(field_index) = field.index_for_position(vent.x, vent.y) else {
-            continue;
-        };
-        let template = &available[rng.gen_range(0..available.len())];
-        if vent.emission_amount <= 0.0 {
-            continue;
-        }
-        let fluctuation = rng.gen_range(0.5..1.5);
-        let amount = vent.emission_amount * fluctuation;
-        field.deposit_at_index(field_index, scale_material(template, amount));
     }
 }
 
