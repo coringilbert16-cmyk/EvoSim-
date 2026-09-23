@@ -157,6 +157,7 @@ fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
         reproductive_construction: None,
         structure: construction.developing_structure.clone(),
         structure_revision: 0,
+        position_revision: 0,
         cached_cavity_revision: None,
         cached_cavity: None,
         cached_developmental_revision: None,
