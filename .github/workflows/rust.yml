@@ -1,6 +1,7 @@
 name: Rust
 
 # CI trigger: validate the current main branch after the latest fixes.
+# Formatting gate verification on the current main tree.
 
 on:
   push:
