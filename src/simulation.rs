@@ -477,6 +477,7 @@ impl Simulation {
                     &organisms[index].decision_history,
                     &candidates,
                     &developmental_scores,
+                    &mut self.rng,
                 ) else {
                     continue;
                 };
