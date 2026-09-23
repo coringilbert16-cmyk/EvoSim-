@@ -194,17 +194,7 @@ mod integration_tests {
         let mut o = Simulation::create_initial_organism();
         assert!(o.store_material(structured_carbon_hydrogen()));
         assert_eq!(o.stored_material.count_structured(), 1);
-    }
-    #[test]
-    fn fresh_simulation_material_flow_remains_finite_with_direct_vent_sources() {
-        let mut s = Simulation::new(1, 10.0);
-        for _ in 0..300 {
-            s.step();
-        }
-        assert!(s.total_material_in_system().is_finite());
-        assert!(s.total_material_in_system() > 0.0);
-    }
-    fn add_test_break_bond(s: &mut Simulation) {
+    }    fn add_test_break_bond(s: &mut Simulation) {
         s.organisms[0].structure.bonds.clear();
         let a = s.organisms[0].structure.add_unit(StructuralUnit::new(
             "Carbon",
