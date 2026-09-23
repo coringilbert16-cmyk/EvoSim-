@@ -174,6 +174,7 @@ impl Simulation {
         organism: &Organism,
         environment: &Environment,
         needs: CurrentNeeds,
+        has_executable_break: bool,
     ) -> ActionEligibility {
         let can_build_from_storage =
             !organism.structure.units.is_empty() && !organism.stored_material.is_empty();
@@ -192,43 +193,51 @@ impl Simulation {
                         .reproductive_construction
                         .as_ref()
                         .is_some_and(|construction| construction.needs_space))
-                && organism
-                    .structure
-                    .bonds
-                    .iter()
-                    .any(|bond| break_candidate_is_executable(organism, environment, *bond)),
+                && has_executable_break,
             can_expel: false,
         }
+    }
+    fn executable_break_candidates(
+        organism: &Organism,
+        environment: &Environment,
+        needs: CurrentNeeds,
+    ) -> Vec<usize> {
+        let break_allowed = organism.active_transformation_id.is_none()
+            && (organism.reproductive_construction.is_none()
+                || needs.survival > 0.0
+                || needs.development > 0.0
+                || organism
+                    .reproductive_construction
+                    .as_ref()
+                    .is_some_and(|construction| construction.needs_space));
+        if !break_allowed {
+            return Vec::new();
+        }
+        organism
+            .structure
+            .bonds
+            .iter()
+            .enumerate()
+            .filter(|(_, bond)| break_candidate_is_executable(organism, environment, **bond))
+            .map(|(index, _)| index)
+            .collect()
     }
     fn decision_candidates(
         organism: &Organism,
         environment: &Environment,
         needs: CurrentNeeds,
         eligibility: ActionEligibility,
+        executable_breaks: &[usize],
     ) -> Vec<ActionCandidate> {
         let mut candidates = Vec::new();
         let relevant = |action: ActionKind| {
             eligibility.permits(action) && needs.any_for(action.relevant_needs())
         };
         if relevant(ActionKind::Break) {
-            candidates.extend(
-                organism
-                    .structure
-                    .bonds
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, bond)| {
-                        crate::transformation::break_candidate_is_executable(
-                            organism,
-                            environment,
-                            **bond,
-                        )
-                    })
-                    .map(|(index, _)| ActionCandidate {
-                        action: ActionKind::Break,
-                        context_key: Some(format!("bond:{index}")),
-                    }),
-            );
+            candidates.extend(executable_breaks.iter().copied().map(|index| ActionCandidate {
+                action: ActionKind::Break,
+                context_key: Some(format!("bond:{index}")),
+            }));
         }
         if relevant(ActionKind::Combine) {
             candidates.push(ActionCandidate {
@@ -462,10 +471,22 @@ impl Simulation {
                     growth_fractions[index],
                     decision_parameters,
                 );
-                let eligibility = Self::action_eligibility(&organisms[index], environment, needs);
+                let executable_breaks =
+                    Self::executable_break_candidates(&organisms[index], environment, needs);
+                let eligibility = Self::action_eligibility(
+                    &organisms[index],
+                    environment,
+                    needs,
+                    !executable_breaks.is_empty(),
+                );
                 let context = DecisionContext { needs, eligibility };
-                let candidates =
-                    Self::decision_candidates(&organisms[index], environment, needs, eligibility);
+                let candidates = Self::decision_candidates(
+                    &organisms[index],
+                    environment,
+                    needs,
+                    eligibility,
+                    &executable_breaks,
+                );
                 let Some(selected) =
                     select_action(context, &organisms[index].decision_history, &candidates)
                 else {
