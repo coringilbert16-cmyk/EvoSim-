@@ -226,9 +226,7 @@ impl DiagnosticsRecorder {
         for transformation in after.transformations.values() {
             if !before.transformations.contains_key(&transformation.id) {
                 self.summary.transformation_starts += 1;
-                self.summary
-                    .first_transformation_tick
-                    .get_or_insert(after.tick);
+                self.summary.first_transformation_tick.get_or_insert(after.tick);
                 self.summary.last_transformation_tick = Some(after.tick);
                 let kind = serde_json::to_string(&transformation.kind)
                     .unwrap_or_else(|_| "unknown".to_string());
@@ -344,9 +342,7 @@ impl DiagnosticsRecorder {
             let new = after.organisms.get(&id).map(|o| o.stage.clone());
             if old != new {
                 self.summary.lifecycle_changes += 1;
-                self.summary
-                    .first_lifecycle_change_tick
-                    .get_or_insert(after.tick);
+                self.summary.first_lifecycle_change_tick.get_or_insert(after.tick);
                 self.summary.last_lifecycle_change_tick = Some(after.tick);
                 self.write_event(json!({
                     "event": "lifecycle_change",
@@ -366,11 +362,7 @@ impl DiagnosticsRecorder {
         Ok(())
     }
 
-    fn write_snapshot(
-        &mut self,
-        simulation: &mut Simulation,
-        reason: &str,
-    ) -> std::io::Result<()> {
+    fn write_snapshot(&mut self, simulation: &mut Simulation, reason: &str) -> std::io::Result<()> {
         let snapshot = self.capture(simulation);
         self.summary.max_active_transformations = self
             .summary
@@ -429,9 +421,11 @@ impl DiagnosticsRecorder {
             "field_total_mass": total_field_mass,
             "stored_total_mass": total_stored_mass,
             "energy_ledger": simulation.energy_ledger,
-            "organisms": snapshot.organisms.into_iter().map(|(id, organism)| {
-                (id, self.state_json(&organism))
-            }).collect::<HashMap<_, _>>()
+            "organisms": snapshot
+                .organisms
+                .into_iter()
+                .map(|(id, organism)| (id, self.state_json(&organism)))
+                .collect::<HashMap<_, _>>()
         }))
     }
 
@@ -549,8 +543,13 @@ impl DiagnosticsRecorder {
             writeln!(
                 file,
                 "#{index} id={} stage={:?} growth={:.6} energy={:.6} stress={:.6} units={} bonds={} components={} stored={}",
-                organism.id, organism.development_stage, growth, organism.usable_energy, organism.stress,
-                organism.structure.units.len(), organism.structure.bonds.len(),
+                organism.id,
+                organism.development_stage,
+                growth,
+                organism.usable_energy,
+                organism.stress,
+                organism.structure.units.len(),
+                organism.structure.bonds.len(),
                 organism.structure.connected_components().len(),
                 organism.stored_material.physical_count()
             )?;
@@ -578,10 +577,7 @@ fn scalar_delta(before: Option<f64>, after: Option<f64>) -> Option<f64> {
     }
 }
 
-fn structural_delta(
-    before: Option<&OrganismSnapshot>,
-    after: Option<&OrganismSnapshot>,
-) -> Value {
+fn structural_delta(before: Option<&OrganismSnapshot>, after: Option<&OrganismSnapshot>) -> Value {
     json!({
         "unit_count": scalar_usize_delta(
             before.map(|o| o.unit_count),
@@ -616,10 +612,7 @@ fn scalar_usize_delta(before: Option<usize>, after: Option<usize>) -> Option<i64
     }
 }
 
-fn bond_json_for_transformation(
-    structure: &Value,
-    transformation_bond: &Value,
-) -> Option<Value> {
+fn bond_json_for_transformation(structure: &Value, transformation_bond: &Value) -> Option<Value> {
     let bond = transformation_bond.as_object()?;
     let endpoint_a = bond.get("endpoint_a")?;
     let endpoint_b = bond.get("endpoint_b")?;
@@ -636,11 +629,7 @@ fn bond_json_for_transformation(
         .cloned()
 }
 
-fn update_min_max(
-    min: &mut Option<f64>,
-    max: &mut Option<f64>,
-    value: Option<f64>,
-) {
+fn update_min_max(min: &mut Option<f64>, max: &mut Option<f64>, value: Option<f64>) {
     let Some(value) = value.filter(|v| v.is_finite()) else {
         return;
     };
