@@ -10,8 +10,8 @@ use crate::structure::{Bond, OrganismStructure};
 use parking_lot::Mutex;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 #[derive(Clone)]
 pub(crate) struct AppState {
     pub(crate) simulation: Arc<Mutex<Simulation>>,
