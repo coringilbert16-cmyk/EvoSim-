@@ -108,7 +108,7 @@ impl Simulation {
             .overall
             .clamp(0.0, 1.0)
     }
-    fn update_development_stage(organism: &mut Organism, environment: &Environment) {
+    fn update_development_stage(organism: &mut Organism, growth_fraction: f64) {
         match organism.development_stage {
             DevelopmentStage::Offspring => {
                 if organism.reproductive_construction.is_none() {
@@ -116,7 +116,7 @@ impl Simulation {
                 }
             }
             DevelopmentStage::Juvenile => {
-                if Self::growth_fraction(organism, environment) >= ADULTHOOD_GROWTH_FRACTION {
+                if growth_fraction >= ADULTHOOD_GROWTH_FRACTION {
                     organism.development_stage = DevelopmentStage::Adult
                 }
             }
@@ -125,14 +125,14 @@ impl Simulation {
     }
     fn current_needs(
         organism: &Organism,
-        environment: &Environment,
+        growth_fraction: f64,
         parameters: DecisionParameters,
     ) -> CurrentNeeds {
         let survival_reserve = parameters.survival_reserve.max(f64::EPSILON);
         let reserve_pressure = (1.0 - organism.usable_energy / survival_reserve).clamp(0.0, 1.0);
         let survival = (reserve_pressure * (1.0 + organism.stress.max(0.0))).clamp(0.0, 1.0);
         let development = if matches!(organism.development_stage, DevelopmentStage::Juvenile) {
-            (1.0 - Self::growth_fraction(organism, environment).clamp(0.0, 1.0)).max(0.0)
+            (1.0 - growth_fraction.clamp(0.0, 1.0)).max(0.0)
         } else {
             0.0
         };
@@ -414,8 +414,13 @@ impl Simulation {
             }
         }
         let decision_parameters = self.decision_parameters;
+        let juvenile_scale_reference = crate::juvenile::confirmed_seed_scale_reference(&self.environment.catalog)
+            .expect("confirmed seed scale reference must be valid");
+        let mut growth_fractions = Vec::with_capacity(self.organisms.len());
         for organism in &mut self.organisms {
-            Self::update_development_stage(organism, &self.environment);
+            let growth_fraction = Self::growth_fraction(organism, &self.environment);
+            growth_fractions.push(growth_fraction);
+            Self::update_development_stage(organism, growth_fraction);
             organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
             Self::update_resource_perception(organism, &self.environment);
             Self::update_memory_from_sources(organism, &self.environment);
@@ -445,8 +450,11 @@ impl Simulation {
                 {
                     continue;
                 }
-                let needs =
-                    Self::current_needs(&organisms[index], environment, decision_parameters);
+                let needs = Self::current_needs(
+                    &organisms[index],
+                    growth_fractions[index],
+                    decision_parameters,
+                );
                 let eligibility = Self::action_eligibility(&organisms[index], environment, needs);
                 let context = DecisionContext { needs, eligibility };
                 let candidates =
@@ -489,11 +497,7 @@ impl Simulation {
                             organisms[index].development_stage,
                             DevelopmentStage::Juvenile
                         ) {
-                            let (seed_mass, seed_length) =
-                                crate::juvenile::confirmed_seed_scale_reference(
-                                    &environment.catalog,
-                                )
-                                .expect("confirmed seed scale reference must be valid");
+                            let (seed_mass, seed_length) = juvenile_scale_reference;
                             let preferred_length = blueprint.preferred_developmental_length(
                                 organisms[index].genome.adult_mass(),
                                 seed_mass,
