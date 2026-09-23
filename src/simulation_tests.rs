@@ -310,6 +310,11 @@ mod integration_tests {
     fn break_action_starts_a_transformation_before_resolution() {
         let mut s = Simulation::new(7, 10.0);
         add_test_break_bond(&mut s);
+        s.organisms[0].decision_history.record(
+            ActionKind::Break,
+            Some("bond:0".into()),
+            OutcomeKind::Beneficial,
+        );
         s.organisms[0].usable_energy = 0.0;
         s.step();
         assert_eq!(s.organisms[0].structure.bonds.len(), 1);
@@ -319,6 +324,11 @@ mod integration_tests {
     fn break_resolution_changes_state_on_expected_tick() {
         let mut s = Simulation::new(7, 10.0);
         add_test_break_bond(&mut s);
+        s.organisms[0].decision_history.record(
+            ActionKind::Break,
+            Some("bond:0".into()),
+            OutcomeKind::Beneficial,
+        );
         s.organisms[0].usable_energy = 0.0;
         s.step();
         s.step();
