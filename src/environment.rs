@@ -465,8 +465,11 @@ pub fn apply_vents<R: Rng + ?Sized>(
             continue;
         };
         let template = &available[rng.gen_range(0..available.len())];
+        if vent.emission_amount <= 0.0 {
+            continue;
+        }
         let fluctuation = rng.gen_range(0.5..1.5);
-        let amount = (vent.emission_amount.max(0.0) * fluctuation).max(f64::EPSILON);
+        let amount = vent.emission_amount * fluctuation;
         field.deposit_at_index(field_index, scale_material(template, amount));
     }
 }
