@@ -237,7 +237,6 @@ pub(crate) struct Environment {
     pub(crate) height: f64,
     pub(crate) catalog: Vec<BaseResource>,
     pub(crate) field: ActiveMaterialField,
-    pub(crate) vents: Vec<Vent>,
 }
 pub(crate) struct Simulation {
     pub(crate) tick: u64,
