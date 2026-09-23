@@ -6,8 +6,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::physical_material::PhysicalMaterial;
 use crate::material_transfer::take_whole_unstructured;
+use crate::physical_material::PhysicalMaterial;
 use crate::resources::{merge_parts, Material};
 
 pub const DEFAULT_CELL_SIZE: f64 = 25.0;
