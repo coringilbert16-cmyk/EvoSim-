@@ -49,7 +49,6 @@ pub(crate) fn context<'a>(
         preferred_length,
     );
     Some(DevelopmentalContext {
-
         blueprint,
         origin,
         orientation,
