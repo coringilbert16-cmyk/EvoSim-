@@ -100,6 +100,3 @@ fn cells_within_radius_handles_grid_edges_and_invalid_input() {
     assert!(field.cells_within_radius(0.0, 0.0, -1.0).is_empty());
 }
 
-
-
-
