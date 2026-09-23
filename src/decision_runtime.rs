@@ -57,7 +57,10 @@ fn cheap_decision_score(
     if approve(context, candidate.action) != DecisionResult::Approve {
         return None;
     }
-    Some(need_pressure(candidate.action, context.needs) + history_adjustment(history, candidate))
+    Some(
+        need_pressure(candidate.action, context.needs)
+            + history_adjustment(history, candidate),
+    )
 }
 
 /// Identify candidates that genuinely require a physical developmental
