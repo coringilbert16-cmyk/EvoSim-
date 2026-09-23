@@ -551,15 +551,13 @@ impl Simulation {
                             original.mark_position_changed();
                         }
                     }
-                    crate::decision_runtime::record_outcome(
-                        &mut organism.decision_history,
-                        &move_candidate,
-                        if moved {
-                            crate::decision::OutcomeKind::Neutral
-                        } else {
-                            crate::decision::OutcomeKind::Harmful
-                        },
-                    );
+                    if moved {
+                        crate::decision_runtime::record_outcome(
+                            &mut organism.decision_history,
+                            &move_candidate,
+                            crate::decision::OutcomeKind::Beneficial,
+                        );
+                    }
                 }
             }
         }
