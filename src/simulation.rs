@@ -425,8 +425,9 @@ impl Simulation {
             }
         }
         let decision_parameters = self.decision_parameters;
-        let juvenile_scale_reference = crate::juvenile::confirmed_seed_scale_reference(&self.environment.catalog)
-            .expect("confirmed seed scale reference must be valid");
+        let juvenile_scale_reference =
+            crate::juvenile::confirmed_seed_scale_reference(&self.environment.catalog)
+                .expect("confirmed seed scale reference must be valid");
         let mut growth_fractions = Vec::with_capacity(self.organisms.len());
         for organism in &mut self.organisms {
             let growth_fraction = if matches!(
