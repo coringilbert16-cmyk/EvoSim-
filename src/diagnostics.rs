@@ -452,4 +452,3 @@ fn bond_json_for_transformation(structure: &Value, transformation_bond: &Value) 
         })
         .cloned()
 }
-
