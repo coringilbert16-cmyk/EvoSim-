@@ -132,8 +132,7 @@ pub(crate) fn resolve_stress_break(
     .into_iter()
     .find(|c| {
         c.endpoint_a == target.endpoint_a.location && c.endpoint_b == target.endpoint_b.location
-    })
-    else {
+    }) else {
         return false;
     };
     let formation_interaction = crate::combine::experimental_interaction(
