@@ -132,7 +132,8 @@ pub(crate) fn resolve_stress_break(
     .into_iter()
     .find(|c| {
         c.endpoint_a == target.endpoint_a.location && c.endpoint_b == target.endpoint_b.location
-    }) else {
+    })
+    else {
         return false;
     };
     let formation_interaction = crate::combine::experimental_interaction(
@@ -168,10 +169,20 @@ pub(crate) fn break_candidate_is_executable(
     let Some(ib) = organism.structure.unit_index(target.endpoint_b.constituent_id) else {
         return false;
     };
-    let Some(a) = organism.structure.units.get(ia).and_then(|u| u.properties(&environment.catalog)) else {
+    let Some(a) = organism
+        .structure
+        .units
+        .get(ia)
+        .and_then(|u| u.properties(&environment.catalog))
+    else {
         return false;
     };
-    let Some(b) = organism.structure.units.get(ib).and_then(|u| u.properties(&environment.catalog)) else {
+    let Some(b) = organism
+        .structure
+        .units
+        .get(ib)
+        .and_then(|u| u.properties(&environment.catalog))
+    else {
         return false;
     };
     let work = break_work_cost(a, b, crate::math::complexity(2.0));
