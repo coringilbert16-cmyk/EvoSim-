@@ -198,6 +198,7 @@ pub fn known_outcome(
 mod tests {
     use super::*;
     use crate::decision::NeedKind;
+    use rand::SeedableRng;
 
     fn context() -> DecisionContext {
         DecisionContext {
