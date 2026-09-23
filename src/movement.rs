@@ -272,45 +272,39 @@ fn apply_push_plan(
     }
 
     if !plan.physical_materials.is_empty() {
-        let mut moves = Vec::with_capacity(plan.physical_materials.len());
+        let mut relocating = Vec::with_capacity(plan.physical_materials.len());
         for &(cell_index, material_index) in &plan.physical_materials {
-            let physical = environment.field.cells[cell_index]
+            let target_index = environment.field.cells[cell_index]
                 .physical_materials
                 .get(material_index)
-                .cloned();
-            if let Some(mut physical) = physical {
-                translate_physical(&mut physical, dx, dy);
-                let target_index = physical
-                    .placements
-                    .as_ref()
-                    .and_then(|placements| placements.first())
-                    .and_then(|placement| {
-                        environment
-                            .field
-                            .index_for_position(placement.x, placement.y)
-                    });
-                moves.push((cell_index, material_index, target_index, physical));
-            }
-        }
-
-        moves.sort_by_key(|(cell_index, material_index, _, _)| (*cell_index, std::cmp::Reverse(*material_index)));
-        for (cell_index, material_index, target_index, _) in &moves {
-            if *target_index != Some(*cell_index) {
-                environment.field.cells[*cell_index]
-                    .physical_materials
-                    .swap_remove(*material_index);
-            }
-        }
-
-        for (cell_index, material_index, target_index, physical) in moves {
+                .and_then(|physical| physical.placements.as_ref())
+                .and_then(|placements| placements.first())
+                .and_then(|placement| {
+                    environment
+                        .field
+                        .index_for_position(placement.x + dx, placement.y + dy)
+                });
             if target_index == Some(cell_index) {
-                if let Some(slot) = environment.field.cells[cell_index]
+                if let Some(physical) = environment.field.cells[cell_index]
                     .physical_materials
                     .get_mut(material_index)
                 {
-                    *slot = physical;
+                    translate_physical(physical, dx, dy);
                 }
-            } else if let Some(target_index) = target_index {
+            } else {
+                relocating.push((cell_index, material_index, target_index));
+            }
+        }
+
+        relocating.sort_by_key(|(cell_index, material_index, _)| {
+            (*cell_index, std::cmp::Reverse(*material_index))
+        });
+        for (cell_index, material_index, target_index) in relocating {
+            let mut physical = environment.field.cells[cell_index]
+                .physical_materials
+                .swap_remove(material_index);
+            translate_physical(&mut physical, dx, dy);
+            if let Some(target_index) = target_index {
                 environment.field.cells[target_index]
                     .physical_materials
                     .push(physical);
