@@ -471,7 +471,7 @@ impl Simulation {
                             {
                                 original.occupied_cells = trial.occupied_cells;
                                 original.structure = trial.structure;
-                                original.mark_structure_changed();
+                                original.mark_position_changed();
                             }
                         }
                         crate::decision_runtime::record_outcome(
