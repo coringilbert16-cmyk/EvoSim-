@@ -57,7 +57,6 @@ mod integration_tests {
     #[test]
     fn death_with_no_remaining_bonds_releases_realized_structure() {
         let mut s = Simulation::new(41, 10.0);
-        s.environment.vents.clear();
         let before_environment_amount = s.environment.field.total_amount();
         let organism = &mut s.organisms[0];
         organism.structure.bonds.clear();
@@ -104,7 +103,6 @@ mod integration_tests {
     // Containment is automatic; there is no organism-side acquisition action.
     fn contained_physical_material_becomes_storage_without_an_acquire_action() {
         let mut s = Simulation::new(21, 10.0);
-        s.environment.vents.clear();
         let organism = s.organisms[0].clone();
         let anchor = organism.structure.units[0].placement;
         let physical = PhysicalMaterial::realized(
@@ -127,7 +125,6 @@ mod integration_tests {
     #[test]
     fn a_composite_crossing_the_boundary_is_partitioned_at_constituent_scale() {
         let mut s = Simulation::new(23, 10.0);
-        s.environment.vents.clear();
         for cell in &mut s.environment.field.cells {
             cell.materials.clear();
             cell.physical_materials.clear();
