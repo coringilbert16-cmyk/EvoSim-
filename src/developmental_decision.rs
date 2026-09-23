@@ -160,7 +160,6 @@ pub(crate) fn developmental_action_scores(
                         .as_deref()
                         .and_then(|key| key.strip_prefix("bond:"))
                         .and_then(|index| index.parse::<usize>().ok())?;
-                    organism.structure.bonds.get(bond_index)?;
                     Some(
                         developmental.blueprint.realization_after_break_with_components(
                             &organism.structure,
