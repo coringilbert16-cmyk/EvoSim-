@@ -182,16 +182,69 @@ impl ActiveMaterialField {
         indices
     }
 
+    /// Return field cells whose spatial bounds intersect the supplied
+    /// axis-aligned bounds. Horizontal coordinates remain bounded; vertical
+    /// coordinates wrap continuously from top to bottom.
+    fn cells_intersecting_bounds(
+        &self,
+        min_x: f64,
+        max_x: f64,
+        min_y: f64,
+        max_y: f64,
+    ) -> Vec<usize> {
+        if !min_x.is_finite()
+            || !max_x.is_finite()
+            || !min_y.is_finite()
+            || !max_y.is_finite()
+            || min_x > max_x
+            || min_y > max_y
+        {
+            return Vec::new();
+        }
+
+        let min_col = ((min_x / self.cell_size).floor() as isize).max(0) as usize;
+        let max_col = ((max_x / self.cell_size).floor() as isize)
+            .min(self.width_cells.saturating_sub(1) as isize)
+            .max(0) as usize;
+        if min_col > max_col || self.width_cells == 0 || self.height_cells == 0 {
+            return Vec::new();
+        }
+
+        let row_start = (min_y / self.cell_size).floor() as isize;
+        let row_end = (max_y / self.cell_size).floor() as isize;
+        let row_count = row_end.saturating_sub(row_start).saturating_add(1) as usize;
+        let rows = if row_count >= self.height_cells {
+            (0..self.height_cells).collect()
+        } else {
+            (0..row_count)
+                .map(|offset| {
+                    (row_start + offset as isize).rem_euclid(self.height_cells as isize) as usize
+                })
+                .collect()
+        };
+
+        let mut indices = Vec::with_capacity(rows.len() * (max_col - min_col + 1));
+        for row in rows {
+            for col in min_col..=max_col {
+                indices.push(row * self.width_cells + col);
+            }
+        }
+        indices
+    }
+
     /// Remove the already-realized physical constituents whose placement points
-    /// are inside the organism's realized body geometry. The grid is only an
-    /// index: every field cell is examined for physical candidates, and a
-    /// composite may be partitioned at constituent boundaries.
+    /// are inside the organism's realized body geometry. The field grid is a
+    /// spatial index: only cells intersecting the body's bounds are examined,
+    /// while physical containment remains authoritative.
     pub(crate) fn take_contained_physical_materials(
         &mut self,
         body: &crate::organism_geometry::OrganismBodyGeometry,
     ) -> Vec<PhysicalMaterial> {
+        let candidate_indices =
+            self.cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y);
         let mut contained = Vec::new();
-        for cell in &mut self.cells {
+        for index in candidate_indices {
+            let cell = &mut self.cells[index];
             let mut remaining = Vec::with_capacity(cell.physical_materials.len());
             for physical in cell.physical_materials.drain(..) {
                 let Some(placements) = physical.placements.as_ref() else {
