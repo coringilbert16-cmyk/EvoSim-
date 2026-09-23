@@ -209,7 +209,7 @@ impl Simulation {
         }
     }
     fn executable_break_candidates(
-        organism: &Organism,
+        organism: &mut Organism,
         environment: &Environment,
         needs: CurrentNeeds,
     ) -> Vec<usize> {
@@ -513,7 +513,7 @@ impl Simulation {
                     decision_parameters,
                 );
                 let executable_breaks =
-                    Self::executable_break_candidates(&organisms[index], environment, needs);
+                    Self::executable_break_candidates(&mut organisms[index], environment, needs);
                 let eligibility = Self::action_eligibility(
                     &organisms[index],
                     environment,
@@ -538,7 +538,7 @@ impl Simulation {
                         let (before, rest) = organisms.split_at_mut(index);
                         let (organism, after) =
                             rest.split_first_mut().expect("index is in organisms");
-                        let moved = Self::update_movement(
+                        let _moved = Self::update_movement(
                             organism,
                             environment,
                             before,
