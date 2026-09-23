@@ -156,7 +156,7 @@ impl Simulation {
         organism: &Organism,
         _environment: &Environment,
         parameters: DecisionParameters,
-        developmental: Option<&crate::developmental_decision::DevelopmentalContext<'_>>,
+        developmental: Option<&crate::developmental_decision::DevelopmentalContext>,
     ) -> CurrentNeeds {
         let survival_reserve = parameters.survival_reserve.max(f64::EPSILON);
         let reserve_pressure = (1.0 - organism.usable_energy / survival_reserve).clamp(0.0, 1.0);
