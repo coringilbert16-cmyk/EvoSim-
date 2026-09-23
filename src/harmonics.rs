@@ -327,13 +327,15 @@ pub(crate) fn update_organism_harmonics(
     organism: &mut crate::state::Organism,
     environment: &crate::state::Environment,
 ) {
-    let boundary_units =
-        crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
-            .ok()
-            .flatten()
-            .filter(|cavity| cavity.qualifies())
-            .map(|cavity| cavity.boundary_units)
-            .unwrap_or_default();
+    let key = (organism.structure_revision, environment.field.revision);
+    if organism.cached_harmonic_key == Some(key) {
+        return;
+    }
+
+    let boundary_units = organism
+        .genome_cavity_cached(&environment.catalog)
+        .map(|cavity| cavity.boundary_units)
+        .unwrap_or_default();
 
     organism.harmonic_spectrum = genome_cavity_spectrum(
         &organism.structure,
@@ -341,6 +343,7 @@ pub(crate) fn update_organism_harmonics(
         &environment.field,
         &boundary_units,
     );
+    organism.cached_harmonic_key = Some(key);
 }
 
 #[cfg(test)]
