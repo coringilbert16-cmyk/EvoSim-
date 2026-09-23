@@ -440,12 +440,6 @@ mod tests {
             developmental_orientation_radians: 0.0,
             occupied_cells: vec![crate::state::Position { x: 0.0, y: 0.0 }],
             genome,
-            resource_sense: crate::state::ResourceSense {
-                sensed_resources: Vec::new(),
-                direction_x: 0.0,
-                direction_y: 0.0,
-                direction_strength: 0.0,
-            },
             harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
             memory: Vec::new(),
             decision_history: crate::decision::DecisionHistory::default(),
