@@ -392,7 +392,7 @@ mod tests {
     }
 
     #[test]
-    fn zero_pressure_candidates_are_resolved_by_the_universal_tie_breaker() {
+    fn zero_pressure_candidates_are_rejected_as_irrelevant() {
         let context = DecisionContext {
             needs: CurrentNeeds::default(),
             eligibility: ActionEligibility {
@@ -413,13 +413,15 @@ mod tests {
             },
         ];
 
-        let selected = select_action(
-            context,
-            &history,
-            &candidates,
-            &mut ChaCha8Rng::seed_from_u64(1),
+        assert_eq!(
+            select_action(
+                context,
+                &history,
+                &candidates,
+                &mut ChaCha8Rng::seed_from_u64(1),
+            ),
+            None
         );
-        assert!(selected.is_some_and(|candidate| candidates.contains(&candidate)));
     }
 
     #[test]
