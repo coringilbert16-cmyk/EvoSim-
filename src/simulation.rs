@@ -234,10 +234,15 @@ impl Simulation {
             eligibility.permits(action) && needs.any_for(action.relevant_needs())
         };
         if relevant(ActionKind::Break) {
-            candidates.extend(executable_breaks.iter().copied().map(|index| ActionCandidate {
-                action: ActionKind::Break,
-                context_key: Some(format!("bond:{index}")),
-            }));
+            candidates.extend(
+                executable_breaks
+                    .iter()
+                    .copied()
+                    .map(|index| ActionCandidate {
+                        action: ActionKind::Break,
+                        context_key: Some(format!("bond:{index}")),
+                    }),
+            );
         }
         if relevant(ActionKind::Combine) {
             candidates.push(ActionCandidate {
