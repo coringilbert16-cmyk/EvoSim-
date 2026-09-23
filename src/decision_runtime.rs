@@ -9,7 +9,7 @@ use crate::decision::{
     approve_action_for_current_needs, outcome_is_known, ActionEligibility, ActionKind,
     CurrentNeeds, DecisionHistory, DecisionResult, OutcomeKind,
 };
-use rand::{Rng, SeedableRng};
+use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 
 /// Maximum influence a recorded consequence has on action selection.
@@ -155,13 +155,10 @@ pub fn select_action_with_developmental_scores(
         ));
     }
 
-    let Some(best_score) = scored
+    let best_score = scored
         .iter()
         .map(|(_, score, _)| *score)
-        .max_by(f64::total_cmp)
-    else {
-        return None;
-    };
+        .max_by(f64::total_cmp)?;
 
     let mut tied: Vec<_> = scored
         .into_iter()
