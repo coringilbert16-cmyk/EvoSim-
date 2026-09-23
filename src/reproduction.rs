@@ -9,7 +9,7 @@ use crate::juvenile_requirements::{validate_realized_juvenile, JuvenileViability
 use crate::material_storage::MaterialStorage;
 use crate::resources::Material;
 use crate::state::{
-    DevelopmentStage, EnergyLedger, Environment, Organism, Position, ReproductiveConstruction,,
+    DevelopmentStage, EnergyLedger, Environment, Organism, Position, ReproductiveConstruction,
 };
 use crate::structure::OrganismStructure;
 use rand_chacha::ChaCha8Rng;
