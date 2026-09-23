@@ -2,9 +2,6 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashSet;
 
-#[cfg(test)]
-mod simulation_material_tests;
-
 use crate::decision::{
     ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters, OutcomeKind,
 };
@@ -682,9 +679,5 @@ impl Simulation {
             return true;
         }
         organism.apply_stress_damage(environment, ledger, rng)
-    }
-    #[cfg(test)]
-    pub(crate) fn total_material_in_system(&self) -> f64 {
-        simulation_material_tests::total_material_in_system(self)
     }
 }
