@@ -481,17 +481,17 @@ The same physical material may be used differently by different organisms.
 
 Its biological significance emerges from organism behavior and physical interaction rather than from an environmental role flag.
 
-# 15. Environmental Material Transfer and Vents
+# 15. Active Environmental Field
 
-Vents are environmental transfer mechanisms, not separate environmental storage compartments.
+The active ecological field is the complete environmental material layer.
 
-Where vents are present, they redistribute material within the environment according to the established environmental process.
+The field is persistent and stable by default. Material changes when an organism or an explicitly defined environmental event physically acts on the affected material.
 
-Vents are not inherently biased toward bonded or unbonded material and do not classify material according to biological usefulness.
+There is no vent-driven environmental source or separate deep-reservoir authority.
 
-Material emerging through a vent may therefore include individual resources, composite material, bonded structures, or mixtures of materials according to the actual environmental process.
+There is no mandatory per-tick diffusion pass. Passive redistribution is not assumed unless a future environmental process explicitly requires it.
 
-No obsolete deep-reservoir model is part of EvoSim.
+Environmental acquisition, expulsion, decomposition, and other material transfers modify only the spatially affected field state.
 
 # 16. Material Storage
 
@@ -1018,15 +1018,13 @@ The governing principle remains:
 
 > **Calculate the minimum amount of information necessary to produce the desired emergent behavior.**
 
-## 44.8 Vents
+## 44.8 Active Environmental Field
 
-Where vents are present, they are environmental transfer mechanisms rather than separate storage compartments.
+The active field is the complete environmental material layer.
 
-Vents do not classify material according to biological usefulness and are not inherently biased toward bonded or unbonded material.
+It is persistent and remains stable unless an organism or explicitly defined environmental event changes it.
 
-They redistribute material according to the established environmental process.
-
-No obsolete deep-reservoir model is part of EvoSim.
+Vents, a deep-reservoir authority, and mandatory per-tick diffusion are not part of the current environment model.
 
 # 45. Material Transformation
 
