@@ -17,6 +17,8 @@ pub(crate) struct DevelopmentalContext<'a> {
     pub(crate) orientation: f64,
     pub(crate) preferred_length: f64,
     pub(crate) current_growth_fraction: f64,
+    pub(crate) current_material_realized: Option<f64>,
+    pub(crate) current_density_realized: Option<f64>,
 }
 
 pub(crate) fn context<'a>(
@@ -34,22 +36,27 @@ pub(crate) fn context<'a>(
         organism.developmental_origin.y,
     );
     let orientation = organism.developmental_orientation_radians;
-    let preferred_length =
-        blueprint.preferred_developmental_length(organism.genome.adult_mass(), seed_mass, seed_length);
-    let current_growth_fraction = growth_fraction_for_structure(
+    let preferred_length = blueprint.preferred_developmental_length(
+        organism.genome.adult_mass(),
+        seed_mass,
+        seed_length,
+    );
+    let current_realization = blueprint.realization_at_length(
         &organism.structure,
-        environment,
-        blueprint,
+        &environment.catalog,
         origin,
         orientation,
         preferred_length,
     );
     Some(DevelopmentalContext {
+
         blueprint,
         origin,
         orientation,
         preferred_length,
-        current_growth_fraction,
+        current_growth_fraction: current_realization.overall,
+        current_material_realized: current_realization.material,
+        current_density_realized: current_realization.density,
     })
 }
 
@@ -114,15 +121,6 @@ pub(crate) fn developmental_action_scores(
         return vec![None; candidates.len()];
     }
 
-    let (material_realized, density_realized) =
-        developmental.blueprint.material_and_density_realization(
-            &organism.structure,
-            &environment.catalog,
-            developmental.origin,
-            developmental.orientation,
-            developmental.preferred_length,
-        );
-
     candidates
         .iter()
         .enumerate()
@@ -162,7 +160,7 @@ pub(crate) fn developmental_action_scores(
                         .as_deref()
                         .and_then(|key| key.strip_prefix("bond:"))
                         .and_then(|index| index.parse::<usize>().ok())?;
-                    let bond = *organism.structure.bonds.get(bond_index)?;
+                    organism.structure.bonds.get(bond_index)?;
                     Some(
                         developmental.blueprint.realization_after_break_with_components(
                             &organism.structure,
@@ -171,8 +169,8 @@ pub(crate) fn developmental_action_scores(
                             developmental.orientation,
                             developmental.preferred_length,
                             bond_index,
-                            material_realized,
-                            density_realized,
+                            developmental.current_material_realized,
+                            developmental.current_density_realized,
                         )?
                         .overall
                         .clamp(0.0, 1.0),
