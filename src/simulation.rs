@@ -186,12 +186,19 @@ impl Simulation {
         organism: &Organism,
         environment: &Environment,
         parameters: DecisionParameters,
+        developmental: Option<&crate::developmental_decision::DevelopmentalContext<'_>>,
     ) -> CurrentNeeds {
         let survival_reserve = parameters.survival_reserve.max(f64::EPSILON);
         let reserve_pressure = (1.0 - organism.usable_energy / survival_reserve).clamp(0.0, 1.0);
         let survival = (reserve_pressure * (1.0 + organism.stress.max(0.0))).clamp(0.0, 1.0);
-        let development = if matches!(organism.development_stage, DevelopmentStage::Juvenile) {
-            (1.0 - crate::developmental_decision::growth_fraction(organism, environment)
+        let development = if let Some(developmental) = developmental {
+            (1.0
+                - crate::developmental_decision::growth_fraction_for_context(
+                    organism,
+                    environment,
+                    &organism.structure,
+                    developmental,
+                )
                 .clamp(0.0, 1.0))
             .max(0.0)
         } else {
@@ -439,18 +446,32 @@ impl Simulation {
                 {
                     continue;
                 }
-                let needs =
-                    Self::current_needs(&organisms[index], environment, decision_parameters);
+                let developmental =
+                    crate::developmental_decision::context(&organisms[index], environment);
+                let needs = Self::current_needs(
+                    &organisms[index],
+                    environment,
+                    decision_parameters,
+                    developmental.as_ref(),
+                );
                 let eligibility = Self::action_eligibility(&organisms[index], environment, needs);
                 let context = DecisionContext { needs, eligibility };
                 let candidates =
                     Self::decision_candidates(&organisms[index], environment, needs, eligibility);
+                let competing_indices =
+                    crate::decision_runtime::developmental_competition_indices(
+                        context,
+                        &organisms[index].decision_history,
+                        &candidates,
+                    );
                 let developmental_scores =
                     crate::developmental_decision::developmental_action_scores(
                         &organisms[index],
                         environment,
                         needs,
                         &candidates,
+                        &competing_indices,
+                        developmental.as_ref(),
                         &self.energy_ledger,
                     );
                 let Some(selected) = select_action_with_developmental_scores(
@@ -508,17 +529,18 @@ impl Simulation {
                             organisms[index].development_stage,
                             DevelopmentStage::Juvenile
                         ) {
-                            let (seed_mass, seed_length) =
-                                crate::juvenile::confirmed_seed_scale_reference(
-                                    &environment.catalog,
+                            let developmental_context =
+                                crate::developmental_decision::context(
+                                    &organisms[index],
+                                    environment,
                                 )
-                                .expect("confirmed seed scale reference must be valid");
-                            let preferred_length = blueprint.preferred_developmental_length(
-                                organisms[index].genome.adult_mass(),
-                                seed_mass,
-                                seed_length,
-                            );
-                            Some((blueprint, origin, orientation, preferred_length))
+                                .expect("juvenile developmental context must exist");
+                            Some((
+                                developmental_context.blueprint,
+                                developmental_context.origin,
+                                developmental_context.orientation,
+                                developmental_context.preferred_length,
+                            ))
                         } else {
                             None
                         };
