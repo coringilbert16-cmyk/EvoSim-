@@ -6,6 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::material_transfer::take_whole_unstructured;
 use crate::physical_material::PhysicalMaterial;
 use crate::resources::{merge_parts, Material};
 
@@ -213,7 +214,7 @@ impl ActiveMaterialField {
         let row_start = (min_y / self.cell_size).floor() as isize;
         let row_end = (max_y / self.cell_size).floor() as isize;
         let row_count = row_end.saturating_sub(row_start).saturating_add(1) as usize;
-        let rows = if row_count >= self.height_cells {
+        let rows: Vec<usize> = if row_count >= self.height_cells {
             (0..self.height_cells).collect()
         } else {
             (0..row_count)
