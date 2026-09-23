@@ -545,6 +545,7 @@ pub(crate) fn try_combine_stored_unit(
                 organism.stored_material.take_matching(&raw)?;
             }
             organism.structure = hypothetical;
+            organism.mark_structure_changed();
             organism.usable_energy = candidate_energy;
             *ledger = candidate_ledger;
             organism.add_transaction_stress(attempt.work_cost);
