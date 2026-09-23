@@ -43,12 +43,14 @@ pub(crate) fn context<'a>(
     );
     let current_realization = organism
         .developmental_realization_cached(&environment.catalog)
-        .unwrap_or_else(|| crate::developmental_blueprint::DevelopmentalRealization {
-            material: None,
-            density: None,
-            connectivity: None,
-            overall: 0.0,
-        });
+        .unwrap_or_else(
+            || crate::developmental_blueprint::DevelopmentalRealization {
+                material: None,
+                density: None,
+                connectivity: None,
+                overall: 0.0,
+            },
+        );
     Some(DevelopmentalContext {
         blueprint,
         origin,
