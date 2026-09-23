@@ -72,7 +72,7 @@ impl Simulation {
 
         organism.occupied_cells[0].x = new_x;
         organism.occupied_cells[0].y = new_y;
-        organism.position_revision = organism.position_revision.wrapping_add(1);
+        organism.mark_position_changed();
         organism.developmental_origin.x += dx;
         organism.developmental_origin.y += dy;
         for unit in &mut organism.structure.units {
@@ -303,6 +303,7 @@ fn apply_push_plan(
                     .push(physical);
             }
         }
+        environment.revision = environment.revision.wrapping_add(1);
     }
 }
 
@@ -476,6 +477,7 @@ fn translate_organism(organism: &mut Organism, dx: f64, dy: f64) {
         unit.placement.y += dy;
     }
     translate_reproductive_construction(organism, dx, dy);
+    organism.mark_position_changed();
 }
 
 #[cfg(test)]
