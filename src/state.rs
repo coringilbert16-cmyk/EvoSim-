@@ -92,8 +92,7 @@ pub(crate) struct EnergyLedger {
     pub(crate) total_heat_dissipated: f64,
     pub(crate) total_usable_energy_held: f64,
 }
-#[derive(Serialize, Deserialize, Clone)]
-#[derive(Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub(crate) struct CalculationCache {
     pub(crate) growth: Option<(u64, u64, f64)>,
     pub(crate) break_candidates: Option<(u64, u64, u64, Vec<usize>)>,
