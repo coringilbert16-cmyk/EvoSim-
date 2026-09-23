@@ -126,6 +126,8 @@ pub(crate) struct Organism {
     pub(crate) reproductive_construction: Option<ReproductiveConstruction>,
     #[serde(default)]
     pub(crate) structure_revision: u64,
+    #[serde(default)]
+    pub(crate) position_revision: u64,
     #[serde(skip)]
     pub(crate) cached_cavity_revision: Option<u64>,
     #[serde(skip)]
@@ -153,6 +155,11 @@ impl Organism {
         self.cached_cavity = None;
         self.cached_developmental_revision = None;
         self.cached_developmental_realization = None;
+        self.cached_harmonic_key = None;
+    }
+
+    pub(crate) fn mark_position_changed(&mut self) {
+        self.position_revision = self.position_revision.wrapping_add(1);
         self.cached_harmonic_key = None;
     }
 
