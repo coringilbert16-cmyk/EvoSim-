@@ -147,7 +147,7 @@ impl Simulation {
 
     fn current_needs(
         organism: &Organism,
-        environment: &Environment,
+        _environment: &Environment,
         parameters: DecisionParameters,
         developmental: Option<&crate::developmental_decision::DevelopmentalContext<'_>>,
     ) -> CurrentNeeds {
