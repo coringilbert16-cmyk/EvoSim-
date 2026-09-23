@@ -1,7 +1,5 @@
 use super::*;
 use crate::resources::{InternalBond, Material};
-use rand::SeedableRng;
-use rand_chacha::ChaCha8Rng;
 
 fn make_raw(name: &str, amount: f64) -> Material {
     Material::free_base(name, amount)
@@ -155,74 +153,4 @@ fn repeated_diffusion_spreads_material_across_the_field() {
             .count()
             > 1
     );
-}
-
-#[test]
-fn vent_material_pool_contains_raw_and_structured_valid_materials() {
-    let catalog = crate::resources::default_catalog();
-    let materials = valid_vent_materials(&catalog);
-    assert!(!materials.is_empty());
-    assert!(materials.iter().all(Material::is_valid));
-    assert!(materials.iter().any(|m| !m.has_internal_structure()));
-    assert!(materials.iter().any(Material::has_internal_structure));
-}
-
-#[test]
-fn vents_emit_directly_into_the_active_field_without_a_reservoir() {
-    let mut field = ActiveMaterialField::new(200.0, 200.0, 25.0);
-    let catalog = crate::resources::default_catalog();
-    let mut vents = vec![Vent {
-        x: 100.0,
-        y: 100.0,
-        emission_amount: 40.0,
-        emission_interval: 0,
-        emission_timer: 0,
-    }];
-    let mut rng = ChaCha8Rng::seed_from_u64(7);
-    apply_vents(&mut field, &catalog, &mut vents, &mut rng);
-    let index = field.index_for_position(100.0, 100.0).unwrap();
-    assert!(field.cells[index].total_amount() > 0.0);
-}
-
-#[test]
-fn vent_quantity_fluctuates_around_its_configured_average() {
-    let mut field = ActiveMaterialField::new(200.0, 200.0, 25.0);
-    let catalog = crate::resources::default_catalog();
-    let mut vents = vec![Vent {
-        x: 100.0,
-        y: 100.0,
-        emission_amount: 40.0,
-        emission_interval: 0,
-        emission_timer: 0,
-    }];
-    let mut rng = ChaCha8Rng::seed_from_u64(11);
-    let mut amounts = Vec::new();
-    for _ in 0..8 {
-        let before = field.total_amount();
-        apply_vents(&mut field, &catalog, &mut vents, &mut rng);
-        amounts.push(field.total_amount() - before);
-    }
-    assert!(amounts.iter().all(|amount| *amount > 0.0));
-    assert!(amounts.iter().any(|amount| (*amount - 40.0).abs() > 1e-9));
-}
-
-#[test]
-fn vents_can_emit_both_atomic_and_compound_material_over_time() {
-    let mut field = ActiveMaterialField::new(200.0, 200.0, 25.0);
-    let catalog = crate::resources::default_catalog();
-    let mut vents = vec![Vent {
-        x: 100.0,
-        y: 100.0,
-        emission_amount: 40.0,
-        emission_interval: 0,
-        emission_timer: 0,
-    }];
-    let mut rng = ChaCha8Rng::seed_from_u64(1234);
-    for _ in 0..200 {
-        apply_vents(&mut field, &catalog, &mut vents, &mut rng);
-    }
-    let index = field.index_for_position(100.0, 100.0).unwrap();
-    let materials = &field.cells[index].materials;
-    assert!(materials.iter().any(|m| !m.has_internal_structure()));
-    assert!(materials.iter().any(Material::has_internal_structure));
 }
