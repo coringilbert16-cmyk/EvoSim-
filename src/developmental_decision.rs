@@ -16,38 +16,50 @@ pub(crate) struct DevelopmentalContext<'a> {
     pub(crate) origin: (f64, f64),
     pub(crate) orientation: f64,
     pub(crate) preferred_length: f64,
+    pub(crate) current_growth_fraction: f64,
 }
 
 pub(crate) fn context<'a>(
     organism: &'a Organism,
     environment: &Environment,
+    seed_reference: (f64, f64),
 ) -> Option<DevelopmentalContext<'a>> {
     if !matches!(organism.development_stage, DevelopmentStage::Juvenile) {
         return None;
     }
-    let (seed_mass, seed_length) =
-        crate::juvenile::confirmed_seed_scale_reference(&environment.catalog).ok()?;
+    let (seed_mass, seed_length) = seed_reference;
     let blueprint = &organism.genome.developmental_blueprint;
+    let origin = (
+        organism.developmental_origin.x,
+        organism.developmental_origin.y,
+    );
+    let orientation = organism.developmental_orientation_radians;
+    let preferred_length =
+        blueprint.preferred_developmental_length(organism.genome.adult_mass(), seed_mass, seed_length);
+    let current_growth_fraction = growth_fraction_for_context(
+        organism,
+        environment,
+        &organism.structure,
+        blueprint,
+        origin,
+        orientation,
+        preferred_length,
+    );
     Some(DevelopmentalContext {
         blueprint,
-        origin: (
-            organism.developmental_origin.x,
-            organism.developmental_origin.y,
-        ),
-        orientation: organism.developmental_orientation_radians,
-        preferred_length: blueprint.preferred_developmental_length(
-            organism.genome.adult_mass(),
-            seed_mass,
-            seed_length,
-        ),
+        origin,
+        orientation,
+        preferred_length,
+        current_growth_fraction,
     })
 }
 
 pub(crate) fn growth_fraction(organism: &Organism, environment: &Environment) -> f64 {
-    context(organism, environment)
-        .map(|developmental| {
-            growth_fraction_for_context(organism, environment, &organism.structure, &developmental)
-        })
+    let seed_reference =
+        crate::juvenile::confirmed_seed_scale_reference(&environment.catalog).ok();
+    seed_reference
+        .and_then(|reference| context(organism, environment, reference))
+        .map(|developmental| developmental.current_growth_fraction)
         .unwrap_or(0.0)
 }
 
@@ -57,14 +69,31 @@ pub(crate) fn growth_fraction_for_context(
     structure: &crate::structure::OrganismStructure,
     developmental: &DevelopmentalContext<'_>,
 ) -> f64 {
-    developmental
-        .blueprint
+    growth_fraction_for_structure(
+        structure,
+        environment,
+        developmental.blueprint,
+        developmental.origin,
+        developmental.orientation,
+        developmental.preferred_length,
+    )
+}
+
+fn growth_fraction_for_structure(
+    structure: &crate::structure::OrganismStructure,
+    environment: &Environment,
+    blueprint: &crate::developmental_blueprint::DevelopmentalFieldBlueprint,
+    origin: (f64, f64),
+    orientation: f64,
+    preferred_length: f64,
+) -> f64 {
+    blueprint
         .realization_at_length(
             structure,
             &environment.catalog,
-            developmental.origin,
-            developmental.orientation,
-            developmental.preferred_length,
+            origin,
+            orientation,
+            preferred_length,
         )
         .overall
         .clamp(0.0, 1.0)
@@ -90,7 +119,7 @@ pub(crate) fn developmental_action_scores(
         .iter()
         .enumerate()
         .map(|(index, candidate)| {
-            if !competing_indices.contains(&index) {
+            if !competing_indices.iter().any(|&competing| competing == index) {
                 return None;
             }
             match candidate.action {
@@ -110,11 +139,13 @@ pub(crate) fn developmental_action_scores(
                             developmental.preferred_length,
                         )),
                     )?;
-                    Some(growth_fraction_for_context(
-                        &trial,
-                        environment,
+                    Some(growth_fraction_for_structure(
                         &trial.structure,
-                        developmental,
+                        environment,
+                        developmental.blueprint,
+                        developmental.origin,
+                        developmental.orientation,
+                        developmental.preferred_length,
                     ))
                 }
                 ActionKind::Break => {
@@ -124,14 +155,18 @@ pub(crate) fn developmental_action_scores(
                         .and_then(|key| key.strip_prefix("bond:"))
                         .and_then(|index| index.parse::<usize>().ok())?;
                     let bond = *organism.structure.bonds.get(bond_index)?;
-                    let mut structure = organism.structure.clone();
-                    structure.break_matching_bond(bond)?;
-                    Some(growth_fraction_for_context(
-                        organism,
-                        environment,
-                        &structure,
-                        developmental,
-                    ))
+                    Some(
+                        developmental.blueprint.realization_after_break(
+                            &organism.structure,
+                            &environment.catalog,
+                            developmental.origin,
+                            developmental.orientation,
+                            developmental.preferred_length,
+                            bond_index,
+                        )?
+                        .overall
+                        .clamp(0.0, 1.0),
+                    )
                 }
                 _ => None,
             }
