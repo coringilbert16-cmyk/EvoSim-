@@ -11,6 +11,7 @@ use parking_lot::Mutex;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::hash::{Hash, Hasher};
 #[derive(Clone)]
 pub(crate) struct AppState {
     pub(crate) simulation: Arc<Mutex<Simulation>>,
@@ -123,6 +124,19 @@ pub(crate) struct Organism {
     pub(crate) active_transformation_id: Option<u64>,
     #[serde(default)]
     pub(crate) reproductive_construction: Option<ReproductiveConstruction>,
+    #[serde(default)]
+    pub(crate) structure_revision: u64,
+    #[serde(skip)]
+    pub(crate) cached_cavity_revision: Option<u64>,
+    #[serde(skip)]
+    pub(crate) cached_cavity: Option<Option<crate::cavity::GenomeCavity>>,
+    #[serde(skip)]
+    pub(crate) cached_developmental_revision: Option<u64>,
+    #[serde(skip)]
+    pub(crate) cached_developmental_realization:
+        Option<crate::developmental_blueprint::DevelopmentalRealization>,
+    #[serde(skip)]
+    pub(crate) cached_harmonic_key: Option<(u64, u64)>,
 }
 pub(crate) const STRESS_DECAY_PER_TICK: f64 = 0.98;
 pub(crate) const INITIAL_STRESS_THRESHOLD: f64 = 100.0;
@@ -133,6 +147,64 @@ fn default_stress_threshold() -> f64 {
     INITIAL_STRESS_THRESHOLD
 }
 impl Organism {
+    pub(crate) fn mark_structure_changed(&mut self) {
+        self.structure_revision = self.structure_revision.wrapping_add(1);
+        self.cached_cavity_revision = None;
+        self.cached_cavity = None;
+        self.cached_developmental_revision = None;
+        self.cached_developmental_realization = None;
+        self.cached_harmonic_key = None;
+    }
+
+    pub(crate) fn genome_cavity_cached(
+        &mut self,
+        catalog: &[BaseResource],
+    ) -> Option<crate::cavity::GenomeCavity> {
+        if self.cached_cavity_revision != Some(self.structure_revision) {
+            let cavity = crate::cavity::analyze_genome_cavity(&self.structure, catalog)
+                .ok()
+                .flatten()
+                .filter(|cavity| cavity.qualifies());
+            self.cached_cavity = Some(cavity);
+            self.cached_cavity_revision = Some(self.structure_revision);
+        }
+        self.cached_cavity.clone().flatten()
+    }
+
+    pub(crate) fn developmental_realization_cached(
+        &mut self,
+        catalog: &[BaseResource],
+    ) -> Option<crate::developmental_blueprint::DevelopmentalRealization> {
+        if self.cached_developmental_revision != Some(self.structure_revision) {
+            let (seed_mass, seed_length) =
+                crate::juvenile::confirmed_seed_scale_reference(catalog).ok()?;
+            let preferred_length = self
+                .genome
+                .developmental_blueprint
+                .preferred_developmental_length(
+                    self.genome.adult_mass(),
+                    seed_mass,
+                    seed_length,
+                );
+            self.cached_developmental_realization = Some(
+                self.genome
+                    .developmental_blueprint
+                    .realization_at_length(
+                        &self.structure,
+                        catalog,
+                        (
+                            self.developmental_origin.x,
+                            self.developmental_origin.y,
+                        ),
+                        self.developmental_orientation_radians,
+                        preferred_length,
+                    ),
+            );
+            self.cached_developmental_revision = Some(self.structure_revision);
+        }
+        self.cached_developmental_realization
+    }
+
     pub(crate) fn store_material(&mut self, material: Material) -> bool {
         self.stored_material.store(material)
     }
