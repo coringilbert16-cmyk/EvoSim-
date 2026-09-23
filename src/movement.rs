@@ -72,6 +72,7 @@ impl Simulation {
 
         organism.occupied_cells[0].x = new_x;
         organism.occupied_cells[0].y = new_y;
+        organism.position_revision = organism.position_revision.wrapping_add(1);
         organism.developmental_origin.x += dx;
         organism.developmental_origin.y += dy;
         for unit in &mut organism.structure.units {
