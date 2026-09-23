@@ -616,8 +616,6 @@ impl Simulation {
                         );
                     }
                 }
-
-
             }
         }
         let mut offspring = Vec::new();
