@@ -399,15 +399,16 @@ impl Simulation {
                 {
                     continue;
                 }
-                let developmental = crate::juvenile::confirmed_seed_scale_reference(&environment.catalog)
-                    .ok()
-                    .and_then(|reference| {
-                    crate::developmental_decision::context(
-                        &organisms[index],
-                        environment,
-                        reference,
-                    )
-                });
+                let developmental =
+                    crate::juvenile::confirmed_seed_scale_reference(&environment.catalog)
+                        .ok()
+                        .and_then(|reference| {
+                            crate::developmental_decision::context(
+                                &organisms[index],
+                                environment,
+                                reference,
+                            )
+                        });
                 let needs = Self::current_needs(
                     &organisms[index],
                     environment,
