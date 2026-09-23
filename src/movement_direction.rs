@@ -1,3 +1,5 @@
+use rand::Rng;
+
 use crate::state::Organism;
 
 fn wrapped_delta(target: f64, origin: f64, period: f64) -> f64 {
@@ -42,4 +44,17 @@ pub(crate) fn movement_direction_periodic(
     } else {
         Some((x / magnitude, y / magnitude))
     }
+}
+
+
+pub(crate) fn movement_direction_with_intrinsic(
+    organism: &Organism,
+    environment_height: f64,
+    rng: &mut impl Rng,
+) -> Option<(f64, f64)> {
+    if let Some(direction) = movement_direction_periodic(organism, environment_height) {
+        return Some(direction);
+    }
+    let angle = rng.gen_range(0.0..std::f64::consts::TAU);
+    Some((angle.cos(), angle.sin()))
 }
