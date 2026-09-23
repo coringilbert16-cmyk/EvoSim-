@@ -145,7 +145,6 @@ mod integration_tests {
     #[test]
     fn acquire_accepts_and_preserves_structured_material() {
         let mut s = Simulation::new(23, 10.0);
-        s.environment.vents.clear();
         let i = s
             .environment
             .field
@@ -172,7 +171,6 @@ mod integration_tests {
     #[test]
     fn acquire_only_considers_the_currently_occupied_field_cell() {
         let mut s = Simulation::new(22, 10.0);
-        s.environment.vents.clear();
         let i = s
             .environment
             .field
