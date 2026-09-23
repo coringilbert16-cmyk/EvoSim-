@@ -97,18 +97,7 @@ impl Simulation {
         }
     }
 
-    pub(crate) fn remember_perception(
-    organism: &mut Organism,
-    sx: f64,
-    sy: f64,
-    memory_strength: f64,
-    capacity: usize,
-    spectrum: &crate::harmonics::ToneSpectrum,
-) {
-    Simulation::remember_perception(organism, sx, sy, memory_strength, capacity, spectrum);
-}
-
-pub(crate) fn reinforce_memory_point(
+    pub(crate) fn reinforce_memory_point(
         organism: &mut Organism,
         sx: f64,
         sy: f64,
@@ -158,6 +147,17 @@ pub(crate) fn reinforce_memory_point(
             }
         }
     }
+}
+
+pub(crate) fn remember_perception(
+    organism: &mut Organism,
+    sx: f64,
+    sy: f64,
+    memory_strength: f64,
+    capacity: usize,
+    spectrum: &crate::harmonics::ToneSpectrum,
+) {
+    Simulation::remember_perception(organism, sx, sy, memory_strength, capacity, spectrum);
 }
 
 pub(crate) fn reinforce_memory_point(
