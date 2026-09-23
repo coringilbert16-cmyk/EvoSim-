@@ -389,7 +389,16 @@ impl Simulation {
                     .filter(|cavity| cavity.qualifies())
                     .map(|cavity| crate::memory::memory_capacity(&cavity));
             if let Some(capacity) = capacity {
-                crate::memory::reinforce_memory_point(organism, x, y, reinforcement, capacity);
+                let spectrum = organism.harmonic_spectrum.clone();
+                crate::memory::reinforce_memory_point(
+                    organism,
+                    x,
+                    y,
+                    reinforcement,
+                    capacity,
+                    &spectrum,
+                    outcome,
+                );
             } else {
                 organism.memory.clear();
             }
@@ -437,6 +446,7 @@ mod tests {
                 direction_y: 0.0,
                 direction_strength: 0.0,
             },
+            harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
             memory: Vec::new(),
             decision_history: crate::decision::DecisionHistory::default(),
             usable_energy: 1_000_000.0,
@@ -447,6 +457,11 @@ mod tests {
             development_stage: crate::state::DevelopmentStage::Juvenile,
             active_transformation_id: None,
             reproductive_construction: None,
+            cached_cavity_revision: None,
+            cached_cavity: None,
+            cached_developmental_revision: None,
+            cached_developmental_realization: None,
+            cached_harmonic_key: None,
         };
         let environment = crate::state::Environment {
             revision: 0,
