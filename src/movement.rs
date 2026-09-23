@@ -87,9 +87,8 @@ fn resolve_push_chain(
         .iter()
         .enumerate()
         .flat_map(|(cell_index, cell)| {
-            (0..cell.physical_materials.len()).map(move |material_index| {
-                (cell_index, material_index)
-            })
+            (0..cell.physical_materials.len())
+                .map(move |material_index| (cell_index, material_index))
         })
         .collect();
     let moving_destination = organism_parts_at(moving, environment, dx, dy);
@@ -226,7 +225,9 @@ fn apply_push_plan(
                 .field
                 .index_for_position(placement.x, placement.y)
             {
-                environment.field.cells[index].physical_materials.push(physical);
+                environment.field.cells[index]
+                    .physical_materials
+                    .push(physical);
             }
         }
     }
