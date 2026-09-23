@@ -138,7 +138,7 @@ pub(crate) struct Organism {
     pub(crate) cached_developmental_realization:
         Option<crate::developmental_blueprint::DevelopmentalRealization>,
     #[serde(skip)]
-    pub(crate) cached_harmonic_key: Option<(u64, u64)>,
+    pub(crate) cached_harmonic_key: Option<(u64, u64, u64)>,
 }
 pub(crate) const STRESS_DECAY_PER_TICK: f64 = 0.98;
 pub(crate) const INITIAL_STRESS_THRESHOLD: f64 = 100.0;
