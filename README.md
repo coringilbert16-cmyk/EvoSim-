@@ -425,17 +425,13 @@ The same physical material may be used differently by different organisms.
 
 Its biological significance emerges from organism behavior and physical interaction rather than from an environmental role flag.
 
-# 15. Environmental Material Transfer and Vents
+# 15. Environmental Material Transfer
 
-Vents are environmental transfer mechanisms, not separate environmental storage compartments.
+The environment is a single physical material system.
 
-Where vents are present, they redistribute material within the environment according to the established environmental process.
+Material changes location or ownership through the established physical interactions and local environmental events that act on the active field.
 
-Vents are not inherently biased toward bonded or unbonded material and do not classify material according to biological usefulness.
-
-Material emerging through a vent may therefore include individual resources, composite material, bonded structures, or mixtures of materials according to the actual environmental process.
-
-No obsolete deep-reservoir model is part of EvoSim.
+There is no separate reservoir, vent system, or per-tick diffusion process serving as an environmental authority.
 
 # 16. Material Storage
 
@@ -961,16 +957,6 @@ An aggregate representation is valid only when it preserves enough information t
 The governing principle remains:
 
 > **Calculate the minimum amount of information necessary to produce the desired emergent behavior.**
-
-## 44.8 Vents
-
-Where vents are present, they are environmental transfer mechanisms rather than separate storage compartments.
-
-Vents do not classify material according to biological usefulness and are not inherently biased toward bonded or unbonded material.
-
-They redistribute material according to the established environmental process.
-
-No obsolete deep-reservoir model is part of EvoSim.
 
 # 45. Material Transformation
 

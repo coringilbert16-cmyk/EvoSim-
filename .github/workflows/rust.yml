@@ -22,6 +22,20 @@ jobs:
         run: bash scripts/check_large_files.sh
       - name: Check COMBINE architecture
         run: bash scripts/check_combine_architecture.sh
+      - name: Run diagnostic headless multigeneration simulation
+        run: |
+          mkdir -p ci-diagnostics
+          cargo run --release -- --headless --births 3 --ticks 10000 --diagnostics ci-diagnostics/diagnostics.jsonl --diagnostic-interval 100
+      - name: Upload diagnostic data sheet
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evosim-diagnostic-data
+          path: |
+            ci-diagnostics/diagnostics.jsonl
+            ci-diagnostics/diagnostics.jsonl.summary.txt
+          if-no-files-found: warn
+          retention-days: 7
       - name: Run Rust tests
         run: cargo test --all-targets
       - name: Run Clippy

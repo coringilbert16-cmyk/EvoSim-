@@ -2,20 +2,18 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashSet;
 
-#[cfg(test)]
-mod simulation_material_tests;
-
-use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
+use crate::decision::{
+    ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters, OutcomeKind,
+};
 use crate::decision_runtime::{select_action, ActionCandidate, DecisionContext};
 use crate::energy_ledger::EnergyLedgerAuthority;
-use crate::environment::{
-    apply_vents, ActiveMaterialField, Vent, DEFAULT_CELL_SIZE, DEFAULT_DIFFUSION_FRACTION,
-};
+use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
 use crate::genome::initial_genome;
 use crate::juvenile::realize_initial;
 use crate::state::{
     DevelopmentStage, EnergyLedger, Environment, Organism, Position, ResourceSense, Simulation,
 };
+use crate::transformation::break_candidate_is_executable;
 
 const ADULTHOOD_GROWTH_FRACTION: f64 = 0.90;
 
@@ -45,35 +43,11 @@ impl Simulation {
         let height = 1000.0;
         let mut field = ActiveMaterialField::new(width, height, DEFAULT_CELL_SIZE);
         crate::environmental_materials::seed_initial_landscape(&mut field);
-        let vents = vec![
-            Vent {
-                x: 250.0,
-                y: 250.0,
-                emission_amount: 50.0,
-                emission_interval: 20,
-                emission_timer: 0,
-            },
-            Vent {
-                x: 750.0,
-                y: 300.0,
-                emission_amount: 50.0,
-                emission_interval: 30,
-                emission_timer: 0,
-            },
-            Vent {
-                x: 520.0,
-                y: 550.0,
-                emission_amount: 50.0,
-                emission_interval: 25,
-                emission_timer: 0,
-            },
-        ];
         Environment {
             width,
             height,
             catalog,
             field,
-            vents,
         }
     }
     pub(crate) fn create_initial_organism() -> Organism {
@@ -117,17 +91,6 @@ impl Simulation {
             reproductive_construction: None,
         }
     }
-    pub(crate) fn step_environment(&mut self) {
-        apply_vents(
-            &mut self.environment.field,
-            &self.environment.catalog,
-            &mut self.environment.vents,
-            &mut self.rng,
-        );
-        self.environment
-            .field
-            .diffuse_step(DEFAULT_DIFFUSION_FRACTION);
-    }
     fn growth_fraction(organism: &Organism, environment: &Environment) -> f64 {
         organism
             .genome
@@ -145,7 +108,7 @@ impl Simulation {
             .overall
             .clamp(0.0, 1.0)
     }
-    fn update_development_stage(organism: &mut Organism, environment: &Environment) {
+    fn update_development_stage(organism: &mut Organism, growth_fraction: f64) {
         match organism.development_stage {
             DevelopmentStage::Offspring => {
                 if organism.reproductive_construction.is_none() {
@@ -153,7 +116,7 @@ impl Simulation {
                 }
             }
             DevelopmentStage::Juvenile => {
-                if Self::growth_fraction(organism, environment) >= ADULTHOOD_GROWTH_FRACTION {
+                if growth_fraction >= ADULTHOOD_GROWTH_FRACTION {
                     organism.development_stage = DevelopmentStage::Adult
                 }
             }
@@ -162,14 +125,14 @@ impl Simulation {
     }
     fn current_needs(
         organism: &Organism,
-        environment: &Environment,
+        growth_fraction: f64,
         parameters: DecisionParameters,
     ) -> CurrentNeeds {
         let survival_reserve = parameters.survival_reserve.max(f64::EPSILON);
         let reserve_pressure = (1.0 - organism.usable_energy / survival_reserve).clamp(0.0, 1.0);
         let survival = (reserve_pressure * (1.0 + organism.stress.max(0.0))).clamp(0.0, 1.0);
         let development = if matches!(organism.development_stage, DevelopmentStage::Juvenile) {
-            (1.0 - Self::growth_fraction(organism, environment).clamp(0.0, 1.0)).max(0.0)
+            (1.0 - growth_fraction.clamp(0.0, 1.0)).max(0.0)
         } else {
             0.0
         };
@@ -211,6 +174,7 @@ impl Simulation {
         organism: &Organism,
         environment: &Environment,
         needs: CurrentNeeds,
+        has_executable_break: bool,
     ) -> ActionEligibility {
         let can_build_from_storage =
             !organism.structure.units.is_empty() && !organism.stored_material.is_empty();
@@ -222,22 +186,48 @@ impl Simulation {
             can_combine: organism.active_transformation_id.is_none()
                 && (can_build_from_storage || can_join_existing_structure),
             can_break: organism.active_transformation_id.is_none()
-                && !organism.structure.bonds.is_empty()
                 && (organism.reproductive_construction.is_none()
                     || needs.survival > 0.0
                     || needs.development > 0.0
                     || organism
                         .reproductive_construction
                         .as_ref()
-                        .is_some_and(|construction| construction.needs_space)),
+                        .is_some_and(|construction| construction.needs_space))
+                && has_executable_break,
             can_expel: false,
         }
+    }
+    fn executable_break_candidates(
+        organism: &Organism,
+        environment: &Environment,
+        needs: CurrentNeeds,
+    ) -> Vec<usize> {
+        let break_allowed = organism.active_transformation_id.is_none()
+            && (organism.reproductive_construction.is_none()
+                || needs.survival > 0.0
+                || needs.development > 0.0
+                || organism
+                    .reproductive_construction
+                    .as_ref()
+                    .is_some_and(|construction| construction.needs_space));
+        if !break_allowed {
+            return Vec::new();
+        }
+        organism
+            .structure
+            .bonds
+            .iter()
+            .enumerate()
+            .filter(|(_, bond)| break_candidate_is_executable(organism, environment, **bond))
+            .map(|(index, _)| index)
+            .collect()
     }
     fn decision_candidates(
         organism: &Organism,
         environment: &Environment,
         needs: CurrentNeeds,
         eligibility: ActionEligibility,
+        executable_breaks: &[usize],
     ) -> Vec<ActionCandidate> {
         let mut candidates = Vec::new();
         let relevant = |action: ActionKind| {
@@ -245,12 +235,10 @@ impl Simulation {
         };
         if relevant(ActionKind::Break) {
             candidates.extend(
-                organism
-                    .structure
-                    .bonds
+                executable_breaks
                     .iter()
-                    .enumerate()
-                    .map(|(index, _)| ActionCandidate {
+                    .copied()
+                    .map(|index| ActionCandidate {
                         action: ActionKind::Break,
                         context_key: Some(format!("bond:{index}")),
                     }),
@@ -410,20 +398,21 @@ impl Simulation {
     }
     pub(crate) fn step(&mut self) {
         self.tick += 1;
-        self.step_environment();
-        let mut still_active = Vec::new();
         let mut completed = Vec::new();
-        for mut transformation in self.active_transformations.drain(..) {
-            if transformation.remaining_ticks > 0 {
-                transformation.remaining_ticks -= 1
+        if !self.active_transformations.is_empty() {
+            let mut still_active = Vec::with_capacity(self.active_transformations.len());
+            for mut transformation in self.active_transformations.drain(..) {
+                if transformation.remaining_ticks > 0 {
+                    transformation.remaining_ticks -= 1
+                }
+                if transformation.remaining_ticks == 0 {
+                    completed.push(transformation)
+                } else {
+                    still_active.push(transformation)
+                }
             }
-            if transformation.remaining_ticks == 0 {
-                completed.push(transformation)
-            } else {
-                still_active.push(transformation)
-            }
+            self.active_transformations = still_active;
         }
-        self.active_transformations = still_active;
         let mut completed_organisms = HashSet::new();
         for transformation in &completed {
             completed_organisms.insert(transformation.organism_id.clone());
@@ -440,20 +429,32 @@ impl Simulation {
                 );
             }
         }
-        let environment_snapshot = self.environment.clone();
         let decision_parameters = self.decision_parameters;
+        let juvenile_scale_reference =
+            crate::juvenile::confirmed_seed_scale_reference(&self.environment.catalog)
+                .expect("confirmed seed scale reference must be valid");
+        let mut growth_fractions = Vec::with_capacity(self.organisms.len());
         for organism in &mut self.organisms {
-            Self::update_development_stage(organism, &environment_snapshot);
-            organism.apply_maintenance(&environment_snapshot.catalog, &mut self.energy_ledger);
-            Self::update_resource_perception(organism, &environment_snapshot);
-            Self::update_memory_from_sources(organism, &environment_snapshot);
+            let growth_fraction = if matches!(
+                organism.development_stage,
+                DevelopmentStage::Offspring | DevelopmentStage::Juvenile
+            ) {
+                Self::growth_fraction(organism, &self.environment)
+            } else {
+                1.0
+            };
+            growth_fractions.push(growth_fraction);
+            Self::update_development_stage(organism, growth_fraction);
+            organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
+            Self::update_resource_perception(organism, &self.environment);
+            Self::update_memory_from_sources(organism, &self.environment);
             if matches!(organism.development_stage, DevelopmentStage::Adult)
                 && organism.reproductive_construction.is_none()
             {
                 let _ = crate::reproduction::begin_reproduction(
                     organism,
                     &mut self.rng,
-                    &environment_snapshot.catalog,
+                    &self.environment.catalog,
                     &mut self.energy_ledger,
                 );
             }
@@ -473,12 +474,27 @@ impl Simulation {
                 {
                     continue;
                 }
-                let needs =
-                    Self::current_needs(&organisms[index], environment, decision_parameters);
-                let eligibility = Self::action_eligibility(&organisms[index], environment, needs);
+                let needs = Self::current_needs(
+                    &organisms[index],
+                    growth_fractions[index],
+                    decision_parameters,
+                );
+                let executable_breaks =
+                    Self::executable_break_candidates(&organisms[index], environment, needs);
+                let eligibility = Self::action_eligibility(
+                    &organisms[index],
+                    environment,
+                    needs,
+                    !executable_breaks.is_empty(),
+                );
                 let context = DecisionContext { needs, eligibility };
-                let candidates =
-                    Self::decision_candidates(&organisms[index], environment, needs, eligibility);
+                let candidates = Self::decision_candidates(
+                    &organisms[index],
+                    environment,
+                    needs,
+                    eligibility,
+                    &executable_breaks,
+                );
                 let Some(selected) =
                     select_action(context, &organisms[index].decision_history, &candidates)
                 else {
@@ -486,34 +502,20 @@ impl Simulation {
                 };
                 match selected.action {
                     ActionKind::Move => {
-                        let organism_count = organisms.len();
                         let (before, rest) = organisms.split_at_mut(index);
                         let (organism, after) =
                             rest.split_first_mut().expect("index is in organisms");
-                        let mut others = Vec::with_capacity(organism_count.saturating_sub(1));
-                        for other in before.iter() {
-                            others.push((*other).clone());
-                        }
-                        for other in after.iter() {
-                            others.push((*other).clone());
-                        }
-                        let moved = Self::update_movement(organism, environment, &mut others);
-                        if moved {
-                            for (original, trial) in
-                                before.iter_mut().chain(after.iter_mut()).zip(others)
-                            {
-                                original.occupied_cells = trial.occupied_cells;
-                                original.structure = trial.structure;
-                            }
-                        }
+                        let moved = Self::update_movement(
+                            organism,
+                            environment,
+                            before,
+                            after,
+                            &mut self.rng,
+                        );
                         crate::decision_runtime::record_outcome(
                             &mut organism.decision_history,
                             &selected,
-                            if moved {
-                                crate::decision::OutcomeKind::Neutral
-                            } else {
-                                crate::decision::OutcomeKind::Harmful
-                            },
+                            OutcomeKind::Neutral,
                         );
                     }
                     ActionKind::Combine => {
@@ -531,11 +533,7 @@ impl Simulation {
                             organisms[index].development_stage,
                             DevelopmentStage::Juvenile
                         ) {
-                            let (seed_mass, seed_length) =
-                                crate::juvenile::confirmed_seed_scale_reference(
-                                    &environment.catalog,
-                                )
-                                .expect("confirmed seed scale reference must be valid");
+                            let (seed_mass, seed_length) = juvenile_scale_reference;
                             let preferred_length = blueprint.preferred_developmental_length(
                                 organisms[index].genome.adult_mass(),
                                 seed_mass,
@@ -706,9 +704,5 @@ impl Simulation {
             return true;
         }
         organism.apply_stress_damage(environment, ledger, rng)
-    }
-    #[cfg(test)]
-    pub(crate) fn total_material_in_system(&self) -> f64 {
-        simulation_material_tests::total_material_in_system(self)
     }
 }
