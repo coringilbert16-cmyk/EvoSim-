@@ -10,9 +10,7 @@ use crate::decision_runtime::{
     select_action_with_developmental_scores, ActionCandidate, DecisionContext,
 };
 use crate::energy_ledger::EnergyLedgerAuthority;
-use crate::environment::{
-    apply_vents, ActiveMaterialField, Vent, DEFAULT_CELL_SIZE, DEFAULT_DIFFUSION_FRACTION,
-};
+use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
 use crate::genome::initial_genome;
 use crate::juvenile::realize_initial;
 use crate::state::{DevelopmentStage, EnergyLedger, Environment, Organism, Position, Simulation};
@@ -46,35 +44,11 @@ impl Simulation {
         let height = 1000.0;
         let mut field = ActiveMaterialField::new(width, height, DEFAULT_CELL_SIZE);
         crate::environmental_materials::seed_initial_landscape(&mut field, &catalog);
-        let vents = vec![
-            Vent {
-                x: 250.0,
-                y: 250.0,
-                emission_amount: 0.0,
-                emission_interval: 20,
-                emission_timer: 0,
-            },
-            Vent {
-                x: 750.0,
-                y: 300.0,
-                emission_amount: 0.0,
-                emission_interval: 30,
-                emission_timer: 0,
-            },
-            Vent {
-                x: 520.0,
-                y: 550.0,
-                emission_amount: 0.0,
-                emission_interval: 25,
-                emission_timer: 0,
-            },
-        ];
         Environment {
             width,
             height,
             catalog,
             field,
-            vents,
         }
     }
     pub(crate) fn create_initial_organism() -> Organism {
@@ -112,17 +86,6 @@ impl Simulation {
             active_transformation_id: None,
             reproductive_construction: None,
         }
-    }
-    pub(crate) fn step_environment(&mut self) {
-        apply_vents(
-            &mut self.environment.field,
-            &self.environment.catalog,
-            &mut self.environment.vents,
-            &mut self.rng,
-        );
-        self.environment
-            .field
-            .diffuse_step(DEFAULT_DIFFUSION_FRACTION);
     }
     fn update_development_stage(organism: &mut Organism, environment: &Environment) {
         match organism.development_stage {
@@ -374,7 +337,6 @@ impl Simulation {
     }
     pub(crate) fn step(&mut self) {
         self.tick += 1;
-        self.step_environment();
         let mut still_active = Vec::new();
         let mut completed = Vec::new();
         for mut transformation in self.active_transformations.drain(..) {
@@ -404,26 +366,23 @@ impl Simulation {
                 );
             }
         }
-        let environment_snapshot = self.environment.clone();
         let decision_parameters = self.decision_parameters;
-        let seed_reference =
-            crate::juvenile::confirmed_seed_scale_reference(&environment_snapshot.catalog).ok();
         for organism in &mut self.organisms {
-            Self::update_development_stage(organism, &environment_snapshot);
-            organism.apply_maintenance(&environment_snapshot.catalog, &mut self.energy_ledger);
-            crate::harmonics::update_organism_harmonics(organism, &environment_snapshot);
-            Self::transfer_contained_environmental_material(organism, &mut self.environment);
-            Self::update_memory_from_sources(organism, &environment_snapshot);
+            Self::update_development_stage(organism, &self.environment);
+            organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
+            crate::harmonics::update_organism_harmonics(organism, &self.environment);
+            Self::update_memory_from_sources(organism, &self.environment);
             if matches!(organism.development_stage, DevelopmentStage::Adult)
                 && organism.reproductive_construction.is_none()
             {
                 let _ = crate::reproduction::begin_reproduction(
                     organism,
                     &mut self.rng,
-                    &environment_snapshot.catalog,
+                    &self.environment.catalog,
                     &mut self.energy_ledger,
                 );
             }
+            Self::transfer_contained_environmental_material(organism, &mut self.environment);
         }
         {
             let (organisms, environment) = (&mut self.organisms, &mut self.environment);
@@ -440,7 +399,9 @@ impl Simulation {
                 {
                     continue;
                 }
-                let developmental = seed_reference.and_then(|reference| {
+                let developmental = crate::juvenile::confirmed_seed_scale_reference(&environment.catalog)
+                    .ok()
+                    .and_then(|reference| {
                     crate::developmental_decision::context(
                         &organisms[index],
                         environment,
