@@ -66,9 +66,7 @@ pub(crate) struct ReproductiveConstruction {
     pub(crate) developing_structure: OrganismStructure,
     pub(crate) child_genome: Genome,
     /// Persistent developmental frame for the physically separate offspring.
-    #[serde(default)]
     pub(crate) developmental_origin: Position,
-    #[serde(default)]
     pub(crate) developmental_orientation_radians: f64,
     /// Stress accumulated by the developing offspring before detachment.
     #[serde(default)]
@@ -98,14 +96,12 @@ pub(crate) struct CalculationCache {
     pub(crate) break_candidates: Option<(u64, u64, u64, Vec<usize>)>,
 }
 
+#[derive(Clone)]
 pub(crate) struct Organism {
-    #[serde(skip)]
     pub(crate) calculation_cache: CalculationCache,
     /// Monotonic revision of physical structure. Increment when structure/bonds change.
-    #[serde(default)]
     pub(crate) structure_revision: u64,
     /// Monotonic revision of organism position/geometry in the environment.
-    #[serde(default)]
     pub(crate) position_revision: u64,
     pub(crate) id: String,
     /// Persistent organism-local developmental origin. This is anchored at
@@ -121,30 +117,22 @@ pub(crate) struct Organism {
     pub(crate) occupied_cells: Vec<Position>,
     pub(crate) genome: Genome,
     /// Spectrum currently present at the organism's physically realized genome cavity.
-    #[serde(default)]
     pub(crate) harmonic_spectrum: crate::harmonics::ToneSpectrum,
     pub(crate) memory: Vec<MemoryPoint>,
     pub(crate) decision_history: DecisionHistory,
     pub(crate) usable_energy: f64,
     pub(crate) stress: f64,
-    #[serde(default = "default_stress_threshold")]
     pub(crate) stress_threshold: f64,
     pub(crate) stored_material: MaterialStorage,
     pub(crate) structure: OrganismStructure,
     pub(crate) development_stage: DevelopmentStage,
     pub(crate) active_transformation_id: Option<u64>,
-    #[serde(default)]
     pub(crate) reproductive_construction: Option<ReproductiveConstruction>,
-    #[serde(skip)]
     pub(crate) cached_cavity_revision: Option<u64>,
-    #[serde(skip)]
     pub(crate) cached_cavity: Option<Option<crate::cavity::GenomeCavity>>,
-    #[serde(skip)]
     pub(crate) cached_developmental_revision: Option<u64>,
-    #[serde(skip)]
     pub(crate) cached_developmental_realization:
         Option<crate::developmental_blueprint::DevelopmentalRealization>,
-    #[serde(skip)]
     pub(crate) cached_harmonic_key: Option<(u64, u64, u64)>,
 }
 pub(crate) const STRESS_DECAY_PER_TICK: f64 = 0.98;
