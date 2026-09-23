@@ -62,7 +62,7 @@ impl Simulation {
             unit.placement.y = wrap_y(unit.placement.y + dy, environment.height);
         }
         translate_reproductive_construction(organism, dx, dy, environment.height);
-        organism.mark_structure_changed();
+        organism.mark_position_changed();
         true
     }
 }
