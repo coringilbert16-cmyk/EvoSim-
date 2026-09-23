@@ -418,7 +418,14 @@ impl Simulation {
             .expect("confirmed seed scale reference must be valid");
         let mut growth_fractions = Vec::with_capacity(self.organisms.len());
         for organism in &mut self.organisms {
-            let growth_fraction = Self::growth_fraction(organism, &self.environment);
+            let growth_fraction = if matches!(
+                organism.development_stage,
+                DevelopmentStage::Offspring | DevelopmentStage::Juvenile
+            ) {
+                Self::growth_fraction(organism, &self.environment)
+            } else {
+                1.0
+            };
             growth_fractions.push(growth_fraction);
             Self::update_development_stage(organism, growth_fraction);
             organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
