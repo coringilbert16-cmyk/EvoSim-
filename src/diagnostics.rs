@@ -285,8 +285,14 @@ impl DiagnosticsRecorder {
                 "organism_before": before_organism.map(|o| self.state_json(o)),
                 "organism_after": after_organism.map(|o| self.state_json(o)),
                 "structural_delta": structural_delta(before_organism, after_organism),
-                "energy_delta": scalar_delta(before_organism.map(|o| o.energy), after_organism.map(|o| o.energy)),
-                "stress_delta": scalar_delta(before_organism.map(|o| o.stress), after_organism.map(|o| o.stress)),
+                "energy_delta": scalar_delta(
+                    before_organism.map(|o| o.energy),
+                    after_organism.map(|o| o.energy),
+                ),
+                "stress_delta": scalar_delta(
+                    before_organism.map(|o| o.stress),
+                    after_organism.map(|o| o.stress),
+                ),
                 "growth_fraction_delta": scalar_delta(
                     before_organism.and_then(|o| o.developmental_growth_fraction),
                     after_organism.and_then(|o| o.developmental_growth_fraction),
@@ -360,7 +366,11 @@ impl DiagnosticsRecorder {
         Ok(())
     }
 
-    fn write_snapshot(&mut self, simulation: &mut Simulation, reason: &str) -> std::io::Result<()> {
+    fn write_snapshot(
+        &mut self,
+        simulation: &mut Simulation,
+        reason: &str,
+    ) -> std::io::Result<()> {
         let snapshot = self.capture(simulation);
         self.summary.max_active_transformations = self
             .summary
@@ -458,7 +468,11 @@ impl DiagnosticsRecorder {
         writeln!(file, "tick: {}", simulation.tick)?;
         writeln!(file, "population: {}", simulation.organisms.len())?;
         writeln!(file, "max_population: {}", self.summary.max_population)?;
-        writeln!(file, "active_transformations_final: {}", simulation.active_transformations.len())?;
+        writeln!(
+            file,
+            "active_transformations_final: {}",
+            simulation.active_transformations.len()
+        )?;
         writeln!(
             file,
             "max_active_transformations: {}",
@@ -469,21 +483,41 @@ impl DiagnosticsRecorder {
             "decomposing_bodies_final: {}",
             simulation.decomposing_bodies.len()
         )?;
-        writeln!(file, "field_revision: {}", simulation.environment.field.revision)?;
+        writeln!(
+            file,
+            "field_revision: {}",
+            simulation.environment.field.revision
+        )?;
         writeln!(file)?;
         writeln!(file, "TRANSFORMATIONS")?;
         writeln!(file, "starts: {}", self.summary.transformation_starts)?;
         writeln!(file, "completions: {}", self.summary.transformation_completions)?;
-        writeln!(file, "first_tick: {:?}", self.summary.first_transformation_tick)?;
-        writeln!(file, "last_tick: {:?}", self.summary.last_transformation_tick)?;
+        writeln!(
+            file,
+            "first_tick: {:?}",
+            self.summary.first_transformation_tick
+        )?;
+        writeln!(
+            file,
+            "last_tick: {:?}",
+            self.summary.last_transformation_tick
+        )?;
         for (kind, count) in &self.summary.transformation_types {
             writeln!(file, "type {kind}: {count}")?;
         }
         writeln!(file)?;
         writeln!(file, "LIFECYCLE / STRUCTURE")?;
         writeln!(file, "lifecycle_changes: {}", self.summary.lifecycle_changes)?;
-        writeln!(file, "first_lifecycle_change_tick: {:?}", self.summary.first_lifecycle_change_tick)?;
-        writeln!(file, "last_lifecycle_change_tick: {:?}", self.summary.last_lifecycle_change_tick)?;
+        writeln!(
+            file,
+            "first_lifecycle_change_tick: {:?}",
+            self.summary.first_lifecycle_change_tick
+        )?;
+        writeln!(
+            file,
+            "last_lifecycle_change_tick: {:?}",
+            self.summary.last_lifecycle_change_tick
+        )?;
         writeln!(file, "structure_changes: {}", self.summary.structure_changes)?;
         writeln!(file)?;
         writeln!(file, "RANGES OBSERVED")?;
@@ -508,7 +542,10 @@ impl DiagnosticsRecorder {
         writeln!(file)?;
         writeln!(file, "FINAL ORGANISMS")?;
         for (index, organism) in simulation.organisms.iter_mut().enumerate() {
-            let growth = crate::developmental_decision::growth_fraction(organism, &simulation.environment);
+            let growth = crate::developmental_decision::growth_fraction(
+                organism,
+                &simulation.environment,
+            );
             writeln!(
                 file,
                 "#{index} id={} stage={:?} growth={:.6} energy={:.6} stress={:.6} units={} bonds={} components={} stored={}",
@@ -604,7 +641,9 @@ fn update_min_max(
     max: &mut Option<f64>,
     value: Option<f64>,
 ) {
-    let Some(value) = value.filter(|v| v.is_finite()) else { return; };
+    let Some(value) = value.filter(|v| v.is_finite()) else {
+        return;
+    };
     *min = Some(min.map_or(value, |current| current.min(value)));
     *max = Some(max.map_or(value, |current| current.max(value)));
 }
