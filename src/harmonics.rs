@@ -349,7 +349,7 @@ pub(crate) fn update_organism_harmonics(
     };
 
     let environment_key =
-        environment_fingerprint(&environment.field, &boundary_units);
+        environment_fingerprint(&environment.field, &organism.structure, &boundary_units);
     if organism.harmonic_cache.as_ref().is_some_and(|cache| {
         cache.structure_key == structure_key
             && cache.environment_key == environment_key
@@ -403,6 +403,7 @@ fn structure_fingerprint(structure: &crate::structure::OrganismStructure) -> u64
 
 fn environment_fingerprint(
     field: &crate::environment::ActiveMaterialField,
+    structure: &crate::structure::OrganismStructure,
     boundary_units: &[usize],
 ) -> u64 {
     use std::hash::{Hash, Hasher};
@@ -410,28 +411,19 @@ fn environment_fingerprint(
     boundary_units.len().hash(&mut hasher);
     for &unit_index in boundary_units {
         unit_index.hash(&mut hasher);
-        let _ = unit_index;
-    }
-    // The structure positions identify the sampled field cells; the caller
-    // supplies boundary units, so the field fingerprint is populated from
-    // those realized positions by the cache's environmental sampling key.
-    // A field-wide fallback is deliberately avoided here.
-    for index in field.cells.iter().enumerate().filter_map(|(index, cell)| {
-        if boundary_units.is_empty() {
-            None
-        } else {
-            // Boundary positions are resolved by the spectrum calculation.
-            // Include cells that currently contain material; empty cells
-            // cannot contribute to the harmonic response.
-            (!cell.materials.is_empty() || !cell.physical_materials.is_empty()).then_some(index)
-        }
-    }) {
-        index.hash(&mut hasher);
-        format!("{:?}", &field.cells[index]).hash(&mut hasher);
+        let Some(unit) = structure.units.get(unit_index) else {
+            continue;
+        };
+        unit.placement.x.to_bits().hash(&mut hasher);
+        unit.placement.y.to_bits().hash(&mut hasher);
+        let Some(cell_index) = field.index_for_position(unit.placement.x, unit.placement.y) else {
+            continue;
+        };
+        cell_index.hash(&mut hasher);
+        format!("{:?}", &field.cells[cell_index]).hash(&mut hasher);
     }
     hasher.finish()
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
