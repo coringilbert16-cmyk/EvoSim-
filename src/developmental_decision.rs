@@ -22,7 +22,7 @@ pub(crate) struct DevelopmentalContext<'a> {
 }
 
 pub(crate) fn context<'a>(
-    organism: &'a Organism,
+    organism: &'a mut Organism,
     environment: &Environment,
     seed_reference: (f64, f64),
 ) -> Option<DevelopmentalContext<'a>> {
@@ -41,13 +41,14 @@ pub(crate) fn context<'a>(
         seed_mass,
         seed_length,
     );
-    let current_realization = blueprint.realization_at_length(
-        &organism.structure,
-        &environment.catalog,
-        origin,
-        orientation,
-        preferred_length,
-    );
+    let current_realization = organism
+        .developmental_realization_cached(&environment.catalog)
+        .unwrap_or_else(|| crate::developmental_blueprint::DevelopmentalRealization {
+            material: None,
+            density: None,
+            connectivity: None,
+            overall: 0.0,
+        });
     Some(DevelopmentalContext {
         blueprint,
         origin,
