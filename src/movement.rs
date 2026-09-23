@@ -262,11 +262,12 @@ fn apply_push_plan(
     dy: f64,
     plan: &PushPlan,
 ) {
+    let before_len = before_organisms.len();
     for &(is_before, index) in &plan.organism_indices {
         let organism = if is_before {
             &mut before_organisms[index]
         } else {
-            &mut after_organisms[index - before_organisms.len()]
+            &mut after_organisms[index - before_len]
         };
         translate_organism(organism, dx, dy);
     }
@@ -770,6 +771,7 @@ mod tests {
             &mut organism,
             &mut environment,
             &mut [blocker],
+            &mut [],
             5.0,
             0.0
         ));
