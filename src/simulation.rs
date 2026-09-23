@@ -370,6 +370,25 @@ impl Simulation {
             organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
             crate::harmonics::update_organism_harmonics(organism, &self.environment);
             Self::update_memory_from_sources(organism, &self.environment);
+            let (x, y) = organism
+                .occupied_cells
+                .first()
+                .map(|p| (p.x, p.y))
+                .unwrap_or((0.0, 0.0));
+            if let Some(cavity) = organism
+                .genome_cavity_cached(&self.environment.catalog)
+                .filter(|cavity| cavity.qualifies())
+            {
+                let capacity = crate::memory::memory_capacity(&cavity);
+                crate::memory::remember_perception(
+                    organism,
+                    x,
+                    y,
+                    organism.genome.memory_strength().clamp(0.0, 1.0),
+                    capacity,
+                    &organism.harmonic_spectrum.clone(),
+                );
+            }
             if matches!(organism.development_stage, DevelopmentStage::Adult)
                 && organism.reproductive_construction.is_none()
             {
