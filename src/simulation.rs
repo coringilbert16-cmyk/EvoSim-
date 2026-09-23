@@ -517,33 +517,14 @@ impl Simulation {
                     ActionKind::Combine => {
                         let developmental_blueprint =
                             organisms[index].genome.developmental_blueprint.clone();
-                        let (blueprint, origin, orientation) = (
-                            &developmental_blueprint,
+                        let developmental = developmental.as_ref().map(|context| {
                             (
-                                organisms[index].developmental_origin.x,
-                                organisms[index].developmental_origin.y,
-                            ),
-                            organisms[index].developmental_orientation_radians,
-                        );
-                        let developmental = if matches!(
-                            organisms[index].development_stage,
-                            DevelopmentStage::Juvenile
-                        ) {
-                            let developmental_context =
-                                crate::developmental_decision::context(
-                                    &organisms[index],
-                                    environment,
-                                )
-                                .expect("juvenile developmental context must exist");
-                            Some((
-                                developmental_context.blueprint,
-                                developmental_context.origin,
-                                developmental_context.orientation,
-                                developmental_context.preferred_length,
-                            ))
-                        } else {
-                            None
-                        };
+                                &developmental_blueprint,
+                                context.origin,
+                                context.orientation,
+                                context.preferred_length,
+                            )
+                        });
                         let combined = crate::combine_runtime::try_combine(
                             &mut organisms[index],
                             environment,
