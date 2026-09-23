@@ -62,6 +62,7 @@ impl Simulation {
             unit.placement.y = wrap_y(unit.placement.y + dy, environment.height);
         }
         translate_reproductive_construction(organism, dx, dy, environment.height);
+        organism.mark_structure_changed();
         true
     }
 }
@@ -214,6 +215,9 @@ fn apply_push_plan(
         let mut physical = physical;
         translate_physical(&mut physical, dx, dy, environment.height);
         pushed.push(physical);
+    }
+    if !pushed.is_empty() {
+        environment.field.revision = environment.field.revision.wrapping_add(1);
     }
     for physical in pushed {
         if let Some(placement) = physical
