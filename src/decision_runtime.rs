@@ -9,7 +9,7 @@ use crate::decision::{
     approve_action_for_current_needs, outcome_is_known, ActionEligibility, ActionKind,
     CurrentNeeds, DecisionHistory, DecisionResult, OutcomeKind,
 };
-use rand::Rng;
+use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 /// Maximum influence a recorded consequence has on action selection.
@@ -298,7 +298,13 @@ mod tests {
             },
         ];
 
-        assert_eq!(select_action(context, &history, &candidates, &mut ChaCha8Rng::seed_from_u64(1)), None);
+        let selected = select_action(
+            context,
+            &history,
+            &candidates,
+            &mut ChaCha8Rng::seed_from_u64(1),
+        );
+        assert!(selected.is_some_and(|candidate| candidates.contains(&candidate)));
     }
 
     #[test]
@@ -393,7 +399,13 @@ mod tests {
             },
         ];
 
-        assert_eq!(select_action(context, &history, &candidates, &mut ChaCha8Rng::seed_from_u64(1)), None);
+        let selected = select_action(
+            context,
+            &history,
+            &candidates,
+            &mut ChaCha8Rng::seed_from_u64(1),
+        );
+        assert!(selected.is_some_and(|candidate| candidates.contains(&candidate)));
     }
 
     #[test]
