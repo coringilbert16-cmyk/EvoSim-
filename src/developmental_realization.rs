@@ -86,20 +86,8 @@ impl DevelopmentalFieldBlueprint {
         preferred_length: f64,
     ) -> (Option<f64>, Option<f64>) {
         (
-            self.material_realization(
-                structure,
-                catalog,
-                origin,
-                orientation,
-                preferred_length,
-            ),
-            self.density_realization(
-                structure,
-                catalog,
-                origin,
-                orientation,
-                preferred_length,
-            ),
+            self.material_realization(structure, catalog, origin, orientation, preferred_length),
+            self.density_realization(structure, catalog, origin, orientation, preferred_length),
         )
     }
 
@@ -213,12 +201,7 @@ impl DevelopmentalFieldBlueprint {
                         .iter()
                         .map(|(name, amount)| {
                             (amount / total_amount)
-                                * self.material_preference_scaled(
-                                    name,
-                                    x,
-                                    y,
-                                    preferred_length,
-                                )
+                                * self.material_preference_scaled(name, x, y, preferred_length)
                         })
                         .sum::<f64>()
                 },
