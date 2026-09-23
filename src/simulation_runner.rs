@@ -7,6 +7,8 @@ const REPORT_INTERVAL: u64 = 100;
 pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
     let mut max_ticks = DEFAULT_MAX_TICKS;
     let mut target_births = DEFAULT_TARGET_BIRTHS;
+    let mut diagnostics_path: Option<String> = None;
+    let mut diagnostic_interval = REPORT_INTERVAL;
 
     let mut args = args.skip(1);
     while let Some(arg) = args.next() {
@@ -23,6 +25,15 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
                     .and_then(|value| value.parse().ok())
                     .unwrap_or(DEFAULT_TARGET_BIRTHS);
             }
+            "--diagnostics" => {
+                diagnostics_path = args.next();
+            }
+            "--diagnostic-interval" => {
+                diagnostic_interval = args
+                    .next()
+                    .and_then(|value| value.parse().ok())
+                    .unwrap_or(REPORT_INTERVAL);
+            }
             _ => {}
         }
     }
@@ -38,13 +49,26 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
         "HEADLESS SIMULATION START: seed=42 initial_organism={initial_id}          max_ticks={max_ticks} target_births={target_births}"
     );
 
+    let mut diagnostics = diagnostics_path.map(|path| {
+        crate::diagnostics::DiagnosticsRecorder::new(&path, diagnostic_interval, &mut simulation)
+            .unwrap_or_else(|error| panic!("failed to create diagnostics file {path}: {error}"))
+    });
+
     report(&simulation, "initial");
 
     let mut previous_population = simulation.organisms.len();
     let mut previous_births = simulation.next_organism_id.saturating_sub(2);
 
     for _ in 0..max_ticks {
+        if let Some(diagnostics) = diagnostics.as_mut() {
+            diagnostics.observe_before(&mut simulation);
+        }
         simulation.step();
+        if let Some(diagnostics) = diagnostics.as_mut() {
+            diagnostics
+                .observe_after(&mut simulation)
+                .expect("failed to write simulation diagnostics");
+        }
 
         let births = simulation.next_organism_id.saturating_sub(2);
         if births != previous_births {
@@ -67,6 +91,11 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
 
         if births >= target_births {
             report(&simulation, "target reached");
+            if let Some(diagnostics) = diagnostics.as_mut() {
+                diagnostics
+                    .finish(&mut simulation)
+                    .expect("failed to finalize simulation diagnostics");
+            }
             println!(
                 "HEADLESS SIMULATION END: observed {} completed birth events by tick {}.",
                 births, simulation.tick
@@ -76,6 +105,11 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
 
         if simulation.organisms.is_empty() {
             report(&simulation, "population extinct");
+            if let Some(diagnostics) = diagnostics.as_mut() {
+                diagnostics
+                    .finish(&mut simulation)
+                    .expect("failed to finalize simulation diagnostics");
+            }
             println!(
                 "HEADLESS SIMULATION END: population reached zero at tick {}.",
                 simulation.tick
@@ -84,6 +118,11 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
         }
     }
 
+    if let Some(diagnostics) = diagnostics.as_mut() {
+        diagnostics
+            .finish(&mut simulation)
+            .expect("failed to finalize simulation diagnostics");
+    }
     report(&simulation, "tick limit reached");
     println!(
         "HEADLESS SIMULATION END: tick limit {} reached with {} completed birth events.",
