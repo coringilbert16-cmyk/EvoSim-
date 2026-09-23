@@ -390,13 +390,36 @@ impl DiagnosticsRecorder {
                 Some(organism.stress),
             );
         }
-        let total_field_mass: f64 = simulation
+        let active_logical_mass: f64 = simulation
             .environment
             .field
             .cells
             .iter()
             .flat_map(|cell| cell.materials.iter())
             .map(|material| material.mass(&simulation.environment.catalog))
+            .sum();
+        let active_physical_mass: f64 = simulation
+            .environment
+            .field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .map(|instance| instance.material.mass(&simulation.environment.catalog))
+            .sum();
+        let active_total_mass = active_logical_mass + active_physical_mass;
+        let logical_material_instances: usize = simulation
+            .environment
+            .field
+            .cells
+            .iter()
+            .map(|cell| cell.materials.len())
+            .sum();
+        let physical_material_instances: usize = simulation
+            .environment
+            .field
+            .cells
+            .iter()
+            .map(|cell| cell.physical_materials.len())
             .sum();
         let total_stored_mass: f64 = simulation
             .organisms
@@ -419,7 +442,11 @@ impl DiagnosticsRecorder {
             "active_transformations": simulation.active_transformations.len(),
             "decomposing_bodies": simulation.decomposing_bodies.len(),
             "field_revision": simulation.environment.field.revision,
-            "field_total_mass": total_field_mass,
+            "active_logical_mass": active_logical_mass,
+            "active_physical_mass": active_physical_mass,
+            "active_total_mass": active_total_mass,
+            "logical_material_instances": logical_material_instances,
+            "physical_material_instances": physical_material_instances,
             "stored_total_mass": total_stored_mass,
             "energy_ledger": simulation.energy_ledger,
             "organisms": snapshot
@@ -482,6 +509,64 @@ impl DiagnosticsRecorder {
             file,
             "field_revision: {}",
             simulation.environment.field.revision
+        )?;
+        let active_logical_mass: f64 = simulation
+            .environment
+            .field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.materials.iter())
+            .map(|material| material.mass(&simulation.environment.catalog))
+            .sum();
+        let active_physical_mass: f64 = simulation
+            .environment
+            .field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .map(|instance| instance.material.mass(&simulation.environment.catalog))
+            .sum();
+        let active_total_mass = active_logical_mass + active_physical_mass;
+        let logical_material_instances: usize = simulation
+            .environment
+            .field
+            .cells
+            .iter()
+            .map(|cell| cell.materials.len())
+            .sum();
+        let physical_material_instances: usize = simulation
+            .environment
+            .field
+            .cells
+            .iter()
+            .map(|cell| cell.physical_materials.len())
+            .sum();
+        let stored_total_mass: f64 = simulation
+            .organisms
+            .iter()
+            .flat_map(|organism| organism.stored_material.entries.iter())
+            .map(|entry| match entry {
+                crate::material_storage::StoredMaterial::Logical(material) => {
+                    material.mass(&simulation.environment.catalog)
+                }
+                crate::material_storage::StoredMaterial::Physical(instance) => {
+                    instance.material.mass(&simulation.environment.catalog)
+                }
+            })
+            .sum();
+        writeln!(file, "active_logical_mass: {:.6}", active_logical_mass)?;
+        writeln!(file, "active_physical_mass: {:.6}", active_physical_mass)?;
+        writeln!(file, "active_total_mass: {:.6}", active_total_mass)?;
+        writeln!(file, "stored_total_mass: {:.6}", stored_total_mass)?;
+        writeln!(
+            file,
+            "logical_material_instances: {}",
+            logical_material_instances
+        )?;
+        writeln!(
+            file,
+            "physical_material_instances: {}",
+            physical_material_instances
         )?;
         writeln!(file)?;
         writeln!(file, "TRANSFORMATIONS")?;
