@@ -182,7 +182,7 @@ impl Simulation {
             !organism.structure.units.is_empty() && !organism.stored_material.is_empty();
         let can_join_existing_structure = organism.structure.units.len() >= 2;
         ActionEligibility {
-            can_move: organism.active_transformation_id.is_none(),
+            can_move: true,
             can_combine: organism.active_transformation_id.is_none()
                 && (can_build_from_storage || can_join_existing_structure),
             can_break: organism.active_transformation_id.is_none()
@@ -224,12 +224,6 @@ impl Simulation {
         if relevant(ActionKind::Combine) {
             candidates.push(ActionCandidate {
                 action: ActionKind::Combine,
-                context_key: None,
-            });
-        }
-        if relevant(ActionKind::Move) {
-            candidates.push(ActionCandidate {
-                action: ActionKind::Move,
                 context_key: None,
             });
         }
@@ -438,49 +432,15 @@ impl Simulation {
                         developmental.as_ref(),
                         &self.energy_ledger,
                     );
-                let Some(selected) = select_action_with_developmental_scores(
+                if let Some(selected) = select_action_with_developmental_scores(
                     context,
                     &organisms[index].decision_history,
                     &candidates,
                     &developmental_scores,
                     &mut self.rng,
-                ) else {
-                    continue;
-                };
-                match selected.action {
-                    ActionKind::Move => {
-                        let organism_count = organisms.len();
-                        let (before, rest) = organisms.split_at_mut(index);
-                        let (organism, after) =
-                            rest.split_first_mut().expect("index is in organisms");
-                        let mut others = Vec::with_capacity(organism_count.saturating_sub(1));
-                        for other in before.iter() {
-                            others.push((*other).clone());
-                        }
-                        for other in after.iter() {
-                            others.push((*other).clone());
-                        }
-                        let moved = Self::update_movement(organism, environment, &mut others);
-                        if moved {
-                            for (original, trial) in
-                                before.iter_mut().chain(after.iter_mut()).zip(others)
-                            {
-                                original.occupied_cells = trial.occupied_cells;
-                                original.structure = trial.structure;
-                                original.mark_position_changed();
-                            }
-                        }
-                        crate::decision_runtime::record_outcome(
-                            &mut organism.decision_history,
-                            &selected,
-                            if moved {
-                                crate::decision::OutcomeKind::Neutral
-                            } else {
-                                crate::decision::OutcomeKind::Harmful
-                            },
-                        );
-                    }
-                    ActionKind::Combine => {
+                ) {
+                    match selected.action {
+                        ActionKind::Combine => {
                         let developmental_blueprint =
                             organisms[index].genome.developmental_blueprint.clone();
                         let developmental = developmental.as_ref().map(|context| {
@@ -519,30 +479,71 @@ impl Simulation {
                             self.active_transformations.push(transformation);
                         }
                     }
-                    ActionKind::Expel => {
-                        let expelled = selected
-                            .context_key
-                            .as_deref()
-                            .and_then(|key| key.strip_prefix("stored:"))
-                            .and_then(|index| index.parse::<usize>().ok())
-                            .map(|storage_index| {
-                                crate::expulsion::expel_physical_material(
-                                    &mut organisms[index],
-                                    environment,
-                                    storage_index,
-                                )
-                            })
-                            .unwrap_or(false);
-                        crate::decision_runtime::record_outcome(
-                            &mut organisms[index].decision_history,
-                            &selected,
-                            if expelled {
-                                crate::decision::OutcomeKind::Neutral
-                            } else {
-                                crate::decision::OutcomeKind::Harmful
-                            },
-                        );
+                        ActionKind::Expel => {
+                            let expelled = selected
+                                .context_key
+                                .as_deref()
+                                .and_then(|key| key.strip_prefix("stored:"))
+                                .and_then(|index| index.parse::<usize>().ok())
+                                .map(|storage_index| {
+                                    crate::expulsion::expel_physical_material(
+                                        &mut organisms[index],
+                                        environment,
+                                        storage_index,
+                                    )
+                                })
+                                .unwrap_or(false);
+                            crate::decision_runtime::record_outcome(
+                                &mut organisms[index].decision_history,
+                                &selected,
+                                if expelled {
+                                    crate::decision::OutcomeKind::Neutral
+                                } else {
+                                    crate::decision::OutcomeKind::Harmful
+                                },
+                            );
+                        }
+                        ActionKind::Move => unreachable!("movement is evaluated independently"),
                     }
+                }
+
+                if eligibility.can_move
+                    && needs.any_for(ActionKind::Move.relevant_needs())
+                {
+                    let move_candidate = ActionCandidate {
+                        action: ActionKind::Move,
+                        context_key: None,
+                    };
+                    let organism_count = organisms.len();
+                    let (before, rest) = organisms.split_at_mut(index);
+                    let (organism, after) =
+                        rest.split_first_mut().expect("index is in organisms");
+                    let mut others = Vec::with_capacity(organism_count.saturating_sub(1));
+                    for other in before.iter() {
+                        others.push((*other).clone());
+                    }
+                    for other in after.iter() {
+                        others.push((*other).clone());
+                    }
+                    let moved = Self::update_movement(organism, environment, &mut others);
+                    if moved {
+                        for (original, trial) in
+                            before.iter_mut().chain(after.iter_mut()).zip(others)
+                        {
+                            original.occupied_cells = trial.occupied_cells;
+                            original.structure = trial.structure;
+                            original.mark_position_changed();
+                        }
+                    }
+                    crate::decision_runtime::record_outcome(
+                        &mut organism.decision_history,
+                        &move_candidate,
+                        if moved {
+                            crate::decision::OutcomeKind::Neutral
+                        } else {
+                            crate::decision::OutcomeKind::Harmful
+                        },
+                    );
                 }
             }
         }
