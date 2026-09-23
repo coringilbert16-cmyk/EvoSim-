@@ -152,6 +152,63 @@ pub(crate) fn resolve_stress_break(
     settle_break_energy(organism, target, break_interaction_energy, work, ledger)
 }
 
+pub(crate) fn break_candidate_is_executable(
+    organism: &Organism,
+    environment: &Environment,
+    target: crate::structure::Bond,
+) -> bool {
+    if organism.active_transformation_id.is_some()
+        || !target.bond_energy.is_finite()
+        || target.bond_energy < 0.0
+    {
+        return false;
+    }
+    let Some(ia) = organism
+        .structure
+        .unit_index(target.endpoint_a.constituent_id)
+    else {
+        return false;
+    };
+    let Some(ib) = organism
+        .structure
+        .unit_index(target.endpoint_b.constituent_id)
+    else {
+        return false;
+    };
+    let Some(a) = organism.structure.units.get(ia).and_then(|u| u.properties(&environment.catalog)) else {
+        return false;
+    };
+    let Some(b) = organism.structure.units.get(ib).and_then(|u| u.properties(&environment.catalog)) else {
+        return false;
+    };
+    let work = break_work_cost(a, b, crate::math::complexity(2.0));
+    if !work.is_finite() || work < 0.0 {
+        return false;
+    }
+    let Some(candidate) = crate::contact::connection_pair_candidates(
+        &organism.structure,
+        ia,
+        ib,
+        &environment.catalog,
+    )
+    .into_iter()
+    .find(|c| {
+        c.endpoint_a == target.endpoint_a.location && c.endpoint_b == target.endpoint_b.location
+    }) else {
+        return false;
+    };
+    let interaction = crate::combine::experimental_interaction(
+        a,
+        b,
+        candidate,
+        water_field_amount(environment, organism),
+    );
+    let Some(net) = break_net_energy(target.bond_energy, -interaction.signed_value, work) else {
+        return false;
+    };
+    net >= 0.0 || organism.usable_energy + f64::EPSILON >= -net
+}
+
 impl Simulation {
     pub(crate) fn try_start_transformation(
         organism: &mut Organism,
