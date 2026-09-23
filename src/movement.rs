@@ -8,7 +8,8 @@ impl Simulation {
     pub(crate) fn update_movement(
         organism: &mut Organism,
         environment: &mut Environment,
-        other_organisms: &mut [Organism],
+        before_organisms: &mut [Organism],
+        after_organisms: &mut [Organism],
         rng: &mut impl Rng,
     ) -> bool {
         if organism.active_transformation_id.is_some() {
@@ -17,13 +18,21 @@ impl Simulation {
         let movement_efficiency = organism.genome.movement_efficiency();
         let (x, y) = movement_direction(organism, rng);
         let step = 5.0 * movement_efficiency;
-        Self::try_move_cell(organism, environment, other_organisms, x * step, y * step)
+        Self::try_move_cell(
+            organism,
+            environment,
+            before_organisms,
+            after_organisms,
+            x * step,
+            y * step,
+        )
     }
 
     pub(crate) fn try_move_cell(
         organism: &mut Organism,
         environment: &mut Environment,
-        other_organisms: &mut [Organism],
+        before_organisms: &mut [Organism],
+        after_organisms: &mut [Organism],
         delta_x: f64,
         delta_y: f64,
     ) -> bool {
@@ -42,10 +51,24 @@ impl Simulation {
             return false;
         }
 
-        let Some(plan) = resolve_push_chain(organism, other_organisms, environment, dx, dy) else {
+        let Some(plan) = resolve_push_chain(
+            organism,
+            before_organisms,
+            after_organisms,
+            environment,
+            dx,
+            dy,
+        ) else {
             return false;
         };
-        apply_push_plan(organism, other_organisms, environment, dx, dy, &plan);
+        apply_push_plan(
+            before_organisms,
+            after_organisms,
+            environment,
+            dx,
+            dy,
+            &plan,
+        );
 
         organism.occupied_cells[0].x = new_x;
         organism.occupied_cells[0].y = new_y;
@@ -126,18 +149,19 @@ fn reindex_physical_materials(environment: &mut Environment) {
 }
 
 struct PushPlan {
-    organism_indices: Vec<usize>,
+    organism_indices: Vec<(bool, usize)>,
     physical_materials: Vec<(usize, usize)>,
 }
 
 fn resolve_push_chain(
     moving: &Organism,
-    other_organisms: &[Organism],
+    before_organisms: &[Organism],
+    after_organisms: &[Organism],
     environment: &Environment,
     dx: f64,
     dy: f64,
 ) -> Option<PushPlan> {
-    let mut organism_visited = vec![false; other_organisms.len()];
+    let mut organism_visited = vec![false; before_organisms.len() + after_organisms.len()];
     let mut physical_visited = std::collections::HashSet::new();
     let mut plan = PushPlan {
         organism_indices: Vec::new(),
@@ -149,7 +173,8 @@ fn resolve_push_chain(
     }
     if push_blockers_for_parts(
         &moving_destination,
-        other_organisms,
+        before_organisms,
+        after_organisms,
         environment,
         dx,
         dy,
@@ -165,7 +190,8 @@ fn resolve_push_chain(
 
 fn push_blockers_for_parts(
     moving_destination: &[PlacedMaterialPart],
-    other_organisms: &[Organism],
+    before_organisms: &[Organism],
+    after_organisms: &[Organism],
     environment: &Environment,
     dx: f64,
     dy: f64,
@@ -173,11 +199,15 @@ fn push_blockers_for_parts(
     physical_visited: &mut std::collections::HashSet<(usize, usize)>,
     plan: &mut PushPlan,
 ) -> bool {
-    for index in 0..other_organisms.len() {
+    for index in 0..organism_visited.len() {
         if organism_visited[index] {
             continue;
         }
-        let candidate = &other_organisms[index];
+        let candidate = if index < before_organisms.len() {
+            &before_organisms[index]
+        } else {
+            &after_organisms[index - before_organisms.len()]
+        };
         let candidate_parts = organism_parts_at(candidate, environment, 0.0, 0.0);
         if !parts_penetrate(moving_destination, &candidate_parts) {
             continue;
@@ -192,7 +222,8 @@ fn push_blockers_for_parts(
         organism_visited[index] = true;
         if !push_blockers_for_parts(
             &destination,
-            other_organisms,
+            before_organisms,
+            after_organisms,
             environment,
             dx,
             dy,
@@ -202,7 +233,8 @@ fn push_blockers_for_parts(
         ) {
             return false;
         }
-        plan.organism_indices.push(index);
+        plan.organism_indices
+            .push((index < before_organisms.len(), index));
     }
 
     for cell_index in 0..environment.field.cells.len() {
@@ -230,7 +262,8 @@ fn push_blockers_for_parts(
             physical_visited.insert(key);
             if !push_blockers_for_parts(
                 &destination,
-                other_organisms,
+                before_organisms,
+                after_organisms,
                 environment,
                 dx,
                 dy,
@@ -247,15 +280,20 @@ fn push_blockers_for_parts(
 }
 
 fn apply_push_plan(
-    _moving: &mut Organism,
-    other_organisms: &mut [Organism],
+    before_organisms: &mut [Organism],
+    after_organisms: &mut [Organism],
     environment: &mut Environment,
     dx: f64,
     dy: f64,
     plan: &PushPlan,
 ) {
-    for &index in &plan.organism_indices {
-        translate_organism(&mut other_organisms[index], dx, dy);
+    for &(is_before, index) in &plan.organism_indices {
+        let organism = if is_before {
+            &mut before_organisms[index]
+        } else {
+            &mut after_organisms[index - before_organisms.len()]
+        };
+        translate_organism(organism, dx, dy);
     }
 
     if !plan.physical_materials.is_empty() {
@@ -504,6 +542,7 @@ mod tests {
             &mut organism,
             &mut environment,
             &mut [],
+            &mut [],
             12.0,
             -7.0,
         ));
@@ -532,6 +571,7 @@ mod tests {
             &mut organism,
             &mut environment,
             &mut [],
+            &mut [],
             12.0,
             -7.0
         ));
@@ -554,12 +594,14 @@ mod tests {
             &mut organism,
             &mut environment,
             &mut [],
+            &mut [],
             -10.0,
             -10.0
         ));
         assert!(!Simulation::try_move_cell(
             &mut organism,
             &mut environment,
+            &mut [],
             &mut [],
             f64::NAN,
             1.0
@@ -589,6 +631,7 @@ mod tests {
             &mut organism,
             &mut environment,
             &mut [],
+            &mut [],
             5.0,
             0.0
         ));
@@ -614,6 +657,7 @@ mod tests {
             &mut organism,
             &mut environment,
             &mut others,
+            &mut [],
             5.0,
             0.0
         ));
@@ -647,6 +691,7 @@ mod tests {
             &mut organism,
             &mut environment,
             &mut others,
+            &mut [],
             5.0,
             0.0
         ));
@@ -686,6 +731,7 @@ mod tests {
         assert!(Simulation::try_move_cell(
             &mut organism,
             &mut environment,
+            &mut [],
             &mut [],
             5.0,
             0.0
@@ -763,6 +809,7 @@ mod tests {
             &mut organism,
             &mut environment,
             &mut others,
+            &mut [],
             5.0,
             0.0
         ));
@@ -817,6 +864,7 @@ mod tests {
         assert!(Simulation::try_move_cell(
             &mut organism,
             &mut environment,
+            &mut [],
             &mut [],
             5.0,
             0.0
