@@ -51,8 +51,7 @@ impl DecomposingBody {
 
 pub(crate) struct DecompositionStep {
     pub(crate) net_energy: f64,
-    pub(crate) bond_energy: f64,
-    pub(crate) break_interaction_energy: f64,
+    pub(crate) potential_energy: f64,
     pub(crate) heat: f64,
     pub(crate) released_material: Option<Vec<PhysicalMaterial>>,
 }
@@ -95,25 +94,6 @@ pub(crate) fn resolve_one_bond_with_ledger(
         .units
         .get(ib)?
         .properties(&environment.catalog)?;
-    let candidate =
-        crate::contact::connection_pair_candidates(&body.structure, ia, ib, &environment.catalog)
-            .into_iter()
-            .find(|candidate| {
-                candidate.endpoint_a == target.endpoint_a.location
-                    && candidate.endpoint_b == target.endpoint_b.location
-            })?;
-    let interaction = experimental_interaction(
-        a,
-        b,
-        candidate,
-        water_field_amount(environment, &body.position),
-    );
-    let break_interaction_energy = -interaction.signed_value;
-    let complexity = crate::math::complexity(2.0);
-    let work = crate::transformation::break_work_cost(a, b, complexity);
-    if !work.is_finite() || work < 0.0 {
-        return None;
-    }
 
     let mut trial_structure = body.structure.clone();
     trial_structure.break_matching_bond(target)?;
@@ -136,13 +116,14 @@ pub(crate) fn resolve_one_bond_with_ledger(
     };
 
     let before = body.energy_budget;
-    let net = target.bond_energy + break_interaction_energy - work;
+    let (gross, usable, heat) =
+        crate::transformation::break_energy_yield(a, b, water_field_amount(environment, &body.position), 1.0)?;
     let transaction = EnergyTransaction {
         reason: EnergyReason::Decomposition,
-        potential_released: break_interaction_energy.max(0.0),
-        usable_delta: net,
-        structural_delta: -target.bond_energy,
-        heat_dissipated: work + (-break_interaction_energy).max(0.0),
+        potential_released: gross,
+        usable_delta: usable,
+        structural_delta: 0.0,
+        heat_dissipated: heat,
     };
     if !ledger.settle_transaction(&mut body.energy_budget, transaction) {
         return None;
@@ -151,9 +132,8 @@ pub(crate) fn resolve_one_bond_with_ledger(
     body.structure = trial_structure;
     Some(DecompositionStep {
         net_energy: net,
-        bond_energy: target.bond_energy,
-        break_interaction_energy,
-        heat: work,
+        potential_energy: gross,
+        heat,
         released_material,
     })
 }
