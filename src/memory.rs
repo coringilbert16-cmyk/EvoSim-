@@ -101,66 +101,67 @@ impl Simulation {
         let Some(cavity) = qualifying_genome_cavity(organism, environment) else {
             return;
         };
-    let capacity = memory_capacity(&cavity);
-    for (x, y, spectrum) in
-        crate::harmonics::nearby_environmental_spectra(organism, environment)
-    {
-        let Some((sx, sy)) = organism.occupied_cells.first().map(|p| (p.x, p.y)) else {
-            continue;
-        };
-        let distance = ((x - sx).powi(2) + (y - sy).powi(2)).sqrt();
-        let amplitude = spectrum
-            .components
-            .iter()
-            .map(|component| component.amplitude)
-            .fold(0.0, f64::max);
-        let strength = (amplitude / (1.0 + distance)).clamp(0.0, 1.0);
-        if strength > f64::EPSILON {
-            Simulation::remember_perception(organism, x, y, strength, capacity, &spectrum);
+        let capacity = memory_capacity(&cavity);
+        for (x, y, spectrum) in
+            crate::harmonics::nearby_environmental_spectra(organism, environment)
+        {
+            let Some((sx, sy)) = organism.occupied_cells.first().map(|p| (p.x, p.y)) else {
+                continue;
+            };
+            let distance = ((x - sx).powi(2) + (y - sy).powi(2)).sqrt();
+            let amplitude = spectrum
+                .components
+                .iter()
+                .map(|component| component.amplitude)
+                .fold(0.0, f64::max);
+            let strength = (amplitude / (1.0 + distance)).clamp(0.0, 1.0);
+            if strength > f64::EPSILON {
+                Simulation::remember_perception(organism, x, y, strength, capacity, &spectrum);
+            }
         }
     }
-}
 
-pub(crate) fn reinforce_acquired_material(
-    organism: &mut Organism,
-    environment: &Environment,
-    x: f64,
-    y: f64,
-    material: &crate::resources::Material,
-) {
-    let Some(cavity) = qualifying_genome_cavity(organism, environment) else {
-        return;
-    };
-    let spectrum = crate::harmonics::material_spectrum(material, &environment.catalog);
-    if spectrum.components.is_empty() {
-        return;
-    }
-    let matches_perceived_signal = |point: &MemoryPoint| {
-        let dx = point.x - x;
-        let dy = point.y - y;
-        if (dx * dx + dy * dy).sqrt() >= MEMORY_MERGE_RADIUS {
-            return false;
+    pub(crate) fn reinforce_acquired_material(
+        organism: &mut Organism,
+        environment: &Environment,
+        x: f64,
+        y: f64,
+        material: &crate::resources::Material,
+    ) {
+        let Some(cavity) = qualifying_genome_cavity(organism, environment) else {
+            return;
+        };
+        let spectrum = crate::harmonics::material_spectrum(material, &environment.catalog);
+        if spectrum.components.is_empty() {
+            return;
         }
-        point.spectrum.components.iter().any(|observed| {
-            spectrum.components.iter().any(|acquired| {
-                (observed.frequency_hz - acquired.frequency_hz).abs() <= 1e-6
-                    })
+        let matches_perceived_signal = |point: &MemoryPoint| {
+            let dx = point.x - x;
+            let dy = point.y - y;
+            if (dx * dx + dy * dy).sqrt() >= MEMORY_MERGE_RADIUS {
+                return false;
+            }
+            point.spectrum.components.iter().any(|observed| {
+                spectrum
+                    .components
+                    .iter()
+                    .any(|acquired| (observed.frequency_hz - acquired.frequency_hz).abs() <= 1e-6)
             })
-    };
-    let Some(index) = organism.memory.iter().position(matches_perceived_signal) else {
-        return;
-    };
-    let point = organism.memory[index].clone();
-    Simulation::reinforce_memory_point(
-        organism,
-        point.x,
-        point.y,
-        organism.genome.memory_strength().clamp(0.0, 1.0),
-        memory_capacity(&cavity),
-        &spectrum,
-        crate::decision::OutcomeKind::Beneficial,
-    );
-}
+        };
+        let Some(index) = organism.memory.iter().position(matches_perceived_signal) else {
+            return;
+        };
+        let point = organism.memory[index].clone();
+        Simulation::reinforce_memory_point(
+            organism,
+            point.x,
+            point.y,
+            organism.genome.memory_strength().clamp(0.0, 1.0),
+            memory_capacity(&cavity),
+            &spectrum,
+            crate::decision::OutcomeKind::Beneficial,
+        );
+    }
 
     pub(crate) fn reinforce_memory_point(
         organism: &mut Organism,
