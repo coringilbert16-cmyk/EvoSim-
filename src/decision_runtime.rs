@@ -7,7 +7,7 @@
 
 use crate::decision::{
     approve_action_for_current_needs, outcome_is_known, ActionEligibility, ActionKind,
-    ActionConsequence, CurrentNeeds, DecisionHistory, DecisionResult,
+    ActionConsequence, CurrentNeeds, DecisionHistory, DecisionResult, OutcomeKind,
 };
 use rand::Rng;
 use rand_chacha::ChaCha8Rng;
