@@ -78,20 +78,20 @@ impl Simulation {
                 y: sy,
                 strength: memory_strength,
                 spectrum: spectrum.clone(),
-                outcome: None,
+                consequence: None,
             });
         } else if let Some(weakest) = organism
             .memory
             .iter_mut()
             .min_by(|a, b| a.strength.partial_cmp(&b.strength).unwrap())
         {
-            if memory_strength > weakest.strength && weakest.outcome.is_none() {
+            if memory_strength > weakest.strength && weakest.consequence.is_none() {
                 *weakest = MemoryPoint {
                     x: sx,
                     y: sy,
                     strength: memory_strength,
                     spectrum: spectrum.clone(),
-                    outcome: None,
+                    consequence: None,
                 };
             }
         }
@@ -104,7 +104,7 @@ impl Simulation {
         memory_strength: f64,
         capacity: usize,
         spectrum: &crate::harmonics::ToneSpectrum,
-        outcome: crate::decision::OutcomeKind,
+        consequence: crate::decision::ActionConsequence,
     ) {
         let merged = organism.memory.iter_mut().find(|p| {
             let dx = p.x - sx;
@@ -118,7 +118,7 @@ impl Simulation {
                 existing.y = sy;
                 existing.strength = (existing.strength + memory_strength).min(1.0);
                 existing.spectrum.merge_from(spectrum, 1.0);
-                existing.outcome = Some(outcome);
+                existing.consequence = Some(outcome);
             }
             None => {
                 if organism.memory.len() < capacity {
@@ -127,7 +127,7 @@ impl Simulation {
                         y: sy,
                         strength: memory_strength,
                         spectrum: spectrum.clone(),
-                        outcome: Some(outcome),
+                        consequence: Some(consequence),
                     });
                 } else if let Some(weakest) = organism
                     .memory
@@ -140,7 +140,7 @@ impl Simulation {
                             y: sy,
                             strength: memory_strength,
                             spectrum: spectrum.clone(),
-                            outcome: Some(outcome),
+                            consequence: Some(consequence),
                         };
                     }
                 }
@@ -208,7 +208,7 @@ mod tests {
         assert_eq!(organism.memory.len(), 1);
         assert_eq!(organism.memory[0].spectrum, spectrum);
         assert_eq!(
-            organism.memory[0].outcome,
+            organism.memory[0].consequence,
             Some(crate::decision::OutcomeKind::Beneficial)
         );
     }
@@ -220,7 +220,7 @@ mod tests {
 
         Simulation::remember_perception(&mut organism, 12.0, 34.0, 0.5, 1, &spectrum);
         assert_eq!(organism.memory.len(), 1);
-        assert_eq!(organism.memory[0].outcome, None);
+        assert_eq!(organism.memory[0].consequence, None);
         let perception_strength = organism.memory[0].strength;
 
         reinforce_memory_point(
@@ -234,7 +234,7 @@ mod tests {
         );
 
         assert_eq!(
-            organism.memory[0].outcome,
+            organism.memory[0].consequence,
             Some(crate::decision::OutcomeKind::Harmful)
         );
         assert!(organism.memory[0].strength > perception_strength);
