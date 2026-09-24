@@ -717,3 +717,38 @@ impl Simulation {
         organism.apply_stress_damage(environment, ledger, rng)
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn initial_environment_material_is_acquired_when_physically_contained() {
+        let mut simulation = Simulation::new(42, 20.0);
+        let before = simulation.organisms[0].stored_material.physical_count();
+        Simulation::transfer_contained_environmental_material(
+            &mut simulation.organisms[0],
+            &mut simulation.environment,
+        );
+        let after = simulation.organisms[0].stored_material.physical_count();
+        assert!(
+            after > before,
+            "initial environment should provide physically contained material"
+        );
+    }
+
+    #[test]
+    fn movement_is_not_eligible_without_energy_to_execute_it() {
+        let simulation = Simulation::new(42, 20.0);
+        let mut organism = simulation.organisms[0].clone();
+        organism.usable_energy = 0.0;
+        let needs = CurrentNeeds {
+            survival: 1.0,
+            ..CurrentNeeds::default()
+        };
+        let eligibility =
+            Simulation::action_eligibility(&organism, &simulation.environment, needs);
+        assert!(!eligibility.can_move);
+    }
+}
