@@ -98,7 +98,7 @@ impl Simulation {
     }
 
     pub(crate) fn remember_nearby_harmonics(organism: &mut Organism, environment: &Environment) {
-    let Some(cavity) = qualifying_genome_cavity(organism, environment) else {
+        let Some(cavity) = qualifying_genome_cavity(organism, environment) else {
         return;
     };
     let capacity = memory_capacity(&cavity);
@@ -162,7 +162,7 @@ pub(crate) fn reinforce_acquired_material(
     );
 }
 
-pub(crate) fn reinforce_memory_point(
+    pub(crate) fn reinforce_memory_point(
         organism: &mut Organism,
         sx: f64,
         sy: f64,
