@@ -38,13 +38,16 @@ fn compound(parts: &[(&str, f64)]) -> Material {
 /// Populate the active field with a deterministic, spatially correlated
 /// starting landscape. No terrain categories are introduced: local character
 /// comes entirely from material composition, quantity, and neighboring cells.
-pub(crate) const INITIAL_FORMATION_COUNT: usize = 6;
-const FORMATION_PARTICLES: usize = 120;
-const FORMATION_RADIUS: f64 = 45.0;
+pub(crate) const INITIAL_FORMATION_COUNT: usize = 9;
+const FORMATION_PARTICLES: usize = 180;
+const FORMATION_RADIUS: f64 = 65.0;
 const FORMATION_CENTER_FRACTIONS: [(f64, f64); INITIAL_FORMATION_COUNT] = [
     (0.18, 0.18),
     (0.50, 0.18),
     (0.82, 0.18),
+    (0.18, 0.50),
+    (0.50, 0.50),
+    (0.82, 0.50),
     (0.18, 0.82),
     (0.50, 0.82),
     (0.82, 0.82),
@@ -195,6 +198,16 @@ mod tests {
             .sum();
         assert!(physical_count > INITIAL_FORMATION_COUNT);
         assert!(physical_count <= INITIAL_FORMATION_COUNT * FORMATION_PARTICLES);
+    }
+
+    #[test]
+    fn initial_landscape_places_material_at_initial_organism_location() {
+        let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
+        seed_initial_landscape(&mut field, &crate::resources::default_catalog());
+        let center = field
+            .index_for_position(500.0, 500.0)
+            .expect("initial organism location must be in the field");
+        assert!(!field.cells[center].physical_materials.is_empty());
     }
 
     #[test]
