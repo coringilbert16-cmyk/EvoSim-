@@ -259,6 +259,7 @@ mod tests {
             area: 10.0,
             boundary_units: Vec::new(),
             minimum_area: 10.0,
+            boundary_polygon: Vec::new(),
         };
         let four_times = crate::cavity::GenomeCavity {
             area: 40.0,
