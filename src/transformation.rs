@@ -22,44 +22,60 @@ fn water_field_amount(environment: &Environment, organism: &Organism) -> f64 {
         .unwrap_or(0.0)
 }
 
-fn break_net_energy(bond_energy: f64, interaction_energy: f64, work_cost: f64) -> Option<f64> {
-    if !bond_energy.is_finite()
-        || bond_energy < 0.0
-        || !interaction_energy.is_finite()
-        || !work_cost.is_finite()
-        || work_cost < 0.0
-    {
+pub(crate) fn break_energy_yield(
+    a: crate::resources::ResourceProperties,
+    b: crate::resources::ResourceProperties,
+    water_field: f64,
+    processing_efficiency: f64,
+) -> Option<(f64, f64, f64)> {
+    let gross = a.potential_energy + b.potential_energy;
+    if !gross.is_finite() || gross < 0.0 {
         return None;
     }
-    let net = bond_energy + interaction_energy - work_cost;
-    net.is_finite().then_some(net)
+    let reactivity = (
+        crate::math::exponential_influence(
+            crate::resources::effective_reactivity(a.reactivity.max(0.0), water_field),
+        )
+        + crate::math::exponential_influence(
+            crate::resources::effective_reactivity(b.reactivity.max(0.0), water_field),
+        )
+    ) * 0.5;
+    let cohesion = ((a.cohesion.clamp(0.0, 1.0) + b.cohesion.clamp(0.0, 1.0)) * 0.5)
+        .clamp(0.0, 1.0);
+    let accessible = gross * reactivity;
+    let cohesion_loss = accessible * cohesion * 0.5;
+    let pre_processing = (accessible - cohesion_loss).max(0.0);
+    let efficiency = processing_efficiency.clamp(0.0, 1.0);
+    let usable = pre_processing * efficiency;
+    let heat = (gross - usable).max(0.0);
+    (usable.is_finite() && heat.is_finite()).then_some((gross, usable, heat))
 }
 
 fn settle_break_energy(
     organism: &mut Organism,
     bond: crate::structure::Bond,
-    break_interaction_energy: f64,
-    work: f64,
+    usable: f64,
+    gross: f64,
+    heat: f64,
     ledger: &mut EnergyLedger,
 ) -> bool {
     let mut trial_structure = organism.structure.clone();
     if trial_structure.break_matching_bond(bond).is_none() {
         return false;
     }
-    let net = bond.bond_energy + break_interaction_energy - work;
     let tx = EnergyTransaction {
         reason: EnergyReason::Break,
-        potential_released: break_interaction_energy.max(0.0),
-        usable_delta: net,
-        structural_delta: -bond.bond_energy,
-        heat_dissipated: work + (-break_interaction_energy).max(0.0),
+        potential_released: gross,
+        usable_delta: usable,
+        structural_delta: 0.0,
+        heat_dissipated: heat,
     };
     if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
         return false;
     }
     organism.structure = trial_structure;
     organism.mark_structure_changed();
-    organism.add_transaction_stress(work);
+    organism.add_transaction_stress(heat);
     true
 }
 
@@ -136,20 +152,13 @@ pub(crate) fn resolve_stress_break(
     }) else {
         return false;
     };
-    let formation_interaction = crate::combine::experimental_interaction(
+    let (gross, usable, heat) = break_energy_yield(
         a,
         b,
-        candidate,
         water_field_amount(environment, organism),
-    );
-    let break_interaction_energy = -formation_interaction.signed_value;
-    let Some(net) = break_net_energy(target.bond_energy, break_interaction_energy, work) else {
-        return false;
-    };
-    if net < 0.0 && organism.usable_energy + f64::EPSILON < -net {
-        return false;
-    }
-    settle_break_energy(organism, target, break_interaction_energy, work, ledger)
+        organism.genome.processing_efficiency(),
+    )?;
+    settle_break_energy(organism, target, usable, gross, heat, ledger)
 }
 
 impl Simulation {
@@ -263,38 +272,23 @@ impl Simulation {
                 return;
             }
         };
-        let formation_interaction = crate::combine::experimental_interaction(
+        let Some((gross, usable, heat)) = break_energy_yield(
             a,
             b,
-            candidate,
             water_field_amount(environment, organism),
-        );
-        let break_interaction_energy = -formation_interaction.signed_value;
-        let Some(net) = break_net_energy(target.bond_energy, break_interaction_energy, work) else {
+            organism.genome.processing_efficiency(),
+        ) else {
             organism.active_transformation_id = None;
             return;
         };
-        if net < 0.0 && organism.usable_energy + f64::EPSILON < -net {
-            organism.active_transformation_id = None;
-            let candidate = ActionCandidate {
-                action: ActionKind::Break,
-                context_key: transformation.decision_context_key.clone(),
-            };
-            crate::decision_runtime::record_outcome(
-                &mut organism.decision_history,
-                &candidate,
-                OutcomeKind::Harmful,
-            );
-            return;
-        }
-        if !settle_break_energy(organism, target, break_interaction_energy, work, ledger) {
+        if !settle_break_energy(organism, target, usable, gross, heat, ledger) {
             organism.active_transformation_id = None;
             return;
         }
         organism.active_transformation_id = None;
-        let outcome = if net > f64::EPSILON {
+        let outcome = if usable > f64::EPSILON {
             OutcomeKind::Beneficial
-        } else if net < -f64::EPSILON {
+        } else if heat > f64::EPSILON {
             OutcomeKind::Harmful
         } else {
             OutcomeKind::Neutral
@@ -350,10 +344,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn break_net_energy_supports_all_three_signs() {
-        assert!(break_net_energy(10.0, 5.0, 3.0).unwrap() > 0.0);
-        assert_eq!(break_net_energy(10.0, 0.0, 10.0).unwrap(), 0.0);
-        assert!(break_net_energy(10.0, -5.0, 6.0).unwrap() < 0.0)
+    fn break_energy_yield_is_positive_when_resources_have_reactive_potential() {
+        let carbon = crate::resources::ResourceProperties {
+            mass: 1.0,
+            potential_energy: 1.0,
+            reactivity: 1.0,
+            cohesion: 0.5,
+        };
+        let methane = crate::resources::ResourceProperties {
+            potential_energy: 20.0,
+            reactivity: 4.0,
+            cohesion: 0.1,
+            ..carbon
+        };
+        let (gross, usable, heat) = break_energy_yield(carbon, methane, 0.0, 0.8).unwrap();
+        assert_eq!(gross, 21.0);
+        assert!(usable > 0.0);
+        assert!(heat >= 0.0);
+        assert!((gross - usable - heat).abs() < 1e-12);
     }
 
     #[test]
