@@ -104,7 +104,7 @@ impl Simulation {
         memory_strength: f64,
         capacity: usize,
         spectrum: &crate::harmonics::ToneSpectrum,
-        outcome: crate::decision::OutcomeKind,
+        consequence: crate::decision::ActionConsequence,
     ) {
         let merged = organism.memory.iter_mut().find(|p| {
             let dx = p.x - sx;
@@ -118,7 +118,8 @@ impl Simulation {
                 existing.y = sy;
                 existing.strength = (existing.strength + memory_strength).min(1.0);
                 existing.spectrum.merge_from(spectrum, 1.0);
-                existing.outcome = Some(outcome);
+                existing.outcome = Some(consequence.outcome());
+                existing.consequence = Some(consequence);
             }
             None => {
                 if organism.memory.len() < capacity {
@@ -127,7 +128,8 @@ impl Simulation {
                         y: sy,
                         strength: memory_strength,
                         spectrum: spectrum.clone(),
-                        outcome: Some(outcome),
+                        outcome: Some(consequence.outcome()),
+                        consequence: Some(consequence),
                     });
                 } else if let Some(weakest) = organism
                     .memory
@@ -167,7 +169,7 @@ pub(crate) fn reinforce_memory_point(
     memory_strength: f64,
     capacity: usize,
     spectrum: &crate::harmonics::ToneSpectrum,
-    outcome: crate::decision::OutcomeKind,
+    consequence: crate::decision::ActionConsequence,
 ) {
     Simulation::reinforce_memory_point(
         organism,
@@ -176,7 +178,7 @@ pub(crate) fn reinforce_memory_point(
         memory_strength,
         capacity,
         spectrum,
-        outcome,
+        consequence,
     );
 }
 
