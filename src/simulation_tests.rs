@@ -124,6 +124,41 @@ mod integration_tests {
     }
 
     #[test]
+    fn material_inside_realized_cavity_becomes_storage() {
+        let mut s = Simulation::new(24, 10.0);
+        let organism = s.organisms[0].clone();
+        let center = organism.developmental_origin.clone();
+        let body = crate::organism_geometry::OrganismBodyGeometry::from_structure(
+            &organism.structure,
+            &s.environment.catalog,
+        )
+        .expect("initial organism must have a realized body");
+        assert!(
+            !body.contains_point(center.x, center.y),
+            "the seed center should be the enclosed cavity, not structural material"
+        );
+        let physical = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: center.x,
+                y: center.y,
+                rotation_radians: 0.0,
+            }],
+            &s.environment.catalog,
+        )
+        .expect("carbon should have a valid physical realization");
+        let before = s.organisms[0].stored_material.total_amount();
+        s.environment.field.deposit(center.x, center.y, physical);
+
+        Simulation::transfer_contained_environmental_material(
+            &mut s.organisms[0],
+            &mut s.environment,
+        );
+
+        assert_eq!(s.organisms[0].stored_material.total_amount(), before + 1.0);
+    }
+
+    #[test]
     fn a_composite_crossing_the_boundary_is_partitioned_at_constituent_scale() {
         let mut s = Simulation::new(23, 10.0);
         for cell in &mut s.environment.field.cells {
