@@ -528,10 +528,10 @@ impl Simulation {
                                 let developmental_change = developmental_scores
                                     .iter()
                                     .zip(candidates.iter())
-                                    .find(|(_, candidate)| *candidate == selected)
+                                     .find(|(_, candidate)| **candidate == selected)
                                     .and_then(|(score, _)| *score)
-                                    .zip(developmental.as_ref())
-                                    .map(|(after, context)| after - context.current_growth_fraction)
+                                     .zip(developmental.as_ref())
+                                    .map(|(after, _)| after - crate::developmental_decision::growth_fraction(&mut organisms[index], environment))
                                     .unwrap_or(0.0)
                                     .clamp(-1.0, 1.0);
                                 crate::decision::ActionConsequence {
