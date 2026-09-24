@@ -520,7 +520,8 @@ impl Simulation {
                                 developmental,
                             );
                             let consequence = if let Some(attempt) = combined {
-                                let structural_change = organisms[index].structure.units.len() as f64
+                                let structural_change = organisms[index].structure.units.len()
+                                    as f64
                                     - before_units as f64;
                                 let bond_change = organisms[index].structure.bonds.len() as f64
                                     - before_bonds as f64;
