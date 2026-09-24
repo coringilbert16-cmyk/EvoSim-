@@ -242,7 +242,7 @@ fn environmental_mass_scale(mass: f64, baseline_mass: f64) -> f64 {
 /// The physical genome cavity receives the spectrum present at its realized
 /// boundary. Boundary membership comes only from the actual cavity analysis;
 /// it is never inferred from a blueprint or a hard-coded genome core.
-fn environmental_spectrum_at_position(
+pub(crate) fn environmental_spectrum_at_position(
     field: &crate::environment::ActiveMaterialField,
     catalog: &[crate::resources::BaseResource],
     x: f64,
@@ -283,6 +283,58 @@ fn environmental_spectrum_at_position(
     }
     spectrum.retain_strongest();
     spectrum
+}
+
+/// Return the harmonic signal from one realized environmental material without
+/// exposing its material identity to the organism.
+pub(crate) fn material_spectrum(
+    material: &crate::resources::Material,
+    catalog: &[crate::resources::BaseResource],
+) -> ToneSpectrum {
+    if !material.is_valid() || material.is_empty() {
+        return ToneSpectrum::empty();
+    }
+    let baselines = ResourceBaselines::from_catalog(catalog);
+    let response = material_response(material.weighted_properties(catalog), baselines, 0.0);
+    let mut spectrum = response;
+    spectrum.retain_strongest();
+    spectrum
+}
+
+/// Perception samples only the local environmental neighborhood. It returns
+/// positions and resonant spectra, never resource names or material identity.
+pub(crate) fn nearby_environmental_spectra(
+    organism: &crate::state::Organism,
+    environment: &crate::state::Environment,
+) -> Vec<(f64, f64, ToneSpectrum)> {
+    let Some(anchor) = organism.occupied_cells.first() else {
+        return Vec::new();
+    };
+    let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_structure(
+        &organism.structure,
+        &environment.catalog,
+    ) else {
+        return Vec::new();
+    };
+    let body_extent = (body.max_x - body.min_x).max(body.max_y - body.min_y);
+    let radius = body_extent * 0.5 + environment.field.cell_size;
+    let mut observations = Vec::new();
+    for index in environment
+        .field
+        .cells_within_radius(anchor.x, anchor.y, radius.max(environment.field.cell_size))
+    {
+        let (x, y) = environment.field.cell_center(index);
+        let spectrum = environmental_spectrum_at_position(
+            &environment.field,
+            &environment.catalog,
+            x,
+            y,
+        );
+        if spectrum.components.iter().any(|component| component.amplitude > f64::EPSILON) {
+            observations.push((x, y, spectrum));
+        }
+    }
+    observations
 }
 
 pub(crate) fn genome_cavity_spectrum(
