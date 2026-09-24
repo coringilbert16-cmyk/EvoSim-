@@ -429,13 +429,7 @@ pub(crate) fn update_movement_in_population(
         return false;
     }
     let step = 5.0 * movement_efficiency;
-    try_move_cell_in_population(
-        organism_index,
-        organisms,
-        environment,
-        x * step,
-        y * step,
-    )
+    try_move_cell_in_population(organism_index, organisms, environment, x * step, y * step)
 }
 
 fn try_move_cell_in_population(
@@ -463,16 +457,11 @@ fn try_move_cell_in_population(
         return false;
     }
 
-    let push_plan = match resolve_push_chain_in_population(
-        organism_index,
-        organisms,
-        environment,
-        dx,
-        dy,
-    ) {
-        Some(plan) => plan,
-        None => return false,
-    };
+    let push_plan =
+        match resolve_push_chain_in_population(organism_index, organisms, environment, dx, dy) {
+            Some(plan) => plan,
+            None => return false,
+        };
 
     apply_push_plan_in_population(organisms, environment, push_plan, dx, dy);
 
