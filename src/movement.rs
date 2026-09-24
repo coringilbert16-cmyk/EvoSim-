@@ -436,6 +436,7 @@ mod tests {
             strength: 1.0,
             spectrum: crate::harmonics::ToneSpectrum::empty(),
             outcome: None,
+            consequence: None,
         });
         let (x, y) = movement_direction(&organism).expect("direction should exist");
         assert!(x.abs() < f64::EPSILON);
