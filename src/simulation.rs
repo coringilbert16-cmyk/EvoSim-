@@ -510,22 +510,45 @@ impl Simulation {
                                     context.preferred_length,
                                 )
                             });
+                            let before_units = organisms[index].structure.units.len();
+                            let before_bonds = organisms[index].structure.bonds.len();
                             let combined = crate::combine_runtime::try_combine(
                                 &mut organisms[index],
                                 environment,
                                 &mut compatibility_cache,
                                 &mut self.energy_ledger,
                                 developmental,
-                            )
-                            .is_some();
-                            crate::decision_runtime::record_outcome(
+                            );
+                            let consequence = if let Some(attempt) = combined {
+                                let structural_change = organisms[index].structure.units.len() as f64
+                                    - before_units as f64;
+                                let bond_change = organisms[index].structure.bonds.len() as f64
+                                    - before_bonds as f64;
+                                let developmental_change = developmental_scores
+                                    .iter()
+                                    .zip(candidates.iter())
+                                    .find(|(_, candidate)| **candidate == selected)
+                                    .and_then(|(score, _)| *score)
+                                    .zip(developmental.as_ref())
+                                    .map(|(after, context)| after - context.current_growth_fraction)
+                                    .unwrap_or(0.0)
+                                    .clamp(-1.0, 1.0);
+                                crate::decision::ActionConsequence {
+                                    energy: attempt.net_energy_change.signum(),
+                                    structure: (structural_change + bond_change).signum(),
+                                    development: developmental_change.signum(),
+                                }
+                            } else {
+                                crate::decision::ActionConsequence {
+                                    energy: -1.0,
+                                    structure: 0.0,
+                                    development: 0.0,
+                                }
+                            };
+                            crate::decision_runtime::record_consequence(
                                 &mut organisms[index].decision_history,
                                 &selected,
-                                if combined {
-                                    crate::decision::OutcomeKind::Neutral
-                                } else {
-                                    crate::decision::OutcomeKind::Harmful
-                                },
+                                consequence,
                             );
                         }
                         ActionKind::Break => {
