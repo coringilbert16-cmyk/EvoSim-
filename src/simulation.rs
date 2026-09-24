@@ -441,8 +441,11 @@ impl Simulation {
                 // survival/reproduction need pressure or by the transformation
                 // selector below.
                 if eligibility.can_move {
-                    let moved =
-                        crate::movement::update_movement_in_population(index, organisms, environment);
+                    let moved = crate::movement::update_movement_in_population(
+                        index,
+                        organisms,
+                        environment,
+                    );
                     if moved {
                         let move_candidate = ActionCandidate {
                             action: ActionKind::Move,
