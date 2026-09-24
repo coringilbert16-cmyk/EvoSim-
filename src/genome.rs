@@ -141,8 +141,9 @@ fn mutate_developmental_blueprint(
     const FALLOFF_SIGMA: f64 = 0.1;
 
     if rng.gen::<f64>() < MUTATION_PROBABILITY {
-        blueprint.connectivity.strength =
-            (blueprint.connectivity.strength + gaussian_unit(rng) * STRENGTH_SIGMA).clamp(0.0, 1.0);
+        blueprint.connectivity.strength = (blueprint.connectivity.strength
+            + gaussian_unit(rng) * STRENGTH_SIGMA)
+            .clamp(0.0, 1.0);
     }
     if rng.gen::<f64>() < MUTATION_PROBABILITY {
         blueprint.connectivity.center_x = (blueprint.connectivity.center_x
@@ -169,7 +170,9 @@ fn mutate_developmental_blueprint(
                 (influence.center_y + gaussian_unit(rng) * POSITION_SIGMA).clamp(-1.0, 1.0);
         }
         if rng.gen::<f64>() < MUTATION_PROBABILITY {
-            influence.radial_falloff = (influence.radial_falloff + gaussian_unit(rng) * FALLOFF_SIGMA).clamp(0.25, 8.0);
+            influence.radial_falloff =
+                (influence.radial_falloff + gaussian_unit(rng) * FALLOFF_SIGMA)
+                    .clamp(0.25, 8.0);
         }
         if rng.gen::<f64>() < MUTATION_PROBABILITY {
             influence.strength =
