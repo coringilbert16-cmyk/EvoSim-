@@ -61,7 +61,7 @@ pub struct GenomeCavity {
     pub area: f64,
     pub boundary_units: Vec<usize>,
     pub minimum_area: f64,
-    pub(crate) boundary_polygon: Vec<(f64, f64)>,
+    pub(crate) boundary_polygon: Vec<Point>,
 }
 
 impl GenomeCavity {
@@ -272,10 +272,7 @@ pub fn analyze_genome_cavity(
         }
         let boundary_polygon = face
             .iter()
-            .map(|&i| {
-                let point = points[edges[i].from];
-                (point.x, point.y)
-            })
+            .map(|&i| points[edges[i].from])
             .collect();
         let candidate = GenomeCavity {
             area,
