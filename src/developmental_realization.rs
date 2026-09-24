@@ -656,3 +656,54 @@ pub fn default_developmental_blueprint() -> DevelopmentalFieldBlueprint {
         },
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn break_preview_matches_realization_of_actual_post_break_structure() {
+        let catalog = crate::resources::default_catalog();
+        let blueprint = default_developmental_blueprint();
+        let (structure, _, _) =
+            crate::juvenile::realize_initial(&blueprint, &catalog).expect("seed should realize");
+        assert!(!structure.bonds.is_empty());
+
+        let (seed_mass, seed_length) =
+            crate::juvenile::confirmed_seed_scale_reference(&catalog).unwrap();
+        let preferred_length =
+            blueprint.preferred_developmental_length(30.0, seed_mass, seed_length);
+        let (material, density) = blueprint.material_and_density_realization(
+            &structure,
+            &catalog,
+            (0.0, 0.0),
+            0.0,
+            preferred_length,
+        );
+        let preview = blueprint
+            .realization_after_break_with_components(
+                &structure,
+                &catalog,
+                (0.0, 0.0),
+                0.0,
+                preferred_length,
+                0,
+                material,
+                density,
+            )
+            .unwrap();
+
+        let mut post_break = structure.clone();
+        post_break.break_bond(0).unwrap();
+        let direct = blueprint.realization_at_length(
+            &post_break,
+            &catalog,
+            (0.0, 0.0),
+            0.0,
+            preferred_length,
+        );
+
+        assert_eq!(preview, direct);
+    }
+}
