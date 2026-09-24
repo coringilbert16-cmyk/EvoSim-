@@ -202,14 +202,20 @@ mod tests {
             0.5,
             1,
             &spectrum,
-            crate::decision::ActionConsequence { energy_delta: 1.5, ..Default::default() },
+            crate::decision::ActionConsequence {
+                energy_delta: 1.5,
+                ..Default::default()
+            },
         );
 
         assert_eq!(organism.memory.len(), 1);
         assert_eq!(organism.memory[0].spectrum, spectrum);
         assert_eq!(
             organism.memory[0].consequence,
-            Some(crate::decision::ActionConsequence { energy_delta: 1.5, ..Default::default() })
+            Some(crate::decision::ActionConsequence {
+                energy_delta: 1.5,
+                ..Default::default()
+            })
         );
     }
 
@@ -230,12 +236,20 @@ mod tests {
             0.5,
             1,
             &spectrum,
-            crate::decision::ActionConsequence { energy_delta: -1.0, stress_delta: 1.0, ..Default::default() },
+            crate::decision::ActionConsequence {
+                energy_delta: -1.0,
+                stress_delta: 1.0,
+                ..Default::default()
+            },
         );
 
         assert_eq!(
             organism.memory[0].consequence,
-            Some(crate::decision::ActionConsequence { energy_delta: -1.0, stress_delta: 1.0, ..Default::default() })
+            Some(crate::decision::ActionConsequence {
+                energy_delta: -1.0,
+                stress_delta: 1.0,
+                ..Default::default()
+            })
         );
         assert!(organism.memory[0].strength > perception_strength);
     }
