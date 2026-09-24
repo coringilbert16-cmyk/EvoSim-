@@ -19,6 +19,7 @@ pub(crate) use realization::{default_developmental_blueprint, developmental_poin
 pub(crate) const CANDIDATE_MATERIAL_WEIGHT: f64 = 1.0; // EXPERIMENTAL: initial solver weight.
 pub(crate) const CANDIDATE_DENSITY_WEIGHT: f64 = 1.0; // EXPERIMENTAL: initial solver weight.
 pub(crate) const CANDIDATE_CONNECTIVITY_WEIGHT: f64 = 0.25; // EXPERIMENTAL: initial solver weight.
+pub(crate) const CONNECTIVITY_NEIGHBORHOOD_WEIGHT: f64 = 0.25; // EXPERIMENTAL: P6 neighborhood coefficient λ.
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RadialInfluence {
@@ -344,8 +345,20 @@ mod tests {
     }
 
     #[test]
-    fn connectivity_can_remain_inactive() {
+    fn default_connectivity_is_active_and_meaningful() {
         let blueprint = default_developmental_blueprint();
-        assert_eq!(blueprint.connectivity_preference(0.0, 0.0), 0.0);
+        assert!(blueprint.connectivity.strength > 0.0);
+        assert!(blueprint.connectivity_preference(0.0, 0.0) > 0.0);
+    }
+
+    #[test]
+    fn connectivity_strength_changes_preference_magnitude() {
+        let mut weak = default_developmental_blueprint();
+        let mut strong = weak.clone();
+        weak.connectivity.strength = 0.25;
+        strong.connectivity.strength = 0.5;
+        let weak_value = weak.connectivity_preference(0.0, 0.0);
+        let strong_value = strong.connectivity_preference(0.0, 0.0);
+        assert!(strong_value > weak_value);
     }
 }
