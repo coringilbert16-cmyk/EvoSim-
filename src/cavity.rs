@@ -65,14 +65,6 @@ pub struct GenomeCavity {
 }
 
 impl GenomeCavity {
-    pub fn contains_point(&self, x: f64, y: f64) -> bool {
-        if !x.is_finite() || !y.is_finite() || self.boundary_polygon.len() < 3 {
-            return false;
-        }
-        point_in_polygon(Point { x, y }, &self.boundary_polygon)
-    }
-
-impl GenomeCavity {
     pub fn qualifies(&self) -> bool {
         self.area + EPS >= self.minimum_area
     }
