@@ -210,21 +210,8 @@ impl Simulation {
                     if instance.material.internal_bonds.len() > 0
             )
         });
-        let construction_missing = organism
-            .reproductive_construction
-            .as_ref()
-            .is_some_and(|construction| {
-                matches!(
-                    crate::reproduction::next_construction_resource_status(
-                        &crate::reproduction::developing_organism(construction),
-                        &organism.stored_material,
-                        environment,
-                        &crate::state::EnergyLedger::default(),
-                        None,
-                    ),
-                    crate::reproduction::NextConstructionResourceStatus::Missing
-                )
-            });
+        let construction_missing =
+            crate::reproduction::construction_requires_external_material(organism, environment);
         let structural_break_allowed = !stored_breakable
             && !construction_missing
             && !organism.structure.bonds.is_empty()
