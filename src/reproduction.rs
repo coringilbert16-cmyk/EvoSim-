@@ -442,7 +442,9 @@ pub(crate) fn begin_reproduction(
     // structured object may be used directly.
     for entry in parent.stored_material.entries.clone() {
         let anchor = match &entry {
-            StoredMaterial::Logical(material) if !material.has_internal_structure() => material.clone(),
+            StoredMaterial::Logical(material) if !material.has_internal_structure() => {
+                material.clone()
+            },
             StoredMaterial::Physical(instance) => instance.material.clone(),
             StoredMaterial::Logical(_) => continue,
         };
