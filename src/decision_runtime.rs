@@ -68,12 +68,10 @@ fn history_adjustment(
     history: &DecisionHistory,
     candidate: &ActionCandidate,
 ) -> f64 {
-    let learned = history
+    let consequence = history
         .consequence(candidate.action, candidate.context_key.as_deref())
-        .map(|consequence| consequence.contextual_value(context.needs))
-        .unwrap_or(0.0);
-    let immediate = immediate_consequence(candidate.action).contextual_value(context.needs);
-    HISTORY_INFLUENCE * (learned + immediate)
+        .unwrap_or_else(|| immediate_consequence(candidate.action));
+    HISTORY_INFLUENCE * consequence.contextual_value(context.needs)
 }
 
 fn cheap_decision_score(
