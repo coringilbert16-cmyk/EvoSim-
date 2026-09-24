@@ -13,6 +13,7 @@ pub enum ActionKind {
     Combine,
     Break,
     Expel,
+    NoTransaction,
 }
 
 impl ActionKind {
@@ -32,6 +33,7 @@ impl ActionKind {
                 NeedKind::Development,
             ],
             ActionKind::Expel => &[NeedKind::Survival],
+            ActionKind::NoTransaction => &[NeedKind::Survival, NeedKind::Reproduction, NeedKind::Development],
         }
     }
 }
@@ -266,6 +268,7 @@ pub struct ActionEligibility {
     pub can_combine: bool,
     pub can_break: bool,
     pub can_expel: bool,
+    pub can_no_transaction: bool,
 }
 
 impl ActionEligibility {
@@ -275,6 +278,7 @@ impl ActionEligibility {
             ActionKind::Combine => self.can_combine,
             ActionKind::Break => self.can_break,
             ActionKind::Expel => self.can_expel,
+            ActionKind::NoTransaction => self.can_no_transaction,
         }
     }
 }
