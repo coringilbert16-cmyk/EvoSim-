@@ -259,6 +259,7 @@ impl Simulation {
             developmental_delta: after_developmental - transformation.before_developmental,
             stress_delta: organism.stress - transformation.before_stress,
             position_delta: 0.0,
+            storage_delta: 0.0,
         };
         let candidate = ActionCandidate {
             action: ActionKind::Break,
