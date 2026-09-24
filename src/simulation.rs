@@ -706,20 +706,4 @@ impl Simulation {
         }
         organism.apply_stress_damage(environment, ledger, rng)
     }
-}    pub(crate) fn apply_survival_damage(
-        organism: &mut Organism,
-        environment: &Environment,
-        ledger: &mut EnergyLedger,
-        rng: &mut ChaCha8Rng,
-    ) -> bool {
-        let threshold = organism
-            .stress_threshold
-            .max(crate::state::MIN_STRESS_THRESHOLD);
-        let lethal_before_decay = organism.stress >= threshold;
-        organism.stress *= crate::state::STRESS_DECAY_PER_TICK;
-        if organism.structure.bonds.is_empty() && lethal_before_decay {
-            return true;
-        }
-        organism.apply_stress_damage(environment, ledger, rng)
-    }
 }
