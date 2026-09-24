@@ -105,35 +105,15 @@ impl DevelopmentalFieldBlueprint {
         if bond_index >= structure.bonds.len() {
             return None;
         }
-        let connectivity = self.connectivity_realization_excluding(
-            structure,
+        let mut trial = structure.clone();
+        trial.break_bond(bond_index)?;
+        Some(self.realization_at_length(
+            &trial,
             catalog,
             origin,
             orientation,
             preferred_length,
-            Some(bond_index),
-        );
-        let mut sum = 0.0;
-        let mut active = 0usize;
-        for value in [material_realized, density_realized, connectivity]
-            .into_iter()
-            .flatten()
-        {
-            if value.is_finite() {
-                sum += value;
-                active += 1;
-            }
-        }
-        Some(DevelopmentalRealization {
-            material: material_realized,
-            density: density_realized,
-            connectivity,
-            overall: if active == 0 {
-                0.0
-            } else {
-                (sum / active as f64).clamp(0.0, 1.0)
-            },
-        })
+        ))
     }
 
     pub(crate) fn realization_after_break(
@@ -422,7 +402,13 @@ impl DevelopmentalFieldBlueprint {
         if available_value <= 0.0 {
             None
         } else {
-            Some((actual_value / available_value).clamp(0.0, 1.0))
+            let match_fraction = (actual_value / available_value).clamp(0.0, 1.0);
+            let strength = self.connectivity.strength.clamp(0.0, 1.0);
+            if strength <= f64::EPSILON {
+                None
+            } else {
+                Some((1.0 - strength * (1.0 - match_fraction)).clamp(0.0, 1.0))
+            }
         }
     }
 
@@ -445,7 +431,7 @@ impl DevelopmentalFieldBlueprint {
         let qreal_a = endpoint_realized_count(structure, unit_a, endpoint_a);
         let qreal_b = endpoint_realized_count(structure, unit_b, endpoint_b);
         let n = 0.5 * (qreal_a as f64 / qa.max(1) as f64 + qreal_b as f64 / qb.max(1) as f64);
-        let lambda = crate::developmental_blueprint::CANDIDATE_CONNECTIVITY_WEIGHT;
+        let lambda = crate::developmental_blueprint::CONNECTIVITY_NEIGHBORHOOD_WEIGHT;
         ((ka + kb) * 0.5 + lambda * n).max(0.0)
     }
 
@@ -654,7 +640,7 @@ pub fn default_developmental_blueprint() -> DevelopmentalFieldBlueprint {
             ],
         },
         connectivity: ConnectivityField {
-            strength: 0.0,
+            strength: 0.5,      // EXPERIMENTAL: inherited connectivity importance.
             center_x: 0.0,       // EXPERIMENTAL: initial influence center.
             center_y: 0.0,       // EXPERIMENTAL: initial influence center.
             radial_falloff: 2.0, // EXPERIMENTAL: alpha=0.5 initial Gaussian width.
@@ -663,7 +649,7 @@ pub fn default_developmental_blueprint() -> DevelopmentalFieldBlueprint {
                     center_x: 0.0,
                     center_y: 0.0,
                     radial_falloff: 2.0,
-                    strength: 0.0,
+                    strength: 0.5,
                 };
                 3
             ],
