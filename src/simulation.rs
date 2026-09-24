@@ -527,7 +527,7 @@ impl Simulation {
                                 let developmental_change = developmental_scores
                                     .iter()
                                     .zip(candidates.iter())
-                                    .find(|(_, candidate)| **candidate == selected)
+                                    .find(|(_, candidate)| *candidate == selected)
                                     .and_then(|(score, _)| *score)
                                     .zip(developmental.as_ref())
                                     .map(|(after, context)| after - context.current_growth_fraction)
