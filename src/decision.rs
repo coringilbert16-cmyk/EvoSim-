@@ -87,6 +87,7 @@ impl ActionConsequence {
 pub struct DecisionHistoryEntry {
     pub action: ActionKind,
     pub context_key: Option<String>,
+    #[serde(default)]
     pub consequence: ActionConsequence,
     pub count: u64,
 }
