@@ -61,7 +61,16 @@ pub struct GenomeCavity {
     pub area: f64,
     pub boundary_units: Vec<usize>,
     pub minimum_area: f64,
+    boundary_polygon: Vec<(f64, f64)>,
 }
+
+impl GenomeCavity {
+    pub fn contains_point(&self, x: f64, y: f64) -> bool {
+        if !x.is_finite() || !y.is_finite() || self.boundary_polygon.len() < 3 {
+            return false;
+        }
+        point_in_polygon(Point { x, y }, &self.boundary_polygon)
+    }
 
 impl GenomeCavity {
     pub fn qualifies(&self) -> bool {
@@ -262,10 +271,18 @@ pub fn analyze_genome_cavity(
         if !sealed {
             continue;
         }
+        let boundary_polygon = face
+            .iter()
+            .map(|&i| {
+                let point = points[edges[i].from];
+                (point.x, point.y)
+            })
+            .collect();
         let candidate = GenomeCavity {
             area,
             boundary_units,
             minimum_area,
+            boundary_polygon,
         };
         if best
             .as_ref()
