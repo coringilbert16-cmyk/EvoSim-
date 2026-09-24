@@ -333,7 +333,8 @@ pub(crate) fn try_combine_stored_unit(
                                                 local.1,
                                                 preferred_length,
                                             )
-                                        + crate::developmental_blueprint::CANDIDATE_CONNECTIVITY_WEIGHT * blueprint.connectivity.strength
+                                        + crate::developmental_blueprint::CANDIDATE_CONNECTIVITY_WEIGHT
+                                            * blueprint.connectivity.strength
                                             * blueprint.connectivity_preference_scaled(
                                                 local.0,
                                                 local.1,
