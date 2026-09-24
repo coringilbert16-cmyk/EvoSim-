@@ -225,8 +225,8 @@ impl Simulation {
         before: (f64, f64, f64, f64, f64, (f64, f64)),
         after: (f64, f64, f64, f64, f64, (f64, f64)),
     ) -> crate::decision::ActionConsequence {
-        let (bx, by) = before.4;
-        let (ax, ay) = after.4;
+        let (bx, by) = before.5;
+        let (ax, ay) = after.5;
         crate::decision::ActionConsequence {
             energy_delta: after.0 - before.0,
             structural_delta: after.2 - before.2,
@@ -595,8 +595,8 @@ impl Simulation {
                         organisms[index].genome.memory_strength().clamp(0.0, 1.0);
                     crate::memory::reinforce_memory_point(
                         &mut organisms[index],
-                        after.4.0,
-                        after.4.1,
+                        after.5.0,
+                        after.5.1,
                         memory_strength,
                         capacity,
                         &spectrum,
