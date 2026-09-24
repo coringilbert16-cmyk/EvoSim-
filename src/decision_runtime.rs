@@ -7,7 +7,7 @@
 
 use crate::decision::{
     approve_action_for_current_needs, outcome_is_known, ActionEligibility, ActionKind,
-    CurrentNeeds, DecisionHistory, DecisionResult, OutcomeKind,
+    ActionConsequence, CurrentNeeds, DecisionHistory, DecisionResult,
 };
 use rand::Rng;
 use rand_chacha::ChaCha8Rng;
@@ -43,12 +43,15 @@ fn need_pressure(action: ActionKind, needs: CurrentNeeds) -> f64 {
         .fold(0.0_f64, |best, pressure| best.max(pressure))
 }
 
-fn history_adjustment(history: &DecisionHistory, candidate: &ActionCandidate) -> f64 {
-    match history.outcome(candidate.action, candidate.context_key.as_deref()) {
-        Some(OutcomeKind::Beneficial) => HISTORY_INFLUENCE,
-        Some(OutcomeKind::Harmful) => -HISTORY_INFLUENCE,
-        Some(OutcomeKind::Neutral) | None => 0.0,
-    }
+fn history_adjustment(
+    context: DecisionContext,
+    history: &DecisionHistory,
+    candidate: &ActionCandidate,
+) -> f64 {
+    history
+        .consequence(candidate.action, candidate.context_key.as_deref())
+        .map(|consequence| HISTORY_INFLUENCE * consequence.contextual_value(context.needs))
+        .unwrap_or(0.0)
 }
 
 fn cheap_decision_score(
@@ -59,7 +62,7 @@ fn cheap_decision_score(
     if approve(context, candidate.action) != DecisionResult::Approve {
         return None;
     }
-    Some(need_pressure(candidate.action, context.needs) + history_adjustment(history, candidate))
+    Some(need_pressure(candidate.action, context.needs) + history_adjustment(context, history, candidate))
 }
 
 /// Identify candidates that genuinely require a physical developmental
@@ -178,10 +181,18 @@ pub fn select_action_with_developmental_scores(
     candidates.get(tied[selected_index].0).cloned()
 }
 
+pub fn record_consequence(
+    history: &mut DecisionHistory,
+    candidate: &ActionCandidate,
+    consequence: ActionConsequence,
+) {
+    history.record_consequence(candidate.action, candidate.context_key.clone(), consequence);
+}
+
 pub fn record_outcome(
     history: &mut DecisionHistory,
     candidate: &ActionCandidate,
-    outcome: OutcomeKind,
+    outcome: crate::decision::OutcomeKind,
 ) {
     history.record(candidate.action, candidate.context_key.clone(), outcome);
 }
