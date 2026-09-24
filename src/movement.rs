@@ -443,10 +443,17 @@ mod tests {
     }
 
     #[test]
-    fn movement_direction_without_inputs_is_rejected() {
+    fn movement_direction_without_inputs_gets_soft_random_push() {
         let simulation = Simulation::new(7, 20.0);
         let organism = simulation.organisms[0].clone();
-        assert!(movement_direction(&organism).is_none());
+        let (x, y) = movement_direction(&organism).expect("initial direction should exist");
+        let magnitude = (x * x + y * y).sqrt();
+        assert!((magnitude - 1.0).abs() < 1e-12);
+
+        let mut other = organism.clone();
+        other.id = "2".into();
+        let other_direction = movement_direction(&other).expect("other organism should move");
+        assert_ne!((x, y), other_direction);
     }
 
     #[test]
