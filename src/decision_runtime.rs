@@ -32,6 +32,9 @@ pub struct ActionCandidate {
 }
 
 pub fn approve(context: DecisionContext, action: ActionKind) -> DecisionResult {
+    if action == ActionKind::NoTransaction {
+        return DecisionResult::Approve;
+    }
     approve_action_for_current_needs(action, context.eligibility, context.needs)
 }
 
