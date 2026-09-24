@@ -279,7 +279,10 @@ pub fn try_add_bond(
     if !s.is_valid_bond(&b, c) {
         return Err("invalid bond");
     }
-    if s.bonds.iter().any(|existing| existing.has_same_identity(&b)) {
+    if s.bonds
+        .iter()
+        .any(|existing| existing.has_same_identity(&b))
+    {
         return Err("duplicate bond");
     }
     Ok(s.push_bond_unchecked(b))
