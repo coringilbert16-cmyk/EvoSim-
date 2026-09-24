@@ -261,6 +261,23 @@ mod tests {
     }
 
     #[test]
+    fn survival_pressure_makes_combine_relevant() {
+        let eligibility = ActionEligibility {
+            can_combine: true,
+            ..Default::default()
+        };
+        let needs = CurrentNeeds {
+            survival: 0.5,
+            reproduction: 0.0,
+            development: 0.0,
+        };
+        assert_eq!(
+            approve_action_for_current_needs(ActionKind::Combine, eligibility, needs),
+            DecisionResult::Approve
+        );
+    }
+
+    #[test]
     fn reproduction_pressure_makes_combine_relevant() {
         let eligibility = ActionEligibility {
             can_combine: true,
