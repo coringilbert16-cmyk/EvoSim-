@@ -1,4 +1,4 @@
-use crate::decision::{ActionKind, OutcomeKind};
+use crate::decision::ActionKind;
 use crate::decision_runtime::ActionCandidate;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
 use crate::state::{ActiveTransformation, EnergyLedger, Environment, Organism, Simulation};
@@ -237,21 +237,18 @@ impl Simulation {
             return;
         }
         organism.active_transformation_id = None;
-        let outcome = if usable > f64::EPSILON {
-            OutcomeKind::Beneficial
-        } else if heat > f64::EPSILON {
-            OutcomeKind::Harmful
-        } else {
-            OutcomeKind::Neutral
-        };
         let candidate = ActionCandidate {
             action: ActionKind::Break,
             context_key: transformation.decision_context_key.clone(),
         };
-        crate::decision_runtime::record_outcome(
+        crate::decision_runtime::record_consequence(
             &mut organism.decision_history,
             &candidate,
-            outcome,
+            crate::decision::ActionConsequence {
+                energy: if usable > f64::EPSILON { 1.0 } else { 0.0 },
+                structure: -1.0,
+                development: -1.0,
+            },
         );
         let (x, y) = organism
             .occupied_cells
@@ -274,7 +271,11 @@ impl Simulation {
                 reinforcement,
                 capacity,
                 &spectrum,
-                outcome,
+                crate::decision::ActionConsequence {
+                    energy: 1.0,
+                    structure: -1.0,
+                    development: -1.0,
+                },
             );
         } else {
             organism.memory.clear();
