@@ -93,7 +93,7 @@ impl Simulation {
                     strength: memory_strength,
                     spectrum: spectrum.clone(),
                     outcome: None,
-                consequence: None,
+                    consequence: None,
                 };
             }
         }
