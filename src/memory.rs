@@ -97,10 +97,7 @@ impl Simulation {
         }
     }
 
-    pub(crate) fn remember_nearby_harmonics(
-    organism: &mut Organism,
-    environment: &Environment,
-) {
+    pub(crate) fn remember_nearby_harmonics(organism: &mut Organism, environment: &Environment) {
     let Some(cavity) = qualifying_genome_cavity(organism, environment) else {
         return;
     };
@@ -147,8 +144,8 @@ pub(crate) fn reinforce_acquired_material(
         point.spectrum.components.iter().any(|observed| {
             spectrum.components.iter().any(|acquired| {
                 (observed.frequency_hz - acquired.frequency_hz).abs() <= 1e-6
+                    })
             })
-        })
     };
     let Some(index) = organism.memory.iter().position(matches_perceived_signal) else {
         return;
