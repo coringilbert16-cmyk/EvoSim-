@@ -608,10 +608,7 @@ pub(crate) fn combine_specific_pair(
     None
 }
 
-pub(crate) fn can_combine(
-    organism: &Organism,
-    environment: &Environment,
-) -> bool {
+pub(crate) fn can_combine(organism: &Organism, environment: &Environment) -> bool {
     if organism.active_transformation_id.is_some() {
         return false;
     }
