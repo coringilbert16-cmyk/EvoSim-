@@ -45,13 +45,9 @@ fn need_pressure(action: ActionKind, needs: CurrentNeeds) -> f64 {
 
 fn immediate_consequence(action: ActionKind) -> ActionConsequence {
     match action {
-        // Preserving the realized structure is a real physical consequence of
-        // declining a transaction, not a free utility bonus.
-        ActionKind::NoTransaction => ActionConsequence {
-            energy: 0.0,
-            structure: 1.0,
-            development: 0.0,
-        },
+        // NoTransaction means no resource/structural transaction occurred.
+        // Maintenance is handled separately by the simulation lifecycle.
+        ActionKind::NoTransaction => ActionConsequence::NONE,
         // Breaking a bond has an immediate structural cost even before its
         // eventual energetic result is known.
         ActionKind::Break => ActionConsequence {
