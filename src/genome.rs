@@ -1,5 +1,5 @@
 #![expect(dead_code, reason = "Staged API retained for subsystem integration")]
-use rand::Rng;
+use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 
@@ -76,6 +76,7 @@ impl Genome {
     }
 
     pub fn mutate(&mut self, rng: &mut ChaCha8Rng) {
+        mutate_developmental_blueprint(&mut self.developmental_blueprint, rng);
         if !self
             .traits
             .iter()
@@ -129,6 +130,56 @@ fn default_juvenile_energy_reserve() -> f64 {
     16.0
 }
 
+fn mutate_developmental_blueprint(
+    blueprint: &mut DevelopmentalFieldBlueprint,
+    rng: &mut ChaCha8Rng,
+) {
+    const MUTATION_PROBABILITY: f64 = 0.001; // EXPERIMENTAL: inherited developmental mutation rate.
+    const STRENGTH_SIGMA: f64 = 0.05; // EXPERIMENTAL: bounded developmental mutation scale.
+    const POSITION_SIGMA: f64 = 0.05; // EXPERIMENTAL: bounded developmental mutation scale.
+    const FALLOFF_SIGMA: f64 = 0.1; // EXPERIMENTAL: bounded developmental mutation scale.
+
+    if rng.gen::<f64>() < MUTATION_PROBABILITY {
+        blueprint.connectivity.strength =
+            (blueprint.connectivity.strength + gaussian_unit(rng) * STRENGTH_SIGMA)
+                .clamp(0.0, 1.0);
+    }
+    if rng.gen::<f64>() < MUTATION_PROBABILITY {
+        blueprint.connectivity.center_x =
+            (blueprint.connectivity.center_x + gaussian_unit(rng) * POSITION_SIGMA)
+                .clamp(-1.0, 1.0);
+    }
+    if rng.gen::<f64>() < MUTATION_PROBABILITY {
+        blueprint.connectivity.center_y =
+            (blueprint.connectivity.center_y + gaussian_unit(rng) * POSITION_SIGMA)
+                .clamp(-1.0, 1.0);
+    }
+    if rng.gen::<f64>() < MUTATION_PROBABILITY {
+        blueprint.connectivity.radial_falloff =
+            (blueprint.connectivity.radial_falloff + gaussian_unit(rng) * FALLOFF_SIGMA)
+                .clamp(0.25, 8.0);
+    }
+    for influence in &mut blueprint.connectivity.additional_influences {
+        if rng.gen::<f64>() < MUTATION_PROBABILITY {
+            influence.center_x =
+                (influence.center_x + gaussian_unit(rng) * POSITION_SIGMA).clamp(-1.0, 1.0);
+        }
+        if rng.gen::<f64>() < MUTATION_PROBABILITY {
+            influence.center_y =
+                (influence.center_y + gaussian_unit(rng) * POSITION_SIGMA).clamp(-1.0, 1.0);
+        }
+        if rng.gen::<f64>() < MUTATION_PROBABILITY {
+            influence.radial_falloff =
+                (influence.radial_falloff + gaussian_unit(rng) * FALLOFF_SIGMA)
+                    .clamp(0.25, 8.0);
+        }
+        if rng.gen::<f64>() < MUTATION_PROBABILITY {
+            influence.strength =
+                (influence.strength + gaussian_unit(rng) * STRENGTH_SIGMA).clamp(0.0, 1.0);
+        }
+    }
+}
+
 fn gaussian_unit(rng: &mut ChaCha8Rng) -> f64 {
     let u1 = rng.gen_range(f64::MIN_POSITIVE..1.0);
     let u2 = rng.gen_range(0.0..1.0);
@@ -173,6 +224,25 @@ mod tests {
         let genome = initial_genome();
         assert!((genome.size_preference() - 0.5).abs() < f64::EPSILON);
         assert!((genome.adult_mass() - 30.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn developmental_blueprint_is_inherited_and_can_mutate() {
+        let parent = initial_genome();
+        let mut child = parent.clone();
+        let mut rng = ChaCha8Rng::seed_from_u64(17);
+        for _ in 0..10_000 {
+            child.mutate(&mut rng);
+            if child.developmental_blueprint.connectivity != parent.developmental_blueprint.connectivity {
+                break;
+            }
+        }
+        assert_ne!(
+            child.developmental_blueprint.connectivity,
+            parent.developmental_blueprint.connectivity
+        );
+        assert!(child.developmental_blueprint.validate().is_ok());
+        assert!((0.0..=1.0).contains(&child.developmental_blueprint.connectivity.strength));
     }
 
     #[test]
