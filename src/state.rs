@@ -155,6 +155,7 @@ pub(crate) const STRESS_DECAY_PER_TICK: f64 = 0.98;
 pub(crate) const INITIAL_STRESS_THRESHOLD: f64 = 100.0;
 pub(crate) const STRESS_THRESHOLD_DECAY: f64 = 0.90;
 pub(crate) const MAINTENANCE_ENERGY_PER_MASS: f64 = 0.001;
+pub(crate) const ZERO_ENERGY_STRESS_PER_TICK: f64 = 0.1;
 pub(crate) const MIN_STRESS_THRESHOLD: f64 = 5.0;
 fn default_stress_threshold() -> f64 {
     INITIAL_STRESS_THRESHOLD
