@@ -328,6 +328,36 @@ mod tests {
     use super::*;
 
     #[test]
+    fn mixed_consequence_preserves_beneficial_and_harmful_dimensions() {
+        let consequence = ActionConsequence {
+            energy: 1.0,
+            structure: -1.0,
+            development: -1.0,
+        };
+        assert_eq!(consequence.energy, 1.0);
+        assert_eq!(consequence.structure, -1.0);
+        assert_eq!(consequence.development, -1.0);
+        assert_eq!(consequence.outcome(), OutcomeKind::Harmful);
+    }
+
+    #[test]
+    fn no_transaction_is_a_real_eligible_action() {
+        let eligibility = ActionEligibility {
+            can_no_transaction: true,
+            ..Default::default()
+        };
+        let needs = CurrentNeeds {
+            survival: 1.0,
+            reproduction: 0.0,
+            development: 0.0,
+        };
+        assert_eq!(
+            approve_action_for_current_needs(ActionKind::NoTransaction, eligibility, needs),
+            DecisionResult::Approve
+        );
+    }
+
+    #[test]
     fn mechanically_ineligible_action_is_rejected_even_when_needed() {
         let eligibility = ActionEligibility::default();
         let needs = CurrentNeeds {
