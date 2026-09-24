@@ -99,8 +99,8 @@ impl Simulation {
 
     pub(crate) fn remember_nearby_harmonics(organism: &mut Organism, environment: &Environment) {
         let Some(cavity) = qualifying_genome_cavity(organism, environment) else {
-        return;
-    };
+            return;
+        };
     let capacity = memory_capacity(&cavity);
     for (x, y, spectrum) in
         crate::harmonics::nearby_environmental_spectra(organism, environment)
