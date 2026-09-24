@@ -173,6 +173,7 @@ fn resolve_stored_break(
         organism.genome.processing_efficiency(),
     )?;
     let fragments = crate::material_transfer::break_physical_material_bond(&instance, bond_index)?;
+    let removed = organism.stored_material.take_physical_at(storage_index)?;
     let tx = EnergyTransaction {
         reason: EnergyReason::Break,
         potential_released: gross,
@@ -181,15 +182,17 @@ fn resolve_stored_break(
         heat_dissipated: heat,
     };
     if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
-        return None;
-    }
-    if organism.stored_material.take_physical_at(storage_index).is_none() {
+        organism
+            .stored_material
+            .entries
+            .insert(storage_index, crate::material_storage::StoredMaterial::Physical(removed));
         return None;
     }
     for fragment in fragments {
-        if !organism.stored_material.store_physical_instance(fragment) {
-            return None;
-        }
+        organism
+            .stored_material
+            .entries
+            .push(crate::material_storage::StoredMaterial::Physical(fragment));
     }
     organism.add_transaction_stress(heat);
     Some(if usable > f64::EPSILON {
