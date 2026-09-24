@@ -136,6 +136,10 @@ pub(crate) struct Organism {
     #[serde(skip)]
     pub(crate) cached_developmental_realization:
         Option<crate::developmental_blueprint::DevelopmentalRealization>,
+    /// Highest developmental realization previously reached by this organism.
+    /// It is a memory of the organism's own realized physical self, not a new target.
+    #[serde(default)]
+    pub(crate) peak_developmental_realization: f64,
     #[serde(skip)]
     pub(crate) cached_harmonic_key: Option<(u64, u64, u64)>,
 }
