@@ -55,7 +55,7 @@ pub enum OutcomeKind {
     Harmful,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
 pub struct ActionConsequence {
     /// Signed energetic consequence, normalized to [-1, 1].
     pub energy: f64,
