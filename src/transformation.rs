@@ -1,4 +1,4 @@
-use crate::decision::{ActionKind, OutcomeKind};
+use crate::decision::ActionKind;
 use crate::decision_runtime::ActionCandidate;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
 use crate::state::{ActiveTransformation, EnergyLedger, Environment, Organism, Simulation};
@@ -160,6 +160,13 @@ impl Simulation {
         let bond = *organism.structure.bonds.get(index)?;
         let complexity = crate::math::complexity(2.0);
         let duration = 1_u64.max(complexity.ceil() as u64);
+        let before_energy = organism.usable_energy;
+        let before_stress = organism.stress;
+        let before_structural_mass = organism.structural_mass(_catalog);
+        let before_developmental = organism
+            .developmental_realization_cached(_catalog)
+            .map(|realization| realization.overall)
+            .unwrap_or(0.0);
         let t = ActiveTransformation {
             id: *next_id,
             organism_id: organism.id.clone(),
@@ -170,6 +177,10 @@ impl Simulation {
             duration_ticks: duration,
             remaining_ticks: duration,
             decision_context_key: decision.context_key.clone(),
+            before_energy,
+            before_stress,
+            before_structural_mass,
+            before_developmental,
         };
         *next_id += 1;
         organism.active_transformation_id = Some(t.id);
@@ -237,21 +248,26 @@ impl Simulation {
             return;
         }
         organism.active_transformation_id = None;
-        let outcome = if usable > f64::EPSILON {
-            OutcomeKind::Beneficial
-        } else if heat > f64::EPSILON {
-            OutcomeKind::Harmful
-        } else {
-            OutcomeKind::Neutral
+        let after_structural_mass = organism.structural_mass(&environment.catalog);
+        let after_developmental = organism
+            .developmental_realization_cached(&environment.catalog)
+            .map(|realization| realization.overall)
+            .unwrap_or(0.0);
+        let consequence = crate::decision::ActionConsequence {
+            energy_delta: organism.usable_energy - transformation.before_energy,
+            structural_delta: after_structural_mass - transformation.before_structural_mass,
+            developmental_delta: after_developmental - transformation.before_developmental,
+            stress_delta: organism.stress - transformation.before_stress,
+            position_delta: 0.0,
         };
         let candidate = ActionCandidate {
             action: ActionKind::Break,
             context_key: transformation.decision_context_key.clone(),
         };
-        crate::decision_runtime::record_outcome(
+        crate::decision_runtime::record_consequence(
             &mut organism.decision_history,
             &candidate,
-            outcome,
+            consequence,
         );
         let (x, y) = organism
             .occupied_cells
@@ -274,7 +290,7 @@ impl Simulation {
                 reinforcement,
                 capacity,
                 &spectrum,
-                outcome,
+                consequence,
             );
         } else {
             organism.memory.clear();
