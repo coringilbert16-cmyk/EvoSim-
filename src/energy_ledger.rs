@@ -7,6 +7,7 @@ const EPSILON: f64 = 1e-9;
 pub(crate) enum EnergyReason {
     Combine,
     Break,
+    Move,
     Maintenance,
     Decomposition,
     Transfer,
@@ -99,7 +100,7 @@ mod tests {
     fn transaction_balances_without_reason_specific_accounting() {
         for reason in [
             EnergyReason::Combine,
-            EnergyReason::Break,
+            EnergyReason::Move,
             EnergyReason::Maintenance,
             EnergyReason::Decomposition,
             EnergyReason::Transfer,
