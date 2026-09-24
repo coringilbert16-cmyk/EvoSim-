@@ -331,18 +331,6 @@ mod integration_tests {
         let b = s.organisms[0].structure.units[b_index]
             .properties(&s.environment.catalog)
             .unwrap();
-        let candidate = crate::contact::connection_pair_candidates(
-            &s.organisms[0].structure,
-            a_index,
-            b_index,
-            &s.environment.catalog,
-        )
-        .into_iter()
-        .find(|c| {
-            c.endpoint_a == ConnectionEndpoint::Corner { point_index: 0 }
-                && c.endpoint_b == ConnectionEndpoint::Corner { point_index: 0 }
-        })
-        .expect("test bond endpoints must remain resolvable");
         let water = s.organisms[0]
             .occupied_cells
             .first()
@@ -357,13 +345,16 @@ mod integration_tests {
                     .sum::<f64>()
             })
             .unwrap_or(0.0);
-        let formation_interaction =
-            crate::combine::experimental_interaction(a, b, candidate, water);
-        let break_interaction = -formation_interaction.signed_value;
-        let work = crate::transformation::break_work_cost(a, b, crate::math::complexity(2.0));
+        let (_, usable, _) = crate::transformation::break_energy_yield(
+            a,
+            b,
+            water,
+            s.organisms[0].genome.processing_efficiency(),
+        )
+        .unwrap();
         let maintenance = s.organisms[0].structural_mass(&s.environment.catalog)
             * crate::state::MAINTENANCE_ENERGY_PER_MASS;
-        let expected = 12.5 + break_interaction - work - maintenance;
+        let expected = usable - maintenance;
         assert!(s.organisms[0].structure.bonds.is_empty());
         assert!((s.organisms[0].usable_energy - expected).abs() < 1e-12);
         assert!(s.organisms[0]
