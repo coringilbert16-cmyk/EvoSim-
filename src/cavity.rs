@@ -270,10 +270,7 @@ pub fn analyze_genome_cavity(
         if !sealed {
             continue;
         }
-        let boundary_polygon = face
-            .iter()
-            .map(|&i| points[edges[i].from])
-            .collect();
+        let boundary_polygon = face.iter().map(|&i| points[edges[i].from]).collect();
         let candidate = GenomeCavity {
             area,
             boundary_units,
