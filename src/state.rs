@@ -38,6 +38,9 @@ pub(crate) struct MemoryPoint {
     /// The observed consequence associated with the remembered spectrum.
     #[serde(default)]
     pub(crate) outcome: Option<crate::decision::OutcomeKind>,
+    /// Full independent action consequences retained with the memory.
+    #[serde(default)]
+    pub(crate) consequence: Option<crate::decision::ActionConsequence>,
 }
 pub(crate) const MEMORY_DECAY_PER_TICK: f64 = 0.995;
 pub(crate) const MEMORY_MERGE_RADIUS: f64 = 40.0;
