@@ -121,7 +121,8 @@ impl DecisionHistory {
             existing.consequence.structural_delta =
                 (existing.consequence.structural_delta * n + consequence.structural_delta) / next;
             existing.consequence.developmental_delta =
-                (existing.consequence.developmental_delta * n + consequence.developmental_delta) / next;
+                (existing.consequence.developmental_delta * n + consequence.developmental_delta)
+                    / next;
             existing.consequence.stress_delta =
                 (existing.consequence.stress_delta * n + consequence.stress_delta) / next;
             existing.consequence.position_delta =
