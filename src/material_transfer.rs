@@ -156,7 +156,10 @@ pub(crate) fn break_physical_material_bond(
             let mut new_bonds = Vec::new();
             let mut new_connections = Vec::new();
             for (index, bond) in bonds.iter().enumerate() {
-                if index == bond_index || remap[bond.part_a] == usize::MAX || remap[bond.part_b] == usize::MAX {
+                if index == bond_index
+                    || remap[bond.part_a] == usize::MAX
+                    || remap[bond.part_b] == usize::MAX
+                {
                     continue;
                 }
                 new_bonds.push(crate::resources::InternalBond {
@@ -367,8 +370,14 @@ mod tests {
                 ("Nitrogen".into(), 1.0),
             ],
             internal_bonds: vec![
-                InternalBond { part_a: 0, part_b: 1 },
-                InternalBond { part_a: 1, part_b: 2 },
+                InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                },
+                InternalBond {
+                    part_a: 1,
+                    part_b: 2,
+                },
             ],
         };
         let placements = vec![
@@ -388,12 +397,9 @@ mod tests {
                 rotation_radians: 0.0,
             },
         ];
-        let physical = crate::physical_material::PhysicalMaterial::realized(
-            material,
-            placements,
-            &catalog,
-        )
-        .unwrap();
+        let physical =
+            crate::physical_material::PhysicalMaterial::realized(material, placements, &catalog)
+                .unwrap();
         let fragments = super::break_physical_material_bond(&physical, 0).unwrap();
         assert_eq!(fragments.len(), 2);
         assert_eq!(
