@@ -107,21 +107,11 @@ impl Genome {
 
 fn default_juvenile_reserve() -> Material {
     Material {
-        parts: vec![
-            ("Carbon".into(), 1.0),
-            ("Carbon".into(), 1.0),
-            ("Sulfur".into(), 1.0),
-        ],
-        internal_bonds: vec![
-            crate::resources::InternalBond {
-                part_a: 0,
-                part_b: 1,
-            },
-            crate::resources::InternalBond {
-                part_a: 1,
-                part_b: 2,
-            },
-        ],
+        parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+        internal_bonds: vec![crate::resources::InternalBond {
+            part_a: 0,
+            part_b: 1,
+        }],
     }
 }
 
@@ -183,12 +173,11 @@ mod tests {
             genome.juvenile_reserve.parts,
             vec![
                 ("Carbon".into(), 1.0),
-                ("Carbon".into(), 1.0),
-                ("Sulfur".into(), 1.0),
+                ("Hydrogen".into(), 1.0),
             ]
         );
-        assert_eq!(genome.juvenile_reserve.internal_bonds.len(), 2);
-        assert_eq!(genome.juvenile_reserve.total_amount(), 3.0);
+        assert_eq!(genome.juvenile_reserve.internal_bonds.len(), 1);
+        assert_eq!(genome.juvenile_reserve.total_amount(), 2.0);
         assert!(genome.juvenile_energy_reserve.is_finite() && genome.juvenile_energy_reserve > 0.0);
     }
 }
