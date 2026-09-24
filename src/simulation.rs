@@ -177,10 +177,11 @@ impl Simulation {
             (organism.peak_developmental_realization - current_realization).clamp(0.0, 1.0);
         let energy_survival =
             (reserve_pressure * (1.0 + organism.stress.max(0.0))).clamp(0.0, 1.0);
-        // Survival is the need to remain a viable physical organism. Energy is
-        // one pressure inside that need; loss of previously realized self is
-        // allowed to dominate when it is the larger pressure.
-        let survival = energy_survival.max(self_maintenance_pressure);
+        // Survival is first the pressure to preserve the organism's realized
+        // physical self. Energy fills the remaining survival deficit rather
+        // than replacing that structural pressure.
+        let survival = self_maintenance_pressure
+            + (1.0 - self_maintenance_pressure) * energy_survival;
         let development = if developmental.is_some() {
             (1.0 - current_realization).max(0.0)
         } else {
