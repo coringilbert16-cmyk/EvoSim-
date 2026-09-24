@@ -18,6 +18,9 @@ use rand_chacha::ChaCha8Rng;
 /// and exposed so the decision layer can be tuned without changing chemistry
 /// or physics.
 pub const HISTORY_INFLUENCE: f64 = 0.25;
+/// Small default preference for preserving the current state. A transaction
+/// must therefore have enough current need or learned relevance to justify itself.
+pub const NO_TRANSACTION_BASELINE: f64 = 0.25;
 
 #[derive(Clone, Copy, Debug)]
 pub struct DecisionContext {
@@ -157,8 +160,12 @@ pub fn select_action_with_developmental_scores(
         }
         scored.push((
             index,
-            need_pressure(candidate.action, context.needs)
-                + history_adjustment(history, candidate, context.needs),
+            if candidate.action == ActionKind::NoTransaction {
+                NO_TRANSACTION_BASELINE
+            } else {
+                need_pressure(candidate.action, context.needs)
+                    + history_adjustment(history, candidate, context.needs)
+            },
             developmental_scores
                 .get(index)
                 .copied()
