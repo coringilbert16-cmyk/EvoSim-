@@ -6,7 +6,7 @@
 use crate::combine_runtime::DevelopmentalContext;
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::juvenile_requirements::{validate_realized_juvenile, JuvenileViabilityRequirements};
-use crate::material_storage::MaterialStorage;
+use crate::material_storage::{MaterialStorage, StoredMaterial};
 use crate::resources::Material;
 use crate::state::{
     DevelopmentStage, EnergyLedger, Environment, Organism, Position, ReproductiveConstruction,
@@ -362,14 +362,10 @@ fn birth_ready(
 
 fn anchor_structure(
     child_genome: &crate::genome::Genome,
-    anchor: Material,
+    anchor_storage: MaterialStorage,
     placement: crate::structure::Placement,
     catalog: &[crate::resources::BaseResource],
 ) -> Option<(OrganismStructure, MaterialStorage, usize)> {
-    let mut storage = MaterialStorage::default();
-    if !storage.store(anchor) {
-        return None;
-    }
     let mut child = Organism {
         id: "developing-offspring".into(),
         developmental_origin: Position {
@@ -388,7 +384,7 @@ fn anchor_structure(
         usable_energy: 0.0,
         stress: 0.0,
         stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
-        stored_material: storage,
+        stored_material: anchor_storage,
         development_stage: DevelopmentStage::Juvenile,
         active_transformation_id: None,
         reproductive_construction: None,
@@ -398,7 +394,6 @@ fn anchor_structure(
         cached_cavity_revision: None,
         cached_cavity: None,
         cached_developmental_revision: None,
-        cached_developmental_realization: None,
         cached_harmonic_key: None,
     };
     let anchor_unit_index = crate::combine_runtime::instantiate_one_unit(&mut child, catalog)?;
@@ -407,7 +402,6 @@ fn anchor_structure(
     }
     Some((child.structure, child.stored_material, anchor_unit_index))
 }
-
 pub(crate) fn total_usable_energy_held(organisms: &[Organism]) -> f64 {
     organisms
         .iter()
@@ -441,25 +435,45 @@ pub(crate) fn begin_reproduction(
         return false;
     }
 
-    let snapshot = parent.stored_material.materials_snapshot();
-    for anchor in snapshot {
+    // No resource type is reserved as a reproductive anchor. The first
+    // offspring core is selected from whatever parent-held material can
+    // actually be instantiated by the physical construction runtime.
+    // Structured logical material remains intact; an already-realized
+    // structured object may be used directly.
+    for entry in parent.stored_material.entries.clone() {
+        let anchor = match &entry {
+            StoredMaterial::Logical(material) if !material.has_internal_structure() => material.clone(),
+            StoredMaterial::Physical(instance) => instance.material.clone(),
+            StoredMaterial::Logical(_) => continue,
+        };
         let Some(placement) = parent_child_position(parent, &anchor, catalog) else {
             continue;
         };
-        let mut trial_storage = parent.stored_material.clone();
-        let Some(transferred) = trial_storage.take_matching(&anchor) else {
-            continue;
-        };
+
+        let mut trial_storage = MaterialStorage::default();
+        trial_storage.entries.push(entry.clone());
         let Some((structure, child_storage, anchor_unit_index)) =
-            anchor_structure(&child_genome, transferred, placement, catalog)
+            anchor_structure(&child_genome, trial_storage, placement, catalog)
         else {
             continue;
         };
-        parent.stored_material = trial_storage;
+
+        let mut parent_trial = parent.stored_material.clone();
+        let removed = match &entry {
+            StoredMaterial::Logical(material) => parent_trial.take_matching(material).is_some(),
+            StoredMaterial::Physical(instance) => parent_trial
+                .take_matching_physical(&instance.material)
+                .is_some(),
+        };
+        if !removed {
+            continue;
+        }
+
+        parent.stored_material = parent_trial;
         parent.reproductive_construction = Some(ReproductiveConstruction {
             committed_material: child_storage,
             developing_structure: structure,
-            child_genome,
+            child_genome: child_genome.clone(),
             developmental_origin: Position {
                 x: placement.x,
                 y: placement.y,
@@ -841,6 +855,8 @@ mod tests {
             y: 0.0,
             rotation_radians: 0.0,
         };
-        assert!(anchor_structure(&genome, anchor, placement, &catalog).is_some());
+        let mut storage = MaterialStorage::default();
+        assert!(storage.store(anchor));
+        assert!(anchor_structure(&genome, storage, placement, &catalog).is_some());
     }
 }
