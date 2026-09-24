@@ -366,5 +366,4 @@ mod tests {
             .boundary_bond_indices(&organism.structure);
         assert!(candidates.iter().all(|index| !genome_bonds.contains(index)));
     }
-
 }
