@@ -87,9 +87,10 @@ mod integration_tests {
     fn storage_contains_discrete_independent_material_objects() {
         let mut o = Simulation::create_initial_organism();
         assert!(o.store_material(Material::free_base("Carbon", 5.0)));
-        assert_eq!(o.stored_material.len(), 6);
-        assert_eq!(o.stored_material.count_unstructured(), 6);
-        assert_eq!(o.stored_material.total_amount(), 6.0);
+        assert_eq!(o.stored_material.len(), 2);
+        assert_eq!(o.stored_material.count_unstructured(), 1);
+        assert_eq!(o.stored_material.count_structured(), 1);
+        assert_eq!(o.stored_material.total_amount(), 8.0);
     }
     #[test]
     fn storage_preserves_a_compound_as_one_intact_object() {
