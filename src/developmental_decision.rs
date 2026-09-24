@@ -104,6 +104,109 @@ fn growth_fraction_for_structure(
         .clamp(0.0, 1.0)
 }
 
+fn combine_developmental_preview_score(
+    organism: &Organism,
+    environment: &Environment,
+    developmental: &DevelopmentalContext,
+) -> Option<f64> {
+    let mut best = None;
+
+    // Stored material: score prospective placement directly. This predicts the
+    // local developmental contribution without cloning the organism, structure,
+    // or energy ledger.
+    if let Some(raw) = organism.stored_material.first_material() {
+        let first_resource = raw.parts.first()?.0.as_str();
+        let geometry_source = environment
+            .catalog
+            .iter()
+            .find(|resource| resource.name == first_resource)?;
+
+        for ua in 0..organism.structure.units.len() {
+            let anchor = organism.structure.units[ua].placement;
+            for placement in crate::construction_runtime::candidate_placements(
+                &organism.structure,
+                geometry_source,
+                anchor,
+                &[ua],
+                &environment.catalog,
+            ) {
+                let local = crate::developmental_blueprint::developmental_point(
+                    placement.x,
+                    placement.y,
+                    developmental.origin,
+                    developmental.orientation,
+                );
+                let score =
+                    crate::developmental_blueprint::CANDIDATE_MATERIAL_WEIGHT
+                        * developmental.blueprint.material_preference_scaled(
+                            first_resource,
+                            local.0,
+                            local.1,
+                            developmental.preferred_length,
+                        )
+                        + crate::developmental_blueprint::CANDIDATE_DENSITY_WEIGHT
+                            * developmental.blueprint.density_preference_scaled(
+                                local.0,
+                                local.1,
+                                developmental.preferred_length,
+                            )
+                        + crate::developmental_blueprint::CANDIDATE_CONNECTIVITY_WEIGHT
+                            * developmental.blueprint.connectivity_preference_scaled(
+                                local.0,
+                                local.1,
+                                developmental.preferred_length,
+                            );
+                best = Some(best.map_or(score, |current: f64| current.max(score)));
+            }
+        }
+    }
+
+    // Existing structural units: a prospective bond changes connectivity, so
+    // score the bond midpoint without constructing a trial structure.
+    if organism.structure.units.len() >= 2 {
+        let mut cache = ConnectionCompatibilityCache::new();
+        for ua in 0..organism.structure.units.len() {
+            for ub in ua + 1..organism.structure.units.len() {
+                for candidate in crate::combine::eligible_candidates(
+                    &organism.structure,
+                    ua,
+                    ub,
+                    &environment.catalog,
+                    &mut cache,
+                ) {
+                    let Some(a) = candidate
+                        .endpoint_a
+                        .world_point(&organism.structure.units[ua], &environment.catalog)
+                    else {
+                        continue;
+                    };
+                    let Some(b) = candidate
+                        .endpoint_b
+                        .world_point(&organism.structure.units[ub], &environment.catalog)
+                    else {
+                        continue;
+                    };
+                    let midpoint = ((a.x + b.x) * 0.5, (a.y + b.y) * 0.5);
+                    let local = crate::developmental_blueprint::developmental_point(
+                        midpoint.0,
+                        midpoint.1,
+                        developmental.origin,
+                        developmental.orientation,
+                    );
+                    let score = developmental.blueprint.connectivity_preference_scaled(
+                        local.0,
+                        local.1,
+                        developmental.preferred_length,
+                    );
+                    best = Some(best.map_or(score, |current: f64| current.max(score)));
+                }
+            }
+        }
+    }
+
+    best.map(|score| score.clamp(0.0, 1.0))
+}
+
 pub(crate) fn developmental_action_scores(
     organism: &Organism,
     environment: &Environment,
@@ -111,7 +214,7 @@ pub(crate) fn developmental_action_scores(
     candidates: &[ActionCandidate],
     competing_indices: &[usize],
     developmental: Option<&DevelopmentalContext>,
-    ledger: &EnergyLedger,
+    _ledger: &EnergyLedger,
 ) -> Vec<Option<f64>> {
     let Some(developmental) = developmental else {
         return vec![None; candidates.len()];
@@ -119,6 +222,16 @@ pub(crate) fn developmental_action_scores(
     if needs.development <= 0.0 {
         return vec![None; candidates.len()];
     }
+
+    let combine_score = if competing_indices.iter().any(|&index| {
+        candidates
+            .get(index)
+            .is_some_and(|candidate| candidate.action == ActionKind::Combine)
+    }) {
+        combine_developmental_preview_score(organism, environment, developmental)
+    } else {
+        None
+    };
 
     candidates
         .iter()
@@ -128,31 +241,7 @@ pub(crate) fn developmental_action_scores(
                 return None;
             }
             match candidate.action {
-                ActionKind::Combine => {
-                    let mut trial = organism.clone();
-                    let mut trial_ledger = *ledger;
-                    let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-                    crate::combine_runtime::try_combine(
-                        &mut trial,
-                        environment,
-                        &mut cache,
-                        &mut trial_ledger,
-                        Some((
-                            &developmental.blueprint,
-                            developmental.origin,
-                            developmental.orientation,
-                            developmental.preferred_length,
-                        )),
-                    )?;
-                    Some(growth_fraction_for_structure(
-                        &trial.structure,
-                        environment,
-                        &developmental.blueprint,
-                        developmental.origin,
-                        developmental.orientation,
-                        developmental.preferred_length,
-                    ))
-                }
+                ActionKind::Combine => combine_score,
                 ActionKind::NoTransaction => Some(developmental.current_growth_fraction),
                 ActionKind::Break => {
                     let bond_index = candidate
