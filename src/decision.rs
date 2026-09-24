@@ -21,7 +21,11 @@ impl ActionKind {
     pub fn relevant_needs(self) -> &'static [NeedKind] {
         match self {
             ActionKind::Move => &[NeedKind::Survival, NeedKind::Reproduction],
-            ActionKind::Combine => &[NeedKind::Reproduction, NeedKind::Development],
+            ActionKind::Combine => &[
+                NeedKind::Survival,
+                NeedKind::Reproduction,
+                NeedKind::Development,
+            ],
             ActionKind::Break => &[
                 NeedKind::Survival,
                 NeedKind::Reproduction,
