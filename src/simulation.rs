@@ -199,7 +199,7 @@ impl Simulation {
     }
     fn action_eligibility(
         organism: &Organism,
-        _environment: &Environment,
+        environment: &Environment,
         needs: CurrentNeeds,
     ) -> ActionEligibility {
         let can_combine = crate::combine_runtime::can_combine(organism, environment);
