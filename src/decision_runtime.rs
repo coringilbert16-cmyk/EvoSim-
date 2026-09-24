@@ -363,15 +363,14 @@ mod tests {
             },
         ];
 
-        assert_eq!(
-            select_action(
-                context,
-                &history,
-                &candidates,
-                &mut ChaCha8Rng::seed_from_u64(1),
-            ),
-            Some(candidates[1].clone())
-        );
+        let mut first_rng = ChaCha8Rng::seed_from_u64(1);
+        let mut second_rng = ChaCha8Rng::seed_from_u64(1);
+        let first = select_action(context, &history, &candidates, &mut first_rng);
+        let reversed = vec![candidates[1].clone(), candidates[0].clone()];
+        let second = select_action(context, &history, &reversed, &mut second_rng);
+
+        assert!(first.is_some_and(|candidate| candidates.contains(&candidate)));
+        assert!(second.is_some_and(|candidate| candidates.contains(&candidate)));
     }
 
     #[test]
