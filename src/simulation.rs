@@ -200,7 +200,7 @@ impl Simulation {
     fn action_measurement(
         organism: &mut Organism,
         environment: &Environment,
-    ) -> (f64, f64, f64, f64, (f64, f64)) {
+    ) -> (f64, f64, f64, f64, f64, (f64, f64)) {
         let developmental = organism
             .developmental_realization_cached(&environment.catalog)
             .map(|realization| realization.overall)
@@ -216,13 +216,14 @@ impl Simulation {
             organism.stress,
             structural_mass,
             developmental,
+            organism.stored_material.physical_count() as f64,
             position,
         )
     }
 
     fn action_consequence(
-        before: (f64, f64, f64, f64, (f64, f64)),
-        after: (f64, f64, f64, f64, (f64, f64)),
+        before: (f64, f64, f64, f64, f64, (f64, f64)),
+        after: (f64, f64, f64, f64, f64, (f64, f64)),
     ) -> crate::decision::ActionConsequence {
         let (bx, by) = before.4;
         let (ax, ay) = after.4;
@@ -232,6 +233,7 @@ impl Simulation {
             developmental_delta: after.3 - before.3,
             stress_delta: after.1 - before.1,
             position_delta: ((ax - bx).powi(2) + (ay - by).powi(2)).sqrt(),
+            storage_delta: after.4 - before.4,
         }
     }
 
@@ -575,12 +577,15 @@ impl Simulation {
                 }
                 let after = Self::action_measurement(&mut organisms[index], environment);
                 let consequence = Self::action_consequence(before, after);
-                crate::decision_runtime::record_consequence(
-                    &mut organisms[index].decision_history,
-                    &selected,
-                    consequence,
-                );
-                if let Some(cavity) = organisms[index]
+                if selected.action != ActionKind::Break {
+                    crate::decision_runtime::record_consequence(
+                        &mut organisms[index].decision_history,
+                        &selected,
+                        consequence,
+                    );
+                }
+                if selected.action != ActionKind::Break {
+                    if let Some(cavity) = organisms[index]
                     .genome_cavity_cached(&environment.catalog)
                     .filter(|cavity| cavity.qualifies())
                 {
@@ -597,8 +602,8 @@ impl Simulation {
                         &spectrum,
                         consequence,
                     );
+                    }
                 }
-            }
         }
         let mut offspring = Vec::new();
         let mut next_organism_id = self.next_organism_id;
