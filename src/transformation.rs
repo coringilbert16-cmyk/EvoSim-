@@ -145,6 +145,62 @@ pub(crate) fn resolve_stress_break(
     settle_break_energy(organism, target, usable, gross, heat, ledger)
 }
 
+fn resolve_stored_break(
+    organism: &mut Organism,
+    environment: &Environment,
+    storage_index: usize,
+    bond_index: usize,
+    ledger: &mut crate::state::EnergyLedger,
+) -> Option<OutcomeKind> {
+    let instance = organism.stored_material.peek_physical_at(storage_index)?;
+    let bond = *instance.material.internal_bonds.get(bond_index)?;
+    let name_a = instance.material.parts.get(bond.part_a)?.0.as_str();
+    let name_b = instance.material.parts.get(bond.part_b)?.0.as_str();
+    let a = environment
+        .catalog
+        .iter()
+        .find(|resource| resource.name == name_a)?
+        .properties;
+    let b = environment
+        .catalog
+        .iter()
+        .find(|resource| resource.name == name_b)?
+        .properties;
+    let (gross, usable, heat) = break_energy_yield(
+        a,
+        b,
+        water_field_amount(environment, organism),
+        organism.genome.processing_efficiency(),
+    )?;
+    let fragments = crate::material_transfer::break_physical_material_bond(&instance, bond_index)?;
+    let tx = EnergyTransaction {
+        reason: EnergyReason::Break,
+        potential_released: gross,
+        usable_delta: usable,
+        structural_delta: 0.0,
+        heat_dissipated: heat,
+    };
+    if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
+        return None;
+    }
+    if organism.stored_material.take_physical_at(storage_index).is_none() {
+        return None;
+    }
+    for fragment in fragments {
+        if !organism.stored_material.store_physical_instance(fragment) {
+            return None;
+        }
+    }
+    organism.add_transaction_stress(heat);
+    Some(if usable > f64::EPSILON {
+        OutcomeKind::Beneficial
+    } else if heat > f64::EPSILON {
+        OutcomeKind::Harmful
+    } else {
+        OutcomeKind::Neutral
+    })
+}
+
 impl Simulation {
     pub(crate) fn try_start_transformation(
         organism: &mut Organism,
@@ -196,6 +252,32 @@ impl Simulation {
         environment: &mut Environment,
         ledger: &mut EnergyLedger,
     ) {
+        if let (Some(storage_index), Some(bond_index)) = (
+            transformation.stored_material_index,
+            transformation.stored_bond_index,
+        ) {
+            if let Some(outcome) = resolve_stored_break(
+                organism,
+                environment,
+                storage_index,
+                bond_index,
+                ledger,
+            ) {
+                organism.active_transformation_id = None;
+                let candidate = ActionCandidate {
+                    action: ActionKind::Break,
+                    context_key: transformation.decision_context_key.clone(),
+                };
+                crate::decision_runtime::record_outcome(
+                    &mut organism.decision_history,
+                    &candidate,
+                    outcome,
+                );
+                return;
+            }
+            organism.active_transformation_id = None;
+            return;
+        }
         let Some(target) = transformation.bond else {
             organism.active_transformation_id = None;
             return;
