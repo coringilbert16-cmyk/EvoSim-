@@ -718,7 +718,6 @@ impl Simulation {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -747,8 +746,7 @@ mod tests {
             survival: 1.0,
             ..CurrentNeeds::default()
         };
-        let eligibility =
-            Simulation::action_eligibility(&organism, &simulation.environment, needs);
+        let eligibility = Simulation::action_eligibility(&organism, &simulation.environment, needs);
         assert!(!eligibility.can_move);
     }
 }
