@@ -442,7 +442,7 @@ impl Simulation {
                 // selector below.
                 if eligibility.can_move {
                     let moved =
-                        Self::update_movement_in_population(index, organisms, environment);
+                        crate::movement::update_movement_in_population(index, organisms, environment);
                     if moved {
                         let move_candidate = ActionCandidate {
                             action: ActionKind::Move,
