@@ -586,22 +586,22 @@ impl Simulation {
                 }
                 if selected.action != ActionKind::Break {
                     if let Some(cavity) = organisms[index]
-                    .genome_cavity_cached(&environment.catalog)
-                    .filter(|cavity| cavity.qualifies())
-                {
-                    let capacity = crate::memory::memory_capacity(&cavity);
-                    let spectrum = organisms[index].harmonic_spectrum.clone();
-                    let memory_strength =
-                        organisms[index].genome.memory_strength().clamp(0.0, 1.0);
-                    crate::memory::reinforce_memory_point(
-                        &mut organisms[index],
-                        after.5.0,
-                        after.5.1,
-                        memory_strength,
-                        capacity,
-                        &spectrum,
-                        consequence,
-                    );
+                        .genome_cavity_cached(&environment.catalog)
+                        .filter(|cavity| cavity.qualifies())
+                    {
+                        let capacity = crate::memory::memory_capacity(&cavity);
+                        let spectrum = organisms[index].harmonic_spectrum.clone();
+                        let memory_strength =
+                            organisms[index].genome.memory_strength().clamp(0.0, 1.0);
+                        crate::memory::reinforce_memory_point(
+                            &mut organisms[index],
+                            after.5.0,
+                            after.5.1,
+                            memory_strength,
+                            capacity,
+                            &spectrum,
+                            consequence,
+                        );
                     }
                 }
             }
