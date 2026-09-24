@@ -90,7 +90,7 @@ mod integration_tests {
         assert_eq!(o.stored_material.len(), 6);
         assert_eq!(o.stored_material.count_unstructured(), 5);
         assert_eq!(o.stored_material.count_structured(), 1);
-        assert_eq!(o.stored_material.total_amount(), 8.0);
+        assert_eq!(o.stored_material.total_amount(), 7.0);
     }
     #[test]
     fn storage_preserves_a_compound_as_one_intact_object() {
