@@ -124,13 +124,11 @@ impl Simulation {
             .first()
             .cloned()
             .unwrap_or(Position { x: 0.0, y: 0.0 });
-        let interior_boundary = crate::cavity::analyze_genome_cavity(
-            &organism.structure,
-            &environment.catalog,
-        )
-        .ok()
-        .flatten()
-        .map(|cavity| move |x: f64, y: f64| cavity.contains_point(x, y));
+        let interior_boundary =
+            crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
+                .ok()
+                .flatten()
+                .map(|cavity| move |x: f64, y: f64| cavity.contains_point(x, y));
         let interior_boundary_ref = interior_boundary
             .as_ref()
             .map(|contains| contains as &dyn Fn(f64, f64) -> bool);
