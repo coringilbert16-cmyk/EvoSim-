@@ -441,33 +441,15 @@ impl Simulation {
                 // survival/reproduction need pressure or by the transformation
                 // selector below.
                 if eligibility.can_move {
-                    let move_candidate = ActionCandidate {
-                        action: ActionKind::Move,
-                        context_key: None,
-                    };
-                    let organism_count = organisms.len();
-                    let (before, rest) = organisms.split_at_mut(index);
-                    let (organism, after) = rest.split_first_mut().expect("index is in organisms");
-                    let mut others = Vec::with_capacity(organism_count.saturating_sub(1));
-                    for other in before.iter() {
-                        others.push((*other).clone());
-                    }
-                    for other in after.iter() {
-                        others.push((*other).clone());
-                    }
-                    let moved = Self::update_movement(organism, environment, &mut others);
+                    let moved =
+                        Self::update_movement_in_population(index, organisms, environment);
                     if moved {
-                        for (original, trial) in
-                            before.iter_mut().chain(after.iter_mut()).zip(others)
-                        {
-                            original.occupied_cells = trial.occupied_cells;
-                            original.structure = trial.structure;
-                            original.mark_position_changed();
-                        }
-                    }
-                    if moved {
+                        let move_candidate = ActionCandidate {
+                            action: ActionKind::Move,
+                            context_key: None,
+                        };
                         crate::decision_runtime::record_outcome(
-                            &mut organism.decision_history,
+                            &mut organisms[index].decision_history,
                             &move_candidate,
                             crate::decision::OutcomeKind::Beneficial,
                         );
