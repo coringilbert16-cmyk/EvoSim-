@@ -250,7 +250,7 @@ pub(crate) fn instantiate_one_unit(
     Some(organism.structure.add_unit(unit))
 }
 
-pub(crate) fn try_combine_stored_unit(
+fn try_combine_stored_unit_first(
     organism: &mut Organism,
     environment: &Environment,
     cache: &mut ConnectionCompatibilityCache,
@@ -549,6 +549,35 @@ pub(crate) fn try_combine_stored_unit(
             organism.usable_energy = candidate_energy;
             *ledger = candidate_ledger;
             organism.add_transaction_stress(attempt.work_cost);
+            return Some(attempt);
+        }
+    }
+    None
+}
+
+pub(crate) fn try_combine_stored_unit(
+    organism: &mut Organism,
+    environment: &Environment,
+    cache: &mut ConnectionCompatibilityCache,
+    ledger: &mut EnergyLedger,
+    developmental: Option<DevelopmentalContext<'_>>,
+) -> Option<CombineAttempt> {
+    let entry_count = organism.stored_material.entries.len();
+    for index in 0..entry_count {
+        let mut trial = organism.clone();
+        trial.stored_material.entries.swap(0, index);
+        let mut trial_cache = cache.clone();
+        let mut trial_ledger = *ledger;
+        if let Some(attempt) = try_combine_stored_unit_first(
+            &mut trial,
+            environment,
+            &mut trial_cache,
+            &mut trial_ledger,
+            developmental,
+        ) {
+            *organism = trial;
+            *cache = trial_cache;
+            *ledger = trial_ledger;
             return Some(attempt);
         }
     }
