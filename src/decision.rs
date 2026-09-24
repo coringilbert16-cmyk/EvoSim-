@@ -77,7 +77,7 @@ impl ActionConsequence {
     };
 
     pub fn contextual_value(self, needs: CurrentNeeds) -> f64 {
-        let survival = (self.energy + 0.5 * self.structure) * needs.survival;
+        let survival = (self.energy + 0.25 * self.structure) * needs.survival;
         let development = self.development * (needs.development + needs.reproduction);
         survival + development
     }
