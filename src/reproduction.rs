@@ -449,7 +449,7 @@ pub(crate) fn begin_reproduction(
                 material.clone()
             }
             StoredMaterial::Physical(instance) => instance.material.clone(),
-            StoredMaterial::Logical(_) => continue,
+            StoredMaterial::Logical(material) => material.clone(),
         };
         let Some(placement) = parent_child_position(parent, &anchor, catalog) else {
             continue;
