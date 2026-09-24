@@ -160,15 +160,7 @@ impl Simulation {
         let key = decision.context_key.as_deref()?;
         let index = key.strip_prefix("bond:")?.parse::<usize>().ok()?;
         let bond = *organism.structure.bonds.get(index)?;
-                let ia = organism
-            .structure
-            .unit_index(bond.endpoint_a.constituent_id)?;
-        let ib = organism
-            .structure
-            .unit_index(bond.endpoint_b.constituent_id)?;
-        let a = organism.structure.units.get(ia)?.properties(catalog)?;
-        let b = organism.structure.units.get(ib)?.properties(catalog)?;
-        let complexity = crate::math::complexity(2.0);
+                let complexity = crate::math::complexity(2.0);
         let duration = 1_u64.max(complexity.ceil() as u64);
         let t = ActiveTransformation {
             id: *next_id,
