@@ -670,11 +670,12 @@ pub(crate) fn try_combine(
                                 origin,
                                 orientation,
                             );
-                            blueprint.connectivity_preference_scaled(
-                                (la.0 + lb.0) * 0.5,
-                                (la.1 + lb.1) * 0.5,
-                                preferred_length,
-                            )
+                            blueprint.connectivity.strength
+                                * blueprint.connectivity_preference_scaled(
+                                    (la.0 + lb.0) * 0.5,
+                                    (la.1 + lb.1) * 0.5,
+                                    preferred_length,
+                                )
                         })
                         .unwrap_or(0.0);
                     pairs.push((
