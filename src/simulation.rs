@@ -604,6 +604,7 @@ impl Simulation {
                     );
                     }
                 }
+            }
         }
         let mut offspring = Vec::new();
         let mut next_organism_id = self.next_organism_id;
