@@ -136,28 +136,14 @@ pub(crate) fn resolve_stress_break(
     else {
         return false;
     };
-    let work = break_work_cost(a, b, crate::math::complexity(2.0));
-    if !work.is_finite() || work < 0.0 {
-        return false;
-    }
-    let Some(candidate) = crate::contact::connection_pair_candidates(
-        &organism.structure,
-        ia,
-        ib,
-        &environment.catalog,
-    )
-    .into_iter()
-    .find(|c| {
-        c.endpoint_a == target.endpoint_a.location && c.endpoint_b == target.endpoint_b.location
-    }) else {
-        return false;
-    };
-    let (gross, usable, heat) = break_energy_yield(
+    let Some((gross, usable, heat)) = break_energy_yield(
         a,
         b,
         water_field_amount(environment, organism),
         organism.genome.processing_efficiency(),
-    )?;
+    ) else {
+        return false;
+    };
     settle_break_energy(organism, target, usable, gross, heat, ledger)
 }
 
@@ -245,27 +231,6 @@ impl Simulation {
             }
         };
         let b = match organism.structure.units[ib].properties(&environment.catalog) {
-            Some(x) => x,
-            None => {
-                organism.active_transformation_id = None;
-                return;
-            }
-        };
-        let work = break_work_cost(a, b, transformation.complexity);
-        if !work.is_finite() || work < 0.0 {
-            organism.active_transformation_id = None;
-            return;
-        }
-        let candidate = match crate::contact::connection_pair_candidates(
-            &organism.structure,
-            ia,
-            ib,
-            &environment.catalog,
-        )
-        .into_iter()
-        .find(|c| {
-            c.endpoint_a == target.endpoint_a.location && c.endpoint_b == target.endpoint_b.location
-        }) {
             Some(x) => x,
             None => {
                 organism.active_transformation_id = None;
