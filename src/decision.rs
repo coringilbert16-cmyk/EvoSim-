@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ActionKind {
+    NoTransaction,
     Move,
     Combine,
     Break,
@@ -20,6 +21,7 @@ impl ActionKind {
     /// an action mandate and not a utility score.
     pub fn relevant_needs(self) -> &'static [NeedKind] {
         match self {
+            ActionKind::NoTransaction => &[],
             ActionKind::Move => &[NeedKind::Survival, NeedKind::Reproduction],
             ActionKind::Combine => &[
                 NeedKind::Survival,
@@ -46,18 +48,44 @@ pub enum NeedKind {
     Development,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum OutcomeKind {
-    Beneficial,
-    Neutral,
-    Harmful,
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+pub struct ActionConsequence {
+    pub energy_delta: f64,
+    pub structural_delta: f64,
+    pub developmental_delta: f64,
+    pub stress_delta: f64,
+    pub position_delta: f64,
+}
+
+impl ActionConsequence {
+    pub fn finite(self) -> bool {
+        self.energy_delta.is_finite()
+            && self.structural_delta.is_finite()
+            && self.developmental_delta.is_finite()
+            && self.stress_delta.is_finite()
+            && self.position_delta.is_finite()
+    }
+
+    pub fn weighted_relevance(self, needs: CurrentNeeds) -> f64 {
+        let survival = self.energy_delta - self.stress_delta;
+        let development = self.developmental_delta + self.structural_delta;
+        let reproduction = self.structural_delta + self.position_delta;
+        let total = needs.survival + needs.development + needs.reproduction;
+        if total <= 0.0 {
+            return 0.0;
+        }
+        (needs.survival * survival
+            + needs.development * development
+            + needs.reproduction * reproduction)
+            / total
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct DecisionHistoryEntry {
     pub action: ActionKind,
     pub context_key: Option<String>,
-    pub outcome: OutcomeKind,
+    pub consequence: ActionConsequence,
     pub count: u64,
 }
 
@@ -73,14 +101,28 @@ impl DecisionHistory {
         &mut self,
         action: ActionKind,
         context_key: Option<String>,
-        outcome: OutcomeKind,
+        consequence: ActionConsequence,
     ) {
+        if !consequence.finite() {
+            return;
+        }
         if let Some(existing) = self
             .entries
             .iter_mut()
             .find(|entry| entry.action == action && entry.context_key == context_key)
         {
-            existing.outcome = outcome;
+            let n = existing.count as f64;
+            let next = n + 1.0;
+            existing.consequence.energy_delta =
+                (existing.consequence.energy_delta * n + consequence.energy_delta) / next;
+            existing.consequence.structural_delta =
+                (existing.consequence.structural_delta * n + consequence.structural_delta) / next;
+            existing.consequence.developmental_delta =
+                (existing.consequence.developmental_delta * n + consequence.developmental_delta) / next;
+            existing.consequence.stress_delta =
+                (existing.consequence.stress_delta * n + consequence.stress_delta) / next;
+            existing.consequence.position_delta =
+                (existing.consequence.position_delta * n + consequence.position_delta) / next;
             existing.count = existing.count.saturating_add(1);
             return;
         }
@@ -98,26 +140,30 @@ impl DecisionHistory {
         self.entries.push(DecisionHistoryEntry {
             action,
             context_key,
-            outcome,
+            consequence,
             count: 1,
         });
     }
 
-    pub fn outcome(&self, action: ActionKind, context_key: Option<&str>) -> Option<OutcomeKind> {
+    pub fn consequence(
+        &self,
+        action: ActionKind,
+        context_key: Option<&str>,
+    ) -> Option<ActionConsequence> {
         self.entries
             .iter()
             .find(|entry| entry.action == action && entry.context_key.as_deref() == context_key)
-            .map(|entry| entry.outcome)
+            .map(|entry| entry.consequence)
             .or_else(|| {
                 self.entries
                     .iter()
                     .find(|entry| entry.action == action && entry.context_key.is_none())
-                    .map(|entry| entry.outcome)
+                    .map(|entry| entry.consequence)
             })
     }
 
     pub fn has_knowledge(&self, action: ActionKind, context_key: Option<&str>) -> bool {
-        self.outcome(action, context_key).is_some()
+        self.consequence(action, context_key).is_some()
     }
 }
 
@@ -177,6 +223,7 @@ pub struct ActionEligibility {
 impl ActionEligibility {
     pub fn permits(self, action: ActionKind) -> bool {
         match action {
+            ActionKind::NoTransaction => true,
             ActionKind::Move => self.can_move,
             ActionKind::Combine => self.can_combine,
             ActionKind::Break => self.can_break,
@@ -343,7 +390,7 @@ mod tests {
             history.record(
                 ActionKind::Break,
                 Some(format!("material-{i}")),
-                OutcomeKind::Neutral,
+                ActionConsequence::default(),
             );
         }
         assert_eq!(history.entries.len(), DecisionHistory::MAX_ENTRIES);
