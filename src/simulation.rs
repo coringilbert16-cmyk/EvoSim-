@@ -1,6 +1,6 @@
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
 use crate::decision_runtime::{
@@ -112,18 +112,19 @@ impl Simulation {
     pub(crate) fn transfer_contained_environmental_material(
         organism: &mut Organism,
         environment: &mut Environment,
-    ) {
+    ) -> Vec<(f64, f64, crate::resources::Material)> {
         let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_structure(
             &organism.structure,
             &environment.catalog,
         ) else {
-            return;
+            return Vec::new();
         };
         let anchor = organism
             .occupied_cells
             .first()
             .cloned()
             .unwrap_or(Position { x: 0.0, y: 0.0 });
+        let mut acquired = Vec::new();
         for physical in environment.field.take_contained_physical_materials(&body) {
             let source_position = physical
                 .placements
@@ -142,13 +143,7 @@ impl Simulation {
                 )
             {
                 if let Some((x, y)) = source_position {
-                    crate::memory::reinforce_acquired_material(
-                        organism,
-                        environment,
-                        x,
-                        y,
-                        &physical.material,
-                    );
+                    acquired.push((x, y, physical.material.clone()));
                 }
                 continue;
             }
@@ -162,6 +157,7 @@ impl Simulation {
                     .deposit(placement.x, placement.y, physical);
             }
         }
+        acquired
     }
 
     fn current_needs(
@@ -406,6 +402,8 @@ impl Simulation {
             }
         }
         let decision_parameters = self.decision_parameters;
+        let mut acquisition_cues: HashMap<String, Vec<(f64, f64, crate::resources::Material)>> =
+            HashMap::new();
         for organism in &mut self.organisms {
             Self::update_development_stage(organism, &self.environment);
             organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
@@ -422,7 +420,11 @@ impl Simulation {
                     &mut self.energy_ledger,
                 );
             }
-            Self::transfer_contained_environmental_material(organism, &mut self.environment);
+            let acquired =
+                Self::transfer_contained_environmental_material(organism, &mut self.environment);
+            if !acquired.is_empty() {
+                acquisition_cues.insert(organism.id.clone(), acquired);
+            }
         }
         {
             let (organisms, environment) = (&mut self.organisms, &mut self.environment);
@@ -666,6 +668,19 @@ impl Simulation {
                 };
                 if let Some(stress) = stress {
                     organism.add_transaction_stress(stress);
+                }
+                if matches!(status, crate::reproduction::ConstructionStatus::Progress) {
+                    if let Some(cues) = acquisition_cues.remove(&organism.id) {
+                        for (x, y, material) in cues {
+                            crate::memory::reinforce_acquired_material(
+                                organism,
+                                &self.environment,
+                                x,
+                                y,
+                                &material,
+                            );
+                        }
+                    }
                 }
                 if matches!(
                     status,
