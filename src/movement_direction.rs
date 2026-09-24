@@ -17,8 +17,7 @@ pub(crate) fn resource_seek_direction(
         return None;
     }
     let (px, py) = organism.occupied_cells.first().map(|p| (p.x, p.y))?;
-    let radius = organism.genome.perception_radius().max(0.0);
-    let indices = environment.field.cells_within_radius(px, py, radius);
+    let indices: Vec<usize> = (0..environment.field.cells.len()).collect();
     let mut dx_total = 0.0;
     let mut dy_total = 0.0;
     let mut weight_total = 0.0;
