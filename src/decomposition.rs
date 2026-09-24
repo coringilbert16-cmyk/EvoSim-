@@ -1,5 +1,4 @@
 #![expect(dead_code, reason = "Staged API retained for subsystem integration")]
-use crate::combine::experimental_interaction;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
 use crate::physical_material::PhysicalMaterial;
 use crate::state::{EnergyLedger, Environment, Organism, Position};
@@ -116,8 +115,12 @@ pub(crate) fn resolve_one_bond_with_ledger(
     };
 
     let before = body.energy_budget;
-    let (gross, usable, heat) =
-        crate::transformation::break_energy_yield(a, b, water_field_amount(environment, &body.position), 1.0)?;
+    let (gross, usable, heat) = crate::transformation::break_energy_yield(
+        a,
+        b,
+        water_field_amount(environment, &body.position),
+        1.0,
+    )?;
     let transaction = EnergyTransaction {
         reason: EnergyReason::Decomposition,
         potential_released: gross,
