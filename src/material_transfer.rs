@@ -358,6 +358,57 @@ mod tests {
     }
 
     #[test]
+    fn breaking_a_bridge_bond_preserves_the_two_physical_fragments() {
+        let catalog = crate::resources::default_catalog();
+        let material = Material {
+            parts: vec![
+                ("Carbon".into(), 1.0),
+                ("Hydrogen".into(), 1.0),
+                ("Nitrogen".into(), 1.0),
+            ],
+            internal_bonds: vec![
+                InternalBond { part_a: 0, part_b: 1 },
+                InternalBond { part_a: 1, part_b: 2 },
+            ],
+        };
+        let placements = vec![
+            crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            crate::structure::Placement {
+                x: 0.8,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            crate::structure::Placement {
+                x: 1.6,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ];
+        let physical = crate::physical_material::PhysicalMaterial::realized(
+            material,
+            placements,
+            &catalog,
+        )
+        .unwrap();
+        let fragments = super::break_physical_material_bond(&physical, 0).unwrap();
+        assert_eq!(fragments.len(), 2);
+        assert_eq!(
+            fragments
+                .iter()
+                .map(|fragment| fragment.material.total_amount())
+                .sum::<f64>(),
+            3.0
+        );
+        assert!(fragments
+            .iter()
+            .all(|fragment| fragment.material.internal_bonds.len() <= 1));
+    }
+
+    #[test]
     fn rejects_whole_material_as_a_partition() {
         let catalog = crate::resources::default_catalog();
         let physical = crate::physical_material::PhysicalMaterial::realized(
