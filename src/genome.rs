@@ -171,10 +171,7 @@ mod tests {
         assert!(genome.juvenile_reserve.is_valid());
         assert_eq!(
             genome.juvenile_reserve.parts,
-            vec![
-                ("Carbon".into(), 1.0),
-                ("Hydrogen".into(), 1.0),
-            ]
+            vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0),]
         );
         assert_eq!(genome.juvenile_reserve.internal_bonds.len(), 1);
         assert_eq!(genome.juvenile_reserve.total_amount(), 2.0);
