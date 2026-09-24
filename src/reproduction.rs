@@ -444,7 +444,7 @@ pub(crate) fn begin_reproduction(
         let anchor = match &entry {
             StoredMaterial::Logical(material) if !material.has_internal_structure() => {
                 material.clone()
-            },
+            }
             StoredMaterial::Physical(instance) => instance.material.clone(),
             StoredMaterial::Logical(_) => continue,
         };
