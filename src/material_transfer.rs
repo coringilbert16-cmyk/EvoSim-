@@ -93,6 +93,97 @@ pub(crate) fn split_physical_material(
         build(instance, &flags, false)?,
     ))
 }
+pub(crate) fn break_physical_material_bond(
+    instance: &crate::physical_material::PhysicalMaterial,
+    bond_index: usize,
+) -> Option<Vec<crate::physical_material::PhysicalMaterial>> {
+    let placements = instance.placements.as_ref()?;
+    let connections = instance.internal_connections.as_ref()?;
+    if !instance.is_realized()
+        || placements.len() != instance.material.parts.len()
+        || connections.len() != instance.material.internal_bonds.len()
+    {
+        return None;
+    }
+    let bonds = &instance.material.internal_bonds;
+    let target = *bonds.get(bond_index)?;
+    if target.part_a >= placements.len() || target.part_b >= placements.len() {
+        return None;
+    }
+
+    let mut adjacency = vec![Vec::<usize>::new(); placements.len()];
+    for (index, bond) in bonds.iter().enumerate() {
+        if index == bond_index {
+            continue;
+        }
+        adjacency[bond.part_a].push(bond.part_b);
+        adjacency[bond.part_b].push(bond.part_a);
+    }
+
+    let mut component = vec![usize::MAX; placements.len()];
+    let mut components = Vec::<Vec<usize>>::new();
+    for start in 0..placements.len() {
+        if component[start] != usize::MAX {
+            continue;
+        }
+        let component_index = components.len();
+        let mut stack = vec![start];
+        component[start] = component_index;
+        let mut members = Vec::new();
+        while let Some(current) = stack.pop() {
+            members.push(current);
+            for &next in &adjacency[current] {
+                if component[next] == usize::MAX {
+                    component[next] = component_index;
+                    stack.push(next);
+                }
+            }
+        }
+        components.push(members);
+    }
+
+    components
+        .into_iter()
+        .map(|members| {
+            let mut remap = vec![usize::MAX; placements.len()];
+            let mut parts = Vec::with_capacity(members.len());
+            let mut new_placements = Vec::with_capacity(members.len());
+            for old in members {
+                remap[old] = parts.len();
+                parts.push(instance.material.parts[old].clone());
+                new_placements.push(placements[old]);
+            }
+            let mut new_bonds = Vec::new();
+            let mut new_connections = Vec::new();
+            for (index, bond) in bonds.iter().enumerate() {
+                if index == bond_index || remap[bond.part_a] == usize::MAX || remap[bond.part_b] == usize::MAX {
+                    continue;
+                }
+                new_bonds.push(crate::resources::InternalBond {
+                    part_a: remap[bond.part_a],
+                    part_b: remap[bond.part_b],
+                });
+                let connection = connections.get(index)?;
+                new_connections.push(crate::physical_material::PhysicalMaterialBond {
+                    part_a: remap[connection.part_a],
+                    endpoint_a: connection.endpoint_a,
+                    part_b: remap[connection.part_b],
+                    endpoint_b: connection.endpoint_b,
+                });
+            }
+            Some(crate::physical_material::PhysicalMaterial {
+                material: crate::resources::Material {
+                    parts,
+                    internal_bonds: new_bonds,
+                },
+                placements: Some(new_placements),
+                internal_connections: Some(new_connections),
+                owner_relative_origin: instance.owner_relative_origin,
+            })
+        })
+        .collect()
+}
+
 /// Extract up to `requested` whole unstructured units from an ecological aggregate.
 ///
 /// This is deliberately separate from `Material::take`: the latter is a
