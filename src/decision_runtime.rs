@@ -6,8 +6,8 @@
 //! to execute through its existing physical systems.
 
 use crate::decision::{
-    approve_action_for_current_needs, outcome_is_known, ActionEligibility, ActionKind,
-    ActionConsequence, CurrentNeeds, DecisionHistory, DecisionResult, OutcomeKind,
+    approve_action_for_current_needs, outcome_is_known, ActionConsequence, ActionEligibility,
+    ActionKind, CurrentNeeds, DecisionHistory, DecisionResult, OutcomeKind,
 };
 use rand::Rng;
 use rand_chacha::ChaCha8Rng;
@@ -82,7 +82,10 @@ fn cheap_decision_score(
     if approve(context, candidate.action) != DecisionResult::Approve {
         return None;
     }
-    Some(need_pressure(candidate.action, context.needs) + history_adjustment(context, history, candidate))
+    Some(
+        need_pressure(candidate.action, context.needs)
+            + history_adjustment(context, history, candidate),
+    )
 }
 
 /// Identify candidates that genuinely require a physical developmental
@@ -169,7 +172,8 @@ pub fn select_action_with_developmental_scores(
         }
         scored.push((
             index,
-            need_pressure(candidate.action, context.needs) + history_adjustment(context, history, candidate),
+            need_pressure(candidate.action, context.needs)
+                + history_adjustment(context, history, candidate),
             developmental_scores
                 .get(index)
                 .copied()
