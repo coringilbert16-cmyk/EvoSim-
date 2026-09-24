@@ -267,7 +267,7 @@ impl ActiveMaterialField {
                         (body.contains_point(placement.x, placement.y)
                             || interior_boundary
                                 .is_some_and(|contains| contains(placement.x, placement.y)))
-                            .then_some(index)
+                        .then_some(index)
                     })
                     .collect();
                 if selected.is_empty() {
