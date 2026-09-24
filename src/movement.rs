@@ -1,5 +1,5 @@
-use crate::material_geometry::PlacedMaterialPart;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
+use crate::material_geometry::PlacedMaterialPart;
 use crate::state::{EnergyLedger, Environment, Organism, Simulation};
 use crate::structure::Placement;
 
