@@ -88,6 +88,7 @@ impl Simulation {
             cached_cavity: None,
             cached_developmental_revision: None,
             cached_developmental_realization: None,
+            peak_developmental_realization: 0.0,
             cached_harmonic_key: None,
         }
     }
@@ -150,16 +151,38 @@ impl Simulation {
     }
 
     fn current_needs(
-        organism: &Organism,
-        _environment: &Environment,
+        organism: &mut Organism,
+        environment: &Environment,
         parameters: DecisionParameters,
         developmental: Option<&crate::developmental_decision::DevelopmentalContext>,
     ) -> CurrentNeeds {
         let survival_reserve = parameters.survival_reserve.max(f64::EPSILON);
         let reserve_pressure = (1.0 - organism.usable_energy / survival_reserve).clamp(0.0, 1.0);
-        let survival = (reserve_pressure * (1.0 + organism.stress.max(0.0))).clamp(0.0, 1.0);
-        let development = if let Some(developmental) = developmental {
-            (1.0 - developmental.current_growth_fraction).max(0.0)
+        let current_realization = developmental
+            .map(|context| context.current_growth_fraction)
+            .or_else(|| {
+                organism
+                    .developmental_realization_cached(&environment.catalog)
+                    .map(|realization| realization.overall)
+            })
+            .unwrap_or(0.0)
+            .clamp(0.0, 1.0);
+        if organism.peak_developmental_realization <= 0.0 {
+            organism.peak_developmental_realization = current_realization;
+        } else {
+            organism.peak_developmental_realization =
+                organism.peak_developmental_realization.max(current_realization);
+        }
+        let self_maintenance_pressure =
+            (organism.peak_developmental_realization - current_realization).clamp(0.0, 1.0);
+        let energy_survival =
+            (reserve_pressure * (1.0 + organism.stress.max(0.0))).clamp(0.0, 1.0);
+        // Survival is the need to remain a viable physical organism. Energy is
+        // one pressure inside that need; loss of previously realized self is
+        // allowed to dominate when it is the larger pressure.
+        let survival = energy_survival.max(self_maintenance_pressure);
+        let development = if developmental.is_some() {
+            (1.0 - current_realization).max(0.0)
         } else {
             0.0
         };
@@ -178,13 +201,10 @@ impl Simulation {
         _environment: &Environment,
         needs: CurrentNeeds,
     ) -> ActionEligibility {
-        let can_build_from_storage =
-            !organism.structure.units.is_empty() && !organism.stored_material.is_empty();
-        let can_join_existing_structure = organism.structure.units.len() >= 2;
+        let can_combine = crate::combine_runtime::can_combine(organism, environment);
         ActionEligibility {
             can_move: true,
-            can_combine: organism.active_transformation_id.is_none()
-                && (can_build_from_storage || can_join_existing_structure),
+            can_combine,
             can_break: organism.active_transformation_id.is_none()
                 && !organism.structure.bonds.is_empty()
                 && (organism.reproductive_construction.is_none()
@@ -400,7 +420,7 @@ impl Simulation {
                             )
                         });
                 let needs = Self::current_needs(
-                    &organisms[index],
+                    &mut organisms[index],
                     environment,
                     decision_parameters,
                     developmental.as_ref(),
