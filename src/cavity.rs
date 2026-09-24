@@ -61,7 +61,7 @@ pub struct GenomeCavity {
     pub area: f64,
     pub boundary_units: Vec<usize>,
     pub minimum_area: f64,
-    boundary_polygon: Vec<(f64, f64)>,
+    pub(crate) boundary_polygon: Vec<(f64, f64)>,
 }
 
 impl GenomeCavity {
