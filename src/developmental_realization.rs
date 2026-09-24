@@ -651,7 +651,6 @@ pub fn default_developmental_blueprint() -> DevelopmentalFieldBlueprint {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
