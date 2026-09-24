@@ -402,6 +402,9 @@ impl Simulation {
         for organism in &mut self.organisms {
             Self::update_development_stage(organism, &self.environment);
             organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
+            if organism.usable_energy <= f64::EPSILON {
+                organism.stress += crate::state::ZERO_ENERGY_STRESS_PER_TICK;
+            }
             crate::harmonics::update_organism_harmonics(organism, &self.environment);
             Self::update_memory_from_sources(organism, &self.environment);
             let (x, y) = organism
@@ -571,11 +574,30 @@ impl Simulation {
                     }
                 }
                 let after = Self::action_measurement(&mut organisms[index], environment);
+                let consequence = Self::action_consequence(before, after);
                 crate::decision_runtime::record_consequence(
                     &mut organisms[index].decision_history,
                     &selected,
-                    Self::action_consequence(before, after),
+                    consequence,
                 );
+                if let Some(cavity) = organisms[index]
+                    .genome_cavity_cached(&environment.catalog)
+                    .filter(|cavity| cavity.qualifies())
+                {
+                    let capacity = crate::memory::memory_capacity(&cavity);
+                    let spectrum = organisms[index].harmonic_spectrum.clone();
+                    let memory_strength =
+                        organisms[index].genome.memory_strength().clamp(0.0, 1.0);
+                    crate::memory::reinforce_memory_point(
+                        &mut organisms[index],
+                        after.4.0,
+                        after.4.1,
+                        memory_strength,
+                        capacity,
+                        &spectrum,
+                        consequence,
+                    );
+                }
             }
         }
         let mut offspring = Vec::new();
