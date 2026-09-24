@@ -3,6 +3,10 @@ use crate::material_geometry::PlacedMaterialPart;
 use crate::state::{EnergyLedger, Environment, Organism, Simulation};
 use crate::structure::Placement;
 
+pub(crate) fn movement_cost(organism: &Organism) -> f64 {
+    (5.0 * organism.genome.movement_efficiency()).max(0.0)
+}
+
 impl Simulation {
     pub(crate) fn update_movement(
         organism: &mut Organism,
@@ -10,7 +14,6 @@ impl Simulation {
         other_organisms: &mut [Organism],
         ledger: &mut EnergyLedger,
     ) -> bool {
-        let movement_efficiency = organism.genome.movement_efficiency();
         let (x, y) = match crate::movement_direction::movement_direction_periodic(
             organism,
             environment.height,
@@ -21,8 +24,8 @@ impl Simulation {
         if organism.active_transformation_id.is_some() {
             return false;
         }
-        let step = 5.0 * movement_efficiency;
-        let cost = step.max(0.0);
+        let cost = movement_cost(organism);
+        let step = cost;
         if !cost.is_finite() || organism.usable_energy + f64::EPSILON < cost {
             return false;
         }
