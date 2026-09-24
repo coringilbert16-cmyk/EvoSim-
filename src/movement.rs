@@ -7,12 +7,18 @@ impl Simulation {
         organism: &mut Organism,
         environment: &mut Environment,
         other_organisms: &mut [Organism],
+        resource_targets: &[String],
     ) -> bool {
         let movement_efficiency = organism.genome.movement_efficiency();
-        let (x, y) = match crate::movement_direction::movement_direction_periodic(
+        let direction = crate::movement_direction::resource_seek_direction(
             organism,
-            environment.height,
-        ) {
+            environment,
+            resource_targets,
+        )
+        .or_else(|| {
+            crate::movement_direction::movement_direction_periodic(organism, environment.height)
+        });
+        let (x, y) = match direction {
             Some(direction) => direction,
             None => return false,
         };
