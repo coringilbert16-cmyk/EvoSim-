@@ -142,23 +142,22 @@ fn mutate_developmental_blueprint(
 
     if rng.gen::<f64>() < MUTATION_PROBABILITY {
         blueprint.connectivity.strength =
-            (blueprint.connectivity.strength + gaussian_unit(rng) * STRENGTH_SIGMA)
-                .clamp(0.0, 1.0);
+            (blueprint.connectivity.strength + gaussian_unit(rng) * STRENGTH_SIGMA).clamp(0.0, 1.0);
     }
     if rng.gen::<f64>() < MUTATION_PROBABILITY {
-        blueprint.connectivity.center_x =
-            (blueprint.connectivity.center_x + gaussian_unit(rng) * POSITION_SIGMA)
-                .clamp(-1.0, 1.0);
+        blueprint.connectivity.center_x = (blueprint.connectivity.center_x
+            + gaussian_unit(rng) * POSITION_SIGMA)
+            .clamp(-1.0, 1.0);
     }
     if rng.gen::<f64>() < MUTATION_PROBABILITY {
-        blueprint.connectivity.center_y =
-            (blueprint.connectivity.center_y + gaussian_unit(rng) * POSITION_SIGMA)
-                .clamp(-1.0, 1.0);
+        blueprint.connectivity.center_y = (blueprint.connectivity.center_y
+            + gaussian_unit(rng) * POSITION_SIGMA)
+            .clamp(-1.0, 1.0);
     }
     if rng.gen::<f64>() < MUTATION_PROBABILITY {
-        blueprint.connectivity.radial_falloff =
-            (blueprint.connectivity.radial_falloff + gaussian_unit(rng) * FALLOFF_SIGMA)
-                .clamp(0.25, 8.0);
+        blueprint.connectivity.radial_falloff = (blueprint.connectivity.radial_falloff
+            + gaussian_unit(rng) * FALLOFF_SIGMA)
+            .clamp(0.25, 8.0);
     }
     for influence in &mut blueprint.connectivity.additional_influences {
         if rng.gen::<f64>() < MUTATION_PROBABILITY {
@@ -170,9 +169,7 @@ fn mutate_developmental_blueprint(
                 (influence.center_y + gaussian_unit(rng) * POSITION_SIGMA).clamp(-1.0, 1.0);
         }
         if rng.gen::<f64>() < MUTATION_PROBABILITY {
-            influence.radial_falloff =
-                (influence.radial_falloff + gaussian_unit(rng) * FALLOFF_SIGMA)
-                    .clamp(0.25, 8.0);
+            influence.radial_falloff = (influence.radial_falloff + gaussian_unit(rng) * FALLOFF_SIGMA).clamp(0.25, 8.0);
         }
         if rng.gen::<f64>() < MUTATION_PROBABILITY {
             influence.strength =
@@ -234,7 +231,9 @@ mod tests {
         let mut rng = ChaCha8Rng::seed_from_u64(17);
         for _ in 0..10_000 {
             child.mutate(&mut rng);
-            if child.developmental_blueprint.connectivity != parent.developmental_blueprint.connectivity {
+            if child.developmental_blueprint.connectivity
+                != parent.developmental_blueprint.connectivity
+            {
                 break;
             }
         }
