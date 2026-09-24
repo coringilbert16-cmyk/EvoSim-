@@ -55,6 +55,7 @@ pub struct ActionConsequence {
     pub developmental_delta: f64,
     pub stress_delta: f64,
     pub position_delta: f64,
+    pub storage_delta: f64,
 }
 
 impl ActionConsequence {
@@ -64,10 +65,11 @@ impl ActionConsequence {
             && self.developmental_delta.is_finite()
             && self.stress_delta.is_finite()
             && self.position_delta.is_finite()
+            && self.storage_delta.is_finite()
     }
 
     pub fn weighted_relevance(self, needs: CurrentNeeds) -> f64 {
-        let survival = self.energy_delta - self.stress_delta;
+        let survival = self.energy_delta - self.stress_delta + self.storage_delta;
         let development = self.developmental_delta + self.structural_delta;
         let reproduction = self.structural_delta + self.position_delta;
         let total = needs.survival + needs.development + needs.reproduction;
