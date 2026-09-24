@@ -162,7 +162,7 @@ fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
         cached_cavity: None,
         cached_developmental_revision: None,
         cached_developmental_realization: None,
-            peak_developmental_realization: 0.0,
+        peak_developmental_realization: 0.0,
         cached_harmonic_key: None,
     }
 }
@@ -396,7 +396,7 @@ fn anchor_structure(
         cached_cavity: None,
         cached_developmental_revision: None,
         cached_developmental_realization: None,
-            peak_developmental_realization: 0.0,
+        peak_developmental_realization: 0.0,
         cached_harmonic_key: None,
     };
     let anchor_unit_index = crate::combine_runtime::instantiate_one_unit(&mut child, catalog)?;
@@ -653,7 +653,7 @@ pub(crate) fn finish_reproduction(
         cached_cavity: None,
         cached_developmental_revision: None,
         cached_developmental_realization: None,
-            peak_developmental_realization: 0.0,
+        peak_developmental_realization: 0.0,
         cached_harmonic_key: None,
     })
 }
