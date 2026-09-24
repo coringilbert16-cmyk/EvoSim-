@@ -126,6 +126,8 @@ impl DecisionHistory {
                 (existing.consequence.stress_delta * n + consequence.stress_delta) / next;
             existing.consequence.position_delta =
                 (existing.consequence.position_delta * n + consequence.position_delta) / next;
+            existing.consequence.storage_delta =
+                (existing.consequence.storage_delta * n + consequence.storage_delta) / next;
             existing.count = existing.count.saturating_add(1);
             return;
         }
