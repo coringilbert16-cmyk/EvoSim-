@@ -207,7 +207,11 @@ mod tests {
             0.5,
             1,
             &spectrum,
-            crate::decision::ActionConsequence { energy: 1.0, structure: 0.0, development: 0.0 },
+            crate::decision::ActionConsequence {
+                energy: 1.0,
+                structure: 0.0,
+                development: 0.0,
+            },
         );
 
         assert_eq!(organism.memory.len(), 1);
@@ -235,7 +239,11 @@ mod tests {
             0.5,
             1,
             &spectrum,
-            crate::decision::ActionConsequence { energy: -1.0, structure: 0.0, development: 0.0 },
+            crate::decision::ActionConsequence {
+                energy: -1.0,
+                structure: 0.0,
+                development: 0.0,
+            },
         );
 
         assert_eq!(
