@@ -265,11 +265,13 @@ mod tests {
             area: 40.0,
             boundary_units: Vec::new(),
             minimum_area: 10.0,
+            boundary_polygon: Vec::new(),
         };
         let sixteen_times = crate::cavity::GenomeCavity {
             area: 160.0,
             boundary_units: Vec::new(),
             minimum_area: 10.0,
+            boundary_polygon: Vec::new(),
         };
         assert_eq!(memory_capacity(&minimum), 1);
         assert_eq!(memory_capacity(&four_times), 2);
