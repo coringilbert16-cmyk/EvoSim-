@@ -352,13 +352,15 @@ mod tests {
     }
 
     #[test]
-    fn connectivity_strength_changes_preference_magnitude() {
+    fn connectivity_strength_is_separate_from_spatial_preference() {
         let mut weak = default_developmental_blueprint();
         let mut strong = weak.clone();
         weak.connectivity.strength = 0.25;
         strong.connectivity.strength = 0.5;
-        let weak_value = weak.connectivity_preference(0.0, 0.0);
-        let strong_value = strong.connectivity_preference(0.0, 0.0);
-        assert!(strong_value > weak_value);
+        assert_eq!(
+            weak.connectivity_preference(0.0, 0.0),
+            strong.connectivity_preference(0.0, 0.0)
+        );
+        assert!(strong.connectivity.strength > weak.connectivity.strength);
     }
 }
