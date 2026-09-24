@@ -69,6 +69,13 @@ impl GenomeCavity {
         self.area + EPS >= self.minimum_area
     }
 
+    pub fn contains_point(&self, x: f64, y: f64) -> bool {
+        if !x.is_finite() || !y.is_finite() || self.boundary_polygon.len() < 3 {
+            return false;
+        }
+        point_in_polygon(Point { x, y }, &self.boundary_polygon)
+    }
+
     /// Return the physical bond indices that form the qualifying genome-cavity
     /// boundary. This is derived from the realized physical genome criterion;
     /// it is not a second stored genome representation.
