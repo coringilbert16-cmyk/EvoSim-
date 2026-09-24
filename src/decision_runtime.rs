@@ -6,8 +6,8 @@
 //! to execute through its existing physical systems.
 
 use crate::decision::{
-    approve_action_for_current_needs, outcome_is_known, ActionEligibility, ActionKind,
-    ActionConsequence, CurrentNeeds, DecisionHistory, DecisionResult,
+    approve_action_for_current_needs, outcome_is_known, ActionConsequence, ActionEligibility,
+    ActionKind, CurrentNeeds, DecisionHistory, DecisionResult,
 };
 use rand::Rng;
 use rand_chacha::ChaCha8Rng;
