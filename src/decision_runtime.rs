@@ -57,10 +57,8 @@ fn history_adjustment(
     history
         .consequence(candidate.action, candidate.context_key.as_deref())
         .map(|consequence| {
-            (consequence.weighted_relevance(needs) * HISTORY_INFLUENCE).clamp(
-                -HISTORY_INFLUENCE,
-                HISTORY_INFLUENCE,
-            )
+            (consequence.weighted_relevance(needs) * HISTORY_INFLUENCE)
+                .clamp(-HISTORY_INFLUENCE, HISTORY_INFLUENCE)
         })
         .unwrap_or(0.0)
 }
@@ -207,11 +205,7 @@ pub fn record_consequence(
     candidate: &ActionCandidate,
     consequence: ActionConsequence,
 ) {
-    history.record(
-        candidate.action,
-        candidate.context_key.clone(),
-        consequence,
-    );
+    history.record(candidate.action, candidate.context_key.clone(), consequence);
 }
 
 pub fn known_consequence(
@@ -365,7 +359,10 @@ mod tests {
         history.record(
             ActionKind::Combine,
             None,
-            ActionConsequence { structural_delta: 1.0, ..Default::default() },
+            ActionConsequence {
+                structural_delta: 1.0,
+                ..Default::default()
+            },
         );
 
         assert_eq!(
@@ -407,7 +404,11 @@ mod tests {
         history.record(
             ActionKind::Break,
             Some("bond:0".into()),
-            ActionConsequence { energy_delta: -1.0, stress_delta: 1.0, ..Default::default() },
+            ActionConsequence {
+                energy_delta: -1.0,
+                stress_delta: 1.0,
+                ..Default::default()
+            },
         );
 
         assert_eq!(
@@ -578,9 +579,16 @@ mod tests {
         record_consequence(
             &mut history,
             &candidate,
-            ActionConsequence { energy_delta: 1.0, ..Default::default() },
+            ActionConsequence {
+                energy_delta: 1.0,
+                ..Default::default()
+            },
         );
-        assert!(known_consequence(&history, ActionKind::Break, Some("Methane")));
+        assert!(known_consequence(
+            &history,
+            ActionKind::Break,
+            Some("Methane")
+        ));
     }
 
     #[test]
