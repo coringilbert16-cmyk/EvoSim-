@@ -1,5 +1,6 @@
 use crate::material_geometry::PlacedMaterialPart;
-use crate::state::{Environment, Organism, Simulation};
+use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
+use crate::state::{EnergyLedger, Environment, Organism, Simulation};
 use crate::structure::Placement;
 
 impl Simulation {
@@ -7,6 +8,7 @@ impl Simulation {
         organism: &mut Organism,
         environment: &mut Environment,
         other_organisms: &mut [Organism],
+        ledger: &mut EnergyLedger,
     ) -> bool {
         let movement_efficiency = organism.genome.movement_efficiency();
         let (x, y) = match crate::movement_direction::movement_direction_periodic(
@@ -20,7 +22,25 @@ impl Simulation {
             return false;
         }
         let step = 5.0 * movement_efficiency;
-        Self::try_move_cell(organism, environment, other_organisms, x * step, y * step)
+        let cost = step.max(0.0);
+        if !cost.is_finite() || organism.usable_energy + f64::EPSILON < cost {
+            return false;
+        }
+        let moved = Self::try_move_cell(organism, environment, other_organisms, x * step, y * step);
+        if !moved {
+            return false;
+        }
+        let transaction = EnergyTransaction {
+            reason: EnergyReason::Move,
+            potential_released: 0.0,
+            usable_delta: -cost,
+            structural_delta: 0.0,
+            heat_dissipated: cost,
+        };
+        if !ledger.settle_transaction(&mut organism.usable_energy, transaction) {
+            return false;
+        }
+        true
     }
 
     pub(crate) fn try_move_cell(
