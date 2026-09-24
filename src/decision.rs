@@ -53,10 +53,48 @@ pub enum OutcomeKind {
     Harmful,
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+pub struct ActionConsequence {
+    /// Signed energetic consequence, normalized to [-1, 1].
+    pub energy: f64,
+    /// Signed structural/connectivity consequence, normalized to [-1, 1].
+    pub structure: f64,
+    /// Signed developmental consequence, normalized to [-1, 1].
+    pub development: f64,
+}
+
+impl ActionConsequence {
+    pub const NONE: Self = Self {
+        energy: 0.0,
+        structure: 0.0,
+        development: 0.0,
+    };
+
+    pub fn contextual_value(self, needs: CurrentNeeds) -> f64 {
+        let survival = ((self.energy + self.structure) * 0.5) * needs.survival;
+        let development = self.development * (needs.development + needs.reproduction);
+        survival + development
+    }
+
+    pub fn outcome(self) -> OutcomeKind {
+        let sum = self.energy + self.structure + self.development;
+        if sum > f64::EPSILON {
+            OutcomeKind::Beneficial
+        } else if sum < -f64::EPSILON {
+            OutcomeKind::Harmful
+        } else {
+            OutcomeKind::Neutral
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct DecisionHistoryEntry {
     pub action: ActionKind,
     pub context_key: Option<String>,
+    #[serde(default)]
+    pub consequence: ActionConsequence,
+    /// Compatibility summary for older serialized histories.
     pub outcome: OutcomeKind,
     pub count: u64,
 }
@@ -81,6 +119,11 @@ impl DecisionHistory {
             .find(|entry| entry.action == action && entry.context_key == context_key)
         {
             existing.outcome = outcome;
+            existing.consequence = match outcome {
+                OutcomeKind::Beneficial => ActionConsequence { energy: 1.0, structure: 0.0, development: 0.0 },
+                OutcomeKind::Harmful => ActionConsequence { energy: -1.0, structure: 0.0, development: 0.0 },
+                OutcomeKind::Neutral => ActionConsequence::NONE,
+            };
             existing.count = existing.count.saturating_add(1);
             return;
         }
@@ -98,9 +141,60 @@ impl DecisionHistory {
         self.entries.push(DecisionHistoryEntry {
             action,
             context_key,
+            consequence: match outcome {
+                OutcomeKind::Beneficial => ActionConsequence { energy: 1.0, structure: 0.0, development: 0.0 },
+                OutcomeKind::Harmful => ActionConsequence { energy: -1.0, structure: 0.0, development: 0.0 },
+                OutcomeKind::Neutral => ActionConsequence::NONE,
+            },
             outcome,
             count: 1,
         });
+    }
+
+    pub fn record_consequence(
+        &mut self,
+        action: ActionKind,
+        context_key: Option<String>,
+        consequence: ActionConsequence,
+    ) {
+        let outcome = consequence.outcome();
+        if let Some(existing) = self
+            .entries
+            .iter_mut()
+            .find(|entry| entry.action == action && entry.context_key == context_key)
+        {
+            existing.consequence = consequence;
+            existing.outcome = outcome;
+            existing.count = existing.count.saturating_add(1);
+            return;
+        }
+        if self.entries.len() >= Self::MAX_ENTRIES {
+            if let Some(index) = self.entries.iter().enumerate()
+                .min_by_key(|(_, entry)| entry.count).map(|(index, _)| index)
+            {
+                self.entries.remove(index);
+            }
+        }
+        self.entries.push(DecisionHistoryEntry {
+            action,
+            context_key,
+            consequence,
+            outcome,
+            count: 1,
+        });
+    }
+
+    pub fn consequence(&self, action: ActionKind, context_key: Option<&str>) -> Option<ActionConsequence> {
+        self.entries
+            .iter()
+            .find(|entry| entry.action == action && entry.context_key.as_deref() == context_key)
+            .map(|entry| entry.consequence)
+            .or_else(|| {
+                self.entries
+                    .iter()
+                    .find(|entry| entry.action == action && entry.context_key.is_none())
+                    .map(|entry| entry.consequence)
+            })
     }
 
     pub fn outcome(&self, action: ActionKind, context_key: Option<&str>) -> Option<OutcomeKind> {
