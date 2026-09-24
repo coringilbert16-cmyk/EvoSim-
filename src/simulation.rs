@@ -124,7 +124,20 @@ impl Simulation {
             .first()
             .cloned()
             .unwrap_or(Position { x: 0.0, y: 0.0 });
-        for physical in environment.field.take_contained_physical_materials(&body) {
+        let interior_boundary = crate::cavity::analyze_genome_cavity(
+            &organism.structure,
+            &environment.catalog,
+        )
+        .ok()
+        .flatten()
+        .map(|cavity| move |x: f64, y: f64| cavity.contains_point(x, y));
+        let interior_boundary_ref = interior_boundary
+            .as_ref()
+            .map(|contains| contains as &dyn Fn(f64, f64) -> bool);
+        for physical in environment
+            .field
+            .take_contained_physical_materials(&body, interior_boundary_ref)
+        {
             if organism
                 .stored_material
                 .store_physical_instance_at_owner_anchor(
