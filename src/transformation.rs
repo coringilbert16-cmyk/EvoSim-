@@ -182,10 +182,10 @@ fn resolve_stored_break(
         heat_dissipated: heat,
     };
     if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
-        organism
-            .stored_material
-            .entries
-            .insert(storage_index, crate::material_storage::StoredMaterial::Physical(removed));
+        organism.stored_material.entries.insert(
+            storage_index,
+            crate::material_storage::StoredMaterial::Physical(removed),
+        );
         return None;
     }
     for fragment in fragments {
@@ -215,7 +215,8 @@ impl Simulation {
             return None;
         }
         let key = decision.context_key.as_deref()?;
-        let (bond, stored_material_index, stored_bond_index) = if let Some(rest) = key.strip_prefix("stored:") {
+        let (bond, stored_material_index, stored_bond_index) =
+            if let Some(rest) = key.strip_prefix("stored:") {
             let (storage_index, bond_part) = rest.split_once(":bond:")?;
             let storage_index = storage_index.parse::<usize>().ok()?;
             let stored_bond_index = bond_part.parse::<usize>().ok()?;
@@ -224,11 +225,11 @@ impl Simulation {
                 return None;
             }
             (None, Some(storage_index), Some(stored_bond_index))
-        } else {
-            let index = key.strip_prefix("bond:")?.parse::<usize>().ok()?;
+            } else {
+                let index = key.strip_prefix("bond:")?.parse::<usize>().ok()?;
             let bond = *organism.structure.bonds.get(index)?;
-            (Some(bond), None, None)
-        };
+                (Some(bond), None, None)
+            };
         let complexity = crate::math::complexity(2.0);
         let duration = 1_u64.max(complexity.ceil() as u64);
         let t = ActiveTransformation {
@@ -259,13 +260,9 @@ impl Simulation {
             transformation.stored_material_index,
             transformation.stored_bond_index,
         ) {
-            if let Some(outcome) = resolve_stored_break(
-                organism,
-                environment,
-                storage_index,
-                bond_index,
-                ledger,
-            ) {
+            if let Some(outcome) =
+                resolve_stored_break(organism, environment, storage_index, bond_index, ledger)
+            {
                 organism.active_transformation_id = None;
                 let candidate = ActionCandidate {
                     action: ActionKind::Break,
