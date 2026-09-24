@@ -69,7 +69,7 @@ mod tests {
     fn logical_material_is_not_promoted_into_physical_containment() {
         let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
         field.deposit_at_index(0, compound());
-        let contained = field.take_contained_physical_materials(&body());
+        let contained = field.take_contained_physical_materials(&body(), None);
         assert!(contained.is_empty());
         assert_eq!(field.cells[0].materials.len(), 1);
     }
