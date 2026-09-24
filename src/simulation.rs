@@ -210,16 +210,23 @@ impl Simulation {
                     if instance.material.internal_bonds.len() > 0
             )
         });
-        let missing_resources = crate::reproduction::missing_construction_resources(
-            organism,
-            environment,
-        );
-        let external_missing = crate::reproduction::environment_contains_material(
-            environment,
-            &missing_resources,
-        );
+        let construction_missing = organism
+            .reproductive_construction
+            .as_ref()
+            .is_some_and(|construction| {
+                matches!(
+                    crate::reproduction::next_construction_resource_status(
+                        &crate::reproduction::developing_organism(construction),
+                        &organism.stored_material,
+                        environment,
+                        &crate::state::EnergyLedger::default(),
+                        None,
+                    ),
+                    crate::reproduction::NextConstructionResourceStatus::Missing
+                )
+            });
         let structural_break_allowed = !stored_breakable
-            && !external_missing
+            && !construction_missing
             && !organism.structure.bonds.is_empty()
             && (organism.reproductive_construction.is_none()
                 || needs.survival > 0.0
@@ -268,27 +275,17 @@ impl Simulation {
             if !stored_breaks.is_empty() {
                 candidates.extend(stored_breaks);
             } else {
-                let missing_resources = crate::reproduction::missing_construction_resources(
-                    organism,
-                    environment,
+                candidates.extend(
+                    organism
+                        .structure
+                        .bonds
+                        .iter()
+                        .enumerate()
+                        .map(|(index, _)| ActionCandidate {
+                            action: ActionKind::Break,
+                            context_key: Some(format!("bond:{index}")),
+                        }),
                 );
-                let external_missing = crate::reproduction::environment_contains_material(
-                    environment,
-                    &missing_resources,
-                );
-                if !external_missing {
-                    candidates.extend(
-                        organism
-                            .structure
-                            .bonds
-                            .iter()
-                            .enumerate()
-                            .map(|(index, _)| ActionCandidate {
-                                action: ActionKind::Break,
-                                context_key: Some(format!("bond:{index}")),
-                            }),
-                    );
-                }
             }
         }
         if relevant(ActionKind::Combine) {
@@ -413,25 +410,7 @@ impl Simulation {
             organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
             crate::harmonics::update_organism_harmonics(organism, &self.environment);
             Self::update_memory_from_sources(organism, &self.environment);
-            let (x, y) = organism
-                .occupied_cells
-                .first()
-                .map(|p| (p.x, p.y))
-                .unwrap_or((0.0, 0.0));
-            if let Some(cavity) = organism
-                .genome_cavity_cached(&self.environment.catalog)
-                .filter(|cavity| cavity.qualifies())
-            {
-                let capacity = crate::memory::memory_capacity(&cavity);
-                crate::memory::remember_perception(
-                    organism,
-                    x,
-                    y,
-                    organism.genome.memory_strength().clamp(0.0, 1.0),
-                    capacity,
-                    &organism.harmonic_spectrum.clone(),
-                );
-            }
+            crate::memory::remember_nearby_harmonics(organism, &self.environment);
             if matches!(organism.development_stage, DevelopmentStage::Adult)
                 && organism.reproductive_construction.is_none()
             {
@@ -494,15 +473,10 @@ impl Simulation {
                     for other in after.iter() {
                         others.push((*other).clone());
                     }
-                    let resource_targets = crate::reproduction::missing_construction_resources(
-                        organism,
-                        environment,
-                    );
                     let moved = Self::update_movement(
                         organism,
                         environment,
                         &mut others,
-                        &resource_targets,
                     );
                     if moved {
                         for (original, trial) in
