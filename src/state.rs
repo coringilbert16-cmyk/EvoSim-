@@ -56,6 +56,11 @@ pub(crate) struct ActiveTransformation {
     pub(crate) material: Material,
     #[serde(default)]
     pub(crate) bond: Option<Bond>,
+    /// When present, BREAK targets an internal bond of a physically stored material.
+    #[serde(default)]
+    pub(crate) stored_material_index: Option<usize>,
+    #[serde(default)]
+    pub(crate) stored_bond_index: Option<usize>,
     pub(crate) complexity: f64,
     pub(crate) duration_ticks: u64,
     pub(crate) remaining_ticks: u64,
