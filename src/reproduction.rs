@@ -394,6 +394,7 @@ fn anchor_structure(
         cached_cavity_revision: None,
         cached_cavity: None,
         cached_developmental_revision: None,
+        cached_developmental_realization: None,
         cached_harmonic_key: None,
     };
     let anchor_unit_index = crate::combine_runtime::instantiate_one_unit(&mut child, catalog)?;
