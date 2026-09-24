@@ -211,6 +211,13 @@ impl MaterialStorage {
         Some(self.entries.swap_remove(index).into_material())
     }
 
+    pub(crate) fn peek_physical_at(&self, index: usize) -> Option<PhysicalMaterial> {
+        match self.entries.get(index)? {
+            StoredMaterial::Physical(instance) if instance.is_realized() => Some(instance.clone()),
+            _ => None,
+        }
+    }
+
     pub(crate) fn take_physical_at(&mut self, index: usize) -> Option<PhysicalMaterial> {
         match self.entries.get(index)? {
             StoredMaterial::Physical(instance) if instance.is_realized() => {}
