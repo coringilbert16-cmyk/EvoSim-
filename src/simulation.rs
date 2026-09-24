@@ -217,6 +217,7 @@ impl Simulation {
                         .is_some_and(|construction| construction.needs_space)),
             can_expel: organism.active_transformation_id.is_none()
                 && organism.stored_material.physical_count() > 0,
+            can_no_transaction: true,
         }
     }
     fn decision_candidates(
@@ -245,6 +246,15 @@ impl Simulation {
         if relevant(ActionKind::Combine) {
             candidates.push(ActionCandidate {
                 action: ActionKind::Combine,
+                context_key: None,
+            });
+        }
+        // Doing nothing is a real biological option: it preserves the current
+        // structure and allows the organism to continue searching rather than
+        // being forced into a transaction.
+        if eligibility.permits(ActionKind::NoTransaction) {
+            candidates.push(ActionCandidate {
+                action: ActionKind::NoTransaction,
                 context_key: None,
             });
         }
@@ -553,6 +563,7 @@ impl Simulation {
                             );
                         }
                         ActionKind::Move => unreachable!("movement is evaluated independently"),
+                        ActionKind::NoTransaction => {}
                     }
                 } else {
                     let expulsion_candidates =
