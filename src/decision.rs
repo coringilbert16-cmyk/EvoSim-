@@ -157,15 +157,15 @@ impl DecisionHistory {
             context_key,
             consequence: match outcome {
                 OutcomeKind::Beneficial => ActionConsequence {
-                energy: 1.0,
-                structure: 0.0,
-                development: 0.0,
-            },
+                    energy: 1.0,
+                    structure: 0.0,
+                    development: 0.0,
+                },
                 OutcomeKind::Harmful => ActionConsequence {
-                energy: -1.0,
-                structure: 0.0,
-                development: 0.0,
-            },
+                    energy: -1.0,
+                    structure: 0.0,
+                    development: 0.0,
+                },
                 OutcomeKind::Neutral => ActionConsequence::NONE,
             },
             outcome,
