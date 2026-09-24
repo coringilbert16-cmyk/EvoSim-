@@ -8,6 +8,7 @@
 //! No developmental weights, penalties, or action priorities are introduced.
 
 use crate::decision::{ActionKind, CurrentNeeds};
+use crate::contact::ConnectionCompatibilityCache;
 use crate::decision_runtime::ActionCandidate;
 use crate::state::{DevelopmentStage, EnergyLedger, Environment, Organism};
 
