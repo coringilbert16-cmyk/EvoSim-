@@ -125,6 +125,11 @@ impl Simulation {
             .cloned()
             .unwrap_or(Position { x: 0.0, y: 0.0 });
         for physical in environment.field.take_contained_physical_materials(&body) {
+            let source_position = physical
+                .placements
+                .as_ref()
+                .and_then(|placements| placements.first())
+                .map(|placement| (placement.x, placement.y));
             if organism
                 .stored_material
                 .store_physical_instance_at_owner_anchor(
@@ -136,6 +141,15 @@ impl Simulation {
                     },
                 )
             {
+                if let Some((x, y)) = source_position {
+                    crate::memory::reinforce_acquired_material(
+                        organism,
+                        environment,
+                        x,
+                        y,
+                        &physical.material,
+                    );
+                }
                 continue;
             }
             if let Some(placement) = physical
