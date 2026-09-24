@@ -242,9 +242,13 @@ impl Simulation {
         environment: &Environment,
         needs: CurrentNeeds,
     ) -> ActionEligibility {
+        let movement_cost = crate::movement::movement_cost(organism);
+        let can_move = organism.active_transformation_id.is_none()
+            && movement_cost.is_finite()
+            && organism.usable_energy + f64::EPSILON >= movement_cost;
         let can_combine = crate::combine_runtime::can_combine(organism, environment);
         ActionEligibility {
-            can_move: true,
+            can_move,
             can_combine,
             can_break: organism.active_transformation_id.is_none()
                 && !organism.structure.bonds.is_empty()
