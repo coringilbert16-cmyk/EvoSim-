@@ -60,6 +60,14 @@ pub(crate) struct ActiveTransformation {
     pub(crate) duration_ticks: u64,
     pub(crate) remaining_ticks: u64,
     pub(crate) decision_context_key: Option<String>,
+    #[serde(default)]
+    pub(crate) before_energy: f64,
+    #[serde(default)]
+    pub(crate) before_stress: f64,
+    #[serde(default)]
+    pub(crate) before_structural_mass: f64,
+    #[serde(default)]
+    pub(crate) before_developmental: f64,
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct ReproductiveConstruction {
