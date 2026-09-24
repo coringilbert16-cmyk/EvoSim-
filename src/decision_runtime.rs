@@ -43,15 +43,37 @@ fn need_pressure(action: ActionKind, needs: CurrentNeeds) -> f64 {
         .fold(0.0_f64, |best, pressure| best.max(pressure))
 }
 
+fn immediate_consequence(action: ActionKind) -> ActionConsequence {
+    match action {
+        // Preserving the realized structure is a real physical consequence of
+        // declining a transaction, not a free utility bonus.
+        ActionKind::NoTransaction => ActionConsequence {
+            energy: 0.0,
+            structure: 1.0,
+            development: 0.0,
+        },
+        // Breaking a bond has an immediate structural cost even before its
+        // eventual energetic result is known.
+        ActionKind::Break => ActionConsequence {
+            energy: 0.0,
+            structure: -1.0,
+            development: -1.0,
+        },
+        _ => ActionConsequence::NONE,
+    }
+}
+
 fn history_adjustment(
     context: DecisionContext,
     history: &DecisionHistory,
     candidate: &ActionCandidate,
 ) -> f64 {
-    history
+    let learned = history
         .consequence(candidate.action, candidate.context_key.as_deref())
-        .map(|consequence| HISTORY_INFLUENCE * consequence.contextual_value(context.needs))
-        .unwrap_or(0.0)
+        .map(|consequence| consequence.contextual_value(context.needs))
+        .unwrap_or(0.0);
+    let immediate = immediate_consequence(candidate.action).contextual_value(context.needs);
+    HISTORY_INFLUENCE * (learned + immediate)
 }
 
 fn cheap_decision_score(
