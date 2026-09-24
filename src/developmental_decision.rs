@@ -153,6 +153,7 @@ pub(crate) fn developmental_action_scores(
                         developmental.preferred_length,
                     ))
                 }
+                ActionKind::NoTransaction => Some(developmental.current_growth_fraction),
                 ActionKind::Break => {
                     let bond_index = candidate
                         .context_key
