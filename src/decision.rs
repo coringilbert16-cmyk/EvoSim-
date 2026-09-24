@@ -126,8 +126,16 @@ impl DecisionHistory {
         {
             existing.outcome = outcome;
             existing.consequence = match outcome {
-                OutcomeKind::Beneficial => ActionConsequence { energy: 1.0, structure: 0.0, development: 0.0 },
-                OutcomeKind::Harmful => ActionConsequence { energy: -1.0, structure: 0.0, development: 0.0 },
+                OutcomeKind::Beneficial => ActionConsequence {
+                    energy: 1.0,
+                    structure: 0.0,
+                    development: 0.0,
+                },
+                OutcomeKind::Harmful => ActionConsequence {
+                    energy: -1.0,
+                    structure: 0.0,
+                    development: 0.0,
+                },
                 OutcomeKind::Neutral => ActionConsequence::NONE,
             };
             existing.count = existing.count.saturating_add(1);
@@ -175,8 +183,12 @@ impl DecisionHistory {
             return;
         }
         if self.entries.len() >= Self::MAX_ENTRIES {
-            if let Some(index) = self.entries.iter().enumerate()
-                .min_by_key(|(_, entry)| entry.count).map(|(index, _)| index)
+            if let Some(index) = self
+                .entries
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, entry)| entry.count)
+                .map(|(index, _)| index)
             {
                 self.entries.remove(index);
             }
@@ -190,7 +202,11 @@ impl DecisionHistory {
         });
     }
 
-    pub fn consequence(&self, action: ActionKind, context_key: Option<&str>) -> Option<ActionConsequence> {
+    pub fn consequence(
+        &self,
+        action: ActionKind,
+        context_key: Option<&str>,
+    ) -> Option<ActionConsequence> {
         self.entries
             .iter()
             .find(|entry| entry.action == action && entry.context_key.as_deref() == context_key)
