@@ -320,10 +320,10 @@ pub(crate) fn nearby_environmental_spectra(
     let radius = body_extent * 0.5 + environment.field.cell_size;
     let mut observations = Vec::new();
     for index in environment.field.cells_within_radius(
-            anchor.x,
-            anchor.y,
-            radius.max(environment.field.cell_size),
-        ) {
+        anchor.x,
+        anchor.y,
+        radius.max(environment.field.cell_size),
+    ) {
         let (x, y) = environment.field.cell_center(index);
         let spectrum =
             environmental_spectrum_at_position(&environment.field, &environment.catalog, x, y);
