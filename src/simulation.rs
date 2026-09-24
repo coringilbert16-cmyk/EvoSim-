@@ -595,8 +595,8 @@ impl Simulation {
                             organisms[index].genome.memory_strength().clamp(0.0, 1.0);
                         crate::memory::reinforce_memory_point(
                             &mut organisms[index],
-                            after.5.0,
-                            after.5.1,
+                            after.5 .0,
+                            after.5 .1,
                             memory_strength,
                             capacity,
                             &spectrum,
