@@ -612,8 +612,8 @@ pub(crate) fn can_combine(
     organism: &Organism,
     environment: &Environment,
 ) -> bool {
-    if organism.active_transformation_id.is_some() || organism.structure.units.len() < 2 {
-        return !organism.structure.units.is_empty() && !organism.stored_material.is_empty();
+    if organism.active_transformation_id.is_some() {
+        return false;
     }
     let mut trial = organism.clone();
     let mut cache = ConnectionCompatibilityCache::new();
