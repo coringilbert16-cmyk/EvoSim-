@@ -138,10 +138,26 @@ pub(crate) fn reinforce_acquired_material(
     if spectrum.components.is_empty() {
         return;
     }
+    let matches_perceived_signal = |point: &MemoryPoint| {
+        let dx = point.x - x;
+        let dy = point.y - y;
+        if (dx * dx + dy * dy).sqrt() >= MEMORY_MERGE_RADIUS {
+            return false;
+        }
+        point.spectrum.components.iter().any(|observed| {
+            spectrum.components.iter().any(|acquired| {
+                (observed.frequency_hz - acquired.frequency_hz).abs() <= 1e-6
+            })
+        })
+    };
+    let Some(index) = organism.memory.iter().position(matches_perceived_signal) else {
+        return;
+    };
+    let point = organism.memory[index].clone();
     Simulation::reinforce_memory_point(
         organism,
-        x,
-        y,
+        point.x,
+        point.y,
         organism.genome.memory_strength().clamp(0.0, 1.0),
         memory_capacity(&cavity),
         &spectrum,
