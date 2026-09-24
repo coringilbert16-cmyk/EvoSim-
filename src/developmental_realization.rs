@@ -107,13 +107,7 @@ impl DevelopmentalFieldBlueprint {
         }
         let mut trial = structure.clone();
         trial.break_bond(bond_index)?;
-        Some(self.realization_at_length(
-            &trial,
-            catalog,
-            origin,
-            orientation,
-            preferred_length,
-        ))
+        Some(self.realization_at_length(&trial, catalog, origin, orientation, preferred_length))
     }
 
     pub(crate) fn realization_after_break(
@@ -640,7 +634,7 @@ pub fn default_developmental_blueprint() -> DevelopmentalFieldBlueprint {
             ],
         },
         connectivity: ConnectivityField {
-            strength: 0.5,      // EXPERIMENTAL: inherited connectivity importance.
+            strength: 0.5,       // EXPERIMENTAL: inherited connectivity importance.
             center_x: 0.0,       // EXPERIMENTAL: initial influence center.
             center_y: 0.0,       // EXPERIMENTAL: initial influence center.
             radial_falloff: 2.0, // EXPERIMENTAL: alpha=0.5 initial Gaussian width.
