@@ -134,10 +134,11 @@ fn mutate_developmental_blueprint(
     blueprint: &mut DevelopmentalFieldBlueprint,
     rng: &mut ChaCha8Rng,
 ) {
-    const MUTATION_PROBABILITY: f64 = 0.001; // EXPERIMENTAL: inherited developmental mutation rate.
-    const STRENGTH_SIGMA: f64 = 0.05; // EXPERIMENTAL: bounded developmental mutation scale.
-    const POSITION_SIGMA: f64 = 0.05; // EXPERIMENTAL: bounded developmental mutation scale.
-    const FALLOFF_SIGMA: f64 = 0.1; // EXPERIMENTAL: bounded developmental mutation scale.
+    // EXPERIMENTAL: inherited developmental mutation parameters.
+    const MUTATION_PROBABILITY: f64 = 0.001;
+    const STRENGTH_SIGMA: f64 = 0.05;
+    const POSITION_SIGMA: f64 = 0.05;
+    const FALLOFF_SIGMA: f64 = 0.1;
 
     if rng.gen::<f64>() < MUTATION_PROBABILITY {
         blueprint.connectivity.strength =
