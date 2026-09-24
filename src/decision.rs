@@ -312,7 +312,13 @@ pub fn approve_action_for_current_needs(
     eligibility: ActionEligibility,
     needs: CurrentNeeds,
 ) -> DecisionResult {
-    if !eligibility.permits(action) || !needs.any_for(action.relevant_needs()) {
+    if !eligibility.permits(action) {
+        return DecisionResult::Reject;
+    }
+    if action == ActionKind::NoTransaction {
+        return DecisionResult::Approve;
+    }
+    if !needs.any_for(action.relevant_needs()) {
         DecisionResult::Reject
     } else {
         DecisionResult::Approve
