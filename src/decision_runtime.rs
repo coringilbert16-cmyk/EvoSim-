@@ -248,6 +248,75 @@ mod tests {
     }
 
     #[test]
+    fn no_transaction_beats_unlearned_break_when_energy_is_not_critical() {
+        let context = DecisionContext {
+            needs: CurrentNeeds {
+                survival: 0.5,
+                reproduction: 0.0,
+                development: 0.0,
+            },
+            eligibility: ActionEligibility {
+                can_break: true,
+                can_no_transaction: true,
+                ..Default::default()
+            },
+        };
+        let candidates = vec![
+            ActionCandidate {
+                action: ActionKind::Break,
+                context_key: Some("bond:0".into()),
+            },
+            ActionCandidate {
+                action: ActionKind::NoTransaction,
+                context_key: None,
+            },
+        ];
+        let history = DecisionHistory::default();
+        let mut rng = ChaCha8Rng::seed_from_u64(1);
+        let selected = select_action(context, &history, &candidates, &mut rng).unwrap();
+        assert_eq!(selected.action, ActionKind::NoTransaction);
+    }
+
+    #[test]
+    fn strong_energy_history_can_outweigh_break_structural_cost() {
+        let context = DecisionContext {
+            needs: CurrentNeeds {
+                survival: 1.0,
+                reproduction: 0.0,
+                development: 0.0,
+            },
+            eligibility: ActionEligibility {
+                can_break: true,
+                can_no_transaction: true,
+                ..Default::default()
+            },
+        };
+        let candidates = vec![
+            ActionCandidate {
+                action: ActionKind::Break,
+                context_key: Some("bond:0".into()),
+            },
+            ActionCandidate {
+                action: ActionKind::NoTransaction,
+                context_key: None,
+            },
+        ];
+        let mut history = DecisionHistory::default();
+        history.record_consequence(
+            ActionKind::Break,
+            Some("bond:0".into()),
+            ActionConsequence {
+                energy: 1.0,
+                structure: -1.0,
+                development: -1.0,
+            },
+        );
+        let mut rng = ChaCha8Rng::seed_from_u64(1);
+        let selected = select_action(context, &history, &candidates, &mut rng).unwrap();
+        assert_eq!(selected.action, ActionKind::Break);
+    }
+
+    #[test]
     fn bridge_approves_needed_mechanically_eligible_action() {
         assert_eq!(
             approve(context(), ActionKind::Break),
