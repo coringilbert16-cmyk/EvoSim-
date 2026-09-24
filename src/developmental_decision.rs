@@ -136,26 +136,25 @@ fn combine_developmental_preview_score(
                     developmental.origin,
                     developmental.orientation,
                 );
-                let score =
-                    crate::developmental_blueprint::CANDIDATE_MATERIAL_WEIGHT
-                        * developmental.blueprint.material_preference_scaled(
-                            first_resource,
+                let score = crate::developmental_blueprint::CANDIDATE_MATERIAL_WEIGHT
+                    * developmental.blueprint.material_preference_scaled(
+                        first_resource,
+                        local.0,
+                        local.1,
+                        developmental.preferred_length,
+                    )
+                    + crate::developmental_blueprint::CANDIDATE_DENSITY_WEIGHT
+                        * developmental.blueprint.density_preference_scaled(
                             local.0,
                             local.1,
                             developmental.preferred_length,
                         )
-                        + crate::developmental_blueprint::CANDIDATE_DENSITY_WEIGHT
-                            * developmental.blueprint.density_preference_scaled(
-                                local.0,
-                                local.1,
-                                developmental.preferred_length,
-                            )
-                        + crate::developmental_blueprint::CANDIDATE_CONNECTIVITY_WEIGHT
-                            * developmental.blueprint.connectivity_preference_scaled(
-                                local.0,
-                                local.1,
-                                developmental.preferred_length,
-                            );
+                    + crate::developmental_blueprint::CANDIDATE_CONNECTIVITY_WEIGHT
+                        * developmental.blueprint.connectivity_preference_scaled(
+                            local.0,
+                            local.1,
+                            developmental.preferred_length,
+                        );
                 best = Some(best.map_or(score, |current: f64| current.max(score)));
             }
         }
