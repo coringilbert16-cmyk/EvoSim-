@@ -608,6 +608,19 @@ pub(crate) fn combine_specific_pair(
     None
 }
 
+pub(crate) fn can_combine(
+    organism: &Organism,
+    environment: &Environment,
+) -> bool {
+    if organism.active_transformation_id.is_some() || organism.structure.units.len() < 2 {
+        return !organism.structure.units.is_empty() && !organism.stored_material.is_empty();
+    }
+    let mut trial = organism.clone();
+    let mut cache = ConnectionCompatibilityCache::new();
+    let mut ledger = EnergyLedger::default();
+    try_combine(&mut trial, environment, &mut cache, &mut ledger, None).is_some()
+}
+
 pub(crate) fn try_combine(
     organism: &mut Organism,
     environment: &Environment,
