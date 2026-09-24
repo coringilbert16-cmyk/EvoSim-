@@ -500,6 +500,10 @@ impl Simulation {
                 ) {
                     match selected.action {
                         ActionKind::Combine => {
+                            let current_growth_fraction = developmental
+                                .as_ref()
+                                .map(|context| context.current_growth_fraction)
+                                .unwrap_or(0.0);
                             let developmental_blueprint =
                                 organisms[index].genome.developmental_blueprint.clone();
                             let developmental = developmental.as_ref().map(|context| {
@@ -528,10 +532,9 @@ impl Simulation {
                                 let developmental_change = developmental_scores
                                     .iter()
                                     .zip(candidates.iter())
-                                     .find(|(_, candidate)| **candidate == selected)
+                                    .find(|(_, candidate)| **candidate == selected)
                                     .and_then(|(score, _)| *score)
-                                     .zip(developmental.as_ref())
-                                    .map(|(after, _)| after - crate::developmental_decision::growth_fraction(&mut organisms[index], environment))
+                                    .map(|after| after - current_growth_fraction)
                                     .unwrap_or(0.0)
                                     .clamp(-1.0, 1.0);
                                 crate::decision::ActionConsequence {
