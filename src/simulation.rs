@@ -409,7 +409,7 @@ impl Simulation {
             organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
             crate::harmonics::update_organism_harmonics(organism, &self.environment);
             Self::update_memory_from_sources(organism, &self.environment);
-            crate::memory::remember_nearby_harmonics(organism, &self.environment);
+            Self::remember_nearby_harmonics(organism, &self.environment);
             if matches!(organism.development_stage, DevelopmentStage::Adult)
                 && organism.reproductive_construction.is_none()
             {
@@ -668,7 +668,7 @@ impl Simulation {
                 if matches!(status, crate::reproduction::ConstructionStatus::Progress) {
                     if let Some(cues) = acquisition_cues.remove(&organism.id) {
                         for (x, y, material) in cues {
-                            crate::memory::reinforce_acquired_material(
+                            Self::reinforce_acquired_material(
                                 organism,
                                 &self.environment,
                                 x,
