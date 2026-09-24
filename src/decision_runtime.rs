@@ -7,7 +7,7 @@
 
 use crate::decision::{
     approve_action_for_current_needs, outcome_is_known, ActionEligibility, ActionKind,
-    CurrentNeeds, DecisionHistory, DecisionResult, OutcomeKind,
+    ActionConsequence, CurrentNeeds, DecisionHistory, DecisionResult,
 };
 use rand::Rng;
 use rand_chacha::ChaCha8Rng;
@@ -43,12 +43,20 @@ fn need_pressure(action: ActionKind, needs: CurrentNeeds) -> f64 {
         .fold(0.0_f64, |best, pressure| best.max(pressure))
 }
 
-fn history_adjustment(history: &DecisionHistory, candidate: &ActionCandidate) -> f64 {
-    match history.outcome(candidate.action, candidate.context_key.as_deref()) {
-        Some(OutcomeKind::Beneficial) => HISTORY_INFLUENCE,
-        Some(OutcomeKind::Harmful) => -HISTORY_INFLUENCE,
-        Some(OutcomeKind::Neutral) | None => 0.0,
-    }
+fn history_adjustment(
+    history: &DecisionHistory,
+    candidate: &ActionCandidate,
+    needs: CurrentNeeds,
+) -> f64 {
+    history
+        .consequence(candidate.action, candidate.context_key.as_deref())
+        .map(|consequence| {
+            (consequence.weighted_relevance(needs) * HISTORY_INFLUENCE).clamp(
+                -HISTORY_INFLUENCE,
+                HISTORY_INFLUENCE,
+            )
+        })
+        .unwrap_or(0.0)
 }
 
 fn cheap_decision_score(
@@ -59,7 +67,7 @@ fn cheap_decision_score(
     if approve(context, candidate.action) != DecisionResult::Approve {
         return None;
     }
-    Some(need_pressure(candidate.action, context.needs) + history_adjustment(history, candidate))
+    Some(need_pressure(candidate.action, context.needs) + history_adjustment(history, candidate, context.needs))
 }
 
 /// Identify candidates that genuinely require a physical developmental
@@ -178,15 +186,19 @@ pub fn select_action_with_developmental_scores(
     candidates.get(tied[selected_index].0).cloned()
 }
 
-pub fn record_outcome(
+pub fn record_consequence(
     history: &mut DecisionHistory,
     candidate: &ActionCandidate,
-    outcome: OutcomeKind,
+    consequence: ActionConsequence,
 ) {
-    history.record(candidate.action, candidate.context_key.clone(), outcome);
+    history.record(
+        candidate.action,
+        candidate.context_key.clone(),
+        consequence,
+    );
 }
 
-pub fn known_outcome(
+pub fn known_consequence(
     history: &DecisionHistory,
     action: ActionKind,
     context_key: Option<&str>,
@@ -334,7 +346,11 @@ mod tests {
             },
         ];
         let mut history = DecisionHistory::default();
-        history.record(ActionKind::Combine, None, OutcomeKind::Beneficial);
+        history.record(
+            ActionKind::Combine,
+            None,
+            ActionConsequence { structural_delta: 1.0, ..Default::default() },
+        );
 
         assert_eq!(
             select_action(
@@ -375,7 +391,7 @@ mod tests {
         history.record(
             ActionKind::Break,
             Some("bond:0".into()),
-            OutcomeKind::Harmful,
+            ActionConsequence { energy_delta: -1.0, stress_delta: 1.0, ..Default::default() },
         );
 
         assert_eq!(
@@ -543,7 +559,11 @@ mod tests {
             action: ActionKind::Break,
             context_key: Some("Methane".into()),
         };
-        record_outcome(&mut history, &candidate, OutcomeKind::Beneficial);
+        record_consequence(
+            &mut history,
+            &candidate,
+            ActionConsequence { energy_delta: 1.0, ..Default::default() },
+        );
         assert!(known_outcome(&history, ActionKind::Break, Some("Methane")));
     }
 
