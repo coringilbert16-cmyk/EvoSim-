@@ -237,6 +237,25 @@ fn next_construction_resource_status(
     }
 }
 
+pub(crate) fn construction_requires_external_material(
+    parent: &Organism,
+    environment: &Environment,
+) -> bool {
+    let Some(construction) = parent.reproductive_construction.as_ref() else {
+        return false;
+    };
+    matches!(
+        next_construction_resource_status(
+            &developing_organism(construction),
+            &parent.stored_material,
+            environment,
+            &EnergyLedger::default(),
+            None,
+        ),
+        NextConstructionResourceStatus::Missing
+    )
+}
+
 fn try_child_construction(
     child: &Organism,
     parent_storage: &MaterialStorage,
