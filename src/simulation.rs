@@ -406,7 +406,10 @@ impl Simulation {
                     developmental.as_ref(),
                 );
                 let eligibility = Self::action_eligibility(&organisms[index], environment, needs);
-                if eligibility.can_move && needs.any_for(ActionKind::Move.relevant_needs()) {
+                // Movement is an independent channel. It is not gated by
+                // survival/reproduction need pressure or by the transformation
+                // selector below.
+                if eligibility.can_move {
                     let move_candidate = ActionCandidate {
                         action: ActionKind::Move,
                         context_key: None,
