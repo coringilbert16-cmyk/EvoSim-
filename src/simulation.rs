@@ -203,25 +203,43 @@ impl Simulation {
         needs: CurrentNeeds,
     ) -> ActionEligibility {
         let can_combine = crate::combine_runtime::can_combine(organism, environment);
+        let stored_breakable = organism.stored_material.entries.iter().any(|entry| {
+            matches!(
+                entry,
+                crate::material_storage::StoredMaterial::Physical(instance)
+                    if instance.material.internal_bonds.len() > 0
+            )
+        });
+        let missing_resources = crate::reproduction::missing_construction_resources(
+            organism,
+            environment,
+        );
+        let external_missing = crate::reproduction::environment_contains_material(
+            environment,
+            &missing_resources,
+        );
+        let structural_break_allowed = !stored_breakable
+            && !external_missing
+            && !organism.structure.bonds.is_empty()
+            && (organism.reproductive_construction.is_none()
+                || needs.survival > 0.0
+                || needs.development > 0.0
+                || organism
+                    .reproductive_construction
+                    .as_ref()
+                    .is_some_and(|construction| construction.needs_space));
         ActionEligibility {
             can_move: true,
             can_combine,
             can_break: organism.active_transformation_id.is_none()
-                && !organism.structure.bonds.is_empty()
-                && (organism.reproductive_construction.is_none()
-                    || needs.survival > 0.0
-                    || needs.development > 0.0
-                    || organism
-                        .reproductive_construction
-                        .as_ref()
-                        .is_some_and(|construction| construction.needs_space)),
+                && (stored_breakable || structural_break_allowed),
             can_expel: organism.active_transformation_id.is_none()
                 && organism.stored_material.physical_count() > 0,
         }
     }
     fn decision_candidates(
         organism: &Organism,
-        _environment: &Environment,
+        environment: &Environment,
         needs: CurrentNeeds,
         eligibility: ActionEligibility,
     ) -> Vec<ActionCandidate> {
@@ -230,17 +248,48 @@ impl Simulation {
             eligibility.permits(action) && needs.any_for(action.relevant_needs())
         };
         if relevant(ActionKind::Break) {
-            candidates.extend(
-                organism
-                    .structure
-                    .bonds
-                    .iter()
-                    .enumerate()
-                    .map(|(index, _)| ActionCandidate {
-                        action: ActionKind::Break,
-                        context_key: Some(format!("bond:{index}")),
-                    }),
-            );
+            let stored_breaks: Vec<ActionCandidate> = organism
+                .stored_material
+                .entries
+                .iter()
+                .enumerate()
+                .flat_map(|(storage_index, entry)| {
+                    let crate::material_storage::StoredMaterial::Physical(instance) = entry else {
+                        return Vec::new();
+                    };
+                    (0..instance.material.internal_bonds.len())
+                        .map(|bond_index| ActionCandidate {
+                            action: ActionKind::Break,
+                            context_key: Some(format!("stored:{storage_index}:bond:{bond_index}")),
+                        })
+                        .collect()
+                })
+                .collect();
+            if !stored_breaks.is_empty() {
+                candidates.extend(stored_breaks);
+            } else {
+                let missing_resources = crate::reproduction::missing_construction_resources(
+                    organism,
+                    environment,
+                );
+                let external_missing = crate::reproduction::environment_contains_material(
+                    environment,
+                    &missing_resources,
+                );
+                if !external_missing {
+                    candidates.extend(
+                        organism
+                            .structure
+                            .bonds
+                            .iter()
+                            .enumerate()
+                            .map(|(index, _)| ActionCandidate {
+                                action: ActionKind::Break,
+                                context_key: Some(format!("bond:{index}")),
+                            }),
+                    );
+                }
+            }
         }
         if relevant(ActionKind::Combine) {
             candidates.push(ActionCandidate {
@@ -445,7 +494,16 @@ impl Simulation {
                     for other in after.iter() {
                         others.push((*other).clone());
                     }
-                    let moved = Self::update_movement(organism, environment, &mut others);
+                    let resource_targets = crate::reproduction::missing_construction_resources(
+                        organism,
+                        environment,
+                    );
+                    let moved = Self::update_movement(
+                        organism,
+                        environment,
+                        &mut others,
+                        &resource_targets,
+                    );
                     if moved {
                         for (original, trial) in
                             before.iter_mut().chain(after.iter_mut()).zip(others)
