@@ -97,7 +97,59 @@ impl Simulation {
         }
     }
 
-    pub(crate) fn reinforce_memory_point(
+    pub(crate) fn remember_nearby_harmonics(
+    organism: &mut Organism,
+    environment: &Environment,
+) {
+    let Some(cavity) = qualifying_genome_cavity(organism, environment) else {
+        return;
+    };
+    let capacity = memory_capacity(&cavity);
+    for (x, y, spectrum) in
+        crate::harmonics::nearby_environmental_spectra(organism, environment)
+    {
+        let Some((sx, sy)) = organism.occupied_cells.first().map(|p| (p.x, p.y)) else {
+            continue;
+        };
+        let distance = ((x - sx).powi(2) + (y - sy).powi(2)).sqrt();
+        let amplitude = spectrum
+            .components
+            .iter()
+            .map(|component| component.amplitude)
+            .fold(0.0, f64::max);
+        let strength = (amplitude / (1.0 + distance)).clamp(0.0, 1.0);
+        if strength > f64::EPSILON {
+            Simulation::remember_perception(organism, x, y, strength, capacity, &spectrum);
+        }
+    }
+}
+
+pub(crate) fn reinforce_acquired_material(
+    organism: &mut Organism,
+    environment: &Environment,
+    x: f64,
+    y: f64,
+    material: &crate::resources::Material,
+) {
+    let Some(cavity) = qualifying_genome_cavity(organism, environment) else {
+        return;
+    };
+    let spectrum = crate::harmonics::material_spectrum(material, &environment.catalog);
+    if spectrum.components.is_empty() {
+        return;
+    }
+    Simulation::reinforce_memory_point(
+        organism,
+        x,
+        y,
+        organism.genome.memory_strength().clamp(0.0, 1.0),
+        memory_capacity(&cavity),
+        &spectrum,
+        crate::decision::OutcomeKind::Beneficial,
+    );
+}
+
+pub(crate) fn reinforce_memory_point(
         organism: &mut Organism,
         sx: f64,
         sy: f64,
