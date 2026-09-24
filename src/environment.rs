@@ -243,6 +243,7 @@ impl ActiveMaterialField {
     pub(crate) fn take_contained_physical_materials(
         &mut self,
         body: &crate::organism_geometry::OrganismBodyGeometry,
+        interior_boundary: Option<&dyn Fn(f64, f64) -> bool>,
     ) -> Vec<PhysicalMaterial> {
         let candidate_indices =
             self.cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y);
@@ -263,7 +264,9 @@ impl ActiveMaterialField {
                     .iter()
                     .enumerate()
                     .filter_map(|(index, placement)| {
-                        body.contains_point(placement.x, placement.y)
+                        (body.contains_point(placement.x, placement.y)
+                            || interior_boundary
+                                .is_some_and(|contains| contains(placement.x, placement.y)))
                             .then_some(index)
                     })
                     .collect();
