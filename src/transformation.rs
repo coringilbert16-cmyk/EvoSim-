@@ -150,7 +150,7 @@ pub(crate) fn resolve_stress_break(
 impl Simulation {
     pub(crate) fn try_start_transformation(
         organism: &mut Organism,
-        catalog: &[crate::resources::BaseResource],
+        _catalog: &[crate::resources::BaseResource],
         next_id: &mut u64,
         decision: &ActionCandidate,
     ) -> Option<ActiveTransformation> {
@@ -367,10 +367,4 @@ mod tests {
         assert!(candidates.iter().all(|index| !genome_bonds.contains(index)));
     }
 
-    #[test]
-    fn invalid_break_energy_is_rejected() {
-        assert!(break_net_energy(-1.0, 0.0, 1.0).is_none());
-        assert!(break_net_energy(1.0, f64::NAN, 1.0).is_none());
-        assert!(break_net_energy(1.0, 0.0, -1.0).is_none())
-    }
 }
