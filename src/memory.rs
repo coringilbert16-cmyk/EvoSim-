@@ -118,7 +118,7 @@ impl Simulation {
                 existing.y = sy;
                 existing.strength = (existing.strength + memory_strength).min(1.0);
                 existing.spectrum.merge_from(spectrum, 1.0);
-                existing.consequence = Some(outcome);
+                existing.consequence = Some(consequence);
             }
             None => {
                 if organism.memory.len() < capacity {
@@ -167,7 +167,7 @@ pub(crate) fn reinforce_memory_point(
     memory_strength: f64,
     capacity: usize,
     spectrum: &crate::harmonics::ToneSpectrum,
-    outcome: crate::decision::OutcomeKind,
+    consequence: crate::decision::ActionConsequence,
 ) {
     Simulation::reinforce_memory_point(
         organism,
@@ -176,7 +176,7 @@ pub(crate) fn reinforce_memory_point(
         memory_strength,
         capacity,
         spectrum,
-        outcome,
+        consequence,
     );
 }
 
@@ -185,7 +185,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn harmonic_experience_is_stored_with_its_outcome() {
+    fn harmonic_experience_is_stored_with_its_consequence() {
         let mut organism = Simulation::create_initial_organism();
         let spectrum = crate::harmonics::ToneSpectrum {
             components: vec![crate::harmonics::ToneComponent {
@@ -202,14 +202,14 @@ mod tests {
             0.5,
             1,
             &spectrum,
-            crate::decision::OutcomeKind::Beneficial,
+            crate::decision::ActionConsequence { energy_delta: 1.5, ..Default::default() },
         );
 
         assert_eq!(organism.memory.len(), 1);
         assert_eq!(organism.memory[0].spectrum, spectrum);
         assert_eq!(
             organism.memory[0].consequence,
-            Some(crate::decision::OutcomeKind::Beneficial)
+            Some(crate::decision::ActionConsequence { energy_delta: 1.5, ..Default::default() })
         );
     }
 
@@ -230,12 +230,12 @@ mod tests {
             0.5,
             1,
             &spectrum,
-            crate::decision::OutcomeKind::Harmful,
+            crate::decision::ActionConsequence { energy_delta: -1.0, stress_delta: 1.0, ..Default::default() },
         );
 
         assert_eq!(
             organism.memory[0].consequence,
-            Some(crate::decision::OutcomeKind::Harmful)
+            Some(crate::decision::ActionConsequence { energy_delta: -1.0, stress_delta: 1.0, ..Default::default() })
         );
         assert!(organism.memory[0].strength > perception_strength);
     }
