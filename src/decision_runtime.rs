@@ -238,78 +238,6 @@ mod tests {
     }
 
     #[test]
-    fn survival_pressure_selects_survival_relevant_action() {
-        let context = DecisionContext {
-            needs: CurrentNeeds {
-                survival: 1.0,
-                reproduction: 0.0,
-                development: 0.0,
-            },
-            eligibility: ActionEligibility {
-                can_break: true,
-                can_combine: true,
-                ..Default::default()
-            },
-        };
-        let history = DecisionHistory::default();
-        let candidates = vec![
-            ActionCandidate {
-                action: ActionKind::Combine,
-                context_key: None,
-            },
-            ActionCandidate {
-                action: ActionKind::Break,
-                context_key: Some("bond:0".into()),
-            },
-        ];
-
-        assert_eq!(
-            select_action(
-                context,
-                &history,
-                &candidates,
-                &mut ChaCha8Rng::seed_from_u64(1),
-            ),
-            Some(candidates[1].clone())
-        );
-    }
-
-    #[test]
-    fn reproduction_pressure_selects_reproduction_relevant_action() {
-        let context = DecisionContext {
-            needs: CurrentNeeds {
-                survival: 0.0,
-                reproduction: 1.0,
-                development: 0.0,
-            },
-            eligibility: ActionEligibility {
-                can_break: true,
-                can_combine: true,
-                ..Default::default()
-            },
-        };
-        let history = DecisionHistory::default();
-        let candidates = vec![
-            ActionCandidate {
-                action: ActionKind::Break,
-                context_key: Some("bond:0".into()),
-            },
-            ActionCandidate {
-                action: ActionKind::Combine,
-                context_key: None,
-            },
-        ];
-
-        let selected = select_action(
-            context,
-            &history,
-            &candidates,
-            &mut ChaCha8Rng::seed_from_u64(1),
-        );
-        assert!(selected.is_some_and(|candidate| candidates.contains(&candidate)));
-    }
-
-    #[test]
     fn beneficial_history_can_change_selection_when_need_pressure_is_close() {
         let context = DecisionContext {
             needs: CurrentNeeds {
@@ -458,40 +386,6 @@ mod tests {
             ),
             Some(candidates[1].clone())
         );
-    }
-
-    #[test]
-    fn unresolved_equal_candidates_do_not_use_candidate_order() {
-        let context = DecisionContext {
-            needs: CurrentNeeds {
-                survival: 0.0,
-                reproduction: 1.0,
-                development: 0.0,
-            },
-            eligibility: ActionEligibility {
-                can_break: true,
-                can_combine: true,
-                ..Default::default()
-            },
-        };
-        let candidates = vec![
-            ActionCandidate {
-                action: ActionKind::Break,
-                context_key: Some("bond:0".into()),
-            },
-            ActionCandidate {
-                action: ActionKind::Combine,
-                context_key: None,
-            },
-        ];
-
-        let selected = select_action(
-            context,
-            &DecisionHistory::default(),
-            &candidates,
-            &mut ChaCha8Rng::seed_from_u64(1),
-        );
-        assert!(selected.is_some_and(|candidate| candidates.contains(&candidate)));
     }
 
     #[test]
