@@ -144,7 +144,8 @@ impl Simulation {
                             y: sy,
                             strength: memory_strength,
                             spectrum: spectrum.clone(),
-                            outcome: Some(outcome),
+                            outcome: Some(consequence.outcome()),
+                            consequence: Some(consequence),
                         };
                     }
                 }
