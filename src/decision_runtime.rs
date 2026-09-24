@@ -157,7 +157,8 @@ pub fn select_action_with_developmental_scores(
         }
         scored.push((
             index,
-            need_pressure(candidate.action, context.needs) + history_adjustment(history, candidate),
+            need_pressure(candidate.action, context.needs)
+                + history_adjustment(history, candidate, context.needs),
             developmental_scores
                 .get(index)
                 .copied()
@@ -556,7 +557,7 @@ mod tests {
     }
 
     #[test]
-    fn recorded_outcome_is_available_to_future_decisions() {
+    fn recorded_consequence_is_available_to_future_decisions() {
         let mut history = DecisionHistory::default();
         let candidate = ActionCandidate {
             action: ActionKind::Break,
@@ -567,7 +568,19 @@ mod tests {
             &candidate,
             ActionConsequence { energy_delta: 1.0, ..Default::default() },
         );
-        assert!(known_outcome(&history, ActionKind::Break, Some("Methane")));
+        assert!(known_consequence(&history, ActionKind::Break, Some("Methane")));
+    }
+
+    #[test]
+    fn no_transaction_is_always_an_approved_option() {
+        let context = DecisionContext {
+            needs: CurrentNeeds::default(),
+            eligibility: ActionEligibility::default(),
+        };
+        assert_eq!(
+            approve(context, ActionKind::NoTransaction),
+            DecisionResult::Approve
+        );
     }
 
     #[test]
