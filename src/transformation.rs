@@ -32,16 +32,14 @@ pub(crate) fn break_energy_yield(
     if !gross.is_finite() || gross < 0.0 {
         return None;
     }
-    let reactivity = (
-        crate::math::exponential_influence(
-            crate::resources::effective_reactivity(a.reactivity.max(0.0), water_field),
-        )
-        + crate::math::exponential_influence(
-            crate::resources::effective_reactivity(b.reactivity.max(0.0), water_field),
-        )
-    ) * 0.5;
-    let cohesion = ((a.cohesion.clamp(0.0, 1.0) + b.cohesion.clamp(0.0, 1.0)) * 0.5)
-        .clamp(0.0, 1.0);
+    let reactivity = (crate::math::exponential_influence(crate::resources::effective_reactivity(
+        a.reactivity.max(0.0),
+        water_field,
+    )) + crate::math::exponential_influence(
+        crate::resources::effective_reactivity(b.reactivity.max(0.0), water_field),
+    )) * 0.5;
+    let cohesion =
+        ((a.cohesion.clamp(0.0, 1.0) + b.cohesion.clamp(0.0, 1.0)) * 0.5).clamp(0.0, 1.0);
     let accessible = gross * reactivity;
     let cohesion_loss = accessible * cohesion * 0.5;
     let pre_processing = (accessible - cohesion_loss).max(0.0);
