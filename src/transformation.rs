@@ -218,16 +218,16 @@ impl Simulation {
         let (bond, stored_material_index, stored_bond_index) =
             if let Some(rest) = key.strip_prefix("stored:") {
                 let (storage_index, bond_part) = rest.split_once(":bond:")?;
-            let storage_index = storage_index.parse::<usize>().ok()?;
-            let stored_bond_index = bond_part.parse::<usize>().ok()?;
-            let instance = organism.stored_material.peek_physical_at(storage_index)?;
-            if stored_bond_index >= instance.material.internal_bonds.len() {
-                return None;
-            }
+                let storage_index = storage_index.parse::<usize>().ok()?;
+                let stored_bond_index = bond_part.parse::<usize>().ok()?;
+                let instance = organism.stored_material.peek_physical_at(storage_index)?;
+                if stored_bond_index >= instance.material.internal_bonds.len() {
+                    return None;
+                }
                 (None, Some(storage_index), Some(stored_bond_index))
             } else {
                 let index = key.strip_prefix("bond:")?.parse::<usize>().ok()?;
-            let bond = *organism.structure.bonds.get(index)?;
+                let bond = *organism.structure.bonds.get(index)?;
                 (Some(bond), None, None)
             };
         let complexity = crate::math::complexity(2.0);
