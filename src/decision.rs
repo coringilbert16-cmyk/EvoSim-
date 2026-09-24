@@ -33,7 +33,11 @@ impl ActionKind {
                 NeedKind::Development,
             ],
             ActionKind::Expel => &[NeedKind::Survival],
-            ActionKind::NoTransaction => &[NeedKind::Survival, NeedKind::Reproduction, NeedKind::Development],
+            ActionKind::NoTransaction => &[
+                NeedKind::Survival,
+                NeedKind::Reproduction,
+                NeedKind::Development,
+            ],
         }
     }
 }
