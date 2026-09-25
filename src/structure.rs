@@ -551,7 +551,8 @@ impl PhysicalConstituentGraph {
         &mut self,
         retained: &std::collections::HashSet<PhysicalConstituentId>,
     ) {
-        self.units.retain(|unit| retained.contains(&unit.physical_id));
+        self.units
+            .retain(|unit| retained.contains(&unit.physical_id));
         self.bonds.retain(|bond| {
             retained.contains(&bond.endpoint_a.constituent_id)
                 && retained.contains(&bond.endpoint_b.constituent_id)
