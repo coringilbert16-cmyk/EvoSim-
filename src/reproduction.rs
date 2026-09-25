@@ -171,6 +171,7 @@ fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
 fn store_first_available_material(
     parent_storage: &mut MaterialStorage,
     child_storage: &mut MaterialStorage,
+    catalog: &[crate::resources::BaseResource],
 ) -> bool {
     let Some(material) = parent_storage.peek_one_unstructured() else {
         return false;
@@ -178,7 +179,7 @@ fn store_first_available_material(
     let Some(material) = parent_storage.take_matching(&material) else {
         return false;
     };
-    child_storage.store(material)
+    child_storage.store(material, catalog)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -211,7 +212,7 @@ fn next_construction_resource_status(
                 .any(|held| held == &material);
 
         let mut candidate = child.clone();
-        if !candidate.stored_material.store(material.clone()) {
+        if !candidate.stored_material.store(material.clone(), &environment.catalog) {
             continue;
         }
 
@@ -534,7 +535,7 @@ pub(crate) fn advance_construction(
     }
 
     if child.stored_material.is_empty()
-        && !store_first_available_material(parent_storage, &mut child.stored_material)
+        && !store_first_available_material(parent_storage, &mut child.stored_material, &environment.catalog)
     {
         return (ConstructionStatus::Waiting, None);
     }
@@ -693,7 +694,7 @@ mod tests {
     fn reserve_requirement_is_genome_defined() {
         let mut storage = MaterialStorage::default();
         let genome = initial_genome();
-        assert!(storage.store(genome.juvenile_reserve.clone()));
+        assert!(storage.store(genome.juvenile_reserve.clone(), &default_catalog()));
         assert!(storage.take_matching(&genome.juvenile_reserve).is_some());
         assert!(genome.juvenile_energy_reserve > 0.0);
     }
