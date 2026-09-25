@@ -220,7 +220,7 @@ impl Simulation {
             organism.stress,
             structural_mass,
             developmental,
-            organism.stored_material.physical_count() as f64,
+            organism.stored_material.total_amount(),
             position,
         )
     }
