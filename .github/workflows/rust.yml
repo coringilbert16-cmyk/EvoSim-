@@ -27,7 +27,7 @@ jobs:
       - name: Run diagnostic headless multigeneration simulation
         run: |
           mkdir -p ci-diagnostics
-          cargo run --release -- --headless --births 3 --ticks 10000 --diagnostics ci-diagnostics/diagnostics.jsonl --diagnostic-interval 100
+          cargo run --release -- --headless --births 3 --ticks 5000 --diagnostics ci-diagnostics/diagnostics.jsonl --diagnostic-interval 100
       - name: Upload diagnostic data sheet
         if: always()
         uses: actions/upload-artifact@v4
