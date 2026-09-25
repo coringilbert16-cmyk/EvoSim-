@@ -377,6 +377,7 @@ mod tests {
                 crate::environment::DEFAULT_CELL_SIZE,
             ),
         };
+            resource_cloud: crate::environmental_materials::ResourceCloud::initial(500.0, 500.0),
         let candidates = stress_break_candidate_indices(&organism, &environment);
         assert!(!candidates.is_empty());
         let genome_bonds = crate::cavity::analyze_genome_cavity(&organism.structure, &catalog)
