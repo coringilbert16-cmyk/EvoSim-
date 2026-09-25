@@ -113,18 +113,19 @@ impl Simulation {
     pub(crate) fn transfer_contained_environmental_material(
         organism: &mut Organism,
         environment: &mut Environment,
-    ) {
+    ) -> bool {
         let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_structure(
             &organism.structure,
             &environment.catalog,
         ) else {
-            return;
+            return false;
         };
         let anchor = organism
             .occupied_cells
             .first()
             .cloned()
             .unwrap_or(Position { x: 0.0, y: 0.0 });
+        let mut acquired = false;
         for physical in environment.field.take_contained_physical_materials(&body) {
             if organism
                 .stored_material
@@ -137,6 +138,7 @@ impl Simulation {
                     },
                 )
             {
+                acquired = true;
                 continue;
             }
             if let Some(placement) = physical
@@ -149,6 +151,7 @@ impl Simulation {
                     .deposit(placement.x, placement.y, physical);
             }
         }
+        acquired
     }
 
     fn current_needs(
@@ -394,7 +397,30 @@ impl Simulation {
                     &mut self.energy_ledger,
                 );
             }
-            Self::transfer_contained_environmental_material(organism, &mut self.environment);
+            let acquired_environmental_material =
+                Self::transfer_contained_environmental_material(organism, &mut self.environment);
+            if acquired_environmental_material {
+                let (x, y) = organism
+                    .occupied_cells
+                    .first()
+                    .map(|p| (p.x, p.y))
+                    .unwrap_or((0.0, 0.0));
+                if let Some(cavity) = organism
+                    .genome_cavity_cached(&self.environment.catalog)
+                    .filter(|cavity| cavity.qualifies())
+                {
+                    let capacity = crate::memory::memory_capacity(&cavity);
+                    crate::memory::reinforce_memory_point(
+                        organism,
+                        x,
+                        y,
+                        organism.genome.memory_strength().clamp(0.0, 1.0),
+                        capacity,
+                        &organism.harmonic_spectrum.clone(),
+                        crate::decision::OutcomeKind::Beneficial,
+                    );
+                }
+            }
         }
         {
             let (organisms, environment) = (&mut self.organisms, &mut self.environment);
