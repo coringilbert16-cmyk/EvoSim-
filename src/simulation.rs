@@ -350,6 +350,11 @@ impl Simulation {
     }
     pub(crate) fn step(&mut self) {
         self.tick += 1;
+        crate::environmental_materials::release_random_unbonded_vent_packets(
+            &mut self.environment.field,
+            &self.environment.catalog,
+            &mut self.rng,
+        );
         let mut still_active = Vec::new();
         let mut completed = Vec::new();
         for mut transformation in self.active_transformations.drain(..) {
@@ -414,18 +419,6 @@ impl Simulation {
                     &mut self.energy_ledger,
                 );
             }
-            let (x, y) = organism
-                .occupied_cells
-                .first()
-                .map(|p| (p.x, p.y))
-                .unwrap_or((0.0, 0.0));
-            let _ = crate::environmental_materials::release_random_unbonded_packet_near(
-                &mut self.environment.field,
-                &self.environment.catalog,
-                &mut self.rng,
-                x,
-                y,
-            );
             Self::transfer_contained_environmental_material(organism, &mut self.environment);
         }
         {
