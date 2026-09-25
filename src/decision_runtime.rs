@@ -90,7 +90,7 @@ fn cheap_decision_score(
 /// kinds remain tied at that stage.
 pub fn developmental_competition_indices(
     context: DecisionContext,
-    _history: &DecisionHistory,
+    history: &DecisionHistory,
     candidates: &[ActionCandidate],
 ) -> Vec<usize> {
     if context.needs.development <= 0.0 {
@@ -235,7 +235,6 @@ pub fn known_consequence(
 ) -> bool {
     history.has_knowledge(action, context_key)
 }
-
 
 #[cfg(test)]
 mod tests {
