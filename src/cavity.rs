@@ -88,6 +88,23 @@ impl GenomeCavity {
             })
             .collect()
     }
+
+    /// Unit indices whose bond-connected component contains a physical
+    /// genome-cavity boundary unit. This derives structural authority from the
+    /// realized genome criterion and the bond graph; it is not a stored flag.
+    pub fn genome_connected_unit_indices(
+        &self,
+        structure: &OrganismStructure,
+    ) -> std::collections::HashSet<usize> {
+        let boundary: std::collections::HashSet<usize> =
+            self.boundary_units.iter().copied().collect();
+        structure
+            .connected_components()
+            .into_iter()
+            .filter(|component| component.iter().any(|index| boundary.contains(index)))
+            .flatten()
+            .collect()
+    }
 }
 
 /// The minimum cavity is strictly larger than the area occupied by three
@@ -392,5 +409,30 @@ mod tests {
         assert!(analyze_genome_cavity(&structure, &catalog)
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn genome_connected_units_follow_bond_components() {
+        let catalog = default_catalog();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
+        let (mut structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
+        let cavity = analyze_genome_cavity(&structure, &catalog).unwrap().unwrap();
+        let connected = cavity.genome_connected_unit_indices(&structure);
+        assert_eq!(connected.len(), structure.units.len());
+
+        let detached = structure.units.last().unwrap().physical_id;
+        let previous = structure.units.len() - 1;
+        let target = structure.bonds.iter().position(|bond| {
+            bond.endpoint_a.constituent_id == detached
+                || bond.endpoint_b.constituent_id == detached
+        });
+        if let Some(index) = target {
+            structure.break_bond(index);
+            let cavity = analyze_genome_cavity(&structure, &catalog).unwrap();
+            if let Some(cavity) = cavity {
+                let connected = cavity.genome_connected_unit_indices(&structure);
+                assert!(connected.len() <= previous);
+            }
+        }
     }
 }
