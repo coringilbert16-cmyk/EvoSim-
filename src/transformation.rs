@@ -129,11 +129,13 @@ fn reconcile_detached_components(
         physical.push(instance);
     }
 
+    let mut trial_storage = organism.stored_material.clone();
     for instance in physical {
-        if !organism.stored_material.store_physical_instance(instance) {
+        if !trial_storage.store_physical_instance(instance) {
             return false;
         }
     }
+    organism.stored_material = trial_storage;
 
     let detached_ids: HashSet<_> = detached
         .iter()
