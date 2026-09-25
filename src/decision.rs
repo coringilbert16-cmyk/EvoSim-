@@ -46,18 +46,33 @@ pub enum NeedKind {
     Development,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum OutcomeKind {
-    Beneficial,
-    Neutral,
-    Harmful,
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+pub struct ActionConsequence {
+    /// Signed change in usable energy caused by the action.
+    pub energy_delta: f64,
+    /// Signed change in realized physical structure.
+    pub structural_delta: f64,
+    /// Signed change in developmental realization.
+    pub developmental_delta: f64,
+    /// Signed change in accumulated transaction stress.
+    pub stress_delta: f64,
+}
+
+impl ActionConsequence {
+    pub const NONE: Self = Self {
+        energy_delta: 0.0,
+        structural_delta: 0.0,
+        developmental_delta: 0.0,
+        stress_delta: 0.0,
+    };
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct DecisionHistoryEntry {
     pub action: ActionKind,
     pub context_key: Option<String>,
-    pub outcome: OutcomeKind,
+    #[serde(default)]
+    pub consequence: ActionConsequence,
     pub count: u64,
 }
 
@@ -69,55 +84,34 @@ pub struct DecisionHistory {
 impl DecisionHistory {
     pub const MAX_ENTRIES: usize = 64;
 
-    pub fn record(
-        &mut self,
-        action: ActionKind,
-        context_key: Option<String>,
-        outcome: OutcomeKind,
-    ) {
-        if let Some(existing) = self
-            .entries
-            .iter_mut()
-            .find(|entry| entry.action == action && entry.context_key == context_key)
-        {
-            existing.outcome = outcome;
-            existing.count = existing.count.saturating_add(1);
+    pub fn record_consequence(&mut self, action: ActionKind, context_key: Option<String>, consequence: ActionConsequence) {
+        if let Some(existing) = self.entries.iter_mut().find(|entry| entry.action == action && entry.context_key == context_key) {
+            let previous_count = existing.count as f64;
+            let new_count = existing.count.saturating_add(1);
+            let denominator = new_count as f64;
+            existing.consequence.energy_delta = (existing.consequence.energy_delta * previous_count + consequence.energy_delta) / denominator;
+            existing.consequence.structural_delta = (existing.consequence.structural_delta * previous_count + consequence.structural_delta) / denominator;
+            existing.consequence.developmental_delta = (existing.consequence.developmental_delta * previous_count + consequence.developmental_delta) / denominator;
+            existing.consequence.stress_delta = (existing.consequence.stress_delta * previous_count + consequence.stress_delta) / denominator;
+            existing.count = new_count;
             return;
         }
         if self.entries.len() >= Self::MAX_ENTRIES {
-            if let Some(index) = self
-                .entries
-                .iter()
-                .enumerate()
-                .min_by_key(|(_, entry)| entry.count)
-                .map(|(index, _)| index)
-            {
+            if let Some(index) = self.entries.iter().enumerate().min_by_key(|(_, entry)| entry.count).map(|(index, _)| index) {
                 self.entries.remove(index);
             }
         }
-        self.entries.push(DecisionHistoryEntry {
-            action,
-            context_key,
-            outcome,
-            count: 1,
-        });
+        self.entries.push(DecisionHistoryEntry { action, context_key, consequence, count: 1 });
     }
 
-    pub fn outcome(&self, action: ActionKind, context_key: Option<&str>) -> Option<OutcomeKind> {
-        self.entries
-            .iter()
-            .find(|entry| entry.action == action && entry.context_key.as_deref() == context_key)
-            .map(|entry| entry.outcome)
-            .or_else(|| {
-                self.entries
-                    .iter()
-                    .find(|entry| entry.action == action && entry.context_key.is_none())
-                    .map(|entry| entry.outcome)
-            })
+    pub fn consequence(&self, action: ActionKind, context_key: Option<&str>) -> Option<ActionConsequence> {
+        self.entries.iter().find(|entry| entry.action == action && entry.context_key.as_deref() == context_key).map(|entry| entry.consequence).or_else(|| {
+            self.entries.iter().find(|entry| entry.action == action && entry.context_key.is_none()).map(|entry| entry.consequence)
+        })
     }
 
     pub fn has_knowledge(&self, action: ActionKind, context_key: Option<&str>) -> bool {
-        self.outcome(action, context_key).is_some()
+        self.consequence(action, context_key).is_some()
     }
 }
 
@@ -329,8 +323,7 @@ mod tests {
     #[test]
     fn unknown_history_does_not_invent_an_outcome() {
         let history = DecisionHistory::default();
-        assert!(!outcome_is_known(
-            &history,
+        assert!(!history.has_knowledge(
             ActionKind::Combine,
             Some("Carbon+Methane")
         ));
