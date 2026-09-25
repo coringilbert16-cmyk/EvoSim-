@@ -152,7 +152,7 @@ pub(crate) fn seed_resource_cloud(
 
     let compounds = seed_compounds();
     let mut rng = StdRng::seed_from_u64(seed ^ 0xC10D_5EED);
-    for index in 0..RESOURCE_CLOUD_PARTICLES {
+    for _index in 0..RESOURCE_CLOUD_PARTICLES {
         let angle = rng.gen_range(0.0..std::f64::consts::TAU);
         let radial = rng.gen::<f64>().sqrt();
         let radius = cloud.radius * radial;
