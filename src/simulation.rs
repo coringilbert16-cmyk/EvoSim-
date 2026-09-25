@@ -567,7 +567,8 @@ impl Simulation {
                                     .unwrap_or(0.0),
                                 structural_delta: (organisms[index].structure.units.len() as f64
                                     - before_units)
-                                    + (organisms[index].structure.bonds.len() as f64 - before_bonds),
+                                    + (organisms[index].structure.bonds.len() as f64
+                                        - before_bonds),
                                 developmental_delta: after_development - current_development,
                                 stress_delta: organisms[index].stress - before_stress,
                             };
