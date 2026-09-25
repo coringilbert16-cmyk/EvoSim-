@@ -546,6 +546,17 @@ impl PhysicalConstituentGraph {
         let i = self.bonds.iter().position(|b| b.has_same_identity(&t))?;
         self.break_bond(i)
     }
+
+    pub(crate) fn retain_unit_indices(
+        &mut self,
+        retained: &std::collections::HashSet<PhysicalConstituentId>,
+    ) {
+        self.units.retain(|unit| retained.contains(&unit.physical_id));
+        self.bonds.retain(|bond| {
+            retained.contains(&bond.endpoint_a.constituent_id)
+                && retained.contains(&bond.endpoint_b.constituent_id)
+        });
+    }
 }
 pub type OrganismStructure = PhysicalConstituentGraph;
 pub fn formation_threshold(a: f64, b: f64, la: f64, lb: f64) -> f64 {
