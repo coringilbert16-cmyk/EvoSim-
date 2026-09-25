@@ -213,3 +213,32 @@ impl PhysicalMaterial {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::resources::{InternalBond, Material};
+
+    #[test]
+    fn breaking_internal_bond_splits_only_the_stored_material() {
+        let catalog = crate::resources::default_catalog();
+        let material = Material {
+            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+            internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
+        };
+        let physical = PhysicalMaterial::realized(
+            material,
+            vec![
+                Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                Placement { x: 0.838, y: 0.0, rotation_radians: 0.0 },
+            ],
+            &catalog,
+        )
+        .expect("stored compound should be realizable");
+        let target = physical.internal_connections.as_ref().unwrap()[0].clone();
+        let pieces = physical.break_internal_bond(&target).expect("stored bond");
+        assert_eq!(pieces.len(), 2);
+        assert!(pieces.iter().all(|piece| piece.material.internal_bonds.is_empty()));
+        assert_eq!(pieces.iter().map(|piece| piece.material.parts.len()).sum::<usize>(), 2);
+    }
+}
