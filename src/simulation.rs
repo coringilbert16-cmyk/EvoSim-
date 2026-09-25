@@ -473,6 +473,8 @@ impl Simulation {
                     for other in after.iter() {
                         others.push((*other).clone());
                     }
+                    let before_energy = organism.usable_energy;
+                    let before_stress = organism.stress;
                     let moved = Self::update_movement(
                         organism,
                         environment,
@@ -494,10 +496,10 @@ impl Simulation {
                             &mut organism.decision_history,
                             &move_candidate,
                             crate::decision::ActionConsequence {
-                                energy_delta: 0.0,
+                                energy_delta: organism.usable_energy - before_energy,
                                 structural_delta: 0.0,
                                 developmental_delta: 0.0,
-                                stress_delta: 0.0,
+                                stress_delta: organism.stress - before_stress,
                             },
                         );
                     }
