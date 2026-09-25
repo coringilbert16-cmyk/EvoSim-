@@ -517,7 +517,7 @@ mod tests {
             y: organism.occupied_cells[0].y - 20.0,
             strength: 1.0,
             spectrum: crate::harmonics::ToneSpectrum::empty(),
-            outcome: None,
+            consequence: None,
         });
         let (x, y) = movement_direction(&organism).expect("direction should exist");
         assert!(x.abs() < f64::EPSILON);
