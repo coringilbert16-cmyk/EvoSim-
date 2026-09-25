@@ -19,7 +19,7 @@ mod tests {
             width: 100.0,
             height: 100.0,
             catalog: catalog.clone(),
-            field: ActiveMaterialField::new(100.0, 100.0, 10.0),
+            field: ActiveMaterialField::new(100.0, 100.0, 10.0),\n            resource_cloud: crate::environmental_materials::ResourceCloud::initial(50.0, 50.0),
         };
         let mut ledger = EnergyLedger::default();
 
