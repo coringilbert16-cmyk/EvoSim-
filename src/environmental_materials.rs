@@ -1,7 +1,7 @@
 #![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 use crate::environment::ActiveMaterialField;
-use serde::{Deserialize, Serialize};
 use crate::resources::{combine_materials, Material};
+use serde::{Deserialize, Serialize};
 use crate::structure::Placement;
 
 /// Small, reusable structured-material seeds for the initial environment.
@@ -306,8 +306,8 @@ mod tests {
         seed_compounds, seed_initial_landscape, FORMATION_PARTICLES, INITIAL_FORMATION_COUNT,
     };
     use crate::environment::ActiveMaterialField;
-    use std::collections::BTreeSet;
     use rand::SeedableRng;
+    use std::collections::BTreeSet;
 
     fn physical_signature(material: &crate::physical_material::PhysicalMaterial) -> Vec<String> {
         let mut names = material
@@ -340,8 +340,12 @@ mod tests {
             .flat_map(|cell| cell.physical_materials.iter())
             .collect::<Vec<_>>();
         assert_eq!(materials.len(), super::RESOURCE_CLOUD_PARTICLES);
-        assert!(materials.iter().any(|material| material.material.parts.len() == 1));
-        assert!(materials.iter().any(|material| material.material.parts.len() > 1));
+        assert!(materials
+            .iter()
+            .any(|material| material.material.parts.len() == 1));
+        assert!(materials
+            .iter()
+            .any(|material| material.material.parts.len() > 1));
         assert!(materials.iter().all(|material| material.is_realized()));
         assert!(materials.iter().all(|material| {
             let placement = material.placements.as_ref().unwrap().first().unwrap();
