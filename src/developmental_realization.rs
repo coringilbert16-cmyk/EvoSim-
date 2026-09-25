@@ -99,8 +99,8 @@ impl DevelopmentalFieldBlueprint {
         orientation: f64,
         preferred_length: f64,
         bond_index: usize,
-        material_realized: Option<f64>,
-        density_realized: Option<f64>,
+        _material_realized: Option<f64>,
+        _density_realized: Option<f64>,
     ) -> Option<DevelopmentalRealization> {
         if bond_index >= structure.bonds.len() {
             return None;
