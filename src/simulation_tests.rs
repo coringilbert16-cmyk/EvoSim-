@@ -86,9 +86,9 @@ mod integration_tests {
     #[test]
     fn storage_contains_discrete_independent_material_objects() {
         let mut o = Simulation::create_initial_organism();
-        assert!(o.store_material(Material::free_base("Carbon", 5.0)));
-        assert_eq!(o.stored_material.len(), 2);
-        assert_eq!(o.stored_material.count_unstructured(), 1);
+        assert!(o.store_material(Material::free_base("Carbon", 5.0), &s.environment.catalog));
+        assert_eq!(o.stored_material.len(), 6);
+        assert_eq!(o.stored_material.count_unstructured(), 5);
         assert_eq!(o.stored_material.count_structured(), 1);
         assert_eq!(o.stored_material.total_amount(), 8.0);
     }
@@ -96,7 +96,16 @@ mod integration_tests {
     fn storage_preserves_a_compound_as_one_intact_object() {
         let mut o = Simulation::create_initial_organism();
         let m = structured_carbon_hydrogen();
-        assert!(o.store_material(m.clone()));
+        let physical = PhysicalMaterial::realized(
+            m.clone(),
+            vec![
+                Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                Placement { x: 0.8, y: 0.0, rotation_radians: 0.0 },
+            ],
+            &s.environment.catalog,
+        )
+        .expect("compound should be physically realizable");
+        assert!(o.stored_material.store_physical_instance(physical));
         assert!(o.stored_material.materials_snapshot().contains(&m));
         assert_eq!(o.stored_material.count_structured(), 1);
     }
