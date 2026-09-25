@@ -1,5 +1,6 @@
+use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
 use crate::material_geometry::PlacedMaterialPart;
-use crate::state::{Environment, Organism, Simulation};
+use crate::state::{EnergyLedger, Environment, Organism, Simulation};
 use crate::structure::Placement;
 
 impl Simulation {
@@ -7,6 +8,7 @@ impl Simulation {
         organism: &mut Organism,
         environment: &mut Environment,
         other_organisms: &mut [Organism],
+        ledger: &mut EnergyLedger,
         tick: u64,
     ) -> bool {
         let old_position = organism.occupied_cells.first().cloned();
@@ -31,7 +33,8 @@ impl Simulation {
         };
 
         let step = 5.0 * movement_efficiency;
-        if active_transformation_id.is_some() {
+        let cost = step.max(0.0);
+        if !cost.is_finite() || organism.usable_energy + f64::EPSILON < cost {
             organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
                 tick,
                 direction_x: Some(x),
@@ -39,7 +42,7 @@ impl Simulation {
                 step: Some(step),
                 usable_energy,
                 active_transformation_id,
-                result: Err(crate::state::MovementFailureReason::ActiveTransformation),
+                result: Err(crate::state::MovementFailureReason::InsufficientEnergy),
                 old_position,
                 new_position: None,
             });
@@ -55,17 +58,18 @@ impl Simulation {
         );
         let diagnostic_result = result.clone();
         let new_position = organism.occupied_cells.first().cloned();
-        organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
-            tick,
-            direction_x: Some(x),
-            direction_y: Some(y),
-            step: Some(step),
-            usable_energy,
-            active_transformation_id,
-            result: diagnostic_result,
-            old_position,
-            new_position,
-        });
+        if result.is_ok() {
+            let transaction = EnergyTransaction {
+                reason: EnergyReason::Move,
+                potential_released: 0.0,
+                usable_delta: -cost,
+                structural_delta: 0.0,
+                heat_dissipated: cost,
+            };
+            if !ledger.settle_transaction(&mut organism.usable_energy, transaction) {
+                return false;
+            }
+        }
         result.is_ok()
     }
 
