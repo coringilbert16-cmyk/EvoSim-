@@ -156,50 +156,58 @@ fn compound_placements(
         .collect()
 }
 
-/// Release a single random unbonded resource packet near an organism.
+/// Ocean-floor vents are inexhaustible local sources of random, unbonded resources.
 ///
-/// The source is intentionally inexhaustible: no reservoir or global stock is
-/// tracked. Only a small local neighborhood is realized, so the cost stays
-/// proportional to the organisms being simulated rather than the size of the
-/// world.
-pub(crate) fn release_random_unbonded_packet_near(
+/// The vent locations are fixed physical source points. Each vent can realize only
+/// a small local neighborhood, so the simulation never creates a world-sized
+/// resource pool. The resource type and exact placement are random on release.
+pub(crate) const VENT_COUNT: usize = 4;
+const VENT_RELEASE_RADIUS: f64 = 20.0;
+const MAX_VENT_LOCAL_PACKETS: usize = 64;
+const VENT_X_FRACTIONS: [f64; VENT_COUNT] = [0.15, 0.38, 0.62, 0.85];
+
+pub(crate) fn release_random_unbonded_vent_packets(
     field: &mut ActiveMaterialField,
     catalog: &[crate::resources::BaseResource],
     rng: &mut impl rand::Rng,
-    x: f64,
-    y: f64,
-) -> bool {
-    const RELEASE_RADIUS: f64 = 20.0;
-    const MAX_LOCAL_PACKETS: usize = 256;
-
-    let nearby_count: usize = field
-        .cells_within_radius(x, y, RELEASE_RADIUS)
-        .into_iter()
-        .map(|index| field.cells[index].physical_materials.len())
-        .sum();
-    if nearby_count >= MAX_LOCAL_PACKETS || catalog.is_empty() {
-        return false;
+) {
+    if catalog.is_empty() || field.width_cells == 0 || field.height_cells == 0 {
+        return;
     }
 
-    let resource = &catalog[rng.gen_range(0..catalog.len())];
-    let angle = rng.gen_range(0.0..std::f64::consts::TAU);
-    let radius = RELEASE_RADIUS * rng.gen::<f64>().sqrt();
-    let placement = Placement {
-        x: x + radius * angle.cos(),
-        y: (y + radius * angle.sin())
-            .rem_euclid(field.height_cells as f64 * field.cell_size),
-        rotation_radians: rng.gen_range(0.0..std::f64::consts::TAU),
-    };
-    let material = Material::free_base(resource.name.clone(), 1.0);
-    let physical = crate::physical_material::PhysicalMaterial::realized(
-        material,
-        vec![placement],
-        catalog,
-    );
-    let Some(physical) = physical else {
-        return false;
-    };
-    field.deposit_physical(placement.x, placement.y, physical)
+    let width = field.width_cells as f64 * field.cell_size;
+    let height = field.height_cells as f64 * field.cell_size;
+    let vent_y = height - field.cell_size * 0.5;
+
+    for &fraction in &VENT_X_FRACTIONS {
+        let vent_x = fraction * width;
+        let nearby_count: usize = field
+            .cells_within_radius(vent_x, vent_y, VENT_RELEASE_RADIUS)
+            .into_iter()
+            .map(|index| field.cells[index].physical_materials.len())
+            .sum();
+        if nearby_count >= MAX_VENT_LOCAL_PACKETS {
+            continue;
+        }
+
+        let resource = &catalog[rng.gen_range(0..catalog.len())];
+        let angle = rng.gen_range(0.0..std::f64::consts::TAU);
+        let radius = VENT_RELEASE_RADIUS * rng.gen::<f64>().sqrt();
+        let placement = Placement {
+            x: vent_x + radius * angle.cos(),
+            y: (vent_y + radius * angle.sin()).rem_euclid(height),
+            rotation_radians: rng.gen_range(0.0..std::f64::consts::TAU),
+        };
+        let material = Material::free_base(resource.name.clone(), 1.0);
+        let Some(physical) = crate::physical_material::PhysicalMaterial::realized(
+            material,
+            vec![placement],
+            catalog,
+        ) else {
+            continue;
+        };
+        let _ = field.deposit_physical(placement.x, placement.y, physical);
+    }
 }
 
 #[cfg(test)]
