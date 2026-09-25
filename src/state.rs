@@ -31,6 +31,7 @@ pub(crate) struct Position {
 pub(crate) enum MovementFailureReason {
     NoDirection,
     ActiveTransformation,
+    InsufficientEnergy,
     NonFiniteDisplacement,
     NoOccupiedCell,
     ZeroDisplacement,
