@@ -110,8 +110,12 @@ impl PhysicalMaterial {
 
         let mut adjacency = vec![Vec::new(); self.material.parts.len()];
         for (index, bond) in connections.iter().enumerate() {
-            if index == target_index { continue; }
-            if bond.part_a >= adjacency.len() || bond.part_b >= adjacency.len() { return None; }
+            if index == target_index {
+                continue;
+            }
+            if bond.part_a >= adjacency.len() || bond.part_b >= adjacency.len() {
+                return None;
+            }
             adjacency[bond.part_a].push(bond.part_b);
             adjacency[bond.part_b].push(bond.part_a);
         }
@@ -119,7 +123,9 @@ impl PhysicalMaterial {
         let mut components = Vec::<Vec<usize>>::new();
         let mut seen = vec![false; adjacency.len()];
         for start in 0..adjacency.len() {
-            if seen[start] { continue; }
+            if seen[start] {
+                continue;
+            }
             let mut stack = vec![start];
             let mut members = Vec::new();
             seen[start] = true;
@@ -229,8 +235,14 @@ mod tests {
         let physical = PhysicalMaterial::realized(
             material,
             vec![
-                Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                Placement { x: 0.838, y: 0.0, rotation_radians: 0.0 },
+                Placement { x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement { x: 0.838,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
             ],
             &catalog,
         )
@@ -239,6 +251,12 @@ mod tests {
         let pieces = physical.break_internal_bond(&target).expect("stored bond");
         assert_eq!(pieces.len(), 2);
         assert!(pieces.iter().all(|piece| piece.material.internal_bonds.is_empty()));
-        assert_eq!(pieces.iter().map(|piece| piece.material.parts.len()).sum::<usize>(), 2);
+        assert_eq!(
+            pieces
+                .iter()
+                .map(|piece| piece.material.parts.len())
+                .sum::<usize>(),
+            2
+        );
     }
 }
