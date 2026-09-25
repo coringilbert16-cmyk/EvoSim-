@@ -342,3 +342,44 @@ mod tests {
         assert_eq!(history.entries.len(), DecisionHistory::MAX_ENTRIES);
     }
 }
+    #[test]
+    fn mixed_consequence_dimensions_are_preserved() {
+        let consequence = ActionConsequence {
+            energy_delta: 2.0,
+            structural_delta: -3.0,
+            developmental_delta: 0.5,
+            stress_delta: 1.0,
+        };
+        let mut history = DecisionHistory::default();
+        history.record_consequence(ActionKind::Combine, None, consequence);
+        assert_eq!(history.consequence(ActionKind::Combine, None), Some(consequence));
+    }
+
+    #[test]
+    fn repeated_consequences_are_retained_as_numerical_memory() {
+        let mut history = DecisionHistory::default();
+        history.record_consequence(ActionKind::Combine, None, ActionConsequence {
+            energy_delta: 2.0,
+            ..ActionConsequence::NONE
+        });
+        history.record_consequence(ActionKind::Combine, None, ActionConsequence {
+            energy_delta: 0.0,
+            ..ActionConsequence::NONE
+        });
+        assert_eq!(history.entries[0].count, 2);
+        assert_eq!(history.entries[0].consequence.energy_delta, 1.0);
+    }
+
+    #[test]
+    fn history_is_bounded() {
+        let mut history = DecisionHistory::default();
+        for i in 0..(DecisionHistory::MAX_ENTRIES + 10) {
+            history.record_consequence(
+                ActionKind::Break,
+                Some(format!("material-{i}")),
+                ActionConsequence::NONE,
+            );
+        }
+        assert_eq!(history.entries.len(), DecisionHistory::MAX_ENTRIES);
+    }
+}
