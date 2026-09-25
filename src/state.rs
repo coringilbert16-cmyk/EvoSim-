@@ -237,7 +237,7 @@ impl Organism {
     }
 
     pub(crate) fn store_material(&mut self, material: Material) -> bool {
-        self.stored_material.store(material)
+        self.stored_material.store(material, &crate::resources::default_catalog())
     }
     pub(crate) fn structural_mass(&self, catalog: &[BaseResource]) -> f64 {
         self.structure
