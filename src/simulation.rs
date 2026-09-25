@@ -640,8 +640,7 @@ impl Simulation {
                         let (before_organisms, rest) = organisms.split_at_mut(index);
                         let (organism, after_organisms) =
                             rest.split_first_mut().expect("index is in organisms");
-                        let mut others =
-                            Vec::with_capacity(organism_count.saturating_sub(1));
+                        let mut others = Vec::with_capacity(organism_count.saturating_sub(1));
                         for other in before_organisms.iter() {
                             others.push((*other).clone());
                         }
@@ -664,10 +663,7 @@ impl Simulation {
                                 original.structure = trial.structure;
                                 original.mark_position_changed();
                             }
-                            Self::transfer_contained_environmental_material(
-                                organism,
-                                environment,
-                            );
+                            Self::transfer_contained_environmental_material(organism, environment);
                         }
                         let movement_after =
                             Self::action_measurement(&mut organisms[index], environment);
