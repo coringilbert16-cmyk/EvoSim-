@@ -187,6 +187,9 @@ impl Simulation {
         } else {
             0.0
         };
+        let acquisition_reserve = parameters.acquisition_reserve.max(f64::EPSILON);
+        let stored_amount = organism.stored_material.total_amount().max(0.0);
+        let acquisition = (1.0 - stored_amount / acquisition_reserve).clamp(0.0, 1.0);
         CurrentNeeds {
             survival,
             reproduction: if matches!(organism.development_stage, DevelopmentStage::Adult) {
@@ -195,6 +198,7 @@ impl Simulation {
                 0.0
             },
             development,
+            acquisition,
         }
     }
     fn action_measurement(
@@ -273,12 +277,6 @@ impl Simulation {
         let relevant = |action: ActionKind| {
             eligibility.permits(action) && needs.any_for(action.relevant_needs())
         };
-        if relevant(ActionKind::Move) {
-            candidates.push(ActionCandidate {
-                action: ActionKind::Move,
-                context_key: None,
-            });
-        }
         if relevant(ActionKind::Break) {
             candidates.extend(
                 organism
