@@ -101,6 +101,19 @@ mod integration_tests {
         assert_eq!(o.stored_material.count_structured(), 1);
     }
     #[test]
+    fn initial_vent_cloud_is_acquirable_and_remembered() {
+        let mut s = Simulation::new(24, 10.0);
+        let initial_physical_count = s.organisms[0].stored_material.physical_count();
+
+        s.step();
+
+        assert!(s.organisms[0].stored_material.physical_count() > initial_physical_count);
+        assert!(s.organisms[0].memory.iter().any(|point| {
+            (point.x - 500.0).abs() < 1e-9 && (point.y - 500.0).abs() < 1e-9
+        }));
+    }
+
+    #[test]
     // Containment is automatic; there is no organism-side acquisition action.
     fn contained_physical_material_becomes_storage_without_an_acquire_action() {
         let mut s = Simulation::new(21, 10.0);
