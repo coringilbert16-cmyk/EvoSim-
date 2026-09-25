@@ -4,6 +4,7 @@ use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransactio
 use crate::state::{ActiveTransformation, EnergyLedger, Environment, Organism, Simulation};
 use rand::Rng;
 use rand_chacha::ChaCha8Rng;
+use std::collections::HashSet;
 
 fn water_field_amount(environment: &Environment, organism: &Organism) -> f64 {
     organism
@@ -77,6 +78,89 @@ fn settle_break_energy(
     true
 }
 
+fn genome_boundary_ids(
+    organism: &Organism,
+    environment: &Environment,
+) -> HashSet<crate::structure::PhysicalConstituentId> {
+    crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
+        .ok()
+        .flatten()
+        .map(|cavity| {
+            cavity
+                .boundary_units
+                .iter()
+                .filter_map(|&index| organism.structure.physical_id(index))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// After a bond is actually broken, any component no longer connected to the
+/// physical genome boundary ceases to be structural material. It is transferred
+/// intact into storage, including its realized placements and internal bonds.
+fn reconcile_detached_components(
+    organism: &mut Organism,
+    environment: &Environment,
+    genome_boundary_ids: &HashSet<crate::structure::PhysicalConstituentId>,
+) -> bool {
+    let components = organism.structure.connected_components();
+    let detached: Vec<Vec<usize>> = components
+        .into_iter()
+        .filter(|component| {
+            !component.iter().any(|&index| {
+                organism
+                    .structure
+                    .physical_id(index)
+                    .is_some_and(|id| genome_boundary_ids.contains(&id))
+            })
+        })
+        .collect();
+    if detached.is_empty() {
+        return false;
+    }
+
+    let mut physical = Vec::with_capacity(detached.len());
+    for component in &detached {
+        let Some(instance) =
+            crate::physical_material::PhysicalMaterial::from_structure_component(
+                &organism.structure,
+                component,
+            )
+        else {
+            return false;
+        };
+        physical.push(instance);
+    }
+
+    for instance in physical {
+        if !organism.stored_material.store_physical_instance(instance) {
+            return false;
+        }
+    }
+
+    let retained_ids: HashSet<_> = organism
+        .structure
+        .units
+        .iter()
+        .filter(|unit| {
+            genome_boundary_ids.contains(&unit.physical_id)
+                || !detached.iter().any(|component| {
+                    component.iter().any(|&index| {
+                        organism
+                            .structure
+                            .units
+                            .get(index)
+                            .is_some_and(|candidate| candidate.physical_id == unit.physical_id)
+                    })
+                })
+        })
+        .map(|unit| unit.physical_id)
+        .collect();
+    organism.structure.retain_unit_indices(&retained_ids);
+    organism.mark_structure_changed();
+    true
+}
+
 fn stress_break_candidate_indices(organism: &Organism, environment: &Environment) -> Vec<usize> {
     let genome_bonds =
         crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
@@ -105,6 +189,7 @@ pub(crate) fn resolve_stress_break(
     else {
         return false;
     };
+    let genome_ids = genome_boundary_ids(organism, environment);
     let target = organism.structure.bonds[target_index];
     let Some(ia) = organism
         .structure
@@ -142,7 +227,11 @@ pub(crate) fn resolve_stress_break(
     ) else {
         return false;
     };
-    settle_break_energy(organism, target, usable, gross, heat, ledger)
+    if !settle_break_energy(organism, target, usable, gross, heat, ledger) {
+        return false;
+    }
+    reconcile_detached_components(organism, environment, &genome_ids);
+    true
 }
 
 impl Simulation {
@@ -182,6 +271,7 @@ impl Simulation {
         environment: &mut Environment,
         ledger: &mut EnergyLedger,
     ) {
+        let genome_ids = genome_boundary_ids(organism, environment);
         let Some(target) = transformation.bond else {
             organism.active_transformation_id = None;
             return;
@@ -237,6 +327,7 @@ impl Simulation {
             return;
         }
         organism.active_transformation_id = None;
+        reconcile_detached_components(organism, environment, &genome_ids);
         let outcome = if usable > f64::EPSILON {
             OutcomeKind::Beneficial
         } else if heat > f64::EPSILON {
