@@ -80,6 +80,11 @@ pub(crate) struct ActiveTransformation {
     pub(crate) material: Material,
     #[serde(default)]
     pub(crate) bond: Option<Bond>,
+    /// Voluntary BREAK acts only on a bond belonging to stored physical material.
+    #[serde(default)]
+    pub(crate) stored_material: Option<crate::physical_material::PhysicalMaterial>,
+    #[serde(default)]
+    pub(crate) stored_bond: Option<crate::physical_material::PhysicalMaterialBond>,
     pub(crate) complexity: f64,
     pub(crate) duration_ticks: u64,
     pub(crate) remaining_ticks: u64,
