@@ -124,6 +124,43 @@ mod integration_tests {
     }
 
     #[test]
+    fn acquired_material_survives_leaving_the_resource_cloud() {
+        let mut s = Simulation::new(29, 10.0);
+        let organism = s.organisms[0].clone();
+        let anchor = organism.structure.units[0].placement;
+        let physical = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![anchor],
+            &s.environment.catalog,
+        )
+        .expect("carbon should have a valid physical realization");
+        s.environment.field.deposit(anchor.x, anchor.y, physical);
+        Simulation::transfer_contained_environmental_material(
+            &mut s.organisms[0],
+            &mut s.environment,
+        );
+        let stored_before = s.organisms[0].stored_material.total_amount();
+        assert!(stored_before > 0.0);
+
+        for unit in &mut s.organisms[0].structure.units {
+            unit.placement.x += 200.0;
+        }
+        s.organisms[0].occupied_cells[0].x += 200.0;
+
+        let cloud = s.environment.resource_cloud.clone();
+        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(31);
+        crate::environmental_materials::advance_resource_cloud(
+            &mut s.environment.field,
+            &cloud,
+            &mut rng,
+        );
+        assert_eq!(
+            s.organisms[0].stored_material.total_amount(),
+            stored_before
+        );
+    }
+
+    #[test]
     fn a_composite_crossing_the_boundary_is_partitioned_at_constituent_scale() {
         let mut s = Simulation::new(23, 10.0);
         for cell in &mut s.environment.field.cells {
