@@ -60,9 +60,9 @@ pub(crate) struct MemoryPoint {
     /// memory was formed or reinforced.
     #[serde(default)]
     pub(crate) spectrum: crate::harmonics::ToneSpectrum,
-    /// The observed consequence associated with the remembered spectrum.
+    /// The numerical physical consequence associated with the remembered spectrum.
     #[serde(default)]
-    pub(crate) outcome: Option<crate::decision::OutcomeKind>,
+    pub(crate) consequence: Option<crate::decision::ActionConsequence>,
 }
 pub(crate) const MEMORY_DECAY_PER_TICK: f64 = 0.995;
 pub(crate) const MEMORY_MERGE_RADIUS: f64 = 40.0;
