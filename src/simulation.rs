@@ -204,11 +204,22 @@ impl Simulation {
         needs: CurrentNeeds,
     ) -> ActionEligibility {
         let can_combine = crate::combine_runtime::can_combine(organism, environment);
+        let can_break_stored = organism.active_transformation_id.is_none()
+            && organism.stored_material.entries.iter().any(|entry| {
+                matches!(
+                    entry,
+                    crate::material_storage::StoredMaterial::Physical(instance)
+                        if instance.is_realized()
+                            && instance
+                                .internal_connections
+                                .as_ref()
+                                .is_some_and(|connections| !connections.is_empty())
+                )
+            });
         ActionEligibility {
             can_move: true,
             can_combine,
-            can_break: organism.active_transformation_id.is_none()
-                && !organism.structure.bonds.is_empty()
+            can_break: can_break_stored
                 && (organism.reproductive_construction.is_none()
                     || needs.survival > 0.0
                     || needs.development > 0.0
@@ -231,17 +242,20 @@ impl Simulation {
             eligibility.permits(action) && needs.any_for(action.relevant_needs())
         };
         if relevant(ActionKind::Break) {
-            candidates.extend(
-                organism
-                    .structure
-                    .bonds
-                    .iter()
-                    .enumerate()
-                    .map(|(index, _)| ActionCandidate {
-                        action: ActionKind::Break,
-                        context_key: Some(format!("bond:{index}")),
-                    }),
-            );
+            for (storage_index, entry) in organism.stored_material.entries.iter().enumerate() {
+                if let crate::material_storage::StoredMaterial::Physical(instance) = entry {
+                    if let Some(connections) = &instance.internal_connections {
+                        for bond_index in 0..connections.len() {
+                            candidates.push(ActionCandidate {
+                                action: ActionKind::Break,
+                                context_key: Some(format!(
+                                    "stored:{storage_index}:bond:{bond_index}"
+                                )),
+                            });
+                        }
+                    }
+                }
+            }
         }
         if relevant(ActionKind::Combine) {
             candidates.push(ActionCandidate {
@@ -299,7 +313,8 @@ impl Simulation {
                 continue;
             };
             if step.net_energy > 0.0 {
-                if let Some(organism_index) = crate::decomposition::harvestable_decomposition_energy(
+                if let Some(organism_index) =
+                    crate::decomposition::harvestable_decomposition_energy(
                     &self.organisms,
                     &self.decomposing_bodies[index].position,
                 ) {

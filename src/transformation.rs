@@ -156,8 +156,22 @@ impl Simulation {
             return None;
         }
         let key = decision.context_key.as_deref()?;
-        let index = key.strip_prefix("bond:")?.parse::<usize>().ok()?;
-        let bond = *organism.structure.bonds.get(index)?;
+        let rest = key.strip_prefix("stored:")?;
+        let (storage_index, bond_part) = rest.split_once(":bond:")?;
+        let storage_index = storage_index.parse::<usize>().ok()?;
+        let bond_index = bond_part.parse::<usize>().ok()?;
+        let entry = organism.stored_material.entries.get(storage_index)?;
+        let physical = match entry {
+            crate::material_storage::StoredMaterial::Physical(instance)
+                if instance.is_realized() => instance.clone(),
+            _ => return None,
+        };
+        let stored_bond = physical.internal_connections.as_ref()?.get(bond_index)?.clone();
+        let removed = organism.stored_material.entries.swap_remove(storage_index);
+        let stored_material = match removed {
+            crate::material_storage::StoredMaterial::Physical(instance) => instance,
+            _ => return None,
+        };
         let complexity = crate::math::complexity(2.0);
         let duration = 1_u64.max(complexity.ceil() as u64);
         let t = ActiveTransformation {
@@ -165,7 +179,9 @@ impl Simulation {
             organism_id: organism.id.clone(),
             kind: crate::state::TransformationKind::Break,
             material: crate::resources::Material::free_base("", 0.0),
-            bond: Some(bond),
+            bond: None,
+            stored_material: Some(stored_material),
+            stored_bond: Some(stored_bond),
             complexity,
             duration_ticks: duration,
             remaining_ticks: duration,
@@ -182,46 +198,25 @@ impl Simulation {
         environment: &mut Environment,
         ledger: &mut EnergyLedger,
     ) {
-        let Some(target) = transformation.bond else {
+        let Some(stored) = transformation.stored_material.as_ref() else {
             organism.active_transformation_id = None;
             return;
         };
-        let Some(ia) = organism
-            .structure
-            .unit_index(target.endpoint_a.constituent_id)
-        else {
+        let Some(target) = transformation.stored_bond.as_ref() else {
             organism.active_transformation_id = None;
             return;
         };
-        let Some(ib) = organism
-            .structure
-            .unit_index(target.endpoint_b.constituent_id)
-        else {
+        let Some(a) = stored.material.parts.get(target.part_a).and_then(|(name, _)| {
+            environment.catalog.iter().find(|resource| resource.name == *name).map(|r| r.properties)
+        }) else {
             organism.active_transformation_id = None;
             return;
         };
-        if !organism
-            .structure
-            .bonds
-            .iter()
-            .any(|b| b.has_same_identity(&target))
-        {
+        let Some(b) = stored.material.parts.get(target.part_b).and_then(|(name, _)| {
+            environment.catalog.iter().find(|resource| resource.name == *name).map(|r| r.properties)
+        }) else {
             organism.active_transformation_id = None;
             return;
-        }
-        let a = match organism.structure.units[ia].properties(&environment.catalog) {
-            Some(x) => x,
-            None => {
-                organism.active_transformation_id = None;
-                return;
-            }
-        };
-        let b = match organism.structure.units[ib].properties(&environment.catalog) {
-            Some(x) => x,
-            None => {
-                organism.active_transformation_id = None;
-                return;
-            }
         };
         let Some((gross, usable, heat)) = break_energy_yield(
             a,
@@ -232,10 +227,32 @@ impl Simulation {
             organism.active_transformation_id = None;
             return;
         };
-        if !settle_break_energy(organism, target, usable, gross, heat, ledger) {
+        let Some(pieces) = stored.break_internal_bond(target) else {
+            organism.active_transformation_id = None;
+            return;
+        };
+        let tx = EnergyTransaction {
+            reason: EnergyReason::Break,
+            potential_released: gross,
+            usable_delta: usable,
+            structural_delta: 0.0,
+            heat_dissipated: heat,
+        };
+        if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
             organism.active_transformation_id = None;
             return;
         }
+        for piece in pieces {
+            if !organism.stored_material.store_physical_instance(piece.clone()) {
+                if let Some(placement) = piece
+                        .placements
+                        .as_ref()
+                        .and_then(|placements| placements.first()) {
+                    let _ = environment.field.deposit(placement.x, placement.y, piece);
+                }
+            }
+        }
+        organism.add_transaction_stress(heat);
         organism.active_transformation_id = None;
         let outcome = if usable > f64::EPSILON {
             OutcomeKind::Beneficial
@@ -244,41 +261,14 @@ impl Simulation {
         } else {
             OutcomeKind::Neutral
         };
-        let candidate = ActionCandidate {
-            action: ActionKind::Break,
-            context_key: transformation.decision_context_key.clone(),
-        };
         crate::decision_runtime::record_outcome(
             &mut organism.decision_history,
-            &candidate,
+            &ActionCandidate {
+                action: ActionKind::Break,
+                context_key: transformation.decision_context_key.clone(),
+            },
             outcome,
         );
-        let (x, y) = organism
-            .occupied_cells
-            .first()
-            .map(|p| (p.x, p.y))
-            .unwrap_or((0.0, 0.0));
-        let reinforcement = organism.genome.memory_strength().clamp(0.0, 1.0);
-        let capacity =
-            crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
-                .ok()
-                .flatten()
-                .filter(|cavity| cavity.qualifies())
-                .map(|cavity| crate::memory::memory_capacity(&cavity));
-        if let Some(capacity) = capacity {
-            let spectrum = organism.harmonic_spectrum.clone();
-            crate::memory::reinforce_memory_point(
-                organism,
-                x,
-                y,
-                reinforcement,
-                capacity,
-                &spectrum,
-                outcome,
-            );
-        } else {
-            organism.memory.clear();
-        }
     }
 }
 
