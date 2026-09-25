@@ -69,6 +69,7 @@ struct OrganismSnapshot {
     occupied_cells: Value,
     active_transformation_id: Option<u64>,
     reproductive_construction: Value,
+    movement_attempt: Option<crate::state::MovementAttemptDiagnostic>,
 }
 
 #[derive(Clone)]
@@ -122,6 +123,7 @@ impl DiagnosticsRecorder {
         self.record_transformation_completions(&before, &after)?;
         self.record_structure_changes(&before, &after)?;
         self.record_lifecycle_changes(&before, &after)?;
+        self.record_movement_attempts(&after)?;
 
         if after.tick % self.interval == 0 {
             self.write_snapshot(simulation, "interval")?;
@@ -186,6 +188,7 @@ impl DiagnosticsRecorder {
                             &organism.reproductive_construction,
                         )
                         .unwrap_or(Value::Null),
+                        movement_attempt: organism.last_movement_attempt.clone(),
                     },
                 )
             })
@@ -366,6 +369,33 @@ impl DiagnosticsRecorder {
         Ok(())
     }
 
+    fn record_movement_attempts(&mut self, snapshot: &SimulationSnapshot) -> std::io::Result<()> {
+        for (organism_id, organism) in &snapshot.organisms {
+            let Some(attempt) = &organism.movement_attempt else {
+                continue;
+            };
+            if attempt.tick != snapshot.tick {
+                continue;
+            }
+            self.write_event(json!({
+                "event": "movement_attempt",
+                "tick": attempt.tick,
+                "organism_id": organism_id,
+                "direction": {
+                    "x": attempt.direction_x,
+                    "y": attempt.direction_y,
+                },
+                "step": attempt.step,
+                "usable_energy": attempt.usable_energy,
+                "active_transformation_id": attempt.active_transformation_id,
+                "result": attempt.result,
+                "old_position": attempt.old_position,
+                "new_position": attempt.new_position,
+            }))?;
+        }
+        Ok(())
+    }
+
     fn write_snapshot(&mut self, simulation: &mut Simulation, reason: &str) -> std::io::Result<()> {
         let snapshot = self.capture(simulation);
         self.summary.max_active_transformations = self
@@ -453,6 +483,7 @@ impl DiagnosticsRecorder {
             "occupied_cells": state.occupied_cells,
             "active_transformation_id": state.active_transformation_id,
             "reproductive_construction": state.reproductive_construction,
+            "movement_attempt": state.movement_attempt,
         })
     }
 
