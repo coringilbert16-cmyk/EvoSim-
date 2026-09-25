@@ -113,7 +113,8 @@ pub(crate) fn seed_initial_landscape(
 }
 
 /// Configuration for the finite, physically realized resource cloud surrounding the initial organism.
-/// The cloud is a spatial formation only; its contents live in the active field as ordinary physical materials.\n/// Once acquired, material is no longer environmental cloud material and cannot be reclaimed by the cloud.
+/// The cloud is a spatial formation only; its contents live in the active field as ordinary physical materials.
+/// Once acquired, material is no longer environmental cloud material and cannot be reclaimed by the cloud.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct ResourceCloud {
     pub(crate) center_x: f64,
