@@ -99,10 +99,10 @@ impl DecisionHistory {
             let new_count = existing.count.saturating_add(1);
             let denominator = new_count as f64;
             existing.consequence.energy_delta =
-                (existing.consequence.energy_delta * previous_count + consequence.energy_delta)
-                    / denominator;
+                (existing.consequence.energy_delta * previous_count + consequence.energy_delta) / denominator;
             existing.consequence.structural_delta =
-                (existing.consequence.structural_delta * previous_count + consequence.structural_delta)
+                (existing.consequence.structural_delta * previous_count
+                    + consequence.structural_delta)
                     / denominator;
             existing.consequence.developmental_delta =
                 (existing.consequence.developmental_delta * previous_count
@@ -115,7 +115,13 @@ impl DecisionHistory {
             return;
         }
         if self.entries.len() >= Self::MAX_ENTRIES {
-            if let Some(index) = self.entries.iter().enumerate().min_by_key(|(_, entry)| entry.count).map(|(index, _)| index) {
+            if let Some(index) = self
+                .entries
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, entry)| entry.count)
+                .map(|(index, _)| index)
+            {
                 self.entries.remove(index);
             }
         }
@@ -127,17 +133,21 @@ impl DecisionHistory {
         });
     }
 
-    pub fn consequence(&self, action: ActionKind, context_key: Option<&str>) -> Option<ActionConsequence> {
+    pub fn consequence(
+        &self,
+        action: ActionKind,
+        context_key: Option<&str>,
+    ) -> Option<ActionConsequence> {
         self.entries
             .iter()
             .find(|entry| entry.action == action && entry.context_key.as_deref() == context_key)
             .map(|entry| entry.consequence)
             .or_else(|| {
-            self.entries
-                .iter()
-                .find(|entry| entry.action == action && entry.context_key.is_none())
-                .map(|entry| entry.consequence)
-        })
+                self.entries
+                    .iter()
+                    .find(|entry| entry.action == action && entry.context_key.is_none())
+                    .map(|entry| entry.consequence)
+            })
     }
 
     pub fn has_knowledge(&self, action: ActionKind, context_key: Option<&str>) -> bool {
@@ -256,42 +266,78 @@ mod tests {
     #[test]
     fn mechanically_ineligible_action_is_rejected_even_when_needed() {
         let eligibility = ActionEligibility::default();
-        let needs = CurrentNeeds { survival: 1.0, reproduction: 0.0, development: 0.0 };
-        assert_eq!(approve_action_for_current_needs(ActionKind::Break, eligibility, needs), DecisionResult::Reject);
+        let needs = CurrentNeeds {
+            survival: 1.0,
+            reproduction: 0.0,
+            development: 0.0,
+        };
+        assert_eq!(
+            approve_action_for_current_needs(ActionKind::Break, eligibility, needs),
+            DecisionResult::Reject
+        );
     }
 
     #[test]
     fn survival_pressure_makes_break_relevant() {
-        let eligibility = ActionEligibility { can_break: true, ..Default::default() };
-        let needs = CurrentNeeds { survival: 0.5, reproduction: 0.0, development: 0.0 };
-        assert_eq!(approve_action_for_current_needs(ActionKind::Break, eligibility, needs), DecisionResult::Approve);
+        let eligibility = ActionEligibility {
+            can_break: true,
+            ..Default::default()
+        };
+        let needs = CurrentNeeds {
+            survival: 0.5,
+            reproduction: 0.0,
+            development: 0.0,
+        };
+        assert_eq!(
+            approve_action_for_current_needs(ActionKind::Break, eligibility, needs),
+            DecisionResult::Approve
+        );
     }
 
     #[test]
     fn survival_pressure_makes_combine_relevant() {
-        let eligibility = ActionEligibility { can_combine: true, ..Default::default() };
+        let eligibility = ActionEligibility {
+            can_combine: true,
+            ..Default::default()
+        };
         let needs = CurrentNeeds { survival: 0.5, reproduction: 0.0, development: 0.0 };
-        assert_eq!(approve_action_for_current_needs(ActionKind::Combine, eligibility, needs), DecisionResult::Approve);
+        assert_eq!(
+            approve_action_for_current_needs(ActionKind::Combine, eligibility, needs),
+            DecisionResult::Approve
+        );
     }
 
     #[test]
     fn reproduction_pressure_makes_combine_relevant() {
         let eligibility = ActionEligibility { can_combine: true, ..Default::default() };
-        let needs = CurrentNeeds { survival: 0.0, reproduction: 0.5, development: 0.0 };
+        let needs = CurrentNeeds {
+            survival: 0.0,
+            reproduction: 0.5,
+            development: 0.0,
+        };
         assert_eq!(approve_action_for_current_needs(ActionKind::Combine, eligibility, needs), DecisionResult::Approve);
     }
 
     #[test]
     fn move_is_relevant_to_survival() {
-        let eligibility = ActionEligibility { can_move: true, ..Default::default() };
+        let eligibility = ActionEligibility {
+            can_move: true,
+            ..Default::default()
+        };
         let needs = CurrentNeeds { survival: 0.5, ..Default::default() };
-        assert_eq!(approve_action_for_current_needs(ActionKind::Move, eligibility, needs), DecisionResult::Approve);
+        assert_eq!(
+            approve_action_for_current_needs(ActionKind::Move, eligibility, needs),
+            DecisionResult::Approve
+        );
     }
 
     #[test]
     fn zero_pressure_does_not_make_a_need_relevant() {
         let eligibility = ActionEligibility { can_break: true, ..Default::default() };
-        assert_eq!(approve_action_for_current_needs(ActionKind::Break, eligibility, CurrentNeeds::default()), DecisionResult::Reject);
+        assert_eq!(
+            approve_action_for_current_needs(ActionKind::Break, eligibility, CurrentNeeds::default()),
+            DecisionResult::Reject
+        );
     }
 
     #[test]
@@ -310,7 +356,10 @@ mod tests {
         };
         let mut history = DecisionHistory::default();
         history.record_consequence(ActionKind::Combine, None, consequence);
-        assert_eq!(history.consequence(ActionKind::Combine, None), Some(consequence));
+        assert_eq!(
+            history.consequence(ActionKind::Combine, None),
+            Some(consequence)
+        );
     }
 
     #[test]
@@ -340,7 +389,11 @@ mod tests {
     fn history_is_bounded() {
         let mut history = DecisionHistory::default();
         for i in 0..(DecisionHistory::MAX_ENTRIES + 10) {
-            history.record_consequence(ActionKind::Break, Some(format!("material-{i}")), ActionConsequence::NONE);
+            history.record_consequence(
+                ActionKind::Break,
+                Some(format!("material-{i}")),
+                ActionConsequence::NONE,
+            );
         }
         assert_eq!(history.entries.len(), DecisionHistory::MAX_ENTRIES);
     }
