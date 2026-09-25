@@ -226,130 +226,53 @@ mod tests {
     #[test]
     fn mechanically_ineligible_action_is_rejected_even_when_needed() {
         let eligibility = ActionEligibility::default();
-        let needs = CurrentNeeds {
-            survival: 1.0,
-            reproduction: 0.0,
-            development: 0.0,
-        };
-        assert_eq!(
-            approve_action_for_current_needs(ActionKind::Break, eligibility, needs),
-            DecisionResult::Reject
-        );
+        let needs = CurrentNeeds { survival: 1.0, reproduction: 0.0, development: 0.0 };
+        assert_eq!(approve_action_for_current_needs(ActionKind::Break, eligibility, needs), DecisionResult::Reject);
     }
 
     #[test]
     fn survival_pressure_makes_break_relevant() {
-        let eligibility = ActionEligibility {
-            can_break: true,
-            ..Default::default()
-        };
-        let needs = CurrentNeeds {
-            survival: 0.5,
-            reproduction: 0.0,
-            development: 0.0,
-        };
-        assert_eq!(
-            approve_action_for_current_needs(ActionKind::Break, eligibility, needs),
-            DecisionResult::Approve
-        );
+        let eligibility = ActionEligibility { can_break: true, ..Default::default() };
+        let needs = CurrentNeeds { survival: 0.5, reproduction: 0.0, development: 0.0 };
+        assert_eq!(approve_action_for_current_needs(ActionKind::Break, eligibility, needs), DecisionResult::Approve);
     }
 
     #[test]
     fn survival_pressure_makes_combine_relevant() {
-        let eligibility = ActionEligibility {
-            can_combine: true,
-            ..Default::default()
-        };
-        let needs = CurrentNeeds {
-            survival: 0.5,
-            reproduction: 0.0,
-            development: 0.0,
-        };
-        assert_eq!(
-            approve_action_for_current_needs(ActionKind::Combine, eligibility, needs),
-            DecisionResult::Approve
-        );
+        let eligibility = ActionEligibility { can_combine: true, ..Default::default() };
+        let needs = CurrentNeeds { survival: 0.5, reproduction: 0.0, development: 0.0 };
+        assert_eq!(approve_action_for_current_needs(ActionKind::Combine, eligibility, needs), DecisionResult::Approve);
     }
 
     #[test]
     fn reproduction_pressure_makes_combine_relevant() {
-        let eligibility = ActionEligibility {
-            can_combine: true,
-            ..Default::default()
-        };
-        let needs = CurrentNeeds {
-            survival: 0.0,
-            reproduction: 0.5,
-            development: 0.0,
-        };
-        assert_eq!(
-            approve_action_for_current_needs(ActionKind::Combine, eligibility, needs),
-            DecisionResult::Approve
-        );
+        let eligibility = ActionEligibility { can_combine: true, ..Default::default() };
+        let needs = CurrentNeeds { survival: 0.0, reproduction: 0.5, development: 0.0 };
+        assert_eq!(approve_action_for_current_needs(ActionKind::Combine, eligibility, needs), DecisionResult::Approve);
     }
 
     #[test]
     fn move_is_relevant_to_survival() {
-        let eligibility = ActionEligibility {
-            can_move: true,
-            ..Default::default()
-        };
-        let needs = CurrentNeeds {
-            survival: 0.5,
-            ..Default::default()
-        };
-        assert_eq!(
-            approve_action_for_current_needs(ActionKind::Move, eligibility, needs),
-            DecisionResult::Approve
-        );
+        let eligibility = ActionEligibility { can_move: true, ..Default::default() };
+        let needs = CurrentNeeds { survival: 0.5, ..Default::default() };
+        assert_eq!(approve_action_for_current_needs(ActionKind::Move, eligibility, needs), DecisionResult::Approve);
     }
 
     #[test]
     fn zero_pressure_does_not_make_a_need_relevant() {
-        let eligibility = ActionEligibility {
-            can_break: true,
-            ..Default::default()
-        };
-        assert_eq!(
-            approve_action_for_current_needs(
-                ActionKind::Break,
-                eligibility,
-                CurrentNeeds::default()
-            ),
-            DecisionResult::Reject
-        );
+        let eligibility = ActionEligibility { can_break: true, ..Default::default() };
+        assert_eq!(approve_action_for_current_needs(ActionKind::Break, eligibility, CurrentNeeds::default()), DecisionResult::Reject);
     }
 
     #[test]
-    fn unknown_history_does_not_invent_an_outcome() {
+    fn unknown_history_does_not_invent_a_consequence() {
         let history = DecisionHistory::default();
-        assert!(!history.has_knowledge(
-            ActionKind::Combine,
-            Some("Carbon+Methane")
-        ));
+        assert!(!history.has_knowledge(ActionKind::Combine, Some("Carbon+Methane")));
     }
 
-    #[test]
-    fn history_is_bounded() {
-        let mut history = DecisionHistory::default();
-        for i in 0..(DecisionHistory::MAX_ENTRIES + 10) {
-            history.record(
-                ActionKind::Break,
-                Some(format!("material-{i}")),
-                OutcomeKind::Neutral,
-            );
-        }
-        assert_eq!(history.entries.len(), DecisionHistory::MAX_ENTRIES);
-    }
-}
     #[test]
     fn mixed_consequence_dimensions_are_preserved() {
-        let consequence = ActionConsequence {
-            energy_delta: 2.0,
-            structural_delta: -3.0,
-            developmental_delta: 0.5,
-            stress_delta: 1.0,
-        };
+        let consequence = ActionConsequence { energy_delta: 2.0, structural_delta: -3.0, developmental_delta: 0.5, stress_delta: 1.0 };
         let mut history = DecisionHistory::default();
         history.record_consequence(ActionKind::Combine, None, consequence);
         assert_eq!(history.consequence(ActionKind::Combine, None), Some(consequence));
@@ -358,14 +281,8 @@ mod tests {
     #[test]
     fn repeated_consequences_are_retained_as_numerical_memory() {
         let mut history = DecisionHistory::default();
-        history.record_consequence(ActionKind::Combine, None, ActionConsequence {
-            energy_delta: 2.0,
-            ..ActionConsequence::NONE
-        });
-        history.record_consequence(ActionKind::Combine, None, ActionConsequence {
-            energy_delta: 0.0,
-            ..ActionConsequence::NONE
-        });
+        history.record_consequence(ActionKind::Combine, None, ActionConsequence { energy_delta: 2.0, ..ActionConsequence::NONE });
+        history.record_consequence(ActionKind::Combine, None, ActionConsequence { energy_delta: 0.0, ..ActionConsequence::NONE });
         assert_eq!(history.entries[0].count, 2);
         assert_eq!(history.entries[0].consequence.energy_delta, 1.0);
     }
@@ -374,11 +291,7 @@ mod tests {
     fn history_is_bounded() {
         let mut history = DecisionHistory::default();
         for i in 0..(DecisionHistory::MAX_ENTRIES + 10) {
-            history.record_consequence(
-                ActionKind::Break,
-                Some(format!("material-{i}")),
-                ActionConsequence::NONE,
-            );
+            history.record_consequence(ActionKind::Break, Some(format!("material-{i}")), ActionConsequence::NONE);
         }
         assert_eq!(history.entries.len(), DecisionHistory::MAX_ENTRIES);
     }
