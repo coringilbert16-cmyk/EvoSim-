@@ -58,8 +58,13 @@ pub(crate) fn emit_vents(
         let radius = rng.gen_range(0.0..VENT_SPREAD_RADIUS);
         let x = VENT_POSITION.0 + radius * angle.cos();
         let y = VENT_POSITION.1 + radius * angle.sin();
-        let placements =
-            compound_placements(&material, x, y, angle, rng.gen_range(0.25..0.65));
+        let placements = compound_placements(
+            &material,
+            x,
+            y,
+            angle,
+            rng.gen_range(0.25..0.65),
+        );
         let Some(physical) =
             crate::physical_material::PhysicalMaterial::realized(material, placements, catalog)
         else {
