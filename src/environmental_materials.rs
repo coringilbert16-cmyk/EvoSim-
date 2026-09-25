@@ -156,6 +156,52 @@ fn compound_placements(
         .collect()
 }
 
+/// Release a single random unbonded resource packet near an organism.
+///
+/// The source is intentionally inexhaustible: no reservoir or global stock is
+/// tracked. Only a small local neighborhood is realized, so the cost stays
+/// proportional to the organisms being simulated rather than the size of the
+/// world.
+pub(crate) fn release_random_unbonded_packet_near(
+    field: &mut ActiveMaterialField,
+    catalog: &[crate::resources::BaseResource],
+    rng: &mut impl rand::Rng,
+    x: f64,
+    y: f64,
+) -> bool {
+    const RELEASE_RADIUS: f64 = 20.0;
+    const MAX_LOCAL_PACKETS: usize = 256;
+
+    let nearby_count: usize = field
+        .cells_within_radius(x, y, RELEASE_RADIUS)
+        .into_iter()
+        .map(|index| field.cells[index].physical_materials.len())
+        .sum();
+    if nearby_count >= MAX_LOCAL_PACKETS || catalog.is_empty() {
+        return false;
+    }
+
+    let resource = &catalog[rng.gen_range(0..catalog.len())];
+    let angle = rng.gen_range(0.0..std::f64::consts::TAU);
+    let radius = RELEASE_RADIUS * rng.gen::<f64>().sqrt();
+    let placement = Placement {
+        x: x + radius * angle.cos(),
+        y: (y + radius * angle.sin())
+            .rem_euclid(field.height_cells as f64 * field.cell_size),
+        rotation_radians: rng.gen_range(0.0..std::f64::consts::TAU),
+    };
+    let material = Material::free_base(resource.name.clone(), 1.0);
+    let physical = crate::physical_material::PhysicalMaterial::realized(
+        material,
+        vec![placement],
+        catalog,
+    );
+    let Some(physical) = physical else {
+        return false;
+    };
+    field.deposit_physical(placement.x, placement.y, physical)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
