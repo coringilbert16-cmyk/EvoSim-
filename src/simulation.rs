@@ -313,8 +313,7 @@ impl Simulation {
                 continue;
             };
             if step.net_energy > 0.0 {
-                if let Some(organism_index) =
-                    crate::decomposition::harvestable_decomposition_energy(
+                if let Some(organism_index) = crate::decomposition::harvestable_decomposition_energy(
                     &self.organisms,
                     &self.decomposing_bodies[index].position,
                 ) {
