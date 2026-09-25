@@ -39,7 +39,7 @@ fn compound(parts: &[(&str, f64)]) -> Material {
 /// starting landscape. No terrain categories are introduced: local character
 /// comes entirely from material composition, quantity, and neighboring cells.
 pub(crate) const VENT_EMISSION_QUANTITY: usize = 10;
-pub(crate) const VENT_POSITION: (f64, f64) = (500.0, 530.0);
+pub(crate) const VENT_POSITION: (f64, f64) = (500.0, 450.0);
 const VENT_SPREAD_RADIUS: f64 = 6.0;
 
 pub(crate) fn emit_vents(
@@ -204,6 +204,32 @@ mod tests {
             .collect::<Vec<_>>();
         names.sort();
         names
+    }
+
+    #[test]
+    fn vent_emits_ten_realized_material_packets() {
+        let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
+        let catalog = crate::resources::default_catalog();
+        let mut rng = rand::rngs::StdRng::seed_from_u64(7);
+
+        emit_vents(&mut field, &catalog, &mut rng);
+
+        let packets: Vec<_> = field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .collect();
+        assert_eq!(packets.len(), VENT_EMISSION_QUANTITY);
+        assert!(packets.iter().all(|packet| packet.is_realized()));
+        assert!(packets.iter().all(|packet| {
+            packet.placements.as_ref().is_some_and(|placements| {
+                placements.iter().all(|placement| {
+                    let dx = placement.x - VENT_POSITION.0;
+                    let dy = placement.y - VENT_POSITION.1;
+                    dx * dx + dy * dy <= VENT_SPREAD_RADIUS * VENT_SPREAD_RADIUS
+                })
+            })
+        }));
     }
 
     #[test]
