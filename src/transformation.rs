@@ -1,4 +1,4 @@
-use crate::decision::{ActionKind, OutcomeKind};
+use crate::decision::ActionKind;
 use crate::decision_runtime::ActionCandidate;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
 use crate::state::{ActiveTransformation, EnergyLedger, Environment, Organism, Simulation};
@@ -281,22 +281,23 @@ impl Simulation {
                 }
             }
         }
+        let before_energy = organism.usable_energy;
+        let before_stress = organism.stress;
         organism.add_transaction_stress(heat);
         organism.active_transformation_id = None;
-        let outcome = if usable > f64::EPSILON {
-            OutcomeKind::Beneficial
-        } else if heat > f64::EPSILON {
-            OutcomeKind::Harmful
-        } else {
-            OutcomeKind::Neutral
+        let consequence = crate::decision::ActionConsequence {
+            energy_delta: organism.usable_energy - before_energy,
+            structural_delta: -1.0,
+            developmental_delta: 0.0,
+            stress_delta: organism.stress - before_stress,
         };
-        crate::decision_runtime::record_outcome(
+        crate::decision_runtime::record_consequence(
             &mut organism.decision_history,
             &ActionCandidate {
                 action: ActionKind::Break,
                 context_key: transformation.decision_context_key.clone(),
             },
-            outcome,
+            consequence,
         );
     }
 }
