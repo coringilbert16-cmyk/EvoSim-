@@ -228,6 +228,7 @@ mod tests {
                 survival: 1.0,
                 reproduction: 0.5,
                 development: 0.0,
+                acquisition: 0.0,
             },
             eligibility: ActionEligibility {
                 can_move: true,
@@ -253,6 +254,7 @@ mod tests {
                 survival: 1.0,
                 reproduction: 0.0,
                 development: 0.0,
+                acquisition: 0.0,
             },
             eligibility: Default::default(),
         };
@@ -266,6 +268,7 @@ mod tests {
                 survival: 1.0,
                 reproduction: 0.0,
                 development: 0.0,
+                acquisition: 0.0,
             },
             eligibility: ActionEligibility {
                 can_break: true,
@@ -303,6 +306,7 @@ mod tests {
                 survival: 0.0,
                 reproduction: 1.0,
                 development: 0.0,
+                acquisition: 0.0,
             },
             eligibility: ActionEligibility {
                 can_break: true,
@@ -338,6 +342,7 @@ mod tests {
                 survival: 0.60,
                 reproduction: 0.40,
                 development: 0.0,
+                acquisition: 0.0,
             },
             eligibility: ActionEligibility {
                 can_break: true,
@@ -383,6 +388,7 @@ mod tests {
                 survival: 0.60,
                 reproduction: 0.40,
                 development: 0.0,
+                acquisition: 0.0,
             },
             eligibility: ActionEligibility {
                 can_break: true,
@@ -462,6 +468,7 @@ mod tests {
                 survival: 0.0,
                 reproduction: 0.0,
                 development: 1.0,
+                acquisition: 0.0,
             },
             eligibility: ActionEligibility {
                 can_break: true,
@@ -500,6 +507,7 @@ mod tests {
                 survival: 0.0,
                 reproduction: 1.0,
                 development: 0.0,
+                acquisition: 0.0,
             },
             eligibility: ActionEligibility {
                 can_break: true,
@@ -534,6 +542,7 @@ mod tests {
                 survival: 1.0,
                 reproduction: 0.0,
                 development: 0.0,
+                acquisition: 0.0,
             },
             eligibility: ActionEligibility {
                 can_move: true,
