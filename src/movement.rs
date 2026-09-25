@@ -7,20 +7,68 @@ impl Simulation {
         organism: &mut Organism,
         environment: &mut Environment,
         other_organisms: &mut [Organism],
+        tick: u64,
     ) -> bool {
+        let old_position = organism.occupied_cells.first().cloned();
+        let usable_energy = organism.usable_energy;
+        let active_transformation_id = organism.active_transformation_id;
         let movement_efficiency = organism.genome.movement_efficiency();
-        let (x, y) = match crate::movement_direction::movement_direction_periodic(
+        let direction = crate::movement_direction::movement_direction_periodic(
             organism,
             environment.height,
-        ) {
-            Some(direction) => direction,
-            None => return false,
+        );
+        let Some((x, y)) = direction else {
+            organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
+                tick,
+                direction_x: None,
+                direction_y: None,
+                step: None,
+                usable_energy,
+                active_transformation_id,
+                result: Err(crate::state::MovementFailureReason::NoDirection),
+                old_position,
+                new_position: None,
+            });
+            return false;
         };
-        if organism.active_transformation_id.is_some() {
+
+        let step = 5.0 * movement_efficiency;
+        if active_transformation_id.is_some() {
+            organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
+                tick,
+                direction_x: Some(x),
+                direction_y: Some(y),
+                step: Some(step),
+                usable_energy,
+                active_transformation_id,
+                result: Err(crate::state::MovementFailureReason::ActiveTransformation),
+                old_position,
+                new_position: None,
+            });
             return false;
         }
-        let step = 5.0 * movement_efficiency;
-        Self::try_move_cell(organism, environment, other_organisms, x * step, y * step)
+
+        let result = Self::try_move_cell_with_reason(
+            organism,
+            environment,
+            other_organisms,
+            x * step,
+            y * step,
+        );
+        let diagnostic_result = result.clone();
+        let new_position = organism.occupied_cells.first().cloned();
+        organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
+            tick,
+            direction_x: Some(x),
+            direction_y: Some(y),
+            step: Some(step),
+            usable_energy,
+            active_transformation_id,
+            result: diagnostic_result,
+            old_position,
+            new_position,
+        });
+        result.is_ok()
     }
 
     pub(crate) fn try_move_cell(
@@ -30,25 +78,35 @@ impl Simulation {
         delta_x: f64,
         delta_y: f64,
     ) -> bool {
+        Self::try_move_cell_with_reason(organism, environment, other_organisms, delta_x, delta_y)
+            .is_ok()
+    }
+
+    fn try_move_cell_with_reason(
+        organism: &mut Organism,
+        environment: &mut Environment,
+        other_organisms: &mut [Organism],
+        delta_x: f64,
+        delta_y: f64,
+    ) -> Result<(), crate::state::MovementFailureReason> {
         if !delta_x.is_finite() || !delta_y.is_finite() {
-            return false;
+            return Err(crate::state::MovementFailureReason::NonFiniteDisplacement);
         }
-        let (old_x, old_y) = match organism.occupied_cells.first() {
-            Some(p) => (p.x, p.y),
-            None => return false,
-        };
+        let (old_x, old_y) = organism
+            .occupied_cells
+            .first()
+            .map(|p| (p.x, p.y))
+            .ok_or(crate::state::MovementFailureReason::NoOccupiedCell)?;
         let new_x = (old_x + delta_x).clamp(0.0, environment.width);
         let new_y = wrap_y(old_y + delta_y, environment.height);
         let dx = new_x - old_x;
         let dy = new_y - old_y;
         if dx.abs() <= f64::EPSILON && dy.abs() <= f64::EPSILON {
-            return false;
+            return Err(crate::state::MovementFailureReason::ZeroDisplacement);
         }
 
-        let push_plan = match resolve_push_chain(organism, other_organisms, environment, dx, dy) {
-            Some(plan) => plan,
-            None => return false,
-        };
+        let push_plan = resolve_push_chain(organism, other_organisms, environment, dx, dy)
+            .ok_or(crate::state::MovementFailureReason::BlockedByPushChain)?;
 
         apply_push_plan(other_organisms, environment, push_plan, dx, dy);
 
@@ -63,7 +121,7 @@ impl Simulation {
         }
         translate_reproductive_construction(organism, dx, dy, environment.height);
         organism.mark_position_changed();
-        true
+        Ok(())
     }
 }
 
