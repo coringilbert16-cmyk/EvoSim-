@@ -557,6 +557,26 @@ impl PhysicalConstituentGraph {
                 && retained.contains(&bond.endpoint_b.constituent_id)
         });
     }
+
+    pub(crate) fn retain_components_touching(
+        &mut self,
+        anchor_ids: &std::collections::HashSet<PhysicalConstituentId>,
+    ) {
+        let retained: std::collections::HashSet<_> = self
+            .connected_components()
+            .into_iter()
+            .filter(|component| {
+                component.iter().any(|index| {
+                    self.units
+                        .get(*index)
+                        .is_some_and(|unit| anchor_ids.contains(&unit.physical_id))
+                })
+            })
+            .flatten()
+            .filter_map(|index| self.units.get(index).map(|unit| unit.physical_id))
+            .collect();
+        self.retain_unit_indices(&retained);
+    }
 }
 pub type OrganismStructure = PhysicalConstituentGraph;
 pub fn formation_threshold(a: f64, b: f64, la: f64, lb: f64) -> f64 {
