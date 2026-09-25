@@ -313,7 +313,13 @@ pub(crate) struct Environment {
     pub(crate) height: f64,
     pub(crate) catalog: Vec<BaseResource>,
     pub(crate) field: ActiveMaterialField,
+    #[serde(default = "default_resource_cloud")]
+    pub(crate) resource_cloud: ResourceCloud,
 }
+fn default_resource_cloud() -> ResourceCloud {
+    ResourceCloud::initial(500.0, 500.0)
+}
+
 pub(crate) struct Simulation {
     pub(crate) tick: u64,
     pub(crate) ticks_per_second: f64,
