@@ -335,7 +335,10 @@ mod tests {
             can_move: true,
             ..Default::default()
         };
-        let needs = CurrentNeeds { survival: 0.5, ..Default::default() };
+        let needs = CurrentNeeds {
+            survival: 0.5,
+            ..Default::default()
+        };
         assert_eq!(
             approve_action_for_current_needs(ActionKind::Move, eligibility, needs),
             DecisionResult::Approve
