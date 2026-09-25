@@ -18,7 +18,7 @@ const ADULTHOOD_GROWTH_FRACTION: f64 = 0.90;
 impl Simulation {
     pub(crate) fn new(seed: u64, ticks_per_second: f64) -> Self {
         let rng = ChaCha8Rng::seed_from_u64(seed);
-        let environment = Self::create_environment();
+        let environment = Self::create_environment(seed);
         let organism = Self::create_initial_organism();
         Self {
             tick: 0,
@@ -35,7 +35,7 @@ impl Simulation {
             decision_parameters: DecisionParameters::default(),
         }
     }
-    fn create_environment() -> Environment {
+    fn create_environment(seed: u64) -> Environment {
         let catalog = crate::resources::default_catalog();
         let width = 1000.0;
         let height = 1000.0;
