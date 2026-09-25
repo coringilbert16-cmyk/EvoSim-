@@ -650,15 +650,13 @@ impl Simulation {
                                 )
                             })
                             .unwrap_or(false);
-                        crate::decision_runtime::record_outcome(
-                            &mut organisms[index].decision_history,
-                            &selected,
-                            if expelled {
-                                crate::decision::OutcomeKind::Neutral
-                            } else {
-                                crate::decision::OutcomeKind::Harmful
-                            },
-                        );
+                        if expelled {
+                            crate::decision_runtime::record_consequence(
+                                &mut organisms[index].decision_history,
+                                &selected,
+                                crate::decision::ActionConsequence::NONE,
+                            );
+                        }
                     }
                 }
             }
