@@ -18,9 +18,6 @@ impl Simulation {
             Some(direction) => direction,
             None => return false,
         };
-        if organism.active_transformation_id.is_some() {
-            return false;
-        }
         let step = 5.0 * movement_efficiency;
         let cost = step.max(0.0);
         if !cost.is_finite() || organism.usable_energy + f64::EPSILON < cost {
