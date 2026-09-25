@@ -323,7 +323,7 @@ impl Simulation {
             return;
         }
         organism.active_transformation_id = None;
-        reconcile_detached_components(organism, environment, &genome_ids);
+        reconcile_detached_components(organism, &genome_ids);
         let outcome = if usable > f64::EPSILON {
             OutcomeKind::Beneficial
         } else if heat > f64::EPSILON {
