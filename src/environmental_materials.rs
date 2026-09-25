@@ -2,6 +2,7 @@
 use crate::environment::ActiveMaterialField;
 use crate::resources::{combine_materials, Material};
 use crate::structure::Placement;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 /// Small, reusable structured-material seeds for the initial environment.
