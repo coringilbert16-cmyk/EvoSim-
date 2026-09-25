@@ -90,6 +90,7 @@ impl Simulation {
             cached_developmental_realization: None,
             peak_developmental_realization: 0.0,
             cached_harmonic_key: None,
+            last_movement_attempt: None,
         }
     }
     fn update_development_stage(organism: &mut Organism, environment: &Environment) {
@@ -445,7 +446,7 @@ impl Simulation {
                     for other in after.iter() {
                         others.push((*other).clone());
                     }
-                    let moved = Self::update_movement(organism, environment, &mut others);
+                    let moved = Self::update_movement(organism, environment, &mut others, self.tick);
                     if moved {
                         for (original, trial) in
                             before.iter_mut().chain(after.iter_mut()).zip(others)
