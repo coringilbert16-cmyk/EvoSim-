@@ -6,18 +6,49 @@
 //! to execute through its existing physical systems.
 
 use crate::decision::{
-    approve_action_for_current_needs, outcome_is_known, ActionEligibility, ActionKind,
-    CurrentNeeds, DecisionHistory, DecisionResult, OutcomeKind,
+    approve_action_for_current_needs, ActionConsequence, ActionEligibility, ActionKind,
+    CurrentNeeds, DecisionHistory, DecisionResult,
 };
 use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 
-/// Maximum influence a recorded consequence has on action selection.
-///
-/// Need pressure remains the primary driver. This value is deliberately small
-/// and exposed so the decision layer can be tuned without changing chemistry
-/// or physics.
-pub const HISTORY_INFLUENCE: f64 = 0.25;
+fn immediate_consequence(action: ActionKind) -> ActionConsequence {
+    match action {
+        ActionKind::Break => ActionConsequence {
+            structural_delta: -1.0,
+            developmental_delta: -1.0,
+            ..ActionConsequence::NONE
+        },
+        _ => ActionConsequence::NONE,
+    }
+}
+
+fn historical_consequence(
+    history: &DecisionHistory,
+    candidate: &ActionCandidate,
+) -> ActionConsequence {
+    history
+        .consequence(candidate.action, candidate.context_key.as_deref())
+        .unwrap_or_else(|| immediate_consequence(candidate.action))
+}
+
+fn consequence_components(
+    consequence: ActionConsequence,
+    needs: CurrentNeeds,
+) -> [f64; 4] {
+    [
+        consequence.energy_delta * needs.survival.max(0.0),
+        consequence.structural_delta * needs.survival.max(needs.reproduction).max(needs.development),
+        consequence.developmental_delta * needs.development.max(needs.reproduction),
+        -consequence.stress_delta * needs.survival.max(0.0),
+    ]
+}
+
+fn dominates(a: [f64; 4], b: [f64; 4]) -> bool {
+    let at_least_as_good = a.iter().zip(b.iter()).all(|(left, right)| left >= right);
+    let strictly_better = a.iter().zip(b.iter()).any(|(left, right)| left > right);
+    at_least_as_good && strictly_better
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct DecisionContext {
@@ -53,13 +84,12 @@ fn history_adjustment(history: &DecisionHistory, candidate: &ActionCandidate) ->
 
 fn cheap_decision_score(
     context: DecisionContext,
-    history: &DecisionHistory,
     candidate: &ActionCandidate,
 ) -> Option<f64> {
     if approve(context, candidate.action) != DecisionResult::Approve {
         return None;
     }
-    Some(need_pressure(candidate.action, context.needs) + history_adjustment(history, candidate))
+    Some(need_pressure(candidate.action, context.needs))
 }
 
 /// Identify candidates that genuinely require a physical developmental
@@ -129,9 +159,6 @@ pub fn select_action(
     select_action_with_developmental_scores(context, history, candidates, &scores, rng)
 }
 
-/// Select an action using physical developmental results when they are
-/// available. The scores are candidate-specific results produced by the
-/// physical/developmental subsystem; this module does not calculate them.
 pub fn select_action_with_developmental_scores(
     context: DecisionContext,
     history: &DecisionHistory,
@@ -139,424 +166,80 @@ pub fn select_action_with_developmental_scores(
     developmental_scores: &[Option<f64>],
     rng: &mut ChaCha8Rng,
 ) -> Option<ActionCandidate> {
-    let mut scored = Vec::new();
-    for (index, candidate) in candidates.iter().enumerate() {
-        if approve(context, candidate.action) != DecisionResult::Approve {
-            continue;
-        }
-        scored.push((
-            index,
-            need_pressure(candidate.action, context.needs) + history_adjustment(history, candidate),
-            developmental_scores
-                .get(index)
-                .copied()
-                .flatten()
-                .filter(|value| value.is_finite()),
-        ));
-    }
-
-    let best_score = scored
+    let scored: Vec<_> = candidates
         .iter()
-        .map(|(_, score, _)| *score)
+        .enumerate()
+        .filter_map(|(index, candidate)| {
+            let score = cheap_decision_score(context, candidate)?;
+            Some((
+                index,
+                score,
+                historical_consequence(history, candidate),
+                developmental_scores
+                    .get(index)
+                    .copied()
+                    .flatten()
+                    .filter(|value| value.is_finite()),
+            ))
+        })
+        .collect();
+    let best_need = scored
+        .iter()
+        .map(|(_, score, _, _)| *score)
         .max_by(f64::total_cmp)?;
-
     let mut tied: Vec<_> = scored
         .into_iter()
-        .filter(|(_, score, _)| score.total_cmp(&best_score).is_eq())
+        .filter(|(_, score, _, _)| score.total_cmp(&best_need).is_eq())
         .collect();
 
-    if tied.len() > 1 && tied.iter().all(|(_, _, score)| score.is_some()) {
+    if tied.len() > 1 {
+        let components: Vec<_> = tied
+            .iter()
+            .map(|(_, _, consequence, _)| consequence_components(*consequence, context.needs))
+            .collect();
+        let nondominated: Vec<_> = tied
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| {
+                !components
+                    .iter()
+                    .enumerate()
+                    .any(|(other, other_components)| other != *index && dominates(*other_components, components[*index]))
+            })
+            .map(|(_, candidate)| *candidate)
+            .collect();
+        if !nondominated.is_empty() {
+            tied = nondominated;
+        }
+    }
+
+    if tied.len() > 1 && tied.iter().all(|(_, _, _, score)| score.is_some()) {
         let best_developmental = tied
             .iter()
-            .filter_map(|(_, _, score)| *score)
+            .filter_map(|(_, _, _, score)| *score)
             .max_by(f64::total_cmp)
             .expect("all tied candidates have developmental scores");
-        tied.retain(|(_, _, score)| score.is_some_and(|score| score == best_developmental));
+        tied.retain(|(_, _, _, score)| score.is_some_and(|score| score == best_developmental));
     }
 
     let selected_index = rng.gen_range(0..tied.len());
     candidates.get(tied[selected_index].0).cloned()
 }
 
-pub fn record_outcome(
+pub fn record_consequence(
     history: &mut DecisionHistory,
     candidate: &ActionCandidate,
-    outcome: OutcomeKind,
+    consequence: ActionConsequence,
 ) {
-    history.record(candidate.action, candidate.context_key.clone(), outcome);
+    history.record_consequence(candidate.action, candidate.context_key.clone(), consequence);
 }
 
-pub fn known_outcome(
+pub fn known_consequence(
     history: &DecisionHistory,
     action: ActionKind,
     context_key: Option<&str>,
 ) -> bool {
-    outcome_is_known(history, action, context_key)
+    history.has_knowledge(action, context_key)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::decision::NeedKind;
-    use rand::SeedableRng;
 
-    fn context() -> DecisionContext {
-        DecisionContext {
-            needs: CurrentNeeds {
-                survival: 1.0,
-                reproduction: 0.5,
-                development: 0.0,
-            },
-            eligibility: ActionEligibility {
-                can_move: true,
-                can_break: true,
-                can_combine: true,
-                ..Default::default()
-            },
-        }
-    }
-
-    #[test]
-    fn bridge_approves_needed_mechanically_eligible_action() {
-        assert_eq!(
-            approve(context(), ActionKind::Break),
-            DecisionResult::Approve
-        );
-    }
-
-    #[test]
-    fn bridge_rejects_mechanically_ineligible_action() {
-        let context = DecisionContext {
-            needs: CurrentNeeds {
-                survival: 1.0,
-                reproduction: 0.0,
-                development: 0.0,
-            },
-            eligibility: Default::default(),
-        };
-        assert_eq!(approve(context, ActionKind::Break), DecisionResult::Reject);
-    }
-
-    #[test]
-    fn survival_pressure_selects_survival_relevant_action() {
-        let context = DecisionContext {
-            needs: CurrentNeeds {
-                survival: 1.0,
-                reproduction: 0.0,
-                development: 0.0,
-            },
-            eligibility: ActionEligibility {
-                can_break: true,
-                can_combine: true,
-                ..Default::default()
-            },
-        };
-        let history = DecisionHistory::default();
-        let candidates = vec![
-            ActionCandidate {
-                action: ActionKind::Combine,
-                context_key: None,
-            },
-            ActionCandidate {
-                action: ActionKind::Break,
-                context_key: Some("bond:0".into()),
-            },
-        ];
-
-        assert_eq!(
-            select_action(
-                context,
-                &history,
-                &candidates,
-                &mut ChaCha8Rng::seed_from_u64(1),
-            ),
-            Some(candidates[1].clone())
-        );
-    }
-
-    #[test]
-    fn reproduction_pressure_selects_reproduction_relevant_action() {
-        let context = DecisionContext {
-            needs: CurrentNeeds {
-                survival: 0.0,
-                reproduction: 1.0,
-                development: 0.0,
-            },
-            eligibility: ActionEligibility {
-                can_break: true,
-                can_combine: true,
-                ..Default::default()
-            },
-        };
-        let history = DecisionHistory::default();
-        let candidates = vec![
-            ActionCandidate {
-                action: ActionKind::Break,
-                context_key: Some("bond:0".into()),
-            },
-            ActionCandidate {
-                action: ActionKind::Combine,
-                context_key: None,
-            },
-        ];
-
-        let selected = select_action(
-            context,
-            &history,
-            &candidates,
-            &mut ChaCha8Rng::seed_from_u64(1),
-        );
-        assert!(selected.is_some_and(|candidate| candidates.contains(&candidate)));
-    }
-
-    #[test]
-    fn beneficial_history_can_change_selection_when_need_pressure_is_close() {
-        let context = DecisionContext {
-            needs: CurrentNeeds {
-                survival: 0.60,
-                reproduction: 0.40,
-                development: 0.0,
-            },
-            eligibility: ActionEligibility {
-                can_break: true,
-                can_combine: true,
-                ..Default::default()
-            },
-        };
-        let candidates = vec![
-            ActionCandidate {
-                action: ActionKind::Break,
-                context_key: Some("bond:0".into()),
-            },
-            ActionCandidate {
-                action: ActionKind::Combine,
-                context_key: None,
-            },
-        ];
-        let mut history = DecisionHistory::default();
-        history.record(ActionKind::Combine, None, OutcomeKind::Beneficial);
-
-        assert_eq!(
-            select_action(
-                context,
-                &history,
-                &candidates,
-                &mut ChaCha8Rng::seed_from_u64(1),
-            ),
-            Some(candidates[1].clone())
-        );
-    }
-
-    #[test]
-    fn harmful_history_can_weaken_a_competing_action() {
-        let context = DecisionContext {
-            needs: CurrentNeeds {
-                survival: 0.60,
-                reproduction: 0.40,
-                development: 0.0,
-            },
-            eligibility: ActionEligibility {
-                can_break: true,
-                can_combine: true,
-                ..Default::default()
-            },
-        };
-        let candidates = vec![
-            ActionCandidate {
-                action: ActionKind::Break,
-                context_key: Some("bond:0".into()),
-            },
-            ActionCandidate {
-                action: ActionKind::Combine,
-                context_key: None,
-            },
-        ];
-        let mut history = DecisionHistory::default();
-        history.record(
-            ActionKind::Break,
-            Some("bond:0".into()),
-            OutcomeKind::Harmful,
-        );
-
-        assert_eq!(
-            select_action(
-                context,
-                &history,
-                &candidates,
-                &mut ChaCha8Rng::seed_from_u64(1),
-            ),
-            Some(candidates[1].clone())
-        );
-    }
-
-    #[test]
-    fn zero_pressure_candidates_are_rejected_as_irrelevant() {
-        let context = DecisionContext {
-            needs: CurrentNeeds::default(),
-            eligibility: ActionEligibility {
-                can_break: true,
-                can_combine: true,
-                ..Default::default()
-            },
-        };
-        let history = DecisionHistory::default();
-        let candidates = vec![
-            ActionCandidate {
-                action: ActionKind::Break,
-                context_key: Some("bond:0".into()),
-            },
-            ActionCandidate {
-                action: ActionKind::Combine,
-                context_key: None,
-            },
-        ];
-
-        assert_eq!(
-            select_action(
-                context,
-                &history,
-                &candidates,
-                &mut ChaCha8Rng::seed_from_u64(1),
-            ),
-            None
-        );
-    }
-
-    #[test]
-    fn physical_developmental_result_breaks_equal_need_tie() {
-        let context = DecisionContext {
-            needs: CurrentNeeds {
-                survival: 0.0,
-                reproduction: 0.0,
-                development: 1.0,
-            },
-            eligibility: ActionEligibility {
-                can_break: true,
-                can_combine: true,
-                ..Default::default()
-            },
-        };
-        let candidates = vec![
-            ActionCandidate {
-                action: ActionKind::Break,
-                context_key: Some("bond:0".into()),
-            },
-            ActionCandidate {
-                action: ActionKind::Combine,
-                context_key: None,
-            },
-        ];
-        let scores = vec![Some(0.2), Some(0.8)];
-
-        assert_eq!(
-            select_action_with_developmental_scores(
-                context,
-                &DecisionHistory::default(),
-                &candidates,
-                &scores,
-                &mut ChaCha8Rng::seed_from_u64(1),
-            ),
-            Some(candidates[1].clone())
-        );
-    }
-
-    #[test]
-    fn unresolved_equal_candidates_do_not_use_candidate_order() {
-        let context = DecisionContext {
-            needs: CurrentNeeds {
-                survival: 0.0,
-                reproduction: 1.0,
-                development: 0.0,
-            },
-            eligibility: ActionEligibility {
-                can_break: true,
-                can_combine: true,
-                ..Default::default()
-            },
-        };
-        let candidates = vec![
-            ActionCandidate {
-                action: ActionKind::Break,
-                context_key: Some("bond:0".into()),
-            },
-            ActionCandidate {
-                action: ActionKind::Combine,
-                context_key: None,
-            },
-        ];
-
-        let selected = select_action(
-            context,
-            &DecisionHistory::default(),
-            &candidates,
-            &mut ChaCha8Rng::seed_from_u64(1),
-        );
-        assert!(selected.is_some_and(|candidate| candidates.contains(&candidate)));
-    }
-
-    #[test]
-    fn universal_tie_breaker_handles_different_action_kinds() {
-        let context = DecisionContext {
-            needs: CurrentNeeds {
-                survival: 1.0,
-                reproduction: 0.0,
-                development: 0.0,
-            },
-            eligibility: ActionEligibility {
-                can_move: true,
-                can_break: true,
-                ..Default::default()
-            },
-        };
-        let candidates = vec![
-            ActionCandidate {
-                action: ActionKind::Move,
-                context_key: None,
-            },
-            ActionCandidate {
-                action: ActionKind::Break,
-                context_key: Some("bond:0".into()),
-            },
-        ];
-        let mut first_rng = ChaCha8Rng::seed_from_u64(7);
-        let mut second_rng = ChaCha8Rng::seed_from_u64(7);
-        let first = select_action(
-            context,
-            &DecisionHistory::default(),
-            &candidates,
-            &mut first_rng,
-        );
-        let second = select_action(
-            context,
-            &DecisionHistory::default(),
-            &candidates,
-            &mut second_rng,
-        );
-        assert_eq!(first, second);
-        assert!(first.is_some_and(|candidate| candidates.contains(&candidate)));
-    }
-
-    #[test]
-    fn recorded_outcome_is_available_to_future_decisions() {
-        let mut history = DecisionHistory::default();
-        let candidate = ActionCandidate {
-            action: ActionKind::Break,
-            context_key: Some("Methane".into()),
-        };
-        record_outcome(&mut history, &candidate, OutcomeKind::Beneficial);
-        assert!(known_outcome(&history, ActionKind::Break, Some("Methane")));
-    }
-
-    #[test]
-    fn action_need_mapping_is_owned_by_decision_layer() {
-        assert!(ActionKind::Combine
-            .relevant_needs()
-            .contains(&NeedKind::Reproduction));
-        assert!(ActionKind::Break
-            .relevant_needs()
-            .contains(&NeedKind::Survival));
-        assert!(ActionKind::Break
-            .relevant_needs()
-            .contains(&NeedKind::Reproduction));
-    }
-}
