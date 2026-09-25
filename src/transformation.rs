@@ -256,6 +256,8 @@ impl Simulation {
             organism.active_transformation_id = None;
             return;
         };
+        let before_energy = organism.usable_energy;
+        let before_stress = organism.stress;
         let tx = EnergyTransaction {
             reason: EnergyReason::Break,
             potential_released: gross,
@@ -281,8 +283,6 @@ impl Simulation {
                 }
             }
         }
-        let before_energy = organism.usable_energy;
-        let before_stress = organism.stress;
         organism.add_transaction_stress(heat);
         organism.active_transformation_id = None;
         let consequence = crate::decision::ActionConsequence {
