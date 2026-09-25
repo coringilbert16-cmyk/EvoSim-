@@ -155,10 +155,7 @@ mod integration_tests {
             &cloud,
             &mut rng,
         );
-        assert_eq!(
-            s.organisms[0].stored_material.total_amount(),
-            stored_before
-        );
+        assert_eq!(s.organisms[0].stored_material.total_amount(), stored_before);
     }
 
     #[test]
