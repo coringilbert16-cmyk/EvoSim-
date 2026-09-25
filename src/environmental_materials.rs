@@ -189,6 +189,8 @@ fn compound_placements(
 
 #[cfg(test)]
 mod tests {
+    use rand::SeedableRng;
+
     use super::{
         seed_compounds, seed_initial_landscape, FORMATION_PARTICLES, INITIAL_FORMATION_COUNT,
     };
