@@ -64,7 +64,29 @@ impl Simulation {
         }
 
         let mut stored_material = crate::material_storage::MaterialStorage::default();
-        assert!(stored_material.store(genome.juvenile_reserve.clone()));
+        let reserve = crate::physical_material::PhysicalMaterial::realized(
+            genome.juvenile_reserve.clone(),
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.8,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 1.6,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("juvenile reserve must be physically realizable");
+        assert!(stored_material.store_physical_instance(reserve));
         Organism {
             id: "1".into(),
             developmental_origin: anchor.clone(),
