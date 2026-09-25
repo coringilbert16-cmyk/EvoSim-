@@ -256,7 +256,7 @@ fn try_child_construction(
 
     for material in parent_storage.materials_snapshot() {
         let mut candidate = child.clone();
-        if !candidate.stored_material.store(material.clone()) {
+        if !candidate.stored_material.store(material.clone(), &environment.catalog) {
             continue;
         }
         let last = candidate.stored_material.entries.len().saturating_sub(1);
