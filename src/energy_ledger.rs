@@ -7,6 +7,7 @@ const EPSILON: f64 = 1e-9;
 pub(crate) enum EnergyReason {
     Combine,
     Break,
+    Move,
     Maintenance,
     Decomposition,
     Transfer,
