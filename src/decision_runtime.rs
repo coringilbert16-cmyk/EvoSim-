@@ -97,7 +97,7 @@ pub fn developmental_competition_indices(
 
     let mut best_score = None;
     for candidate in candidates {
-        let Some(score) = cheap_decision_score(context, history, candidate) else {
+        let Some(score) = cheap_decision_score(context, candidate) else {
             continue;
         };
         best_score = Some(best_score.map_or(score, |best: f64| best.max(score)));
@@ -109,7 +109,7 @@ pub fn developmental_competition_indices(
     let mut indices = Vec::new();
     let mut action_kinds = Vec::new();
     for (index, candidate) in candidates.iter().enumerate() {
-        let Some(score) = cheap_decision_score(context, history, candidate) else {
+        let Some(score) = cheap_decision_score(context, candidate) else {
             continue;
         };
         if score != best_score
