@@ -90,7 +90,7 @@ fn cheap_decision_score(
 /// kinds remain tied at that stage.
 pub fn developmental_competition_indices(
     context: DecisionContext,
-    history: &DecisionHistory,
+    _history: &DecisionHistory,
     candidates: &[ActionCandidate],
 ) -> Vec<usize> {
     if context.needs.development <= 0.0 {
@@ -196,7 +196,9 @@ pub fn select_action_with_developmental_scores(
                 !components
                     .iter()
                     .enumerate()
-                    .any(|(other, other_components)| other != *index && dominates(*other_components, components[*index]))
+                    .any(|(other, other_components)| {
+                        other != *index && dominates(*other_components, components[*index])
+                    })
             })
             .map(|(_, candidate)| *candidate)
             .collect();
@@ -235,3 +237,96 @@ pub fn known_consequence(
 }
 
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::SeedableRng;
+
+    fn context() -> DecisionContext {
+        DecisionContext {
+            needs: CurrentNeeds {
+                survival: 1.0,
+                reproduction: 0.5,
+                development: 0.0,
+            },
+            eligibility: ActionEligibility {
+                can_break: true,
+                can_combine: true,
+                ..Default::default()
+            },
+        }
+    }
+
+    #[test]
+    fn numerical_consequence_can_select_between_equal_need_candidates() {
+        let candidates = vec![
+            ActionCandidate {
+                action: ActionKind::Break,
+                context_key: Some("bond:0".into()),
+            },
+            ActionCandidate {
+                action: ActionKind::Combine,
+                context_key: None,
+            },
+        ];
+        let mut history = DecisionHistory::default();
+        history.record_consequence(
+            ActionKind::Break,
+            Some("bond:0".into()),
+            ActionConsequence {
+                energy_delta: -2.0,
+                ..ActionConsequence::NONE
+            },
+        );
+        history.record_consequence(
+            ActionKind::Combine,
+            None,
+            ActionConsequence {
+                energy_delta: 2.0,
+                ..ActionConsequence::NONE
+            },
+        );
+        assert_eq!(
+            select_action(
+                context(),
+                &history,
+                &candidates,
+                &mut ChaCha8Rng::seed_from_u64(1),
+            ),
+            Some(candidates[1].clone())
+        );
+    }
+
+    #[test]
+    fn mixed_consequences_are_retained_independently() {
+        let consequence = ActionConsequence {
+            energy_delta: 2.0,
+            structural_delta: -3.0,
+            developmental_delta: 0.5,
+            stress_delta: 1.0,
+        };
+        let mut history = DecisionHistory::default();
+        history.record_consequence(ActionKind::Combine, None, consequence);
+        assert_eq!(
+            history.consequence(ActionKind::Combine, None),
+            Some(consequence)
+        );
+    }
+
+    #[test]
+    fn unresolved_mixed_consequences_do_not_collapse_to_a_label() {
+        let a = ActionConsequence {
+            energy_delta: 1.0,
+            structural_delta: -1.0,
+            ..ActionConsequence::NONE
+        };
+        let b = ActionConsequence {
+            energy_delta: 0.0,
+            structural_delta: 0.0,
+            ..ActionConsequence::NONE
+        };
+        let needs = context().needs;
+        assert!(!dominates(consequence_components(a, needs), consequence_components(b, needs)));
+        assert!(!dominates(consequence_components(b, needs), consequence_components(a, needs)));
+    }
+}
