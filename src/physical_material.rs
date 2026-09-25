@@ -98,6 +98,7 @@ impl PhysicalMaterial {
             placements: Some(placements),
             internal_connections: Some(internal_connections),
             owner_relative_origin: None,
+            vent_origin: None,
         })
     }
 
