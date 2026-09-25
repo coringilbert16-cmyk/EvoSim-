@@ -108,9 +108,10 @@ mod integration_tests {
         s.step();
 
         assert!(s.organisms[0].stored_material.physical_count() > initial_physical_count);
-        assert!(s.organisms[0].memory.iter().any(|point| {
-            (point.x - 500.0).abs() < 1e-9 && (point.y - 500.0).abs() < 1e-9
-        }));
+        assert!(s.organisms[0]
+            .memory
+            .iter()
+            .any(|point| { (point.x - 500.0).abs() < 1e-9 && (point.y - 500.0).abs() < 1e-9 }));
     }
 
     #[test]
