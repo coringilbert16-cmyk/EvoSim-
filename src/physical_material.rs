@@ -105,7 +105,11 @@ impl PhysicalMaterial {
         structure: &OrganismStructure,
         component: &[usize],
     ) -> Option<Self> {
-        if component.is_empty() || component.iter().any(|&index| index >= structure.units.len()) {
+        if component.is_empty()
+            || component
+                .iter()
+                .any(|&index| index >= structure.units.len())
+        {
             return None;
         }
         let mut sorted = component.to_vec();
@@ -126,8 +130,10 @@ impl PhysicalMaterial {
             placements.push(unit.placement);
         }
 
-        let ids: std::collections::HashSet<_> =
-            sorted.iter().map(|&i| structure.units[i].physical_id).collect();
+        let ids: std::collections::HashSet<_> = sorted
+            .iter()
+            .map(|&i| structure.units[i].physical_id)
+            .collect();
         let mut internal_bonds = Vec::new();
         let mut internal_connections = Vec::new();
         for bond in &structure.bonds {
