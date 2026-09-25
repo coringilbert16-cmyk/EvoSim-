@@ -26,6 +26,29 @@ pub(crate) struct Position {
     pub(crate) x: f64,
     pub(crate) y: f64,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub(crate) enum MovementFailureReason {
+    NoDirection,
+    ActiveTransformation,
+    NonFiniteDisplacement,
+    NoOccupiedCell,
+    ZeroDisplacement,
+    BlockedByPushChain,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub(crate) struct MovementAttemptDiagnostic {
+    pub(crate) tick: u64,
+    pub(crate) direction_x: Option<f64>,
+    pub(crate) direction_y: Option<f64>,
+    pub(crate) step: Option<f64>,
+    pub(crate) usable_energy: f64,
+    pub(crate) active_transformation_id: Option<u64>,
+    pub(crate) result: Result<(), MovementFailureReason>,
+    pub(crate) old_position: Option<Position>,
+    pub(crate) new_position: Option<Position>,
+}
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct MemoryPoint {
     pub(crate) x: f64,
