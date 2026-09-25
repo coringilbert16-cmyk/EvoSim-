@@ -350,6 +350,7 @@ impl Simulation {
     }
     pub(crate) fn step(&mut self) {
         self.tick += 1;
+        crate::environmental_materials::remove_vent_packets_outside_influence(&mut self.environment.field);
         crate::environmental_materials::release_random_unbonded_vent_packets(
             &mut self.environment.field,
             &self.environment.catalog,
