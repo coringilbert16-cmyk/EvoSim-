@@ -142,6 +142,8 @@ pub(crate) struct Organism {
     pub(crate) peak_developmental_realization: f64,
     #[serde(skip)]
     pub(crate) cached_harmonic_key: Option<(u64, u64, u64)>,
+    #[serde(skip)]
+    pub(crate) last_movement_attempt: Option<MovementAttemptDiagnostic>,
 }
 pub(crate) const STRESS_DECAY_PER_TICK: f64 = 0.98;
 pub(crate) const INITIAL_STRESS_THRESHOLD: f64 = 100.0;
