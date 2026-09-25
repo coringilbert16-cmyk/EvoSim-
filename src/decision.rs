@@ -99,17 +99,16 @@ impl DecisionHistory {
             let new_count = existing.count.saturating_add(1);
             let denominator = new_count as f64;
             existing.consequence.energy_delta =
-                (existing.consequence.energy_delta * previous_count
-                    + consequence.energy_delta)
+                (existing.consequence.energy_delta * previous_count + consequence.energy_delta)
                     / denominator;
-            existing.consequence.structural_delta =
-                (existing.consequence.structural_delta * previous_count
-                    + consequence.structural_delta)
-                    / denominator;
-            existing.consequence.developmental_delta =
-                (existing.consequence.developmental_delta * previous_count
-                    + consequence.developmental_delta)
-                    / denominator;
+            existing.consequence.structural_delta = (existing.consequence.structural_delta
+                * previous_count
+                + consequence.structural_delta)
+                / denominator;
+            existing.consequence.developmental_delta = (existing.consequence.developmental_delta
+                * previous_count
+                + consequence.developmental_delta)
+                / denominator;
             existing.consequence.stress_delta =
                 (existing.consequence.stress_delta * previous_count + consequence.stress_delta)
                     / denominator;
@@ -362,10 +361,7 @@ mod tests {
     #[test]
     fn unknown_history_does_not_invent_a_consequence() {
         let history = DecisionHistory::default();
-        assert!(!history.has_knowledge(
-            ActionKind::Combine,
-            Some("Carbon+Methane")
-        ));
+        assert!(!history.has_knowledge(ActionKind::Combine, Some("Carbon+Methane")));
     }
 
     #[test]
@@ -404,10 +400,7 @@ mod tests {
             },
         );
         assert_eq!(history.entries[0].count, 2);
-        assert_eq!(
-            history.entries[0].consequence.energy_delta,
-            1.0
-        );
+        assert_eq!(history.entries[0].consequence.energy_delta, 1.0);
     }
 
     #[test]
