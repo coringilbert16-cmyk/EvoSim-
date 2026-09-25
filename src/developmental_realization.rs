@@ -105,13 +105,20 @@ impl DevelopmentalFieldBlueprint {
         if bond_index >= structure.bonds.len() {
             return None;
         }
-        let connectivity = self.connectivity_realization_excluding(
-            structure,
+        let post_break = post_break_structure(structure, catalog, bond_index)?;
+        let (material_realized, density_realized) = self.material_and_density_realization(
+            &post_break,
             catalog,
             origin,
             orientation,
             preferred_length,
-            Some(bond_index),
+        );
+        let connectivity = self.connectivity_realization(
+            &post_break,
+            catalog,
+            origin,
+            orientation,
+            preferred_length,
         );
         let mut sum = 0.0;
         let mut active = 0usize;
@@ -506,6 +513,30 @@ impl DevelopmentalFieldBlueprint {
         }
         total * hx * hy
     }
+}
+
+fn post_break_structure(
+    structure: &crate::structure::OrganismStructure,
+    catalog: &[BaseResource],
+    bond_index: usize,
+) -> Option<crate::structure::OrganismStructure> {
+    let target = *structure.bonds.get(bond_index)?;
+    let anchors: std::collections::HashSet<_> =
+        crate::cavity::analyze_genome_cavity(structure, catalog)
+            .ok()
+            .flatten()
+            .map(|cavity| {
+                cavity
+                    .boundary_units
+                    .iter()
+                    .filter_map(|&index| structure.physical_id(index))
+                    .collect()
+            })
+            .unwrap_or_default();
+    let mut trial = structure.clone();
+    trial.break_matching_bond(target)?;
+    trial.retain_components_touching(&anchors);
+    Some(trial)
 }
 
 fn gaussian_plane_integral(amplitude: f64, radial_falloff: f64) -> Option<f64> {
