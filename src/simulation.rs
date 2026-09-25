@@ -41,8 +41,7 @@ impl Simulation {
         let height = 1000.0;
         let mut field = ActiveMaterialField::new(width, height, DEFAULT_CELL_SIZE);
         crate::environmental_materials::seed_initial_landscape(&mut field, &catalog);
-        let resource_cloud =
-            crate::environmental_materials::ResourceCloud::initial(500.0, 500.0);
+        let resource_cloud = crate::environmental_materials::ResourceCloud::initial(500.0, 500.0);
         crate::environmental_materials::seed_resource_cloud(
             &mut field,
             &catalog,
