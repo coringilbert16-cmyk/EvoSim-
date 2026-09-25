@@ -236,8 +236,8 @@ impl Organism {
         self.cached_developmental_realization
     }
 
-    pub(crate) fn store_material(&mut self, material: Material) -> bool {
-        self.stored_material.store(material, &crate::resources::default_catalog())
+    pub(crate) fn store_material(&mut self, material: Material, catalog: &[BaseResource]) -> bool {
+        self.stored_material.store(material, catalog)
     }
     pub(crate) fn structural_mass(&self, catalog: &[BaseResource]) -> f64 {
         self.structure
