@@ -1,8 +1,8 @@
 #![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 use crate::environment::ActiveMaterialField;
 use crate::resources::{combine_materials, Material};
-use serde::{Deserialize, Serialize};
 use crate::structure::Placement;
+use serde::{Deserialize, Serialize};
 
 /// Small, reusable structured-material seeds for the initial environment.
 ///
