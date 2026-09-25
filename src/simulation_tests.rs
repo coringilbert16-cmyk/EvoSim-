@@ -100,8 +100,16 @@ mod integration_tests {
         let physical = PhysicalMaterial::realized(
             m.clone(),
             vec![
-                Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                Placement { x: 0.8, y: 0.0, rotation_radians: 0.0 },
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.8,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
             ],
             &crate::resources::default_catalog(),
         )
