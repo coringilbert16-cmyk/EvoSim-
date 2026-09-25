@@ -91,7 +91,6 @@ impl Simulation {
             peak_developmental_realization: 0.0,
             cached_harmonic_key: None,
             last_movement_attempt: None,
-            last_movement_attempt: None,
         }
     }
     fn update_development_stage(organism: &mut Organism, environment: &Environment) {
