@@ -371,6 +371,11 @@ impl Simulation {
     }
     pub(crate) fn step(&mut self) {
         self.tick += 1;
+        crate::environmental_materials::emit_vents(
+            &mut self.environment.field,
+            &self.environment.catalog,
+            &mut self.rng,
+        );
         let mut still_active = Vec::new();
         let mut completed = Vec::new();
         for mut transformation in self.active_transformations.drain(..) {
