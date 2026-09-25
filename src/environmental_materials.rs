@@ -136,7 +136,7 @@ impl ResourceCloud {
     }
 }
 
-const RESOURCE_CLOUD_PARTICLES: usize = 360;
+const RESOURCE_CLOUD_PARTICLES: usize = 5_000;
 
 /// Seed a dense, finite population of atomic and composite physical materials
 /// around the starting organism. No logical resource inventory is created.
