@@ -433,17 +433,16 @@ mod tests {
     fn storage_never_merges_independent_atoms() {
         let mut storage = MaterialStorage::default();
         storage.store(Material::free_base("Carbon", 1.0), &catalog());
-        storage.store(Material::free_base("Carbon", 1.0));
+        storage.store(Material::free_base("Carbon", 1.0), &catalog());
         assert_eq!(storage.len(), 2);
     }
 
     #[test]
-    fn storage_never_opens_a_compound() {
+    fn storage_rejects_unrealized_compounds() {
         let mut storage = MaterialStorage::default();
         let m = compound();
-        storage.store(m.clone());
-        assert!(storage.take_unstructured(1).is_none());
-        assert_eq!(storage.materials_snapshot(), vec![m]);
+        assert!(!storage.store(m, &catalog()));
+        assert!(storage.is_empty());
     }
 
     #[test]
