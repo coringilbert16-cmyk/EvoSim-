@@ -99,7 +99,9 @@ impl DecisionHistory {
             let new_count = existing.count.saturating_add(1);
             let denominator = new_count as f64;
             existing.consequence.energy_delta =
-                (existing.consequence.energy_delta * previous_count + consequence.energy_delta) / denominator;
+                (existing.consequence.energy_delta * previous_count
+                    + consequence.energy_delta)
+                    / denominator;
             existing.consequence.structural_delta =
                 (existing.consequence.structural_delta * previous_count
                     + consequence.structural_delta)
@@ -300,7 +302,11 @@ mod tests {
             can_combine: true,
             ..Default::default()
         };
-        let needs = CurrentNeeds { survival: 0.5, reproduction: 0.0, development: 0.0 };
+        let needs = CurrentNeeds {
+            survival: 0.5,
+            reproduction: 0.0,
+            development: 0.0,
+        };
         assert_eq!(
             approve_action_for_current_needs(ActionKind::Combine, eligibility, needs),
             DecisionResult::Approve
@@ -309,13 +315,19 @@ mod tests {
 
     #[test]
     fn reproduction_pressure_makes_combine_relevant() {
-        let eligibility = ActionEligibility { can_combine: true, ..Default::default() };
+        let eligibility = ActionEligibility {
+            can_combine: true,
+            ..Default::default()
+        };
         let needs = CurrentNeeds {
             survival: 0.0,
             reproduction: 0.5,
             development: 0.0,
         };
-        assert_eq!(approve_action_for_current_needs(ActionKind::Combine, eligibility, needs), DecisionResult::Approve);
+        assert_eq!(
+            approve_action_for_current_needs(ActionKind::Combine, eligibility, needs),
+            DecisionResult::Approve
+        );
     }
 
     #[test]
@@ -333,9 +345,16 @@ mod tests {
 
     #[test]
     fn zero_pressure_does_not_make_a_need_relevant() {
-        let eligibility = ActionEligibility { can_break: true, ..Default::default() };
+        let eligibility = ActionEligibility {
+            can_break: true,
+            ..Default::default()
+        };
         assert_eq!(
-            approve_action_for_current_needs(ActionKind::Break, eligibility, CurrentNeeds::default()),
+            approve_action_for_current_needs(
+                ActionKind::Break,
+                eligibility,
+                CurrentNeeds::default()
+            ),
             DecisionResult::Reject
         );
     }
@@ -343,7 +362,10 @@ mod tests {
     #[test]
     fn unknown_history_does_not_invent_a_consequence() {
         let history = DecisionHistory::default();
-        assert!(!history.has_knowledge(ActionKind::Combine, Some("Carbon+Methane")));
+        assert!(!history.has_knowledge(
+            ActionKind::Combine,
+            Some("Carbon+Methane")
+        ));
     }
 
     #[test]
@@ -382,7 +404,10 @@ mod tests {
             },
         );
         assert_eq!(history.entries[0].count, 2);
-        assert_eq!(history.entries[0].consequence.energy_delta, 1.0);
+        assert_eq!(
+            history.entries[0].consequence.energy_delta,
+            1.0
+        );
     }
 
     #[test]
