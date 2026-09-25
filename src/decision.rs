@@ -22,7 +22,11 @@ impl ActionKind {
     pub fn relevant_needs(self) -> &'static [NeedKind] {
         match self {
             ActionKind::NoTransaction => &[],
-            ActionKind::Move => &[\n                NeedKind::Survival,\n                NeedKind::Reproduction,\n                NeedKind::Acquisition,\n            ],
+            ActionKind::Move => &[
+                NeedKind::Survival,
+                NeedKind::Reproduction,
+                NeedKind::Acquisition,
+            ],
             ActionKind::Combine => &[
                 NeedKind::Survival,
                 NeedKind::Reproduction,
@@ -46,6 +50,8 @@ pub enum NeedKind {
     Survival,
     Reproduction,
     Development,
+    /// Resource-seeking pressure derived from depleted stored material.
+    Acquisition,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
@@ -72,13 +78,16 @@ impl ActionConsequence {
         let survival = self.energy_delta - self.stress_delta + self.storage_delta;
         let development = self.developmental_delta + self.structural_delta;
         let reproduction = self.structural_delta + self.position_delta;
-        let total = needs.survival + needs.development + needs.reproduction;
+        let acquisition = self.storage_delta + self.position_delta;
+        let total =
+            needs.survival + needs.development + needs.reproduction + needs.acquisition;
         if total <= 0.0 {
             return 0.0;
         }
         (needs.survival * survival
             + needs.development * development
-            + needs.reproduction * reproduction)
+            + needs.reproduction * reproduction
+            + needs.acquisition * acquisition)
             / total
     }
 }
@@ -182,6 +191,8 @@ pub struct CurrentNeeds {
     /// Juvenile developmental pressure. This is a developmental drive, not a third
     /// true biological need; adults have zero developmental pressure.
     pub development: f64,
+    /// Pressure to seek new environmental material when storage is depleted.
+    pub acquisition: f64,
 }
 
 impl CurrentNeeds {
@@ -194,6 +205,7 @@ impl CurrentNeeds {
             NeedKind::Survival => self.survival,
             NeedKind::Reproduction => self.reproduction,
             NeedKind::Development => self.development,
+            NeedKind::Acquisition => self.acquisition,
         }
     }
 
@@ -208,12 +220,15 @@ impl CurrentNeeds {
 pub struct DecisionParameters {
     /// Immediate usable-energy reserve at which survival pressure reaches 0.
     pub survival_reserve: f64,
+    /// Stored material amount at or above which acquisition pressure is zero.
+    pub acquisition_reserve: f64,
 }
 
 impl Default for DecisionParameters {
     fn default() -> Self {
         Self {
             survival_reserve: 1.0,
+            acquisition_reserve: 3.0,
         }
     }
 }
