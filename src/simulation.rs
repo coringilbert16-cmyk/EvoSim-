@@ -490,10 +490,15 @@ impl Simulation {
                         }
                     }
                     if moved {
-                        crate::decision_runtime::record_outcome(
+                        crate::decision_runtime::record_consequence(
                             &mut organism.decision_history,
                             &move_candidate,
-                            crate::decision::OutcomeKind::Beneficial,
+                            crate::decision::ActionConsequence {
+                                energy_delta: 0.0,
+                                structural_delta: 0.0,
+                                developmental_delta: 0.0,
+                                stress_delta: 0.0,
+                            },
                         );
                     }
                 }
@@ -524,6 +529,14 @@ impl Simulation {
                 ) {
                     match selected.action {
                         ActionKind::Combine => {
+                            let current_development = developmental
+                                .as_ref()
+                                .map(|context| context.current_growth_fraction)
+                                .unwrap_or(0.0);
+                            let before_units = organisms[index].structure.units.len() as f64;
+                            let before_bonds = organisms[index].structure.bonds.len() as f64;
+                            let before_energy = organisms[index].usable_energy;
+                            let before_stress = organisms[index].stress;
                             let developmental_blueprint =
                                 organisms[index].genome.developmental_blueprint.clone();
                             let developmental = developmental.as_ref().map(|context| {
@@ -534,22 +547,32 @@ impl Simulation {
                                     context.preferred_length,
                                 )
                             });
-                            let combined = crate::combine_runtime::try_combine(
+                            let attempt = crate::combine_runtime::try_combine(
                                 &mut organisms[index],
                                 environment,
                                 &mut compatibility_cache,
                                 &mut self.energy_ledger,
                                 developmental,
-                            )
-                            .is_some();
-                            crate::decision_runtime::record_outcome(
+                            );
+                            let after_development = organisms[index]
+                                .developmental_realization_cached(&environment.catalog)
+                                .map(|realization| realization.overall)
+                                .unwrap_or(current_development);
+                            let consequence = crate::decision::ActionConsequence {
+                                energy_delta: attempt
+                                    .as_ref()
+                                    .map(|_| organisms[index].usable_energy - before_energy)
+                                    .unwrap_or(0.0),
+                                structural_delta: (organisms[index].structure.units.len() as f64
+                                    - before_units)
+                                    + (organisms[index].structure.bonds.len() as f64 - before_bonds),
+                                developmental_delta: after_development - current_development,
+                                stress_delta: organisms[index].stress - before_stress,
+                            };
+                            crate::decision_runtime::record_consequence(
                                 &mut organisms[index].decision_history,
                                 &selected,
-                                if combined {
-                                    crate::decision::OutcomeKind::Beneficial
-                                } else {
-                                    crate::decision::OutcomeKind::Harmful
-                                },
+                                consequence,
                             );
                         }
                         ActionKind::Break => {
@@ -576,15 +599,13 @@ impl Simulation {
                                     )
                                 })
                                 .unwrap_or(false);
-                            crate::decision_runtime::record_outcome(
-                                &mut organisms[index].decision_history,
-                                &selected,
-                                if expelled {
-                                    crate::decision::OutcomeKind::Neutral
-                                } else {
-                                    crate::decision::OutcomeKind::Harmful
-                                },
-                            );
+                            if expelled {
+                                crate::decision_runtime::record_consequence(
+                                    &mut organisms[index].decision_history,
+                                    &selected,
+                                    crate::decision::ActionConsequence::NONE,
+                                );
+                            }
                         }
                         ActionKind::Move => unreachable!("movement is evaluated independently"),
                     }
