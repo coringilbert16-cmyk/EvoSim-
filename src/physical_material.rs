@@ -100,10 +100,7 @@ impl PhysicalMaterial {
 
     /// Break one pre-existing internal bond and return the resulting physically
     /// disconnected pieces. The bond itself must belong to this stored material.
-    pub(crate) fn break_internal_bond(
-        &self,
-        target: &PhysicalMaterialBond,
-    ) -> Option<Vec<Self>> {
+    pub(crate) fn break_internal_bond(&self, target: &PhysicalMaterialBond) -> Option<Vec<Self>> {
         let placements = self.placements.as_ref()?;
         let connections = self.internal_connections.as_ref()?;
         let target_index = connections.iter().position(|bond| bond == target)?;
@@ -166,7 +163,10 @@ impl PhysicalMaterial {
                 }
             }
             pieces.push(Self {
-                material: Material { parts, internal_bonds },
+                material: Material {
+                    parts,
+                    internal_bonds,
+                },
                 placements: Some(piece_placements),
                 internal_connections: Some(internal_connections),
                 owner_relative_origin: self.owner_relative_origin,
@@ -175,10 +175,7 @@ impl PhysicalMaterial {
         Some(pieces)
     }
 
-    fn remapped_bond(
-        bond: &PhysicalMaterialBond,
-        remap: &[usize],
-    ) -> PhysicalMaterialBond {
+    fn remapped_bond(bond: &PhysicalMaterialBond, remap: &[usize]) -> PhysicalMaterialBond {
         PhysicalMaterialBond {
             part_a: remap[bond.part_a],
             endpoint_a: bond.endpoint_a,
@@ -230,16 +227,21 @@ mod tests {
         let catalog = crate::resources::default_catalog();
         let material = Material {
             parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
-            internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
+            internal_bonds: vec![InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
         };
         let physical = PhysicalMaterial::realized(
             material,
             vec![
-                Placement { x: 0.0,
+                Placement {
+                    x: 0.0,
                     y: 0.0,
                     rotation_radians: 0.0,
                 },
-                Placement { x: 0.838,
+                Placement {
+                    x: 0.838,
                     y: 0.0,
                     rotation_radians: 0.0,
                 },
@@ -250,7 +252,9 @@ mod tests {
         let target = physical.internal_connections.as_ref().unwrap()[0].clone();
         let pieces = physical.break_internal_bond(&target).expect("stored bond");
         assert_eq!(pieces.len(), 2);
-        assert!(pieces.iter().all(|piece| piece.material.internal_bonds.is_empty()));
+        assert!(pieces
+            .iter()
+            .all(|piece| piece.material.internal_bonds.is_empty()));
         assert_eq!(
             pieces
                 .iter()
