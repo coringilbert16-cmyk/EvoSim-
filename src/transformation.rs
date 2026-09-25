@@ -244,7 +244,10 @@ impl Simulation {
         }
         for piece in pieces {
             if !organism.stored_material.store_physical_instance(piece.clone()) {
-                if let Some(placement) = piece.placements.as_ref().and_then(|placements| placements.first()) {
+                if let Some(placement) = piece
+                        .placements
+                        .as_ref()
+                        .and_then(|placements| placements.first()) {
                     let _ = environment.field.deposit(placement.x, placement.y, piece);
                 }
             }
