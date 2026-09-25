@@ -41,6 +41,8 @@ fn compound(parts: &[(&str, f64)]) -> Material {
 pub(crate) const INITIAL_FORMATION_COUNT: usize = 6;
 const FORMATION_PARTICLES: usize = 120;
 const FORMATION_RADIUS: f64 = 45.0;
+const INITIAL_VENT_CLOUD_PARTICLES: usize = 240;
+const INITIAL_VENT_CLOUD_RADIUS: f64 = 12.0;
 const FORMATION_CENTER_FRACTIONS: [(f64, f64); INITIAL_FORMATION_COUNT] = [
     (0.18, 0.18),
     (0.50, 0.18),
@@ -108,6 +110,43 @@ pub(crate) fn seed_initial_landscape(
             };
             field.deposit_physical_at_index(index, physical);
         }
+    }
+
+    // The seed organism begins at the vent location. The initial cloud is
+    // deliberately dense and local so acquisition is an immediate physical
+    // consequence of containment, not a movement-targeting mechanism.
+    seed_initial_vent_cloud(field, catalog, &compounds);
+}
+
+fn seed_initial_vent_cloud(
+    field: &mut ActiveMaterialField,
+    catalog: &[crate::resources::BaseResource],
+    compounds: &[Material],
+) {
+    use crate::physical_material::PhysicalMaterial;
+    use rand::{rngs::StdRng, Rng, SeedableRng};
+
+    let center_x = 500.0;
+    let center_y = 500.0;
+    let seed = 0x5645_4E54_u64;
+    let mut rng = StdRng::seed_from_u64(seed);
+    for particle_index in 0..INITIAL_VENT_CLOUD_PARTICLES {
+        let angle = rng.gen_range(0.0..std::f64::consts::TAU);
+        let radius = INITIAL_VENT_CLOUD_RADIUS * rng.gen::<f64>().sqrt();
+        let x = center_x + radius * angle.cos();
+        let y = center_y + radius * angle.sin();
+        let material = &compounds[particle_index % compounds.len()];
+        let rotation = rng.gen_range(0.0..std::f64::consts::TAU);
+        let spacing = rng.gen_range(0.20..0.45);
+        let placements = compound_placements(material, x, y, rotation, spacing);
+        let Some(physical) = PhysicalMaterial::realized(material.clone(), placements, catalog)
+        else {
+            continue;
+        };
+        let Some(index) = field.index_for_position(x, y) else {
+            continue;
+        };
+        field.deposit_physical_at_index(index, physical);
     }
 }
 
