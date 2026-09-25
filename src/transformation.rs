@@ -163,10 +163,17 @@ impl Simulation {
         let entry = organism.stored_material.entries.get(storage_index)?;
         let physical = match entry {
             crate::material_storage::StoredMaterial::Physical(instance)
-                if instance.is_realized() => instance.clone(),
+                if instance.is_realized() =>
+            {
+                instance.clone()
+            }
             _ => return None,
         };
-        let stored_bond = physical.internal_connections.as_ref()?.get(bond_index)?.clone();
+        let stored_bond = physical
+            .internal_connections
+            .as_ref()?
+            .get(bond_index)?
+            .clone();
         let removed = organism.stored_material.entries.swap_remove(storage_index);
         let stored_material = match removed {
             crate::material_storage::StoredMaterial::Physical(instance) => instance,
@@ -206,15 +213,33 @@ impl Simulation {
             organism.active_transformation_id = None;
             return;
         };
-        let Some(a) = stored.material.parts.get(target.part_a).and_then(|(name, _)| {
-            environment.catalog.iter().find(|resource| resource.name == *name).map(|r| r.properties)
-        }) else {
+        let Some(a) = stored
+            .material
+            .parts
+            .get(target.part_a)
+            .and_then(|(name, _)| {
+                environment
+                    .catalog
+                    .iter()
+                    .find(|resource| resource.name == *name)
+                    .map(|r| r.properties)
+            })
+        else {
             organism.active_transformation_id = None;
             return;
         };
-        let Some(b) = stored.material.parts.get(target.part_b).and_then(|(name, _)| {
-            environment.catalog.iter().find(|resource| resource.name == *name).map(|r| r.properties)
-        }) else {
+        let Some(b) = stored
+            .material
+            .parts
+            .get(target.part_b)
+            .and_then(|(name, _)| {
+                environment
+                    .catalog
+                    .iter()
+                    .find(|resource| resource.name == *name)
+                    .map(|r| r.properties)
+            })
+        else {
             organism.active_transformation_id = None;
             return;
         };
@@ -243,11 +268,15 @@ impl Simulation {
             return;
         }
         for piece in pieces {
-            if !organism.stored_material.store_physical_instance(piece.clone()) {
+            if !organism
+                .stored_material
+                .store_physical_instance(piece.clone())
+            {
                 if let Some(placement) = piece
-                        .placements
-                        .as_ref()
-                        .and_then(|placements| placements.first()) {
+                    .placements
+                    .as_ref()
+                    .and_then(|placements| placements.first())
+                {
                     let _ = environment.field.deposit(placement.x, placement.y, piece);
                 }
             }
