@@ -38,6 +38,37 @@ fn compound(parts: &[(&str, f64)]) -> Material {
 /// Populate the active field with a deterministic, spatially correlated
 /// starting landscape. No terrain categories are introduced: local character
 /// comes entirely from material composition, quantity, and neighboring cells.
+pub(crate) const VENT_EMISSION_QUANTITY: usize = 10;
+pub(crate) const VENT_POSITION: (f64, f64) = (500.0, 530.0);
+const VENT_SPREAD_RADIUS: f64 = 6.0;
+
+pub(crate) fn emit_vents(
+    field: &mut ActiveMaterialField,
+    catalog: &[crate::resources::BaseResource],
+    rng: &mut impl rand::Rng,
+) {
+    let compounds = seed_compounds();
+    if compounds.is_empty() {
+        return;
+    }
+
+    for _ in 0..VENT_EMISSION_QUANTITY {
+        let material = compounds[rng.gen_range(0..compounds.len())].clone();
+        let angle = rng.gen_range(0.0..std::f64::consts::TAU);
+        let radius = rng.gen_range(0.0..VENT_SPREAD_RADIUS);
+        let x = VENT_POSITION.0 + radius * angle.cos();
+        let y = VENT_POSITION.1 + radius * angle.sin();
+        let placements =
+            compound_placements(&material, x, y, angle, rng.gen_range(0.25..0.65));
+        let Some(physical) =
+            crate::physical_material::PhysicalMaterial::realized(material, placements, catalog)
+        else {
+            continue;
+        };
+        let _ = field.deposit(x, y, physical);
+    }
+}
+
 pub(crate) const INITIAL_FORMATION_COUNT: usize = 6;
 const FORMATION_PARTICLES: usize = 120;
 const FORMATION_RADIUS: f64 = 45.0;
