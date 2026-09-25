@@ -399,6 +399,34 @@ mod tests {
     }
 
     #[test]
+    fn disconnected_structure_component_moves_to_physical_storage() {
+        let mut simulation = crate::state::Simulation::new(37, 20.0);
+        let mut organism = simulation.organisms.remove(0);
+        let catalog = simulation.environment.catalog.clone();
+        let original_units = organism.structure.units.len();
+        organism.structure.add_unit(crate::structure::StructuralUnit::new(
+            "Carbon",
+            crate::structure::Placement {
+                x: 10_000.0,
+                y: 10_000.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let genome_ids = genome_boundary_ids(&organism, &simulation.environment);
+        assert_eq!(organism.stored_material.physical_count(), 0);
+        assert_eq!(organism.structure.units.len(), original_units + 1);
+
+        assert!(reconcile_detached_components(&mut organism, &genome_ids));
+        assert_eq!(organism.structure.units.len(), original_units);
+        assert_eq!(organism.stored_material.physical_count(), 1);
+        assert!(organism
+            .stored_material
+            .iter_materials()
+            .any(|material| material.parts == vec![("Carbon".to_string(), 1.0)]));
+        let _ = catalog;
+    }
+
+    #[test]
     fn stress_break_candidates_exclude_genome_boundary_bonds() {
         let genome = crate::genome::initial_genome();
         let catalog = crate::resources::default_catalog();
