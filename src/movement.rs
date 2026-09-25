@@ -67,8 +67,7 @@ impl Simulation {
                 heat_dissipated: cost,
             };
             if !ledger.settle_transaction(&mut organism.usable_energy, transaction) {
-                organism.last_movement_attempt =
-                    Some(crate::state::MovementAttemptDiagnostic {
+                organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
                         tick,
                         direction_x: Some(x),
                         direction_y: Some(y),
@@ -78,7 +77,7 @@ impl Simulation {
                         result: Err(crate::state::MovementFailureReason::InsufficientEnergy),
                         old_position,
                         new_position,
-                    });
+                });
                 return false;
             }
         }
