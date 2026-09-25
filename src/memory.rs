@@ -213,7 +213,7 @@ mod tests {
 
         Simulation::remember_perception(&mut organism, 12.0, 34.0, 0.5, 1, &spectrum);
         assert_eq!(organism.memory.len(), 1);
-        assert_eq!(organism.memory[0].outcome, None);
+        assert_eq!(organism.memory[0].consequence, None);
         let perception_strength = organism.memory[0].strength;
 
         reinforce_memory_point(
@@ -230,8 +230,11 @@ mod tests {
         );
 
         assert_eq!(
-            organism.memory[0].outcome,
-            Some(crate::decision::OutcomeKind::Harmful)
+            organism.memory[0].consequence,
+            Some(crate::decision::ActionConsequence {
+                energy_delta: -1.0,
+                ..Default::default()
+            })
         );
         assert!(organism.memory[0].strength > perception_strength);
     }
