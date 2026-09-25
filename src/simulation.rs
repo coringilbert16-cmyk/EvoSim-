@@ -1,4 +1,4 @@
-use rand::SeedableRng;
+use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashSet;
 
@@ -40,7 +40,6 @@ impl Simulation {
         let width = 1000.0;
         let height = 1000.0;
         let mut field = ActiveMaterialField::new(width, height, DEFAULT_CELL_SIZE);
-        crate::environmental_materials::seed_initial_landscape(&mut field, &catalog);
         Environment {
             width,
             height,
@@ -414,6 +413,18 @@ impl Simulation {
                     &mut self.energy_ledger,
                 );
             }
+            let (x, y) = organism
+                .occupied_cells
+                .first()
+                .map(|p| (p.x, p.y))
+                .unwrap_or((0.0, 0.0));
+            let _ = crate::environmental_materials::release_random_unbonded_packet_near(
+                &mut self.environment.field,
+                &self.environment.catalog,
+                &mut self.rng,
+                x,
+                y,
+            );
             Self::transfer_contained_environmental_material(organism, &mut self.environment);
         }
         {
