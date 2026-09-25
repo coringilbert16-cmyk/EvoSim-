@@ -165,7 +165,6 @@ fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
         peak_developmental_realization: 0.0,
         cached_harmonic_key: None,
         last_movement_attempt: None,
-        last_movement_attempt: None,
     }
 }
 
