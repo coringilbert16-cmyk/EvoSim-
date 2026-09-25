@@ -38,6 +38,7 @@ fn compound(parts: &[(&str, f64)]) -> Material {
 /// Populate the active field with a deterministic, spatially correlated
 /// starting landscape. No terrain categories are introduced: local character
 /// comes entirely from material composition, quantity, and neighboring cells.
+/// The vent emits ten independently selected physical packets per tick.
 pub(crate) const VENT_EMISSION_QUANTITY: usize = 10;
 pub(crate) const VENT_POSITION: (f64, f64) = (500.0, 450.0);
 const VENT_SPREAD_RADIUS: f64 = 6.0;
