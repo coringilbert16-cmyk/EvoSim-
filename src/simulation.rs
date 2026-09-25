@@ -41,11 +41,20 @@ impl Simulation {
         let height = 1000.0;
         let mut field = ActiveMaterialField::new(width, height, DEFAULT_CELL_SIZE);
         crate::environmental_materials::seed_initial_landscape(&mut field, &catalog);
+        let resource_cloud =
+            crate::environmental_materials::ResourceCloud::initial(500.0, 500.0);
+        crate::environmental_materials::seed_resource_cloud(
+            &mut field,
+            &catalog,
+            &resource_cloud,
+            seed,
+        );
         Environment {
             width,
             height,
             catalog,
             field,
+            resource_cloud,
         }
     }
     pub(crate) fn create_initial_organism() -> Organism {
@@ -344,6 +353,11 @@ impl Simulation {
     }
     pub(crate) fn step(&mut self) {
         self.tick += 1;
+        crate::environmental_materials::advance_resource_cloud(
+            &mut self.environment.field,
+            &self.environment.resource_cloud,
+            &mut self.rng,
+        );
         let mut still_active = Vec::new();
         let mut completed = Vec::new();
         for mut transformation in self.active_transformations.drain(..) {
