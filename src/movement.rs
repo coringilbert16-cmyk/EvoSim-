@@ -13,10 +13,8 @@ impl Simulation {
         let usable_energy = organism.usable_energy;
         let active_transformation_id = organism.active_transformation_id;
         let movement_efficiency = organism.genome.movement_efficiency();
-        let direction = crate::movement_direction::movement_direction_periodic(
-            organism,
-            environment.height,
-        );
+        let direction =
+            crate::movement_direction::movement_direction_periodic(organism, environment.height);
         let Some((x, y)) = direction else {
             organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
                 tick,
