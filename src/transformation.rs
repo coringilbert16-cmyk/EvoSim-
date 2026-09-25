@@ -100,7 +100,6 @@ fn genome_boundary_ids(
 /// intact into storage, including its realized placements and internal bonds.
 fn reconcile_detached_components(
     organism: &mut Organism,
-    environment: &Environment,
     genome_boundary_ids: &HashSet<crate::structure::PhysicalConstituentId>,
 ) -> bool {
     let components = organism.structure.connected_components();
@@ -138,23 +137,16 @@ fn reconcile_detached_components(
         }
     }
 
+    let detached_ids: HashSet<_> = detached
+        .iter()
+        .flat_map(|component| component.iter().filter_map(|&index| organism.structure.physical_id(index)))
+        .collect();
     let retained_ids: HashSet<_> = organism
         .structure
         .units
         .iter()
-        .filter(|unit| {
-            genome_boundary_ids.contains(&unit.physical_id)
-                || !detached.iter().any(|component| {
-                    component.iter().any(|&index| {
-                        organism
-                            .structure
-                            .units
-                            .get(index)
-                            .is_some_and(|candidate| candidate.physical_id == unit.physical_id)
-                    })
-                })
-        })
         .map(|unit| unit.physical_id)
+        .filter(|id| !detached_ids.contains(id))
         .collect();
     organism.structure.retain_unit_indices(&retained_ids);
     organism.mark_structure_changed();
@@ -230,7 +222,7 @@ pub(crate) fn resolve_stress_break(
     if !settle_break_energy(organism, target, usable, gross, heat, ledger) {
         return false;
     }
-    reconcile_detached_components(organism, environment, &genome_ids);
+    reconcile_detached_components(organism, &genome_ids);
     true
 }
 
