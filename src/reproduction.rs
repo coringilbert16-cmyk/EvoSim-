@@ -165,6 +165,7 @@ fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
         peak_developmental_realization: 0.0,
         cached_harmonic_key: None,
         last_movement_attempt: None,
+        last_movement_attempt: None,
     }
 }
 
@@ -399,6 +400,7 @@ fn anchor_structure(
         cached_developmental_realization: None,
         peak_developmental_realization: 0.0,
         cached_harmonic_key: None,
+        last_movement_attempt: None,
     };
     let anchor_unit_index = crate::combine_runtime::instantiate_one_unit(&mut child, catalog)?;
     if let Some(anchor_unit) = child.structure.units.get_mut(anchor_unit_index) {
@@ -656,6 +658,7 @@ pub(crate) fn finish_reproduction(
         cached_developmental_realization: None,
         peak_developmental_realization: 0.0,
         cached_harmonic_key: None,
+        last_movement_attempt: None,
     })
 }
 
