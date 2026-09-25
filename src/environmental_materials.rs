@@ -199,6 +199,7 @@ fn compound_placements(
 mod tests {
     use super::{
         seed_compounds, seed_initial_landscape, FORMATION_PARTICLES, INITIAL_FORMATION_COUNT,
+        INITIAL_VENT_CLOUD_PARTICLES,
     };
     use crate::environment::ActiveMaterialField;
     use std::collections::BTreeSet;
