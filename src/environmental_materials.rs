@@ -232,8 +232,20 @@ mod tests {
             .iter()
             .map(|cell| cell.physical_materials.len())
             .sum();
-        assert!(physical_count > INITIAL_FORMATION_COUNT);
-        assert!(physical_count <= INITIAL_FORMATION_COUNT * FORMATION_PARTICLES);
+        assert!(physical_count > INITIAL_FORMATION_COUNT * FORMATION_PARTICLES);
+        assert!(
+            physical_count
+                <= INITIAL_FORMATION_COUNT * FORMATION_PARTICLES
+                    + INITIAL_VENT_CLOUD_PARTICLES
+        );
+    }
+
+    #[test]
+    fn initial_vent_cloud_is_available_at_seed_position() {
+        let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
+        seed_initial_landscape(&mut field, &crate::resources::default_catalog());
+        let index = field.index_for_position(500.0, 500.0).expect("seed position");
+        assert!(!field.cells[index].physical_materials.is_empty());
     }
 
     #[test]
