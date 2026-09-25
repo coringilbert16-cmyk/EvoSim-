@@ -2,7 +2,8 @@
 use crate::decision::{DecisionHistory, DecisionParameters};
 use crate::decomposition::DecomposingBody;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
-use crate::environment::ActiveMaterialField;\nuse crate::environmental_materials::ResourceCloud;
+use crate::environment::ActiveMaterialField;
+use crate::environmental_materials::ResourceCloud;
 use crate::genome::Genome;
 use crate::material_storage::MaterialStorage;
 use crate::resources::{BaseResource, Material};
