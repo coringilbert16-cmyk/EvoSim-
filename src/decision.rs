@@ -78,7 +78,7 @@ impl ActionConsequence {
         let survival = self.energy_delta - self.stress_delta + self.storage_delta;
         let development = self.developmental_delta + self.structural_delta;
         let reproduction = self.structural_delta + self.position_delta;
-        let acquisition = self.storage_delta + self.position_delta;
+        let acquisition = self.storage_delta;
         let total =
             needs.survival + needs.development + needs.reproduction + needs.acquisition;
         if total <= 0.0 {
