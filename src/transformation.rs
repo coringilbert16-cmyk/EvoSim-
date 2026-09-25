@@ -120,12 +120,10 @@ fn reconcile_detached_components(
 
     let mut physical = Vec::with_capacity(detached.len());
     for component in &detached {
-        let Some(instance) =
-            crate::physical_material::PhysicalMaterial::from_structure_component(
-                &organism.structure,
-                component,
-            )
-        else {
+        let Some(instance) = crate::physical_material::PhysicalMaterial::from_structure_component(
+            &organism.structure,
+            component,
+        ) else {
             return false;
         };
         physical.push(instance);
@@ -139,7 +137,11 @@ fn reconcile_detached_components(
 
     let detached_ids: HashSet<_> = detached
         .iter()
-        .flat_map(|component| component.iter().filter_map(|&index| organism.structure.physical_id(index)))
+        .flat_map(|component| {
+            component
+                .iter()
+                .filter_map(|&index| organism.structure.physical_id(index))
+        })
         .collect();
     let retained_ids: HashSet<_> = organism
         .structure
@@ -403,8 +405,10 @@ mod tests {
         let mut simulation = crate::state::Simulation::new(37, 20.0);
         let mut organism = simulation.organisms.remove(0);
         let original_units = organism.structure.units.len();
-        organism.structure.add_unit(crate::structure::StructuralUnit::new(
-            "Carbon",
+        organism
+            .structure
+            .add_unit(crate::structure::StructuralUnit::new(
+                "Carbon",
             crate::structure::Placement {
                 x: 10_000.0,
                 y: 10_000.0,
