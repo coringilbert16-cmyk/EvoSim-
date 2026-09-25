@@ -447,7 +447,7 @@ impl Simulation {
                         others.push((*other).clone());
                     }
                     let moved =
-                        Self::update_movement(organism, environment, &mut others, self.tick);
+                        Self::update_movement(organism, environment, &mut others, &mut self.energy_ledger, self.tick);
                     if moved {
                         for (original, trial) in
                             before.iter_mut().chain(after.iter_mut()).zip(others)
