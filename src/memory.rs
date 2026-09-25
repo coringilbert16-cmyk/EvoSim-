@@ -78,7 +78,7 @@ impl Simulation {
                 y: sy,
                 strength: memory_strength,
                 spectrum: spectrum.clone(),
-                outcome: None,
+                consequence: None,
             });
         } else if let Some(weakest) = organism
             .memory
@@ -91,7 +91,7 @@ impl Simulation {
                     y: sy,
                     strength: memory_strength,
                     spectrum: spectrum.clone(),
-                    outcome: None,
+                    consequence: None,
                 };
             }
         }
@@ -104,7 +104,7 @@ impl Simulation {
         memory_strength: f64,
         capacity: usize,
         spectrum: &crate::harmonics::ToneSpectrum,
-        outcome: crate::decision::OutcomeKind,
+        consequence: crate::decision::ActionConsequence,
     ) {
         let merged = organism.memory.iter_mut().find(|p| {
             let dx = p.x - sx;
@@ -185,7 +185,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn harmonic_experience_is_stored_with_its_outcome() {
+    fn harmonic_experience_is_stored_with_its_consequence() {
         let mut organism = Simulation::create_initial_organism();
         let spectrum = crate::harmonics::ToneSpectrum {
             components: vec![crate::harmonics::ToneComponent {
@@ -194,27 +194,20 @@ mod tests {
                 phase_radians: 0.25,
             }],
         };
-
-        reinforce_memory_point(
-            &mut organism,
-            12.0,
-            34.0,
-            0.5,
-            1,
-            &spectrum,
-            crate::decision::OutcomeKind::Beneficial,
-        );
-
+        let consequence = crate::decision::ActionConsequence {
+            energy_delta: 2.0,
+            structural_delta: -1.0,
+            developmental_delta: 0.5,
+            stress_delta: 0.25,
+        };
+        reinforce_memory_point(&mut organism, 12.0, 34.0, 0.5, 1, &spectrum, consequence);
         assert_eq!(organism.memory.len(), 1);
         assert_eq!(organism.memory[0].spectrum, spectrum);
-        assert_eq!(
-            organism.memory[0].outcome,
-            Some(crate::decision::OutcomeKind::Beneficial)
-        );
+        assert_eq!(organism.memory[0].consequence, Some(consequence));
     }
 
     #[test]
-    fn perception_memory_is_level_one_until_an_outcome_occurs() {
+    fn perception_memory_is_level_one_until_a_consequence_occurs() {
         let mut organism = Simulation::create_initial_organism();
         let spectrum = crate::harmonics::ToneSpectrum::empty();
 
@@ -230,7 +223,10 @@ mod tests {
             0.5,
             1,
             &spectrum,
-            crate::decision::OutcomeKind::Harmful,
+            crate::decision::ActionConsequence {
+                energy_delta: -1.0,
+                ..Default::default()
+            },
         );
 
         assert_eq!(
