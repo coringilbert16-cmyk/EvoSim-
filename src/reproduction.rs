@@ -694,7 +694,30 @@ mod tests {
     fn reserve_requirement_is_genome_defined() {
         let mut storage = MaterialStorage::default();
         let genome = initial_genome();
-        assert!(storage.store(genome.juvenile_reserve.clone(), &default_catalog()));
+        let catalog = default_catalog();
+        let physical = crate::physical_material::PhysicalMaterial::realized(
+            genome.juvenile_reserve.clone(),
+            vec![
+                crate::structure::Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                crate::structure::Placement {
+                    x: 0.8,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                crate::structure::Placement {
+                    x: 1.6,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("juvenile reserve must be physically realizable");
+        assert!(storage.store_physical_instance(physical));
         assert!(storage.take_matching(&genome.juvenile_reserve).is_some());
         assert!(genome.juvenile_energy_reserve > 0.0);
     }
@@ -866,7 +889,7 @@ mod tests {
             rotation_radians: 0.0,
         };
         let mut storage = MaterialStorage::default();
-        assert!(storage.store(anchor));
+        assert!(storage.store(anchor, &catalog));
         assert!(anchor_structure(&genome, storage, placement, &catalog).is_some());
     }
 }
