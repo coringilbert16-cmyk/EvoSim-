@@ -90,22 +90,39 @@ impl MaterialStorage {
         })
     }
 
-    pub(crate) fn store(&mut self, material: Material) -> bool {
+    /// Store material that has no internal structure by realizing each
+    /// constituent as its own physical unit. Structured material must arrive
+    /// through an already-realized PhysicalMaterial so storage never invents
+    /// internal geometry or bond endpoints.
+    pub(crate) fn store(
+        &mut self,
+        material: Material,
+        catalog: &[crate::resources::BaseResource],
+    ) -> bool {
         if material.parts.is_empty() || !material.is_valid() || !Self::is_discrete(&material) {
             return false;
         }
         if material.has_internal_structure() {
-            self.entries.push(StoredMaterial::Logical(material));
-            return true;
+            return false;
         }
         for (name, amount) in material.parts {
             let count = amount.round() as u64;
             for _ in 0..count {
-                self.entries
-                    .push(StoredMaterial::Logical(Material::free_base(
-                        name.clone(),
-                        1.0,
-                    )));
+                let atom = Material::free_base(name.clone(), 1.0);
+                let Some(instance) = PhysicalMaterial::realized(
+                    atom,
+                    vec![Placement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    }],
+                    catalog,
+                ) else {
+                    return false;
+                };
+                if !self.store_physical_instance(instance) {
+                    return false;
+                }
             }
         }
         true
@@ -292,7 +309,7 @@ mod tests {
     #[test]
     fn free_material_is_stored_as_discrete_units() {
         let mut storage = MaterialStorage::default();
-        assert!(storage.store(Material::free_base("Carbon", 3.0)));
+        assert!(storage.store(Material::free_base("Carbon", 3.0), &catalog()));
         assert_eq!(storage.len(), 3);
         assert_eq!(storage.count_unstructured(), 3);
         assert_eq!(storage.total_amount(), 3.0);
@@ -301,7 +318,7 @@ mod tests {
     #[test]
     fn peek_does_not_consume_free_material() {
         let mut storage = MaterialStorage::default();
-        storage.store(Material::free_base("Carbon", 1.0));
+        storage.store(Material::free_base("Carbon", 1.0), &catalog());
         let peeked = storage.peek_one_unstructured().expect("stored unit");
         assert_eq!(peeked, Material::free_base("Carbon", 1.0));
         assert_eq!(storage.count_unstructured(), 1);
@@ -320,7 +337,7 @@ mod tests {
     fn structured_material_is_taken_intact() {
         let mut storage = MaterialStorage::default();
         let m = compound();
-        storage.store(m.clone());
+        storage.store(m.clone(), &catalog());
         assert_eq!(storage.take_matching(&m), Some(m.clone()));
         assert!(storage.is_empty());
     }
@@ -377,7 +394,7 @@ mod tests {
     #[test]
     fn storage_never_merges_independent_atoms() {
         let mut storage = MaterialStorage::default();
-        storage.store(Material::free_base("Carbon", 1.0));
+        storage.store(Material::free_base("Carbon", 1.0), &catalog());
         storage.store(Material::free_base("Carbon", 1.0));
         assert_eq!(storage.len(), 2);
     }
@@ -394,7 +411,7 @@ mod tests {
     #[test]
     fn fractional_material_is_rejected_at_storage_boundary() {
         let mut storage = MaterialStorage::default();
-        assert!(!storage.store(Material::free_base("Carbon", 1.5)));
+        assert!(!storage.store(Material::free_base("Carbon", 1.5), &catalog()));
         assert!(storage.is_empty());
     }
 }
