@@ -212,7 +212,10 @@ fn next_construction_resource_status(
                 .any(|held| held == &material);
 
         let mut candidate = child.clone();
-        if !candidate.stored_material.store(material.clone(), &environment.catalog) {
+        if !candidate
+            .stored_material
+            .store(material.clone(), &environment.catalog)
+        {
             continue;
         }
 
@@ -256,7 +259,10 @@ fn try_child_construction(
 
     for material in parent_storage.materials_snapshot() {
         let mut candidate = child.clone();
-        if !candidate.stored_material.store(material.clone(), &environment.catalog) {
+        if !candidate
+            .stored_material
+            .store(material.clone(), &environment.catalog)
+        {
             continue;
         }
         let last = candidate.stored_material.entries.len().saturating_sub(1);
@@ -535,7 +541,11 @@ pub(crate) fn advance_construction(
     }
 
     if child.stored_material.is_empty()
-        && !store_first_available_material(parent_storage, &mut child.stored_material, &environment.catalog)
+        && !store_first_available_material(
+            parent_storage,
+            &mut child.stored_material,
+            &environment.catalog,
+        )
     {
         return (ConstructionStatus::Waiting, None);
     }
