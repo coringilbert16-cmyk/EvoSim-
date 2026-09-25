@@ -546,7 +546,7 @@ impl Simulation {
                                 &mut organisms[index].decision_history,
                                 &selected,
                                 if combined {
-                                    crate::decision::OutcomeKind::Neutral
+                                    crate::decision::OutcomeKind::Beneficial
                                 } else {
                                     crate::decision::OutcomeKind::Harmful
                                 },
