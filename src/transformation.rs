@@ -411,12 +411,12 @@ mod tests {
             .structure
             .add_unit(crate::structure::StructuralUnit::new(
                 "Carbon",
-            crate::structure::Placement {
-                x: 10_000.0,
-                y: 10_000.0,
-                rotation_radians: 0.0,
-            },
-        ));
+                crate::structure::Placement {
+                    x: 10_000.0,
+                    y: 10_000.0,
+                    rotation_radians: 0.0,
+                },
+            ));
         let genome_ids = genome_boundary_ids(&organism, &simulation.environment);
         assert_eq!(organism.stored_material.physical_count(), 0);
         assert_eq!(organism.structure.units.len(), original_units + 1);
