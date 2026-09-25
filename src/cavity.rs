@@ -416,15 +416,16 @@ mod tests {
         let catalog = default_catalog();
         let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
         let (mut structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
-        let cavity = analyze_genome_cavity(&structure, &catalog).unwrap().unwrap();
+        let cavity = analyze_genome_cavity(&structure, &catalog)
+            .unwrap()
+            .unwrap();
         let connected = cavity.genome_connected_unit_indices(&structure);
         assert_eq!(connected.len(), structure.units.len());
 
         let detached = structure.units.last().unwrap().physical_id;
         let previous = structure.units.len() - 1;
         let target = structure.bonds.iter().position(|bond| {
-            bond.endpoint_a.constituent_id == detached
-                || bond.endpoint_b.constituent_id == detached
+            bond.endpoint_a.constituent_id == detached || bond.endpoint_b.constituent_id == detached
         });
         if let Some(index) = target {
             structure.break_bond(index);
