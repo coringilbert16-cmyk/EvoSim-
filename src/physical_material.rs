@@ -5,7 +5,7 @@
 //! `PhysicalMaterial` owns the complete realized arrangement needed to restore
 //! those bonds without inventing connection endpoints at the organism boundary.
 use crate::contact::connection_pair_candidates;
-use crate::resources::{BaseResource, Material};
+use crate::resources::{BaseResource, InternalBond, Material};
 use crate::structure::{ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
 use serde::{Deserialize, Serialize};
 
@@ -91,6 +91,67 @@ impl PhysicalMaterial {
         }
 
         Some(Self {
+            material,
+            placements: Some(placements),
+            internal_connections: Some(internal_connections),
+            owner_relative_origin: None,
+        })
+    }
+
+    /// Capture an existing disconnected organism component without inventing
+    /// chemistry or connection endpoints. The component remains exactly the
+    /// physical material that existed in the organism graph.
+    pub(crate) fn from_structure_component(
+        structure: &OrganismStructure,
+        component: &[usize],
+    ) -> Option<Self> {
+        if component.is_empty() || component.iter().any(|&index| index >= structure.units.len()) {
+            return None;
+        }
+        let mut sorted = component.to_vec();
+        sorted.sort_unstable();
+        let mut part_by_unit = std::collections::HashMap::new();
+        let mut parts = Vec::with_capacity(sorted.len());
+        let mut placements = Vec::with_capacity(sorted.len());
+        for (part_index, &unit_index) in sorted.iter().enumerate() {
+            let unit = structure.units.get(unit_index)?;
+            if unit.material.parts.len() != 1
+                || unit.material.has_internal_structure()
+                || unit.material.is_empty()
+            {
+                return None;
+            }
+            part_by_unit.insert(unit.physical_id, part_index);
+            parts.push(unit.material.parts[0].clone());
+            placements.push(unit.placement);
+        }
+
+        let ids: std::collections::HashSet<_> =
+            sorted.iter().map(|&i| structure.units[i].physical_id).collect();
+        let mut internal_bonds = Vec::new();
+        let mut internal_connections = Vec::new();
+        for bond in &structure.bonds {
+            if !ids.contains(&bond.endpoint_a.constituent_id)
+                || !ids.contains(&bond.endpoint_b.constituent_id)
+            {
+                continue;
+            }
+            let part_a = *part_by_unit.get(&bond.endpoint_a.constituent_id)?;
+            let part_b = *part_by_unit.get(&bond.endpoint_b.constituent_id)?;
+            internal_bonds.push(InternalBond { part_a, part_b });
+            internal_connections.push(PhysicalMaterialBond {
+                part_a,
+                endpoint_a: bond.endpoint_a.location,
+                part_b,
+                endpoint_b: bond.endpoint_b.location,
+            });
+        }
+
+        let material = Material {
+            parts,
+            internal_bonds,
+        };
+        material.is_valid().then_some(Self {
             material,
             placements: Some(placements),
             internal_connections: Some(internal_connections),
