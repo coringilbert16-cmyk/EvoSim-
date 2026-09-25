@@ -166,6 +166,33 @@ const VENT_RELEASE_RADIUS: f64 = 20.0;
 const MAX_VENT_LOCAL_PACKETS: usize = 64;
 const VENT_X_FRACTIONS: [f64; VENT_COUNT] = [0.15, 0.38, 0.62, 0.85];
 
+/// Remove vent-emitted material that has left its vent influence radius.
+pub(crate) fn remove_vent_packets_outside_influence(field: &mut ActiveMaterialField) {
+    let mut removed = false;
+    let field_height = field.height_cells as f64 * field.cell_size;
+    for cell in &mut field.cells {
+        let before = cell.physical_materials.len();
+        cell.physical_materials.retain(|physical| {
+            let Some((vent_x, vent_y)) = physical.vent_origin else {
+                return true;
+            };
+            let Some(placements) = physical.placements.as_ref() else {
+                return false;
+            };
+            placements.iter().any(|placement| {
+                let dx = placement.x - vent_x;
+                let direct_dy = (placement.y - vent_y).abs();
+                let dy = direct_dy.min(field_height - direct_dy);
+                dx * dx + dy * dy <= VENT_RELEASE_RADIUS * VENT_RELEASE_RADIUS
+            })
+        });
+        removed |= cell.physical_materials.len() != before;
+    }
+    if removed {
+        field.revision = field.revision.wrapping_add(1);
+    }
+}
+
 pub(crate) fn release_random_unbonded_vent_packets(
     field: &mut ActiveMaterialField,
     catalog: &[crate::resources::BaseResource],
@@ -206,6 +233,8 @@ pub(crate) fn release_random_unbonded_vent_packets(
         ) else {
             continue;
         };
+        let mut physical = physical;
+        physical.vent_origin = Some((vent_x, vent_y));
         let _ = field.deposit_physical(placement.x, placement.y, physical);
     }
 }
