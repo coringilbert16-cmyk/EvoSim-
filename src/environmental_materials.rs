@@ -156,11 +156,12 @@ pub(crate) fn seed_resource_cloud(
         let radius = cloud.radius * radial;
         let x = cloud.center_x + radius * angle.cos();
         let y = cloud.center_y + radius * angle.sin();
-        let material = if index % 3 == 0 {
-            let name = [\"Carbon\", \"Hydrogen\", \"Nitrogen\", \"Phosphorus\", \"Sulfur\", \"Water\"][index % 6];
+        let material = if rng.gen_bool(0.33) {
+            let name =
+                ["Carbon", "Hydrogen", "Nitrogen", "Phosphorus", "Sulfur"][rng.gen_range(0..5)];
             Material::free_base(name, 1.0)
         } else {
-            compounds[index % compounds.len()].clone()
+            compounds[rng.gen_range(0..compounds.len())].clone()
         };
         let placements = if material.parts.len() == 1 {
             vec![Placement {
