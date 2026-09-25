@@ -5,6 +5,7 @@ mod integration_tests {
     use crate::resources::{InternalBond, Material};
     use crate::state::{DevelopmentStage, Simulation};
     use crate::structure::{Bond, BondEndpoint, ConnectionEndpoint, Placement, StructuralUnit};
+    use rand::SeedableRng;
 
     fn structured_carbon_hydrogen() -> Material {
         Material {
