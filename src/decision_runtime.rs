@@ -32,21 +32,28 @@ fn historical_consequence(
         .unwrap_or_else(|| immediate_consequence(candidate.action))
 }
 
-fn consequence_components(
-    consequence: ActionConsequence,
-    needs: CurrentNeeds,
-) -> [f64; 4] {
+fn consequence_components(consequence: ActionConsequence, needs: CurrentNeeds) -> [f64; 4] {
     [
         consequence.energy_delta * needs.survival.max(0.0),
-        consequence.structural_delta * needs.survival.max(needs.reproduction).max(needs.development),
+        consequence.structural_delta
+            * needs
+                .survival
+                .max(needs.reproduction)
+                .max(needs.development),
         consequence.developmental_delta * needs.development.max(needs.reproduction),
         -consequence.stress_delta * needs.survival.max(0.0),
     ]
 }
 
 fn dominates(a: [f64; 4], b: [f64; 4]) -> bool {
-    let at_least_as_good = a.iter().zip(b.iter()).all(|(left, right)| left >= right);
-    let strictly_better = a.iter().zip(b.iter()).any(|(left, right)| left > right);
+    let at_least_as_good = a
+        .iter()
+        .zip(b.iter())
+        .all(|(left, right)| left >= right);
+    let strictly_better = a
+        .iter()
+        .zip(b.iter())
+        .any(|(left, right)| left > right);
     at_least_as_good && strictly_better
 }
 
@@ -187,7 +194,9 @@ pub fn select_action_with_developmental_scores(
     if tied.len() > 1 {
         let components: Vec<_> = tied
             .iter()
-            .map(|(_, _, consequence, _)| consequence_components(*consequence, context.needs))
+            .map(|(_, _, consequence, _)| {
+                consequence_components(*consequence, context.needs)
+            })
             .collect();
         let nondominated: Vec<_> = tied
             .iter()
@@ -213,7 +222,9 @@ pub fn select_action_with_developmental_scores(
             .filter_map(|(_, _, _, score)| *score)
             .max_by(f64::total_cmp)
             .expect("all tied candidates have developmental scores");
-        tied.retain(|(_, _, _, score)| score.is_some_and(|score| score == best_developmental));
+        tied.retain(|(_, _, _, score)| {
+            score.is_some_and(|score| score == best_developmental)
+        });
     }
 
     let selected_index = rng.gen_range(0..tied.len());
@@ -225,7 +236,11 @@ pub fn record_consequence(
     candidate: &ActionCandidate,
     consequence: ActionConsequence,
 ) {
-    history.record_consequence(candidate.action, candidate.context_key.clone(), consequence);
+    history.record_consequence(
+        candidate.action,
+        candidate.context_key.clone(),
+        consequence,
+    );
 }
 
 pub fn known_consequence(
@@ -325,7 +340,13 @@ mod tests {
             ..ActionConsequence::NONE
         };
         let needs = context().needs;
-        assert!(!dominates(consequence_components(a, needs), consequence_components(b, needs)));
-        assert!(!dominates(consequence_components(b, needs), consequence_components(a, needs)));
+        assert!(!dominates(
+            consequence_components(a, needs),
+            consequence_components(b, needs)
+        ));
+        assert!(!dominates(
+            consequence_components(b, needs),
+            consequence_components(a, needs)
+        ));
     }
 }
