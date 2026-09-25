@@ -1,5 +1,6 @@
 #![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 use crate::environment::ActiveMaterialField;
+use serde::{Deserialize, Serialize};
 use crate::resources::{combine_materials, Material};
 use crate::structure::Placement;
 
@@ -111,7 +112,148 @@ pub(crate) fn seed_initial_landscape(
     }
 }
 
-/// Configuration for the finite, physically realized resource cloud surrounding the initial organism.\n/// The cloud is a spatial formation only; its contents live in the active field as ordinary physical materials.\n#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]\npub(crate) struct ResourceCloud {\n    pub(crate) center_x: f64,\n    pub(crate) center_y: f64,\n    pub(crate) radius: f64,\n    pub(crate) max_material_moves_per_tick: usize,\n    pub(crate) movement_step: f64,\n}\n\nimpl ResourceCloud {\n    pub(crate) fn initial(center_x: f64, center_y: f64) -> Self {\n        Self {\n            center_x,\n            center_y,\n            radius: 70.0,\n            max_material_moves_per_tick: 24,\n            movement_step: 1.5,\n        }\n    }\n}\n\nconst RESOURCE_CLOUD_PARTICLES: usize = 360;\n\n/// Seed a dense, finite population of atomic and composite physical materials\n/// around the starting organism. No logical resource inventory is created.\npub(crate) fn seed_resource_cloud(\n    field: &mut ActiveMaterialField,\n    catalog: &[crate::resources::BaseResource],\n    cloud: &ResourceCloud,\n    seed: u64,\n) {\n    use crate::physical_material::PhysicalMaterial;\n    use rand::{rngs::StdRng, Rng, SeedableRng};\n\n    let compounds = seed_compounds();\n    let mut rng = StdRng::seed_from_u64(seed ^ 0xC10D_5EED);\n    for index in 0..RESOURCE_CLOUD_PARTICLES {\n        let angle = rng.gen_range(0.0..std::f64::consts::TAU);\n        let radial = rng.gen::<f64>().sqrt();\n        let radius = cloud.radius * radial;\n        let x = cloud.center_x + radius * angle.cos();\n        let y = cloud.center_y + radius * angle.sin();\n        let material = if index % 3 == 0 {\n            let name = [\"Carbon\", \"Hydrogen\", \"Nitrogen\", \"Phosphorus\", \"Sulfur\", \"Water\"][index % 6];\n            Material::free_base(name, 1.0)\n        } else {\n            compounds[index % compounds.len()].clone()\n        };\n        let placements = if material.parts.len() == 1 {\n            vec![Placement {\n                x,\n                y,\n                rotation_radians: angle,\n            }]\n        } else {\n            compound_placements(&material, x, y, angle, rng.gen_range(0.25..0.65))\n        };\n        let Some(physical) = PhysicalMaterial::realized(material, placements, catalog) else {\n            continue;\n        };\n        if let Some(cell) = field.index_for_position(x, y) {\n            field.deposit_physical_at_index(cell, physical);\n        }\n    }\n}\n\n/// Move a bounded number of cloud materials by small random displacements.\n/// This deliberately avoids pairwise diffusion physics while allowing the\n/// cloud contents to rearrange and remain a persistent environmental source.\npub(crate) fn advance_resource_cloud<R: Rng + ?Sized>(\n    field: &mut ActiveMaterialField,\n    cloud: &ResourceCloud,\n    rng: &mut R,\n) {\n    let candidate_indices = field.cells_within_radius(\n        cloud.center_x,\n        cloud.center_y,\n        cloud.radius + cloud.movement_step + 2.0,\n    );\n    let mut moved = Vec::new();\n    let mut moved_count = 0;\n    for index in candidate_indices {\n        let cell = &mut field.cells[index];\n        let mut remaining = Vec::with_capacity(cell.physical_materials.len());\n        for mut physical in cell.physical_materials.drain(..) {\n            let should_move = moved_count < cloud.max_material_moves_per_tick\n                && physical\n                    .placements\n                    .as_ref()\n                    .and_then(|placements| placements.first())\n                    .map(|placement| {\n                        let dx = placement.x - cloud.center_x;\n                        let dy = placement.y - cloud.center_y;\n                        dx * dx + dy * dy <= cloud.radius * cloud.radius\n                    })\n                    .unwrap_or(false)\n                && rng.gen_bool(0.5);\n            if !should_move {\n                remaining.push(physical);\n                continue;\n            }\n            let angle = rng.gen_range(0.0..std::f64::consts::TAU);\n            let distance = rng.gen_range(0.0..=cloud.movement_step);\n            let dx = distance * angle.cos();\n            let dy = distance * angle.sin();\n            if let Some(placements) = physical.placements.as_mut() {\n                for placement in placements {\n                    placement.x += dx;\n                    placement.y += dy;\n                }\n            }\n            let Some(first) = physical.placements.as_ref().and_then(|p| p.first()) else {\n                remaining.push(physical);\n                continue;\n            };\n            let boundary_dx = first.x - cloud.center_x;\n            let boundary_dy = first.y - cloud.center_y;\n            if boundary_dx * boundary_dx + boundary_dy * boundary_dy > cloud.radius * cloud.radius {\n                if let Some(placements) = physical.placements.as_mut() {\n                    for placement in placements {\n                        placement.x -= dx;\n                        placement.y -= dy;\n                    }\n                }\n                remaining.push(physical);\n            } else {\n                moved_count += 1;\n                moved.push(physical);\n            }\n        }\n        cell.physical_materials = remaining;\n    }\n    for physical in moved {\n        if let Some(placement) = physical.placements.as_ref().and_then(|p| p.first()) {\n            let _ = field.deposit_physical(placement.x, placement.y, physical);\n        }\n    }\n}\n\nfn formation_material_indices(compounds: &[Material], formation_index: usize) -> Vec<usize> {
+/// Configuration for the finite, physically realized resource cloud surrounding the initial organism.
+/// The cloud is a spatial formation only; its contents live in the active field as ordinary physical materials.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub(crate) struct ResourceCloud {
+    pub(crate) center_x: f64,
+    pub(crate) center_y: f64,
+    pub(crate) radius: f64,
+    pub(crate) max_material_moves_per_tick: usize,
+    pub(crate) movement_step: f64,
+}
+
+impl ResourceCloud {
+    pub(crate) fn initial(center_x: f64, center_y: f64) -> Self {
+        Self {
+            center_x,
+            center_y,
+            radius: 70.0,
+            max_material_moves_per_tick: 24,
+            movement_step: 1.5,
+        }
+    }
+}
+
+const RESOURCE_CLOUD_PARTICLES: usize = 360;
+
+/// Seed a dense, finite population of atomic and composite physical materials
+/// around the starting organism. No logical resource inventory is created.
+pub(crate) fn seed_resource_cloud(
+    field: &mut ActiveMaterialField,
+    catalog: &[crate::resources::BaseResource],
+    cloud: &ResourceCloud,
+    seed: u64,
+) {
+    use crate::physical_material::PhysicalMaterial;
+    use rand::{rngs::StdRng, Rng, SeedableRng};
+
+    let compounds = seed_compounds();
+    let mut rng = StdRng::seed_from_u64(seed ^ 0xC10D_5EED);
+    for index in 0..RESOURCE_CLOUD_PARTICLES {
+        let angle = rng.gen_range(0.0..std::f64::consts::TAU);
+        let radial = rng.gen::<f64>().sqrt();
+        let radius = cloud.radius * radial;
+        let x = cloud.center_x + radius * angle.cos();
+        let y = cloud.center_y + radius * angle.sin();
+        let material = if index % 3 == 0 {
+            let name = [\"Carbon\", \"Hydrogen\", \"Nitrogen\", \"Phosphorus\", \"Sulfur\", \"Water\"][index % 6];
+            Material::free_base(name, 1.0)
+        } else {
+            compounds[index % compounds.len()].clone()
+        };
+        let placements = if material.parts.len() == 1 {
+            vec![Placement {
+                x,
+                y,
+                rotation_radians: angle,
+            }]
+        } else {
+            compound_placements(&material, x, y, angle, rng.gen_range(0.25..0.65))
+        };
+        let Some(physical) = PhysicalMaterial::realized(material, placements, catalog) else {
+            continue;
+        };
+        if let Some(cell) = field.index_for_position(x, y) {
+            field.deposit_physical_at_index(cell, physical);
+        }
+    }
+}
+
+/// Move a bounded number of cloud materials by small random displacements.
+/// This deliberately avoids pairwise diffusion physics while allowing the
+/// cloud contents to rearrange and remain a persistent environmental source.
+pub(crate) fn advance_resource_cloud<R: Rng + ?Sized>(
+    field: &mut ActiveMaterialField,
+    cloud: &ResourceCloud,
+    rng: &mut R,
+) {
+    let candidate_indices = field.cells_within_radius(
+        cloud.center_x,
+        cloud.center_y,
+        cloud.radius + cloud.movement_step + 2.0,
+    );
+    let mut moved = Vec::new();
+    let mut moved_count = 0;
+    for index in candidate_indices {
+        let cell = &mut field.cells[index];
+        let mut remaining = Vec::with_capacity(cell.physical_materials.len());
+        for mut physical in cell.physical_materials.drain(..) {
+            let should_move = moved_count < cloud.max_material_moves_per_tick
+                && physical
+                    .placements
+                    .as_ref()
+                    .and_then(|placements| placements.first())
+                    .map(|placement| {
+                        let dx = placement.x - cloud.center_x;
+                        let dy = placement.y - cloud.center_y;
+                        dx * dx + dy * dy <= cloud.radius * cloud.radius
+                    })
+                    .unwrap_or(false)
+                && rng.gen_bool(0.5);
+            if !should_move {
+                remaining.push(physical);
+                continue;
+            }
+            let angle = rng.gen_range(0.0..std::f64::consts::TAU);
+            let distance = rng.gen_range(0.0..=cloud.movement_step);
+            let dx = distance * angle.cos();
+            let dy = distance * angle.sin();
+            if let Some(placements) = physical.placements.as_mut() {
+                for placement in placements {
+                    placement.x += dx;
+                    placement.y += dy;
+                }
+            }
+            let Some(first) = physical.placements.as_ref().and_then(|p| p.first()) else {
+                remaining.push(physical);
+                continue;
+            };
+            let boundary_dx = first.x - cloud.center_x;
+            let boundary_dy = first.y - cloud.center_y;
+            if boundary_dx * boundary_dx + boundary_dy * boundary_dy > cloud.radius * cloud.radius {
+                if let Some(placements) = physical.placements.as_mut() {
+                    for placement in placements {
+                        placement.x -= dx;
+                        placement.y -= dy;
+                    }
+                }
+                remaining.push(physical);
+            } else {
+                moved_count += 1;
+                moved.push(physical);
+            }
+        }
+        cell.physical_materials = remaining;
+    }
+    for physical in moved {
+        if let Some(placement) = physical.placements.as_ref().and_then(|p| p.first()) {
+            let _ = field.deposit_physical(placement.x, placement.y, physical);
+        }
+    }
+}
+
+fn formation_material_indices(compounds: &[Material], formation_index: usize) -> Vec<usize> {
     let count = compounds.len();
     let first = (formation_index * 5 + 1) % count;
     let second = (first + 3 + formation_index % 4) % count;
@@ -162,7 +304,8 @@ mod tests {
         seed_compounds, seed_initial_landscape, FORMATION_PARTICLES, INITIAL_FORMATION_COUNT,
     };
     use crate::environment::ActiveMaterialField;
-    use std::collections::BTreeSet;\n    use rand::SeedableRng;
+    use std::collections::BTreeSet;
+    use rand::SeedableRng;
 
     fn physical_signature(material: &crate::physical_material::PhysicalMaterial) -> Vec<String> {
         let mut names = material
@@ -182,6 +325,57 @@ mod tests {
         assert!(compounds.iter().all(|material| material.is_valid()
             && material.has_internal_structure()
             && material.parts.len() >= 2));
+    }
+
+    #[test]
+    fn resource_cloud_is_dense_finite_and_mixed() {
+        let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
+        let cloud = super::ResourceCloud::initial(500.0, 500.0);
+        super::seed_resource_cloud(&mut field, &crate::resources::default_catalog(), &cloud, 7);
+        let materials = field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .collect::<Vec<_>>();
+        assert_eq!(materials.len(), super::RESOURCE_CLOUD_PARTICLES);
+        assert!(materials.iter().any(|material| material.material.parts.len() == 1));
+        assert!(materials.iter().any(|material| material.material.parts.len() > 1));
+        assert!(materials.iter().all(|material| material.is_realized()));
+        assert!(materials.iter().all(|material| {
+            let placement = material.placements.as_ref().unwrap().first().unwrap();
+            let dx = placement.x - cloud.center_x;
+            let dy = placement.y - cloud.center_y;
+            dx * dx + dy * dy <= cloud.radius * cloud.radius
+        }));
+    }
+
+    #[test]
+    fn resource_cloud_movement_is_bounded_and_deterministic() {
+        let catalog = crate::resources::default_catalog();
+        let cloud = super::ResourceCloud::initial(500.0, 500.0);
+        let mut first = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
+        let mut second = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
+        super::seed_resource_cloud(&mut first, &catalog, &cloud, 7);
+        super::seed_resource_cloud(&mut second, &catalog, &cloud, 7);
+        let before = first.clone();
+        let mut rng_a = rand::rngs::StdRng::seed_from_u64(99);
+        let mut rng_b = rand::rngs::StdRng::seed_from_u64(99);
+        super::advance_resource_cloud(&mut first, &cloud, &mut rng_a);
+        super::advance_resource_cloud(&mut second, &cloud, &mut rng_b);
+        assert_eq!(first, second);
+        assert_eq!(
+            first
+                .cells
+                .iter()
+                .map(|cell| cell.physical_materials.len())
+                .sum::<usize>(),
+            before
+                .cells
+                .iter()
+                .map(|cell| cell.physical_materials.len())
+                .sum::<usize>()
+        );
+        assert_ne!(first, before);
     }
 
     #[test]
