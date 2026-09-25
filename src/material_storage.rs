@@ -325,19 +325,57 @@ mod tests {
     }
 
     #[test]
-    fn structured_material_is_stored_intact() {
+    fn structured_material_requires_physical_realization() {
         let mut storage = MaterialStorage::default();
         let m = compound();
-        assert!(storage.store(m.clone()));
+        assert!(!storage.store(m.clone(), &catalog()));
+        assert!(storage.is_empty());
+
+        let physical = PhysicalMaterial::realized(
+            m.clone(),
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.8,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog(),
+        )
+        .expect("compound must be physically realizable");
+        assert!(storage.store_physical_instance(physical));
         assert_eq!(storage.materials_snapshot(), vec![m]);
         assert_eq!(storage.count_structured(), 1);
+        assert_eq!(storage.physical_count(), 1);
     }
 
     #[test]
     fn structured_material_is_taken_intact() {
         let mut storage = MaterialStorage::default();
         let m = compound();
-        storage.store(m.clone(), &catalog());
+        let physical = PhysicalMaterial::realized(
+            m.clone(),
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.8,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog(),
+        )
+        .expect("compound must be physically realizable");
+        assert!(storage.store_physical_instance(physical));
         assert_eq!(storage.take_matching(&m), Some(m.clone()));
         assert!(storage.is_empty());
     }
