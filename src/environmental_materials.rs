@@ -2,6 +2,7 @@
 use crate::environment::ActiveMaterialField;
 use crate::resources::{combine_materials, Material};
 use crate::structure::Placement;
+use rand::seq::SliceRandom;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
@@ -152,13 +153,18 @@ pub(crate) fn seed_resource_cloud(
 
     let compounds = seed_compounds();
     let mut rng = StdRng::seed_from_u64(seed ^ 0xC10D_5EED);
-    for _index in 0..RESOURCE_CLOUD_PARTICLES {
+    let atomic_count = RESOURCE_CLOUD_PARTICLES / 10;
+    let mut atomic_slots = vec![false; RESOURCE_CLOUD_PARTICLES];
+    atomic_slots[..atomic_count].fill(true);
+    atomic_slots.shuffle(&mut rng);
+
+    for index in 0..RESOURCE_CLOUD_PARTICLES {
         let angle = rng.gen_range(0.0..std::f64::consts::TAU);
         let radial = rng.gen::<f64>().sqrt();
         let radius = cloud.radius * radial;
         let x = cloud.center_x + radius * angle.cos();
         let y = cloud.center_y + radius * angle.sin();
-        let material = if rng.gen_bool(0.33) {
+        let material = if atomic_slots[index] {
             let name =
                 ["Carbon", "Hydrogen", "Nitrogen", "Phosphorus", "Sulfur"][rng.gen_range(0..5)];
             Material::free_base(name, 1.0)
@@ -354,6 +360,30 @@ mod tests {
             let dy = placement.y - cloud.center_y;
             dx * dx + dy * dy <= cloud.radius * cloud.radius
         }));
+    }
+
+    #[test]
+    fn resource_cloud_has_exactly_ten_percent_atomic_material() {
+        let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
+        let cloud = super::ResourceCloud::initial(500.0, 500.0);
+        super::seed_resource_cloud(&mut field, &crate::resources::default_catalog(), &cloud, 7);
+        let materials = field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .collect::<Vec<_>>();
+        let atomic = materials
+            .iter()
+            .filter(|material| material.material.parts.len() == 1)
+            .count();
+        let composite = materials
+            .iter()
+            .filter(|material| material.material.parts.len() > 1)
+            .count();
+
+        assert_eq!(materials.len(), super::RESOURCE_CLOUD_PARTICLES);
+        assert_eq!(atomic, super::RESOURCE_CLOUD_PARTICLES / 10);
+        assert_eq!(composite, super::RESOURCE_CLOUD_PARTICLES * 9 / 10);
     }
 
     #[test]
