@@ -86,6 +86,7 @@ pub(crate) fn split_physical_material(
             placements: Some(placements),
             internal_connections: Some(physical),
             owner_relative_origin: instance.owner_relative_origin,
+            vent_origin: instance.vent_origin,
         })
     }
     Some((
