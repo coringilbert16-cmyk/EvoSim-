@@ -74,14 +74,6 @@ fn need_pressure(action: ActionKind, needs: CurrentNeeds) -> f64 {
         .fold(0.0_f64, |best, pressure| best.max(pressure))
 }
 
-fn history_adjustment(history: &DecisionHistory, candidate: &ActionCandidate) -> f64 {
-    match history.outcome(candidate.action, candidate.context_key.as_deref()) {
-        Some(OutcomeKind::Beneficial) => HISTORY_INFLUENCE,
-        Some(OutcomeKind::Harmful) => -HISTORY_INFLUENCE,
-        Some(OutcomeKind::Neutral) | None => 0.0,
-    }
-}
-
 fn cheap_decision_score(
     context: DecisionContext,
     candidate: &ActionCandidate,
