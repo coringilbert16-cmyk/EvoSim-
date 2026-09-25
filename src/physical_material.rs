@@ -98,6 +98,89 @@ impl PhysicalMaterial {
         })
     }
 
+    /// Break one pre-existing internal bond and return the resulting physically
+    /// disconnected pieces. The bond itself must belong to this stored material.
+    pub(crate) fn break_internal_bond(
+        &self,
+        target: &PhysicalMaterialBond,
+    ) -> Option<Vec<Self>> {
+        let placements = self.placements.as_ref()?;
+        let connections = self.internal_connections.as_ref()?;
+        let target_index = connections.iter().position(|bond| bond == target)?;
+
+        let mut adjacency = vec![Vec::new(); self.material.parts.len()];
+        for (index, bond) in connections.iter().enumerate() {
+            if index == target_index { continue; }
+            if bond.part_a >= adjacency.len() || bond.part_b >= adjacency.len() { return None; }
+            adjacency[bond.part_a].push(bond.part_b);
+            adjacency[bond.part_b].push(bond.part_a);
+        }
+
+        let mut components = Vec::<Vec<usize>>::new();
+        let mut seen = vec![false; adjacency.len()];
+        for start in 0..adjacency.len() {
+            if seen[start] { continue; }
+            let mut stack = vec![start];
+            let mut members = Vec::new();
+            seen[start] = true;
+            while let Some(current) = stack.pop() {
+                members.push(current);
+                for &next in &adjacency[current] {
+                    if !seen[next] {
+                        seen[next] = true;
+                        stack.push(next);
+                    }
+                }
+            }
+            members.sort_unstable();
+            components.push(members);
+        }
+
+        let mut pieces = Vec::with_capacity(components.len());
+        for members in components {
+            let mut remap = vec![usize::MAX; self.material.parts.len()];
+            let mut parts = Vec::with_capacity(members.len());
+            let mut piece_placements = Vec::with_capacity(members.len());
+            for (new_index, &old_index) in members.iter().enumerate() {
+                remap[old_index] = new_index;
+                parts.push(self.material.parts[old_index].clone());
+                piece_placements.push(*placements.get(old_index)?);
+            }
+            let mut internal_bonds = Vec::new();
+            let mut internal_connections = Vec::new();
+            for bond in connections {
+                if remap.get(bond.part_a).copied() != Some(usize::MAX)
+                    && remap.get(bond.part_b).copied() != Some(usize::MAX)
+                {
+                    internal_bonds.push(crate::resources::InternalBond {
+                        part_a: remap[bond.part_a],
+                        part_b: remap[bond.part_b],
+                    });
+                    internal_connections.push(Self::remapped_bond(bond, &remap));
+                }
+            }
+            pieces.push(Self {
+                material: Material { parts, internal_bonds },
+                placements: Some(piece_placements),
+                internal_connections: Some(internal_connections),
+                owner_relative_origin: self.owner_relative_origin,
+            });
+        }
+        Some(pieces)
+    }
+
+    fn remapped_bond(
+        bond: &PhysicalMaterialBond,
+        remap: &[usize],
+    ) -> PhysicalMaterialBond {
+        PhysicalMaterialBond {
+            part_a: remap[bond.part_a],
+            endpoint_a: bond.endpoint_a,
+            part_b: remap[bond.part_b],
+            endpoint_b: bond.endpoint_b,
+        }
+    }
+
     pub(crate) fn is_realized(&self) -> bool {
         self.placements.is_some() && self.internal_connections.is_some()
     }
