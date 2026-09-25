@@ -84,15 +84,33 @@ pub struct DecisionHistory {
 impl DecisionHistory {
     pub const MAX_ENTRIES: usize = 64;
 
-    pub fn record_consequence(&mut self, action: ActionKind, context_key: Option<String>, consequence: ActionConsequence) {
-        if let Some(existing) = self.entries.iter_mut().find(|entry| entry.action == action && entry.context_key == context_key) {
+    pub fn record_consequence(
+        &mut self,
+        action: ActionKind,
+        context_key: Option<String>,
+        consequence: ActionConsequence,
+    ) {
+        if let Some(existing) = self
+            .entries
+            .iter_mut()
+            .find(|entry| entry.action == action && entry.context_key == context_key)
+        {
             let previous_count = existing.count as f64;
             let new_count = existing.count.saturating_add(1);
             let denominator = new_count as f64;
-            existing.consequence.energy_delta = (existing.consequence.energy_delta * previous_count + consequence.energy_delta) / denominator;
-            existing.consequence.structural_delta = (existing.consequence.structural_delta * previous_count + consequence.structural_delta) / denominator;
-            existing.consequence.developmental_delta = (existing.consequence.developmental_delta * previous_count + consequence.developmental_delta) / denominator;
-            existing.consequence.stress_delta = (existing.consequence.stress_delta * previous_count + consequence.stress_delta) / denominator;
+            existing.consequence.energy_delta =
+                (existing.consequence.energy_delta * previous_count + consequence.energy_delta)
+                    / denominator;
+            existing.consequence.structural_delta =
+                (existing.consequence.structural_delta * previous_count + consequence.structural_delta)
+                    / denominator;
+            existing.consequence.developmental_delta =
+                (existing.consequence.developmental_delta * previous_count
+                    + consequence.developmental_delta)
+                    / denominator;
+            existing.consequence.stress_delta =
+                (existing.consequence.stress_delta * previous_count + consequence.stress_delta)
+                    / denominator;
             existing.count = new_count;
             return;
         }
@@ -101,12 +119,24 @@ impl DecisionHistory {
                 self.entries.remove(index);
             }
         }
-        self.entries.push(DecisionHistoryEntry { action, context_key, consequence, count: 1 });
+        self.entries.push(DecisionHistoryEntry {
+            action,
+            context_key,
+            consequence,
+            count: 1,
+        });
     }
 
     pub fn consequence(&self, action: ActionKind, context_key: Option<&str>) -> Option<ActionConsequence> {
-        self.entries.iter().find(|entry| entry.action == action && entry.context_key.as_deref() == context_key).map(|entry| entry.consequence).or_else(|| {
-            self.entries.iter().find(|entry| entry.action == action && entry.context_key.is_none()).map(|entry| entry.consequence)
+        self.entries
+            .iter()
+            .find(|entry| entry.action == action && entry.context_key.as_deref() == context_key)
+            .map(|entry| entry.consequence)
+            .or_else(|| {
+            self.entries
+                .iter()
+                .find(|entry| entry.action == action && entry.context_key.is_none())
+                .map(|entry| entry.consequence)
         })
     }
 
@@ -272,7 +302,12 @@ mod tests {
 
     #[test]
     fn mixed_consequence_dimensions_are_preserved() {
-        let consequence = ActionConsequence { energy_delta: 2.0, structural_delta: -3.0, developmental_delta: 0.5, stress_delta: 1.0 };
+        let consequence = ActionConsequence {
+            energy_delta: 2.0,
+            structural_delta: -3.0,
+            developmental_delta: 0.5,
+            stress_delta: 1.0,
+        };
         let mut history = DecisionHistory::default();
         history.record_consequence(ActionKind::Combine, None, consequence);
         assert_eq!(history.consequence(ActionKind::Combine, None), Some(consequence));
@@ -281,8 +316,22 @@ mod tests {
     #[test]
     fn repeated_consequences_are_retained_as_numerical_memory() {
         let mut history = DecisionHistory::default();
-        history.record_consequence(ActionKind::Combine, None, ActionConsequence { energy_delta: 2.0, ..ActionConsequence::NONE });
-        history.record_consequence(ActionKind::Combine, None, ActionConsequence { energy_delta: 0.0, ..ActionConsequence::NONE });
+        history.record_consequence(
+            ActionKind::Combine,
+            None,
+            ActionConsequence {
+                energy_delta: 2.0,
+                ..ActionConsequence::NONE
+            },
+        );
+        history.record_consequence(
+            ActionKind::Combine,
+            None,
+            ActionConsequence {
+                energy_delta: 0.0,
+                ..ActionConsequence::NONE
+            },
+        );
         assert_eq!(history.entries[0].count, 2);
         assert_eq!(history.entries[0].consequence.energy_delta, 1.0);
     }
