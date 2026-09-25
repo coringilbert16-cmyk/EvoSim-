@@ -366,7 +366,6 @@ mod tests {
             peak_developmental_realization: 0.0,
             cached_harmonic_key: None,
             last_movement_attempt: None,
-            last_movement_attempt: None,
         };
         let environment = crate::state::Environment {
             width: 1000.0,
