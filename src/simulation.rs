@@ -609,6 +609,55 @@ impl Simulation {
                         );
                     }
                 }
+                // Movement is a concurrent channel: resource-seeking locomotion may
+                // occur in the same tick as Break, Combine, or Expel.
+                if needs.acquisition > 0.0 {
+                    let movement_before =
+                        Self::action_measurement(&mut organisms[index], environment);
+                    let organism_count = organisms.len();
+                    let (before_organisms, rest) = organisms.split_at_mut(index);
+                    let (organism, after_organisms) =
+                        rest.split_first_mut().expect("index is in organisms");
+                    let mut others = Vec::with_capacity(organism_count.saturating_sub(1));
+                    for other in before_organisms.iter() {
+                        others.push((*other).clone());
+                    }
+                    for other in after_organisms.iter() {
+                        others.push((*other).clone());
+                    }
+                    let moved = Self::update_movement(
+                        organism,
+                        environment,
+                        &mut others,
+                        &mut self.energy_ledger,
+                    );
+                    if moved {
+                        for (original, trial) in before_organisms
+                            .iter_mut()
+                            .chain(after_organisms.iter_mut())
+                            .zip(others)
+                        {
+                            original.occupied_cells = trial.occupied_cells;
+                            original.structure = trial.structure;
+                            original.mark_position_changed();
+                        }
+                        Self::transfer_contained_environmental_material(
+                            organism,
+                            environment,
+                        );
+                    }
+                    let movement_after =
+                        Self::action_measurement(&mut organisms[index], environment);
+                    let movement_candidate = ActionCandidate {
+                        action: ActionKind::Move,
+                        context_key: None,
+                    };
+                    crate::decision_runtime::record_consequence(
+                        &mut organisms[index].decision_history,
+                        &movement_candidate,
+                        Self::action_consequence(movement_before, movement_after),
+                    );
+                }
             }
         }
         let mut offspring = Vec::new();
