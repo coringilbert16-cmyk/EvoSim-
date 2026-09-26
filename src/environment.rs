@@ -300,7 +300,8 @@ impl ActiveMaterialField {
                     .iter()
                     .enumerate()
                     .filter_map(|(part_index, placement)| {
-                        body.contains_point(placement.x, placement.y).then_some(part_index)
+                        body.contains_point(placement.x, placement.y)
+                            .then_some(part_index)
                     })
                     .collect::<Vec<_>>();
                 if !parts.is_empty() {
@@ -315,17 +316,22 @@ impl ActiveMaterialField {
         if id == 0 {
             return None;
         }
-        self.cells.iter().enumerate().find_map(|(cell_index, cell)| {
-            cell.physical_materials
-                .iter()
-                .position(|material| material.id == id)
-                .map(|material_index| (cell_index, material_index))
-        })
+        self.cells
+            .iter()
+            .enumerate()
+            .find_map(|(cell_index, cell)| {
+                cell.physical_materials
+                    .iter()
+                    .position(|material| material.id == id)
+                    .map(|material_index| (cell_index, material_index))
+            })
     }
 
     pub(crate) fn remove_physical_material(&mut self, id: u64) -> Option<PhysicalMaterial> {
         let (cell_index, material_index) = self.find_physical_material(id)?;
-        let material = self.cells[cell_index].physical_materials.swap_remove(material_index);
+        let material = self.cells[cell_index]
+            .physical_materials
+            .swap_remove(material_index);
         self.revision = self.revision.wrapping_add(1);
         Some(material)
     }
