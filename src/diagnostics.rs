@@ -481,15 +481,54 @@ impl DiagnosticsRecorder {
         writeln!(file, "==============================")?;
         writeln!(file, "organism_id: {}", self.organism_id)?;
         writeln!(file, "stopped_at_death: {}", self.stopped)?;
-        writeln!(file, "transformation_starts: {}", self.summary.transformation_starts)?;
-        writeln!(file, "transformation_completions: {}", self.summary.transformation_completions)?;
-        writeln!(file, "first_transformation_tick: {:?}", self.summary.first_transformation_tick)?;
-        writeln!(file, "last_transformation_tick: {:?}", self.summary.last_transformation_tick)?;
-        writeln!(file, "structure_changes: {}", self.summary.structure_changes)?;
-        writeln!(file, "lifecycle_changes: {}", self.summary.lifecycle_changes)?;
-        write_range(&mut file, "growth_fraction", self.summary.min_growth_fraction, self.summary.max_growth_fraction)?;
-        write_range(&mut file, "energy", self.summary.min_energy, self.summary.max_energy)?;
-        write_range(&mut file, "stress", self.summary.min_stress, self.summary.max_stress)?;
+        writeln!(
+            file,
+            "transformation_starts: {}",
+            self.summary.transformation_starts
+        )?;
+        writeln!(
+            file,
+            "transformation_completions: {}",
+            self.summary.transformation_completions
+        )?;
+        writeln!(
+            file,
+            "first_transformation_tick: {:?}",
+            self.summary.first_transformation_tick
+        )?;
+        writeln!(
+            file,
+            "last_transformation_tick: {:?}",
+            self.summary.last_transformation_tick
+        )?;
+        writeln!(
+            file,
+            "structure_changes: {}",
+            self.summary.structure_changes
+        )?;
+        writeln!(
+            file,
+            "lifecycle_changes: {}",
+            self.summary.lifecycle_changes
+        )?;
+        write_range(
+            &mut file,
+            "growth_fraction",
+            self.summary.min_growth_fraction,
+            self.summary.max_growth_fraction,
+        )?;
+        write_range(
+            &mut file,
+            "energy",
+            self.summary.min_energy,
+            self.summary.max_energy,
+        )?;
+        write_range(
+            &mut file,
+            "stress",
+            self.summary.min_stress,
+            self.summary.max_stress,
+        )?;
         Ok(())
     }
 
