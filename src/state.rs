@@ -247,8 +247,9 @@ impl Organism {
     }
     pub(crate) fn structural_mass(&self, catalog: &[BaseResource]) -> f64 {
         self.structure
-            .units
-            .iter()
+            .structural_unit_indices()
+            .into_iter()
+            .filter_map(|index| self.structure.units.get(index))
             .map(|unit| unit.material.mass(catalog))
             .sum()
     }
