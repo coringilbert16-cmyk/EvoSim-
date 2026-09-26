@@ -410,14 +410,11 @@ mod tests {
             .iter()
             .filter_map(|&index| organism.structure.bonds.get(index).copied())
             .collect();
-        organism
-            .structure
-            .bonds
-            .retain(|bond| {
-                protected_bonds
-                    .iter()
-                    .any(|candidate| candidate.has_same_identity(bond))
-            });
+        organism.structure.bonds.retain(|bond| {
+            protected_bonds
+                .iter()
+                .any(|candidate| candidate.has_same_identity(bond))
+        });
         let candidates = stress_break_candidate_indices(&organism, &environment);
         assert_eq!(candidates.len(), organism.structure.bonds.len());
         assert!(!candidates.is_empty());
