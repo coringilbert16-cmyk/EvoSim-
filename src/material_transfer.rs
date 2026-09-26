@@ -1,3 +1,5 @@
+use crate::resources::Material;
+
 /// Extract up to `requested` whole unstructured units from an ecological aggregate.
 ///
 /// This is deliberately separate from `Material::take`: the latter is a
