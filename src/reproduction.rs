@@ -173,14 +173,13 @@ fn store_first_available_material(
     parent_storage: &mut MaterialStorage,
     child_storage: &mut MaterialStorage,
 ) -> bool {
-    let Some(index) = parent_storage
-        .entries
-        .iter()
-        .position(|entry| matches!(entry, StoredMaterial::Physical(instance) if instance.is_realized()))
-    else {
+    let Some(index) = parent_storage.entries.iter().position(
+        |entry| matches!(entry, StoredMaterial::Physical(instance) if instance.is_realized()),
+    ) else {
         return false;
     };
-    let Some(StoredMaterial::Physical(instance)) = parent_storage.entries.get(index).cloned() else {
+    let Some(StoredMaterial::Physical(instance)) = parent_storage.entries.get(index).cloned()
+    else {
         return false;
     };
     if !child_storage.store_physical_instance(instance.clone()) {
@@ -611,9 +610,9 @@ pub(crate) fn advance_construction(
 
     if let Some(StoredMaterial::Physical(material)) = transferred {
         let mut parent_trial = parent_storage.clone();
-        if let Some(index) = parent_storage.entries.iter().position(|entry| {
-            matches!(entry, StoredMaterial::Physical(instance) if instance == &material)
-        }) {
+        if let Some(index) = parent_storage.entries.iter().position(
+            |entry| matches!(entry, StoredMaterial::Physical(instance) if instance == &material),
+        ) {
             let _ = parent_trial.take_physical_at(index);
         } else {
             return (ConstructionStatus::Waiting, None);
