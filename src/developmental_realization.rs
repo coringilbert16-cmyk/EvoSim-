@@ -365,8 +365,8 @@ impl DevelopmentalFieldBlueprint {
             );
         }
 
-        for a in 0..structure.units.len() {
-            for b in (a + 1)..structure.units.len() {
+        for (left, &a) in structural_indices.iter().enumerate() {
+            for &b in structural_indices.iter().skip(left + 1) {
                 for candidate in
                     crate::contact::connection_pair_candidates(structure, a, b, catalog)
                         .into_iter()
