@@ -580,7 +580,10 @@ mod tests {
         assert!(
             movement_energy_cost(16.0, 0.5) > movement_energy_cost(16.0, 0.8)
         );
-        assert_eq!(MOVEMENT_BASE_STEP_DISTANCE, 4.0);
+        assert_eq!(
+            MOVEMENT_BASE_STEP_DISTANCE,
+            4.0,
+        );
     }
 
     #[test]
