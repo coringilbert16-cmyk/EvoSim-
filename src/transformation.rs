@@ -184,7 +184,6 @@ impl Simulation {
             let removed = organism.stored_material.entries.swap_remove(storage_index);
             stored_material = match removed {
                 crate::material_storage::StoredMaterial::Physical(instance) => Some(instance),
-                _ => return None,
             };
         } else if let Some(rest) = key.strip_prefix("environment:") {
             let (material_part, bond_part) = rest.split_once(":bond:")?;
