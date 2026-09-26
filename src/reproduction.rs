@@ -278,7 +278,7 @@ fn try_child_construction(
     for material in parent_storage.entries.iter().cloned() {
         let StoredMaterial::Physical(instance) = material.clone();
         let mut candidate = child.clone();
-        if !candidate.stored_material.store_physical_instance(instance) {
+        if !candidate.stored_material.store_physical_instance(instance.clone()) {
             continue;
         }
         let last = candidate.stored_material.entries.len().saturating_sub(1);
