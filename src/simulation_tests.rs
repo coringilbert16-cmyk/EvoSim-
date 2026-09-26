@@ -87,7 +87,19 @@ mod integration_tests {
     fn storage_contains_discrete_independent_material_objects() {
         let mut o = Simulation::create_initial_organism();
         let catalog = crate::resources::default_catalog();
-        assert!(o.store_material(Material::free_base("Carbon", 5.0), &catalog));
+        for index in 0..5 {
+            let physical = PhysicalMaterial::realized(
+                Material::free_base("Carbon", 1.0),
+                vec![Placement {
+                    x: index as f64,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("carbon should have a valid physical realization");
+            assert!(o.stored_material.store_physical_instance(physical));
+        }
         assert_eq!(o.stored_material.len(), 6);
         assert_eq!(o.stored_material.count_unstructured(), 5);
         assert_eq!(o.stored_material.count_structured(), 1);
