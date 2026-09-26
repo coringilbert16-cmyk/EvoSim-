@@ -144,6 +144,9 @@ pub(crate) struct Organism {
     pub(crate) decision_history: DecisionHistory,
     pub(crate) usable_energy: f64,
     pub(crate) stress: f64,
+    /// Maintenance that this organism has historically failed to pay.
+    #[serde(default)]
+    pub(crate) maintenance_debt: f64,
     #[serde(default = "default_stress_threshold")]
     pub(crate) stress_threshold: f64,
     pub(crate) stored_material: MaterialStorage,
@@ -262,25 +265,31 @@ impl Organism {
             return;
         }
         let paid = self.usable_energy.min(demand).max(0.0);
-        if paid <= 0.0 {
-            self.stress += demand;
-            return;
-        }
-        let tx = EnergyTransaction {
-            reason: EnergyReason::Maintenance,
-            potential_released: 0.0,
-            usable_delta: -paid,
-            structural_delta: 0.0,
-            heat_dissipated: paid,
-        };
-        if !ledger.settle_transaction(&mut self.usable_energy, tx) {
-            self.stress += demand;
-            return;
-        }
-        self.add_transaction_stress(paid);
         let deficit = demand - paid;
         if deficit > 0.0 {
-            self.stress += deficit
+            self.maintenance_debt += deficit;
+        }
+
+        if paid > 0.0 {
+            let tx = EnergyTransaction {
+                reason: EnergyReason::Maintenance,
+                potential_released: 0.0,
+                usable_delta: -paid,
+                structural_delta: 0.0,
+                heat_dissipated: paid,
+            };
+            if ledger.settle_transaction(&mut self.usable_energy, tx) {
+                self.add_transaction_stress(paid);
+            } else {
+                self.maintenance_debt += paid;
+            }
+        }
+
+        // Historical debt only becomes an active stress pressure while current
+        // maintenance is also going unpaid. Recovering energy stops further
+        // starvation damage without retroactively repairing past consequences.
+        if deficit > 0.0 {
+            self.stress += deficit + self.maintenance_debt;
         }
     }
     pub(crate) fn apply_stress_damage(
