@@ -224,7 +224,17 @@ mod integration_tests {
     #[test]
     fn structural_material_is_not_opened_by_storage() {
         let mut o = Simulation::create_initial_organism();
-        assert!(o.store_material(structured_carbon_hydrogen()));
+        let material = structured_carbon_hydrogen();
+        let physical = PhysicalMaterial::realized(
+            material.clone(),
+            vec![
+                Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                Placement { x: 0.8, y: 0.0, rotation_radians: 0.0 },
+            ],
+            &crate::resources::default_catalog(),
+        )
+        .expect("compound should be physically realizable");
+        assert!(o.stored_material.store_physical_instance(physical));
         assert_eq!(o.stored_material.count_structured(), 1);
     }
 
