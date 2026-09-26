@@ -549,6 +549,17 @@ impl Simulation {
                 ) {
                     match selected.action {
                         ActionKind::Combine => {
+                            let before_energy = organisms[index].usable_energy;
+                            let before_stress = organisms[index].stress;
+                            let before_realization = developmental
+                                .as_ref()
+                                .map(|context| context.current_growth_fraction)
+                                .unwrap_or_else(|| {
+                                    organisms[index]
+                                        .developmental_realization_cached(&environment.catalog)
+                                        .map(|realization| realization.overall)
+                                        .unwrap_or(0.0)
+                                });
                             let developmental_blueprint =
                                 organisms[index].genome.developmental_blueprint.clone();
                             let developmental = developmental.as_ref().map(|context| {
@@ -567,14 +578,21 @@ impl Simulation {
                                 developmental,
                             )
                             .is_some();
-                            crate::decision_runtime::record_outcome(
+                            let consequence = if combined {
+                                Self::action_consequence(
+                                    before_energy,
+                                    before_stress,
+                                    before_realization,
+                                    &mut organisms[index],
+                                    environment,
+                                )
+                            } else {
+                                crate::decision::ActionConsequence::default()
+                            };
+                            crate::decision_runtime::record_consequence(
                                 &mut organisms[index].decision_history,
                                 &selected,
-                                if combined {
-                                    crate::decision::OutcomeKind::Neutral
-                                } else {
-                                    crate::decision::OutcomeKind::Harmful
-                                },
+                                consequence,
                             );
                         }
                         ActionKind::Break => {
@@ -588,6 +606,17 @@ impl Simulation {
                             }
                         }
                         ActionKind::Expel => {
+                            let before_energy = organisms[index].usable_energy;
+                            let before_stress = organisms[index].stress;
+                            let before_realization = developmental
+                                .as_ref()
+                                .map(|context| context.current_growth_fraction)
+                                .unwrap_or_else(|| {
+                                    organisms[index]
+                                        .developmental_realization_cached(&environment.catalog)
+                                        .map(|realization| realization.overall)
+                                        .unwrap_or(0.0)
+                                });
                             let expelled = selected
                                 .context_key
                                 .as_deref()
@@ -601,14 +630,21 @@ impl Simulation {
                                     )
                                 })
                                 .unwrap_or(false);
-                            crate::decision_runtime::record_outcome(
+                            let consequence = if expelled {
+                                Self::action_consequence(
+                                    before_energy,
+                                    before_stress,
+                                    before_realization,
+                                    &mut organisms[index],
+                                    environment,
+                                )
+                            } else {
+                                crate::decision::ActionConsequence::default()
+                            };
+                            crate::decision_runtime::record_consequence(
                                 &mut organisms[index].decision_history,
                                 &selected,
-                                if expelled {
-                                    crate::decision::OutcomeKind::Neutral
-                                } else {
-                                    crate::decision::OutcomeKind::Harmful
-                                },
+                                consequence,
                             );
                         }
                         ActionKind::Move => unreachable!("movement is evaluated independently"),
