@@ -232,7 +232,11 @@ mod tests {
     fn carbon_instance(x: f64) -> PhysicalMaterial {
         PhysicalMaterial::realized(
             Material::free_base("Carbon", 1.0),
-            vec![Placement {\n                x,\n                y: 0.0,\n                rotation_radians: 0.0,\n            }],
+            vec![Placement {
+                x,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
             &catalog(),
         )
         .expect("carbon must be physically realizable")
@@ -265,7 +269,10 @@ mod tests {
         let mut storage = MaterialStorage::default();
         let material = Material {
             parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
-            internal_bonds: vec![crate::resources::InternalBond {\n                part_a: 0,\n                part_b: 1,\n            }],
+            internal_bonds: vec![crate::resources::InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
         };
         assert!(PhysicalMaterial::realized(material, vec![], &catalog()).is_none());
         assert!(storage.is_empty());
