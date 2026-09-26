@@ -5,12 +5,8 @@ use crate::structure::Placement;
 
 const DEFAULT_MOVEMENT_EFFICIENCY: f64 = 0.8;
 const MOVEMENT_BASE_STEP_DISTANCE: f64 = 4.0;
-const MOVEMENT_COST_ANCHORS: [(f64, f64); 4] = [
-    (2.7, 1.2),
-    (16.0, 2.0),
-    (64.0, 5.8),
-    (1024.0, 65.0),
-];
+const MOVEMENT_COST_ANCHORS: [(f64, f64); 4] =
+    [(2.7, 1.2), (16.0, 2.0), (64.0, 5.8), (1024.0, 65.0)];
 
 fn mass_movement_cost(realized_mass: f64) -> f64 {
     let mass = realized_mass.max(f64::EPSILON);
@@ -574,12 +570,8 @@ mod tests {
 
     #[test]
     fn movement_efficiency_changes_energy_cost_not_distance() {
-        assert!(
-            movement_energy_cost(16.0, 1.0) < movement_energy_cost(16.0, 0.8)
-        );
-        assert!(
-            movement_energy_cost(16.0, 0.5) > movement_energy_cost(16.0, 0.8)
-        );
+        assert!(movement_energy_cost(16.0, 1.0) < movement_energy_cost(16.0, 0.8));
+        assert!(movement_energy_cost(16.0, 0.5) > movement_energy_cost(16.0, 0.8));
         assert_eq!(
             MOVEMENT_BASE_STEP_DISTANCE,
             4.0,
