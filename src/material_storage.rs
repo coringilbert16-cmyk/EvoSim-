@@ -76,53 +76,6 @@ impl MaterialStorage {
         })
     }
 
-    /// Store material at the logical API boundary.
-    ///
-    /// Structured material must already have a physical realization; storage
-    /// must never invent its geometry or internal bond endpoints. Free
-    /// constituents have no internal structure, so each discrete constituent
-    /// may be realized as an independent physical unit.
-    pub(crate) fn store(
-        &mut self,
-        material: Material,
-        catalog: &[crate::resources::BaseResource],
-    ) -> bool {
-        if material.parts.is_empty() || !material.is_valid() || !Self::is_discrete(&material) {
-            return false;
-        }
-        if material.has_internal_structure() {
-            return false;
-        }
-
-        let mut instances = Vec::new();
-        for (name, amount) in material.parts {
-            let count = amount.round() as usize;
-            for _ in 0..count {
-                let atom = Material::free_base(name.clone(), 1.0);
-                let Some(instance) = PhysicalMaterial::realized(
-                    atom,
-                    vec![Placement {
-                        x: 0.0,
-                        y: 0.0,
-                        rotation_radians: 0.0,
-                    }],
-                    catalog,
-                ) else {
-                    return false;
-                };
-                instances.push(instance);
-            }
-        }
-
-        for instance in instances {
-            self.entries.push(StoredMaterial::Physical(instance));
-        }
-        true
-    }
-
-    /// Store an already-realized physical instance without reconstructing its
-    /// geometry or internal connection endpoints. The world realization is
-    /// rebased only into storage's intrinsic frame.
     pub(crate) fn store_physical_instance(&mut self, instance: PhysicalMaterial) -> bool {
         if !instance.is_realized()
             || instance.material.parts.is_empty()
@@ -209,14 +162,6 @@ impl MaterialStorage {
                 && material.parts[0].0 == name
                 && (material.parts[0].1 - 1.0).abs() <= MATERIAL_EPSILON
         })?;
-        Some(self.entries.swap_remove(index).into_material())
-    }
-
-    pub(crate) fn take_matching(&mut self, target: &Material) -> Option<Material> {
-        let index = self
-            .entries
-            .iter()
-            .position(|entry| entry.material() == target && !entry.material().is_empty())?;
         Some(self.entries.swap_remove(index).into_material())
     }
 
