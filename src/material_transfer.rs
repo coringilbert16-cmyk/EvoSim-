@@ -72,7 +72,7 @@ pub(crate) fn take_whole_unstructured(
     Some(Material {
         parts: taken_parts,
         internal_bonds: Vec::new(),
-    })
+    }) 
 }
 
 #[cfg(test)]
