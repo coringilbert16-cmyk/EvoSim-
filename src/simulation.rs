@@ -688,14 +688,21 @@ impl Simulation {
                                 )
                             })
                             .unwrap_or(false);
-                        crate::decision_runtime::record_outcome(
+                        let consequence = if expelled {
+                            Self::action_consequence(
+                                before_energy,
+                                before_stress,
+                                before_realization,
+                                &mut organisms[index],
+                                environment,
+                            )
+                        } else {
+                            crate::decision::ActionConsequence::default()
+                        };
+                        crate::decision_runtime::record_consequence(
                             &mut organisms[index].decision_history,
                             &selected,
-                            if expelled {
-                                crate::decision::OutcomeKind::Neutral
-                            } else {
-                                crate::decision::OutcomeKind::Harmful
-                            },
+                            consequence,
                         );
                     }
                 }
