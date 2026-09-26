@@ -406,16 +406,14 @@ mod tests {
     fn stress_break_candidates_fall_back_to_genome_bonds_when_structure_is_exhausted() {
         let (mut organism, environment, genome_bonds) = stress_break_test_organism();
         assert!(!genome_bonds.is_empty());
+        let protected_bonds: Vec<_> = genome_bonds
+            .iter()
+            .filter_map(|&index| organism.structure.bonds.get(index).copied())
+            .collect();
         organism
             .structure
             .bonds
-            .retain(|bond| {
-                genome_bonds.iter().any(|index| {
-                    organism.structure.bonds.get(*index).is_some_and(|candidate| {
-                        candidate.has_same_identity(bond)
-                    })
-                })
-            });
+            .retain(|bond| protected_bonds.iter().any(|candidate| candidate.has_same_identity(bond)));
         let candidates = stress_break_candidate_indices(&organism, &environment);
         assert_eq!(candidates.len(), organism.structure.bonds.len());
         assert!(!candidates.is_empty());
