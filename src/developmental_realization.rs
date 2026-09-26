@@ -177,7 +177,8 @@ impl DevelopmentalFieldBlueprint {
             return None;
         }
         let mut realized = 0.0;
-        for unit in &structure.units {
+        for index in structure.structural_unit_indices() {
+            let unit = &structure.units[index];
             let Some(shape) = unit.shape(catalog) else {
                 continue;
             };
@@ -223,7 +224,8 @@ impl DevelopmentalFieldBlueprint {
             return None;
         }
         let mut realized = 0.0;
-        for unit in &structure.units {
+        for index in structure.structural_unit_indices() {
+            let unit = &structure.units[index];
             let Some(shape) = unit.shape(catalog) else {
                 continue;
             };
