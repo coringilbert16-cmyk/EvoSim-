@@ -77,6 +77,7 @@ impl Simulation {
             decision_history: crate::decision::DecisionHistory::default(),
             usable_energy: initial_energy,
             stress: 0.0,
+            maintenance_debt: 0.0,
             stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
             stored_material,
             structure,

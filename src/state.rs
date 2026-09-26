@@ -111,6 +111,9 @@ pub(crate) struct ReproductiveConstruction {
     /// It is transferred from the parent while construction remains active.
     #[serde(default)]
     pub(crate) developing_energy: f64,
+    /// Maintenance historically unpaid by the developing offspring.
+    #[serde(default)]
+    pub(crate) developing_maintenance_debt: f64,
     /// The parent needs to reorganize its own structure to make room for the developing offspring.
     #[serde(default)]
     pub(crate) needs_space: bool,
@@ -144,6 +147,9 @@ pub(crate) struct Organism {
     pub(crate) decision_history: DecisionHistory,
     pub(crate) usable_energy: f64,
     pub(crate) stress: f64,
+    /// Maintenance that this organism has historically failed to pay.
+    #[serde(default)]
+    pub(crate) maintenance_debt: f64,
     #[serde(default = "default_stress_threshold")]
     pub(crate) stress_threshold: f64,
     pub(crate) stored_material: MaterialStorage,
@@ -261,26 +267,35 @@ impl Organism {
         if !demand.is_finite() || demand <= 0.0 {
             return;
         }
-        let paid = self.usable_energy.min(demand).max(0.0);
-        if paid <= 0.0 {
-            self.stress += demand;
-            return;
-        }
-        let tx = EnergyTransaction {
-            reason: EnergyReason::Maintenance,
-            potential_released: 0.0,
-            usable_delta: -paid,
-            structural_delta: 0.0,
-            heat_dissipated: paid,
+        let available = self.usable_energy.max(0.0);
+        let attempted_payment = available.min(demand).max(0.0);
+        let settled_payment = if attempted_payment > 0.0 {
+            let tx = EnergyTransaction {
+                reason: EnergyReason::Maintenance,
+                potential_released: 0.0,
+                usable_delta: -attempted_payment,
+                structural_delta: 0.0,
+                heat_dissipated: attempted_payment,
+            };
+            if ledger.settle_transaction(&mut self.usable_energy, tx) {
+                self.add_transaction_stress(attempted_payment);
+                attempted_payment
+            } else {
+                0.0
+            }
+        } else {
+            0.0
         };
-        if !ledger.settle_transaction(&mut self.usable_energy, tx) {
-            self.stress += demand;
-            return;
-        }
-        self.add_transaction_stress(paid);
-        let deficit = demand - paid;
+
+        let deficit = demand - settled_payment;
         if deficit > 0.0 {
-            self.stress += deficit
+            self.maintenance_debt += deficit;
+
+            // Historical debt only becomes active starvation pressure while
+            // current maintenance is also going unpaid. Recovering energy
+            // stops further starvation damage without retroactively repairing
+            // past consequences.
+            self.stress += deficit + self.maintenance_debt;
         }
     }
     pub(crate) fn apply_stress_damage(

@@ -150,6 +150,7 @@ fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
         decision_history: crate::decision::DecisionHistory::default(),
         usable_energy: construction.developing_energy,
         stress: construction.developing_stress,
+        maintenance_debt: construction.developing_maintenance_debt,
         stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
         stored_material: construction.committed_material.clone(),
         development_stage: DevelopmentStage::Juvenile,
@@ -385,6 +386,7 @@ fn anchor_structure(
         decision_history: crate::decision::DecisionHistory::default(),
         usable_energy: 0.0,
         stress: 0.0,
+        maintenance_debt: 0.0,
         stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
         stored_material: anchor_storage,
         development_stage: DevelopmentStage::Juvenile,
@@ -489,6 +491,7 @@ pub(crate) fn begin_reproduction(
             developing_stress: 0.0,
             anchor_unit_index,
             developing_energy: 0.0,
+            developing_maintenance_debt: 0.0,
             needs_space: false,
         });
         return true;
@@ -520,6 +523,7 @@ pub(crate) fn advance_construction(
     let dead = child.apply_stress_damage(environment, ledger, rng);
     construction.developing_energy = child.usable_energy;
     construction.developing_stress = child.stress;
+    construction.developing_maintenance_debt = child.maintenance_debt;
     construction.developing_structure = child.structure.clone();
     if dead {
         return (ConstructionStatus::Dead, None);
@@ -643,6 +647,7 @@ pub(crate) fn finish_reproduction(
         decision_history: crate::decision::DecisionHistory::default(),
         usable_energy: construction.developing_energy,
         stress: construction.developing_stress,
+        maintenance_debt: construction.developing_maintenance_debt,
         stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
         stored_material: construction.committed_material,
         development_stage: DevelopmentStage::Juvenile,
@@ -683,6 +688,7 @@ mod tests {
             developing_stress: 0.0,
             anchor_unit_index: 0,
             developing_energy: 0.0,
+            developing_maintenance_debt: 0.0,
             needs_space: false,
         };
         assert!(preferred > 0.0);

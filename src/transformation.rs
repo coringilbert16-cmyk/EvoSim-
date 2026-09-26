@@ -101,10 +101,10 @@ pub(crate) fn resolve_stress_break(
     rng: &mut ChaCha8Rng,
 ) -> bool {
     let candidate_indices = stress_break_candidate_indices(organism, environment);
-    let Some(&target_index) = candidate_indices.get(rng.gen_range(0..candidate_indices.len()))
-    else {
+    if candidate_indices.is_empty() {
         return false;
-    };
+    }
+    let target_index = candidate_indices[rng.gen_range(0..candidate_indices.len())];
     let target = organism.structure.bonds[target_index];
     let Some(ia) = organism
         .structure
@@ -351,6 +351,7 @@ mod tests {
             decision_history: crate::decision::DecisionHistory::default(),
             usable_energy: 1_000_000.0,
             stress: 0.0,
+            maintenance_debt: 0.0,
             stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
             stored_material: crate::material_storage::MaterialStorage::default(),
             structure,
