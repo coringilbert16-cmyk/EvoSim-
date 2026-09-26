@@ -5,7 +5,7 @@ use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransactio
 use crate::environment::ActiveMaterialField;
 use crate::genome::Genome;
 use crate::material_storage::MaterialStorage;
-use crate::resources::{BaseResource, Material};
+use crate::resources::BaseResource;
 use crate::structure::{Bond, OrganismStructure};
 use parking_lot::Mutex;
 use rand_chacha::ChaCha8Rng;
