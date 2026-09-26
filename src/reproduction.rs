@@ -173,15 +173,17 @@ fn store_first_available_material(
     parent_storage: &mut MaterialStorage,
     child_storage: &mut MaterialStorage,
 ) -> bool {
-    let index = parent_storage
+    let Some(index) = parent_storage
         .entries
         .iter()
-        .position(|entry| matches!(entry, StoredMaterial::Physical(instance) if instance.is_realized()))?;
+        .position(|entry| matches!(entry, StoredMaterial::Physical(instance) if instance.is_realized()))
+    else {
+        return false;
+    };
     let Some(StoredMaterial::Physical(instance)) = parent_storage.entries.get(index).cloned() else {
         return false;
     };
-    let mut child_instance = instance.clone();
-    if !child_storage.store_physical_instance(child_instance.clone()) {
+    if !child_storage.store_physical_instance(instance.clone()) {
         return false;
     }
     let Some(_) = parent_storage.take_physical_at(index) else {
@@ -221,7 +223,8 @@ fn next_construction_resource_status(
                 .any(|held| held == &material);
 
         let mut candidate = child.clone();
-        if !candidate.stored_material.store_physical_instance(material.clone()) {
+        let StoredMaterial::Physical(instance) = material.clone();
+        if !candidate.stored_material.store_physical_instance(instance) {
             continue;
         }
 
@@ -254,7 +257,7 @@ fn try_child_construction(
     environment: &Environment,
     ledger: &EnergyLedger,
     context: Option<DevelopmentalContext<'_>>,
-) -> Option<(Organism, EnergyLedger, Option<Material>)> {
+) -> Option<(Organism, EnergyLedger, Option<PhysicalMaterial>)> {
     let mut candidates = Vec::new();
 
     for index in 0..child.stored_material.entries.len() {
@@ -592,7 +595,11 @@ pub(crate) fn advance_construction(
 
     if let Some(material) = transferred {
         let mut parent_trial = parent_storage.clone();
-        if parent_trial.take_matching(&material).is_none() {
+        if let Some(index) = parent_storage.entries.iter().position(|entry| {
+            matches!(entry, StoredMaterial::Physical(instance) if instance == &material)
+        }) {
+            let _ = parent_trial.take_physical_at(index);
+        } else {
             return (ConstructionStatus::Waiting, None);
         }
         *parent_storage = parent_trial;
