@@ -77,7 +77,6 @@ pub(crate) struct ActiveTransformation {
     pub(crate) id: u64,
     pub(crate) organism_id: String,
     pub(crate) kind: TransformationKind,
-    pub(crate) material: Material,
     #[serde(default)]
     pub(crate) bond: Option<Bond>,
     /// Voluntary BREAK can target a stored physical material or an intact environmental object.
