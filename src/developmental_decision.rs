@@ -157,7 +157,7 @@ pub(crate) fn developmental_action_scores(
                     let bond_index = candidate
                         .context_key
                         .as_deref()
-                        .and_then(|key| key.strip_prefix("bond:"))
+                        .and_then(|key| key.rsplit_once(":bond:").map(|(_, value)| value))
                         .and_then(|index| index.parse::<usize>().ok())?;
                     Some(
                         developmental
