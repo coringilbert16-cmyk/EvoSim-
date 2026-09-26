@@ -5,7 +5,7 @@ use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransactio
 use crate::environment::ActiveMaterialField;
 use crate::genome::Genome;
 use crate::material_storage::MaterialStorage;
-use crate::resources::{BaseResource, Material};
+use crate::resources::BaseResource;
 use crate::structure::{Bond, OrganismStructure};
 use parking_lot::Mutex;
 use rand_chacha::ChaCha8Rng;
@@ -77,14 +77,17 @@ pub(crate) struct ActiveTransformation {
     pub(crate) id: u64,
     pub(crate) organism_id: String,
     pub(crate) kind: TransformationKind,
-    pub(crate) material: Material,
     #[serde(default)]
     pub(crate) bond: Option<Bond>,
-    /// Voluntary BREAK acts only on a bond belonging to stored physical material.
+    /// Voluntary BREAK can target a stored physical material or an intact environmental object.
     #[serde(default)]
     pub(crate) stored_material: Option<crate::physical_material::PhysicalMaterial>,
     #[serde(default)]
     pub(crate) stored_bond: Option<crate::physical_material::PhysicalMaterialBond>,
+    #[serde(default)]
+    pub(crate) environmental_material_id: Option<u64>,
+    #[serde(default)]
+    pub(crate) environmental_bond_index: Option<usize>,
     pub(crate) complexity: f64,
     pub(crate) duration_ticks: u64,
     pub(crate) remaining_ticks: u64,
@@ -242,9 +245,6 @@ impl Organism {
         self.cached_developmental_realization
     }
 
-    pub(crate) fn store_material(&mut self, material: Material) -> bool {
-        self.stored_material.store(material)
-    }
     pub(crate) fn structural_mass(&self, catalog: &[BaseResource]) -> f64 {
         self.structure
             .units

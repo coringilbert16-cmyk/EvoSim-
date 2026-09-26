@@ -11,7 +11,9 @@ use crate::physical_material::PhysicalMaterial;
 use crate::resources::{merge_parts, Material};
 
 pub const DEFAULT_CELL_SIZE: f64 = 25.0;
-const MATERIAL_EPSILON: f64 = 1e-9;
+fn default_next_physical_material_id() -> u64 {
+    1
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct FieldCell {
@@ -77,6 +79,8 @@ pub struct ActiveMaterialField {
     pub cells: Vec<FieldCell>,
     #[serde(default)]
     pub(crate) revision: u64,
+    #[serde(default = "default_next_physical_material_id")]
+    pub(crate) next_physical_material_id: u64,
 }
 
 pub(crate) enum FieldDeposit {
@@ -110,6 +114,7 @@ impl ActiveMaterialField {
             height_cells,
             cells,
             revision: 0,
+            next_physical_material_id: 1,
         }
     }
 
@@ -236,10 +241,9 @@ impl ActiveMaterialField {
         indices
     }
 
-    /// Remove the already-realized physical constituents whose placement points
-    /// are inside the organism's realized body geometry. The field grid is a
-    /// spatial index: only cells intersecting the body's bounds are examined,
-    /// while physical containment remains authoritative.
+    /// Transfer only physical materials whose complete realization is contained by the
+    /// organism body. A partially overlapping composite remains one environmental object;
+    /// its contained constituents are accessed by query rather than split here.
     pub(crate) fn take_contained_physical_materials(
         &mut self,
         body: &crate::organism_geometry::OrganismBodyGeometry,
@@ -259,28 +263,13 @@ impl ActiveMaterialField {
                     remaining.push(physical);
                     continue;
                 }
-                let selected: Vec<usize> = placements
+                let all_contained = placements
                     .iter()
-                    .enumerate()
-                    .filter_map(|(index, placement)| {
-                        body.contains_point(placement.x, placement.y)
-                            .then_some(index)
-                    })
-                    .collect();
-                if selected.is_empty() {
-                    remaining.push(physical);
-                    continue;
-                }
-                if selected.len() == placements.len() {
+                    .all(|placement| body.contains_point(placement.x, placement.y));
+                if all_contained {
                     contained.push(physical);
-                    continue;
-                }
-                match crate::material_transfer::split_physical_material(&physical, &selected) {
-                    Some((inside, outside)) => {
-                        contained.push(inside);
-                        remaining.push(outside);
-                    }
-                    None => remaining.push(physical),
+                } else {
+                    remaining.push(physical);
                 }
             }
             cell.physical_materials = remaining;
@@ -289,6 +278,62 @@ impl ActiveMaterialField {
             self.revision = self.revision.wrapping_add(1);
         }
         contained
+    }
+
+    /// Return the constituent indices of realized environmental materials that are
+    /// physically accessible from inside the organism body. This is a read-only access
+    /// view: the environmental PhysicalMaterial is never partitioned or removed.
+    pub(crate) fn accessible_physical_materials(
+        &self,
+        body: &crate::organism_geometry::OrganismBodyGeometry,
+    ) -> Vec<(usize, usize, Vec<usize>)> {
+        let mut accessible = Vec::new();
+        for (cell_index, cell) in self.cells.iter().enumerate() {
+            for (material_index, physical) in cell.physical_materials.iter().enumerate() {
+                let Some(placements) = physical.placements.as_ref() else {
+                    continue;
+                };
+                if placements.len() != physical.material.parts.len() || !physical.is_realized() {
+                    continue;
+                }
+                let parts = placements
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(part_index, placement)| {
+                        body.contains_point(placement.x, placement.y)
+                            .then_some(part_index)
+                    })
+                    .collect::<Vec<_>>();
+                if !parts.is_empty() {
+                    accessible.push((cell_index, material_index, parts));
+                }
+            }
+        }
+        accessible
+    }
+
+    pub(crate) fn find_physical_material(&self, id: u64) -> Option<(usize, usize)> {
+        if id == 0 {
+            return None;
+        }
+        self.cells
+            .iter()
+            .enumerate()
+            .find_map(|(cell_index, cell)| {
+                cell.physical_materials
+                    .iter()
+                    .position(|material| material.id == id)
+                    .map(|material_index| (cell_index, material_index))
+            })
+    }
+
+    pub(crate) fn remove_physical_material(&mut self, id: u64) -> Option<PhysicalMaterial> {
+        let (cell_index, material_index) = self.find_physical_material(id)?;
+        let material = self.cells[cell_index]
+            .physical_materials
+            .swap_remove(material_index);
+        self.revision = self.revision.wrapping_add(1);
+        Some(material)
     }
 
     pub fn neighbor_indices(&self, index: usize) -> Vec<usize> {
@@ -358,6 +403,13 @@ impl ActiveMaterialField {
         {
             return false;
         }
+        let mut material = material;
+        if material.id == 0 {
+            material.id = self.next_physical_material_id.max(1);
+        }
+        self.next_physical_material_id = self
+            .next_physical_material_id
+            .max(material.id.wrapping_add(1).max(1));
         self.cells[index].physical_materials.push(material);
         self.revision = self.revision.wrapping_add(1);
         true

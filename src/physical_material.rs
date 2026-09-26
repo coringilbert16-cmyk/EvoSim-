@@ -19,6 +19,10 @@ pub(crate) struct PhysicalMaterialBond {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct PhysicalMaterial {
+    /// Stable identity while this realized object remains in the environment.
+    /// Zero is the unassigned sentinel used before environmental insertion.
+    #[serde(default)]
+    pub(crate) id: u64,
     pub(crate) material: Material,
     pub(crate) placements: Option<Vec<Placement>>,
     #[serde(default)]
@@ -28,15 +32,6 @@ pub(crate) struct PhysicalMaterial {
 }
 
 impl PhysicalMaterial {
-    pub(crate) fn logical(material: Material) -> Self {
-        Self {
-            material,
-            placements: None,
-            internal_connections: None,
-            owner_relative_origin: None,
-        }
-    }
-
     pub(crate) fn realized(
         material: Material,
         placements: Vec<Placement>,
@@ -91,6 +86,7 @@ impl PhysicalMaterial {
         }
 
         Some(Self {
+            id: 0,
             material,
             placements: Some(placements),
             internal_connections: Some(internal_connections),
@@ -163,6 +159,7 @@ impl PhysicalMaterial {
                 }
             }
             pieces.push(Self {
+                id: 0,
                 material: Material {
                     parts,
                     internal_bonds,
@@ -209,6 +206,7 @@ impl PhysicalMaterial {
             })
             .collect();
         Some(Self {
+            id: self.id,
             material: self.material,
             placements: Some(rebased),
             internal_connections: self.internal_connections,

@@ -15,9 +15,7 @@ pub(crate) fn expel_physical_material(
         let Some(stored) = organism.stored_material.entries.get(storage_index) else {
             return false;
         };
-        let crate::material_storage::StoredMaterial::Physical(instance) = stored else {
-            return false;
-        };
+        let crate::material_storage::StoredMaterial::Physical(instance) = stored;
         let Some(relative) = instance.owner_relative_origin else {
             return false;
         };

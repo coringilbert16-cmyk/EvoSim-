@@ -7,6 +7,7 @@ use crate::combine_runtime::DevelopmentalContext;
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::juvenile_requirements::{validate_realized_juvenile, JuvenileViabilityRequirements};
 use crate::material_storage::{MaterialStorage, StoredMaterial};
+use crate::physical_material::PhysicalMaterial;
 use crate::resources::Material;
 use crate::state::{
     DevelopmentStage, EnergyLedger, Environment, Organism, Position, ReproductiveConstruction,
@@ -173,13 +174,23 @@ fn store_first_available_material(
     parent_storage: &mut MaterialStorage,
     child_storage: &mut MaterialStorage,
 ) -> bool {
-    let Some(material) = parent_storage.peek_one_unstructured() else {
+    let Some(index) = parent_storage.entries.iter().position(
+        |entry| matches!(entry, StoredMaterial::Physical(instance) if instance.is_realized()),
+    ) else {
         return false;
     };
-    let Some(material) = parent_storage.take_matching(&material) else {
+    let Some(StoredMaterial::Physical(instance)) = parent_storage.entries.get(index).cloned()
+    else {
         return false;
     };
-    child_storage.store(material)
+    if !child_storage.store_physical_instance(instance.clone()) {
+        return false;
+    }
+    let Some(_) = parent_storage.take_physical_at(index) else {
+        let _ = child_storage.entries.pop();
+        return false;
+    };
+    true
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -211,8 +222,19 @@ fn next_construction_resource_status(
                 .iter()
                 .any(|held| held == &material);
 
+        let Some(physical) = PhysicalMaterial::realized(
+            material.clone(),
+            vec![crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &environment.catalog,
+        ) else {
+            continue;
+        };
         let mut candidate = child.clone();
-        if !candidate.stored_material.store(material.clone()) {
+        if !candidate.stored_material.store_physical_instance(physical) {
             continue;
         }
 
@@ -245,7 +267,7 @@ fn try_child_construction(
     environment: &Environment,
     ledger: &EnergyLedger,
     context: Option<DevelopmentalContext<'_>>,
-) -> Option<(Organism, EnergyLedger, Option<Material>)> {
+) -> Option<(Organism, EnergyLedger, Option<PhysicalMaterial>)> {
     let mut candidates = Vec::new();
 
     for index in 0..child.stored_material.entries.len() {
@@ -254,14 +276,18 @@ fn try_child_construction(
         candidates.push((candidate, None));
     }
 
-    for material in parent_storage.materials_snapshot() {
+    for material in parent_storage.entries.iter().cloned() {
+        let StoredMaterial::Physical(instance) = material.clone();
         let mut candidate = child.clone();
-        if !candidate.stored_material.store(material.clone()) {
+        if !candidate
+            .stored_material
+            .store_physical_instance(instance.clone())
+        {
             continue;
         }
         let last = candidate.stored_material.entries.len().saturating_sub(1);
         candidate.stored_material.entries.swap(0, last);
-        candidates.push((candidate, Some(material)));
+        candidates.push((candidate, Some(instance)));
     }
 
     for (mut candidate, transferred) in candidates {
@@ -445,16 +471,16 @@ pub(crate) fn begin_reproduction(
     // No resource type is reserved as a reproductive anchor. The first
     // offspring core is selected from whatever parent-held material can
     // actually be instantiated by the physical construction runtime.
-    // Structured logical material remains intact; an already-realized
-    // structured object may be used directly.
-    for entry in parent.stored_material.entries.clone() {
-        let anchor = match &entry {
-            StoredMaterial::Logical(material) if !material.has_internal_structure() => {
-                material.clone()
-            }
-            StoredMaterial::Physical(instance) => instance.material.clone(),
-            StoredMaterial::Logical(_) => continue,
-        };
+    // The anchor is always an already-realized physical object.
+    for (entry_index, entry) in parent
+        .stored_material
+        .entries
+        .clone()
+        .into_iter()
+        .enumerate()
+    {
+        let StoredMaterial::Physical(instance) = &entry;
+        let anchor = instance.material.clone();
         let Some(placement) = parent_child_position(parent, &anchor, catalog) else {
             continue;
         };
@@ -468,12 +494,7 @@ pub(crate) fn begin_reproduction(
         };
 
         let mut parent_trial = parent.stored_material.clone();
-        let removed = match &entry {
-            StoredMaterial::Logical(material) => parent_trial.take_matching(material).is_some(),
-            StoredMaterial::Physical(instance) => parent_trial
-                .take_matching_physical(&instance.material)
-                .is_some(),
-        };
+        let removed = parent_trial.take_physical_at(entry_index).is_some();
         if !removed {
             continue;
         }
@@ -596,7 +617,11 @@ pub(crate) fn advance_construction(
 
     if let Some(material) = transferred {
         let mut parent_trial = parent_storage.clone();
-        if parent_trial.take_matching(&material).is_none() {
+        if let Some(index) = parent_storage.entries.iter().position(
+            |entry| matches!(entry, StoredMaterial::Physical(instance) if instance == &material),
+        ) {
+            let _ = parent_trial.take_physical_at(index);
+        } else {
             return (ConstructionStatus::Waiting, None);
         }
         *parent_storage = parent_trial;
@@ -699,8 +724,33 @@ mod tests {
     fn reserve_requirement_is_genome_defined() {
         let mut storage = MaterialStorage::default();
         let genome = initial_genome();
-        assert!(storage.store(genome.juvenile_reserve.clone()));
-        assert!(storage.take_matching(&genome.juvenile_reserve).is_some());
+        let catalog = default_catalog();
+        let physical = crate::physical_material::PhysicalMaterial::realized(
+            genome.juvenile_reserve.clone(),
+            vec![
+                crate::structure::Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                crate::structure::Placement {
+                    x: 0.8,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                crate::structure::Placement {
+                    x: 1.6,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("juvenile reserve must be physically realizable");
+        assert!(storage.store_physical_instance(physical));
+        assert!(storage
+            .take_matching_physical(&genome.juvenile_reserve)
+            .is_some());
         assert!(genome.juvenile_energy_reserve > 0.0);
     }
 
@@ -871,7 +921,17 @@ mod tests {
             rotation_radians: 0.0,
         };
         let mut storage = MaterialStorage::default();
-        assert!(storage.store(anchor));
+        let physical = PhysicalMaterial::realized(
+            anchor.clone(),
+            vec![crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("anchor must be physically realizable");
+        assert!(storage.store_physical_instance(physical));
         assert!(anchor_structure(&genome, storage, placement, &catalog).is_some());
     }
 }

@@ -246,7 +246,7 @@ pub(crate) fn instantiate_one_unit(
         },
         catalog,
     )?;
-    organism.stored_material.take_matching(&material)?;
+    organism.stored_material.take_matching_physical(&material)?;
     Some(organism.structure.add_unit(unit))
 }
 
@@ -539,11 +539,7 @@ pub(crate) fn try_combine_stored_unit(
             &mut candidate_ledger,
             &mut candidate_energy,
         ) {
-            if physical_instance.is_some() {
-                organism.stored_material.take_matching_physical(&raw)?;
-            } else {
-                organism.stored_material.take_matching(&raw)?;
-            }
+            organism.stored_material.take_matching_physical(&raw)?;
             organism.structure = hypothetical;
             organism.mark_structure_changed();
             organism.usable_energy = candidate_energy;

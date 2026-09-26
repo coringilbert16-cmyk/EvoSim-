@@ -75,18 +75,18 @@ mod tests {
     }
 
     #[test]
-    fn composite_is_partitioned_at_constituent_boundary() {
+    fn partially_contained_composite_remains_intact_and_accessible() {
         let catalog = catalog();
         let physical = PhysicalMaterial::realized(
             compound(),
             vec![
                 Placement {
-                    x: 0.0,
+                    x: 1.8,
                     y: 0.0,
                     rotation_radians: 0.0,
                 },
                 Placement {
-                    x: 1.8,
+                    x: 0.0,
                     y: 0.0,
                     rotation_radians: 0.0,
                 },
@@ -96,12 +96,12 @@ mod tests {
         .expect("test composite must have a valid physical realization");
 
         let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
-        field.deposit(0.0, 0.0, physical);
+        field.deposit(1.8, 0.0, physical);
+        let revision_before = field.revision;
         let contained = field.take_contained_physical_materials(&body());
 
-        assert_eq!(contained.len(), 1);
-        assert_eq!(contained[0].material.parts, vec![("Carbon".into(), 1.0)]);
-        assert!(contained[0].material.internal_bonds.is_empty());
+        assert!(contained.is_empty());
+        assert_eq!(field.revision, revision_before);
 
         let remaining: Vec<_> = field
             .cells
@@ -109,7 +109,44 @@ mod tests {
             .flat_map(|cell| cell.physical_materials.iter())
             .collect();
         assert_eq!(remaining.len(), 1);
-        assert_eq!(remaining[0].material.parts, vec![("Hydrogen".into(), 1.0)]);
-        assert!(remaining[0].material.internal_bonds.is_empty());
+        assert_eq!(remaining[0].material, compound());
+        assert_eq!(
+            remaining[0].material.internal_bonds,
+            compound().internal_bonds
+        );
+
+        let accessible = field.accessible_physical_materials(&body());
+        assert_eq!(accessible.len(), 1);
+        assert_eq!(accessible[0].2, vec![0]);
+    }
+    #[test]
+    fn environmental_material_id_survives_redeposit() {
+        let catalog = catalog();
+        let physical = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("test material must be realizable");
+
+        let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
+        assert!(field.deposit(0.0, 0.0, physical));
+        let id = field.cells[0].physical_materials[0].id;
+        assert!(id > 0);
+
+        let removed = field
+            .remove_physical_material(id)
+            .expect("material must exist");
+        assert_eq!(removed.id, id);
+        assert!(field.deposit_physical(25.0, 0.0, removed));
+
+        let found = field
+            .find_physical_material(id)
+            .expect("stable id must survive movement");
+        assert_eq!(field.cells[found.0].physical_materials[found.1].id, id);
     }
 }

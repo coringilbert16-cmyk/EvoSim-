@@ -86,9 +86,22 @@ mod integration_tests {
     #[test]
     fn storage_contains_discrete_independent_material_objects() {
         let mut o = Simulation::create_initial_organism();
-        assert!(o.store_material(Material::free_base("Carbon", 5.0)));
-        assert_eq!(o.stored_material.len(), 2);
-        assert_eq!(o.stored_material.count_unstructured(), 1);
+        let catalog = crate::resources::default_catalog();
+        for index in 0..5 {
+            let physical = PhysicalMaterial::realized(
+                Material::free_base("Carbon", 1.0),
+                vec![Placement {
+                    x: index as f64,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("carbon should have a valid physical realization");
+            assert!(o.stored_material.store_physical_instance(physical));
+        }
+        assert_eq!(o.stored_material.len(), 6);
+        assert_eq!(o.stored_material.count_unstructured(), 5);
         assert_eq!(o.stored_material.count_structured(), 1);
         assert_eq!(o.stored_material.total_amount(), 8.0);
     }
@@ -96,7 +109,24 @@ mod integration_tests {
     fn storage_preserves_a_compound_as_one_intact_object() {
         let mut o = Simulation::create_initial_organism();
         let m = structured_carbon_hydrogen();
-        assert!(o.store_material(m.clone()));
+        let physical = PhysicalMaterial::realized(
+            m.clone(),
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.8,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &crate::resources::default_catalog(),
+        )
+        .expect("compound should be physically realizable");
+        assert!(o.stored_material.store_physical_instance(physical));
         assert!(o.stored_material.materials_snapshot().contains(&m));
         assert_eq!(o.stored_material.count_structured(), 1);
     }
@@ -124,7 +154,7 @@ mod integration_tests {
     }
 
     #[test]
-    fn a_composite_crossing_the_boundary_is_partitioned_at_constituent_scale() {
+    fn a_composite_crossing_the_boundary_remains_intact_and_accessible() {
         let mut s = Simulation::new(23, 10.0);
         for cell in &mut s.environment.field.cells {
             cell.materials.clear();
@@ -170,11 +200,8 @@ mod integration_tests {
             &mut s.organisms[0],
             &mut s.environment,
         );
-        assert_eq!(s.organisms[0].stored_material.total_amount(), before + 1.0);
-        let stored = s.organisms[0].stored_material.materials_snapshot();
-        assert!(stored
-            .iter()
-            .any(|m| m.parts == vec![("Carbon".into(), 1.0)]));
+
+        assert_eq!(s.organisms[0].stored_material.total_amount(), before);
         let remaining: Vec<_> = s
             .environment
             .field
@@ -183,14 +210,39 @@ mod integration_tests {
             .flat_map(|cell| cell.physical_materials.iter())
             .collect();
         assert_eq!(remaining.len(), 1);
-        assert_eq!(remaining[0].material.parts, vec![("Hydrogen".into(), 1.0)]);
-        assert!(remaining[0].material.internal_bonds.is_empty());
+        assert_eq!(
+            remaining[0].material.parts,
+            vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)]
+        );
+        assert_eq!(remaining[0].material.internal_bonds.len(), 1);
+
+        let accessible = s.environment.field.accessible_physical_materials(&body);
+        assert_eq!(accessible.len(), 1);
+        assert_eq!(accessible[0].2, vec![0]);
     }
 
     #[test]
     fn structural_material_is_not_opened_by_storage() {
         let mut o = Simulation::create_initial_organism();
-        assert!(o.store_material(structured_carbon_hydrogen()));
+        let material = structured_carbon_hydrogen();
+        let physical = PhysicalMaterial::realized(
+            material.clone(),
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.8,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &crate::resources::default_catalog(),
+        )
+        .expect("compound should be physically realizable");
+        assert!(o.stored_material.store_physical_instance(physical));
         assert_eq!(o.stored_material.count_structured(), 1);
     }
 
