@@ -3,6 +3,17 @@ use crate::material_geometry::PlacedMaterialPart;
 use crate::state::{EnergyLedger, Environment, Organism, Simulation};
 use crate::structure::Placement;
 
+const DEFAULT_MOVEMENT_EFFICIENCY: f64 = 0.8;
+const MOVEMENT_REFERENCE_MASS: f64 = 16.0;
+const MOVEMENT_BASE_STEP_DISTANCE: f64 = 4.0;
+
+fn movement_energy_cost(realized_mass: f64, movement_efficiency: f64) -> f64 {
+    let mass = realized_mass.max(0.0);
+    let efficiency = movement_efficiency.clamp(0.05, 1.0);
+    let mass_cost = 1.0 + mass / MOVEMENT_REFERENCE_MASS;
+    mass_cost * (DEFAULT_MOVEMENT_EFFICIENCY / efficiency)
+}
+
 impl Simulation {
     pub(crate) fn update_movement(
         organism: &mut Organism,
@@ -15,6 +26,7 @@ impl Simulation {
         let usable_energy = organism.usable_energy;
         let active_transformation_id = organism.active_transformation_id;
         let movement_efficiency = organism.genome.movement_efficiency();
+        let realized_mass = organism.structural_mass(&environment.catalog);
         let direction =
             crate::movement_direction::movement_direction_periodic(organism, environment.height);
         let Some((x, y)) = direction else {
@@ -32,8 +44,11 @@ impl Simulation {
             return false;
         };
 
-        let step = 5.0 * movement_efficiency;
-        let cost = step.max(0.0);
+        // Keep the established default displacement (5.0 * 0.8 = 4.0)
+        // independent from energy efficiency. Efficiency now changes the
+        // energy required for the same movement rather than changing distance.
+        let step = MOVEMENT_BASE_STEP_DISTANCE;
+        let cost = movement_energy_cost(realized_mass, movement_efficiency);
         if !cost.is_finite() || organism.usable_energy + f64::EPSILON < cost {
             organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
                 tick,
@@ -506,6 +521,60 @@ mod tests {
             cell.physical_materials.clear();
         }
         environment
+    }
+
+    #[test]
+    fn movement_cost_matches_reference_curve_at_default_efficiency() {
+        let cases = [
+            (2.7, 1.16875),
+            (4.0, 1.25),
+            (8.0, 1.5),
+            (16.0, 2.0),
+            (32.0, 3.0),
+            (64.0, 5.0),
+            (128.0, 9.0),
+            (256.0, 17.0),
+            (512.0, 33.0),
+            (1024.0, 65.0),
+        ];
+        for (mass, expected) in cases {
+            let actual = movement_energy_cost(mass, DEFAULT_MOVEMENT_EFFICIENCY);
+            assert!(
+                (actual - expected).abs() < 1e-10,
+                "mass {mass}: expected {expected}, got {actual}"
+            );
+        }
+    }
+
+    #[test]
+    fn movement_cost_increases_with_realized_mass() {
+        let masses = [2.7, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0];
+        for pair in masses.windows(2) {
+            assert!(
+                movement_energy_cost(pair[1], DEFAULT_MOVEMENT_EFFICIENCY)
+                    > movement_energy_cost(pair[0], DEFAULT_MOVEMENT_EFFICIENCY)
+            );
+        }
+    }
+
+    #[test]
+    fn movement_efficiency_changes_energy_cost_not_distance() {
+        assert!(
+            movement_energy_cost(16.0, 1.0) < movement_energy_cost(16.0, 0.8)
+        );
+        assert!(
+            movement_energy_cost(16.0, 0.5) > movement_energy_cost(16.0, 0.8)
+        );
+        assert_eq!(MOVEMENT_BASE_STEP_DISTANCE, 4.0);
+    }
+
+    #[test]
+    fn movement_cost_is_finite_for_nonnegative_mass_and_valid_efficiency() {
+        for mass in [0.0, 2.7, 16.0, 1024.0, 1.0e12] {
+            for efficiency in [0.05, 0.8, 1.0] {
+                assert!(movement_energy_cost(mass, efficiency).is_finite());
+            }
+        }
     }
 
     #[test]
