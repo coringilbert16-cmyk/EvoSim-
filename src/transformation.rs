@@ -394,7 +394,8 @@ impl Simulation {
         for piece in pieces {
             if !organism
                 .stored_material
-                .store_physical_instance(piece.clone()) {
+                .store_physical_instance(piece.clone())
+            {
                 if let Some(placement) = piece
                     .placements
                     .as_ref()
