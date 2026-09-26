@@ -742,7 +742,9 @@ mod tests {
         )
         .expect("juvenile reserve must be physically realizable");
         assert!(storage.store_physical_instance(physical));
-        assert!(storage.take_matching_physical(&genome.juvenile_reserve).is_some());
+        assert!(storage
+            .take_matching_physical(&genome.juvenile_reserve)
+            .is_some());
         assert!(genome.juvenile_energy_reserve > 0.0);
     }
 
