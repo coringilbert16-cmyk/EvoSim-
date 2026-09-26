@@ -264,31 +264,34 @@ impl Organism {
         if !demand.is_finite() || demand <= 0.0 {
             return;
         }
-        let paid = self.usable_energy.min(demand).max(0.0);
-        let deficit = demand - paid;
-        if deficit > 0.0 {
-            self.maintenance_debt += deficit;
-        }
-
-        if paid > 0.0 {
+        let available = self.usable_energy.max(0.0);
+        let attempted_payment = available.min(demand).max(0.0);
+        let settled_payment = if attempted_payment > 0.0 {
             let tx = EnergyTransaction {
                 reason: EnergyReason::Maintenance,
                 potential_released: 0.0,
-                usable_delta: -paid,
+                usable_delta: -attempted_payment,
                 structural_delta: 0.0,
-                heat_dissipated: paid,
+                heat_dissipated: attempted_payment,
             };
             if ledger.settle_transaction(&mut self.usable_energy, tx) {
-                self.add_transaction_stress(paid);
+                self.add_transaction_stress(attempted_payment);
+                attempted_payment
             } else {
-                self.maintenance_debt += paid;
+                0.0
             }
-        }
+        } else {
+            0.0
+        };
 
-        // Historical debt only becomes an active stress pressure while current
-        // maintenance is also going unpaid. Recovering energy stops further
-        // starvation damage without retroactively repairing past consequences.
+        let deficit = demand - settled_payment;
         if deficit > 0.0 {
+            self.maintenance_debt += deficit;
+
+            // Historical debt only becomes active starvation pressure while
+            // current maintenance is also going unpaid. Recovering energy
+            // stops further starvation damage without retroactively repairing
+            // past consequences.
             self.stress += deficit + self.maintenance_debt;
         }
     }
