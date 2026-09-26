@@ -110,7 +110,10 @@ mod tests {
             .collect();
         assert_eq!(remaining.len(), 1);
         assert_eq!(remaining[0].material, compound());
-        assert_eq!(remaining[0].material.internal_bonds, compound().internal_bonds);
+        assert_eq!(
+            remaining[0].material.internal_bonds,
+            compound().internal_bonds
+        );
 
         let accessible = field.accessible_physical_materials(&body());
         assert_eq!(accessible.len(), 1);
@@ -135,12 +138,15 @@ mod tests {
         let id = field.cells[0].physical_materials[0].id;
         assert!(id > 0);
 
-        let removed = field.remove_physical_material(id).expect("material must exist");
+        let removed = field
+            .remove_physical_material(id)
+            .expect("material must exist");
         assert_eq!(removed.id, id);
         assert!(field.deposit_physical(25.0, 0.0, removed));
 
-        let found = field.find_physical_material(id).expect("stable id must survive movement");
+        let found = field
+            .find_physical_material(id)
+            .expect("stable id must survive movement");
         assert_eq!(field.cells[found.0].physical_materials[found.1].id, id);
     }
-
 }
