@@ -121,7 +121,8 @@ impl DecisionHistory {
             existing.consequence.stress_delta =
                 (existing.consequence.stress_delta * n + consequence.stress_delta) / next;
             existing.consequence.developmental_delta =
-                (existing.consequence.developmental_delta * n + consequence.developmental_delta) / next;
+                (existing.consequence.developmental_delta * n + consequence.developmental_delta)
+                    / next;
             existing.count = next_count;
             return;
         }
@@ -144,7 +145,11 @@ impl DecisionHistory {
         });
     }
 
-    pub fn consequence(&self, action: ActionKind, context_key: Option<&str>) -> Option<ActionConsequence> {
+    pub fn consequence(
+        &self,
+        action: ActionKind,
+        context_key: Option<&str>,
+    ) -> Option<ActionConsequence> {
         self.entries
             .iter()
             .find(|entry| entry.action == action && entry.context_key.as_deref() == context_key)
