@@ -59,7 +59,7 @@ const FORMATION_CENTER_FRACTIONS: [(f64, f64); INITIAL_FORMATION_COUNT] = [
 /// This is intentionally additive to the broader landscape: the persistent
 /// ecological formations remain in place, while the starting organism also
 /// begins in a physically realized local material cloud.
-pub(crate) const INITIAL_RESOURCE_CLOUD_PARTICLES: usize = 120;
+pub(crate) const INITIAL_RESOURCE_CLOUD_PARTICLES: usize = 5000;
 const INITIAL_RESOURCE_CLOUD_RADIUS: f64 = 55.0;
 const INITIAL_RESOURCE_CLOUD_CENTER: (f64, f64) = (500.0, 500.0);
 
