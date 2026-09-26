@@ -84,14 +84,22 @@ fn stress_break_candidate_indices(organism: &Organism, environment: &Environment
             .flatten()
             .map(|cavity| cavity.boundary_bond_indices(&organism.structure))
             .unwrap_or_default();
-    let candidates: Vec<usize> = organism
+
+    // Genome bonds are protected while ordinary structural bonds remain.
+    // Once those ordinary bonds are exhausted, the protected bonds become
+    // stress-break candidates so structural collapse can proceed normally.
+    let ordinary_candidates: Vec<usize> = organism
         .structure
         .bonds
         .iter()
         .enumerate()
         .filter_map(|(index, _)| (!genome_bonds.contains(&index)).then_some(index))
         .collect();
-    candidates
+    if !ordinary_candidates.is_empty() {
+        return ordinary_candidates;
+    }
+
+    genome_bonds
 }
 
 pub(crate) fn resolve_stress_break(
@@ -334,8 +342,11 @@ mod tests {
         assert!((gross - usable - heat).abs() < 1e-12);
     }
 
-    #[test]
-    fn stress_break_candidates_exclude_genome_boundary_bonds() {
+    fn stress_break_test_organism() -> (
+        crate::state::Organism,
+        crate::state::Environment,
+        Vec<usize>,
+    ) {
         let genome = crate::genome::initial_genome();
         let catalog = crate::resources::default_catalog();
         let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
@@ -363,7 +374,6 @@ mod tests {
             cached_cavity_revision: None,
             cached_cavity: None,
             cached_developmental_revision: None,
-            cached_developmental_realization: None,
             peak_developmental_realization: 0.0,
             cached_harmonic_key: None,
             last_movement_attempt: None,
@@ -378,12 +388,36 @@ mod tests {
                 crate::environment::DEFAULT_CELL_SIZE,
             ),
         };
-        let candidates = stress_break_candidate_indices(&organism, &environment);
-        assert!(!candidates.is_empty());
         let genome_bonds = crate::cavity::analyze_genome_cavity(&organism.structure, &catalog)
             .unwrap()
             .unwrap()
             .boundary_bond_indices(&organism.structure);
+        (organism, environment, genome_bonds)
+    }
+
+    #[test]
+    fn stress_break_candidates_prefer_non_genome_bonds() {
+        let (organism, environment, genome_bonds) = stress_break_test_organism();
+        let candidates = stress_break_candidate_indices(&organism, &environment);
+        assert!(!candidates.is_empty());
         assert!(candidates.iter().all(|index| !genome_bonds.contains(index)));
+    }
+
+    #[test]
+    fn stress_break_candidates_fall_back_to_genome_bonds_when_structure_is_exhausted() {
+        let (mut organism, environment, genome_bonds) = stress_break_test_organism();
+        assert!(!genome_bonds.is_empty());
+        let protected_bonds: Vec<_> = genome_bonds
+            .iter()
+            .filter_map(|&index| organism.structure.bonds.get(index).copied())
+            .collect();
+        organism.structure.bonds.retain(|bond| {
+            protected_bonds
+                .iter()
+                .any(|candidate| candidate.has_same_identity(bond))
+        });
+        let candidates = stress_break_candidate_indices(&organism, &environment);
+        assert_eq!(candidates.len(), organism.structure.bonds.len());
+        assert!(!candidates.is_empty());
     }
 }
