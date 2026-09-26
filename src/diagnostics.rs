@@ -13,7 +13,9 @@ use std::io::{BufWriter, Write};
 pub(crate) struct DiagnosticsRecorder {
     writer: BufWriter<File>,
     interval: u64,
+    organism_id: String,
     before: Option<SimulationSnapshot>,
+    stopped: bool,
     summary_path: String,
     summary: DiagnosticSummary,
 }
@@ -25,8 +27,6 @@ struct DiagnosticSummary {
     transformation_types: HashMap<String, u64>,
     structure_changes: u64,
     lifecycle_changes: u64,
-    max_active_transformations: usize,
-    max_population: usize,
     min_growth_fraction: Option<f64>,
     max_growth_fraction: Option<f64>,
     min_energy: Option<f64>,
@@ -88,6 +88,7 @@ impl DiagnosticsRecorder {
     pub(crate) fn new(
         path: &str,
         interval: u64,
+        organism_id: &str,
         simulation: &mut Simulation,
     ) -> std::io::Result<Self> {
         let file = File::create(path)?;
@@ -95,7 +96,9 @@ impl DiagnosticsRecorder {
             writer: BufWriter::new(file),
             summary_path: format!("{path}.summary.txt"),
             interval: interval.max(1),
+            organism_id: organism_id.to_string(),
             before: None,
+            stopped: false,
             summary: DiagnosticSummary::default(),
         };
         recorder.write_event(json!({
@@ -103,17 +106,23 @@ impl DiagnosticsRecorder {
             "version": 1,
             "seed": 42,
             "max_detail_interval": recorder.interval,
-            "purpose": "Explain transformations, structural changes, developmental progress, energy/stress, memory, harmonics, storage, and environmental changes."
+            "purpose": "Trace the complete life of the initial organism, tick by tick, until death."
         }))?;
-        recorder.write_snapshot(simulation, "initial")?;
+        // The first pre-tick state is captured by observe_before.
         Ok(recorder)
     }
 
     pub(crate) fn observe_before(&mut self, simulation: &mut Simulation) {
+        if self.stopped {
+            return;
+        }
         self.before = Some(self.capture(simulation));
     }
 
     pub(crate) fn observe_after(&mut self, simulation: &mut Simulation) -> std::io::Result<()> {
+        if self.stopped {
+            return Ok(());
+        }
         let Some(before) = self.before.take() else {
             return Ok(());
         };
@@ -125,25 +134,29 @@ impl DiagnosticsRecorder {
         self.record_lifecycle_changes(&before, &after)?;
         self.record_movement_attempts(&after)?;
 
-        if after.tick % self.interval == 0 {
-            self.write_snapshot(simulation, "interval")?;
+        self.write_tick_snapshot(&before, &after)?;
+
+        if !after.organisms.contains_key(&self.organism_id) {
+            self.write_event(json!({
+                "event": "organism_died",
+                "tick": after.tick,
+                "organism_id": self.organism_id,
+                "last_state": before.organisms.get(&self.organism_id).map(|o| self.state_json(o))
+            }))?;
+            self.stopped = true;
         }
 
         self.flush_if_needed(after.tick)
     }
 
-    pub(crate) fn finish(&mut self, simulation: &mut Simulation) -> std::io::Result<()> {
-        self.write_snapshot(simulation, "final")?;
-        self.write_summary_file(simulation)?;
-        self.write_event(json!({
-            "event": "diagnostic_end",
-            "tick": simulation.tick,
-            "population": simulation.organisms.len(),
-            "completed_births": simulation.next_organism_id.saturating_sub(2),
-            "active_transformations": simulation.active_transformations.len(),
-            "decomposing_bodies": simulation.decomposing_bodies.len(),
-            "field_revision": simulation.environment.field.revision
-        }))?;
+    pub(crate) fn finish(&mut self, _simulation: &mut Simulation) -> std::io::Result<()> {
+        if !self.stopped {
+            self.write_event(json!({
+                "event": "diagnostic_end",
+                "organism_id": self.organism_id,
+                "reason": "simulation_finished_before_target_death"
+            }))?;
+        }
         self.writer.flush()
     }
 
@@ -151,6 +164,7 @@ impl DiagnosticsRecorder {
         let organisms = simulation
             .organisms
             .iter_mut()
+            .filter(|organism| organism.id == self.organism_id)
             .map(|organism| {
                 let growth = crate::developmental_decision::growth_fraction(
                     organism,
@@ -197,6 +211,7 @@ impl DiagnosticsRecorder {
         let transformations = simulation
             .active_transformations
             .iter()
+            .filter(|transformation| transformation.organism_id == self.organism_id)
             .map(|transformation| {
                 (
                     transformation.id,
@@ -396,67 +411,40 @@ impl DiagnosticsRecorder {
         Ok(())
     }
 
-    fn write_snapshot(&mut self, simulation: &mut Simulation, reason: &str) -> std::io::Result<()> {
-        let snapshot = self.capture(simulation);
-        self.summary.max_active_transformations = self
-            .summary
-            .max_active_transformations
-            .max(simulation.active_transformations.len());
-        self.summary.max_population = self.summary.max_population.max(simulation.organisms.len());
-        for organism in snapshot.organisms.values() {
-            update_min_max(
-                &mut self.summary.min_growth_fraction,
-                &mut self.summary.max_growth_fraction,
-                organism.developmental_growth_fraction,
-            );
-            update_min_max(
-                &mut self.summary.min_energy,
-                &mut self.summary.max_energy,
-                Some(organism.energy),
-            );
-            update_min_max(
-                &mut self.summary.min_stress,
-                &mut self.summary.max_stress,
-                Some(organism.stress),
-            );
-        }
-        let total_field_mass: f64 = simulation
-            .environment
-            .field
-            .cells
-            .iter()
-            .flat_map(|cell| cell.materials.iter())
-            .map(|material| material.mass(&simulation.environment.catalog))
-            .sum();
-        let total_stored_mass: f64 = simulation
-            .organisms
-            .iter()
-            .flat_map(|organism| organism.stored_material.entries.iter())
-            .map(|entry| match entry {
-                crate::material_storage::StoredMaterial::Logical(material) => {
-                    material.mass(&simulation.environment.catalog)
-                }
-                crate::material_storage::StoredMaterial::Physical(instance) => {
-                    instance.material.mass(&simulation.environment.catalog)
-                }
-            })
-            .sum();
+    fn write_tick_snapshot(
+        &mut self,
+        before: &SimulationSnapshot,
+        after: &SimulationSnapshot,
+    ) -> std::io::Result<()> {
+        let state = after.organisms.get(&self.organism_id);
+        let before_state = before.organisms.get(&self.organism_id);
         self.write_event(json!({
-            "event": "snapshot",
-            "reason": reason,
-            "tick": simulation.tick,
-            "population": simulation.organisms.len(),
-            "active_transformations": simulation.active_transformations.len(),
-            "decomposing_bodies": simulation.decomposing_bodies.len(),
-            "field_revision": simulation.environment.field.revision,
-            "field_total_mass": total_field_mass,
-            "stored_total_mass": total_stored_mass,
-            "energy_ledger": simulation.energy_ledger,
-            "organisms": snapshot
-                .organisms
-                .into_iter()
-                .map(|(id, organism)| (id, self.state_json(&organism)))
-                .collect::<HashMap<_, _>>()
+            "event": "tick",
+            "tick": after.tick,
+            "organism_id": self.organism_id,
+            "energy_delta": scalar_delta(
+                before_state.map(|o| o.energy),
+                state.map(|o| o.energy),
+            ),
+            "stress_delta": scalar_delta(
+                before_state.map(|o| o.stress),
+                state.map(|o| o.stress),
+            ),
+            "growth_fraction_delta": scalar_delta(
+                before_state.and_then(|o| o.developmental_growth_fraction),
+                state.and_then(|o| o.developmental_growth_fraction),
+            ),
+            "state": state.map(|o| self.state_json(o)),
+            "active_transformations": after.transformations.values().map(|t| json!({
+                "id": t.id,
+                "organism_id": t.organism_id,
+                "kind": t.kind,
+                "bond": t.bond,
+                "complexity": t.complexity,
+                "duration_ticks": t.duration_ticks,
+                "remaining_ticks": t.remaining_ticks,
+                "decision_context_key": t.decision_context_key,
+            })).collect::<Vec<_>>(),
         }))
     }
 
@@ -487,116 +475,21 @@ impl DiagnosticsRecorder {
         })
     }
 
-    fn write_summary_file(&self, simulation: &mut Simulation) -> std::io::Result<()> {
+    fn write_summary_file(&self, _simulation: &mut Simulation) -> std::io::Result<()> {
         let mut file = File::create(&self.summary_path)?;
-        writeln!(file, "EVOSIM DIAGNOSTIC SUMMARY")?;
-        writeln!(file, "==========================")?;
-        writeln!(file, "tick: {}", simulation.tick)?;
-        writeln!(file, "population: {}", simulation.organisms.len())?;
-        writeln!(file, "max_population: {}", self.summary.max_population)?;
-        writeln!(
-            file,
-            "active_transformations_final: {}",
-            simulation.active_transformations.len()
-        )?;
-        writeln!(
-            file,
-            "max_active_transformations: {}",
-            self.summary.max_active_transformations
-        )?;
-        writeln!(
-            file,
-            "decomposing_bodies_final: {}",
-            simulation.decomposing_bodies.len()
-        )?;
-        writeln!(
-            file,
-            "field_revision: {}",
-            simulation.environment.field.revision
-        )?;
-        writeln!(file)?;
-        writeln!(file, "TRANSFORMATIONS")?;
-        writeln!(file, "starts: {}", self.summary.transformation_starts)?;
-        writeln!(
-            file,
-            "completions: {}",
-            self.summary.transformation_completions
-        )?;
-        writeln!(
-            file,
-            "first_tick: {:?}",
-            self.summary.first_transformation_tick
-        )?;
-        writeln!(
-            file,
-            "last_tick: {:?}",
-            self.summary.last_transformation_tick
-        )?;
-        for (kind, count) in &self.summary.transformation_types {
-            writeln!(file, "type {kind}: {count}")?;
-        }
-        writeln!(file)?;
-        writeln!(file, "LIFECYCLE / STRUCTURE")?;
-        writeln!(
-            file,
-            "lifecycle_changes: {}",
-            self.summary.lifecycle_changes
-        )?;
-        writeln!(
-            file,
-            "first_lifecycle_change_tick: {:?}",
-            self.summary.first_lifecycle_change_tick
-        )?;
-        writeln!(
-            file,
-            "last_lifecycle_change_tick: {:?}",
-            self.summary.last_lifecycle_change_tick
-        )?;
-        writeln!(
-            file,
-            "structure_changes: {}",
-            self.summary.structure_changes
-        )?;
-        writeln!(file)?;
-        writeln!(file, "RANGES OBSERVED")?;
-        write_range(
-            &mut file,
-            "growth_fraction",
-            self.summary.min_growth_fraction,
-            self.summary.max_growth_fraction,
-        )?;
-        write_range(
-            &mut file,
-            "energy",
-            self.summary.min_energy,
-            self.summary.max_energy,
-        )?;
-        write_range(
-            &mut file,
-            "stress",
-            self.summary.min_stress,
-            self.summary.max_stress,
-        )?;
-        writeln!(file)?;
-        writeln!(file, "FINAL ORGANISMS")?;
-        for (index, organism) in simulation.organisms.iter_mut().enumerate() {
-            let growth =
-                crate::developmental_decision::growth_fraction(organism, &simulation.environment);
-            let stage = serde_json::to_value(&organism.development_stage).unwrap_or(Value::Null);
-            writeln!(
-                file,
-                "#{index} id={} stage={} growth={:.6} energy={:.6} stress={:.6} units={} bonds={} components={} stored={}",
-                organism.id,
-                stage,
-                growth,
-                organism.usable_energy,
-                organism.stress,
-                organism.structure.units.len(),
-                organism.structure.bonds.len(),
-                organism.structure.connected_components().len(),
-                organism.stored_material.physical_count()
-            )?;
-        }
+        writeln!(file, "EVOSIM LIFE DIAGNOSTIC SUMMARY")?;
+        writeln!(file, "==============================")?;
+        writeln!(file, "organism_id: {}", self.organism_id)?;
+        writeln!(file, "stopped_at_death: {}", self.stopped)?;
+        writeln!(file, "transformation_starts: {}", self.summary.transformation_starts)?;
+        writeln!(file, "transformation_completions: {}", self.summary.transformation_completions)?;
+        writeln!(file, "first_transformation_tick: {:?}", self.summary.first_transformation_tick)?;
+        writeln!(file, "last_transformation_tick: {:?}", self.summary.last_transformation_tick)?;
+        writeln!(file, "structure_changes: {}", self.summary.structure_changes)?;
+        writeln!(file, "lifecycle_changes: {}", self.summary.lifecycle_changes)?;
+        write_range(&mut file, "growth_fraction", self.summary.min_growth_fraction, self.summary.max_growth_fraction)?;
+        write_range(&mut file, "energy", self.summary.min_energy, self.summary.max_energy)?;
+        write_range(&mut file, "stress", self.summary.min_stress, self.summary.max_stress)?;
         Ok(())
     }
 
