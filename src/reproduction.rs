@@ -224,7 +224,11 @@ fn next_construction_resource_status(
 
         let Some(physical) = PhysicalMaterial::realized(
             material.clone(),
-            vec![crate::structure::Placement {\n                x: 0.0,\n                y: 0.0,\n                rotation_radians: 0.0,\n            }],
+            vec![crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
             &environment.catalog,
         ) else {
             continue;
@@ -464,7 +468,13 @@ pub(crate) fn begin_reproduction(
     // offspring core is selected from whatever parent-held material can
     // actually be instantiated by the physical construction runtime.
     // The anchor is always an already-realized physical object.
-    for (entry_index, entry) in parent\n        .stored_material\n        .entries\n        .clone()\n        .into_iter()\n        .enumerate()\n    {
+    for (entry_index, entry) in parent
+        .stored_material
+        .entries
+        .clone()
+        .into_iter()
+        .enumerate()
+    {
         let StoredMaterial::Physical(instance) = &entry;
         let anchor = instance.material.clone();
         let Some(placement) = parent_child_position(parent, &anchor, catalog) else {
