@@ -480,6 +480,17 @@ impl Simulation {
                     for other in after.iter() {
                         others.push((*other).clone());
                     }
+                    let before_energy = organism.usable_energy;
+                    let before_stress = organism.stress;
+                    let before_realization = developmental
+                        .as_ref()
+                        .map(|context| context.current_growth_fraction)
+                        .unwrap_or_else(|| {
+                            organism
+                                .developmental_realization_cached(&environment.catalog)
+                                .map(|realization| realization.overall)
+                                .unwrap_or(0.0)
+                        });
                     let moved = Self::update_movement(
                         organism,
                         environment,
@@ -497,10 +508,17 @@ impl Simulation {
                         }
                     }
                     if moved {
-                        crate::decision_runtime::record_outcome(
+                        let consequence = Self::action_consequence(
+                            before_energy,
+                            before_stress,
+                            before_realization,
+                            organism,
+                            environment,
+                        );
+                        crate::decision_runtime::record_consequence(
                             &mut organism.decision_history,
                             &move_candidate,
-                            crate::decision::OutcomeKind::Beneficial,
+                            consequence,
                         );
                     }
                 }
