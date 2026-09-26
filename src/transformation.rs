@@ -101,11 +101,10 @@ pub(crate) fn resolve_stress_break(
     rng: &mut ChaCha8Rng,
 ) -> bool {
     let candidate_indices = stress_break_candidate_indices(organism, environment);
-    let Some(&target_index) = candidate_indices
-        .get((!candidate_indices.is_empty()).then(|| rng.gen_range(0..candidate_indices.len()))?)
-    else {
+    if candidate_indices.is_empty() {
         return false;
-    };
+    }
+    let target_index = candidate_indices[rng.gen_range(0..candidate_indices.len())];
     let target = organism.structure.bonds[target_index];
     let Some(ia) = organism
         .structure
