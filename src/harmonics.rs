@@ -208,7 +208,12 @@ fn realized_unit_spectra(
     let baselines = ResourceBaselines::from_catalog(catalog);
     let mut local = Vec::with_capacity(structure.units.len());
 
-    for unit in &structure.units {
+    let structural_indices = structure.structural_unit_indices();
+    for (index, unit) in structure.units.iter().enumerate() {
+        if !structural_indices.contains(&index) {
+            local.push(ToneSpectrum::empty());
+            continue;
+        }
         let Some(properties) = unit.properties(catalog) else {
             local.push(ToneSpectrum::empty());
             continue;

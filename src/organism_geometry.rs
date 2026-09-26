@@ -34,7 +34,11 @@ impl OrganismBodyGeometry {
             return None;
         }
 
-        let mut parts = Vec::with_capacity(structure.units.len());
+        let structural_indices = structure.structural_unit_indices();
+        if structural_indices.is_empty() {
+            return None;
+        }
+        let mut parts = Vec::with_capacity(structural_indices.len());
         let (mut min_x, mut max_x, mut min_y, mut max_y) = (
             f64::INFINITY,
             f64::NEG_INFINITY,
@@ -42,7 +46,8 @@ impl OrganismBodyGeometry {
             f64::NEG_INFINITY,
         );
 
-        for (i, unit) in structure.units.iter().enumerate() {
+        for i in structural_indices {
+            let unit = &structure.units[i];
             let geometry = unit.geometry.as_ref()?;
             let shape = geometry.shape();
             if !shape.is_valid()

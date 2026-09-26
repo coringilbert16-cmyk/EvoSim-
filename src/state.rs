@@ -61,7 +61,7 @@ pub(crate) struct MemoryPoint {
     pub(crate) spectrum: crate::harmonics::ToneSpectrum,
     /// The observed consequence associated with the remembered spectrum.
     #[serde(default)]
-    pub(crate) outcome: Option<crate::decision::OutcomeKind>,
+    pub(crate) consequence: Option<crate::decision::ActionConsequence>,
 }
 pub(crate) const MEMORY_DECAY_PER_TICK: f64 = 0.995;
 pub(crate) const MEMORY_MERGE_RADIUS: f64 = 40.0;
@@ -247,8 +247,9 @@ impl Organism {
     }
     pub(crate) fn structural_mass(&self, catalog: &[BaseResource]) -> f64 {
         self.structure
-            .units
-            .iter()
+            .structural_unit_indices()
+            .into_iter()
+            .filter_map(|index| self.structure.units.get(index))
             .map(|unit| unit.material.mass(catalog))
             .sum()
     }

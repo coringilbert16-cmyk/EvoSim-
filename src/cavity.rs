@@ -116,8 +116,10 @@ pub fn analyze_genome_cavity(
     catalog: &[BaseResource],
 ) -> Result<Option<GenomeCavity>, String> {
     let minimum_area = minimum_genome_cavity_area(catalog)?;
+    let structural_indices = structure.structural_unit_indices();
     let mut polygons = Vec::<(usize, Vec<Point>)>::new();
-    for (index, unit) in structure.units.iter().enumerate() {
+    for index in structural_indices {
+        let unit = &structure.units[index];
         let Some(geometry) = unit.geometry.as_ref() else {
             continue;
         };

@@ -177,7 +177,8 @@ impl DevelopmentalFieldBlueprint {
             return None;
         }
         let mut realized = 0.0;
-        for unit in &structure.units {
+        for index in structure.structural_unit_indices() {
+            let unit = &structure.units[index];
             let Some(shape) = unit.shape(catalog) else {
                 continue;
             };
@@ -223,7 +224,8 @@ impl DevelopmentalFieldBlueprint {
             return None;
         }
         let mut realized = 0.0;
-        for unit in &structure.units {
+        for index in structure.structural_unit_indices() {
+            let unit = &structure.units[index];
             let Some(shape) = unit.shape(catalog) else {
                 continue;
             };
@@ -318,6 +320,7 @@ impl DevelopmentalFieldBlueprint {
         preferred_length: f64,
         excluded_bond: Option<usize>,
     ) -> Option<f64> {
+        let structural_indices = structure.structural_unit_indices();
         let mut actual_value = 0.0;
         let mut available_value = 0.0;
         for (bond_index, bond) in structure.bonds.iter().enumerate() {
@@ -330,6 +333,9 @@ impl DevelopmentalFieldBlueprint {
             let Some(b) = structure.unit_index(bond.endpoint_b.constituent_id) else {
                 continue;
             };
+            if !structural_indices.contains(&a) || !structural_indices.contains(&b) {
+                continue;
+            }
             let Some(wa) = bond
                 .endpoint_a
                 .location
@@ -359,8 +365,8 @@ impl DevelopmentalFieldBlueprint {
             );
         }
 
-        for a in 0..structure.units.len() {
-            for b in (a + 1)..structure.units.len() {
+        for (left, &a) in structural_indices.iter().enumerate() {
+            for &b in structural_indices.iter().skip(left + 1) {
                 for candidate in
                     crate::contact::connection_pair_candidates(structure, a, b, catalog)
                         .into_iter()
