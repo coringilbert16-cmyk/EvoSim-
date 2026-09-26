@@ -171,7 +171,13 @@ impl Simulation {
                     if instance.is_realized() => instance.clone(),
                 _ => return None,
             };
-            stored_bond = Some(physical.internal_connections.as_ref()?.get(bond_index)?.clone());
+            stored_bond = Some(
+                physical
+                    .internal_connections
+                    .as_ref()?
+                    .get(bond_index)?
+                    .clone(),
+            );
             let removed = organism.stored_material.entries.swap_remove(storage_index);
             stored_material = match removed {
                 crate::material_storage::StoredMaterial::Physical(instance) => Some(instance),
