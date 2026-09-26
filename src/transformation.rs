@@ -156,29 +156,35 @@ impl Simulation {
             return None;
         }
         let key = decision.context_key.as_deref()?;
-        let rest = key.strip_prefix("stored:")?;
-        let (storage_index, bond_part) = rest.split_once(":bond:")?;
-        let storage_index = storage_index.parse::<usize>().ok()?;
-        let bond_index = bond_part.parse::<usize>().ok()?;
-        let entry = organism.stored_material.entries.get(storage_index)?;
-        let physical = match entry {
-            crate::material_storage::StoredMaterial::Physical(instance)
-                if instance.is_realized() =>
-            {
-                instance.clone()
-            }
-            _ => return None,
-        };
-        let stored_bond = physical
-            .internal_connections
-            .as_ref()?
-            .get(bond_index)?
-            .clone();
-        let removed = organism.stored_material.entries.swap_remove(storage_index);
-        let stored_material = match removed {
-            crate::material_storage::StoredMaterial::Physical(instance) => instance,
-            _ => return None,
-        };
+        let mut stored_material = None;
+        let mut stored_bond = None;
+        let mut environmental_material_id = None;
+        let mut environmental_bond_index = None;
+
+        if let Some(rest) = key.strip_prefix("stored:") {
+            let (storage_index, bond_part) = rest.split_once(":bond:")?;
+            let storage_index = storage_index.parse::<usize>().ok()?;
+            let bond_index = bond_part.parse::<usize>().ok()?;
+            let entry = organism.stored_material.entries.get(storage_index)?;
+            let physical = match entry {
+                crate::material_storage::StoredMaterial::Physical(instance)
+                    if instance.is_realized() => instance.clone(),
+                _ => return None,
+            };
+            stored_bond = Some(physical.internal_connections.as_ref()?.get(bond_index)?.clone());
+            let removed = organism.stored_material.entries.swap_remove(storage_index);
+            stored_material = match removed {
+                crate::material_storage::StoredMaterial::Physical(instance) => Some(instance),
+                _ => return None,
+            };
+        } else if let Some(rest) = key.strip_prefix("environment:") {
+            let (material_part, bond_part) = rest.split_once(":bond:")?;
+            environmental_material_id = Some(material_part.parse::<u64>().ok()?);
+            environmental_bond_index = Some(bond_part.parse::<usize>().ok()?);
+        } else {
+            return None;
+        }
+
         let complexity = crate::math::complexity(2.0);
         let duration = 1_u64.max(complexity.ceil() as u64);
         let t = ActiveTransformation {
@@ -187,8 +193,10 @@ impl Simulation {
             kind: crate::state::TransformationKind::Break,
             material: crate::resources::Material::free_base("", 0.0),
             bond: None,
-            stored_material: Some(stored_material),
-            stored_bond: Some(stored_bond),
+            stored_material,
+            stored_bond,
+            environmental_material_id,
+            environmental_bond_index,
             complexity,
             duration_ticks: duration,
             remaining_ticks: duration,
@@ -205,14 +213,49 @@ impl Simulation {
         environment: &mut Environment,
         ledger: &mut EnergyLedger,
     ) {
-        let Some(stored) = transformation.stored_material.as_ref() else {
+        let (stored, target, environmental_id) =
+            if let Some(stored) = transformation.stored_material.as_ref() {
+            let Some(target) = transformation.stored_bond.as_ref() else {
+                organism.active_transformation_id = None;
+                return;
+            };
+            (stored.clone(), target.clone(), None)
+        } else if let (Some(material_id), Some(bond_index)) = (
+            transformation.environmental_material_id,
+            transformation.environmental_bond_index,
+        ) {
+            let Some((cell_index, material_index)) =
+                environment.field.find_physical_material(material_id)
+            else {
+                organism.active_transformation_id = None;
+                return;
+            };
+            let Some(physical) = environment
+                .field
+                .cells
+                .get(cell_index)
+                .and_then(|cell| cell.physical_materials.get(material_index))
+                .filter(|physical| physical.is_realized())
+                .cloned()
+            else {
+                organism.active_transformation_id = None;
+                return;
+            };
+            let Some(target) = physical
+                .internal_connections
+                .as_ref()
+                .and_then(|connections| connections.get(bond_index))
+                .cloned()
+            else {
+                organism.active_transformation_id = None;
+                return;
+            };
+            (physical, target, Some(material_id))
+        } else {
             organism.active_transformation_id = None;
             return;
         };
-        let Some(target) = transformation.stored_bond.as_ref() else {
-            organism.active_transformation_id = None;
-            return;
-        };
+
         let Some(a) = stored
             .material
             .parts
@@ -222,7 +265,7 @@ impl Simulation {
                     .catalog
                     .iter()
                     .find(|resource| resource.name == *name)
-                    .map(|r| r.properties)
+                    .map(|resource| resource.properties)
             })
         else {
             organism.active_transformation_id = None;
@@ -237,7 +280,7 @@ impl Simulation {
                     .catalog
                     .iter()
                     .find(|resource| resource.name == *name)
-                    .map(|r| r.properties)
+                    .map(|resource| resource.properties)
             })
         else {
             organism.active_transformation_id = None;
@@ -252,7 +295,66 @@ impl Simulation {
             organism.active_transformation_id = None;
             return;
         };
-        let Some(pieces) = stored.break_internal_bond(target) else {
+
+        if let Some(material_id) = environmental_id {
+            let Some(removed) = environment.field.remove_physical_material(material_id) else {
+                organism.active_transformation_id = None;
+                return;
+            };
+            let Some(pieces) = removed.break_internal_bond(&target) else {
+                let _ = environment.field.deposit_physical(
+                    removed.placements.as_ref().and_then(|p| p.first()).map(|p| p.x).unwrap_or(0.0),
+                    removed.placements.as_ref().and_then(|p| p.first()).map(|p| p.y).unwrap_or(0.0),
+                    removed,
+                );
+                organism.active_transformation_id = None;
+                return;
+            };
+            let tx = EnergyTransaction {
+                reason: EnergyReason::Break,
+                potential_released: gross,
+                usable_delta: usable,
+                structural_delta: 0.0,
+                heat_dissipated: heat,
+            };
+            if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
+                let first = stored.placements.as_ref().and_then(|p| p.first()).copied();
+                let _ = environment.field.deposit_physical(
+                    first.map(|p| p.x).unwrap_or(0.0),
+                    first.map(|p| p.y).unwrap_or(0.0),
+                    removed,
+                );
+                organism.active_transformation_id = None;
+                return;
+            }
+            for piece in pieces {
+                if let Some(placement) = piece
+                    .placements
+                    .as_ref()
+                    .and_then(|placements| placements.first()) {
+                    let _ = environment.field.deposit_physical(placement.x, placement.y, piece);
+                }
+            }
+            organism.add_transaction_stress(heat);
+            organism.active_transformation_id = None;
+            crate::decision_runtime::record_outcome(
+                &mut organism.decision_history,
+                &ActionCandidate {
+                    action: ActionKind::Break,
+                    context_key: transformation.decision_context_key.clone(),
+                },
+                if usable > f64::EPSILON {
+                    OutcomeKind::Beneficial
+                } else if heat > f64::EPSILON {
+                    OutcomeKind::Harmful
+                } else {
+                    OutcomeKind::Neutral
+                },
+            );
+            return;
+        }
+
+        let Some(pieces) = stored.break_internal_bond(&target) else {
             organism.active_transformation_id = None;
             return;
         };
@@ -270,35 +372,21 @@ impl Simulation {
         for piece in pieces {
             if !organism
                 .stored_material
-                .store_physical_instance(piece.clone())
-            {
-                if let Some(placement) = piece
-                    .placements
-                    .as_ref()
-                    .and_then(|placements| placements.first())
-                {
-                    let _ = environment.field.deposit(placement.x, placement.y, piece);
+                .store_physical_instance(piece.clone()) {
+                if let Some(placement) = piece.placements.as_ref().and_then(|placements| placements.first()) {
+                    let _ = environment.field.deposit_physical(placement.x, placement.y, piece);
                 }
             }
         }
         organism.add_transaction_stress(heat);
         organism.active_transformation_id = None;
-        let outcome = if usable > f64::EPSILON {
-            OutcomeKind::Beneficial
-        } else if heat > f64::EPSILON {
-            OutcomeKind::Harmful
-        } else {
-            OutcomeKind::Neutral
-        };
         crate::decision_runtime::record_outcome(
             &mut organism.decision_history,
-            &ActionCandidate {
-                action: ActionKind::Break,
-                context_key: transformation.decision_context_key.clone(),
-            },
-            outcome,
+            &ActionCandidate { action: ActionKind::Break, context_key: transformation.decision_context_key.clone() },
+            if usable > f64::EPSILON { OutcomeKind::Beneficial } else if heat > f64::EPSILON { OutcomeKind::Harmful } else { OutcomeKind::Neutral },
         );
     }
+
 }
 
 pub(crate) fn break_work_cost(

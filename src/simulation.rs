@@ -65,7 +65,29 @@ impl Simulation {
         }
 
         let mut stored_material = crate::material_storage::MaterialStorage::default();
-        assert!(stored_material.store(genome.juvenile_reserve.clone()));
+        let reserve = crate::physical_material::PhysicalMaterial::realized(
+            genome.juvenile_reserve.clone(),
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.8,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 1.6,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("juvenile reserve must be physically realizable");
+        assert!(stored_material.store_physical_instance(reserve));
         Organism {
             id: "1".into(),
             developmental_origin: anchor.clone(),
@@ -217,10 +239,32 @@ impl Simulation {
                                 .is_some_and(|connections| !connections.is_empty())
                 )
             });
+        let can_break_environmental = organism.active_transformation_id.is_none()
+            && crate::organism_geometry::OrganismBodyGeometry::from_structure(
+                &organism.structure,
+                &environment.catalog,
+            )
+            .is_some_and(|body| {
+                environment
+                    .field
+                    .accessible_physical_materials(&body)
+                    .iter()
+                    .any(|(cell_index, material_index, parts)| {
+                        environment.field.cells[*cell_index]
+                            .physical_materials
+                            .get(*material_index)
+                            .and_then(|physical| physical.internal_connections.as_ref())
+                            .is_some_and(|connections| {
+                                connections.iter().any(|bond| {
+                                    parts.contains(&bond.part_a) || parts.contains(&bond.part_b)
+                                })
+                            })
+                    })
+            });
         ActionEligibility {
             can_move: true,
             can_combine,
-            can_break: can_break_stored
+            can_break: (can_break_stored || can_break_environmental)
                 && (organism.reproductive_construction.is_none()
                     || needs.survival > 0.0
                     || needs.development > 0.0
@@ -234,7 +278,7 @@ impl Simulation {
     }
     fn decision_candidates(
         organism: &Organism,
-        _environment: &Environment,
+        environment: &Environment,
         needs: CurrentNeeds,
         eligibility: ActionEligibility,
     ) -> Vec<ActionCandidate> {
@@ -251,6 +295,37 @@ impl Simulation {
                                 action: ActionKind::Break,
                                 context_key: Some(format!(
                                     "stored:{storage_index}:bond:{bond_index}"
+                                )),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        if relevant(ActionKind::Break) {
+            if let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_structure(
+                &organism.structure,
+                &environment.catalog,
+            ) {
+                for (cell_index, material_index, parts) in
+                    environment.field.accessible_physical_materials(&body)
+                {
+                    let Some(physical) = environment.field.cells[cell_index]
+                        .physical_materials
+                        .get(material_index)
+                    else {
+                        continue;
+                    };
+                    let Some(connections) = &physical.internal_connections else {
+                        continue;
+                    };
+                    for (bond_index, bond) in connections.iter().enumerate() {
+                        if parts.contains(&bond.part_a) || parts.contains(&bond.part_b) {
+                            candidates.push(ActionCandidate {
+                                action: ActionKind::Break,
+                                context_key: Some(format!(
+                                    "environment:{}:bond:{}",
+                                    physical.id, bond_index
                                 )),
                             });
                         }
