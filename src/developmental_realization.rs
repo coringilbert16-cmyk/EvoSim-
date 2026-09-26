@@ -333,6 +333,9 @@ impl DevelopmentalFieldBlueprint {
             let Some(b) = structure.unit_index(bond.endpoint_b.constituent_id) else {
                 continue;
             };
+            if !structural_indices.contains(&a) || !structural_indices.contains(&b) {
+                continue;
+            }
             let Some(wa) = bond
                 .endpoint_a
                 .location
