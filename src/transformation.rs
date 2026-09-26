@@ -171,7 +171,7 @@ impl Simulation {
                     if instance.is_realized() =>
                 {
                     instance.clone()
-                },
+                }
                 _ => return None,
             };
             stored_bond = Some(
@@ -225,39 +225,39 @@ impl Simulation {
         let (stored, target, environmental_id) =
             if let Some(stored) = transformation.stored_material.as_ref() {
                 let Some(target) = transformation.stored_bond.as_ref() else {
-                organism.active_transformation_id = None;
-                return;
+                    organism.active_transformation_id = None;
+                    return;
                 };
                 (stored.clone(), target.clone(), None)
             } else if let (Some(material_id), Some(bond_index)) = (
-            transformation.environmental_material_id,
-            transformation.environmental_bond_index,
-        ) {
-            let Some((cell_index, material_index)) =
-                environment.field.find_physical_material(material_id)
-            else {
-                organism.active_transformation_id = None;
-                return;
-            };
-            let Some(physical) = environment
-                .field
-                .cells
-                .get(cell_index)
-                .and_then(|cell| cell.physical_materials.get(material_index))
-                .filter(|physical| physical.is_realized())
-                .cloned()
-            else {
-                organism.active_transformation_id = None;
-                return;
-            };
-            let Some(target) = physical
-                .internal_connections
-                .as_ref()
-                .and_then(|connections| connections.get(bond_index))
-                .cloned()
-            else {
-                organism.active_transformation_id = None;
-                return;
+                transformation.environmental_material_id,
+                transformation.environmental_bond_index,
+            ) {
+                let Some((cell_index, material_index)) =
+                    environment.field.find_physical_material(material_id)
+                else {
+                    organism.active_transformation_id = None;
+                    return;
+                };
+                let Some(physical) = environment
+                    .field
+                    .cells
+                    .get(cell_index)
+                    .and_then(|cell| cell.physical_materials.get(material_index))
+                    .filter(|physical| physical.is_realized())
+                    .cloned()
+                else {
+                    organism.active_transformation_id = None;
+                    return;
+                };
+                let Some(target) = physical
+                    .internal_connections
+                    .as_ref()
+                    .and_then(|connections| connections.get(bond_index))
+                    .cloned()
+                else {
+                    organism.active_transformation_id = None;
+                    return;
                 };
                 (physical, target, Some(material_id))
             } else {
