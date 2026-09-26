@@ -572,10 +572,7 @@ mod tests {
     fn movement_efficiency_changes_energy_cost_not_distance() {
         assert!(movement_energy_cost(16.0, 1.0) < movement_energy_cost(16.0, 0.8));
         assert!(movement_energy_cost(16.0, 0.5) > movement_energy_cost(16.0, 0.8));
-        assert_eq!(
-            MOVEMENT_BASE_STEP_DISTANCE,
-            4.0,
-        );
+        assert_eq!(MOVEMENT_BASE_STEP_DISTANCE, 4.0);
     }
 
     #[test]
