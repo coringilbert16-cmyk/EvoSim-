@@ -647,6 +647,7 @@ pub(crate) fn finish_reproduction(
         decision_history: crate::decision::DecisionHistory::default(),
         usable_energy: construction.developing_energy,
         stress: construction.developing_stress,
+        maintenance_debt: construction.developing_maintenance_debt,
         stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
         stored_material: construction.committed_material,
         development_stage: DevelopmentStage::Juvenile,
