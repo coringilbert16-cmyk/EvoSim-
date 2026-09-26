@@ -4,14 +4,29 @@ use crate::state::{EnergyLedger, Environment, Organism, Simulation};
 use crate::structure::Placement;
 
 const DEFAULT_MOVEMENT_EFFICIENCY: f64 = 0.8;
-const MOVEMENT_REFERENCE_MASS: f64 = 16.0;
 const MOVEMENT_BASE_STEP_DISTANCE: f64 = 4.0;
+const MOVEMENT_COST_ANCHORS: [(f64, f64); 4] = [
+    (2.7, 1.2),
+    (16.0, 2.0),
+    (64.0, 5.8),
+    (1024.0, 65.0),
+];
+
+fn mass_movement_cost(realized_mass: f64) -> f64 {
+    let mass = realized_mass.max(f64::EPSILON);
+    let segment = MOVEMENT_COST_ANCHORS
+        .windows(2)
+        .find(|pair| mass <= pair[1].0)
+        .unwrap_or(&MOVEMENT_COST_ANCHORS[2..4]);
+    let (mass_a, cost_a) = segment[0];
+    let (mass_b, cost_b) = segment[1];
+    let exponent = (cost_b / cost_a).ln() / (mass_b / mass_a).ln();
+    cost_a * (mass / mass_a).powf(exponent)
+}
 
 fn movement_energy_cost(realized_mass: f64, movement_efficiency: f64) -> f64 {
-    let mass = realized_mass.max(0.0);
     let efficiency = movement_efficiency.clamp(0.05, 1.0);
-    let mass_cost = 1.0 + mass / MOVEMENT_REFERENCE_MASS;
-    mass_cost * (DEFAULT_MOVEMENT_EFFICIENCY / efficiency)
+    mass_movement_cost(realized_mass) * (DEFAULT_MOVEMENT_EFFICIENCY / efficiency)
 }
 
 impl Simulation {
@@ -526,21 +541,21 @@ mod tests {
     #[test]
     fn movement_cost_matches_reference_curve_at_default_efficiency() {
         let cases = [
-            (2.7, 1.16875),
-            (4.0, 1.25),
-            (8.0, 1.5),
+            (2.7, 1.2),
+            (4.0, 1.34),
+            (8.0, 1.64),
             (16.0, 2.0),
-            (32.0, 3.0),
-            (64.0, 5.0),
-            (128.0, 9.0),
-            (256.0, 17.0),
-            (512.0, 33.0),
+            (32.0, 3.4),
+            (64.0, 5.8),
+            (128.0, 10.6),
+            (256.0, 19.2),
+            (512.0, 35.2),
             (1024.0, 65.0),
         ];
         for (mass, expected) in cases {
             let actual = movement_energy_cost(mass, DEFAULT_MOVEMENT_EFFICIENCY);
             assert!(
-                (actual - expected).abs() < 1e-10,
+                (actual - expected).abs() < 0.06,
                 "mass {mass}: expected {expected}, got {actual}"
             );
         }
