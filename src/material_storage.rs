@@ -266,7 +266,7 @@ mod tests {
 
     #[test]
     fn structured_material_must_arrive_already_realized() {
-        let mut storage = MaterialStorage::default();
+        let storage = MaterialStorage::default();
         let material = Material {
             parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
             internal_bonds: vec![crate::resources::InternalBond {
