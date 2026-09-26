@@ -50,7 +50,7 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
     );
 
     let mut diagnostics = diagnostics_path.map(|path| {
-        crate::diagnostics::DiagnosticsRecorder::new(&path, diagnostic_interval, &mut simulation)
+        crate::diagnostics::DiagnosticsRecorder::new(&path, diagnostic_interval, &initial_id, &mut simulation)
             .unwrap_or_else(|error| panic!("failed to create diagnostics file {path}: {error}"))
     });
 
