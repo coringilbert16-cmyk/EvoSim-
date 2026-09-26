@@ -742,7 +742,7 @@ mod tests {
         )
         .expect("juvenile reserve must be physically realizable");
         assert!(storage.store_physical_instance(physical));
-        assert!(storage.take_matching(&genome.juvenile_reserve).is_some());
+        assert!(storage.take_matching_physical(&genome.juvenile_reserve).is_some());
         assert!(genome.juvenile_energy_reserve > 0.0);
     }
 
@@ -913,7 +913,17 @@ mod tests {
             rotation_radians: 0.0,
         };
         let mut storage = MaterialStorage::default();
-        assert!(storage.store(anchor));
+        let physical = PhysicalMaterial::realized(
+            anchor.clone(),
+            vec![crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("anchor must be physically realizable");
+        assert!(storage.store_physical_instance(physical));
         assert!(anchor_structure(&genome, storage, placement, &catalog).is_some());
     }
 }
