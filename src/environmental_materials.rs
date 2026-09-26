@@ -79,7 +79,7 @@ pub(crate) fn seed_initial_resource_cloud(
     let (center_x, center_y) = INITIAL_RESOURCE_CLOUD_CENTER;
     for particle_index in 0..INITIAL_RESOURCE_CLOUD_PARTICLES {
         let angle = rng.gen_range(0.0..std::f64::consts::TAU);
-        let radius = INITIAL_RESOURCE_CLOUD_RADIUS * rng.gen::<f64>().sqrt();
+        let radius = INITIAL_RESOURCE_CLOUD_RADIUS * rng.gen_range(0.0..1.0).sqrt();
         let x = center_x + radius * angle.cos();
         let y = center_y + radius * angle.sin();
         let material = &compounds[particle_index % compounds.len()];
