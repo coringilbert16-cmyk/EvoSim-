@@ -89,7 +89,7 @@ impl DiagnosticsRecorder {
         path: &str,
         interval: u64,
         organism_id: &str,
-        simulation: &mut Simulation,
+        _simulation: &mut Simulation,
     ) -> std::io::Result<Self> {
         let file = File::create(path)?;
         let mut recorder = Self {
