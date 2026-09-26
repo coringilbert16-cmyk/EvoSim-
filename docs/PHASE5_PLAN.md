@@ -40,7 +40,7 @@ The transaction's heat consequence remains part of the common energy/stress path
 ### P5-4 — Insufficient maintenance energy
 An organism pays as much of its maintenance demand as it can.
 
-Any unpaid maintenance deficit becomes stress.
+Any unpaid maintenance deficit is accumulated as persistent maintenance debt. While current maintenance remains unpaid, the current deficit and accumulated debt become stress pressure.
 
 Insufficient maintenance energy does not directly constitute death.
 
@@ -84,6 +84,8 @@ No age, aging rate, lifespan, health decay, or death countdown is introduced.
 
 ### P5-10 — Internal state
 P5 does not add a generic viability/health state.
+
+Maintenance debt is a persistent accounting state with one mechanical meaning: historical maintenance that was not paid. It is not a health score, viability state, starvation timer, or death authority.
 
 Existing usable_energy, stress, and stress_threshold participate in maintenance because they already have defined mechanical roles.
 
@@ -160,7 +162,7 @@ Final audit confirms:
 - [x] Continuous maintenance is implemented through one authority.
 - [x] Demand is derived from realized structural mass.
 - [x] Maintenance uses the energy ledger.
-- [x] Unpaid maintenance becomes stress rather than direct death.
+- [x] Unpaid maintenance accumulates as persistent debt and contributes to stress while current maintenance remains unpaid; it does not directly cause death.
 - [x] Movement remains free of an explicit energy cost.
 - [x] Stress uses the existing heat/stress mechanism.
 - [x] Stress dissipation does not repair damage.
