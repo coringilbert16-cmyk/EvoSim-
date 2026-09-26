@@ -7,6 +7,7 @@ use crate::combine_runtime::DevelopmentalContext;
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::juvenile_requirements::{validate_realized_juvenile, JuvenileViabilityRequirements};
 use crate::material_storage::{MaterialStorage, StoredMaterial};
+use crate::physical_material::PhysicalMaterial;
 use crate::resources::Material;
 use crate::state::{
     DevelopmentStage, EnergyLedger, Environment, Organism, Position, ReproductiveConstruction,
@@ -171,15 +172,23 @@ fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
 fn store_first_available_material(
     parent_storage: &mut MaterialStorage,
     child_storage: &mut MaterialStorage,
-    catalog: &[crate::resources::BaseResource],
 ) -> bool {
-    let Some(material) = parent_storage.peek_one_unstructured() else {
+    let index = parent_storage
+        .entries
+        .iter()
+        .position(|entry| matches!(entry, StoredMaterial::Physical(instance) if instance.is_realized()))?;
+    let Some(StoredMaterial::Physical(instance)) = parent_storage.entries.get(index).cloned() else {
         return false;
     };
-    let Some(material) = parent_storage.take_matching(&material) else {
+    let mut child_instance = instance.clone();
+    if !child_storage.store_physical_instance(child_instance.clone()) {
+        return false;
+    }
+    let Some(_) = parent_storage.take_physical_at(index) else {
+        let _ = child_storage.entries.pop();
         return false;
     };
-    child_storage.store(material, catalog)
+    true
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -212,10 +221,7 @@ fn next_construction_resource_status(
                 .any(|held| held == &material);
 
         let mut candidate = child.clone();
-        if !candidate
-            .stored_material
-            .store(material.clone(), &environment.catalog)
-        {
+        if !candidate.stored_material.store_physical_instance(material.clone()) {
             continue;
         }
 
@@ -257,12 +263,10 @@ fn try_child_construction(
         candidates.push((candidate, None));
     }
 
-    for material in parent_storage.materials_snapshot() {
+    for material in parent_storage.entries.iter().cloned() {
         let mut candidate = child.clone();
-        if !candidate
-            .stored_material
-            .store(material.clone(), &environment.catalog)
-        {
+        let StoredMaterial::Physical(instance) = material.clone();
+        if !candidate.stored_material.store_physical_instance(instance) {
             continue;
         }
         let last = candidate.stored_material.entries.len().saturating_sub(1);
@@ -450,16 +454,10 @@ pub(crate) fn begin_reproduction(
     // No resource type is reserved as a reproductive anchor. The first
     // offspring core is selected from whatever parent-held material can
     // actually be instantiated by the physical construction runtime.
-    // Structured logical material remains intact; an already-realized
-    // structured object may be used directly.
-    for entry in parent.stored_material.entries.clone() {
-        let anchor = match &entry {
-            StoredMaterial::Logical(material) if !material.has_internal_structure() => {
-                material.clone()
-            }
-            StoredMaterial::Physical(instance) => instance.material.clone(),
-            StoredMaterial::Logical(_) => continue,
-        };
+    // The anchor is always an already-realized physical object.
+    for (entry_index, entry) in parent.stored_material.entries.clone().into_iter().enumerate() {
+        let StoredMaterial::Physical(instance) = &entry;
+        let anchor = instance.material.clone();
         let Some(placement) = parent_child_position(parent, &anchor, catalog) else {
             continue;
         };
@@ -473,12 +471,7 @@ pub(crate) fn begin_reproduction(
         };
 
         let mut parent_trial = parent.stored_material.clone();
-        let removed = match &entry {
-            StoredMaterial::Logical(material) => parent_trial.take_matching(material).is_some(),
-            StoredMaterial::Physical(instance) => parent_trial
-                .take_matching_physical(&instance.material)
-                .is_some(),
-        };
+        let removed = parent_trial.take_physical_at(entry_index).is_some();
         if !removed {
             continue;
         }
@@ -541,11 +534,7 @@ pub(crate) fn advance_construction(
     }
 
     if child.stored_material.is_empty()
-        && !store_first_available_material(
-            parent_storage,
-            &mut child.stored_material,
-            &environment.catalog,
-        )
+        && !store_first_available_material(parent_storage, &mut child.stored_material)
     {
         return (ConstructionStatus::Waiting, None);
     }
