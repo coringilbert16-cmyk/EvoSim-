@@ -320,6 +320,7 @@ impl DevelopmentalFieldBlueprint {
         preferred_length: f64,
         excluded_bond: Option<usize>,
     ) -> Option<f64> {
+        let structural_indices = structure.structural_unit_indices();
         let mut actual_value = 0.0;
         let mut available_value = 0.0;
         for (bond_index, bond) in structure.bonds.iter().enumerate() {
