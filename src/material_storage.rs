@@ -7,34 +7,23 @@ use serde::{Deserialize, Serialize};
 
 const MATERIAL_EPSILON: f64 = 1e-12;
 
-/// One authoritative stored-material entry. A physical entry carries the
-/// complete realized material; a logical entry carries only a material
-/// description and therefore cannot masquerade as an existing physical object.
+/// One authoritative stored-material entry. Every entry is an already-realized
+/// physical object; logical material descriptions cannot exist in organism storage.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) enum StoredMaterial {
-    Logical(Material),
     Physical(PhysicalMaterial),
 }
 
 impl StoredMaterial {
     fn material(&self) -> &Material {
         match self {
-            Self::Logical(material) => material,
             Self::Physical(instance) => &instance.material,
         }
     }
 
     fn into_material(self) -> Material {
         match self {
-            Self::Logical(material) => material,
             Self::Physical(instance) => instance.material,
-        }
-    }
-
-    fn physical(&self) -> Option<PhysicalMaterial> {
-        match self {
-            Self::Logical(_) => None,
-            Self::Physical(instance) => Some(instance.clone()),
         }
     }
 }
@@ -78,10 +67,7 @@ impl MaterialStorage {
     }
 
     pub(crate) fn physical_count(&self) -> usize {
-        self.entries
-            .iter()
-            .filter(|entry| matches!(entry, StoredMaterial::Physical(_)))
-            .count()
+        self.entries.len()
     }
 
     fn is_discrete(material: &Material) -> bool {
@@ -239,10 +225,8 @@ impl MaterialStorage {
             StoredMaterial::Physical(instance) if instance.is_realized() => {}
             _ => return None,
         }
-        match self.entries.swap_remove(index) {
-            StoredMaterial::Physical(instance) => Some(instance),
-            StoredMaterial::Logical(_) => None,
-        }
+        let StoredMaterial::Physical(instance) = self.entries.swap_remove(index);
+        Some(instance)
     }
 
     pub(crate) fn take_matching_physical(&mut self, target: &Material) -> Option<PhysicalMaterial> {
@@ -250,10 +234,8 @@ impl MaterialStorage {
             matches!(entry, StoredMaterial::Physical(instance)
                 if instance.material == *target && !instance.material.is_empty())
         })?;
-        match self.entries.swap_remove(index) {
-            StoredMaterial::Physical(instance) => Some(instance),
-            StoredMaterial::Logical(_) => None,
-        }
+        let StoredMaterial::Physical(instance) = self.entries.swap_remove(index);
+        Some(instance)
     }
 
     pub(crate) fn take_unstructured(&mut self, count: usize) -> Option<Vec<Material>> {
@@ -324,7 +306,7 @@ mod tests {
     #[test]
     fn peek_does_not_consume_free_material() {
         let mut storage = MaterialStorage::default();
-        storage.store(Material::free_base("Carbon", 1.0), &catalog());
+        let _ = storage.store_physical(Material::free_base("Carbon", 1.0), vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }], &catalog());
         let peeked = storage.peek_one_unstructured().expect("stored unit");
         assert_eq!(peeked, Material::free_base("Carbon", 1.0));
         assert_eq!(storage.count_unstructured(), 1);
@@ -334,7 +316,8 @@ mod tests {
     fn structured_material_requires_physical_realization() {
         let mut storage = MaterialStorage::default();
         let m = compound();
-        assert!(!storage.store(m.clone(), &catalog()));
+        let unplaced = PhysicalMaterial::realized(m.clone(), vec![], &catalog());
+        assert!(unplaced.is_none());
         assert!(storage.is_empty());
 
         let physical = PhysicalMaterial::realized(
@@ -438,8 +421,8 @@ mod tests {
     #[test]
     fn storage_never_merges_independent_atoms() {
         let mut storage = MaterialStorage::default();
-        storage.store(Material::free_base("Carbon", 1.0), &catalog());
-        storage.store(Material::free_base("Carbon", 1.0), &catalog());
+        let _ = storage.store_physical(Material::free_base("Carbon", 1.0), vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }], &catalog());
+        let _ = storage.store_physical(Material::free_base("Carbon", 1.0), vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }], &catalog());
         assert_eq!(storage.len(), 2);
     }
 
@@ -447,14 +430,19 @@ mod tests {
     fn storage_rejects_unrealized_compounds() {
         let mut storage = MaterialStorage::default();
         let m = compound();
-        assert!(!storage.store(m, &catalog()));
+        assert!(storage.is_empty());
         assert!(storage.is_empty());
     }
 
     #[test]
     fn fractional_material_is_rejected_at_storage_boundary() {
         let mut storage = MaterialStorage::default();
-        assert!(!storage.store(Material::free_base("Carbon", 1.5), &catalog()));
+        let material = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.5),
+            vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }, Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 }],
+            &catalog(),
+        );
+        assert!(material.is_none());
         assert!(storage.is_empty());
     }
 }
