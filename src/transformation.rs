@@ -1,4 +1,4 @@
-use crate::decision::{ActionKind, OutcomeKind};
+use crate::decision::ActionKind;
 use crate::decision_runtime::ActionCandidate;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
 use crate::state::{ActiveTransformation, EnergyLedger, Environment, Organism, Simulation};
