@@ -485,6 +485,16 @@ impl PhysicalConstituentGraph {
         let strength = crate::combine::bond_strength(pa, pb);
         strength.is_finite() && (0.0..=1.0).contains(&strength)
     }
+    /// The organism's structural body is the connected component containing
+    /// its stable first constituent. Disconnected physical material is not
+    /// structural merely because it remains inside the organism boundary.
+    pub fn structural_unit_indices(&self) -> Vec<usize> {
+        self.connected_components()
+            .into_iter()
+            .find(|component| component.contains(&0))
+            .unwrap_or_default()
+    }
+
     pub fn connected_components(&self) -> Vec<Vec<usize>> {
         let mut adjacency = vec![Vec::<usize>::new(); self.units.len()];
         for b in &self.bonds {
