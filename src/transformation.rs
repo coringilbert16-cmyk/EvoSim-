@@ -101,7 +101,8 @@ pub(crate) fn resolve_stress_break(
     rng: &mut ChaCha8Rng,
 ) -> bool {
     let candidate_indices = stress_break_candidate_indices(organism, environment);
-    let Some(&target_index) = candidate_indices.get(rng.gen_range(0..candidate_indices.len()))
+    let Some(&target_index) = candidate_indices
+        .get((!candidate_indices.is_empty()).then(|| rng.gen_range(0..candidate_indices.len()))?)
     else {
         return false;
     };
