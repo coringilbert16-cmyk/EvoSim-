@@ -72,7 +72,7 @@ pub(crate) fn take_whole_unstructured(
     Some(Material {
         parts: taken_parts,
         internal_bonds: Vec::new(),
-    }) 
+    })
 }
 
 #[cfg(test)]
@@ -116,5 +116,4 @@ mod tests {
         assert!(take_whole_unstructured(&mut material, 1).is_none());
         assert_eq!(material.total_amount(), 2.0);
     }
-
 }
