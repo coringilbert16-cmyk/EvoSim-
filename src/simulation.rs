@@ -95,6 +95,24 @@ impl Simulation {
             last_movement_attempt: None,
         }
     }
+    fn action_consequence(
+        before_energy: f64,
+        before_stress: f64,
+        before_realization: f64,
+        organism: &mut Organism,
+        environment: &Environment,
+    ) -> crate::decision::ActionConsequence {
+        let after_realization = organism
+            .developmental_realization_cached(&environment.catalog)
+            .map(|realization| realization.overall)
+            .unwrap_or(before_realization);
+        crate::decision::ActionConsequence {
+            energy_delta: organism.usable_energy - before_energy,
+            stress_delta: organism.stress - before_stress,
+            developmental_delta: after_realization - before_realization,
+        }
+    }
+
     fn update_development_stage(organism: &mut Organism, environment: &Environment) {
         match organism.development_stage {
             DevelopmentStage::Offspring => {
