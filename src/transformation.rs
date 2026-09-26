@@ -168,7 +168,10 @@ impl Simulation {
             let entry = organism.stored_material.entries.get(storage_index)?;
             let physical = match entry {
                 crate::material_storage::StoredMaterial::Physical(instance)
-                    if instance.is_realized() => instance.clone(),
+                    if instance.is_realized() =>
+                {
+                    instance.clone()
+                },
                 _ => return None,
             };
             stored_bond = Some(
@@ -309,8 +312,18 @@ impl Simulation {
             };
             let Some(pieces) = removed.break_internal_bond(&target) else {
                 let _ = environment.field.deposit_physical(
-                    removed.placements.as_ref().and_then(|p| p.first()).map(|p| p.x).unwrap_or(0.0),
-                    removed.placements.as_ref().and_then(|p| p.first()).map(|p| p.y).unwrap_or(0.0),
+                    removed
+                        .placements
+                        .as_ref()
+                        .and_then(|p| p.first())
+                        .map(|p| p.x)
+                        .unwrap_or(0.0),
+                    removed
+                        .placements
+                        .as_ref()
+                        .and_then(|p| p.first())
+                        .map(|p| p.y)
+                        .unwrap_or(0.0),
                     removed,
                 );
                 organism.active_transformation_id = None;
@@ -337,8 +350,11 @@ impl Simulation {
                 if let Some(placement) = piece
                     .placements
                     .as_ref()
-                    .and_then(|placements| placements.first()) {
-                    let _ = environment.field.deposit_physical(placement.x, placement.y, piece);
+                    .and_then(|placements| placements.first())
+                {
+                    let _ = environment
+                        .field
+                        .deposit_physical(placement.x, placement.y, piece);
                 }
             }
             organism.add_transaction_stress(heat);
