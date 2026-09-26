@@ -80,13 +80,7 @@ pub(crate) fn seed_initial_resource_cloud(
         let y = center_y + radius * angle.sin();
         let material = &compounds[particle_index % compounds.len()];
         let rotation = rng.gen_range(0.0..std::f64::consts::TAU);
-        let placements = compound_placements(
-            material,
-            x,
-            y,
-            rotation,
-            rng.gen_range(0.25..0.65),
-        );
+        let placements = compound_placements(material, x, y, rotation, rng.gen_range(0.25..0.65));
         let Some(physical) = PhysicalMaterial::realized(material.clone(), placements, catalog)
         else {
             continue;
