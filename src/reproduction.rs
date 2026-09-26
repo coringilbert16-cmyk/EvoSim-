@@ -283,7 +283,7 @@ fn try_child_construction(
         }
         let last = candidate.stored_material.entries.len().saturating_sub(1);
         candidate.stored_material.entries.swap(0, last);
-        candidates.push((candidate, Some(material)));
+        candidates.push((candidate, Some(instance)));
     }
 
     for (mut candidate, transferred) in candidates {
@@ -608,7 +608,7 @@ pub(crate) fn advance_construction(
         }
     };
 
-    if let Some(StoredMaterial::Physical(material)) = transferred {
+    if let Some(material) = transferred {
         let mut parent_trial = parent_storage.clone();
         if let Some(index) = parent_storage.entries.iter().position(
             |entry| matches!(entry, StoredMaterial::Physical(instance) if instance == &material),
