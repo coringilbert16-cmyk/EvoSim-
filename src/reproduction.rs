@@ -222,9 +222,15 @@ fn next_construction_resource_status(
                 .iter()
                 .any(|held| held == &material);
 
+        let Some(physical) = PhysicalMaterial::realized(
+            material.clone(),
+            vec![crate::structure::Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }],
+            &environment.catalog,
+        ) else {
+            continue;
+        };
         let mut candidate = child.clone();
-        let StoredMaterial::Physical(instance) = material.clone();
-        if !candidate.stored_material.store_physical_instance(instance) {
+        if !candidate.stored_material.store_physical_instance(physical) {
             continue;
         }
 
@@ -267,8 +273,8 @@ fn try_child_construction(
     }
 
     for material in parent_storage.entries.iter().cloned() {
-        let mut candidate = child.clone();
         let StoredMaterial::Physical(instance) = material.clone();
+        let mut candidate = child.clone();
         if !candidate.stored_material.store_physical_instance(instance) {
             continue;
         }
@@ -593,7 +599,7 @@ pub(crate) fn advance_construction(
         }
     };
 
-    if let Some(material) = transferred {
+    if let Some(StoredMaterial::Physical(material)) = transferred {
         let mut parent_trial = parent_storage.clone();
         if let Some(index) = parent_storage.entries.iter().position(|entry| {
             matches!(entry, StoredMaterial::Physical(instance) if instance == &material)
