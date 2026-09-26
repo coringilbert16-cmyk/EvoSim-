@@ -50,10 +50,6 @@ const FORMATION_CENTER_FRACTIONS: [(f64, f64); INITIAL_FORMATION_COUNT] = [
     (0.82, 0.82),
 ];
 
-/// Populate the active field with a small number of physically realized,
-/// composition-driven formations. Empty field remains between formations.
-/// Each formation uses a composition-specific repeating pattern with bounded
-/// random variation so its physical outline is irregular rather than circular.
 /// Seed the initial local resource cloud around the starting organism.
 ///
 /// This is intentionally additive to the broader landscape: the persistent
@@ -79,12 +75,13 @@ pub(crate) fn seed_initial_resource_cloud(
     let (center_x, center_y) = INITIAL_RESOURCE_CLOUD_CENTER;
     for particle_index in 0..INITIAL_RESOURCE_CLOUD_PARTICLES {
         let angle = rng.gen_range(0.0..std::f64::consts::TAU);
-        let radius = INITIAL_RESOURCE_CLOUD_RADIUS * rng.gen_range(0.0..1.0).sqrt();
+        let radius = INITIAL_RESOURCE_CLOUD_RADIUS * rng.gen_range(0.0_f64..1.0_f64).sqrt();
         let x = center_x + radius * angle.cos();
         let y = center_y + radius * angle.sin();
         let material = &compounds[particle_index % compounds.len()];
         let rotation = rng.gen_range(0.0..std::f64::consts::TAU);
-        let placements = compound_placements(material, x, y, rotation, rng.gen_range(0.25..0.65));
+        let placements =
+            compound_placements(material, x, y, rotation, rng.gen_range(0.25..0.65));
         let Some(physical) = PhysicalMaterial::realized(material.clone(), placements, catalog)
         else {
             continue;
