@@ -224,12 +224,12 @@ impl Simulation {
     ) {
         let (stored, target, environmental_id) =
             if let Some(stored) = transformation.stored_material.as_ref() {
-            let Some(target) = transformation.stored_bond.as_ref() else {
+                let Some(target) = transformation.stored_bond.as_ref() else {
                 organism.active_transformation_id = None;
                 return;
-            };
-            (stored.clone(), target.clone(), None)
-        } else if let (Some(material_id), Some(bond_index)) = (
+                };
+                (stored.clone(), target.clone(), None)
+            } else if let (Some(material_id), Some(bond_index)) = (
             transformation.environmental_material_id,
             transformation.environmental_bond_index,
         ) {
@@ -258,12 +258,12 @@ impl Simulation {
             else {
                 organism.active_transformation_id = None;
                 return;
+                };
+                (physical, target, Some(material_id))
+            } else {
+                organism.active_transformation_id = None;
+                return;
             };
-            (physical, target, Some(material_id))
-        } else {
-            organism.active_transformation_id = None;
-            return;
-        };
 
         let Some(a) = stored
             .material
@@ -395,8 +395,14 @@ impl Simulation {
             if !organism
                 .stored_material
                 .store_physical_instance(piece.clone()) {
-                if let Some(placement) = piece.placements.as_ref().and_then(|placements| placements.first()) {
-                    let _ = environment.field.deposit_physical(placement.x, placement.y, piece);
+                if let Some(placement) = piece
+                    .placements
+                    .as_ref()
+                    .and_then(|placements| placements.first())
+                {
+                    let _ = environment
+                        .field
+                        .deposit_physical(placement.x, placement.y, piece);
                 }
             }
         }
@@ -404,11 +410,19 @@ impl Simulation {
         organism.active_transformation_id = None;
         crate::decision_runtime::record_outcome(
             &mut organism.decision_history,
-            &ActionCandidate { action: ActionKind::Break, context_key: transformation.decision_context_key.clone() },
-            if usable > f64::EPSILON { OutcomeKind::Beneficial } else if heat > f64::EPSILON { OutcomeKind::Harmful } else { OutcomeKind::Neutral },
+            &ActionCandidate {
+                action: ActionKind::Break,
+                context_key: transformation.decision_context_key.clone(),
+            },
+            if usable > f64::EPSILON {
+                OutcomeKind::Beneficial
+            } else if heat > f64::EPSILON {
+                OutcomeKind::Harmful
+            } else {
+                OutcomeKind::Neutral
+            },
         );
     }
-
 }
 
 pub(crate) fn break_work_cost(
