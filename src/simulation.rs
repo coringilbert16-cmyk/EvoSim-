@@ -386,6 +386,24 @@ impl Simulation {
             if transformation.remaining_ticks > 0 {
                 transformation.remaining_ticks -= 1
             }
+            if transformation.remaining_ticks == 1 {
+                if let Some(organism) = self
+                    .organisms
+                    .iter_mut()
+                    .find(|o| o.id == transformation.organism_id)
+                {
+                    if !Self::prepare_transformation(
+                        &mut transformation,
+                        organism,
+                        &self.environment,
+                        &mut self.energy_ledger,
+                    ) {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
+            }
             if transformation.remaining_ticks == 0 {
                 completed.push(transformation)
             } else {
