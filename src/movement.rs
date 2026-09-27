@@ -109,9 +109,10 @@ fn movement_energy_cost(realized_mass: f64, movement_efficiency: f64) -> f64 {
 
 impl Simulation {
     pub(crate) fn update_movement(
+        before: &mut [Organism],
         organism: &mut Organism,
+        after: &mut [Organism],
         environment: &mut Environment,
-        other_organisms: &mut [Organism],
         ledger: &mut EnergyLedger,
         tick: u64,
         rng: &mut ChaCha8Rng,
@@ -187,7 +188,9 @@ impl Simulation {
         let result = Self::try_move_cell_with_reason(
             organism,
             environment,
-            other_organisms,
+            before,
+            after,
+            organisms_index(before, after),
             requested_dx,
             requested_dy,
         );
@@ -237,14 +240,24 @@ impl Simulation {
         delta_x: f64,
         delta_y: f64,
     ) -> bool {
-        Self::try_move_cell_with_reason(organism, environment, other_organisms, delta_x, delta_y)
-            .is_ok()
+        Self::try_move_cell_with_reason(
+            organism,
+            environment,
+            other_organisms,
+            &mut [],
+            other_organisms.len(),
+            delta_x,
+            delta_y,
+        )
+        .is_ok()
     }
 
     fn try_move_cell_with_reason(
         organism: &mut Organism,
         environment: &mut Environment,
-        other_organisms: &mut [Organism],
+        before: &mut [Organism],
+        after: &mut [Organism],
+        moving_index: usize,
         delta_x: f64,
         delta_y: f64,
     ) -> Result<(), crate::state::MovementFailureReason> {
@@ -264,10 +277,26 @@ impl Simulation {
             return Err(crate::state::MovementFailureReason::ZeroDisplacement);
         }
 
-        let push_plan = resolve_push_chain(organism, other_organisms, environment, dx, dy)
-            .ok_or(crate::state::MovementFailureReason::BlockedByPushChain)?;
+        let push_plan = resolve_push_chain(
+            organism,
+            before,
+            after,
+            moving_index,
+            environment,
+            dx,
+            dy,
+        )
+        .ok_or(crate::state::MovementFailureReason::BlockedByPushChain)?;
 
-        apply_push_plan(other_organisms, environment, push_plan, dx, dy);
+        apply_push_plan(
+            before,
+            after,
+            moving_index,
+            environment,
+            push_plan,
+            dx,
+            dy,
+        );
 
         organism.occupied_cells[0].x = new_x;
         organism.occupied_cells[0].y = new_y;
@@ -290,32 +319,69 @@ struct PushPlan {
     physical: Vec<(usize, usize)>,
 }
 
+fn organisms_index(before: &[Organism], after: &[Organism]) -> usize {
+    before.len()
+}
+
+fn organism_at<'a>(
+    before: &'a [Organism],
+    after: &'a [Organism],
+    moving_index: usize,
+    index: usize,
+) -> Option<&'a Organism> {
+    if index == moving_index {
+        return None;
+    }
+    if index < moving_index {
+        before.get(index)
+    } else {
+        after.get(index.saturating_sub(moving_index + 1))
+    }
+}
+
+fn organism_at_mut<'a>(
+    before: &'a mut [Organism],
+    after: &'a mut [Organism],
+    moving_index: usize,
+    index: usize,
+) -> Option<&'a mut Organism> {
+    if index == moving_index {
+        return None;
+    }
+    if index < moving_index {
+        before.get_mut(index)
+    } else {
+        after.get_mut(index.saturating_sub(moving_index + 1))
+    }
+}
+
+#[derive(Default)]
+struct PushPlan {
+    organisms: Vec<usize>,
+    physical: Vec<(usize, usize)>,
+}
+
 fn resolve_push_chain(
     moving: &Organism,
-    other_organisms: &[Organism],
+    before: &[Organism],
+    after: &[Organism],
+    moving_index: usize,
     environment: &Environment,
     dx: f64,
     dy: f64,
 ) -> Option<PushPlan> {
-    let mut organism_visited = vec![false; other_organisms.len()];
+    let organism_count = before.len() + 1 + after.len();
+    let mut organism_visited = vec![false; organism_count];
+    organism_visited[moving_index] = true;
     let mut physical_visited = std::collections::HashSet::new();
-    let physical_keys: Vec<(usize, usize)> = environment
-        .field
-        .cells
-        .iter()
-        .enumerate()
-        .flat_map(|(cell_index, cell)| {
-            (0..cell.physical_materials.len())
-                .map(move |material_index| (cell_index, material_index))
-        })
-        .collect();
     let moving_destination = organism_parts_at(moving, environment, dx, dy);
     let mut plan = PushPlan::default();
     if push_blockers_for_parts(
         &moving_destination,
-        other_organisms,
+        before,
+        after,
+        moving_index,
         environment,
-        &physical_keys,
         dx,
         dy,
         &mut organism_visited,
@@ -330,20 +396,23 @@ fn resolve_push_chain(
 
 fn push_blockers_for_parts(
     moving_destination: &[PlacedMaterialPart],
-    other_organisms: &[Organism],
+    before: &[Organism],
+    after: &[Organism],
+    moving_index: usize,
     environment: &Environment,
-    physical_keys: &[(usize, usize)],
     dx: f64,
     dy: f64,
     organism_visited: &mut [bool],
     physical_visited: &mut std::collections::HashSet<(usize, usize)>,
     plan: &mut PushPlan,
 ) -> bool {
-    for index in 0..other_organisms.len() {
+    for index in 0..organism_visited.len() {
         if organism_visited[index] {
             continue;
         }
-        let candidate = &other_organisms[index];
+        let Some(candidate) = organism_at(before, after, moving_index, index) else {
+            continue;
+        };
         let candidate_parts = organism_parts_at(candidate, environment, 0.0, 0.0);
         if !parts_penetrate(moving_destination, &candidate_parts, environment.height) {
             continue;
@@ -355,9 +424,10 @@ fn push_blockers_for_parts(
         organism_visited[index] = true;
         if !push_blockers_for_parts(
             &destination,
-            other_organisms,
+            before,
+            after,
+            moving_index,
             environment,
-            physical_keys,
             dx,
             dy,
             organism_visited,
@@ -369,58 +439,93 @@ fn push_blockers_for_parts(
         plan.organisms.push(index);
     }
 
-    for &(cell_index, material_index) in physical_keys {
-        let key = (cell_index, material_index);
-        if physical_visited.contains(&key) {
-            continue;
-        }
-        let Some(candidate) = environment
+    // Physical material already uses the field's spatial grid for broad-phase
+    // lookup. Do not rebuild a list of every physical object for each move.
+    let moving_min_x = moving_destination
+        .iter()
+        .map(|part| part.placement.x - part.form.bounding_radius())
+        .fold(f64::INFINITY, f64::min);
+    let moving_max_x = moving_destination
+        .iter()
+        .map(|part| part.placement.x + part.form.bounding_radius())
+        .fold(f64::NEG_INFINITY, f64::max);
+    let moving_min_y = moving_destination
+        .iter()
+        .map(|part| part.placement.y - part.form.bounding_radius())
+        .fold(f64::INFINITY, f64::min);
+    let moving_max_y = moving_destination
+        .iter()
+        .map(|part| part.placement.y + part.form.bounding_radius())
+        .fold(f64::NEG_INFINITY, f64::max);
+    let physical_keys = environment
+        .field
+        .cells_intersecting_bounds(moving_min_x, moving_max_x, moving_min_y, moving_max_y);
+
+    for cell_index in physical_keys {
+        let physical_len = environment
             .field
             .cells
             .get(cell_index)
-            .and_then(|cell| cell.physical_materials.get(material_index))
-        else {
-            continue;
-        };
-        if !candidate.is_realized() || candidate.material.is_empty() {
-            continue;
+            .map(|cell| cell.physical_materials.len())
+            .unwrap_or(0);
+        for material_index in 0..physical_len {
+            let key = (cell_index, material_index);
+            if physical_visited.contains(&key) {
+                continue;
+            }
+            let Some(candidate) = environment
+                .field
+                .cells
+                .get(cell_index)
+                .and_then(|cell| cell.physical_materials.get(material_index))
+            else {
+                continue;
+            };
+            if !candidate.is_realized() || candidate.material.is_empty() {
+                continue;
+            }
+            let candidate_parts = physical_parts_at(candidate, environment, 0.0, 0.0);
+            if !parts_penetrate(moving_destination, &candidate_parts, environment.height) {
+                continue;
+            }
+            if !can_translate_physical(candidate, environment, dx, dy) {
+                return false;
+            }
+            let destination = physical_parts_at(candidate, environment, dx, dy);
+            physical_visited.insert(key);
+            if !push_blockers_for_parts(
+                &destination,
+                before,
+                after,
+                moving_index,
+                environment,
+                dx,
+                dy,
+                organism_visited,
+                physical_visited,
+                plan,
+            ) {
+                return false;
+            }
+            plan.physical.push(key);
         }
-        let candidate_parts = physical_parts_at(candidate, environment, 0.0, 0.0);
-        if !parts_penetrate(moving_destination, &candidate_parts, environment.height) {
-            continue;
-        }
-        if !can_translate_physical(candidate, environment, dx, dy) {
-            return false;
-        }
-        let destination = physical_parts_at(candidate, environment, dx, dy);
-        physical_visited.insert(key);
-        if !push_blockers_for_parts(
-            &destination,
-            other_organisms,
-            environment,
-            physical_keys,
-            dx,
-            dy,
-            organism_visited,
-            physical_visited,
-            plan,
-        ) {
-            return false;
-        }
-        plan.physical.push(key);
     }
     true
 }
 
 fn apply_push_plan(
-    other_organisms: &mut [Organism],
+    before: &mut [Organism],
+    after: &mut [Organism],
+    moving_index: usize,
     environment: &mut Environment,
     mut plan: PushPlan,
     dx: f64,
     dy: f64,
 ) {
     for index in plan.organisms.drain(..) {
-        translate_organism(&mut other_organisms[index], dx, dy, environment.height);
+        if let Some(organism) = organism_at_mut(before, after, moving_index, index) {
+            translate_organism(organism, dx, dy, environment.height);
+        }
     }
 
     plan.physical.sort_unstable_by(|a, b| b.cmp(a));
