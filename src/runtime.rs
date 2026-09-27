@@ -22,7 +22,7 @@ impl RuntimeState {
         history.push_back(simulation.clone());
         let session_id = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map(|duration| duration.as_millis().to_string())
+            .map(|duration| format!("{}-{}", std::process::id(), duration.as_millis()))
             .unwrap_or_else(|_| "unknown".into());
         Self {
             simulation,
