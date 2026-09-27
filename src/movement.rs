@@ -13,6 +13,124 @@ const MOVEMENT_REFERENCE_COST: f64 = 0.05;
 const MOVEMENT_MASS_EXPONENT: f64 = 2.0 / 3.0;
 const MOVEMENT_DISTANCE_OPTIONS: [f64; 4] = [1.0, 2.0, 4.0, 8.0];
 
+pub(crate) struct MovementSpatialIndex {
+    cell_size: f64,
+    width_cells: usize,
+    height_cells: usize,
+    cells: Vec<Vec<usize>>,
+    membership: Vec<Vec<usize>>,
+}
+
+impl MovementSpatialIndex {
+    pub(crate) fn new(organisms: &[Organism], environment: &Environment) -> Self {
+        let width_cells = environment.field.width_cells;
+        let height_cells = environment.field.height_cells;
+        let mut index = Self {
+            cell_size: environment.field.cell_size,
+            width_cells,
+            height_cells,
+            cells: vec![Vec::new(); width_cells.saturating_mul(height_cells)],
+            membership: vec![Vec::new(); organisms.len()],
+        };
+        for (organism_index, organism) in organisms.iter().enumerate() {
+            index.insert(organism_index, organism, environment);
+        }
+        index
+    }
+
+    fn cell_index(&self, row: usize, col: usize) -> usize {
+        row * self.width_cells + col
+    }
+
+    fn insert(&mut self, organism_index: usize, organism: &Organism, environment: &Environment) {
+        let Some((min_x, max_x, min_y, max_y)) = organism_bounds(organism, environment) else {
+            return;
+        };
+        let cell_indices = environment
+            .field
+            .cells_intersecting_bounds(min_x, max_x, min_y, max_y);
+        for cell_index in cell_indices {
+            self.cells[cell_index].push(organism_index);
+            self.membership[organism_index].push(cell_index);
+        }
+    }
+
+    pub(crate) fn refresh_organism(
+        &mut self,
+        organism_index: usize,
+        organism: &Organism,
+        environment: &Environment,
+    ) {
+        if organism_index >= self.membership.len() {
+            return;
+        }
+        let old_cells = std::mem::take(&mut self.membership[organism_index]);
+        for cell_index in old_cells {
+            self.cells[cell_index].retain(|candidate| *candidate != organism_index);
+        }
+        self.insert(organism_index, organism, environment);
+    }
+
+    fn candidates(
+        &self,
+        moving_destination: &[PlacedMaterialPart],
+        environment: &Environment,
+    ) -> Vec<usize> {
+        let Some((min_x, max_x, min_y, max_y)) = parts_bounds(moving_destination) else {
+            return Vec::new();
+        };
+        let mut candidates = Vec::new();
+        for cell_index in environment
+            .field
+            .cells_intersecting_bounds(min_x, max_x, min_y, max_y)
+        {
+            for &organism_index in &self.cells[cell_index] {
+                if !candidates.contains(&organism_index) {
+                    candidates.push(organism_index);
+                }
+            }
+        }
+        candidates
+    }
+}
+
+fn organism_bounds(
+    organism: &Organism,
+    environment: &Environment,
+) -> Option<(f64, f64, f64, f64)> {
+    let mut min_x = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    let mut found = false;
+    for unit in &organism.structure.units {
+        let shape = unit.shape(&environment.catalog)?;
+        let radius = shape.form.bounding_radius();
+        min_x = min_x.min(unit.placement.x - radius);
+        max_x = max_x.max(unit.placement.x + radius);
+        min_y = min_y.min(unit.placement.y - radius);
+        max_y = max_y.max(unit.placement.y + radius);
+        found = true;
+    }
+    found.then_some((min_x, max_x, min_y, max_y))
+}
+
+fn parts_bounds(parts: &[PlacedMaterialPart]) -> Option<(f64, f64, f64, f64)> {
+    let mut min_x = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    for part in parts {
+        let radius = part.form.bounding_radius();
+        min_x = min_x.min(part.placement.x - radius);
+        max_x = max_x.max(part.placement.x + radius);
+        min_y = min_y.min(part.placement.y - radius);
+        max_y = max_y.max(part.placement.y + radius);
+    }
+    min_x.is_finite().then_some((min_x, max_x, min_y, max_y))
+}
+
+
 fn movement_energy_cost_for_distance(
     realized_mass: f64,
     movement_efficiency: f64,
@@ -112,6 +230,7 @@ impl Simulation {
         before: &mut [Organism],
         organism: &mut Organism,
         after: &mut [Organism],
+        spatial_index: &mut MovementSpatialIndex,
         environment: &mut Environment,
         ledger: &mut EnergyLedger,
         tick: u64,
@@ -191,6 +310,7 @@ impl Simulation {
             before,
             after,
             organisms_index(before, after),
+            spatial_index,
             requested_dx,
             requested_dy,
         );
@@ -240,12 +360,17 @@ impl Simulation {
         delta_x: f64,
         delta_y: f64,
     ) -> bool {
+        let mut spatial_index = MovementSpatialIndex::new(
+            std::slice::from_ref(organism),
+            environment,
+        );
         Self::try_move_cell_with_reason(
             organism,
             environment,
             other_organisms,
             &mut [],
             other_organisms.len(),
+            &mut spatial_index,
             delta_x,
             delta_y,
         )
@@ -258,6 +383,7 @@ impl Simulation {
         before: &mut [Organism],
         after: &mut [Organism],
         moving_index: usize,
+        spatial_index: &mut MovementSpatialIndex,
         delta_x: f64,
         delta_y: f64,
     ) -> Result<(), crate::state::MovementFailureReason> {
@@ -282,6 +408,7 @@ impl Simulation {
             before,
             after,
             moving_index,
+            spatial_index,
             environment,
             dx,
             dy,
@@ -292,6 +419,7 @@ impl Simulation {
             before,
             after,
             moving_index,
+            spatial_index,
             environment,
             push_plan,
             dx,
@@ -366,6 +494,7 @@ fn resolve_push_chain(
     before: &[Organism],
     after: &[Organism],
     moving_index: usize,
+    spatial_index: &MovementSpatialIndex,
     environment: &Environment,
     dx: f64,
     dy: f64,
@@ -399,6 +528,7 @@ fn push_blockers_for_parts(
     before: &[Organism],
     after: &[Organism],
     moving_index: usize,
+    spatial_index: &MovementSpatialIndex,
     environment: &Environment,
     dx: f64,
     dy: f64,
@@ -406,8 +536,8 @@ fn push_blockers_for_parts(
     physical_visited: &mut std::collections::HashSet<(usize, usize)>,
     plan: &mut PushPlan,
 ) -> bool {
-    for index in 0..organism_visited.len() {
-        if organism_visited[index] {
+    for index in spatial_index.candidates(moving_destination, environment) {
+        if index >= organism_visited.len() || organism_visited[index] {
             continue;
         }
         let Some(candidate) = organism_at(before, after, moving_index, index) else {
@@ -427,6 +557,7 @@ fn push_blockers_for_parts(
             before,
             after,
             moving_index,
+            spatial_index,
             environment,
             dx,
             dy,
@@ -517,6 +648,7 @@ fn apply_push_plan(
     before: &mut [Organism],
     after: &mut [Organism],
     moving_index: usize,
+    spatial_index: &mut MovementSpatialIndex,
     environment: &mut Environment,
     mut plan: PushPlan,
     dx: f64,
@@ -525,6 +657,7 @@ fn apply_push_plan(
     for index in plan.organisms.drain(..) {
         if let Some(organism) = organism_at_mut(before, after, moving_index, index) {
             translate_organism(organism, dx, dy, environment.height);
+            spatial_index.refresh_organism(index, organism, environment);
         }
     }
 
