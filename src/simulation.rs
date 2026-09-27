@@ -468,12 +468,11 @@ impl Simulation {
                 if eligibility.can_move {
                     let move_candidate = ActionCandidate {
                         action: ActionKind::Move,
-                        context_key: organism
-                            .last_movement_attempt
-                            .as_ref()
-                            .and_then(|attempt| {
-                                attempt.step.map(|distance| format!("distance:{distance:.0}"))
-                            }),
+                        context_key: organism.last_movement_attempt.as_ref().and_then(|attempt| {
+                            attempt
+                                .step
+                                .map(|distance| format!("distance:{distance:.0}"))
+                        }),
                     };
                     let organism_count = organisms.len();
                     let (before, rest) = organisms.split_at_mut(index);
