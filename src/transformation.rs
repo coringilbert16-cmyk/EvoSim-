@@ -170,11 +170,15 @@ impl Simulation {
         let bond_index = bond_part.parse::<usize>().ok()?;
 
         let removed = organism.stored_material.entries.get(storage_index)?;
-        if !matches!(
-            removed,
+        let bond_count = match removed {
             crate::material_storage::StoredMaterial::Physical(instance)
-                if instance.is_realized()
-        ) {
+                if instance.is_realized() =>
+            {
+                instance.internal_connections.as_ref()?.len()
+            }
+            _ => return None,
+        };
+        if bond_index >= bond_count {
             return None;
         }
 
