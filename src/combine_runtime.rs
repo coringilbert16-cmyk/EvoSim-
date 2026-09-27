@@ -263,7 +263,12 @@ fn stored_entry_structure(
                 return None;
             }
             let mut structure = crate::structure::OrganismStructure::new();
-            crate::material_restoration::restore_material(&mut structure, instance, origin, catalog)?;
+            crate::material_restoration::restore_material(
+                &mut structure,
+                instance,
+                origin,
+                catalog,
+            )?;
             Some(structure)
         }
         crate::material_storage::StoredMaterial::Logical(material) => {
@@ -274,10 +279,8 @@ fn stored_entry_structure(
             if (*amount - 1.0).abs() > EPSILON {
                 return None;
             }
-            let mut unit = StructuralUnit::from_material(
-                Material::free_base(name.clone(), 1.0),
-                origin,
-            )?;
+            let mut unit =
+                StructuralUnit::from_material(Material::free_base(name.clone(), 1.0), origin)?;
             if !unit.realize_default_geometry(catalog) {
                 return None;
             }
