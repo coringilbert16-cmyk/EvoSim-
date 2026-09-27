@@ -342,8 +342,8 @@ pub(crate) fn update_organism_harmonics(
     }
 
     let boundary_units = organism
-        .genome_cavity_cached(&environment.catalog)
-        .map(|cavity| cavity.boundary_units)
+        .genome_cavity_cached_ref(&environment.catalog)
+        .map(|cavity| cavity.boundary_units.clone())
         .unwrap_or_default();
 
     organism.harmonic_spectrum = genome_cavity_spectrum(
