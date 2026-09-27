@@ -439,15 +439,57 @@
       }
     });
 
+    let liveRefreshQueued = false;
+    let liveStream = null;
+
+    function queueLiveRefresh() {
+      if (historyViewTick != null || liveRefreshQueued) return;
+      liveRefreshQueued = true;
+      setTimeout(async () => {
+        liveRefreshQueued = false;
+        if (historyViewTick != null) return;
+        await refreshRuntimeStatus();
+        if (historyViewTick != null) return;
+        if (observationLevel === 'World') await loadObservation('World');
+        else if (focusedOrganismId != null) await loadObservation(observationLevel, focusedOrganismId);
+      }, 50);
+    }
+
+    function connectLiveStream() {
+      if (liveStream) liveStream.close();
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      liveStream = new WebSocket(protocol + '//' + location.host + '/observation/stream');
+      liveStream.onopen = () => {
+        status.textContent = 'Live observation stream connected';
+        refreshRuntimeStatus();
+      };
+      liveStream.onmessage = event => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type === 'tick') {
+            if (runtimeStatus?.session_id && message.session_id !== runtimeStatus.session_id) {
+              historyViewTick = null;
+              cameraInitialized = false;
+            }
+            queueLiveRefresh();
+          }
+        } catch (_) {}
+      };
+      liveStream.onclose = () => {
+        liveStream = null;
+        if (historyViewTick == null) status.textContent = 'Live stream disconnected — reconnecting…';
+        setTimeout(connectLiveStream, 500);
+      };
+      liveStream.onerror = () => liveStream?.close();
+    }
+
     window.addEventListener('resize', resize);
     resize();
-    loadObservation('World');
-    setInterval(async () => {
-      await refreshRuntimeStatus();
-      if (historyViewTick != null) return;
-      if (observationLevel === 'World') loadObservation('World');
-      else if (focusedOrganismId != null) loadObservation(observationLevel, focusedOrganismId);
-    }, 250);
+    awaitInitialObservation();
+
+    function awaitInitialObservation() {
+      loadObservation('World').finally(connectLiveStream);
+    }
   </script>
 </body>
 </html>
