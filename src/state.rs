@@ -229,9 +229,16 @@ impl Organism {
         &mut self,
         catalog: &[BaseResource],
     ) -> Option<crate::developmental_blueprint::DevelopmentalRealization> {
+        let reference = crate::juvenile::confirmed_seed_scale_reference(catalog).ok()?;
+        self.developmental_realization_cached_for_reference(catalog, reference)
+    }
+
+    pub(crate) fn developmental_realization_cached_for_reference(
+        &mut self,
+        catalog: &[BaseResource],
+        (seed_mass, seed_length): (f64, f64),
+    ) -> Option<crate::developmental_blueprint::DevelopmentalRealization> {
         if self.cached_developmental_revision != Some(self.structure_revision) {
-            let (seed_mass, seed_length) =
-                crate::juvenile::confirmed_seed_scale_reference(catalog).ok()?;
             let preferred_length = self
                 .genome
                 .developmental_blueprint
