@@ -35,7 +35,6 @@ async fn index_handler() -> impl IntoResponse {
     ))
 }
 
-
 async fn observation_stream_handler(
     ws: WebSocketUpgrade,
     State(state): State<AppState>,
