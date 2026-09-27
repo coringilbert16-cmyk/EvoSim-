@@ -1,30 +1,14 @@
 use axum::{
     extract::{Path, State},
     response::{Html, IntoResponse},
-    routing::get,
-    Json, Router,
-};
-use serde_json::Value;
-use std::sync::Arc;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::net::TcpStream;
-use tokio::process::{Child, Command};
-use tokio::sync::Mutex;
-use tower_http::cors::CorsLayer;
-
-use crate::state::AppState;
-
-use axum::{
-    extract::{Path, State},
-    response::{Html, IntoResponse},
     routing::{get, post},
     Json, Router,
 };
 use serde_json::Value;
-use std::time::Duration;
+use tower_http::cors::CorsLayer;
+
 use crate::runtime::SimulationProcess;
 use crate::state::AppState;
-use tower_http::cors::CorsLayer;
 
 async fn request(
     state: &AppState,
@@ -201,7 +185,7 @@ pub(crate) async fn run() {
             "/observation/resources",
             get(resource_visualization_handler),
         )
-        .route("/control/pause", axum::routing::post(pause_handler))
+        .route("/control/pause", post(pause_handler))
         .route("/control/resume", axum::routing::post(resume_handler))
         .route("/control/step", axum::routing::post(step_handler))
         .route(
