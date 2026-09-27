@@ -431,7 +431,7 @@ impl DevelopmentalFieldBlueprint {
                 let actual = actual_total - bond_score;
                 let available = total_available - bond_score;
                 if available <= 0.0 {
-                    Some(0.0)
+                    None
                 } else {
                     Some((actual / available).clamp(0.0, 1.0))
                 }
