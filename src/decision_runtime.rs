@@ -191,14 +191,14 @@ pub fn select_action_with_developmental_scores(
         .iter()
         .filter(|(_, score, developmental)| {
             score.total_cmp(&best_score).is_eq()
-                && best_developmental.is_none_or(|best| *developmental == Some(best))
+                && best_developmental.map_or(true, |best| *developmental == Some(best))
         })
         .count();
     let selected_rank = rng.gen_range(0..final_tie_count);
     let mut rank = 0;
     for (index, score, developmental) in scored {
         if score.total_cmp(&best_score).is_eq()
-            && best_developmental.is_none_or(|best| developmental == Some(best))
+            && best_developmental.map_or(true, |best| developmental == Some(best))
         {
             if rank == selected_rank {
                 return candidates.get(index).cloned();
