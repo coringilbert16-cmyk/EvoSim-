@@ -337,7 +337,7 @@ fn try_combine_stored_materials(
                         }
                     };
                     for &ua in &[anchor_index] {
-                        for &ub in &second_indices {
+                        for (second_part_index, &ub) in second_indices.iter().enumerate() {
                             for candidate in crate::contact::connection_pair_candidates_cached(
                                 &hypothetical, ua, ub, catalog, cache
                             ) {
@@ -351,7 +351,7 @@ fn try_combine_stored_materials(
                                 }
                                 let score = -candidate.distance;
                                 if best.as_ref().map_or(true, |current| score > current.6) {
-                                    best = Some((i, j, anchor_index, ub, origin, candidate, score));
+                                    best = Some((i, j, anchor_index, second_part_index, origin, candidate, score));
                                 }
                                 let _ = (work, investment, required, evaluation);
                             }
