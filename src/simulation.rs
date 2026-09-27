@@ -409,7 +409,8 @@ impl Simulation {
         // The confirmed seed scale is deterministic for the catalog. Compute it
         // once per simulation tick instead of rebuilding the calibration
         // structure for every organism.
-        let seed_reference = crate::juvenile::confirmed_seed_scale_reference(&self.environment.catalog).ok();
+        let seed_reference = crate::juvenile::confirmed_seed_scale_reference(&self.environment.catalog)
+            .ok();
         for organism in &mut self.organisms {
             Self::update_development_stage(organism, &self.environment, seed_reference);
             organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
@@ -464,12 +465,12 @@ impl Simulation {
                     continue;
                 }
                 let developmental = seed_reference.and_then(|reference| {
-                            crate::developmental_decision::context(
-                                &mut organisms[index],
-                                environment,
-                                reference,
-                            )
-                        });
+                    crate::developmental_decision::context(
+                        &mut organisms[index],
+                        environment,
+                        reference,
+                    )
+                });
                 let needs = Self::current_needs(
                     &mut organisms[index],
                     environment,
