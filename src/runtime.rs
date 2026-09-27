@@ -101,6 +101,26 @@ impl SimulationProcess {
         panic!("simulation child did not become ready");
     }
 
+    pub(crate) async fn subscribe(&mut self) -> Result<TcpStream, &'static str> {
+        if self
+            .child
+            .try_wait()
+            .map_err(|_| "simulation_unavailable")?
+            .is_some()
+        {
+            *self = Self::spawn().await;
+        }
+
+        let mut stream = TcpStream::connect(("127.0.0.1", self.port))
+            .await
+            .map_err(|_| "simulation_unavailable")?;
+        stream
+            .write_all(b"{\"command\":\"subscribe\"}\n")
+            .await
+            .map_err(|_| "simulation_unavailable")?;
+        Ok(stream)
+    }
+
     pub(crate) async fn request(&mut self, command: Value) -> Result<Value, &'static str> {
         if self
             .child
@@ -133,10 +153,13 @@ impl SimulationProcess {
             serde_json::from_str(&line).map_err(|_| "invalid_simulation_response")?;
 
         if response.get("ok").and_then(Value::as_bool) != Some(true) {
-            return Err(response
-                .get("error")
-                .and_then(Value::as_str)
-                .unwrap_or("simulation_error"));
+            return Err(match response.get("error").and_then(Value::as_str) {
+                Some("not_found") => "not_found",
+                Some("invalid_speed") => "invalid_speed",
+                Some("invalid_command") => "invalid_command",
+                Some("simulation_unavailable") => "simulation_unavailable",
+                _ => "simulation_error",
+            });
         }
 
         response
