@@ -120,6 +120,23 @@ pub(crate) fn developmental_action_scores(
         return vec![None; candidates.len()];
     }
 
+    let has_competing_break = competing_indices.iter().any(|&index| {
+        candidates
+            .get(index)
+            .is_some_and(|candidate| candidate.action == ActionKind::Break)
+    });
+    let break_scores = has_competing_break.then(|| {
+        developmental
+            .blueprint
+            .connectivity_realizations_after_breaks(
+                &organism.structure,
+                &environment.catalog,
+                developmental.origin,
+                developmental.orientation,
+                developmental.preferred_length,
+            )
+    });
+
     candidates
         .iter()
         .enumerate()
@@ -140,22 +157,11 @@ pub(crate) fn developmental_action_scores(
                         .as_deref()
                         .and_then(|key| key.rsplit_once(":bond:").map(|(_, value)| value))
                         .and_then(|index| index.parse::<usize>().ok())?;
-                    Some(
-                        developmental
-                            .blueprint
-                            .realization_after_break_with_components(
-                                &organism.structure,
-                                &environment.catalog,
-                                developmental.origin,
-                                developmental.orientation,
-                                developmental.preferred_length,
-                                bond_index,
-                                developmental.current_material_realized,
-                                developmental.current_density_realized,
-                            )?
-                            .overall
-                            .clamp(0.0, 1.0),
-                    )
+                    break_scores
+                        .as_ref()
+                        .and_then(|scores| scores.get(bond_index))
+                        .copied()
+                        .flatten()
                 }
                 _ => None,
             }
