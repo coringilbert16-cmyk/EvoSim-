@@ -548,6 +548,7 @@ impl DevelopmentalFieldBlueprint {
                         candidate.endpoint_b,
                         catalog,
                         preferred_length,
+                        &mut endpoint_opportunities,
                     );
                 }
             }
@@ -723,6 +724,7 @@ enum EndpointOpportunityKey {
     Corner(usize),
     LineEndpoint(usize),
     Boundary(u64),
+    Fluid(u64, u64),
 }
 
 impl EndpointOpportunityKey {
@@ -736,6 +738,9 @@ impl EndpointOpportunityKey {
             }
             crate::structure::ConnectionEndpoint::Boundary { angle_radians } => {
                 Self::Boundary(angle_radians.to_bits())
+            }
+            crate::structure::ConnectionEndpoint::Fluid { x, y } => {
+                Self::Fluid(x.to_bits(), y.to_bits())
             }
         }
     }
