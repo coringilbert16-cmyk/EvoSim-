@@ -71,6 +71,7 @@ pub(crate) const BREAK_PROCESSING_RATE: usize = 1;
 #[derive(Serialize, Deserialize, Clone, Copy)]
 pub(crate) enum TransformationKind {
     Break,
+    Combine,
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct ActiveTransformation {
