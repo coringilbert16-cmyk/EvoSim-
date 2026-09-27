@@ -11,7 +11,8 @@ use crate::combine::{
 use crate::contact::ConnectionCompatibilityCache;
 use crate::developmental_blueprint::DevelopmentalFieldBlueprint;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
-use crate::resources::{BaseResource, Material};
+use crate::physical_material::{PhysicalMaterial, PhysicalMaterialBond};
+use crate::resources::{BaseResource, InternalBond, Material};
 use crate::state::{EnergyLedger, Environment, Organism};
 use crate::structure::{BondEndpoint, ConnectionEndpoint, Placement, StructuralUnit};
 
@@ -249,6 +250,94 @@ pub(crate) fn instantiate_one_unit(
     )?;
     organism.stored_material.take_matching(&material)?;
     Some(organism.structure.add_unit(unit))
+}
+
+fn stored_entry_structure(
+    entry: &crate::material_storage::StoredMaterial,
+    origin: Placement,
+    catalog: &[BaseResource],
+) -> Option<crate::structure::OrganismStructure> {
+    match entry {
+        crate::material_storage::StoredMaterial::Physical(instance) => {
+            if !instance.is_realized() {
+                return None;
+            }
+            let mut structure = crate::structure::OrganismStructure::new();
+            crate::material_restoration::restore_material(&mut structure, instance, origin, catalog)?;
+            Some(structure)
+        }
+        crate::material_storage::StoredMaterial::Logical(material) => {
+            if material.has_internal_structure() || material.parts.len() != 1 {
+                return None;
+            }
+            let (name, amount) = material.parts.first()?;
+            if (*amount - 1.0).abs() > EPSILON {
+                return None;
+            }
+            let mut unit = StructuralUnit::from_material(
+                Material::free_base(name.clone(), 1.0),
+                origin,
+            )?;
+            if !unit.realize_default_geometry(catalog) {
+                return None;
+            }
+            let mut structure = crate::structure::OrganismStructure::new();
+            structure.add_unit(unit);
+            Some(structure)
+        }
+    }
+}
+
+fn physical_material_from_structure(
+    structure: &crate::structure::OrganismStructure,
+    _catalog: &[BaseResource],
+) -> Option<PhysicalMaterial> {
+    if structure.units.is_empty() {
+        return None;
+    }
+    let parts: Vec<(String, f64)> = structure
+        .units
+        .iter()
+        .map(|unit| {
+            let (name, amount) = unit.material.parts.as_slice().first()?.clone();
+            if !amount.is_finite() || amount <= 0.0 {
+                return None;
+            }
+            Some((name, amount))
+        })
+        .collect::<Option<_>>()?;
+    let internal_bonds = structure
+        .bonds
+        .iter()
+        .map(|bond| {
+            let part_a = structure.unit_index(bond.endpoint_a.constituent_id)?;
+            let part_b = structure.unit_index(bond.endpoint_b.constituent_id)?;
+            Some(InternalBond { part_a, part_b })
+        })
+        .collect::<Option<Vec<_>>>()?;
+    let internal_connections = structure
+        .bonds
+        .iter()
+        .map(|bond| {
+            let part_a = structure.unit_index(bond.endpoint_a.constituent_id)?;
+            let part_b = structure.unit_index(bond.endpoint_b.constituent_id)?;
+            Some(PhysicalMaterialBond {
+                part_a,
+                endpoint_a: bond.endpoint_a.location,
+                part_b,
+                endpoint_b: bond.endpoint_b.location,
+            })
+        })
+        .collect::<Option<Vec<_>>>()?;
+    Some(PhysicalMaterial {
+        material: Material {
+            parts,
+            internal_bonds,
+        },
+        placements: Some(structure.units.iter().map(|unit| unit.placement).collect()),
+        internal_connections: Some(internal_connections),
+        owner_relative_origin: None,
+    })
 }
 
 fn try_combine_stored_materials(
