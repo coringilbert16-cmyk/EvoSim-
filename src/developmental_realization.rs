@@ -360,6 +360,7 @@ impl DevelopmentalFieldBlueprint {
                 bond.endpoint_b.location,
                 catalog,
                 preferred_length,
+                &mut endpoint_opportunities,
             );
             actual_by_bond[bond_index] = score;
             actual_total += score;
