@@ -134,9 +134,7 @@ pub(crate) fn developmental_action_scores(
             .is_some_and(|candidate| candidate.action == ActionKind::Break)
     });
     let break_scores = has_competing_break.then(|| {
-        developmental
-            blueprint
-            .connectivity_realizations_after_breaks(
+        blueprint.connectivity_realizations_after_breaks(
                 &organism.structure,
                 &environment.catalog,
                 developmental.origin,
