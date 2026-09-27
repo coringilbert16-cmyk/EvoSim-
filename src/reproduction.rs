@@ -286,7 +286,15 @@ fn preferred_length(
     genome: &crate::genome::Genome,
     catalog: &[crate::resources::BaseResource],
 ) -> Option<f64> {
-    let (seed_mass, seed_length) = crate::juvenile::confirmed_seed_scale_reference(catalog).ok()?;
+    let seed_reference = crate::juvenile::confirmed_seed_scale_reference(catalog).ok()?;
+    preferred_length_with_reference(genome, seed_reference)
+}
+
+fn preferred_length_with_reference(
+    genome: &crate::genome::Genome,
+    seed_reference: (f64, f64),
+) -> Option<f64> {
+    let (seed_mass, seed_length) = seed_reference;
     Some(
         genome
             .developmental_blueprint
@@ -299,12 +307,16 @@ fn developmental_context<'a>(
     origin: &Position,
     orientation: f64,
     catalog: &[crate::resources::BaseResource],
+    seed_reference: Option<(f64, f64)>,
 ) -> Option<DevelopmentalContext<'a>> {
+    let preferred = seed_reference
+        .and_then(|reference| preferred_length_with_reference(genome, reference))
+        .or_else(|| preferred_length(genome, catalog))?;
     Some((
         &genome.developmental_blueprint,
         (origin.x, origin.y),
         orientation,
-        preferred_length(genome, catalog)?,
+        preferred,
     ))
 }
 
@@ -320,7 +332,21 @@ fn juvenile_scale_reached(
     construction: &ReproductiveConstruction,
     catalog: &[crate::resources::BaseResource],
 ) -> bool {
-    let Some(preferred) = preferred_length(&construction.child_genome, catalog) else {
+    let seed_reference = crate::juvenile::confirmed_seed_scale_reference(catalog).ok();
+    juvenile_scale_reached_with_reference(construction, catalog, seed_reference)
+}
+
+fn juvenile_scale_reached_with_reference(
+    construction: &ReproductiveConstruction,
+    catalog: &[crate::resources::BaseResource],
+    seed_reference: Option<(f64, f64)>,
+) -> bool {
+    let preferred = seed_reference
+        .and_then(|reference| {
+            preferred_length_with_reference(&construction.child_genome, reference)
+        })
+        .or_else(|| preferred_length(&construction.child_genome, catalog));
+    let Some(preferred) = preferred else {
         return false;
     };
     if preferred <= 0.0 || !preferred.is_finite() {
@@ -336,6 +362,15 @@ fn juvenile_scale_reached(
 fn birth_ready(
     construction: &ReproductiveConstruction,
     catalog: &[crate::resources::BaseResource],
+) -> bool {
+    let seed_reference = crate::juvenile::confirmed_seed_scale_reference(catalog).ok();
+    birth_ready_with_reference(construction, catalog, seed_reference)
+}
+
+fn birth_ready_with_reference(
+    construction: &ReproductiveConstruction,
+    catalog: &[crate::resources::BaseResource],
+    seed_reference: Option<(f64, f64)>,
 ) -> bool {
     let Ok(cavity) =
         crate::cavity::analyze_genome_cavity(&construction.developing_structure, catalog)
@@ -360,7 +395,7 @@ fn birth_ready(
     {
         return false;
     }
-    juvenile_scale_reached(construction, catalog)
+    juvenile_scale_reached_with_reference(construction, catalog, seed_reference)
 }
 
 fn anchor_structure(
@@ -508,6 +543,7 @@ pub(crate) fn advance_construction(
     parent_energy: &mut f64,
     rng: &mut ChaCha8Rng,
     parent_body: &crate::organism_geometry::OrganismBodyGeometry,
+    seed_reference: Option<(f64, f64)>,
 ) -> (ConstructionStatus, Option<f64>) {
     let reserve_energy = construction.child_genome.juvenile_energy_reserve;
     if reserve_energy.is_finite() && reserve_energy > construction.developing_energy {
@@ -529,7 +565,7 @@ pub(crate) fn advance_construction(
         return (ConstructionStatus::Dead, None);
     }
 
-    if birth_ready(construction, &environment.catalog) {
+    if birth_ready_with_reference(construction, &environment.catalog, seed_reference) {
         return (ConstructionStatus::Ready, None);
     }
 
@@ -560,6 +596,7 @@ pub(crate) fn advance_construction(
             &construction.developmental_origin,
             construction.developmental_orientation_radians,
             &environment.catalog,
+            seed_reference,
         )
     } else {
         // Genome construction is deliberately performed through the normal
@@ -613,7 +650,7 @@ pub(crate) fn advance_construction(
     if !parent_child_in_contact(parent_structure, &construction.developing_structure) {
         return (ConstructionStatus::Detached, None);
     }
-    if birth_ready(construction, &environment.catalog) {
+    if birth_ready_with_reference(construction, &environment.catalog, seed_reference) {
         return (ConstructionStatus::Ready, None);
     }
     if construction.developing_structure.units.len() > before_units {
@@ -628,9 +665,10 @@ pub(crate) fn finish_reproduction(
     child_id: String,
     catalog: &[crate::resources::BaseResource],
     _ledger: &mut EnergyLedger,
+    seed_reference: Option<(f64, f64)>,
 ) -> Option<Organism> {
     let construction = parent.reproductive_construction.take()?;
-    let ready = birth_ready(&construction, catalog);
+    let ready = birth_ready_with_reference(&construction, catalog, seed_reference);
     if !ready && construction.developing_structure.units.is_empty() {
         parent.reproductive_construction = Some(construction);
         return None;
@@ -759,6 +797,7 @@ mod tests {
             &mut parent.usable_energy,
             &mut simulation.rng,
             &body,
+            None,
         );
         assert!(construction.developing_energy > 0.0);
         assert!(parent.usable_energy < before_parent_energy);

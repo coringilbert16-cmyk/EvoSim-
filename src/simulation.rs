@@ -757,6 +757,7 @@ impl Simulation {
                         &mut organism.usable_energy,
                         &mut self.rng,
                         &parent_body,
+                        self.seed_scale_reference,
                     )
                 };
                 if let Some(stress) = stress {
@@ -775,6 +776,7 @@ impl Simulation {
                         child_id,
                         &self.environment.catalog,
                         &mut self.energy_ledger,
+                        self.seed_scale_reference,
                     ) {
                         next_organism_id += 1;
                         offspring.push(child);
@@ -800,6 +802,7 @@ impl Simulation {
                         child_id,
                         &self.environment.catalog,
                         &mut self.energy_ledger,
+                        self.seed_scale_reference,
                     ) {
                         next_organism_id += 1;
                         survivors.push(child);
