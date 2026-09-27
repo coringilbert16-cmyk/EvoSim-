@@ -88,6 +88,9 @@ pub(crate) struct ActiveTransformation {
     pub(crate) complexity: f64,
     pub(crate) duration_ticks: u64,
     pub(crate) remaining_ticks: u64,
+    /// Energy transaction prepared during the middle tick, before structural mutation.
+    #[serde(default)]
+    pub(crate) prepared_energy: Option<(f64, f64, f64)>,
     pub(crate) decision_context_key: Option<String>,
 }
 #[derive(Serialize, Deserialize, Clone)]
