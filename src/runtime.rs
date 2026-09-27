@@ -41,3 +41,35 @@ impl RuntimeState {
         true
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn history_is_bounded_and_keeps_latest_ticks() {
+        let mut runtime = RuntimeState::new(Simulation::new(42, 10.0));
+        for tick in 1..=35 {
+            runtime.simulation.tick = tick;
+            runtime.record_tick();
+        }
+
+        assert_eq!(runtime.history.len(), HISTORY_CAPACITY);
+        assert_eq!(runtime.history_ticks().first(), Some(&6));
+        assert_eq!(runtime.history_ticks().last(), Some(&35));
+    }
+
+    #[test]
+    fn restore_replaces_live_state_and_discards_future_history() {
+        let mut runtime = RuntimeState::new(Simulation::new(42, 10.0));
+        for tick in 1..=5 {
+            runtime.simulation.tick = tick;
+            runtime.record_tick();
+        }
+
+        assert!(runtime.restore_tick(3));
+        assert_eq!(runtime.simulation.tick, 3);
+        assert_eq!(runtime.history_ticks(), vec![0, 1, 2, 3]);
+        assert!(!runtime.restore_tick(5));
+    }
+}
