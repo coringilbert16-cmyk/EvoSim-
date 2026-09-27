@@ -140,70 +140,111 @@ pub fn select_action_with_developmental_scores(
     developmental_scores: &[Option<f64>],
     rng: &mut ChaCha8Rng,
 ) -> Option<ActionCandidate> {
-    let mut scored = Vec::with_capacity(candidates.len());
+    let mut best_score = None;
+    let mut tied_count = 0usize;
+    let mut all_tied_have_developmental = true;
+
     for (index, candidate) in candidates.iter().enumerate() {
         if approve(context, candidate.action) != DecisionResult::Approve {
             continue;
         }
-        scored.push((
-            index,
-            need_pressure(candidate.action, context.needs) + history_adjustment(history, candidate),
-            developmental_scores
-                .get(index)
-                .copied()
-                .flatten()
-                .filter(|value| value.is_finite()),
-        ));
+        let score = need_pressure(candidate.action, context.needs)
+            + history_adjustment(history, candidate);
+        match best_score {
+            None => {
+                best_score = Some(score);
+                tied_count = 1;
+                all_tied_have_developmental = developmental_scores
+                    .get(index)
+                    .copied()
+                    .flatten()
+                    .is_some_and(f64::is_finite);
+            }
+            Some(best) => match score.total_cmp(&best) {
+                std::cmp::Ordering::Greater => {
+                    best_score = Some(score);
+                    tied_count = 1;
+                    all_tied_have_developmental = developmental_scores
+                        .get(index)
+                        .copied()
+                        .flatten()
+                        .is_some_and(f64::is_finite);
+                }
+                std::cmp::Ordering::Equal => {
+                    tied_count += 1;
+                    all_tied_have_developmental &= developmental_scores
+                        .get(index)
+                        .copied()
+                        .flatten()
+                        .is_some_and(f64::is_finite);
+                }
+                std::cmp::Ordering::Less => {}
+            },
+        }
     }
 
-    let best_score = scored
-        .iter()
-        .map(|(_, score, _)| *score)
-        .max_by(f64::total_cmp)?;
-
-    let tied_count = scored
-        .iter()
-        .filter(|(_, score, _)| score.total_cmp(&best_score).is_eq())
-        .count();
-
-    let best_developmental = if tied_count > 1
-        && scored
+    let best_score = best_score?;
+    let best_developmental = if tied_count > 1 && all_tied_have_developmental {
+        candidates
             .iter()
-            .filter(|(_, score, _)| score.total_cmp(&best_score).is_eq())
-            .all(|(_, _, score)| score.is_some())
-    {
-        Some(
-            scored
-                .iter()
-                .filter_map(|(_, score, developmental)| {
-                    if score.total_cmp(&best_score).is_eq() {
-                        *developmental
-                    } else {
-                        None
-                    }
-                })
-                .max_by(f64::total_cmp)
-                .expect("all tied candidates have developmental scores"),
-        )
+            .enumerate()
+            .filter(|(index, candidate)| {
+                approve(context, candidate.action) == DecisionResult::Approve
+                    && (need_pressure(candidate.action, context.needs)
+                        + history_adjustment(history, candidate))
+                        .total_cmp(&best_score)
+                        .is_eq()
+            })
+            .filter_map(|(index, _)| {
+                developmental_scores
+                    .get(index)
+                    .copied()
+                    .flatten()
+                    .filter(|value| value.is_finite())
+            })
+            .max_by(f64::total_cmp)
     } else {
         None
     };
 
-    let final_tie_count = scored
+    let final_tie_count = candidates
         .iter()
-        .filter(|(_, score, developmental)| {
-            score.total_cmp(&best_score).is_eq()
-                && best_developmental.map_or(true, |best| *developmental == Some(best))
+        .enumerate()
+        .filter(|(index, candidate)| {
+            approve(context, candidate.action) == DecisionResult::Approve
+                && (need_pressure(candidate.action, context.needs)
+                    + history_adjustment(history, candidate))
+                    .total_cmp(&best_score)
+                    .is_eq()
+                && best_developmental.map_or(true, |best| {
+                    developmental_scores
+                        .get(*index)
+                        .copied()
+                        .flatten()
+                        .is_some_and(|value| value == best)
+                })
         })
         .count();
+
     let selected_rank = rng.gen_range(0..final_tie_count);
     let mut rank = 0;
-    for (index, score, developmental) in scored {
+    for (index, candidate) in candidates.iter().enumerate() {
+        if approve(context, candidate.action) != DecisionResult::Approve {
+            continue;
+        }
+        let score =
+            need_pressure(candidate.action, context.needs) + history_adjustment(history, candidate);
         if score.total_cmp(&best_score).is_eq()
-            && best_developmental.map_or(true, |best| developmental == Some(best))
+            && best_developmental.map_or(true, |best| {
+                developmental_scores
+                    .get(index)
+                    .copied()
+                    .flatten()
+                    .is_some_and(|value| value == best)
+            })
         {
             if rank == selected_rank {
-                return candidates.get(index).cloned();
+                return Some(candidate.clone());
             }
             rank += 1;
         }
