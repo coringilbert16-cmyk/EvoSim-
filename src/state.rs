@@ -8,13 +8,12 @@ use crate::material_storage::MaterialStorage;
 use crate::resources::{BaseResource, Material};
 use crate::structure::{Bond, OrganismStructure};
 use crate::runtime::SimulationProcess;
-use parking_lot::Mutex;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 #[derive(Clone)]
 pub(crate) struct AppState {
-    pub(crate) simulation: Arc<Mutex<Simulation>>,
+    pub(crate) simulation: Arc<tokio::sync::Mutex<SimulationProcess>>,
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) enum DevelopmentStage {
