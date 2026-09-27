@@ -702,6 +702,7 @@ impl Simulation {
                             &expulsion_candidates,
                             &expulsion_competition,
                             developmental.as_ref(),
+                            &organisms[index].genome.developmental_blueprint,
                             &self.energy_ledger,
                         );
                     if let Some(selected) = select_action_with_developmental_scores(
