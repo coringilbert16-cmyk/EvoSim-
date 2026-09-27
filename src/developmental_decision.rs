@@ -9,7 +9,7 @@
 
 use crate::decision::{ActionKind, CurrentNeeds};
 use crate::decision_runtime::ActionCandidate;
-use crate::state::{DevelopmentStage, EnergyLedger, Environment, Organism};
+use crate::state::{DevelopmentStage, Environment, Organism};
 
 pub(crate) struct DevelopmentalContext {
     pub(crate) blueprint: crate::developmental_blueprint::DevelopmentalFieldBlueprint,
@@ -111,7 +111,7 @@ pub(crate) fn developmental_action_scores(
     candidates: &[ActionCandidate],
     competing_indices: &[usize],
     developmental: Option<&DevelopmentalContext>,
-    ledger: &EnergyLedger,
+    _ledger: &crate::state::EnergyLedger,
 ) -> Vec<Option<f64>> {
     let Some(developmental) = developmental else {
         return vec![None; candidates.len()];
@@ -129,29 +129,13 @@ pub(crate) fn developmental_action_scores(
             }
             match candidate.action {
                 ActionKind::Combine => {
-                    let mut trial = organism.clone();
-                    let mut trial_ledger = *ledger;
-                    let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-                    crate::combine_runtime::try_combine(
-                        &mut trial,
-                        environment,
-                        &mut cache,
-                        &mut trial_ledger,
-                        Some((
-                            &developmental.blueprint,
-                            developmental.origin,
-                            developmental.orientation,
-                            developmental.preferred_length,
-                        )),
-                    )?;
-                    Some(growth_fraction_for_structure(
-                        &trial.structure,
-                        environment,
-                        &developmental.blueprint,
-                        developmental.origin,
-                        developmental.orientation,
-                        developmental.preferred_length,
-                    ))
+                    // COMBINE's physical candidate search is deliberately deferred
+                    // to tick 2. Re-running it here would duplicate the expensive
+                    // physical search during every decision tick. At decision time
+                    // the only available developmental value is the current realized
+                    // fraction; the actual candidate-specific result is computed
+                    // when the selected action resolves.
+                    Some(developmental.current_growth_fraction)
                 }
                 ActionKind::Break => {
                     let bond_index = candidate
@@ -163,12 +147,11 @@ pub(crate) fn developmental_action_scores(
                         developmental
                             .blueprint
                             .realization_after_break_with_components(
-                                &organism.structure,
+                                organism.structure.as_ref(),
                                 &environment.catalog,
                                 developmental.origin,
                                 developmental.orientation,
                                 developmental.preferred_length,
-                                bond_index,
                                 developmental.current_material_realized,
                                 developmental.current_density_realized,
                             )?
