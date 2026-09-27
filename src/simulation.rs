@@ -405,10 +405,10 @@ impl Simulation {
                 .map(|p| (p.x, p.y))
                 .unwrap_or((0.0, 0.0));
             if let Some(cavity) = organism
-                .genome_cavity_cached(&self.environment.catalog)
+                .genome_cavity_cached_ref(&self.environment.catalog)
                 .filter(|cavity| cavity.qualifies())
             {
-                let capacity = crate::memory::memory_capacity(&cavity);
+                let capacity = crate::memory::memory_capacity(cavity);
                 crate::memory::remember_perception(
                     organism,
                     x,
@@ -433,6 +433,8 @@ impl Simulation {
         {
             let (organisms, environment) = (&mut self.organisms, &mut self.environment);
             let mut compatibility_cache = crate::contact::ConnectionCompatibilityCache::new();
+            let mut movement_spatial_index =
+                crate::movement::MovementSpatialIndex::new(organisms, environment);
             for index in 0..organisms.len() {
                 if completed_organisms.contains(&organisms[index].id) {
                     continue;
@@ -466,16 +468,8 @@ impl Simulation {
                 // survival/reproduction need pressure or by the transformation
                 // selector below.
                 if eligibility.can_move {
-                    let organism_count = organisms.len();
                     let (before, rest) = organisms.split_at_mut(index);
                     let (organism, after) = rest.split_first_mut().expect("index is in organisms");
-                    let mut others = Vec::with_capacity(organism_count.saturating_sub(1));
-                    for other in before.iter() {
-                        others.push((*other).clone());
-                    }
-                    for other in after.iter() {
-                        others.push((*other).clone());
-                    }
                     let before_energy = organism.usable_energy;
                     let before_stress = organism.stress;
                     let before_realization = developmental
@@ -488,22 +482,15 @@ impl Simulation {
                                 .unwrap_or(0.0)
                         });
                     let moved = Self::update_movement(
+                        before,
                         organism,
+                        after,
+                        &mut movement_spatial_index,
                         environment,
-                        &mut others,
                         &mut self.energy_ledger,
                         self.tick,
                         &mut self.rng,
                     );
-                    if moved {
-                        for (original, trial) in
-                            before.iter_mut().chain(after.iter_mut()).zip(others)
-                        {
-                            original.occupied_cells = trial.occupied_cells;
-                            original.structure = trial.structure;
-                            original.mark_position_changed();
-                        }
-                    }
                     if moved {
                         let move_candidate = ActionCandidate {
                             action: ActionKind::Move,
@@ -585,6 +572,13 @@ impl Simulation {
                                 developmental,
                             )
                             .is_some();
+                            if combined {
+                                movement_spatial_index.refresh_organism(
+                                    index,
+                                    &organisms[index],
+                                    environment,
+                                );
+                            }
                             let consequence = if combined {
                                 Self::action_consequence(
                                     before_energy,

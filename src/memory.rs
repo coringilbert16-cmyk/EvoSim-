@@ -5,11 +5,11 @@ use crate::state::{
 
 pub(crate) const MEMORY_CAPACITY_GROWTH_EXPONENT: f64 = 0.5;
 
-fn qualifying_genome_cavity(
-    organism: &mut Organism,
+fn qualifying_genome_cavity<'a>(
+    organism: &'a mut Organism,
     environment: &Environment,
-) -> Option<crate::cavity::GenomeCavity> {
-    organism.genome_cavity_cached(&environment.catalog)
+) -> Option<&'a crate::cavity::GenomeCavity> {
+    organism.genome_cavity_cached_ref(&environment.catalog)
 }
 
 pub(crate) fn memory_capacity(cavity: &crate::cavity::GenomeCavity) -> usize {
@@ -29,12 +29,12 @@ fn memory_decay_for_cavity(cavity: &crate::cavity::GenomeCavity) -> f64 {
 
 impl Simulation {
     pub(crate) fn update_memory_from_sources(organism: &mut Organism, environment: &Environment) {
-        let Some(cavity) = qualifying_genome_cavity(organism, environment) else {
+        let Some((capacity, decay)) = qualifying_genome_cavity(organism, environment)
+            .map(|cavity| (memory_capacity(cavity), memory_decay_for_cavity(cavity)))
+        else {
             organism.memory.clear();
             return;
         };
-        let capacity = memory_capacity(&cavity);
-        let decay = memory_decay_for_cavity(&cavity);
 
         for point in &mut organism.memory {
             point.strength *= decay;

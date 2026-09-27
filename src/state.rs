@@ -203,10 +203,10 @@ impl Organism {
         self.cached_harmonic_key = None;
     }
 
-    pub(crate) fn genome_cavity_cached(
+    pub(crate) fn genome_cavity_cached_ref(
         &mut self,
         catalog: &[BaseResource],
-    ) -> Option<crate::cavity::GenomeCavity> {
+    ) -> Option<&crate::cavity::GenomeCavity> {
         if self.cached_cavity_revision != Some(self.structure_revision) {
             let cavity = crate::cavity::analyze_genome_cavity(&self.structure, catalog)
                 .ok()
@@ -215,7 +215,14 @@ impl Organism {
             self.cached_cavity = Some(cavity);
             self.cached_cavity_revision = Some(self.structure_revision);
         }
-        self.cached_cavity.clone().flatten()
+        self.cached_cavity.as_ref().and_then(Option::as_ref)
+    }
+
+    pub(crate) fn genome_cavity_cached(
+        &mut self,
+        catalog: &[BaseResource],
+    ) -> Option<crate::cavity::GenomeCavity> {
+        self.genome_cavity_cached_ref(catalog).cloned()
     }
 
     pub(crate) fn developmental_realization_cached(

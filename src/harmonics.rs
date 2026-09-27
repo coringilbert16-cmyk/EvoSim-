@@ -341,17 +341,22 @@ pub(crate) fn update_organism_harmonics(
         return;
     }
 
-    let boundary_units = organism
-        .genome_cavity_cached(&environment.catalog)
-        .map(|cavity| cavity.boundary_units)
-        .unwrap_or_default();
+    let spectrum = {
+        let boundary_units = organism
+            .genome_cavity_cached_ref(&environment.catalog)
+            .map(|cavity| cavity.boundary_units.as_slice());
+        match boundary_units {
+            Some(boundary_units) => genome_cavity_spectrum(
+                &organism.structure,
+                &environment.catalog,
+                &environment.field,
+                boundary_units,
+            ),
+            None => ToneSpectrum::empty(),
+        }
+    };
 
-    organism.harmonic_spectrum = genome_cavity_spectrum(
-        &organism.structure,
-        &environment.catalog,
-        &environment.field,
-        &boundary_units,
-    );
+    organism.harmonic_spectrum = spectrum;
     organism.cached_harmonic_key = Some(key);
 }
 
