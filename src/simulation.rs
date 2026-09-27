@@ -478,13 +478,15 @@ impl Simulation {
                 {
                     continue;
                 }
-                let developmental_for_needs = seed_reference.and_then(|reference| {
+                let developmental_for_needs = if let Some(reference) = seed_reference {
                     crate::developmental_decision::context(
                         &mut organisms[index],
                         environment,
                         reference,
                     )
-                });
+                } else {
+                    None
+                };
                 let current_realization = developmental_for_needs
                     .as_ref()
                     .map(|context| context.current_growth_fraction)
@@ -547,13 +549,15 @@ impl Simulation {
                         );
                     }
                 }
-                let developmental = seed_reference.and_then(|reference| {
+                let developmental = if let Some(reference) = seed_reference {
                     crate::developmental_decision::context(
                         &mut organisms[index],
                         environment,
                         reference,
                     )
-                });
+                } else {
+                    None
+                };
                 let context = DecisionContext { needs, eligibility };
                 let candidates =
                     Self::decision_candidates(&organisms[index], environment, needs, eligibility);
