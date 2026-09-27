@@ -86,8 +86,26 @@ async fn observation_status_handler(State(state): State<AppState>) -> impl IntoR
     }
 }
 
-async fn world_observation_handler(State(state): State<AppState>) -> impl IntoResponse {
-    match request(&state, serde_json::json!({"command": "world"})).await {
+#[derive(serde::Deserialize, Default)]
+struct ViewBounds {
+    min_x: Option<f64>,
+    max_x: Option<f64>,
+    min_y: Option<f64>,
+    max_y: Option<f64>,
+}
+
+async fn world_observation_handler(
+    Query(query): Query<ViewBounds>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let bounds = match (query.min_x, query.max_x, query.min_y, query.max_y) {
+        (Some(min_x), Some(max_x), Some(min_y), Some(max_y))
+            if min_x.is_finite() && max_x.is_finite() && min_y.is_finite() && max_y.is_finite()
+                && min_x <= max_x && min_y <= max_y => Some((min_x, max_x, min_y, max_y)),
+        (None, None, None, None) => None,
+        _ => return error_response("invalid_view_bounds"),
+    };
+    match request(&state, serde_json::json!({"command": "world", "bounds": bounds})).await {
         Ok(value) => Json(value).into_response(),
         Err(error) => error_response(error),
     }
