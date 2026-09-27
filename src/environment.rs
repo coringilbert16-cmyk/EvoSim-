@@ -15,6 +15,8 @@ const MATERIAL_EPSILON: f64 = 1e-9;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct FieldCell {
+    #[serde(default)]
+    pub(crate) revision: u64,
     /// Aggregate stock for unstructured material. Aggregation is a spatial
     /// optimization only; it is not used to represent an existing composite.
     pub materials: Vec<Material>,
@@ -28,6 +30,7 @@ pub struct FieldCell {
 impl FieldCell {
     pub fn empty() -> Self {
         Self {
+            revision: 0,
             materials: Vec::new(),
             physical_materials: Vec::new(),
         }
@@ -77,6 +80,8 @@ pub struct ActiveMaterialField {
     pub cells: Vec<FieldCell>,
     #[serde(default)]
     pub(crate) revision: u64,
+    #[serde(default)]
+    pub(crate) cell_revisions: Vec<u64>,
 }
 
 pub(crate) enum FieldDeposit {
@@ -110,6 +115,7 @@ impl ActiveMaterialField {
             height_cells,
             cells,
             revision: 0,
+            cell_revisions: vec![0; width_cells * height_cells],
         }
     }
 
