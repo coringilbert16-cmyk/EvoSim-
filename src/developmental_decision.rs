@@ -135,12 +135,12 @@ pub(crate) fn developmental_action_scores(
     });
     let break_scores = has_competing_break.then(|| {
         blueprint.connectivity_realizations_after_breaks(
-                &organism.structure,
-                &environment.catalog,
-                developmental.origin,
-                developmental.orientation,
-                developmental.preferred_length,
-            )
+            &organism.structure,
+            &environment.catalog,
+            developmental.origin,
+            developmental.orientation,
+            developmental.preferred_length,
+        )
     });
 
     let mut competing_cursor = 0;
