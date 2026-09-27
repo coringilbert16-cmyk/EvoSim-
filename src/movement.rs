@@ -635,6 +635,7 @@ fn translate_organism(organism: &mut Organism, dx: f64, dy: f64, environment_hei
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::SeedableRng;
 
     fn movement_direction(organism: &Organism) -> Option<(f64, f64)> {
         crate::movement_direction::movement_direction_periodic(organism, 0.0)
