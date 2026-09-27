@@ -123,47 +123,61 @@ impl WorldObservation {
         let organisms = simulation
             .organisms
             .iter()
-            .filter(|organism| {
-                let Some((min_x, max_x, min_y, max_y)) = bounds else { return true; };
-                let position = organism.occupied_cells.first().map(|p| (p.x, p.y)).unwrap_or((0.0, 0.0));
-                let geometry = OrganismBodyGeometry::from_structure(&organism.structure, catalog);
-                match geometry {
-                    Some(g) => g.max_x + position.0 >= min_x && g.min_x + position.0 <= max_x
-                        && g.max_y + position.1 >= min_y && g.min_y + position.1 <= max_y,
-                    None => position.0 >= min_x && position.0 <= max_x && position.1 >= min_y && position.1 <= max_y,
-                }
-            })
-            .map(|organism| organism)
-            .map(|organism| {
+            .filter_map(|organism| {
                 let position = organism
                     .occupied_cells
                     .first()
                     .map(|p| (p.x, p.y))
                     .unwrap_or((0.0, 0.0));
-                let (min_x, max_x, min_y, max_y, silhouette) =
-                    match OrganismBodyGeometry::from_structure(&organism.structure, catalog) {
+                let geometry = OrganismBodyGeometry::from_structure(&organism.structure, catalog);
+                if let Some((min_x, max_x, min_y, max_y)) = bounds {
+                    let visible = match geometry.as_ref() {
                         Some(g) => {
-                            let silhouette = g
-                                .parts
-                                .into_iter()
-                                .map(|part| OrganismSilhouettePart {
-                                    form: part.form,
-                                    x: part.x + position.0,
-                                    y: part.y + position.1,
-                                    rotation_radians: part.rotation_radians,
-                                })
-                                .collect();
-                            (
-                                g.min_x + position.0,
-                                g.max_x + position.0,
-                                g.min_y + position.1,
-                                g.max_y + position.1,
-                                silhouette,
-                            )
+                            g.max_x + position.0 >= min_x
+                                && g.min_x + position.0 <= max_x
+                                && g.max_y + position.1 >= min_y
+                                && g.min_y + position.1 <= max_y
                         }
-                        None => (position.0, position.0, position.1, position.1, Vec::new()),
+                        None => {
+                            position.0 >= min_x
+                                && position.0 <= max_x
+                                && position.1 >= min_y
+                                && position.1 <= max_y
+                        }
                     };
-                WorldOrganismObservation {
+                    if !visible {
+                        return None;
+                    }
+                }
+                let (min_x, max_x, min_y, max_y, silhouette) = match geometry {
+                    Some(g) => {
+                        let silhouette = g
+                            .parts
+                            .into_iter()
+                            .map(|part| OrganismSilhouettePart {
+                                form: part.form,
+                                x: part.x + position.0,
+                                y: part.y + position.1,
+                                rotation_radians: part.rotation_radians,
+                            })
+                            .collect();
+                        (
+                            g.min_x + position.0,
+                            g.max_x + position.0,
+                            g.min_y + position.1,
+                            g.max_y + position.1,
+                            silhouette,
+                        )
+                    }
+                    None => (
+                        position.0,
+                        position.0,
+                        position.1,
+                        position.1,
+                        Vec::new(),
+                    ),
+                };
+                Some(WorldOrganismObservation {
                     id: organism.id.clone(),
                     x: position.0,
                     y: position.1,
@@ -172,7 +186,7 @@ impl WorldObservation {
                     min_y,
                     max_y,
                     silhouette,
-                }
+                })
             })
             .collect();
         let field = simulation
