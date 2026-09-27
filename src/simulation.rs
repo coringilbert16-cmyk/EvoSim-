@@ -605,11 +605,11 @@ impl Simulation {
                         ActionKind::Combine => {
                             let before_energy = organisms[index].usable_energy;
                             let before_stress = organisms[index].stress;
-                            let developmental = developmental_for_combine
-                                .as_ref()
-                                .map(|(blueprint, origin, orientation, preferred_length)| {
+                            let developmental = developmental_for_combine.as_ref().map(
+                                |(blueprint, origin, orientation, preferred_length)| {
                                     (blueprint, *origin, *orientation, *preferred_length)
-                                });
+                                },
+                            );
                             let combined = crate::combine_runtime::try_combine(
                                 &mut organisms[index],
                                 environment,
