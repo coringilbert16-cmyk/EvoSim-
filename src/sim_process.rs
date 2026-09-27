@@ -123,23 +123,38 @@ async fn handle_connection(stream: TcpStream, runtime: Arc<Mutex<RuntimeState>>)
 }
 
 fn execute(command: SimulationCommand, runtime: &Arc<Mutex<RuntimeState>>) -> CommandResponse {
-    let mut state = runtime.lock();
-
     match command {
-        SimulationCommand::Status => CommandResponse::value(serde_json::json!({
-            "tick": state.simulation.tick,
-            "running": state.simulation.running,
-            "ticks_per_second": state.simulation.ticks_per_second,
-            "history_ticks": state.history_ticks(),
-            "observed_tick": state.observed_tick(),
-            "session_id": state.session_id,
-        })),
-        SimulationCommand::World => CommandResponse::value(serde_json::to_value(
-            ObservationProjection::world(WorldObservation::from_simulation(&state.simulation)),
-        )
-        .expect("world observation must serialize")),
+        SimulationCommand::Status => {
+            let state = runtime.lock();
+            CommandResponse::value(serde_json::json!({
+                "tick": state.simulation.tick,
+                "running": state.simulation.running,
+                "ticks_per_second": state.simulation.ticks_per_second,
+                "history_ticks": state.history_ticks(),
+                "observed_tick": state.observed_tick(),
+                "session_id": state.session_id,
+            }))
+        }
+        SimulationCommand::World => {
+            // Snapshot authoritative state under the runtime lock, then do
+            // geometry derivation and JSON serialization without holding it.
+            let simulation = {
+                let state = runtime.lock();
+                state.simulation.clone()
+            };
+            CommandResponse::value(
+                serde_json::to_value(ObservationProjection::world(
+                    WorldObservation::from_simulation(&simulation),
+                ))
+                .expect("world observation must serialize"),
+            )
+        }
         SimulationCommand::HistoryWorld { tick } => {
-            let Some(snapshot) = state.snapshot(tick) else {
+            let snapshot = {
+                let state = runtime.lock();
+                state.snapshot(tick)
+            };
+            let Some(snapshot) = snapshot else {
                 return CommandResponse::error("not_found");
             };
             CommandResponse::value(
@@ -150,8 +165,11 @@ fn execute(command: SimulationCommand, runtime: &Arc<Mutex<RuntimeState>>) -> Co
             )
         }
         SimulationCommand::Organism { id } => {
-            let Some(observation) = OrganismObservation::from_simulation(&state.simulation, &id)
-            else {
+            let simulation = {
+                let state = runtime.lock();
+                state.simulation.clone()
+            };
+            let Some(observation) = OrganismObservation::from_simulation(&simulation, &id) else {
                 return CommandResponse::error("not_found");
             };
             let context = ObservationContext::organism(vec![id]);
@@ -164,8 +182,11 @@ fn execute(command: SimulationCommand, runtime: &Arc<Mutex<RuntimeState>>) -> Co
             )
         }
         SimulationCommand::Structure { id } => {
-            let Some(observation) = StructureObservation::from_simulation(&state.simulation, &id)
-            else {
+            let simulation = {
+                let state = runtime.lock();
+                state.simulation.clone()
+            };
+            let Some(observation) = StructureObservation::from_simulation(&simulation, &id) else {
                 return CommandResponse::error("not_found");
             };
             let context = ObservationContext::structure(vec![id.clone()], Some(id));
@@ -178,44 +199,55 @@ fn execute(command: SimulationCommand, runtime: &Arc<Mutex<RuntimeState>>) -> Co
             )
         }
         SimulationCommand::Resources => {
-            let resources = state
-                .simulation
-                .environment
-                .catalog
+            let (catalog, field_cell_size) = {
+                let state = runtime.lock();
+                (
+                    state.simulation.environment.catalog.clone(),
+                    state.simulation.environment.field.cell_size,
+                )
+            };
+            let resources = catalog
                 .iter()
                 .map(|resource| (resource.name.clone(), appearance(resource)))
                 .collect::<Vec<_>>();
             CommandResponse::value(serde_json::json!({
                 "resources": resources,
-                "field_cell_size": state.simulation.environment.field.cell_size,
+                "field_cell_size": field_cell_size,
             }))
         }
         SimulationCommand::Pause => {
+            let mut state = runtime.lock();
             state.simulation.running = false;
             CommandResponse::value(serde_json::json!({"running": false}))
         }
         SimulationCommand::Resume => {
+            let mut state = runtime.lock();
             state.simulation.running = true;
             CommandResponse::value(serde_json::json!({"running": true}))
         }
         SimulationCommand::Step => {
+            let mut state = runtime.lock();
             state.step();
-            CommandResponse::value(serde_json::json!({"tick": state.simulation.tick}))
+            let tick = state.simulation.tick;
+            CommandResponse::value(serde_json::json!({"tick": tick}))
         }
         SimulationCommand::Speed { ticks_per_second } => {
             if !ticks_per_second.is_finite() || ticks_per_second <= 0.0 {
                 return CommandResponse::error("invalid_speed");
             }
+            let mut state = runtime.lock();
             state.simulation.ticks_per_second = ticks_per_second;
             CommandResponse::value(serde_json::json!({
                 "ticks_per_second": ticks_per_second
             }))
         }
         SimulationCommand::Restore { tick } => {
+            let mut state = runtime.lock();
             if !state.restore_tick(tick) {
                 return CommandResponse::error("not_found");
             }
-            CommandResponse::value(serde_json::json!({"tick": state.simulation.tick}))
+            let restored_tick = state.simulation.tick;
+            CommandResponse::value(serde_json::json!({"tick": restored_tick}))
         }
     }
 }
