@@ -808,3 +808,38 @@ Once that boundary exists, the rest of the approved design becomes incremental:
 The next implementation should therefore begin with the **runtime/control-plane boundary**, not with cosmetic UI work and not with another diagnostic system.
 
 No biological rules should be changed as part of this work.
+
+
+---
+
+# 27. Runtime-boundary implementation progress
+
+The runtime foundation is now implemented on the viewer branch.
+
+The persistent HTTP server no longer owns the authoritative Simulation directly. It launches a separate simulation child process from the same executable using the `--simulation-child <port>` entrypoint.
+
+The child owns:
+
+- the authoritative Simulation,
+- the 30-state runtime history,
+- the simulation tick loop,
+- pause/resume/step/speed,
+- historical observation,
+- actual historical restore,
+- session identity.
+
+The parent owns:
+
+- the persistent browser HTTP server,
+- the LAN listener,
+- browser-facing observation/control routes,
+- the child-process handle.
+
+The parent and child communicate through a localhost-only, line-delimited JSON command boundary.
+
+This is intentionally a small protocol rather than a second simulation model.
+
+The browser therefore remains attached to the parent process when the simulation child is later replaced for Main/PR switching.
+
+The current branch has **not** run the long CI suite. The next validation should be a short compile/format check before adding more runtime layers.
+
