@@ -76,27 +76,30 @@ pub fn developmental_competition_indices(
     }
 
     let mut best_score = None;
-    for candidate in candidates {
-        let Some(score) = cheap_decision_score(context, history, candidate) else {
-            continue;
-        };
-        best_score = Some(best_score.map_or(score, |best: f64| best.max(score)));
-    }
-    let Some(best_score) = best_score else {
-        return Vec::new();
-    };
-
     let mut indices = Vec::new();
     let mut action_kinds = Vec::new();
     for (index, candidate) in candidates.iter().enumerate() {
         let Some(score) = cheap_decision_score(context, history, candidate) else {
             continue;
         };
-        if score != best_score
-            || !candidate
-                .action
-                .relevant_needs()
-                .contains(&crate::decision::NeedKind::Development)
+        match best_score {
+            None => {
+                best_score = Some(score);
+                indices.clear();
+                action_kinds.clear();
+            }
+            Some(best) if score > best => {
+                best_score = Some(score);
+                indices.clear();
+                action_kinds.clear();
+            }
+            Some(best) if score != best => continue,
+            Some(_) => {}
+        }
+        if !candidate
+            .action
+            .relevant_needs()
+            .contains(&crate::decision::NeedKind::Development)
         {
             continue;
         }
