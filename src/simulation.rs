@@ -405,10 +405,10 @@ impl Simulation {
                 .map(|p| (p.x, p.y))
                 .unwrap_or((0.0, 0.0));
             if let Some(cavity) = organism
-                .genome_cavity_cached(&self.environment.catalog)
+                .genome_cavity_cached_ref(&self.environment.catalog)
                 .filter(|cavity| cavity.qualifies())
             {
-                let capacity = crate::memory::memory_capacity(&cavity);
+                let capacity = crate::memory::memory_capacity(cavity);
                 crate::memory::remember_perception(
                     organism,
                     x,
