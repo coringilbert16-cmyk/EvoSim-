@@ -14,9 +14,6 @@ const MOVEMENT_MASS_EXPONENT: f64 = 2.0 / 3.0;
 const MOVEMENT_DISTANCE_OPTIONS: [f64; 4] = [1.0, 2.0, 4.0, 8.0];
 
 pub(crate) struct MovementSpatialIndex {
-    cell_size: f64,
-    width_cells: usize,
-    height_cells: usize,
     cells: Vec<Vec<usize>>,
     membership: Vec<Vec<usize>>,
 }
@@ -26,9 +23,6 @@ impl MovementSpatialIndex {
         let width_cells = environment.field.width_cells;
         let height_cells = environment.field.height_cells;
         let mut index = Self {
-            cell_size: environment.field.cell_size,
-            width_cells,
-            height_cells,
             cells: vec![Vec::new(); width_cells.saturating_mul(height_cells)],
             membership: vec![Vec::new(); organisms.len()],
         };
@@ -36,10 +30,6 @@ impl MovementSpatialIndex {
             index.insert(organism_index, organism, environment);
         }
         index
-    }
-
-    fn cell_index(&self, row: usize, col: usize) -> usize {
-        row * self.width_cells + col
     }
 
     fn insert(&mut self, organism_index: usize, organism: &Organism, environment: &Environment) {
@@ -309,7 +299,7 @@ impl Simulation {
             environment,
             before,
             after,
-            organisms_index(before, after),
+            before.len(),
             spatial_index,
             requested_dx,
             requested_dy,
@@ -360,10 +350,7 @@ impl Simulation {
         delta_x: f64,
         delta_y: f64,
     ) -> bool {
-        let mut spatial_index = MovementSpatialIndex::new(
-            std::slice::from_ref(organism),
-            environment,
-        );
+        let mut spatial_index = MovementSpatialIndex::new(other_organisms, environment);
         Self::try_move_cell_with_reason(
             organism,
             environment,
@@ -437,14 +424,9 @@ impl Simulation {
         }
         translate_reproductive_construction(organism, dx, dy, environment.height);
         organism.mark_position_changed();
+        spatial_index.refresh_organism(moving_index, organism, environment);
         Ok(())
     }
-}
-
-#[derive(Default)]
-struct PushPlan {
-    organisms: Vec<usize>,
-    physical: Vec<(usize, usize)>,
 }
 
 fn organisms_index(before: &[Organism], after: &[Organism]) -> usize {
