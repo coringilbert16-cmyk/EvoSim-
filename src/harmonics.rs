@@ -332,27 +332,30 @@ pub(crate) fn update_organism_harmonics(
     organism: &mut crate::state::Organism,
     environment: &crate::state::Environment,
 ) {
-    let key = (
-        organism.structure_revision,
-        organism.position_revision,
-        environment
-            .field
-            .local_revision_for_positions(
+    let boundary_units = organism
+        .genome_cavity_cached_ref(&environment.catalog)
+        .map(|cavity| cavity.boundary_units.as_slice());
+    let local_environment_revision = boundary_units
+        .map(|indices| {
+            environment.field.local_revision_for_positions(indices.iter().filter_map(|&index| {
                 organism
                     .structure
                     .units
-                    .iter()
-                    .map(|unit| (unit.placement.x, unit.placement.y)),
-            ),
+                    .get(index)
+                    .map(|unit| (unit.placement.x, unit.placement.y))
+            }))
+        })
+        .unwrap_or(0);
+    let key = (
+        organism.structure_revision,
+        organism.position_revision,
+        local_environment_revision,
     );
     if organism.cached_harmonic_key == Some(key) {
         return;
     }
 
     let spectrum = {
-        let boundary_units = organism
-            .genome_cavity_cached_ref(&environment.catalog)
-            .map(|cavity| cavity.boundary_units.as_slice());
         match boundary_units {
             Some(boundary_units) => genome_cavity_spectrum(
                 &organism.structure,
