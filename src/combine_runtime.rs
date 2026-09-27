@@ -268,7 +268,6 @@ fn try_combine_stored_materials(
         usize,
         Placement,
         crate::contact::ConnectionPairCandidate,
-        FormationEvaluation,
         f64,
     )> = None;
 
@@ -284,21 +283,38 @@ fn try_combine_stored_materials(
                 crate::material_storage::StoredMaterial::Physical(instance) => &instance.material,
                 crate::material_storage::StoredMaterial::Logical(material) => material,
             };
-            if first_material.has_internal_structure() && !matches!(
+            if first_material.has_internal_structure()
+                && !matches!(
+                    first,
+                    crate::material_storage::StoredMaterial::Physical(instance)
+                        if instance.is_realized()
+                )
+            {
+                continue;
+            }
+            if second_material.has_internal_structure()
+                && !matches!(
+                    second,
+                    crate::material_storage::StoredMaterial::Physical(instance)
+                        if instance.is_realized()
+                )
+            {
+                continue;
+            }
+            let first_structure = stored_entry_structure(
                 first,
-                crate::material_storage::StoredMaterial::Physical(instance) if instance.is_realized()
-            ) {
-                continue;
-            }
-            if second_material.has_internal_structure() && !matches!(
-                second,
-                crate::material_storage::StoredMaterial::Physical(instance) if instance.is_realized()
-            ) {
-                continue;
-            }
-            let first_structure = stored_entry_structure(first, Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }, catalog)?;
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                catalog,
+            )?;
             let second_resource_name = second_material.parts.first()?.0.as_str();
-            let second_resource = catalog.iter().find(|resource| resource.name == second_resource_name)?;
+            let second_resource = catalog
+                .iter()
+                .find(|resource| resource.name == second_resource_name)?;
+
             for anchor_index in 0..first_structure.units.len() {
                 let anchor = first_structure.units[anchor_index].placement;
                 for origin in crate::construction_runtime::candidate_placements(
@@ -336,25 +352,44 @@ fn try_combine_stored_materials(
                             vec![hypothetical.add_unit(unit)]
                         }
                     };
-                    for &ua in &[anchor_index] {
-                        for (second_part_index, &ub) in second_indices.iter().enumerate() {
-                            for candidate in crate::contact::connection_pair_candidates_cached(
-                                &hypothetical, ua, ub, catalog, cache
-                            ) {
-                                let Some((evaluation, _, work, investment, required)) =
-                                    evaluate_candidate(&hypothetical, ua, ub, candidate, catalog, water)
-                                else {
-                                    continue;
-                                };
-                                if organism.usable_energy + EPSILON < required {
-                                    continue;
-                                }
-                                let score = -candidate.distance;
-                                if best.as_ref().map_or(true, |current| score > current.6) {
-                                    best = Some((i, j, anchor_index, second_part_index, origin, candidate, score));
-                                }
-                                let _ = (work, investment, required, evaluation);
+
+                    for (second_part_index, &ub) in second_indices.iter().enumerate() {
+                        for candidate in crate::contact::connection_pair_candidates_cached(
+                            &hypothetical,
+                            anchor_index,
+                            ub,
+                            catalog,
+                            cache,
+                        ) {
+                            let Some((evaluation, _, _, _, required)) = evaluate_candidate(
+                                &hypothetical,
+                                anchor_index,
+                                ub,
+                                candidate,
+                                catalog,
+                                water,
+                            ) else {
+                                continue;
+                            };
+                            if organism.usable_energy + EPSILON < required {
+                                continue;
                             }
+                            let score = -candidate.distance;
+                            if best
+                                .as_ref()
+                                .map_or(true, |current| score > current.6)
+                            {
+                                best = Some((
+                                    i,
+                                    j,
+                                    anchor_index,
+                                    second_part_index,
+                                    origin,
+                                    candidate,
+                                    score,
+                                ));
+                            }
+                            let _ = evaluation;
                         }
                     }
                 }
@@ -365,12 +400,21 @@ fn try_combine_stored_materials(
     let (i, j, anchor_index, second_index, origin, candidate, _) = best?;
     let mut hypothetical = stored_entry_structure(
         &organism.stored_material.entries[i],
-        Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+        Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        },
         catalog,
     )?;
     let second_indices = match &organism.stored_material.entries[j] {
         crate::material_storage::StoredMaterial::Physical(instance) => {
-            crate::material_restoration::restore_material(&mut hypothetical, instance, origin, catalog)?
+            crate::material_restoration::restore_material(
+                &mut hypothetical,
+                instance,
+                origin,
+                catalog,
+            )?
         }
         crate::material_storage::StoredMaterial::Logical(material) => {
             let (name, amount) = material.parts.first()?;
@@ -389,11 +433,12 @@ fn try_combine_stored_materials(
     };
     let ua = anchor_index;
     let ub = *second_indices.get(second_index)?;
-    let (evaluation, _, work, investment, required) =
+    let (evaluation, _, work, _, required) =
         evaluate_candidate(&hypothetical, ua, ub, candidate, catalog, water)?;
     if organism.usable_energy + EPSILON < required {
         return None;
     }
+
     let mut candidate_ledger = *ledger;
     let mut candidate_energy = organism.usable_energy;
     let attempt = form_bond(
@@ -418,6 +463,7 @@ fn try_combine_stored_materials(
     if !trial_storage.store_physical_instance(physical) {
         return None;
     }
+
     organism.stored_material = trial_storage;
     organism.usable_energy = candidate_energy;
     *ledger = candidate_ledger;
