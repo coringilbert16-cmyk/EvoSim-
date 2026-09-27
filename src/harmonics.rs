@@ -370,7 +370,7 @@ pub(crate) fn update_organism_harmonics(
                 &organism.structure,
                 &environment.catalog,
                 &environment.field,
-                boundary_units,
+                &boundary_units,
             ),
             None => ToneSpectrum::empty(),
         }
