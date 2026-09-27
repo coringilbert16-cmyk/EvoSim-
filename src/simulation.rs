@@ -440,13 +440,14 @@ impl Simulation {
                 .filter(|cavity| cavity.qualifies())
             {
                 let capacity = crate::memory::memory_capacity(cavity);
+                let harmonic_spectrum = organism.harmonic_spectrum.clone();
                 crate::memory::remember_perception(
                     organism,
                     x,
                     y,
                     organism.genome.memory_strength().clamp(0.0, 1.0),
                     capacity,
-                    &organism.harmonic_spectrum,
+                    &harmonic_spectrum,
                 );
             }
             if matches!(organism.development_stage, DevelopmentStage::Adult)
