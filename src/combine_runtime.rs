@@ -250,124 +250,6 @@ pub(crate) fn instantiate_one_unit(
     Some(organism.structure.add_unit(unit))
 }
 
-fn physicalize_stored_entry(
-    entry: &crate::material_storage::StoredMaterial,
-    origin: Placement,
-    catalog: &[BaseResource],
-) -> Option<crate::physical_material::PhysicalMaterial> {
-    match entry {
-        crate::material_storage::StoredMaterial::Physical(instance) => {
-            if !instance.is_realized() {
-                return None;
-            }
-            Some(instance.clone())
-        }
-        crate::material_storage::StoredMaterial::Logical(material) => {
-            if material.has_internal_structure() {
-                return None;
-            }
-            let (name, amount) = material.parts.first()?;
-            if (*amount - 1.0).abs() > EPSILON {
-                return None;
-            }
-            let mut unit = StructuralUnit::from_material(
-                Material::free_base(name.clone(), 1.0),
-                origin,
-            )?;
-            if !unit.realize_default_geometry(catalog) {
-                return None;
-            }
-            let mut structure = crate::structure::OrganismStructure::new();
-            structure.add_unit(unit);
-            physical_material_from_structure(&structure, catalog)
-        }
-    }
-}
-
-fn physical_material_from_structure(
-    structure: &crate::structure::OrganismStructure,
-    catalog: &[BaseResource],
-) -> Option<crate::physical_material::PhysicalMaterial> {
-    if structure.units.is_empty() {
-        return None;
-    }
-    let parts = structure
-        .units
-        .iter()
-        .map(|unit| unit.material.parts.first().cloned())
-        .collect::<Option<Vec<_>>>()?;
-    if structure
-        .units
-        .iter()
-        .any(|unit| unit.material.parts.len() != 1 || unit.material.internal_bonds.len() != 0)
-    {
-        return None;
-    }
-    let internal_bonds = structure
-        .bonds
-        .iter()
-        .map(|bond| {
-            let part_a = structure.unit_index(bond.endpoint_a.constituent_id)?;
-            let part_b = structure.unit_index(bond.endpoint_b.constituent_id)?;
-            Some(crate::physical_material::PhysicalMaterialBond {
-                part_a,
-                endpoint_a: bond.endpoint_a.location,
-                part_b,
-                endpoint_b: bond.endpoint_b.location,
-            })
-        })
-        .collect::<Option<Vec<_>>>()?;
-    let material = Material {
-        parts,
-        internal_bonds: internal_bonds
-            .iter()
-            .map(|bond| crate::resources::InternalBond {
-                part_a: bond.part_a,
-                part_b: bond.part_b,
-            })
-            .collect(),
-    };
-    let placements = structure.units.iter().map(|unit| unit.placement).collect();
-    let instance = crate::physical_material::PhysicalMaterial {
-        material,
-        placements: Some(placements),
-        internal_connections: Some(internal_bonds),
-        owner_relative_origin: None,
-    };
-    instance.is_realized().then_some(instance)
-}
-
-fn stored_entry_structure(
-    entry: &crate::material_storage::StoredMaterial,
-    origin: Placement,
-    catalog: &[BaseResource],
-) -> Option<crate::structure::OrganismStructure> {
-    let mut structure = crate::structure::OrganismStructure::new();
-    match entry {
-        crate::material_storage::StoredMaterial::Physical(instance) => {
-            crate::material_restoration::restore_material(&mut structure, instance, origin, catalog)?;
-        }
-        crate::material_storage::StoredMaterial::Logical(material) => {
-            if material.has_internal_structure() {
-                return None;
-            }
-            let (name, amount) = material.parts.first()?;
-            if (*amount - 1.0).abs() > EPSILON {
-                return None;
-            }
-            let mut unit = StructuralUnit::from_material(
-                Material::free_base(name.clone(), 1.0),
-                origin,
-            )?;
-            if !unit.realize_default_geometry(catalog) {
-                return None;
-            }
-            structure.add_unit(unit);
-        }
-    }
-    Some(structure)
-}
-
 fn try_combine_stored_materials(
     organism: &mut Organism,
     environment: &Environment,
@@ -380,6 +262,8 @@ fn try_combine_stored_materials(
     let catalog = &environment.catalog;
     let water = water_field_amount(environment, organism);
     let mut best: Option<(
+        usize,
+        usize,
         usize,
         usize,
         Placement,
@@ -413,8 +297,6 @@ fn try_combine_stored_materials(
                 continue;
             }
             let first_structure = stored_entry_structure(first, Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }, catalog)?;
-            let anchor_resource_name = first_material.parts.first()?.0.as_str();
-            let anchor_resource = catalog.iter().find(|resource| resource.name == anchor_resource_name)?;
             let second_resource_name = second_material.parts.first()?.0.as_str();
             let second_resource = catalog.iter().find(|resource| resource.name == second_resource_name)?;
             for anchor_index in 0..first_structure.units.len() {
@@ -468,21 +350,19 @@ fn try_combine_stored_materials(
                                     continue;
                                 }
                                 let score = -candidate.distance;
-                                if best.as_ref().is_none_or(|current| score > current.5) {
-                                    best = Some((i, j, origin, candidate, evaluation, score));
+                                if best.as_ref().map_or(true, |current| score > current.6) {
+                                    best = Some((i, j, anchor_index, ub, origin, candidate, score));
                                 }
-                                let _ = (work, investment, required);
+                                let _ = (work, investment, required, evaluation);
                             }
                         }
                     }
                 }
             }
-            let _ = second_resource;
-            let _ = anchor_resource;
         }
     }
 
-    let (i, j, origin, candidate, evaluation, _) = best?;
+    let (i, j, anchor_index, second_index, origin, candidate, _) = best?;
     let mut hypothetical = stored_entry_structure(
         &organism.stored_material.entries[i],
         Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
@@ -507,8 +387,8 @@ fn try_combine_stored_materials(
             vec![hypothetical.add_unit(unit)]
         }
     };
-    let ua = 0usize;
-    let ub = *second_indices.first()?;
+    let ua = anchor_index;
+    let ub = *second_indices.get(second_index)?;
     let (evaluation, _, work, investment, required) =
         evaluate_candidate(&hypothetical, ua, ub, candidate, catalog, water)?;
     if organism.usable_energy + EPSILON < required {
