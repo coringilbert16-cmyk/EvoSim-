@@ -77,6 +77,8 @@ pub struct ActiveMaterialField {
     pub cells: Vec<FieldCell>,
     #[serde(default)]
     pub(crate) revision: u64,
+    #[serde(default)]
+    pub(crate) cell_revisions: Vec<u64>,
 }
 
 pub(crate) enum FieldDeposit {
@@ -110,6 +112,7 @@ impl ActiveMaterialField {
             height_cells,
             cells,
             revision: 0,
+            cell_revisions: vec![0; width_cells * height_cells],
         }
     }
 
@@ -250,6 +253,7 @@ impl ActiveMaterialField {
         for index in candidate_indices {
             let cell = &mut self.cells[index];
             let mut remaining = Vec::with_capacity(cell.physical_materials.len());
+            let mut changed = false;
             for physical in cell.physical_materials.drain(..) {
                 let Some(placements) = physical.placements.as_ref() else {
                     remaining.push(physical);
@@ -273,22 +277,45 @@ impl ActiveMaterialField {
                 }
                 if selected.len() == placements.len() {
                     contained.push(physical);
+                    changed = true;
                     continue;
                 }
                 match crate::material_transfer::split_physical_material(&physical, &selected) {
                     Some((inside, outside)) => {
                         contained.push(inside);
                         remaining.push(outside);
+                        changed = true;
                     }
                     None => remaining.push(physical),
                 }
             }
             cell.physical_materials = remaining;
-        }
-        if !contained.is_empty() {
-            self.revision = self.revision.wrapping_add(1);
+            if changed {
+                self.mark_cell_changed(index);
+            }
         }
         contained
+    }
+
+    pub(crate) fn local_revision_for_positions<I>(&self, positions: I) -> u64
+    where
+        I: Iterator<Item = (f64, f64)>,
+    {
+        if self.cell_revisions.len() != self.cells.len() {
+            return self.revision;
+        }
+        positions
+            .filter_map(|(x, y)| self.index_for_position(x, y))
+            .map(|index| self.cell_revisions[index])
+            .sum()
+    }
+
+    fn mark_cell_changed(&mut self, index: usize) {
+        if self.cell_revisions.len() != self.cells.len() {
+            self.cell_revisions = vec![0; self.cells.len()];
+        }
+        self.cell_revisions[index] = self.cell_revisions[index].wrapping_add(1);
+        self.revision = self.revision.wrapping_add(1);
     }
 
     pub fn neighbor_indices(&self, index: usize) -> Vec<usize> {
@@ -332,7 +359,7 @@ impl ActiveMaterialField {
         if material.is_empty() || !material.is_valid() {
             return;
         }
-        self.revision = self.revision.wrapping_add(1);
+        self.mark_cell_changed(index);
         let cell = &mut self.cells[index];
         if material.has_internal_structure() {
             cell.materials.push(material);
@@ -359,7 +386,7 @@ impl ActiveMaterialField {
             return false;
         }
         self.cells[index].physical_materials.push(material);
-        self.revision = self.revision.wrapping_add(1);
+        self.mark_cell_changed(index);
         true
     }
 

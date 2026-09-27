@@ -415,7 +415,7 @@ impl Simulation {
                     y,
                     organism.genome.memory_strength().clamp(0.0, 1.0),
                     capacity,
-                    &organism.harmonic_spectrum.clone(),
+                    &organism.harmonic_spectrum,
                 );
             }
             if matches!(organism.development_stage, DevelopmentStage::Adult)
