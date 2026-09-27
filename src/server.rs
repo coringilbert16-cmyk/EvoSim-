@@ -1,5 +1,8 @@
 use axum::{
-    extract::{ws::{Message, WebSocket, WebSocketUpgrade}, Path, State},
+    extract::{
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        Path, State,
+    },
     response::{Html, IntoResponse},
     routing::{get, post},
     Json, Router,
@@ -10,10 +13,7 @@ use tower_http::cors::CorsLayer;
 use crate::runtime::SimulationProcess;
 use crate::state::AppState;
 
-async fn request(
-    state: &AppState,
-    command: Value,
-) -> Result<Value, &'static str> {
+async fn request(state: &AppState, command: Value) -> Result<Value, &'static str> {
     let mut process = state.simulation.lock().await;
     process.request(command).await
 }
@@ -21,9 +21,7 @@ async fn request(
 fn error_response(error: &'static str) -> axum::response::Response {
     match error {
         "not_found" => axum::http::StatusCode::NOT_FOUND.into_response(),
-        "invalid_speed" | "invalid_command" => {
-            axum::http::StatusCode::BAD_REQUEST.into_response()
-        }
+        "invalid_speed" | "invalid_command" => axum::http::StatusCode::BAD_REQUEST.into_response(),
         _ => axum::http::StatusCode::SERVICE_UNAVAILABLE.into_response(),
     }
 }
@@ -117,11 +115,7 @@ async fn organism_observation_handler(
     Path(id): Path<String>,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    match request(
-        &state,
-        serde_json::json!({"command": "organism", "id": id}),
-    )
-    .await
+    match request(&state, serde_json::json!({"command": "organism", "id": id})).await
     {
         Ok(value) => Json(value).into_response(),
         Err(error) => error_response(error),
@@ -143,9 +137,7 @@ async fn structure_observation_handler(
     }
 }
 
-async fn resource_visualization_handler(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+async fn resource_visualization_handler(State(state): State<AppState>) -> impl IntoResponse {
     match request(&state, serde_json::json!({"command": "resources"})).await {
         Ok(value) => Json(value).into_response(),
         Err(error) => error_response(error),
