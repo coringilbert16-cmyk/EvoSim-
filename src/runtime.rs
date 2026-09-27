@@ -115,8 +115,7 @@ impl SimulationProcess {
             .await
             .map_err(|_| "simulation_unavailable")?;
         stream
-            .write_all(br#"{"command":"subscribe"}
-"#)
+            .write_all(b"{\"command\":\"subscribe\"}\n")
             .await
             .map_err(|_| "simulation_unavailable")?;
         Ok(stream)
