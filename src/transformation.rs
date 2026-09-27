@@ -159,47 +159,76 @@ impl Simulation {
         _catalog: &[crate::resources::BaseResource],
         next_id: &mut u64,
         decision: &ActionCandidate,
+        before_energy: f64,
+        before_stress: f64,
+        before_realization: f64,
     ) -> Option<ActiveTransformation> {
-        if decision.action != ActionKind::Break || organism.active_transformation_id.is_some() {
+        if organism.active_transformation_id.is_some() {
             return None;
         }
-        let key = decision.context_key.as_deref()?;
-        let rest = key.strip_prefix("stored:")?;
-        let (storage_index, bond_part) = rest.split_once(":bond:")?;
-        let storage_index = storage_index.parse::<usize>().ok()?;
-        let bond_index = bond_part.parse::<usize>().ok()?;
-        let entry = organism.stored_material.entries.get(storage_index)?;
-        let physical = match entry {
-            crate::material_storage::StoredMaterial::Physical(instance)
-                if instance.is_realized() =>
-            {
-                instance.clone()
-            }
+        let kind = match decision.action {
+            ActionKind::Break => crate::state::TransformationKind::Break,
+            ActionKind::Combine => crate::state::TransformationKind::Combine,
             _ => return None,
         };
-        let stored_bond = physical
-            .internal_connections
-            .as_ref()?
-            .get(bond_index)?
-            .clone();
-        let removed = organism.stored_material.entries.swap_remove(storage_index);
-        let stored_material = match removed {
-            crate::material_storage::StoredMaterial::Physical(instance) => instance,
-            _ => return None,
-        };
+
+        let stored_material;
+        let stored_bond;
+        if matches!(kind, crate::state::TransformationKind::Break) {
+            let key = decision.context_key.as_deref()?;
+            let rest = key.strip_prefix("stored:")?;
+            let (storage_index, bond_part) = rest.split_once(":bond:")?;
+            let storage_index = storage_index.parse::<usize>().ok()?;
+            let bond_index = bond_part.parse::<usize>().ok()?;
+            let entry = organism.stored_material.entries.get(storage_index)?;
+            let physical = match entry {
+                crate::material_storage::StoredMaterial::Physical(instance)
+                    if instance.is_realized() =>
+                {
+                    instance.clone()
+                }
+                _ => return None,
+            };
+            let bond = physical
+                .internal_connections
+                .as_ref()?
+                .get(bond_index)?
+                .clone();
+            let removed = organism.stored_material.entries.swap_remove(storage_index);
+            let removed = match removed {
+                crate::material_storage::StoredMaterial::Physical(instance) => instance,
+                _ => return None,
+            };
+            stored_material = Some(removed);
+            stored_bond = Some(bond);
+        } else {
+            stored_material = None;
+            stored_bond = None;
+        }
+
         let complexity = crate::math::complexity(2.0);
-        let duration = 1_u64.max(complexity.ceil() as u64);
+        // The decision tick is tick 1. The two remaining ticks are:
+        // tick 2 = candidate/transaction resolution; tick 3 = mutation commit.
+        let duration = 2_u64;
         let t = ActiveTransformation {
             id: *next_id,
             organism_id: organism.id.clone(),
-            kind: crate::state::TransformationKind::Break,
+            kind,
             material: crate::resources::Material::free_base("", 0.0),
             bond: None,
-            stored_material: Some(stored_material),
-            stored_bond: Some(stored_bond),
+            stored_material,
+            stored_bond,
             complexity,
             duration_ticks: duration,
             remaining_ticks: duration,
+            prepared: false,
+            preparation_failed: false,
+            pending_structure: None,
+            pending_stored_material: None,
+            pending_break_pieces: None,
+            decision_before_energy: before_energy,
+            decision_before_stress: before_stress,
+            decision_before_realization: before_realization,
             decision_context_key: decision.context_key.clone(),
         };
         *next_id += 1;
@@ -207,102 +236,201 @@ impl Simulation {
         Some(t)
     }
 
-    pub(crate) fn resolve_transformation(
+    pub(crate) fn prepare_transformation(
+        transformation: &mut ActiveTransformation,
+        organism: &mut Organism,
+        environment: &Environment,
+        ledger: &mut EnergyLedger,
+    ) {
+        if transformation.prepared {
+            return;
+        }
+
+        match transformation.kind {
+            crate::state::TransformationKind::Break => {
+                let Some(stored) = transformation.stored_material.as_ref() else {
+                    transformation.preparation_failed = true;
+                    transformation.prepared = true;
+                    return;
+                };
+                let Some(target) = transformation.stored_bond.as_ref() else {
+                    transformation.preparation_failed = true;
+                    transformation.prepared = true;
+                    return;
+                };
+                let Some(a) = stored.material.parts.get(target.part_a).and_then(|(name, _)| {
+                    environment
+                        .catalog
+                        .iter()
+                        .find(|resource| resource.name == *name)
+                        .map(|resource| resource.properties)
+                }) else {
+                    transformation.preparation_failed = true;
+                    transformation.prepared = true;
+                    return;
+                };
+                let Some(b) = stored.material.parts.get(target.part_b).and_then(|(name, _)| {
+                    environment
+                        .catalog
+                        .iter()
+                        .find(|resource| resource.name == *name)
+                        .map(|resource| resource.properties)
+                }) else {
+                    transformation.preparation_failed = true;
+                    transformation.prepared = true;
+                    return;
+                };
+                let Some((gross, usable, heat)) = break_energy_yield(
+                    a,
+                    b,
+                    water_field_amount(environment, organism),
+                    organism.genome.processing_efficiency(),
+                ) else {
+                    transformation.preparation_failed = true;
+                    transformation.prepared = true;
+                    return;
+                };
+                let mut trial = stored.clone();
+                let Some(pieces) = trial.break_internal_bond(target) else {
+                    transformation.preparation_failed = true;
+                    transformation.prepared = true;
+                    return;
+                };
+                let tx = EnergyTransaction {
+                    reason: EnergyReason::Break,
+                    potential_released: gross,
+                    usable_delta: usable,
+                    structural_delta: 0.0,
+                    heat_dissipated: heat,
+                };
+                if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
+                    transformation.preparation_failed = true;
+                    transformation.prepared = true;
+                    return;
+                }
+                transformation.pending_break_pieces = Some(pieces);
+                organism.add_transaction_stress(heat);
+                transformation.prepared = true;
+            }
+            crate::state::TransformationKind::Combine => {
+                let mut trial = organism.clone();
+                let mut trial_ledger = EnergyLedger::default();
+                let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+                let Some(attempt) = crate::combine_runtime::try_combine(
+                    &mut trial,
+                    environment,
+                    &mut cache,
+                    &mut trial_ledger,
+                    None,
+                ) else {
+                    transformation.preparation_failed = true;
+                    transformation.prepared = true;
+                    return;
+                };
+                let tx = EnergyTransaction {
+                    reason: EnergyReason::Combine,
+                    potential_released: attempt.interaction_energy,
+                    usable_delta: attempt.interaction_energy
+                        - attempt.energy_invested
+                        - attempt.work_cost,
+                    structural_delta: attempt.energy_invested,
+                    heat_dissipated: attempt.work_cost,
+                };
+                if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
+                    transformation.preparation_failed = true;
+                    transformation.prepared = true;
+                    return;
+                }
+                transformation.pending_structure = Some(trial.structure);
+                transformation.pending_stored_material = Some(trial.stored_material);
+                organism.add_transaction_stress(attempt.work_cost);
+                transformation.prepared = true;
+            }
+        }
+    }
+
+    pub(crate) fn commit_transformation(
         transformation: &ActiveTransformation,
         organism: &mut Organism,
         environment: &mut Environment,
-        ledger: &mut EnergyLedger,
     ) {
-        let Some(stored) = transformation.stored_material.as_ref() else {
-            organism.active_transformation_id = None;
-            return;
-        };
-        let Some(target) = transformation.stored_bond.as_ref() else {
-            organism.active_transformation_id = None;
-            return;
-        };
-        let Some(a) = stored
-            .material
-            .parts
-            .get(target.part_a)
-            .and_then(|(name, _)| {
-                environment
-                    .catalog
-                    .iter()
-                    .find(|resource| resource.name == *name)
-                    .map(|r| r.properties)
-            })
-        else {
-            organism.active_transformation_id = None;
-            return;
-        };
-        let Some(b) = stored
-            .material
-            .parts
-            .get(target.part_b)
-            .and_then(|(name, _)| {
-                environment
-                    .catalog
-                    .iter()
-                    .find(|resource| resource.name == *name)
-                    .map(|r| r.properties)
-            })
-        else {
-            organism.active_transformation_id = None;
-            return;
-        };
-        let Some((gross, usable, heat)) = break_energy_yield(
-            a,
-            b,
-            water_field_amount(environment, organism),
-            organism.genome.processing_efficiency(),
-        ) else {
-            organism.active_transformation_id = None;
-            return;
-        };
-        let Some(pieces) = stored.break_internal_bond(target) else {
-            organism.active_transformation_id = None;
-            return;
-        };
-        let tx = EnergyTransaction {
-            reason: EnergyReason::Break,
-            potential_released: gross,
-            usable_delta: usable,
-            structural_delta: 0.0,
-            heat_dissipated: heat,
-        };
-        if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
-            organism.active_transformation_id = None;
-            return;
-        }
-        for piece in pieces {
-            if !organism
-                .stored_material
-                .store_physical_instance(piece.clone())
-            {
-                if let Some(placement) = piece
-                    .placements
-                    .as_ref()
-                    .and_then(|placements| placements.first())
-                {
-                    let _ = environment.field.deposit(placement.x, placement.y, piece);
+        if transformation.preparation_failed {
+            if matches!(transformation.kind, crate::state::TransformationKind::Break) {
+                if let Some(stored) = transformation.stored_material.clone() {
+                    if !organism.stored_material.store_physical_instance(stored.clone()) {
+                        if let Some(placement) = stored
+                            .placements
+                            .as_ref()
+                            .and_then(|placements| placements.first())
+                        {
+                            let _ = environment.field.deposit(placement.x, placement.y, stored);
+                        }
+                    }
                 }
             }
+            organism.active_transformation_id = None;
+            return;
         }
-        organism.add_transaction_stress(heat);
-        organism.active_transformation_id = None;
-        crate::decision_runtime::record_consequence(
-            &mut organism.decision_history,
-            &ActionCandidate {
-                action: ActionKind::Break,
-                context_key: transformation.decision_context_key.clone(),
-            },
-            crate::decision::ActionConsequence {
-                energy_delta: usable,
-                stress_delta: heat,
-                developmental_delta: 0.0,
-            },
-        );
+
+        match transformation.kind {
+            crate::state::TransformationKind::Break => {
+                if let Some(pieces) = transformation.pending_break_pieces.clone() {
+                    for piece in pieces {
+                        if !organism.stored_material.store_physical_instance(piece.clone()) {
+                            if let Some(placement) = piece
+                                .placements
+                                .as_ref()
+                                .and_then(|placements| placements.first())
+                            {
+                                let _ = environment.field.deposit(placement.x, placement.y, piece);
+                            }
+                        }
+                    }
+                }
+                organism.active_transformation_id = None;
+                crate::decision_runtime::record_consequence(
+                    &mut organism.decision_history,
+                    &ActionCandidate {
+                        action: ActionKind::Break,
+                        context_key: transformation.decision_context_key.clone(),
+                    },
+                    crate::decision::ActionConsequence {
+                        energy_delta: organism.usable_energy
+                            - transformation.decision_before_energy,
+                        stress_delta: organism.stress - transformation.decision_before_stress,
+                        developmental_delta: 0.0,
+                    },
+                );
+            }
+            crate::state::TransformationKind::Combine => {
+                if let Some(structure) = transformation.pending_structure.clone() {
+                    organism.structure = structure;
+                    organism.mark_structure_changed();
+                }
+                if let Some(stored_material) = transformation.pending_stored_material.clone() {
+                    organism.stored_material = stored_material;
+                }
+                let after_realization = organism
+                    .developmental_realization_cached(&environment.catalog)
+                    .map(|realization| realization.overall)
+                    .unwrap_or(transformation.decision_before_realization);
+                organism.active_transformation_id = None;
+                crate::decision_runtime::record_consequence(
+                    &mut organism.decision_history,
+                    &ActionCandidate {
+                        action: ActionKind::Combine,
+                        context_key: transformation.decision_context_key.clone(),
+                    },
+                    crate::decision::ActionConsequence {
+                        energy_delta: organism.usable_energy
+                            - transformation.decision_before_energy,
+                        stress_delta: organism.stress - transformation.decision_before_stress,
+                        developmental_delta: after_realization
+                            - transformation.decision_before_realization,
+                    },
+                );
+            }
+        }
     }
 }
 
