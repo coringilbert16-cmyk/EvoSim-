@@ -161,27 +161,28 @@ impl Simulation {
             .cloned()
             .unwrap_or(Position { x: 0.0, y: 0.0 });
         for physical in environment.field.take_contained_physical_materials(&body) {
-            if organism
+            match organism
                 .stored_material
-                .store_physical_instance_at_owner_anchor(
-                    physical.clone(),
+                .try_store_physical_instance_at_owner_anchor(
+                    physical,
                     Placement {
                         x: anchor.x,
                         y: anchor.y,
                         rotation_radians: 0.0,
                     },
-                )
-            {
-                continue;
-            }
-            if let Some(placement) = physical
-                .placements
-                .as_ref()
-                .and_then(|placements| placements.first())
-            {
-                let _ = environment
-                    .field
-                    .deposit(placement.x, placement.y, physical);
+                ) {
+                Ok(()) => continue,
+                Err(physical) => {
+                    if let Some(placement) = physical
+                        .placements
+                        .as_ref()
+                        .and_then(|placements| placements.first())
+                    {
+                        let _ = environment
+                            .field
+                            .deposit(placement.x, placement.y, physical);
+                    }
+                }
             }
         }
     }
