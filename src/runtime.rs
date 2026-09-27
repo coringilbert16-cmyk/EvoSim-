@@ -153,10 +153,13 @@ impl SimulationProcess {
             serde_json::from_str(&line).map_err(|_| "invalid_simulation_response")?;
 
         if response.get("ok").and_then(Value::as_bool) != Some(true) {
-            return Err(response
-                .get("error")
-                .and_then(Value::as_str)
-                .unwrap_or("simulation_error"));
+            return Err(match response.get("error").and_then(Value::as_str) {
+                Some("not_found") => "not_found",
+                Some("invalid_speed") => "invalid_speed",
+                Some("invalid_command") => "invalid_command",
+                Some("simulation_unavailable") => "simulation_unavailable",
+                _ => "simulation_error",
+            });
         }
 
         response
