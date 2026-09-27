@@ -677,7 +677,10 @@ impl Simulation {
                 } else {
                     let before_energy = organisms[index].usable_energy;
                     let before_stress = organisms[index].stress;
-                    let before_realization = current_realization.unwrap_or(0.0);
+                    let before_realization = developmental
+                        .as_ref()
+                        .map(|context| context.current_growth_fraction)
+                        .unwrap_or(0.0);
                     let expulsion_candidates =
                         Self::expulsion_candidates(&organisms[index], needs, eligibility);
                     let expulsion_competition =
@@ -703,7 +706,6 @@ impl Simulation {
                         &expulsion_scores,
                         &mut self.rng,
                     ) {
-
                         let expelled = selected
                             .context_key
                             .as_deref()
