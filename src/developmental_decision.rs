@@ -146,11 +146,19 @@ pub(crate) fn developmental_action_scores(
             )
     });
 
+    let mut competing_cursor = 0;
     candidates
         .iter()
         .enumerate()
         .map(|(index, candidate)| {
-            if !competing_indices.contains(&index) {
+            while competing_cursor < competing_indices.len()
+                && competing_indices[competing_cursor] < index
+            {
+                competing_cursor += 1;
+            }
+            if competing_cursor >= competing_indices.len()
+                || competing_indices[competing_cursor] != index
+            {
                 return None;
             }
             match candidate.action {
