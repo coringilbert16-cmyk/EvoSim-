@@ -31,7 +31,7 @@ pub(crate) fn context(
     }
     let (seed_mass, seed_length) = seed_reference;
     let current_realization = organism
-        .developmental_realization_cached(&environment.catalog)
+        .developmental_realization_cached_for_reference(&environment.catalog, seed_reference)
         .unwrap_or(crate::developmental_blueprint::DevelopmentalRealization {
             material: None,
             density: None,
