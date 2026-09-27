@@ -176,20 +176,19 @@ fn execute(command: SimulationCommand, runtime: &Arc<Mutex<RuntimeState>>) -> Co
             )
         }
         SimulationCommand::Structure { id } => {
-            let simulation = {
+            let projection = {
                 let state = runtime.lock();
-                state.simulation.clone()
+                let Some(observation) =
+                    StructureObservation::from_simulation(&state.simulation, &id)
+                else {
+                    return CommandResponse::error("not_found");
+                };
+                let context = ObservationContext::structure(vec![id.clone()], Some(id));
+                ObservationProjection::structure(context, observation)
+                    .expect("validated structure observation level")
             };
-            let Some(observation) = StructureObservation::from_simulation(&simulation, &id) else {
-                return CommandResponse::error("not_found");
-            };
-            let context = ObservationContext::structure(vec![id.clone()], Some(id));
             CommandResponse::value(
-                serde_json::to_value(
-                    ObservationProjection::structure(context, observation)
-                        .expect("validated structure observation level"),
-                )
-                .expect("structure observation must serialize"),
+                serde_json::to_value(projection).expect("structure observation must serialize"),
             )
         }
         SimulationCommand::Resources => {
