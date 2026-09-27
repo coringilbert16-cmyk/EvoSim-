@@ -1,5 +1,6 @@
 #![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 //! Runtime COMBINE execution boundary.
+//! Stored COMBINE can transform material without admitting it to organism structure.
 //! Physics is evaluated by `combine`; this module selects a physical
 //! candidate, applies the returned result, mutates structure, and settles
 //! the actual energy holder through the unified ledger authority.
