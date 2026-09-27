@@ -78,6 +78,20 @@ async fn world_observation_handler(State(state): State<AppState>) -> impl IntoRe
     ))
 }
 
+async fn historical_world_observation_handler(
+    Path(tick): Path<u64>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let runtime = state.runtime.lock();
+    let Some(snapshot) = runtime.snapshot(tick) else {
+        return axum::http::StatusCode::NOT_FOUND.into_response();
+    };
+    Json(ObservationProjection::world(
+        WorldObservation::from_simulation(&snapshot),
+    ))
+    .into_response()
+}
+
 async fn organism_observation_handler(
     Path(id): Path<String>,
     State(state): State<AppState>,
@@ -178,6 +192,10 @@ pub(crate) async fn run() {
         .route("/", get(index_handler))
         .route("/observation/status", get(observation_status_handler))
         .route("/observation/world", get(world_observation_handler))
+        .route(
+            "/observation/history/{tick}/world",
+            get(historical_world_observation_handler),
+        )
         .route(
             "/observation/organism/{id}",
             get(organism_observation_handler),
