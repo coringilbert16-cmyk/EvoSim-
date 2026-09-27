@@ -335,7 +335,15 @@ pub(crate) fn update_organism_harmonics(
     let key = (
         organism.structure_revision,
         organism.position_revision,
-        environment.field.revision,
+        environment
+            .field
+            .local_revision_for_positions(
+                organism
+                    .structure
+                    .units
+                    .iter()
+                    .map(|unit| (unit.placement.x, unit.placement.y)),
+            ),
     );
     if organism.cached_harmonic_key == Some(key) {
         return;
