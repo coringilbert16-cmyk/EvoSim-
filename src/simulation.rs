@@ -466,10 +466,6 @@ impl Simulation {
                 // survival/reproduction need pressure or by the transformation
                 // selector below.
                 if eligibility.can_move {
-                    let move_candidate = ActionCandidate {
-                        action: ActionKind::Move,
-                        context_key: None,
-                    };
                     let organism_count = organisms.len();
                     let (before, rest) = organisms.split_at_mut(index);
                     let (organism, after) = rest.split_first_mut().expect("index is in organisms");
@@ -497,6 +493,7 @@ impl Simulation {
                         &mut others,
                         &mut self.energy_ledger,
                         self.tick,
+                        &mut self.rng,
                     );
                     if moved {
                         for (original, trial) in
@@ -508,6 +505,16 @@ impl Simulation {
                         }
                     }
                     if moved {
+                        let move_candidate = ActionCandidate {
+                            action: ActionKind::Move,
+                            context_key: organism.last_movement_attempt.as_ref().and_then(
+                                |attempt| {
+                                    attempt
+                                        .step
+                                        .map(|distance| format!("distance:{distance:.0}"))
+                                },
+                            ),
+                        };
                         let consequence = Self::action_consequence(
                             before_energy,
                             before_stress,
