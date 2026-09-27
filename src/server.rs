@@ -115,8 +115,7 @@ async fn organism_observation_handler(
     Path(id): Path<String>,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    match request(&state, serde_json::json!({"command": "organism", "id": id})).await
-    {
+    match request(&state, serde_json::json!({"command": "organism", "id": id})).await {
         Ok(value) => Json(value).into_response(),
         Err(error) => error_response(error),
     }
