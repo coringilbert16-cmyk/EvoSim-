@@ -433,6 +433,8 @@ impl Simulation {
         {
             let (organisms, environment) = (&mut self.organisms, &mut self.environment);
             let mut compatibility_cache = crate::contact::ConnectionCompatibilityCache::new();
+            let mut movement_spatial_index =
+                crate::movement::MovementSpatialIndex::new(organisms, environment);
             for index in 0..organisms.len() {
                 if completed_organisms.contains(&organisms[index].id) {
                     continue;
@@ -483,6 +485,7 @@ impl Simulation {
                         before,
                         organism,
                         after,
+                        &mut movement_spatial_index,
                         environment,
                         &mut self.energy_ledger,
                         self.tick,
@@ -569,6 +572,13 @@ impl Simulation {
                                 developmental,
                             )
                             .is_some();
+                            if combined {
+                                movement_spatial_index.refresh_organism(
+                                    index,
+                                    &organisms[index],
+                                    environment,
+                                );
+                            }
                             let consequence = if combined {
                                 Self::action_consequence(
                                     before_energy,
