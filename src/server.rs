@@ -6,7 +6,6 @@ use axum::{
 };
 use serde_json::Value;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 use tokio::process::{Child, Command};
@@ -15,79 +14,17 @@ use tower_http::cors::CorsLayer;
 
 use crate::state::AppState;
 
-struct SimulationProcess {
-    child: Child,
-    port: u16,
-}
-
-impl Drop for SimulationProcess {
-    fn drop(&mut self) {
-        let _ = self.child.start_kill();
-    }
-}
-
-impl SimulationProcess {
-    async fn spawn() -> Self {
-        let port = std::net::TcpListener::bind(("127.0.0.1", 0))
-            .expect("could not allocate simulation control port")
-            .local_addr()
-            .expect("could not read simulation control port")
-            .port();
-
-        let executable = std::env::current_exe().expect("could not locate EvoSim executable");
-        let child = Command::new(executable)
-            .arg("--simulation-child")
-            .arg(port.to_string())
-            .spawn()
-            .expect("could not start simulation child");
-
-        let process = Self { child, port };
-
-        for _ in 0..100 {
-            if TcpStream::connect(("127.0.0.1", port)).await.is_ok() {
-                return process;
-            }
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
-
-        panic!("simulation child did not become ready");
-    }
-
-    async fn request(&mut self, command: Value) -> Result<Value, &'static str> {
-        let mut stream = TcpStream::connect(("127.0.0.1", self.port))
-            .await
-            .map_err(|_| "simulation_unavailable")?;
-
-        let mut encoded = serde_json::to_vec(&command).map_err(|_| "invalid_command")?;
-        encoded.push(b'\n');
-        stream
-            .write_all(&encoded)
-            .await
-            .map_err(|_| "simulation_unavailable")?;
-
-        let mut reader = BufReader::new(stream);
-        let mut line = String::new();
-        reader
-            .read_line(&mut line)
-            .await
-            .map_err(|_| "simulation_unavailable")?;
-
-        let response: Value =
-            serde_json::from_str(&line).map_err(|_| "invalid_simulation_response")?;
-
-        if response.get("ok").and_then(Value::as_bool) != Some(true) {
-            return Err(response
-                .get("error")
-                .and_then(Value::as_str)
-                .unwrap_or("simulation_error"));
-        }
-
-        response
-            .get("value")
-            .cloned()
-            .ok_or("invalid_simulation_response")
-    }
-}
+use axum::{
+    extract::{Path, State},
+    response::{Html, IntoResponse},
+    routing::{get, post},
+    Json, Router,
+};
+use serde_json::Value;
+use std::time::Duration;
+use crate::runtime::SimulationProcess;
+use crate::state::AppState;
+use tower_http::cors::CorsLayer;
 
 async fn request(
     state: &AppState,
@@ -241,7 +178,7 @@ async fn restore_handler(
 pub(crate) async fn run() {
     let process = SimulationProcess::spawn().await;
     let state = AppState {
-        simulation: Arc::new(Mutex::new(process)),
+        simulation: std::sync::Arc::new(tokio::sync::Mutex::new(process)),
     };
 
     let app = Router::new()
