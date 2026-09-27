@@ -650,26 +650,32 @@ mod tests {
     }
 
     #[test]
-    fn movement_cost_matches_reference_curve_at_default_efficiency() {
+    fn movement_cost_matches_reference_formula_at_default_efficiency() {
         let cases = [
-            (2.7, 1.2),
-            (4.0, 1.34),
-            (8.0, 1.64),
-            (16.0, 2.0),
-            (32.0, 3.4),
-            (64.0, 5.8),
-            (128.0, 10.6),
-            (256.0, 19.2),
-            (512.0, 35.2),
-            (1024.0, 65.0),
+            (2.7, 0.0152),
+            (16.0, 0.05),
+            (64.0, 0.1266),
+            (256.0, 0.3204),
+            (1024.0, 0.8112),
         ];
         for (mass, expected) in cases {
             let actual = movement_energy_cost(mass, DEFAULT_MOVEMENT_EFFICIENCY);
             assert!(
-                (actual - expected).abs() < 0.06,
+                (actual - expected).abs() < 0.002,
                 "mass {mass}: expected {expected}, got {actual}"
             );
         }
+    }
+
+    #[test]
+    fn movement_cost_scales_linearly_with_distance() {
+        let costs = [1.0, 2.0, 4.0, 8.0].map(|distance| {
+            movement_energy_cost_for_distance(16.0, DEFAULT_MOVEMENT_EFFICIENCY, distance)
+        });
+        assert!((costs[0] - 0.0125).abs() < f64::EPSILON);
+        assert!((costs[1] - 0.025).abs() < f64::EPSILON);
+        assert!((costs[2] - 0.05).abs() < f64::EPSILON);
+        assert!((costs[3] - 0.10).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -687,16 +693,47 @@ mod tests {
     fn movement_efficiency_changes_energy_cost_not_distance() {
         assert!(movement_energy_cost(16.0, 1.0) < movement_energy_cost(16.0, 0.8));
         assert!(movement_energy_cost(16.0, 0.5) > movement_energy_cost(16.0, 0.8));
-        assert_eq!(MOVEMENT_BASE_STEP_DISTANCE, 4.0);
+        assert_eq!(MOVEMENT_REFERENCE_DISTANCE, 4.0);
     }
 
     #[test]
     fn movement_cost_is_finite_for_nonnegative_mass_and_valid_efficiency() {
         for mass in [0.0, 2.7, 16.0, 1024.0, 1.0e12] {
             for efficiency in [0.05, 0.8, 1.0] {
-                assert!(movement_energy_cost(mass, efficiency).is_finite());
+                for distance in [1.0, 2.0, 4.0, 8.0] {
+                    assert!(
+                        movement_energy_cost_for_distance(mass, efficiency, distance).is_finite()
+                    );
+                }
             }
         }
+    }
+
+    #[test]
+    fn movement_distance_history_prefers_non_dominated_consequence() {
+        let simulation = Simulation::new(7, 20.0);
+        let mut organism = simulation.organisms[0].clone();
+        organism.decision_history.record(
+            crate::decision::ActionKind::Move,
+            Some(movement_context_key(1.0)),
+            crate::decision::ActionConsequence {
+                energy_delta: -0.01,
+                ..Default::default()
+            },
+        );
+        organism.decision_history.record(
+            crate::decision::ActionKind::Move,
+            Some(movement_context_key(8.0)),
+            crate::decision::ActionConsequence {
+                energy_delta: -0.08,
+                ..Default::default()
+            },
+        );
+        let mut rng = ChaCha8Rng::seed_from_u64(1);
+        assert_eq!(
+            select_movement_distance(&organism, 16.0, 0.8, 1.0, &mut rng),
+            Some(1.0)
+        );
     }
 
     #[test]
