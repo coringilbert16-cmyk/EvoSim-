@@ -125,8 +125,7 @@ pub fn select_action(
     candidates: &[ActionCandidate],
     rng: &mut ChaCha8Rng,
 ) -> Option<ActionCandidate> {
-    let scores = vec![None; candidates.len()];
-    select_action_with_developmental_scores(context, history, candidates, &scores, rng)
+    select_action_with_developmental_scores(context, history, candidates, &[], rng)
 }
 
 /// Select an action using physical developmental results when they are
@@ -160,22 +159,54 @@ pub fn select_action_with_developmental_scores(
         .map(|(_, score, _)| *score)
         .max_by(f64::total_cmp)?;
 
-    let mut tied: Vec<_> = scored
-        .into_iter()
+    let tied_count = scored
+        .iter()
         .filter(|(_, score, _)| score.total_cmp(&best_score).is_eq())
-        .collect();
+        .count();
 
-    if tied.len() > 1 && tied.iter().all(|(_, _, score)| score.is_some()) {
-        let best_developmental = tied
+    let best_developmental = if tied_count > 1
+        && scored
             .iter()
-            .filter_map(|(_, _, score)| *score)
-            .max_by(f64::total_cmp)
-            .expect("all tied candidates have developmental scores");
-        tied.retain(|(_, _, score)| score.is_some_and(|score| score == best_developmental));
-    }
+            .filter(|(_, score, _)| score.total_cmp(&best_score).is_eq())
+            .all(|(_, _, score)| score.is_some())
+    {
+        Some(
+            scored
+                .iter()
+                .filter_map(|(_, score, developmental)| {
+                    if score.total_cmp(&best_score).is_eq() {
+                        *developmental
+                    } else {
+                        None
+                    }
+                })
+                .max_by(f64::total_cmp)
+                .expect("all tied candidates have developmental scores"),
+        )
+    } else {
+        None
+    };
 
-    let selected_index = rng.gen_range(0..tied.len());
-    candidates.get(tied[selected_index].0).cloned()
+    let final_tie_count = scored
+        .iter()
+        .filter(|(_, score, developmental)| {
+            score.total_cmp(&best_score).is_eq()
+                && best_developmental.is_none_or(|best| *developmental == Some(best))
+        })
+        .count();
+    let selected_rank = rng.gen_range(0..final_tie_count);
+    let mut rank = 0;
+    for (index, score, developmental) in scored {
+        if score.total_cmp(&best_score).is_eq()
+            && best_developmental.is_none_or(|best| developmental == Some(best))
+        {
+            if rank == selected_rank {
+                return candidates.get(index).cloned();
+            }
+            rank += 1;
+        }
+    }
+    None
 }
 
 pub fn record_consequence(
