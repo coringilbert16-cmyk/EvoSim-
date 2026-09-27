@@ -554,11 +554,9 @@ impl Simulation {
                                         .map(|realization| realization.overall)
                                         .unwrap_or(0.0)
                                 });
-                            let developmental_blueprint =
-                                organisms[index].genome.developmental_blueprint.clone();
                             let developmental = developmental.as_ref().map(|context| {
                                 (
-                                    &developmental_blueprint,
+                                    context.blueprint,
                                     context.origin,
                                     context.orientation,
                                     context.preferred_length,
