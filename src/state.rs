@@ -349,6 +349,10 @@ pub(crate) struct Simulation {
     pub(crate) next_transformation_id: u64,
     pub(crate) rng: ChaCha8Rng,
     pub(crate) decision_parameters: DecisionParameters,
+    /// Deterministic calibration derived from the immutable resource catalog.
+    /// Cached once at simulation creation so the tick hot path never rebuilds
+    /// the confirmed seed structure.
+    pub(crate) seed_scale_reference: Option<(f64, f64)>,
 }
 pub(crate) const DESIRABILITY_AMOUNT_HALF_SATURATION: f64 = 100.0;
 pub(crate) const DESIRABILITY_MAX: f64 = 1.0;

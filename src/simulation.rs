@@ -19,6 +19,8 @@ impl Simulation {
     pub(crate) fn new(seed: u64, ticks_per_second: f64) -> Self {
         let rng = ChaCha8Rng::seed_from_u64(seed);
         let environment = Self::create_environment();
+        let seed_scale_reference =
+            crate::juvenile::confirmed_seed_scale_reference(&environment.catalog).ok();
         let organism = Self::create_initial_organism();
         Self {
             tick: 0,
@@ -33,6 +35,7 @@ impl Simulation {
             next_transformation_id: 1,
             rng,
             decision_parameters: DecisionParameters::default(),
+            seed_scale_reference,
         }
     }
     fn create_environment() -> Environment {
@@ -113,7 +116,11 @@ impl Simulation {
         }
     }
 
-    fn update_development_stage(organism: &mut Organism, environment: &Environment) {
+    fn update_development_stage(
+        organism: &mut Organism,
+        environment: &Environment,
+        seed_reference: Option<(f64, f64)>,
+    ) {
         match organism.development_stage {
             DevelopmentStage::Offspring => {
                 if organism.reproductive_construction.is_none() {
@@ -121,7 +128,15 @@ impl Simulation {
                 }
             }
             DevelopmentStage::Juvenile => {
-                if crate::developmental_decision::growth_fraction(organism, environment)
+                if seed_reference
+                    .map(|reference| {
+                        crate::developmental_decision::growth_fraction_for_reference(
+                            organism,
+                            environment,
+                            reference,
+                        )
+                    })
+                    .unwrap_or(0.0)
                     >= ADULTHOOD_GROWTH_FRACTION
                 {
                     organism.development_stage = DevelopmentStage::Adult
@@ -394,8 +409,12 @@ impl Simulation {
             }
         }
         let decision_parameters = self.decision_parameters;
+        // The confirmed seed scale is deterministic for the catalog. Compute it
+        // once per simulation tick instead of rebuilding the calibration
+        // structure for every organism.
+        let seed_reference = self.seed_scale_reference;
         for organism in &mut self.organisms {
-            Self::update_development_stage(organism, &self.environment);
+            Self::update_development_stage(organism, &self.environment, seed_reference);
             organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
             crate::harmonics::update_organism_harmonics(organism, &self.environment);
             Self::update_memory_from_sources(organism, &self.environment);
@@ -447,16 +466,13 @@ impl Simulation {
                 {
                     continue;
                 }
-                let developmental =
-                    crate::juvenile::confirmed_seed_scale_reference(&environment.catalog)
-                        .ok()
-                        .and_then(|reference| {
-                            crate::developmental_decision::context(
-                                &mut organisms[index],
-                                environment,
-                                reference,
-                            )
-                        });
+                let developmental = seed_reference.and_then(|reference| {
+                    crate::developmental_decision::context(
+                        &mut organisms[index],
+                        environment,
+                        reference,
+                    )
+                });
                 let needs = Self::current_needs(
                     &mut organisms[index],
                     environment,

@@ -273,6 +273,8 @@ pub(crate) fn confirmed_seed_baseline(
     Ok(baseline)
 }
 
+// This is a deterministic calibration constant for the current resource catalog.
+// Callers on the simulation hot path should compute it once and reuse it.
 pub(crate) fn confirmed_seed_scale_reference(
     catalog: &[BaseResource],
 ) -> Result<(f64, f64), String> {
