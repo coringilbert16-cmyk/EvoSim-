@@ -102,6 +102,15 @@ impl SimulationProcess {
     }
 
     pub(crate) async fn request(&mut self, command: Value) -> Result<Value, &'static str> {
+        if self
+            .child
+            .try_wait()
+            .map_err(|_| "simulation_unavailable")?
+            .is_some()
+        {
+            *self = Self::spawn().await;
+        }
+
         let mut stream = TcpStream::connect(("127.0.0.1", self.port))
             .await
             .map_err(|_| "simulation_unavailable")?;
