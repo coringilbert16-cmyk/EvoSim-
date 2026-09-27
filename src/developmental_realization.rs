@@ -386,7 +386,7 @@ impl DevelopmentalFieldBlueprint {
                             || (bond.endpoint_a.constituent_id == id_b
                                 && bond.endpoint_a.location == candidate.endpoint_b
                                 && bond.endpoint_b.constituent_id == id_a
-                                && bond.endpoint_a.location == candidate.endpoint_a)
+                                && bond.endpoint_b.location == candidate.endpoint_a)
                     });
                     if is_existing_edge {
                         continue;
