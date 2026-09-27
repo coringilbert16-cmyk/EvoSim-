@@ -42,6 +42,13 @@ impl RuntimeState {
         self.simulation.tick.saturating_sub(15)
     }
 
+    pub(crate) fn snapshot(&self, tick: u64) -> Option<Simulation> {
+        self.history
+            .iter()
+            .find(|snapshot| snapshot.tick == tick)
+            .cloned()
+    }
+
     pub(crate) fn history_ticks(&self) -> Vec<u64> {
         self.history.iter().map(|snapshot| snapshot.tick).collect()
     }
