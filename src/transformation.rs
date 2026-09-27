@@ -154,7 +154,7 @@ pub(crate) fn resolve_stress_break(
 }
 
 impl Simulation {
-    pub(crate) fn try_start_transformation(
+    pub(crate) fn try_start_action_transformation(
         organism: &mut Organism,
         _catalog: &[crate::resources::BaseResource],
         next_id: &mut u64,
@@ -234,6 +234,23 @@ impl Simulation {
         *next_id += 1;
         organism.active_transformation_id = Some(t.id);
         Some(t)
+    }
+
+    pub(crate) fn try_start_transformation(
+        organism: &mut Organism,
+        catalog: &[crate::resources::BaseResource],
+        next_id: &mut u64,
+        decision: &ActionCandidate,
+    ) -> Option<ActiveTransformation> {
+        Self::try_start_action_transformation(
+            organism,
+            catalog,
+            next_id,
+            decision,
+            organism.usable_energy,
+            organism.stress,
+            0.0,
+        )
     }
 
     pub(crate) fn prepare_transformation(
