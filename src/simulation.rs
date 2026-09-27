@@ -655,15 +655,7 @@ impl Simulation {
                         ActionKind::Expel => {
                             let before_energy = organisms[index].usable_energy;
                             let before_stress = organisms[index].stress;
-                            let before_realization = developmental
-                                .as_ref()
-                                .map(|context| context.current_growth_fraction)
-                                .unwrap_or_else(|| {
-                                    organisms[index]
-                                        .developmental_realization_cached(&environment.catalog)
-                                        .map(|realization| realization.overall)
-                                        .unwrap_or(0.0)
-                                });
+                            let before_realization = current_realization.unwrap_or(0.0);
                             let expelled = selected
                                 .context_key
                                 .as_deref()
@@ -725,6 +717,7 @@ impl Simulation {
                         &expulsion_scores,
                         &mut self.rng,
                     ) {
+                        drop(developmental);
                         let expelled = selected
                             .context_key
                             .as_deref()
@@ -754,6 +747,8 @@ impl Simulation {
                             &selected,
                             consequence,
                         );
+                    } else {
+                        drop(developmental);
                     }
                 }
             }
