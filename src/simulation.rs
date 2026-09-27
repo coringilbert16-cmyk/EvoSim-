@@ -587,7 +587,7 @@ impl Simulation {
                                         .map(|realization| realization.overall)
                                         .unwrap_or(0.0)
                                 });
-                            if let Some(transformation) = Self::try_start_transformation(
+                            if let Some(transformation) = Self::try_start_action_transformation(
                                 &mut organisms[index],
                                 &environment.catalog,
                                 &mut self.next_transformation_id,
