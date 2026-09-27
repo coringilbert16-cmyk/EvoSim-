@@ -1,7 +1,7 @@
 use axum::{
     extract::{Path, State},
     response::{Html, IntoResponse},
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use parking_lot::Mutex;
@@ -14,24 +14,28 @@ use crate::observation::{
     WorldObservation,
 };
 use crate::resource_visualization::appearance;
+use crate::runtime::RuntimeState;
 use crate::state::{AppState, Simulation};
 
-pub(crate) fn start_tick_loop(simulation: Arc<Mutex<Simulation>>) {
+pub(crate) fn start_tick_loop(runtime: Arc<Mutex<RuntimeState>>) {
     tokio::spawn(async move {
         loop {
             let tick_duration = {
-                let sim = simulation.lock();
-                if !sim.running {
+                let state = runtime.lock();
+                if !state.simulation.running {
                     Duration::from_millis(100)
                 } else {
-                    let tps = sim.ticks_per_second.max(0.001);
+                    let tps = state.simulation.ticks_per_second.max(0.001);
                     Duration::from_secs_f64(1.0 / tps)
                 }
             };
 
             tokio::time::sleep(tick_duration).await;
-            let mut sim = simulation.lock();
-            sim.step();
+
+            let mut state = runtime.lock();
+            if state.simulation.running {
+                state.step();
+            }
         }
     });
 }
@@ -49,20 +53,24 @@ async fn index_handler() -> impl IntoResponse {
 struct ObservationStatus {
     tick: u64,
     running: bool,
+    ticks_per_second: f64,
+    history_ticks: Vec<u64>,
 }
 
 async fn observation_status_handler(State(state): State<AppState>) -> impl IntoResponse {
-    let simulation = state.simulation.lock();
+    let runtime = state.runtime.lock();
     Json(ObservationStatus {
-        tick: simulation.tick,
-        running: simulation.running,
+        tick: runtime.simulation.tick,
+        running: runtime.simulation.running,
+        ticks_per_second: runtime.simulation.ticks_per_second,
+        history_ticks: runtime.history_ticks(),
     })
 }
 
 async fn world_observation_handler(State(state): State<AppState>) -> impl IntoResponse {
-    let simulation = state.simulation.lock();
+    let runtime = state.runtime.lock();
     Json(ObservationProjection::world(
-        WorldObservation::from_simulation(&simulation),
+        WorldObservation::from_simulation(&runtime.simulation),
     ))
 }
 
@@ -70,8 +78,8 @@ async fn organism_observation_handler(
     Path(id): Path<String>,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    let simulation = state.simulation.lock();
-    let Some(observation) = OrganismObservation::from_simulation(&simulation, &id) else {
+    let runtime = state.runtime.lock();
+    let Some(observation) = OrganismObservation::from_simulation(&runtime.simulation, &id) else {
         return axum::http::StatusCode::NOT_FOUND.into_response();
     };
     let context = ObservationContext::organism(vec![id]);
@@ -83,8 +91,8 @@ async fn structure_observation_handler(
     Path(id): Path<String>,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    let simulation = state.simulation.lock();
-    let Some(observation) = StructureObservation::from_simulation(&simulation, &id) else {
+    let runtime = state.runtime.lock();
+    let Some(observation) = StructureObservation::from_simulation(&runtime.simulation, &id) else {
         return axum::http::StatusCode::NOT_FOUND.into_response();
     };
     let context = ObservationContext::structure(vec![id.clone()], Some(id));
@@ -99,8 +107,9 @@ struct ResourceVisualizationObservation {
 }
 
 async fn resource_visualization_handler(State(state): State<AppState>) -> impl IntoResponse {
-    let simulation = state.simulation.lock();
-    let resources = simulation
+    let runtime = state.runtime.lock();
+    let resources = runtime
+        .simulation
         .environment
         .catalog
         .iter()
@@ -108,18 +117,58 @@ async fn resource_visualization_handler(State(state): State<AppState>) -> impl I
         .collect::<Vec<_>>();
     Json(ResourceVisualizationObservation {
         resources,
-        field_cell_size: simulation.environment.field.cell_size,
+        field_cell_size: runtime.simulation.environment.field.cell_size,
     })
 }
 
-pub(crate) async fn run() {
-    let simulation = Arc::new(Mutex::new(Simulation::new(42, 10.0)));
+async fn pause_handler(State(state): State<AppState>) -> impl IntoResponse {
+    let mut runtime = state.runtime.lock();
+    runtime.simulation.running = false;
+    Json(serde_json::json!({"running": false}))
+}
 
+async fn resume_handler(State(state): State<AppState>) -> impl IntoResponse {
+    let mut runtime = state.runtime.lock();
+    runtime.simulation.running = true;
+    Json(serde_json::json!({"running": true}))
+}
+
+async fn step_handler(State(state): State<AppState>) -> impl IntoResponse {
+    let mut runtime = state.runtime.lock();
+    runtime.step();
+    Json(serde_json::json!({"tick": runtime.simulation.tick}))
+}
+
+async fn speed_handler(
+    Path(ticks_per_second): Path<f64>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    if !ticks_per_second.is_finite() || ticks_per_second <= 0.0 {
+        return axum::http::StatusCode::BAD_REQUEST.into_response();
+    }
+    let mut runtime = state.runtime.lock();
+    runtime.simulation.ticks_per_second = ticks_per_second;
+    Json(serde_json::json!({"ticks_per_second": ticks_per_second})).into_response()
+}
+
+async fn restore_handler(
+    Path(tick): Path<u64>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let mut runtime = state.runtime.lock();
+    if !runtime.restore_tick(tick) {
+        return axum::http::StatusCode::NOT_FOUND.into_response();
+    }
+    Json(serde_json::json!({"tick": runtime.simulation.tick})).into_response()
+}
+
+pub(crate) async fn run() {
+    let runtime = Arc::new(Mutex::new(RuntimeState::new(Simulation::new(42, 10.0))));
     let state = AppState {
-        simulation: simulation.clone(),
+        runtime: runtime.clone(),
     };
 
-    start_tick_loop(simulation);
+    start_tick_loop(runtime);
 
     let app = Router::new()
         .route("/", get(index_handler))
@@ -137,11 +186,16 @@ pub(crate) async fn run() {
             "/observation/resources",
             get(resource_visualization_handler),
         )
+        .route("/control/pause", post(pause_handler))
+        .route("/control/resume", post(resume_handler))
+        .route("/control/step", post(step_handler))
+        .route("/control/speed/{ticks_per_second}", post(speed_handler))
+        .route("/control/restore/{tick}", post(restore_handler))
         .with_state(state)
         .layer(CorsLayer::permissive());
 
-    let address = SocketAddr::from(([127, 0, 0, 1], 3000));
-    println!("Listening on {}", address);
+    let address = SocketAddr::from(([0, 0, 0, 0], 3000));
+    println!("Listening on http://{address}");
     let listener = TcpListener::bind(address).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
