@@ -73,6 +73,7 @@ pub(crate) async fn run_child(port: u16) {
             continue;
         };
         let runtime = runtime.clone();
+        let tick_sender = tick_sender.clone();
         tokio::spawn(async move {
             handle_connection(stream, runtime, tick_sender).await;
         });
