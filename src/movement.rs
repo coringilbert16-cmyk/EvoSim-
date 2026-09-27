@@ -3,26 +3,111 @@ use crate::material_geometry::PlacedMaterialPart;
 use crate::state::{EnergyLedger, Environment, Organism, Simulation};
 use crate::structure::Placement;
 
-const DEFAULT_MOVEMENT_EFFICIENCY: f64 = 0.8;
-const MOVEMENT_BASE_STEP_DISTANCE: f64 = 4.0;
-const MOVEMENT_COST_ANCHORS: [(f64, f64); 4] =
-    [(2.7, 1.2), (16.0, 2.0), (64.0, 5.8), (1024.0, 65.0)];
+use rand::Rng;
+use rand_chacha::ChaCha8Rng;
 
-fn mass_movement_cost(realized_mass: f64) -> f64 {
+const DEFAULT_MOVEMENT_EFFICIENCY: f64 = 0.8;
+const MOVEMENT_REFERENCE_MASS: f64 = 16.0;
+const MOVEMENT_REFERENCE_DISTANCE: f64 = 4.0;
+const MOVEMENT_REFERENCE_COST: f64 = 0.05;
+const MOVEMENT_MASS_EXPONENT: f64 = 2.0 / 3.0;
+const MOVEMENT_DISTANCE_OPTIONS: [f64; 4] = [1.0, 2.0, 4.0, 8.0];
+
+fn movement_energy_cost_for_distance(
+    realized_mass: f64,
+    movement_efficiency: f64,
+    distance: f64,
+) -> f64 {
     let mass = realized_mass.max(f64::EPSILON);
-    let segment = MOVEMENT_COST_ANCHORS
-        .windows(2)
-        .find(|pair| mass <= pair[1].0)
-        .unwrap_or(&MOVEMENT_COST_ANCHORS[2..4]);
-    let (mass_a, cost_a) = segment[0];
-    let (mass_b, cost_b) = segment[1];
-    let exponent = (cost_b / cost_a).ln() / (mass_b / mass_a).ln();
-    cost_a * (mass / mass_a).powf(exponent)
+    let efficiency = movement_efficiency.clamp(0.05, 1.0);
+    let distance = distance.max(0.0);
+    MOVEMENT_REFERENCE_COST
+        * (mass / MOVEMENT_REFERENCE_MASS).powf(MOVEMENT_MASS_EXPONENT)
+        * (distance / MOVEMENT_REFERENCE_DISTANCE)
+        * (DEFAULT_MOVEMENT_EFFICIENCY / efficiency)
+}
+
+fn movement_context_key(distance: f64) -> String {
+    format!("distance:{distance:.0}")
+}
+
+fn select_movement_distance(
+    organism: &Organism,
+    realized_mass: f64,
+    movement_efficiency: f64,
+    usable_energy: f64,
+    rng: &mut ChaCha8Rng,
+) -> Option<f64> {
+    let affordable: Vec<f64> = MOVEMENT_DISTANCE_OPTIONS
+        .into_iter()
+        .filter(|distance| {
+            movement_energy_cost_for_distance(realized_mass, movement_efficiency, *distance)
+                .is_finite()
+                && movement_energy_cost_for_distance(
+                    realized_mass,
+                    movement_efficiency,
+                    *distance,
+                ) <= usable_energy + f64::EPSILON
+        })
+        .collect();
+    if affordable.is_empty() {
+        return None;
+    }
+
+    let known: Vec<(f64, crate::decision::ActionConsequence)> = affordable
+        .iter()
+        .filter_map(|distance| {
+            organism
+                .decision_history
+                .consequence(
+                    crate::decision::ActionKind::Move,
+                    Some(&movement_context_key(*distance)),
+                )
+                .map(|consequence| (*distance, consequence))
+        })
+        .collect();
+
+    let mut scored = Vec::with_capacity(affordable.len());
+    for distance in affordable {
+        let Some(consequence) = organism.decision_history.consequence(
+            crate::decision::ActionKind::Move,
+            Some(&movement_context_key(distance)),
+        ) else {
+            scored.push((distance, 0_i8));
+            continue;
+        };
+
+        let dominated = known.iter().any(|(other_distance, other)| {
+            *other_distance != distance && other.dominates(consequence)
+        });
+        let dominates = known.iter().any(|(other_distance, other)| {
+            *other_distance != distance && consequence.dominates(*other)
+        });
+        scored.push((
+            distance,
+            match (dominates, dominated) {
+                (true, false) => 1,
+                (false, true) => -1,
+                _ => 0,
+            },
+        ));
+    }
+
+    let best_score = scored.iter().map(|(_, score)| *score).max()?;
+    let tied: Vec<f64> = scored
+        .into_iter()
+        .filter(|(_, score)| *score == best_score)
+        .map(|(distance, _)| distance)
+        .collect();
+    tied.get(rng.gen_range(0..tied.len())).copied()
 }
 
 fn movement_energy_cost(realized_mass: f64, movement_efficiency: f64) -> f64 {
-    let efficiency = movement_efficiency.clamp(0.05, 1.0);
-    mass_movement_cost(realized_mass) * (DEFAULT_MOVEMENT_EFFICIENCY / efficiency)
+    movement_energy_cost_for_distance(
+        realized_mass,
+        movement_efficiency,
+        MOVEMENT_REFERENCE_DISTANCE,
+    )
 }
 
 impl Simulation {
@@ -32,6 +117,7 @@ impl Simulation {
         other_organisms: &mut [Organism],
         ledger: &mut EnergyLedger,
         tick: u64,
+        rng: &mut ChaCha8Rng,
     ) -> bool {
         let old_position = organism.occupied_cells.first().cloned();
         let usable_energy = organism.usable_energy;
@@ -55,11 +141,40 @@ impl Simulation {
             return false;
         };
 
-        // Keep the established default displacement (5.0 * 0.8 = 4.0)
-        // independent from energy efficiency. Efficiency now changes the
-        // energy required for the same movement rather than changing distance.
-        let step = MOVEMENT_BASE_STEP_DISTANCE;
-        let cost = movement_energy_cost(realized_mass, movement_efficiency);
+        let Some(step) = select_movement_distance(
+            organism,
+            realized_mass,
+            movement_efficiency,
+            organism.usable_energy,
+            rng,
+        ) else {
+            organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
+                tick,
+                direction_x: Some(x),
+                direction_y: Some(y),
+                step: None,
+                usable_energy,
+                active_transformation_id,
+                result: Err(crate::state::MovementFailureReason::InsufficientEnergy),
+                old_position,
+                new_position: None,
+            });
+            return false;
+        };
+
+        let requested_dx = x * step;
+        let requested_dy = y * step;
+        let old = organism
+            .occupied_cells
+            .first()
+            .expect("movement direction requires an occupied cell");
+        let actual_dx = (old.x + requested_dx).clamp(0.0, environment.width) - old.x;
+        let actual_distance = actual_dx.hypot(requested_dy);
+        let cost = movement_energy_cost_for_distance(
+            realized_mass,
+            movement_efficiency,
+            actual_distance,
+        );
         if !cost.is_finite() || organism.usable_energy + f64::EPSILON < cost {
             organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
                 tick,
@@ -79,8 +194,8 @@ impl Simulation {
             organism,
             environment,
             other_organisms,
-            x * step,
-            y * step,
+            requested_dx,
+            requested_dy,
         );
         let diagnostic_result = result.clone();
         let new_position = organism.occupied_cells.first().cloned();
