@@ -88,6 +88,28 @@ pub(crate) struct ActiveTransformation {
     pub(crate) complexity: f64,
     pub(crate) duration_ticks: u64,
     pub(crate) remaining_ticks: u64,
+    /// Tick-2 candidate/transaction resolution has completed.
+    #[serde(default)]
+    pub(crate) prepared: bool,
+    /// Preparation failed; tick 3 only clears/restores the reserved action.
+    #[serde(default)]
+    pub(crate) preparation_failed: bool,
+    /// Prepared COMBINE result. Structure is not assigned until tick 3.
+    #[serde(default)]
+    pub(crate) pending_structure: Option<OrganismStructure>,
+    #[serde(default)]
+    pub(crate) pending_stored_material: Option<MaterialStorage>,
+    /// Prepared BREAK result. The original stored material remains reserved
+    /// until tick 3, when these pieces replace it.
+    #[serde(default)]
+    pub(crate) pending_break_pieces: Option<Vec<crate::physical_material::PhysicalMaterial>>,
+    /// Decision outcome snapshot retained until the structural mutation commits.
+    #[serde(default)]
+    pub(crate) decision_before_energy: f64,
+    #[serde(default)]
+    pub(crate) decision_before_stress: f64,
+    #[serde(default)]
+    pub(crate) decision_before_realization: f64,
     pub(crate) decision_context_key: Option<String>,
 }
 #[derive(Serialize, Deserialize, Clone)]
