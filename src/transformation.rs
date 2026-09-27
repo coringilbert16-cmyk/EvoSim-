@@ -206,6 +206,7 @@ impl Simulation {
             complexity,
             duration_ticks: duration,
             remaining_ticks: duration,
+            prepared_energy: None,
             decision_context_key: decision.context_key.clone(),
         };
         *next_id += 1;
@@ -213,19 +214,19 @@ impl Simulation {
         Some(t)
     }
 
-    pub(crate) fn resolve_transformation(
-        transformation: &ActiveTransformation,
+    pub(crate) fn prepare_transformation(
+        transformation: &mut ActiveTransformation,
         organism: &mut Organism,
-        environment: &mut Environment,
+        environment: &Environment,
         ledger: &mut EnergyLedger,
-    ) {
+    ) -> bool {
         let Some(stored) = transformation.stored_material.as_ref() else {
             organism.active_transformation_id = None;
-            return;
+            return false;
         };
         let Some(target) = transformation.stored_bond.as_ref() else {
             organism.active_transformation_id = None;
-            return;
+            return false;
         };
         let Some(a) = stored
             .material
@@ -240,7 +241,7 @@ impl Simulation {
             })
         else {
             organism.active_transformation_id = None;
-            return;
+            return false;
         };
         let Some(b) = stored
             .material
@@ -255,7 +256,7 @@ impl Simulation {
             })
         else {
             organism.active_transformation_id = None;
-            return;
+            return false;
         };
         let Some((gross, usable, heat)) = break_energy_yield(
             a,
@@ -264,12 +265,16 @@ impl Simulation {
             organism.genome.processing_efficiency(),
         ) else {
             organism.active_transformation_id = None;
-            return;
+            return false;
         };
-        let Some(pieces) = stored.break_internal_bond(target) else {
+
+        // Validate the exact bond before settling the transaction. The physical
+        // structure itself is not changed until the following tick.
+        if stored.break_internal_bond(target).is_none() {
             organism.active_transformation_id = None;
-            return;
-        };
+            return false;
+        }
+
         let tx = EnergyTransaction {
             reason: EnergyReason::Break,
             potential_released: gross,
@@ -279,8 +284,36 @@ impl Simulation {
         };
         if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
             organism.active_transformation_id = None;
+            return false;
+        }
+
+        transformation.prepared_energy = Some((gross, usable, heat));
+        true
+    }
+
+    pub(crate) fn resolve_transformation(
+        transformation: &ActiveTransformation,
+        organism: &mut Organism,
+        environment: &mut Environment,
+        _ledger: &mut EnergyLedger,
+    ) {
+        let Some(stored) = transformation.stored_material.as_ref() else {
+            organism.active_transformation_id = None;
+            return;
+        };
+        let Some(target) = transformation.stored_bond.as_ref() else {
+            organism.active_transformation_id = None;
+            return;
+        };
+        if transformation.prepared_energy.is_none() {
+            organism.active_transformation_id = None;
             return;
         }
+        let Some(pieces) = stored.break_internal_bond(target) else {
+            organism.active_transformation_id = None;
+            return;
+        };
+
         for piece in pieces {
             if !organism
                 .stored_material
@@ -295,6 +328,7 @@ impl Simulation {
                 }
             }
         }
+        let (_, usable, heat) = transformation.prepared_energy.unwrap();
         organism.add_transaction_stress(heat);
         organism.active_transformation_id = None;
         crate::decision_runtime::record_consequence(
