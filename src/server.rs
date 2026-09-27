@@ -55,8 +55,7 @@ async fn stream_observations(mut socket: WebSocket, state: AppState) {
         return;
     };
 
-    let (_read_half, mut write_half) = tokio::io::split(stream);
-    let mut reader = tokio::io::BufReader::new(_read_half);
+    let mut reader = tokio::io::BufReader::new(stream);
     let mut line = String::new();
 
     loop {
@@ -82,7 +81,6 @@ async fn stream_observations(mut socket: WebSocket, state: AppState) {
         }
     }
 
-    let _ = write_half.shutdown().await;
     let _ = socket.close().await;
 }
 
