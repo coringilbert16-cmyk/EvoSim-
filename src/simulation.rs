@@ -405,11 +405,7 @@ impl Simulation {
                 .iter_mut()
                 .find(|o| o.id == transformation.organism_id)
             {
-                Self::commit_transformation(
-                    &transformation,
-                    organism,
-                    &mut self.environment,
-                );
+                Self::commit_transformation(&transformation, organism, &mut self.environment);
             }
         }
         self.active_transformations = still_active;
