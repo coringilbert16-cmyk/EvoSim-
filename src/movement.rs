@@ -43,11 +43,8 @@ fn select_movement_distance(
         .filter(|distance| {
             movement_energy_cost_for_distance(realized_mass, movement_efficiency, *distance)
                 .is_finite()
-                && movement_energy_cost_for_distance(
-                    realized_mass,
-                    movement_efficiency,
-                    *distance,
-                ) <= usable_energy + f64::EPSILON
+                && movement_energy_cost_for_distance(realized_mass, movement_efficiency, *distance)
+                    <= usable_energy + f64::EPSILON
         })
         .collect();
     if affordable.is_empty() {
