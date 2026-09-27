@@ -138,7 +138,7 @@ pub fn select_action_with_developmental_scores(
     developmental_scores: &[Option<f64>],
     rng: &mut ChaCha8Rng,
 ) -> Option<ActionCandidate> {
-    let mut scored = Vec::new();
+    let mut scored = Vec::with_capacity(candidates.len());
     for (index, candidate) in candidates.iter().enumerate() {
         if approve(context, candidate.action) != DecisionResult::Approve {
             continue;
