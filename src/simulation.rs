@@ -472,7 +472,7 @@ impl Simulation {
                         .as_ref()
                         .map(|context| context.current_growth_fraction)
                         .unwrap_or_else(|| {
-                            organism
+                            organisms[index]
                                 .developmental_realization_cached(&environment.catalog)
                                 .map(|realization| realization.overall)
                                 .unwrap_or(0.0)
@@ -493,12 +493,18 @@ impl Simulation {
                             &mut organisms[index],
                             environment,
                         );
+                        let move_candidate = ActionCandidate {
+                            action: ActionKind::Move,
+                            context_key: organisms[index]
+                                .last_movement_attempt
+                                .as_ref()
+                                .and_then(|attempt| {
+                                    attempt.step.map(|distance| format!("distance:{distance:.0}"))
+                                }),
+                        };
                         crate::decision_runtime::record_consequence(
                             &mut organisms[index].decision_history,
-                            &ActionCandidate {
-                                action: ActionKind::Move,
-                                context_key: None,
-                            },
+                            &move_candidate,
                             consequence,
                         );
                     }
