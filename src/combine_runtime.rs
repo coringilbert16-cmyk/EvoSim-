@@ -608,14 +608,18 @@ pub(crate) fn combine_specific_pair(
     None
 }
 
-pub(crate) fn can_combine(organism: &Organism, environment: &Environment) -> bool {
+pub(crate) fn can_combine(organism: &Organism, _environment: &Environment) -> bool {
     if organism.active_transformation_id.is_some() {
         return false;
     }
-    let mut trial = organism.clone();
-    let mut cache = ConnectionCompatibilityCache::new();
-    let mut ledger = EnergyLedger::default();
-    try_combine(&mut trial, environment, &mut cache, &mut ledger, None).is_some()
+
+    // Eligibility only answers whether COMBINE is mechanically worth considering.
+    // Candidate search belongs to the action's resolution phase; running
+    // try_combine here would duplicate the full physical search every tick.
+    if !organism.stored_material.is_empty() && !organism.structure.units.is_empty() {
+        return true;
+    }
+    organism.structure.units.len() >= 2
 }
 
 pub(crate) fn try_combine(
