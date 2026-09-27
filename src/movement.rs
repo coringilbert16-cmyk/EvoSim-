@@ -170,11 +170,8 @@ impl Simulation {
             .expect("movement direction requires an occupied cell");
         let actual_dx = (old.x + requested_dx).clamp(0.0, environment.width) - old.x;
         let actual_distance = actual_dx.hypot(requested_dy);
-        let cost = movement_energy_cost_for_distance(
-            realized_mass,
-            movement_efficiency,
-            actual_distance,
-        );
+        let cost =
+            movement_energy_cost_for_distance(realized_mass, movement_efficiency, actual_distance);
         if !cost.is_finite() || organism.usable_energy + f64::EPSILON < cost {
             organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
                 tick,
