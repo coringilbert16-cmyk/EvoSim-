@@ -1,39 +1,31 @@
 use axum::{
     extract::{Path, State},
     response::{Html, IntoResponse},
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
-use parking_lot::Mutex;
-use std::{net::SocketAddr, sync::Arc, time::Duration};
-use tokio::net::TcpListener;
+use serde_json::Value;
 use tower_http::cors::CorsLayer;
 
-use crate::observation::{
-    ObservationContext, ObservationProjection, OrganismObservation, StructureObservation,
-    WorldObservation,
-};
-use crate::resource_visualization::appearance;
-use crate::state::{AppState, Simulation};
+use crate::runtime::SimulationProcess;
+use crate::state::AppState;
 
-pub(crate) fn start_tick_loop(simulation: Arc<Mutex<Simulation>>) {
-    tokio::spawn(async move {
-        loop {
-            let tick_duration = {
-                let sim = simulation.lock();
-                if !sim.running {
-                    Duration::from_millis(100)
-                } else {
-                    let tps = sim.ticks_per_second.max(0.001);
-                    Duration::from_secs_f64(1.0 / tps)
-                }
-            };
+async fn request(
+    state: &AppState,
+    command: Value,
+) -> Result<Value, &'static str> {
+    let mut process = state.simulation.lock().await;
+    process.request(command).await
+}
 
-            tokio::time::sleep(tick_duration).await;
-            let mut sim = simulation.lock();
-            sim.step();
+fn error_response(error: &'static str) -> axum::response::Response {
+    match error {
+        "not_found" => axum::http::StatusCode::NOT_FOUND.into_response(),
+        "invalid_speed" | "invalid_command" => {
+            axum::http::StatusCode::BAD_REQUEST.into_response()
         }
-    });
+        _ => axum::http::StatusCode::SERVICE_UNAVAILABLE.into_response(),
+    }
 }
 
 async fn index_handler() -> impl IntoResponse {
@@ -45,86 +37,142 @@ async fn index_handler() -> impl IntoResponse {
     ))
 }
 
-#[derive(serde::Serialize)]
-struct ObservationStatus {
-    tick: u64,
-    running: bool,
-}
-
 async fn observation_status_handler(State(state): State<AppState>) -> impl IntoResponse {
-    let simulation = state.simulation.lock();
-    Json(ObservationStatus {
-        tick: simulation.tick,
-        running: simulation.running,
-    })
+    match request(&state, serde_json::json!({"command": "status"})).await {
+        Ok(value) => Json(value).into_response(),
+        Err(error) => error_response(error),
+    }
 }
 
 async fn world_observation_handler(State(state): State<AppState>) -> impl IntoResponse {
-    let simulation = state.simulation.lock();
-    Json(ObservationProjection::world(
-        WorldObservation::from_simulation(&simulation),
-    ))
+    match request(&state, serde_json::json!({"command": "world"})).await {
+        Ok(value) => Json(value).into_response(),
+        Err(error) => error_response(error),
+    }
+}
+
+async fn historical_world_observation_handler(
+    Path(tick): Path<u64>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    match request(
+        &state,
+        serde_json::json!({"command": "history_world", "tick": tick}),
+    )
+    .await
+    {
+        Ok(value) => Json(value).into_response(),
+        Err(error) => error_response(error),
+    }
 }
 
 async fn organism_observation_handler(
     Path(id): Path<String>,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    let simulation = state.simulation.lock();
-    let Some(observation) = OrganismObservation::from_simulation(&simulation, &id) else {
-        return axum::http::StatusCode::NOT_FOUND.into_response();
-    };
-    let context = ObservationContext::organism(vec![id]);
-    Json(ObservationProjection::organism(context, observation).expect("validated level"))
-        .into_response()
+    match request(
+        &state,
+        serde_json::json!({"command": "organism", "id": id}),
+    )
+    .await
+    {
+        Ok(value) => Json(value).into_response(),
+        Err(error) => error_response(error),
+    }
 }
 
 async fn structure_observation_handler(
     Path(id): Path<String>,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    let simulation = state.simulation.lock();
-    let Some(observation) = StructureObservation::from_simulation(&simulation, &id) else {
-        return axum::http::StatusCode::NOT_FOUND.into_response();
-    };
-    let context = ObservationContext::structure(vec![id.clone()], Some(id));
-    Json(ObservationProjection::structure(context, observation).expect("validated level"))
-        .into_response()
+    match request(
+        &state,
+        serde_json::json!({"command": "structure", "id": id}),
+    )
+    .await
+    {
+        Ok(value) => Json(value).into_response(),
+        Err(error) => error_response(error),
+    }
 }
 
-#[derive(serde::Serialize)]
-struct ResourceVisualizationObservation {
-    resources: Vec<(String, crate::resource_visualization::ResourceAppearance)>,
-    field_cell_size: f64,
+async fn resource_visualization_handler(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    match request(&state, serde_json::json!({"command": "resources"})).await {
+        Ok(value) => Json(value).into_response(),
+        Err(error) => error_response(error),
+    }
 }
 
-async fn resource_visualization_handler(State(state): State<AppState>) -> impl IntoResponse {
-    let simulation = state.simulation.lock();
-    let resources = simulation
-        .environment
-        .catalog
-        .iter()
-        .map(|resource| (resource.name.clone(), appearance(resource)))
-        .collect::<Vec<_>>();
-    Json(ResourceVisualizationObservation {
-        resources,
-        field_cell_size: simulation.environment.field.cell_size,
-    })
+async fn pause_handler(State(state): State<AppState>) -> impl IntoResponse {
+    match request(&state, serde_json::json!({"command": "pause"})).await {
+        Ok(value) => Json(value).into_response(),
+        Err(error) => error_response(error),
+    }
+}
+
+async fn resume_handler(State(state): State<AppState>) -> impl IntoResponse {
+    match request(&state, serde_json::json!({"command": "resume"})).await {
+        Ok(value) => Json(value).into_response(),
+        Err(error) => error_response(error),
+    }
+}
+
+async fn step_handler(State(state): State<AppState>) -> impl IntoResponse {
+    match request(&state, serde_json::json!({"command": "step"})).await {
+        Ok(value) => Json(value).into_response(),
+        Err(error) => error_response(error),
+    }
+}
+
+async fn speed_handler(
+    Path(ticks_per_second): Path<f64>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    match request(
+        &state,
+        serde_json::json!({
+            "command": "speed",
+            "ticks_per_second": ticks_per_second
+        }),
+    )
+    .await
+    {
+        Ok(value) => Json(value).into_response(),
+        Err(error) => error_response(error),
+    }
+}
+
+async fn restore_handler(
+    Path(tick): Path<u64>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    match request(
+        &state,
+        serde_json::json!({"command": "restore", "tick": tick}),
+    )
+    .await
+    {
+        Ok(value) => Json(value).into_response(),
+        Err(error) => error_response(error),
+    }
 }
 
 pub(crate) async fn run() {
-    let simulation = Arc::new(Mutex::new(Simulation::new(42, 10.0)));
-
+    let process = SimulationProcess::spawn().await;
     let state = AppState {
-        simulation: simulation.clone(),
+        simulation: std::sync::Arc::new(tokio::sync::Mutex::new(process)),
     };
-
-    start_tick_loop(simulation);
 
     let app = Router::new()
         .route("/", get(index_handler))
         .route("/observation/status", get(observation_status_handler))
         .route("/observation/world", get(world_observation_handler))
+        .route(
+            "/observation/history/{tick}/world",
+            get(historical_world_observation_handler),
+        )
         .route(
             "/observation/organism/{id}",
             get(organism_observation_handler),
@@ -137,11 +185,26 @@ pub(crate) async fn run() {
             "/observation/resources",
             get(resource_visualization_handler),
         )
+        .route("/control/pause", post(pause_handler))
+        .route("/control/resume", axum::routing::post(resume_handler))
+        .route("/control/step", axum::routing::post(step_handler))
+        .route(
+            "/control/speed/{ticks_per_second}",
+            axum::routing::post(speed_handler),
+        )
+        .route(
+            "/control/restore/{tick}",
+            axum::routing::post(restore_handler),
+        )
         .with_state(state)
         .layer(CorsLayer::permissive());
 
-    let address = SocketAddr::from(([127, 0, 0, 1], 3000));
-    println!("Listening on {}", address);
-    let listener = TcpListener::bind(address).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    let address = std::net::SocketAddr::from(([0, 0, 0, 0], 3000));
+    println!("Listening on http://{address}");
+    let listener = tokio::net::TcpListener::bind(address)
+        .await
+        .expect("could not bind viewer server");
+    axum::serve(listener, app)
+        .await
+        .expect("viewer server stopped");
 }
