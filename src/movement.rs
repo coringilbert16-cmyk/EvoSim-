@@ -27,12 +27,18 @@ fn movement_energy_cost(realized_mass: f64, movement_efficiency: f64) -> f64 {
 
 impl Simulation {
     pub(crate) fn update_movement(
-        organism: &mut Organism,
+        organisms: &mut [Organism],
+        moving_index: usize,
         environment: &mut Environment,
-        other_organisms: &mut [Organism],
         ledger: &mut EnergyLedger,
         tick: u64,
+        rng: &mut ChaCha8Rng,
     ) -> bool {
+        let (before, rest) = organisms.split_at_mut(moving_index);
+        let (organism, after) = rest
+            .split_first_mut()
+            .expect("movement index must reference an organism");
+
         let old_position = organism.occupied_cells.first().cloned();
         let usable_energy = organism.usable_energy;
         let active_transformation_id = organism.active_transformation_id;
@@ -55,11 +61,37 @@ impl Simulation {
             return false;
         };
 
-        // Keep the established default displacement (5.0 * 0.8 = 4.0)
-        // independent from energy efficiency. Efficiency now changes the
-        // energy required for the same movement rather than changing distance.
-        let step = MOVEMENT_BASE_STEP_DISTANCE;
-        let cost = movement_energy_cost(realized_mass, movement_efficiency);
+        let Some(step) = select_movement_distance(
+            organism,
+            realized_mass,
+            movement_efficiency,
+            organism.usable_energy,
+            rng,
+        ) else {
+            organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
+                tick,
+                direction_x: Some(x),
+                direction_y: Some(y),
+                step: None,
+                usable_energy,
+                active_transformation_id,
+                result: Err(crate::state::MovementFailureReason::InsufficientEnergy),
+                old_position,
+                new_position: None,
+            });
+            return false;
+        };
+
+        let requested_dx = x * step;
+        let requested_dy = y * step;
+        let old = organism
+            .occupied_cells
+            .first()
+            .expect("movement direction requires an occupied cell");
+        let actual_dx = (old.x + requested_dx).clamp(0.0, environment.width) - old.x;
+        let actual_distance = actual_dx.hypot(requested_dy);
+        let cost =
+            movement_energy_cost_for_distance(realized_mass, movement_efficiency, actual_distance);
         if !cost.is_finite() || organism.usable_energy + f64::EPSILON < cost {
             organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
                 tick,
@@ -75,38 +107,31 @@ impl Simulation {
             return false;
         }
 
-        let result = Self::try_move_cell_with_reason(
-            organism,
+        let moving_destination =
+            organism_parts_at(organism, environment, requested_dx, requested_dy);
+        if movement_blocked_by_organisms(
+            &moving_destination,
+            before.iter(),
+            after.iter(),
             environment,
-            other_organisms,
-            x * step,
-            y * step,
-        );
-        let diagnostic_result = result.clone();
-        let new_position = organism.occupied_cells.first().cloned();
-        if result.is_ok() {
-            let transaction = EnergyTransaction {
-                reason: EnergyReason::Move,
-                potential_released: 0.0,
-                usable_delta: -cost,
-                structural_delta: 0.0,
-                heat_dissipated: cost,
-            };
-            if !ledger.settle_transaction(&mut organism.usable_energy, transaction) {
-                organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
-                    tick,
-                    direction_x: Some(x),
-                    direction_y: Some(y),
-                    step: Some(step),
-                    usable_energy,
-                    active_transformation_id,
-                    result: Err(crate::state::MovementFailureReason::InsufficientEnergy),
-                    old_position,
-                    new_position,
-                });
-                return false;
-            }
+        ) || movement_blocked_by_physical_material(&moving_destination, environment)
+        {
+            organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
+                tick,
+                direction_x: Some(x),
+                direction_y: Some(y),
+                step: Some(step),
+                usable_energy,
+                active_transformation_id,
+                result: Err(crate::state::MovementFailureReason::BlockedByPushChain),
+                old_position,
+                new_position: None,
+            });
+            return false;
         }
+
+        let result = move_organism(organism, environment, requested_dx, requested_dy, cost, ledger);
+        let new_position = organism.occupied_cells.first().cloned();
         organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
             tick,
             direction_x: Some(x),
@@ -114,12 +139,108 @@ impl Simulation {
             step: Some(step),
             usable_energy,
             active_transformation_id,
-            result: diagnostic_result,
+            result: result.clone(),
             old_position,
             new_position,
         });
         result.is_ok()
     }
+
+    fn move_organism(
+        organism: &mut Organism,
+        environment: &mut Environment,
+        dx: f64,
+        dy: f64,
+        cost: f64,
+        ledger: &mut EnergyLedger,
+    ) -> Result<(), crate::state::MovementFailureReason> {
+        if !dx.is_finite() || !dy.is_finite() {
+            return Err(crate::state::MovementFailureReason::NonFiniteDisplacement);
+        }
+        let (old_x, old_y) = organism
+            .occupied_cells
+            .first()
+            .map(|p| (p.x, p.y))
+            .ok_or(crate::state::MovementFailureReason::NoOccupiedCell)?;
+        let new_x = (old_x + dx).clamp(0.0, environment.width);
+        let new_y = wrap_y(old_y + dy, environment.height);
+        let actual_dx = new_x - old_x;
+        let actual_dy = new_y - old_y;
+        if actual_dx.abs() <= f64::EPSILON && actual_dy.abs() <= f64::EPSILON {
+            return Err(crate::state::MovementFailureReason::ZeroDisplacement);
+        }
+        let transaction = EnergyTransaction {
+            reason: EnergyReason::Move,
+            potential_released: 0.0,
+            usable_delta: -cost,
+            structural_delta: 0.0,
+            heat_dissipated: cost,
+        };
+        if !ledger.settle_transaction(&mut organism.usable_energy, transaction) {
+            return Err(crate::state::MovementFailureReason::InsufficientEnergy);
+        }
+        organism.occupied_cells[0].x = new_x;
+        organism.occupied_cells[0].y = new_y;
+        organism.developmental_origin.x += actual_dx;
+        organism.developmental_origin.y =
+            wrap_y(organism.developmental_origin.y + actual_dy, environment.height);
+        for unit in &mut organism.structure.units {
+            unit.placement.x += actual_dx;
+            unit.placement.y = wrap_y(unit.placement.y + actual_dy, environment.height);
+        }
+        translate_reproductive_construction(organism, actual_dx, actual_dy, environment.height);
+        organism.mark_position_changed();
+        Ok(())
+    }
+
+    fn movement_blocked_by_organisms<'a>(
+        moving_destination: &[PlacedMaterialPart],
+        before: impl Iterator<Item = &'a Organism>,
+        after: impl Iterator<Item = &'a Organism>,
+        environment: &Environment,
+    ) -> bool {
+        before.chain(after).any(|candidate| {
+            let candidate_parts = organism_parts_at(candidate, environment, 0.0, 0.0);
+            parts_penetrate(moving_destination, &candidate_parts, environment.height)
+        })
+    }
+
+    fn movement_blocked_by_physical_material(
+        moving_destination: &[PlacedMaterialPart],
+        environment: &Environment,
+    ) -> bool {
+        let min_x = moving_destination
+            .iter()
+            .map(|part| part.placement.x - part.form.bounding_radius())
+            .fold(f64::INFINITY, f64::min);
+        let max_x = moving_destination
+            .iter()
+            .map(|part| part.placement.x + part.form.bounding_radius())
+            .fold(f64::NEG_INFINITY, f64::max);
+        let min_y = moving_destination
+            .iter()
+            .map(|part| part.placement.y - part.form.bounding_radius())
+            .fold(f64::INFINITY, f64::min);
+        let max_y = moving_destination
+            .iter()
+            .map(|part| part.placement.y + part.form.bounding_radius())
+            .fold(f64::NEG_INFINITY, f64::max);
+
+        let candidate_cells = environment
+            .field
+            .cells_intersecting_bounds_for_movement(min_x, max_x, min_y, max_y);
+        candidate_cells.iter().any(|&cell_index| {
+            environment.field.cells[cell_index]
+                .physical_materials
+                .iter()
+                .filter(|physical| physical.is_realized() && !physical.material.is_empty())
+                .any(|physical| {
+                    let candidate_parts = physical_parts_at(physical, environment, 0.0, 0.0);
+                    parts_penetrate(moving_destination, &candidate_parts, environment.height)
+                })
+        })
+    }
+
 
     pub(crate) fn try_move_cell(
         organism: &mut Organism,
