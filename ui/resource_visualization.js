@@ -136,6 +136,7 @@
 
   const originalLoadObservation = loadObservation;
   let lastObservationTick = null;
+  let lastObservationViewKey = null;
   let statusRequestInFlight = false;
   loadObservation = async function demandDrivenObservation(level, organismId = null) {
     if (statusRequestInFlight) return;
@@ -154,9 +155,11 @@
     const currentLevel = observation?.context?.level;
     const currentObject = currentPayload[level];
     const sameTarget = currentLevel === level && (level === 'World' || (currentObject?.id != null && String(currentObject.id) === String(organismId)));
-    if (sameTarget && lastObservationTick === tick) return;
+    const viewKey = typeof observationViewKey === 'function' ? observationViewKey() : 'full';
+    if (sameTarget && lastObservationTick === tick && lastObservationViewKey === viewKey) return;
     await originalLoadObservation(level, organismId);
     lastObservationTick = tick;
+    lastObservationViewKey = viewKey;
   };
 
   try {
