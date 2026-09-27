@@ -147,11 +147,12 @@ pub(crate) fn developmental_action_scores(
                         developmental
                             .blueprint
                             .realization_after_break_with_components(
-                                organism.structure.as_ref(),
+                                &organism.structure,
                                 &environment.catalog,
                                 developmental.origin,
                                 developmental.orientation,
                                 developmental.preferred_length,
+                                bond_index,
                                 developmental.current_material_realized,
                                 developmental.current_density_realized,
                             )?
