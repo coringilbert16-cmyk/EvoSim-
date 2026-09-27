@@ -55,6 +55,8 @@ struct ObservationStatus {
     running: bool,
     ticks_per_second: f64,
     history_ticks: Vec<u64>,
+    observed_tick: u64,
+    session_id: String,
 }
 
 async fn observation_status_handler(State(state): State<AppState>) -> impl IntoResponse {
@@ -64,6 +66,8 @@ async fn observation_status_handler(State(state): State<AppState>) -> impl IntoR
         running: runtime.simulation.running,
         ticks_per_second: runtime.simulation.ticks_per_second,
         history_ticks: runtime.history_ticks(),
+        observed_tick: runtime.observed_tick(),
+        session_id: runtime.session_id.clone(),
     })
 }
 
