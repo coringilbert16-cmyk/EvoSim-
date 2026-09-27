@@ -136,17 +136,12 @@ fn execute(command: SimulationCommand, runtime: &Arc<Mutex<RuntimeState>>) -> Co
             }))
         }
         SimulationCommand::World => {
-            // Snapshot authoritative state under the runtime lock, then do
-            // geometry derivation and JSON serialization without holding it.
-            let simulation = {
+            let projection = {
                 let state = runtime.lock();
-                state.simulation.clone()
+                ObservationProjection::world(WorldObservation::from_simulation(&state.simulation))
             };
             CommandResponse::value(
-                serde_json::to_value(ObservationProjection::world(
-                    WorldObservation::from_simulation(&simulation),
-                ))
-                .expect("world observation must serialize"),
+                serde_json::to_value(projection).expect("world observation must serialize"),
             )
         }
         SimulationCommand::HistoryWorld { tick } => {
@@ -165,20 +160,19 @@ fn execute(command: SimulationCommand, runtime: &Arc<Mutex<RuntimeState>>) -> Co
             )
         }
         SimulationCommand::Organism { id } => {
-            let simulation = {
+            let projection = {
                 let state = runtime.lock();
-                state.simulation.clone()
+                let Some(observation) =
+                    OrganismObservation::from_simulation(&state.simulation, &id)
+                else {
+                    return CommandResponse::error("not_found");
+                };
+                let context = ObservationContext::organism(vec![id]);
+                ObservationProjection::organism(context, observation)
+                    .expect("validated organism observation level")
             };
-            let Some(observation) = OrganismObservation::from_simulation(&simulation, &id) else {
-                return CommandResponse::error("not_found");
-            };
-            let context = ObservationContext::organism(vec![id]);
             CommandResponse::value(
-                serde_json::to_value(
-                    ObservationProjection::organism(context, observation)
-                        .expect("validated organism observation level"),
-                )
-                .expect("organism observation must serialize"),
+                serde_json::to_value(projection).expect("organism observation must serialize"),
             )
         }
         SimulationCommand::Structure { id } => {
