@@ -11,8 +11,8 @@ use crate::decision::{ActionKind, CurrentNeeds};
 use crate::decision_runtime::ActionCandidate;
 use crate::state::{DevelopmentStage, Environment, Organism};
 
-pub(crate) struct DevelopmentalContext {
-    pub(crate) blueprint: crate::developmental_blueprint::DevelopmentalFieldBlueprint,
+pub(crate) struct DevelopmentalContext<'a> {
+    pub(crate) blueprint: &'a crate::developmental_blueprint::DevelopmentalFieldBlueprint,
     pub(crate) origin: (f64, f64),
     pub(crate) orientation: f64,
     pub(crate) preferred_length: f64,
@@ -25,7 +25,7 @@ pub(crate) fn context(
     organism: &mut Organism,
     environment: &Environment,
     seed_reference: (f64, f64),
-) -> Option<DevelopmentalContext> {
+) -> Option<DevelopmentalContext<'_>> {
     if !matches!(organism.development_stage, DevelopmentStage::Juvenile) {
         return None;
     }
@@ -38,7 +38,7 @@ pub(crate) fn context(
             connectivity: None,
             overall: 0.0,
         });
-    let blueprint = organism.genome.developmental_blueprint.clone();
+    let blueprint = &organism.genome.developmental_blueprint;
     let origin = (
         organism.developmental_origin.x,
         organism.developmental_origin.y,
