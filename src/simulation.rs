@@ -366,33 +366,53 @@ impl Simulation {
         self.tick += 1;
         let mut still_active = Vec::new();
         let mut completed = Vec::new();
+        let mut prepared = Vec::new();
         for mut transformation in self.active_transformations.drain(..) {
             if transformation.remaining_ticks > 0 {
-                transformation.remaining_ticks -= 1
+                transformation.remaining_ticks -= 1;
             }
-            if transformation.remaining_ticks == 0 {
-                completed.push(transformation)
+            if transformation.remaining_ticks == 1 && !transformation.prepared {
+                prepared.push(transformation);
+            } else if transformation.remaining_ticks == 0 {
+                completed.push(transformation);
             } else {
-                still_active.push(transformation)
+                still_active.push(transformation);
             }
         }
-        self.active_transformations = still_active;
+
         let mut completed_organisms = HashSet::new();
-        for transformation in &completed {
+        for mut transformation in prepared {
             completed_organisms.insert(transformation.organism_id.clone());
             if let Some(organism) = self
                 .organisms
                 .iter_mut()
                 .find(|o| o.id == transformation.organism_id)
             {
-                Self::resolve_transformation(
-                    transformation,
+                Self::prepare_transformation(
+                    &mut transformation,
                     organism,
-                    &mut self.environment,
+                    &self.environment,
                     &mut self.energy_ledger,
                 );
             }
+            still_active.push(transformation);
         }
+
+        for transformation in completed {
+            completed_organisms.insert(transformation.organism_id.clone());
+            if let Some(organism) = self
+                .organisms
+                .iter_mut()
+                .find(|o| o.id == transformation.organism_id)
+            {
+                Self::commit_transformation(
+                    &transformation,
+                    organism,
+                    &mut self.environment,
+                );
+            }
+        }
+        self.active_transformations = still_active;
         let decision_parameters = self.decision_parameters;
         for organism in &mut self.organisms {
             Self::update_development_stage(organism, &self.environment);
@@ -555,7 +575,7 @@ impl Simulation {
                     &mut self.rng,
                 ) {
                     match selected.action {
-                        ActionKind::Combine => {
+                        ActionKind::Combine | ActionKind::Break => {
                             let before_energy = organisms[index].usable_energy;
                             let before_stress = organisms[index].stress;
                             let before_realization = developmental
@@ -567,47 +587,14 @@ impl Simulation {
                                         .map(|realization| realization.overall)
                                         .unwrap_or(0.0)
                                 });
-                            let developmental_blueprint =
-                                organisms[index].genome.developmental_blueprint.clone();
-                            let developmental = developmental.as_ref().map(|context| {
-                                (
-                                    &developmental_blueprint,
-                                    context.origin,
-                                    context.orientation,
-                                    context.preferred_length,
-                                )
-                            });
-                            let combined = crate::combine_runtime::try_combine(
-                                &mut organisms[index],
-                                environment,
-                                &mut compatibility_cache,
-                                &mut self.energy_ledger,
-                                developmental,
-                            )
-                            .is_some();
-                            let consequence = if combined {
-                                Self::action_consequence(
-                                    before_energy,
-                                    before_stress,
-                                    before_realization,
-                                    &mut organisms[index],
-                                    environment,
-                                )
-                            } else {
-                                crate::decision::ActionConsequence::default()
-                            };
-                            crate::decision_runtime::record_consequence(
-                                &mut organisms[index].decision_history,
-                                &selected,
-                                consequence,
-                            );
-                        }
-                        ActionKind::Break => {
                             if let Some(transformation) = Self::try_start_transformation(
                                 &mut organisms[index],
                                 &environment.catalog,
                                 &mut self.next_transformation_id,
                                 &selected,
+                                before_energy,
+                                before_stress,
+                                before_realization,
                             ) {
                                 self.active_transformations.push(transformation);
                             }
