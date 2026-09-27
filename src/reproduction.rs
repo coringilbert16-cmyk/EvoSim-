@@ -203,12 +203,10 @@ fn next_construction_resource_status(
 
         let already_held = child
             .stored_material
-            .materials_snapshot()
-            .iter()
+            .iter_materials()
             .any(|held| held == &material)
             || parent_storage
-                .materials_snapshot()
-                .iter()
+                .iter_materials()
                 .any(|held| held == &material);
 
         let mut candidate = child.clone();
