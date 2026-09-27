@@ -84,10 +84,7 @@ impl MovementSpatialIndex {
     }
 }
 
-fn organism_bounds(
-    organism: &Organism,
-    environment: &Environment,
-) -> Option<(f64, f64, f64, f64)> {
+fn organism_bounds(organism: &Organism, environment: &Environment) -> Option<(f64, f64, f64, f64)> {
     let mut min_x = f64::INFINITY;
     let mut max_x = f64::NEG_INFINITY;
     let mut min_y = f64::INFINITY;
@@ -119,7 +116,6 @@ fn parts_bounds(parts: &[PlacedMaterialPart]) -> Option<(f64, f64, f64, f64)> {
     }
     min_x.is_finite().then_some((min_x, max_x, min_y, max_y))
 }
-
 
 fn movement_energy_cost_for_distance(
     realized_mass: f64,
@@ -568,9 +564,12 @@ fn push_blockers_for_parts(
         .iter()
         .map(|part| part.placement.y + part.form.bounding_radius())
         .fold(f64::NEG_INFINITY, f64::max);
-    let physical_keys = environment
-        .field
-        .cells_intersecting_bounds(moving_min_x, moving_max_x, moving_min_y, moving_max_y);
+    let physical_keys = environment.field.cells_intersecting_bounds(
+        moving_min_x,
+        moving_max_x,
+        moving_min_y,
+        moving_max_y,
+    );
 
     for cell_index in physical_keys {
         let physical_len = environment
