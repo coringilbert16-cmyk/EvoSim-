@@ -7,8 +7,14 @@
   <style>
     html, body { margin: 0; width: 100%; height: 100%; background: #f5f5f5; color: #111; font-family: sans-serif; overflow: hidden; }
     #app { width: 100%; height: 100%; display: flex; flex-direction: column; }
-    header { padding: 10px 14px; background: #fff; border-bottom: 1px solid #bbb; }
-    #status { font-size: 14px; }
+    header { padding: 8px 12px; background: #fff; border-bottom: 1px solid #bbb; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+    #status { font-size: 14px; flex:1 1 260px; }
+    #controls { display:flex; align-items:center; gap:6px; }
+    #controls button { padding:5px 9px; cursor:pointer; }
+    #controls input { width:70px; }
+    #timeline { position:fixed; left:12px; right:12px; bottom:10px; display:flex; align-items:center; gap:8px; padding:8px 10px; background:rgba(255,255,255,.94); border:1px solid #999; border-radius:6px; z-index:20; }
+    #history { flex:1; min-width:120px; }
+    #timeline-label { min-width:150px; font-size:12px; text-align:right; }
     main { flex: 1; display: flex; align-items: center; justify-content: center; }
     #world { width: min(90vw, 1000px); height: min(80vh, 700px); background: #fff; border: 1px solid #888; cursor: crosshair; touch-action: none; }
     #world.panning { cursor: grabbing; }
@@ -16,7 +22,7 @@
 </head>
 <body>
   <div id="app">
-    <header><div id="status">Connecting to EvoSim…</div></header>
+    <header><div id="status">Connecting to EvoSim…</div><div id="controls"><button id="pause">Pause</button><button id="step">Step</button><button id="resume">Resume</button><label>TPS <input id="speed" type="number" min="0.1" step="0.1" value="10"></label></div></header><div id="timeline"><button id="live">Live</button><input id="history" type="range" min="0" max="0" value="0" step="1"><span id="timeline-label">Live</span></div>
     <main><canvas id="world"></canvas></main>
   </div>
   <script>
@@ -61,6 +67,84 @@
     let cameraInitialized = false;
     let interaction = null;
     let requestSerial = 0;
+    let runtimeStatus = null;
+    let historyViewTick = null;
+    let historyTicks = [];
+
+    async function control(path) {
+      try {
+        const response = await fetch(path, { method: 'POST', cache: 'no-store' });
+        if (!response.ok) throw new Error();
+        await refreshRuntimeStatus();
+      } catch (_) {
+        status.textContent = 'Control unavailable — simulation may be restarting…';
+      }
+    }
+
+    async function refreshRuntimeStatus() {
+      try {
+        const response = await fetch('/observation/status', { cache: 'no-store' });
+        if (!response.ok) throw new Error();
+        runtimeStatus = await response.json();
+        historyTicks = runtimeStatus.history_ticks || [];
+        const slider = document.getElementById('history');
+        slider.max = Math.max(0, historyTicks.length - 1);
+        if (historyViewTick == null) slider.value = Math.max(0, historyTicks.length - 1);
+        updateTimeline();
+        return runtimeStatus;
+      } catch (_) {
+        runtimeStatus = null;
+        return null;
+      }
+    }
+
+    function updateTimeline() {
+      const slider = document.getElementById('history');
+      const label = document.getElementById('timeline-label');
+      if (!historyTicks.length) { label.textContent = 'No history'; return; }
+      const index = Math.max(0, Math.min(historyTicks.length - 1, Number(slider.value)));
+      const tick = historyTicks[index];
+      const liveTick = runtimeStatus?.tick;
+      label.textContent = (historyViewTick == null || tick === liveTick) ? 'Live — tick ' + (liveTick ?? tick) : 'History — tick ' + tick;
+    }
+
+    async function loadHistoricalWorld(tick) {
+      const serial = ++requestSerial;
+      try {
+        const response = await fetch('/observation/history/' + encodeURIComponent(tick) + '/world', { cache: 'no-store' });
+        if (!response.ok) throw new Error();
+        if (serial !== requestSerial) return;
+        observation = await response.json();
+        observationLevel = 'World';
+        historyViewTick = tick;
+        cameraInitialized = false;
+        render();
+      } catch (_) {
+        if (serial === requestSerial) status.textContent = 'Historical observation unavailable.';
+      }
+    }
+
+    async function returnToLiveWorld() {
+      historyViewTick = null;
+      cameraInitialized = false;
+      await loadObservation('World');
+      await refreshRuntimeStatus();
+    }
+
+    document.getElementById('pause').addEventListener('click', () => control('/control/pause'));
+    document.getElementById('resume').addEventListener('click', () => control('/control/resume'));
+    document.getElementById('step').addEventListener('click', () => control('/control/step'));
+    document.getElementById('speed').addEventListener('change', event => {
+      const value = Number(event.target.value);
+      if (Number.isFinite(value) && value > 0) control('/control/speed/' + encodeURIComponent(value));
+    });
+    document.getElementById('live').addEventListener('click', returnToLiveWorld);
+    document.getElementById('history').addEventListener('input', event => {
+      if (!historyTicks.length) return;
+      const tick = historyTicks[Math.max(0, Math.min(historyTicks.length - 1, Number(event.target.value)))];
+      loadHistoricalWorld(tick);
+    });
+
 
     function resize() {
       const rect = canvas.getBoundingClientRect();
@@ -358,7 +442,9 @@
     window.addEventListener('resize', resize);
     resize();
     loadObservation('World');
-    setInterval(() => {
+    setInterval(async () => {
+      await refreshRuntimeStatus();
+      if (historyViewTick != null) return;
       if (observationLevel === 'World') loadObservation('World');
       else if (focusedOrganismId != null) loadObservation(observationLevel, focusedOrganismId);
     }, 250);
