@@ -342,7 +342,9 @@ fn juvenile_scale_reached_with_reference(
     seed_reference: Option<(f64, f64)>,
 ) -> bool {
     let preferred = seed_reference
-        .and_then(|reference| preferred_length_with_reference(&construction.child_genome, reference))
+        .and_then(|reference| {
+            preferred_length_with_reference(&construction.child_genome, reference)
+        })
         .or_else(|| preferred_length(&construction.child_genome, catalog));
     let Some(preferred) = preferred else {
         return false;
@@ -648,7 +650,7 @@ pub(crate) fn advance_construction(
     if !parent_child_in_contact(parent_structure, &construction.developing_structure) {
         return (ConstructionStatus::Detached, None);
     }
-    if birth_ready(construction, &environment.catalog, seed_reference) {
+    if birth_ready_with_reference(construction, &environment.catalog, seed_reference) {
         return (ConstructionStatus::Ready, None);
     }
     if construction.developing_structure.units.len() > before_units {
