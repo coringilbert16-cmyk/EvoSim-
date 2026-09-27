@@ -1,8 +1,9 @@
 use std::collections::VecDeque;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use crate::state::Simulation;
 use serde_json::Value;
+
+use crate::state::Simulation;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 use tokio::process::{Child, Command};
@@ -72,12 +73,6 @@ pub(crate) struct SimulationProcess {
     port: u16,
 }
 
-impl Drop for SimulationProcess {
-    fn drop(&mut self) {
-        let _ = self.child.start_kill();
-    }
-}
-
 impl SimulationProcess {
     pub(crate) async fn spawn() -> Self {
         let port = std::net::TcpListener::bind(("127.0.0.1", 0))
@@ -88,6 +83,7 @@ impl SimulationProcess {
 
         let executable = std::env::current_exe().expect("could not locate EvoSim executable");
         let child = Command::new(executable)
+            .kill_on_drop(true)
             .arg("--simulation-child")
             .arg(port.to_string())
             .spawn()
