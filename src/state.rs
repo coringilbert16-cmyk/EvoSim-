@@ -7,10 +7,10 @@ use crate::genome::Genome;
 use crate::material_storage::MaterialStorage;
 use crate::resources::{BaseResource, Material};
 use crate::structure::{Bond, OrganismStructure};
+use crate::runtime::RuntimeState;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use crate::runtime::RuntimeState;
 #[derive(Clone)]
 pub(crate) struct AppState {
     pub(crate) runtime: Arc<parking_lot::Mutex<RuntimeState>>,
