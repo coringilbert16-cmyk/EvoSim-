@@ -376,10 +376,7 @@ fn try_combine_stored_materials(
                                 continue;
                             }
                             let score = -candidate.distance;
-                            if best
-                                .as_ref()
-                                .map_or(true, |current| score > current.6)
-                            {
+                            if best.as_ref().map_or(true, |current| score > current.6) {
                                 best = Some((
                                     i,
                                     j,
@@ -422,10 +419,8 @@ fn try_combine_stored_materials(
             if material.has_internal_structure() || (*amount - 1.0).abs() > EPSILON {
                 return None;
             }
-            let mut unit = StructuralUnit::from_material(
-                Material::free_base(name.clone(), 1.0),
-                origin,
-            )?;
+            let mut unit =
+                StructuralUnit::from_material(Material::free_base(name.clone(), 1.0), origin)?;
             if !unit.realize_default_geometry(catalog) {
                 return None;
             }
