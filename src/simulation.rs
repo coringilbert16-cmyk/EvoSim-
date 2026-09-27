@@ -466,15 +466,8 @@ impl Simulation {
                 // survival/reproduction need pressure or by the transformation
                 // selector below.
                 if eligibility.can_move {
-                    let move_candidate = ActionCandidate {
-                        action: ActionKind::Move,
-                        context_key: None,
-                    };
-                    let (before, rest) = organisms.split_at_mut(index);
-                    let (organism, after) = rest.split_first_mut().expect("index is in organisms");
-                    let mut others = before.iter_mut().chain(after.iter_mut());
-                    let before_energy = organism.usable_energy;
-                    let before_stress = organism.stress;
+                    let before_energy = organisms[index].usable_energy;
+                    let before_stress = organisms[index].stress;
                     let before_realization = developmental
                         .as_ref()
                         .map(|context| context.current_growth_fraction)
@@ -485,23 +478,27 @@ impl Simulation {
                                 .unwrap_or(0.0)
                         });
                     let moved = Self::update_movement(
-                        organism,
+                        organisms,
+                        index,
                         environment,
-                        &mut others,
                         &mut self.energy_ledger,
                         self.tick,
+                        &mut self.rng,
                     );
                     if moved {
                         let consequence = Self::action_consequence(
                             before_energy,
                             before_stress,
                             before_realization,
-                            organism,
+                            &mut organisms[index],
                             environment,
                         );
                         crate::decision_runtime::record_consequence(
-                            &mut organism.decision_history,
-                            &move_candidate,
+                            &mut organisms[index].decision_history,
+                            &ActionCandidate {
+                                action: ActionKind::Move,
+                                context_key: None,
+                            },
                             consequence,
                         );
                     }
