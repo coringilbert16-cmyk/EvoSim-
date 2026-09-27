@@ -331,6 +331,14 @@ fn developmental_linear_extent(structure: &OrganismStructure, origin: &Position)
 fn juvenile_scale_reached(
     construction: &ReproductiveConstruction,
     catalog: &[crate::resources::BaseResource],
+) -> bool {
+    let seed_reference = crate::juvenile::confirmed_seed_scale_reference(catalog).ok();
+    juvenile_scale_reached_with_reference(construction, catalog, seed_reference)
+}
+
+fn juvenile_scale_reached_with_reference(
+    construction: &ReproductiveConstruction,
+    catalog: &[crate::resources::BaseResource],
     seed_reference: Option<(f64, f64)>,
 ) -> bool {
     let preferred = seed_reference
@@ -350,6 +358,14 @@ fn juvenile_scale_reached(
 }
 
 fn birth_ready(
+    construction: &ReproductiveConstruction,
+    catalog: &[crate::resources::BaseResource],
+) -> bool {
+    let seed_reference = crate::juvenile::confirmed_seed_scale_reference(catalog).ok();
+    birth_ready_with_reference(construction, catalog, seed_reference)
+}
+
+fn birth_ready_with_reference(
     construction: &ReproductiveConstruction,
     catalog: &[crate::resources::BaseResource],
     seed_reference: Option<(f64, f64)>,
@@ -377,7 +393,7 @@ fn birth_ready(
     {
         return false;
     }
-    juvenile_scale_reached(construction, catalog, seed_reference)
+    juvenile_scale_reached_with_reference(construction, catalog, seed_reference)
 }
 
 fn anchor_structure(
@@ -547,7 +563,7 @@ pub(crate) fn advance_construction(
         return (ConstructionStatus::Dead, None);
     }
 
-    if birth_ready(construction, &environment.catalog, seed_reference) {
+    if birth_ready_with_reference(construction, &environment.catalog, seed_reference) {
         return (ConstructionStatus::Ready, None);
     }
 
@@ -650,7 +666,7 @@ pub(crate) fn finish_reproduction(
     seed_reference: Option<(f64, f64)>,
 ) -> Option<Organism> {
     let construction = parent.reproductive_construction.take()?;
-    let ready = birth_ready(&construction, catalog, seed_reference);
+    let ready = birth_ready_with_reference(&construction, catalog, seed_reference);
     if !ready && construction.developing_structure.units.is_empty() {
         parent.reproductive_construction = Some(construction);
         return None;
