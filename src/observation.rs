@@ -112,10 +112,28 @@ pub(crate) struct WorldObservation {
 }
 impl WorldObservation {
     pub(crate) fn from_simulation(simulation: &Simulation) -> Self {
+        Self::from_simulation_in_bounds(simulation, None)
+    }
+
+    pub(crate) fn from_simulation_in_bounds(
+        simulation: &Simulation,
+        bounds: Option<(f64, f64, f64, f64)>,
+    ) -> Self {
         let catalog = &simulation.environment.catalog;
         let organisms = simulation
             .organisms
             .iter()
+            .filter(|organism| {
+                let Some((min_x, max_x, min_y, max_y)) = bounds else { return true; };
+                let position = organism.occupied_cells.first().map(|p| (p.x, p.y)).unwrap_or((0.0, 0.0));
+                let geometry = OrganismBodyGeometry::from_structure(&organism.structure, catalog);
+                match geometry {
+                    Some(g) => g.max_x + position.0 >= min_x && g.min_x + position.0 <= max_x
+                        && g.max_y + position.1 >= min_y && g.min_y + position.1 <= max_y,
+                    None => position.0 >= min_x && position.0 <= max_x && position.1 >= min_y && position.1 <= max_y,
+                }
+            })
+            .map(|organism| organism)
             .map(|organism| {
                 let position = organism
                     .occupied_cells
@@ -169,6 +187,12 @@ impl WorldObservation {
                     return None;
                 }
                 let (x, y) = simulation.environment.field.cell_center(cell_index);
+                if let Some((min_x, max_x, min_y, max_y)) = bounds {
+                    let half = simulation.environment.field.cell_size * 0.5;
+                    if x + half < min_x || x - half > max_x || y + half < min_y || y - half > max_y {
+                        return None;
+                    }
+                }
                 Some(WorldFieldObservation {
                     cell_index,
                     x,
