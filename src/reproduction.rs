@@ -203,12 +203,10 @@ fn next_construction_resource_status(
 
         let already_held = child
             .stored_material
-            .materials_snapshot()
-            .iter()
+            .iter_materials()
             .any(|held| held == &material)
             || parent_storage
-                .materials_snapshot()
-                .iter()
+                .iter_materials()
                 .any(|held| held == &material);
 
         let mut candidate = child.clone();
@@ -246,25 +244,9 @@ fn try_child_construction(
     ledger: &EnergyLedger,
     context: Option<DevelopmentalContext<'_>>,
 ) -> Option<(Organism, EnergyLedger, Option<Material>)> {
-    let mut candidates = Vec::new();
-
     for index in 0..child.stored_material.entries.len() {
         let mut candidate = child.clone();
         candidate.stored_material.entries.swap(0, index);
-        candidates.push((candidate, None));
-    }
-
-    for material in parent_storage.materials_snapshot() {
-        let mut candidate = child.clone();
-        if !candidate.stored_material.store(material.clone()) {
-            continue;
-        }
-        let last = candidate.stored_material.entries.len().saturating_sub(1);
-        candidate.stored_material.entries.swap(0, last);
-        candidates.push((candidate, Some(material)));
-    }
-
-    for (mut candidate, transferred) in candidates {
         let mut candidate_ledger = *ledger;
         let mut cache = crate::contact::ConnectionCompatibilityCache::new();
         if crate::combine_runtime::try_combine_stored_unit(
@@ -276,7 +258,30 @@ fn try_child_construction(
         )
         .is_some()
         {
-            return Some((candidate, candidate_ledger, transferred));
+            return Some((candidate, candidate_ledger, None));
+        }
+    }
+
+    for material in parent_storage.iter_materials() {
+        let material = material.clone();
+        let mut candidate = child.clone();
+        if !candidate.stored_material.store(material.clone()) {
+            continue;
+        }
+        let last = candidate.stored_material.entries.len().saturating_sub(1);
+        candidate.stored_material.entries.swap(0, last);
+        let mut candidate_ledger = *ledger;
+        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+        if crate::combine_runtime::try_combine_stored_unit(
+            &mut candidate,
+            environment,
+            &mut cache,
+            &mut candidate_ledger,
+            context,
+        )
+        .is_some()
+        {
+            return Some((candidate, candidate_ledger, Some(material)));
         }
     }
     None
