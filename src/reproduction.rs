@@ -795,6 +795,7 @@ mod tests {
             &mut parent.usable_energy,
             &mut simulation.rng,
             &body,
+            None,
         );
         assert!(construction.developing_energy > 0.0);
         assert!(parent.usable_energy < before_parent_energy);
