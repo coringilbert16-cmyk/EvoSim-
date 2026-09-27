@@ -340,8 +340,9 @@ pub(crate) fn update_organism_harmonics(
 ) {
     let boundary_units = organism
         .genome_cavity_cached_ref(&environment.catalog)
-        .map(|cavity| cavity.boundary_units.as_slice());
+        .map(|cavity| cavity.boundary_units.clone());
     let local_environment_revision = boundary_units
+        .as_deref()
         .map(|indices| {
             environment
                 .field
