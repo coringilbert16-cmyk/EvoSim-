@@ -138,7 +138,7 @@ This is a strong foundation for snapshots and rewind.
 
 ## 3.2 Snapshot feasibility
 
-The current `Simulation` itself does not derive `Serialize` or `Clone`.
+The current `Simulation` now derives `Clone` on the runtime foundation branch; it remains intentionally non-Serde so the authoritative simulation state does not acquire a second persistence representation.
 
 However, the audit found that the major state components are already Clone/Serde capable:
 
