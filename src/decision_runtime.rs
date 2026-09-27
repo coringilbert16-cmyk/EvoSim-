@@ -76,43 +76,55 @@ pub fn developmental_competition_indices(
     }
 
     let mut best_score = None;
-    let mut scored = Vec::with_capacity(candidates.len());
-    for (index, candidate) in candidates.iter().enumerate() {
+    for candidate in candidates {
         let Some(score) = cheap_decision_score(context, history, candidate) else {
             continue;
         };
         best_score = Some(best_score.map_or(score, |best: f64| best.max(score)));
-        scored.push((index, score));
     }
     let Some(best_score) = best_score else {
         return Vec::new();
     };
 
-    let mut indices = Vec::new();
-    let mut action_kinds = Vec::new();
-    for (index, score) in scored {
-        if score != best_score {
+    let mut first_kind = None;
+    let mut second_kind = None;
+    for candidate in candidates {
+        let Some(score) = cheap_decision_score(context, history, candidate) else {
             continue;
-        }
-        let candidate = &candidates[index];
-        if !candidate
-            .action
-            .relevant_needs()
-            .contains(&crate::decision::NeedKind::Development)
+        };
+        if score != best_score
+            || !candidate
+                .action
+                .relevant_needs()
+                .contains(&crate::decision::NeedKind::Development)
         {
             continue;
         }
-        if !action_kinds.contains(&candidate.action) {
-            action_kinds.push(candidate.action);
+        if first_kind.is_none() {
+            first_kind = Some(candidate.action);
+        } else if first_kind != Some(candidate.action) {
+            second_kind = Some(candidate.action);
+            break;
         }
-        indices.push(index);
     }
 
-    if action_kinds.len() >= 2 {
-        indices
-    } else {
-        Vec::new()
+    if second_kind.is_none() {
+        return Vec::new();
     }
+
+    candidates
+        .iter()
+        .enumerate()
+        .filter_map(|(index, candidate)| {
+            let score = cheap_decision_score(context, history, candidate)?;
+            (score == best_score
+                && candidate
+                    .action
+                    .relevant_needs()
+                    .contains(&crate::decision::NeedKind::Development))
+            .then_some(index)
+        })
+        .collect()
 }
 
 /// Select exactly one approved action from candidates.
