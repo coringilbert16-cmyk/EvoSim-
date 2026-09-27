@@ -8,7 +8,6 @@ use crate::material_storage::MaterialStorage;
 use crate::resources::{BaseResource, Material};
 use crate::runtime::SimulationProcess;
 use crate::structure::{Bond, OrganismStructure};
-use parking_lot::Mutex;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -347,6 +346,7 @@ pub(crate) struct Environment {
     pub(crate) catalog: Vec<BaseResource>,
     pub(crate) field: ActiveMaterialField,
 }
+#[derive(Clone)]
 pub(crate) struct Simulation {
     pub(crate) tick: u64,
     pub(crate) ticks_per_second: f64,
