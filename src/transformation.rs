@@ -168,25 +168,27 @@ impl Simulation {
         let (storage_index, bond_part) = rest.split_once(":bond:")?;
         let storage_index = storage_index.parse::<usize>().ok()?;
         let bond_index = bond_part.parse::<usize>().ok()?;
-        let entry = organism.stored_material.entries.get(storage_index)?;
-        let physical = match entry {
+
+        let removed = organism.stored_material.entries.get(storage_index)?;
+        if !matches!(
+            removed,
             crate::material_storage::StoredMaterial::Physical(instance)
-                if instance.is_realized() =>
-            {
-                instance.clone()
-            }
-            _ => return None,
-        };
-        let stored_bond = physical
-            .internal_connections
-            .as_ref()?
-            .get(bond_index)?
-            .clone();
+                if instance.is_realized()
+        ) {
+            return None;
+        }
+
         let removed = organism.stored_material.entries.swap_remove(storage_index);
         let stored_material = match removed {
             crate::material_storage::StoredMaterial::Physical(instance) => instance,
             _ => return None,
         };
+        let stored_bond = stored_material
+            .internal_connections
+            .as_ref()?
+            .get(bond_index)?
+            .clone();
+
         let complexity = crate::math::complexity(2.0);
         let duration = 1_u64.max(complexity.ceil() as u64);
         let t = ActiveTransformation {
