@@ -191,19 +191,12 @@ impl Simulation {
         organism: &mut Organism,
         environment: &Environment,
         parameters: DecisionParameters,
-        developmental: Option<&crate::developmental_decision::DevelopmentalContext>,
+        current_realization: Option<f64>,
+        developmental: bool,
     ) -> CurrentNeeds {
         let survival_reserve = parameters.survival_reserve.max(f64::EPSILON);
         let reserve_pressure = (1.0 - organism.usable_energy / survival_reserve).clamp(0.0, 1.0);
-        let current_realization = developmental
-            .map(|context| context.current_growth_fraction)
-            .or_else(|| {
-                organism
-                    .developmental_realization_cached(&environment.catalog)
-                    .map(|realization| realization.overall)
-            })
-            .unwrap_or(0.0)
-            .clamp(0.0, 1.0);
+        let current_realization = current_realization.unwrap_or(0.0).clamp(0.0, 1.0);
         if organism.peak_developmental_realization <= 0.0 {
             organism.peak_developmental_realization = current_realization;
         } else {
@@ -219,7 +212,7 @@ impl Simulation {
         // than replacing that structural pressure.
         let survival =
             self_maintenance_pressure + (1.0 - self_maintenance_pressure) * energy_survival;
-        let development = if developmental.is_some() {
+        let development = if developmental {
             (1.0 - current_realization).max(0.0)
         } else {
             0.0
@@ -485,18 +478,29 @@ impl Simulation {
                 {
                     continue;
                 }
-                let developmental = seed_reference.and_then(|reference| {
+                let developmental_for_needs = seed_reference.and_then(|reference| {
                     crate::developmental_decision::context(
                         &mut organisms[index],
                         environment,
                         reference,
                     )
                 });
+                let current_realization = developmental_for_needs
+                    .as_ref()
+                    .map(|context| context.current_growth_fraction)
+                    .or_else(|| {
+                        organisms[index]
+                            .developmental_realization_cached(&environment.catalog)
+                            .map(|realization| realization.overall)
+                    });
+                let is_developing = developmental_for_needs.is_some();
+                drop(developmental_for_needs);
                 let needs = Self::current_needs(
                     &mut organisms[index],
                     environment,
                     decision_parameters,
-                    developmental.as_ref(),
+                    current_realization,
+                    is_developing,
                 );
                 let eligibility = Self::action_eligibility(&organisms[index], environment, needs);
                 // Movement is an independent channel. It is not gated by
@@ -551,6 +555,13 @@ impl Simulation {
                         );
                     }
                 }
+                let developmental = seed_reference.and_then(|reference| {
+                    crate::developmental_decision::context(
+                        &mut organisms[index],
+                        environment,
+                        reference,
+                    )
+                });
                 let context = DecisionContext { needs, eligibility };
                 let candidates =
                     Self::decision_candidates(&organisms[index], environment, needs, eligibility);
@@ -576,27 +587,29 @@ impl Simulation {
                     &developmental_scores,
                     &mut self.rng,
                 ) {
+                    let before_realization = current_realization.unwrap_or(0.0);
+                    let developmental_for_combine = if selected.action == ActionKind::Combine {
+                        developmental.as_ref().map(|context| {
+                            (
+                                context.blueprint.clone(),
+                                context.origin,
+                                context.orientation,
+                                context.preferred_length,
+                            )
+                        })
+                    } else {
+                        None
+                    };
+                    drop(developmental);
                     match selected.action {
                         ActionKind::Combine => {
                             let before_energy = organisms[index].usable_energy;
                             let before_stress = organisms[index].stress;
-                            let before_realization = developmental
+                            let developmental = developmental_for_combine
                                 .as_ref()
-                                .map(|context| context.current_growth_fraction)
-                                .unwrap_or_else(|| {
-                                    organisms[index]
-                                        .developmental_realization_cached(&environment.catalog)
-                                        .map(|realization| realization.overall)
-                                        .unwrap_or(0.0)
+                                .map(|(blueprint, origin, orientation, preferred_length)| {
+                                    (blueprint, *origin, *orientation, *preferred_length)
                                 });
-                            let developmental = developmental.as_ref().map(|context| {
-                                (
-                                    context.blueprint,
-                                    context.origin,
-                                    context.orientation,
-                                    context.preferred_length,
-                                )
-                            });
                             let combined = crate::combine_runtime::try_combine(
                                 &mut organisms[index],
                                 environment,
@@ -686,15 +699,7 @@ impl Simulation {
                 } else {
                     let before_energy = organisms[index].usable_energy;
                     let before_stress = organisms[index].stress;
-                    let before_realization = developmental
-                        .as_ref()
-                        .map(|context| context.current_growth_fraction)
-                        .unwrap_or_else(|| {
-                            organisms[index]
-                                .developmental_realization_cached(&environment.catalog)
-                                .map(|realization| realization.overall)
-                                .unwrap_or(0.0)
-                        });
+                    let before_realization = current_realization.unwrap_or(0.0);
                     let expulsion_candidates =
                         Self::expulsion_candidates(&organisms[index], needs, eligibility);
                     let expulsion_competition =
