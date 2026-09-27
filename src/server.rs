@@ -48,7 +48,6 @@ async fn stream_observations(mut socket: WebSocket, state: AppState) {
         process.subscribe().await
     };
     let Ok(stream) = stream else {
-        let _ = socket.close().await;
         return;
     };
 
@@ -78,7 +77,6 @@ async fn stream_observations(mut socket: WebSocket, state: AppState) {
         }
     }
 
-    let _ = socket.close().await;
 }
 
 async fn observation_status_handler(State(state): State<AppState>) -> impl IntoResponse {
