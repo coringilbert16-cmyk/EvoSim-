@@ -19,6 +19,8 @@ impl Simulation {
     pub(crate) fn new(seed: u64, ticks_per_second: f64) -> Self {
         let rng = ChaCha8Rng::seed_from_u64(seed);
         let environment = Self::create_environment();
+        let seed_scale_reference =
+            crate::juvenile::confirmed_seed_scale_reference(&environment.catalog).ok();
         let organism = Self::create_initial_organism();
         Self {
             tick: 0,
@@ -33,6 +35,7 @@ impl Simulation {
             next_transformation_id: 1,
             rng,
             decision_parameters: DecisionParameters::default(),
+            seed_scale_reference,
         }
     }
     fn create_environment() -> Environment {
@@ -409,8 +412,7 @@ impl Simulation {
         // The confirmed seed scale is deterministic for the catalog. Compute it
         // once per simulation tick instead of rebuilding the calibration
         // structure for every organism.
-        let seed_reference = crate::juvenile::confirmed_seed_scale_reference(&self.environment.catalog)
-            .ok();
+        let seed_reference = self.seed_scale_reference;
         for organism in &mut self.organisms {
             Self::update_development_stage(organism, &self.environment, seed_reference);
             organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
