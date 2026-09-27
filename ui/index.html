@@ -155,6 +155,18 @@
       render();
     }
     function viewportSize() { return { width: canvas.clientWidth, height: canvas.clientHeight }; }
+    function worldObservationBounds() {
+      if (!observation || observationLevel !== 'World' || !cameraInitialized) return null;
+      const viewport = viewportSize();
+      const a = camera.screenToWorld(0, 0, viewport.width, viewport.height);
+      const b = camera.screenToWorld(viewport.width, viewport.height, viewport.width, viewport.height);
+      const margin = Math.max(1, Math.min(Math.abs(b.x - a.x), Math.abs(b.y - a.y)) * 0.08);
+      return { min_x: Math.min(a.x, b.x) - margin, max_x: Math.max(a.x, b.x) + margin, min_y: Math.min(a.y, b.y) - margin, max_y: Math.max(a.y, b.y) + margin };
+    }
+    function observationViewKey() {
+      const b = worldObservationBounds();
+      return b ? [b.min_x, b.max_x, b.min_y, b.max_y].map(v => v.toFixed(3)).join(',') : 'full';
+    }
     function payload() { return observation?.payload || null; }
     function worldPayload() { return payload()?.World || null; }
     function organismPayload() { return payload()?.Organism || null; }
@@ -348,6 +360,10 @@
       const serial = ++requestSerial;
       const levelChanged = observationLevel !== level;
       let url = '/observation/world';
+      if (level === 'World') {
+        const bounds = worldObservationBounds();
+        if (bounds) url += '?' + new URLSearchParams(bounds).toString();
+      }
       if (level === 'Organism' && organismId != null) url = `/observation/organism/${encodeURIComponent(organismId)}`;
       if (level === 'Structure' && organismId != null) url = `/observation/structure/${encodeURIComponent(organismId)}`;
       try {
@@ -385,7 +401,9 @@
     });
     canvas.addEventListener('wheel', event => {
       event.preventDefault(); const point = canvasPoint(event), viewport = viewportSize();
-      camera.zoomAt(point.x, point.y, Math.exp(-event.deltaY * 0.001), viewport.width, viewport.height); render();
+      camera.zoomAt(point.x, point.y, Math.exp(-event.deltaY * 0.001), viewport.width, viewport.height);
+      render();
+      if (observationLevel === 'World' && historyViewTick == null) loadObservation('World');
     }, { passive: false });
     canvas.addEventListener('pointerdown', event => {
       event.preventDefault();
@@ -406,6 +424,7 @@
       if (interaction.panning) {
         camera.pan(event.clientX - interaction.lastX, event.clientY - interaction.lastY);
         interaction.lastX = event.clientX; interaction.lastY = event.clientY; render();
+        if (observationLevel === 'World' && historyViewTick == null) queueViewportRefresh();
       } else if (interaction.selecting) {
         const point = canvasPoint(event); interaction.currentX = point.x; interaction.currentY = point.y; render();
       }
@@ -439,15 +458,67 @@
       }
     });
 
+    let liveRefreshQueued = false;
+    let liveStream = null;
+
+    let viewportRefreshQueued = false;
+    function queueViewportRefresh() {
+      if (viewportRefreshQueued || historyViewTick != null || observationLevel !== 'World') return;
+      viewportRefreshQueued = true;
+      setTimeout(async () => {
+        viewportRefreshQueued = false;
+        if (historyViewTick == null && observationLevel === 'World') await loadObservation('World');
+      }, 75);
+    }
+
+    function queueLiveRefresh() {
+      if (historyViewTick != null || liveRefreshQueued) return;
+      liveRefreshQueued = true;
+      setTimeout(async () => {
+        liveRefreshQueued = false;
+        if (historyViewTick != null) return;
+        await refreshRuntimeStatus();
+        if (historyViewTick != null) return;
+        if (observationLevel === 'World') await loadObservation('World');
+        else if (focusedOrganismId != null) await loadObservation(observationLevel, focusedOrganismId);
+      }, 50);
+    }
+
+    function connectLiveStream() {
+      if (liveStream) liveStream.close();
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      liveStream = new WebSocket(protocol + '//' + location.host + '/observation/stream');
+      liveStream.onopen = () => {
+        status.textContent = 'Live observation stream connected';
+        refreshRuntimeStatus();
+      };
+      liveStream.onmessage = event => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type === 'tick') {
+            if (runtimeStatus?.session_id && message.session_id !== runtimeStatus.session_id) {
+              historyViewTick = null;
+              cameraInitialized = false;
+            }
+            queueLiveRefresh();
+          }
+        } catch (_) {}
+      };
+      liveStream.onclose = () => {
+        liveStream = null;
+        if (historyViewTick == null) status.textContent = 'Live stream disconnected — reconnecting…';
+        setTimeout(connectLiveStream, 500);
+      };
+      liveStream.onerror = () => liveStream?.close();
+    }
+
     window.addEventListener('resize', resize);
     resize();
-    loadObservation('World');
-    setInterval(async () => {
-      await refreshRuntimeStatus();
-      if (historyViewTick != null) return;
-      if (observationLevel === 'World') loadObservation('World');
-      else if (focusedOrganismId != null) loadObservation(observationLevel, focusedOrganismId);
-    }, 250);
+    awaitInitialObservation();
+
+    function awaitInitialObservation() {
+      loadObservation('World').finally(connectLiveStream);
+    }
   </script>
 </body>
 </html>
