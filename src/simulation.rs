@@ -470,16 +470,9 @@ impl Simulation {
                         action: ActionKind::Move,
                         context_key: None,
                     };
-                    let organism_count = organisms.len();
                     let (before, rest) = organisms.split_at_mut(index);
                     let (organism, after) = rest.split_first_mut().expect("index is in organisms");
-                    let mut others = Vec::with_capacity(organism_count.saturating_sub(1));
-                    for other in before.iter() {
-                        others.push((*other).clone());
-                    }
-                    for other in after.iter() {
-                        others.push((*other).clone());
-                    }
+                    let mut others = before.iter_mut().chain(after.iter_mut());
                     let before_energy = organism.usable_energy;
                     let before_stress = organism.stress;
                     let before_realization = developmental
@@ -498,15 +491,6 @@ impl Simulation {
                         &mut self.energy_ledger,
                         self.tick,
                     );
-                    if moved {
-                        for (original, trial) in
-                            before.iter_mut().chain(after.iter_mut()).zip(others)
-                        {
-                            original.occupied_cells = trial.occupied_cells;
-                            original.structure = trial.structure;
-                            original.mark_position_changed();
-                        }
-                    }
                     if moved {
                         let consequence = Self::action_consequence(
                             before_energy,
