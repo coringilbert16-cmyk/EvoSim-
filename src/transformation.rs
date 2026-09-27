@@ -277,24 +277,34 @@ impl Simulation {
                     transformation.prepared = true;
                     return;
                 };
-                let Some(a) = stored.material.parts.get(target.part_a).and_then(|(name, _)| {
-                    environment
-                        .catalog
-                        .iter()
-                        .find(|resource| resource.name == *name)
-                        .map(|resource| resource.properties)
-                }) else {
+                let Some(a) = stored
+                    .material
+                    .parts
+                    .get(target.part_a)
+                    .and_then(|(name, _)| {
+                        environment
+                            .catalog
+                            .iter()
+                            .find(|resource| resource.name == *name)
+                            .map(|resource| resource.properties)
+                    })
+                else {
                     transformation.preparation_failed = true;
                     transformation.prepared = true;
                     return;
                 };
-                let Some(b) = stored.material.parts.get(target.part_b).and_then(|(name, _)| {
-                    environment
-                        .catalog
-                        .iter()
-                        .find(|resource| resource.name == *name)
-                        .map(|resource| resource.properties)
-                }) else {
+                let Some(b) = stored
+                    .material
+                    .parts
+                    .get(target.part_b)
+                    .and_then(|(name, _)| {
+                        environment
+                            .catalog
+                            .iter()
+                            .find(|resource| resource.name == *name)
+                            .map(|resource| resource.properties)
+                    })
+                else {
                     transformation.preparation_failed = true;
                     transformation.prepared = true;
                     return;
@@ -376,7 +386,10 @@ impl Simulation {
         if transformation.preparation_failed {
             if matches!(transformation.kind, crate::state::TransformationKind::Break) {
                 if let Some(stored) = transformation.stored_material.clone() {
-                    if !organism.stored_material.store_physical_instance(stored.clone()) {
+                    if !organism
+                        .stored_material
+                        .store_physical_instance(stored.clone())
+                    {
                         if let Some(placement) = stored
                             .placements
                             .as_ref()
@@ -395,7 +408,10 @@ impl Simulation {
             crate::state::TransformationKind::Break => {
                 if let Some(pieces) = transformation.pending_break_pieces.clone() {
                     for piece in pieces {
-                        if !organism.stored_material.store_physical_instance(piece.clone()) {
+                        if !organism
+                            .stored_material
+                            .store_physical_instance(piece.clone())
+                        {
                             if let Some(placement) = piece
                                 .placements
                                 .as_ref()
