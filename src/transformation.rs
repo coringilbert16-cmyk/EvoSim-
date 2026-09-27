@@ -242,13 +242,15 @@ impl Simulation {
         next_id: &mut u64,
         decision: &ActionCandidate,
     ) -> Option<ActiveTransformation> {
+        let before_energy = organism.usable_energy;
+        let before_stress = organism.stress;
         Self::try_start_action_transformation(
             organism,
             catalog,
             next_id,
             decision,
-            organism.usable_energy,
-            organism.stress,
+            before_energy,
+            before_stress,
             0.0,
         )
     }
