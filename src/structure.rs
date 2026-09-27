@@ -489,11 +489,39 @@ impl PhysicalConstituentGraph {
     /// its stable first constituent. Disconnected physical material is not
     /// structural merely because it remains inside the organism boundary.
     pub fn structural_unit_indices(&self) -> Vec<usize> {
-        self.connected_components()
-            .into_iter()
-            .find(|component| component.contains(&0))
-            .unwrap_or_default()
-    }
+        if self.units.is_empty() {
+            return Vec::new();
+        }
+
+        let mut adjacency = vec![Vec::<usize>::new(); self.units.len()];
+        for bond in &self.bonds {
+            let (Some(a), Some(b)) = (
+                self.unit_index(bond.endpoint_a.constituent_id),
+                self.unit_index(bond.endpoint_b.constituent_id),
+            ) else {
+                continue;
+            };
+            adjacency[a].push(b);
+            adjacency[b].push(a);
+        }
+
+        let mut visited = vec![false; self.units.len()];
+        let mut stack = vec![0usize];
+        visited[0] = true;
+        let mut component = Vec::new();
+
+        while let Some(unit) = stack.pop() {
+            component.push(unit);
+            for &next in &adjacency[unit] {
+                if !visited[next] {
+                    visited[next] = true;
+                    stack.push(next);
+                }
+            }
+        }
+
+        component.sort_unstable();
+        component
 
     pub fn connected_components(&self) -> Vec<Vec<usize>> {
         let mut adjacency = vec![Vec::<usize>::new(); self.units.len()];
