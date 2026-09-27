@@ -311,6 +311,134 @@ impl DevelopmentalFieldBlueprint {
         )
     }
 
+    pub(crate) fn connectivity_realizations_after_breaks(
+        &self,
+        structure: &crate::structure::OrganismStructure,
+        catalog: &[BaseResource],
+        origin: (f64, f64),
+        orientation: f64,
+        preferred_length: f64,
+    ) -> Vec<Option<f64>> {
+        let structural_indices = structure.structural_unit_indices();
+        let mut actual_total = 0.0;
+        let mut actual_by_bond = vec![0.0; structure.bonds.len()];
+
+        for (bond_index, bond) in structure.bonds.iter().enumerate() {
+            let Some(a) = structure.unit_index(bond.endpoint_a.constituent_id) else {
+                continue;
+            };
+            let Some(b) = structure.unit_index(bond.endpoint_b.constituent_id) else {
+                continue;
+            };
+            if !structural_indices.contains(&a) || !structural_indices.contains(&b) {
+                continue;
+            }
+            let Some(wa) = bond
+                .endpoint_a
+                .location
+                .world_point(&structure.units[a], catalog)
+            else {
+                continue;
+            };
+            let Some(wb) = bond
+                .endpoint_b
+                .location
+                .world_point(&structure.units[b], catalog)
+            else {
+                continue;
+            };
+            let la = developmental_point(wa.x, wa.y, origin, orientation);
+            let lb = developmental_point(wb.x, wb.y, origin, orientation);
+            let score = self.connectivity_score(
+                la,
+                lb,
+                structure,
+                a,
+                b,
+                bond.endpoint_a.location,
+                bond.endpoint_b.location,
+                catalog,
+                preferred_length,
+            );
+            actual_by_bond[bond_index] = score;
+            actual_total += score;
+        }
+
+        let mut opportunity_value = 0.0;
+        for (left, &a) in structural_indices.iter().enumerate() {
+            for &b in structural_indices.iter().skip(left + 1) {
+                for candidate in
+                    crate::contact::connection_pair_candidates(structure, a, b, catalog)
+                        .into_iter()
+                        .filter(|candidate| candidate.available_a && candidate.available_b)
+                {
+                    let is_existing_edge = structure.bonds.iter().any(|bond| {
+                        let Some(id_a) = structure.physical_id(a) else {
+                            return false;
+                        };
+                        let Some(id_b) = structure.physical_id(b) else {
+                            return false;
+                        };
+                        (bond.endpoint_a.constituent_id == id_a
+                            && bond.endpoint_a.location == candidate.endpoint_a
+                            && bond.endpoint_b.constituent_id == id_b
+                            && bond.endpoint_b.location == candidate.endpoint_b)
+                            || (bond.endpoint_a.constituent_id == id_b
+                                && bond.endpoint_a.location == candidate.endpoint_b
+                                && bond.endpoint_b.constituent_id == id_a
+                                && bond.endpoint_a.location == candidate.endpoint_a)
+                    });
+                    if is_existing_edge {
+                        continue;
+                    }
+                    let Some(wa) = candidate
+                        .endpoint_a
+                        .world_point(&structure.units[a], catalog)
+                    else {
+                        continue;
+                    };
+                    let Some(wb) = candidate
+                        .endpoint_b
+                        .world_point(&structure.units[b], catalog)
+                    else {
+                        continue;
+                    };
+                    let la = developmental_point(wa.x, wa.y, origin, orientation);
+                    let lb = developmental_point(wb.x, wb.y, origin, orientation);
+                    opportunity_value += self.connectivity_score(
+                        la,
+                        lb,
+                        structure,
+                        a,
+                        b,
+                        candidate.endpoint_a,
+                        candidate.endpoint_b,
+                        catalog,
+                        preferred_length,
+                    );
+                }
+            }
+        }
+
+        let total_available = actual_total + opportunity_value;
+        if total_available <= 0.0 {
+            return vec![None; structure.bonds.len()];
+        }
+
+        actual_by_bond
+            .into_iter()
+            .map(|bond_score| {
+                let actual = actual_total - bond_score;
+                let available = total_available - bond_score;
+                if available <= 0.0 {
+                    Some(0.0)
+                } else {
+                    Some((actual / available).clamp(0.0, 1.0))
+                }
+            })
+            .collect()
+    }
+
     fn connectivity_realization_excluding(
         &self,
         structure: &crate::structure::OrganismStructure,
@@ -372,10 +500,6 @@ impl DevelopmentalFieldBlueprint {
                         .into_iter()
                         .filter(|candidate| candidate.available_a && candidate.available_b)
                 {
-                    // The opportunity denominator is E_G ∪ O_new. Exclude only
-                    // an opportunity that is the exact already-realized edge;
-                    // other available endpoint pairs between the same two
-                    // physical units remain legitimate opportunities.
                     let is_existing_edge = structure.bonds.iter().any(|bond| {
                         let Some(id_a) = structure.physical_id(a) else {
                             return false;
