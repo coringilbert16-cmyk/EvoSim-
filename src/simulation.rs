@@ -563,6 +563,7 @@ impl Simulation {
                         &candidates,
                         &competing_indices,
                         developmental.as_ref(),
+                        &organisms[index].genome.developmental_blueprint,
                         &self.energy_ledger,
                     );
                 if let Some(selected) = select_action_with_developmental_scores(
@@ -588,6 +589,10 @@ impl Simulation {
                         ActionKind::Combine => {
                             let before_energy = organisms[index].usable_energy;
                             let before_stress = organisms[index].stress;
+                            let before_realization = developmental
+                                .as_ref()
+                                .map(|context| context.current_growth_fraction)
+                                .unwrap_or(0.0);
                             let developmental = developmental_for_combine.as_ref().map(
                                 |(blueprint, origin, orientation, preferred_length)| {
                                     (blueprint, *origin, *orientation, *preferred_length)
