@@ -511,15 +511,7 @@ impl Simulation {
                     let (organism, after) = rest.split_first_mut().expect("index is in organisms");
                     let before_energy = organism.usable_energy;
                     let before_stress = organism.stress;
-                    let before_realization = developmental
-                        .as_ref()
-                        .map(|context| context.current_growth_fraction)
-                        .unwrap_or_else(|| {
-                            organism
-                                .developmental_realization_cached(&environment.catalog)
-                                .map(|realization| realization.overall)
-                                .unwrap_or(0.0)
-                        });
+                    let before_realization = current_realization.unwrap_or(0.0);
                     let moved = Self::update_movement(
                         before,
                         organism,
