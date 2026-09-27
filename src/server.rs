@@ -77,7 +77,6 @@ async fn stream_observations(mut socket: WebSocket, state: AppState) {
             }
         }
     }
-
 }
 
 async fn observation_status_handler(State(state): State<AppState>) -> impl IntoResponse {
