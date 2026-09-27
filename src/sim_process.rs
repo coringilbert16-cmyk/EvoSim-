@@ -59,7 +59,8 @@ impl CommandResponse {
 
 pub(crate) async fn run_child(port: u16) {
     let runtime = Arc::new(Mutex::new(RuntimeState::new(Simulation::new(42, 10.0))));
-    start_tick_loop(runtime.clone());
+    let (tick_sender, _) = tokio::sync::broadcast::channel::<String>(32);
+    start_tick_loop(runtime.clone(), tick_sender.clone());
 
     let listener = TcpListener::bind(("127.0.0.1", port))
         .await
@@ -73,12 +74,12 @@ pub(crate) async fn run_child(port: u16) {
         };
         let runtime = runtime.clone();
         tokio::spawn(async move {
-            handle_connection(stream, runtime).await;
+            handle_connection(stream, runtime, tick_sender).await;
         });
     }
 }
 
-fn start_tick_loop(runtime: Arc<Mutex<RuntimeState>>) {
+fn start_tick_loop(runtime: Arc<Mutex<RuntimeState>>, tick_sender: tokio::sync::broadcast::Sender<String>) {
     tokio::spawn(async move {
         loop {
             let tick_duration = {
@@ -96,17 +97,44 @@ fn start_tick_loop(runtime: Arc<Mutex<RuntimeState>>) {
             let mut state = runtime.lock();
             if state.simulation.running {
                 state.step();
+                let _ = tick_sender.send(serde_json::json!({
+                    "type": "tick",
+                    "tick": state.simulation.tick,
+                    "session_id": state.session_id,
+                }).to_string());
             }
         }
     });
 }
 
-async fn handle_connection(stream: TcpStream, runtime: Arc<Mutex<RuntimeState>>) {
+async fn handle_connection(
+    stream: TcpStream,
+    runtime: Arc<Mutex<RuntimeState>>,
+    tick_sender: tokio::sync::broadcast::Sender<String>,
+) {
     let (read_half, mut write_half) = stream.into_split();
     let mut reader = BufReader::new(read_half);
     let mut line = String::new();
 
     if reader.read_line(&mut line).await.is_err() {
+        return;
+    }
+
+    if line.trim() == r#"{"command":"subscribe"}"# {
+        let mut receiver = tick_sender.subscribe();
+        loop {
+            match receiver.recv().await {
+                Ok(event) => {
+                    let mut encoded = event.into_bytes();
+                    encoded.push(b'\n');
+                    if write_half.write_all(&encoded).await.is_err() {
+                        break;
+                    }
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+            }
+        }
         return;
     }
 
