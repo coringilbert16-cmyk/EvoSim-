@@ -350,13 +350,14 @@ impl Simulation {
         delta_x: f64,
         delta_y: f64,
     ) -> bool {
+        let moving_index = other_organisms.len();
         let mut spatial_index = MovementSpatialIndex::new(other_organisms, environment);
         Self::try_move_cell_with_reason(
             organism,
             environment,
             other_organisms,
             &mut [],
-            other_organisms.len(),
+            moving_index,
             &mut spatial_index,
             delta_x,
             delta_y,
@@ -429,10 +430,6 @@ impl Simulation {
     }
 }
 
-fn organisms_index(before: &[Organism], after: &[Organism]) -> usize {
-    before.len()
-}
-
 fn organism_at<'a>(
     before: &'a [Organism],
     after: &'a [Organism],
@@ -492,6 +489,7 @@ fn resolve_push_chain(
         before,
         after,
         moving_index,
+        spatial_index,
         environment,
         dx,
         dy,
