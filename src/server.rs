@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{ws::{Message, WebSocket, WebSocketUpgrade}, Path, State},
     response::{Html, IntoResponse},
     routing::{get, post},
     Json, Router,
@@ -35,6 +35,55 @@ async fn index_handler() -> impl IntoResponse {
     Html(format!(
         "{page}\n<script>{resource_visualization}</script>\n<script>{organism_inspector}</script>"
     ))
+}
+
+
+async fn observation_stream_handler(
+    ws: WebSocketUpgrade,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| stream_observations(socket, state))
+}
+
+async fn stream_observations(mut socket: WebSocket, state: AppState) {
+    let stream = {
+        let mut process = state.simulation.lock().await;
+        process.subscribe().await
+    };
+    let Ok(stream) = stream else {
+        let _ = socket.close().await;
+        return;
+    };
+
+    let (_read_half, mut write_half) = tokio::io::split(stream);
+    let mut reader = tokio::io::BufReader::new(_read_half);
+    let mut line = String::new();
+
+    loop {
+        tokio::select! {
+            result = reader.read_line(&mut line) => {
+                match result {
+                    Ok(0) | Err(_) => break,
+                    Ok(_) => {
+                        let message = Message::Text(line.trim_end().to_owned().into());
+                        if socket.send(message).await.is_err() {
+                            break;
+                        }
+                        line.clear();
+                    }
+                }
+            }
+            result = socket.recv() => {
+                match result {
+                    Some(Ok(Message::Close(_))) | None | Some(Err(_)) => break,
+                    Some(Ok(_)) => {}
+                }
+            }
+        }
+    }
+
+    let _ = write_half.shutdown().await;
+    let _ = socket.close().await;
 }
 
 async fn observation_status_handler(State(state): State<AppState>) -> impl IntoResponse {
@@ -168,6 +217,7 @@ pub(crate) async fn run() {
     let app = Router::new()
         .route("/", get(index_handler))
         .route("/observation/status", get(observation_status_handler))
+        .route("/observation/stream", get(observation_stream_handler))
         .route("/observation/world", get(world_observation_handler))
         .route(
             "/observation/history/{tick}/world",
