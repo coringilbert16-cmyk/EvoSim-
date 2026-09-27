@@ -66,8 +66,6 @@ pub(crate) struct MemoryPoint {
 pub(crate) const MEMORY_DECAY_PER_TICK: f64 = 0.995;
 pub(crate) const MEMORY_MERGE_RADIUS: f64 = 40.0;
 pub(crate) const MEMORY_PRUNE_THRESHOLD: f64 = 0.01;
-pub(crate) const COMBINE_PROCESSING_RATE: usize = 1;
-pub(crate) const BREAK_PROCESSING_RATE: usize = 1;
 #[derive(Serialize, Deserialize, Clone, Copy)]
 pub(crate) enum TransformationKind {
     Break,
