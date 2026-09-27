@@ -319,6 +319,7 @@ impl DevelopmentalFieldBlueprint {
         orientation: f64,
         preferred_length: f64,
     ) -> Vec<Option<f64>> {
+        let mut endpoint_opportunities = EndpointOpportunityCache::default();
         let structural_indices = structure.structural_unit_indices();
         let mut actual_total = 0.0;
         let mut actual_by_bond = vec![0.0; structure.bonds.len()];
@@ -567,11 +568,12 @@ impl DevelopmentalFieldBlueprint {
         endpoint_b: crate::structure::ConnectionEndpoint,
         catalog: &[BaseResource],
         preferred_length: f64,
+        endpoint_opportunities: &mut EndpointOpportunityCache,
     ) -> f64 {
         let ka = self.connectivity_preference_scaled(a.0, a.1, preferred_length);
         let kb = self.connectivity_preference_scaled(b.0, b.1, preferred_length);
-        let qa = endpoint_opportunity_count(structure, unit_a, endpoint_a, catalog);
-        let qb = endpoint_opportunity_count(structure, unit_b, endpoint_b, catalog);
+        let qa = endpoint_opportunities.get_or_compute(structure, unit_a, endpoint_a, catalog);
+        let qb = endpoint_opportunities.get_or_compute(structure, unit_b, endpoint_b, catalog);
         let qreal_a = endpoint_realized_count(structure, unit_a, endpoint_a);
         let qreal_b = endpoint_realized_count(structure, unit_b, endpoint_b);
         let n = 0.5 * (qreal_a as f64 / qa.max(1) as f64 + qreal_b as f64 / qb.max(1) as f64);
@@ -710,6 +712,52 @@ fn endpoint_realized_count(
         .iter()
         .filter(|bond| bond.touches(id, endpoint))
         .count()
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum EndpointOpportunityKey {
+    Corner(usize),
+    LineEndpoint(usize),
+    Boundary(u64),
+}
+
+impl EndpointOpportunityKey {
+    fn from_endpoint(endpoint: crate::structure::ConnectionEndpoint) -> Self {
+        match endpoint {
+            crate::structure::ConnectionEndpoint::Corner { point_index } => {
+                Self::Corner(point_index)
+            }
+            crate::structure::ConnectionEndpoint::LineEndpoint { point_index } => {
+                Self::LineEndpoint(point_index)
+            }
+            crate::structure::ConnectionEndpoint::Boundary { angle_radians } => {
+                Self::Boundary(angle_radians.to_bits())
+            }
+        }
+    }
+}
+
+#[derive(Default)]
+struct EndpointOpportunityCache {
+    values: std::collections::HashMap<(usize, EndpointOpportunityKey), usize>,
+}
+
+impl EndpointOpportunityCache {
+    fn get_or_compute(
+        &mut self,
+        structure: &crate::structure::OrganismStructure,
+        unit: usize,
+        endpoint: crate::structure::ConnectionEndpoint,
+        catalog: &[BaseResource],
+    ) -> usize {
+        let key = (unit, EndpointOpportunityKey::from_endpoint(endpoint));
+        if let Some(&value) = self.values.get(&key) {
+            return value;
+        }
+        let value = endpoint_opportunity_count(structure, unit, endpoint, catalog);
+        self.values.insert(key, value);
+        value
+    }
 }
 
 fn endpoint_opportunity_count(
