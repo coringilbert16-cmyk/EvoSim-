@@ -76,7 +76,7 @@ pub(crate) fn growth_fraction_for_reference(
 }
 
 pub(crate) fn growth_fraction_for_context(
-    _organism: &Organism,
+    organism: &Organism,
     environment: &Environment,
     structure: &crate::structure::OrganismStructure,
     developmental: &DevelopmentalContext,
@@ -84,7 +84,7 @@ pub(crate) fn growth_fraction_for_context(
     growth_fraction_for_structure(
         structure,
         environment,
-        &developmental.blueprint,
+        &organism.genome.developmental_blueprint,
         developmental.origin,
         developmental.orientation,
         developmental.preferred_length,
@@ -118,6 +118,7 @@ pub(crate) fn developmental_action_scores(
     candidates: &[ActionCandidate],
     competing_indices: &[usize],
     developmental: Option<&DevelopmentalContext>,
+    blueprint: &crate::developmental_blueprint::DevelopmentalFieldBlueprint,
     _ledger: &crate::state::EnergyLedger,
 ) -> Vec<Option<f64>> {
     let Some(developmental) = developmental else {
@@ -134,7 +135,7 @@ pub(crate) fn developmental_action_scores(
     });
     let break_scores = has_competing_break.then(|| {
         developmental
-            .blueprint
+            blueprint
             .connectivity_realizations_after_breaks(
                 &organism.structure,
                 &environment.catalog,
