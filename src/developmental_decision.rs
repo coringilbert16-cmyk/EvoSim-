@@ -11,8 +11,7 @@ use crate::decision::{ActionKind, CurrentNeeds};
 use crate::decision_runtime::ActionCandidate;
 use crate::state::{DevelopmentStage, Environment, Organism};
 
-pub(crate) struct DevelopmentalContext<'a> {
-    pub(crate) blueprint: &'a crate::developmental_blueprint::DevelopmentalFieldBlueprint,
+pub(crate) struct DevelopmentalContext {
     pub(crate) origin: (f64, f64),
     pub(crate) orientation: f64,
     pub(crate) preferred_length: f64,
@@ -21,11 +20,11 @@ pub(crate) struct DevelopmentalContext<'a> {
     pub(crate) current_density_realized: Option<f64>,
 }
 
-pub(crate) fn context<'a>(
-    organism: &'a mut Organism,
-    environment: &'a Environment,
+pub(crate) fn context(
+    organism: &mut Organism,
+    environment: &Environment,
     seed_reference: (f64, f64),
-) -> Option<DevelopmentalContext<'a>> {
+) -> Option<DevelopmentalContext> {
     if !matches!(organism.development_stage, DevelopmentStage::Juvenile) {
         return None;
     }
@@ -50,7 +49,6 @@ pub(crate) fn context<'a>(
         seed_length,
     );
     Some(DevelopmentalContext {
-        blueprint,
         origin,
         orientation,
         preferred_length,
