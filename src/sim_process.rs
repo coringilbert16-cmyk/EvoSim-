@@ -80,7 +80,10 @@ pub(crate) async fn run_child(port: u16) {
     }
 }
 
-fn start_tick_loop(runtime: Arc<Mutex<RuntimeState>>, tick_sender: tokio::sync::broadcast::Sender<String>) {
+fn start_tick_loop(
+    runtime: Arc<Mutex<RuntimeState>>,
+    tick_sender: tokio::sync::broadcast::Sender<String>,
+) {
     tokio::spawn(async move {
         loop {
             let tick_duration = {
@@ -98,11 +101,14 @@ fn start_tick_loop(runtime: Arc<Mutex<RuntimeState>>, tick_sender: tokio::sync::
             let mut state = runtime.lock();
             if state.simulation.running {
                 state.step();
-                let _ = tick_sender.send(serde_json::json!({
-                    "type": "tick",
-                    "tick": state.simulation.tick,
-                    "session_id": state.session_id,
-                }).to_string());
+                let _ = tick_sender.send(
+                    serde_json::json!({
+                        "type": "tick",
+                        "tick": state.simulation.tick,
+                        "session_id": state.session_id,
+                    })
+                    .to_string(),
+                );
             }
         }
     });
