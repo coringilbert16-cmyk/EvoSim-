@@ -805,6 +805,64 @@ mod tests {
 
 
     #[test]
+    fn record_experience_keeps_location_and_spectrum_associations_independent() {
+        let spectrum = crate::harmonics::ToneSpectrum {
+            components: vec![crate::harmonics::ToneComponent {
+                frequency_hz: 440.0,
+                amplitude: 1.0,
+                phase_radians: 0.0,
+            }],
+        };
+        let perception_a = crate::harmonics::ResonancePerception {
+            source_x: 10.0,
+            source_y: 10.0,
+            extent: 2.0,
+            spectrum: spectrum.clone(),
+            magnitude: 1.0,
+        };
+        let perception_b = crate::harmonics::ResonancePerception {
+            source_x: 100.0,
+            source_y: 100.0,
+            extent: 2.0,
+            spectrum,
+            magnitude: 1.0,
+        };
+        let mut memory = ExperienceMemory::default();
+        let needs = crate::decision::CurrentNeeds {
+            survival: 0.5,
+            ..Default::default()
+        };
+
+        record_experience(
+            &mut memory,
+            &[perception_a],
+            crate::decision::ActionKind::Move,
+            MemoryConsequence {
+                energy_delta: 1.0,
+                ..Default::default()
+            },
+            needs,
+            8,
+        );
+        record_experience(
+            &mut memory,
+            &[perception_b],
+            crate::decision::ActionKind::Move,
+            MemoryConsequence {
+                stress_delta: 1.0,
+                ..Default::default()
+            },
+            needs,
+            8,
+        );
+
+        assert_eq!(memory.spatial.len(), 2);
+        assert_eq!(memory.spectral.len(), 1);
+        assert!(memory.spectral[0].association.abs() < 1.0);
+        assert_eq!(memory.encounters.len(), 2);
+    }
+
+    #[test]
     fn consequence_value_changes_with_current_need() {
         let consequence = MemoryConsequence {
             energy_delta: 1.0,
