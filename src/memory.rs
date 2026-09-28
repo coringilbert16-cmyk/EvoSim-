@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+
 use crate::state::{
     Environment, MemoryPoint, Organism, Simulation, MEMORY_DECAY_PER_TICK, MEMORY_MERGE_RADIUS,
     MEMORY_PRUNE_THRESHOLD,
