@@ -511,6 +511,17 @@ pub(crate) struct PendingMovementExperience {
     pub(crate) needs: crate::decision::CurrentNeeds,
 }
 
+/// A processing experience waits for a multi-tick BREAK transformation to
+/// resolve before its physical consequence is assigned.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub(crate) struct PendingTransformationExperience {
+    pub(crate) perceptions: Vec<crate::harmonics::ResonancePerception>,
+    pub(crate) needs: crate::decision::CurrentNeeds,
+    pub(crate) before_energy: f64,
+    pub(crate) before_stress: f64,
+    pub(crate) before_developmental_realization: f64,
+}
+
 /// The organism's associative memory. This is the new memory authority;
 /// capacity and decay remain derived from the physical genome cavity.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
