@@ -180,7 +180,8 @@ async fn organism_observation_handler(
             "known_position_revision": query.known_position_revision,
         }),
     )
-    .await {
+    .await
+    {
         Ok(value) => Json(value).into_response(),
         Err(error) => error_response(error),
     }
