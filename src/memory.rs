@@ -18,6 +18,53 @@ pub(crate) const SPECTRAL_MEMORY_MATCH_FLOOR: f64 = 0.25;
 /// EXPERIMENTAL: memories below this strength are removed during decay.
 pub(crate) const EXPERIENCE_MEMORY_PRUNE_THRESHOLD: f64 = 0.01;
 
+/// EXPERIMENTAL: calibration scales for converting heterogeneous physical
+/// consequences into a dimensionless learned value.
+pub(crate) const CONSEQUENCE_ENERGY_SCALE: f64 = 1.0;
+pub(crate) const CONSEQUENCE_DEVELOPMENT_SCALE: f64 = 0.1;
+pub(crate) const CONSEQUENCE_MATERIAL_SCALE: f64 = 1.0;
+pub(crate) const CONSEQUENCE_STRESS_SCALE: f64 = 1.0;
+pub(crate) const CONSEQUENCE_DAMAGE_SCALE: f64 = 1.0;
+pub(crate) const CONSEQUENCE_CONSUMED_MATERIAL_SCALE: f64 = 1.0;
+
+/// State-dependent valuation of an already observed physical consequence.
+/// The consequence is not changed; current need pressure only changes how
+/// useful or harmful that remembered outcome is right now.
+pub(crate) fn consequence_value(
+    consequence: &MemoryConsequence,
+    needs: crate::decision::CurrentNeeds,
+) -> f64 {
+    let survival = needs.survival.clamp(0.0, 1.0);
+    let reproduction = needs.reproduction.clamp(0.0, 1.0);
+    let development = needs.development.clamp(0.0, 1.0);
+
+    let raw_weights = [
+        1.0 + survival,
+        1.0 + development + 0.5 * reproduction,
+        0.25 + 0.75 * (development.max(reproduction)),
+        1.0 + survival,
+        1.0 + 2.0 * survival,
+        0.25 + 0.75 * survival,
+    ];
+    let weight_total = raw_weights.iter().sum::<f64>().max(f64::EPSILON);
+    let weights = raw_weights.map(|weight| weight / weight_total);
+
+    let normalized = [
+        consequence.energy_delta / CONSEQUENCE_ENERGY_SCALE,
+        consequence.developmental_delta / CONSEQUENCE_DEVELOPMENT_SCALE,
+        consequence.material_acquired / CONSEQUENCE_MATERIAL_SCALE,
+        -consequence.stress_delta / CONSEQUENCE_STRESS_SCALE,
+        -consequence.damage_delta / CONSEQUENCE_DAMAGE_SCALE,
+        -consequence.material_consumed / CONSEQUENCE_CONSUMED_MATERIAL_SCALE,
+    ];
+
+    weights
+        .into_iter()
+        .zip(normalized)
+        .map(|(weight, contribution)| weight * contribution)
+        .sum()
+}
+
 fn bounded_strength_after_experience(current: f64, experience_magnitude: f64) -> f64 {
     let current = current.clamp(0.0, 1.0);
     let magnitude = experience_magnitude.max(0.0);
