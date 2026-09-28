@@ -1,4 +1,7 @@
-#![expect(dead_code, reason = "Staged reproduction API retained for lifecycle integration")]
+#![expect(
+    dead_code,
+    reason = "Staged reproduction API retained for lifecycle integration"
+)]
 
 //! Physical reproduction lifecycle.
 //!
