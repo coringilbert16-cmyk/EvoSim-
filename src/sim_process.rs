@@ -22,7 +22,11 @@ enum SimulationCommand {
         bounds: Option<(f64, f64, f64, f64)>,
     },
     HistoryWorld { tick: u64 },
-    Organism { id: String },
+    Organism {
+        id: String,
+        known_structure_revision: Option<u64>,
+        known_position_revision: Option<u64>,
+    },
     Structure { id: String },
     Resources,
     Pause,
@@ -198,12 +202,19 @@ fn execute(command: SimulationCommand, runtime: &Arc<Mutex<RuntimeState>>) -> Co
                 .expect("historical world observation must serialize"),
             )
         }
-        SimulationCommand::Organism { id } => {
+        SimulationCommand::Organism {
+            id,
+            known_structure_revision,
+            known_position_revision,
+        } => {
             let projection = {
                 let state = runtime.lock();
-                let Some(observation) =
-                    OrganismObservation::from_simulation(&state.simulation, &id)
-                else {
+                let Some(observation) = OrganismObservation::from_simulation_with_revisions(
+                    &state.simulation,
+                    &id,
+                    known_structure_revision,
+                    known_position_revision,
+                ) else {
                     return CommandResponse::error("not_found");
                 };
                 let context = ObservationContext::organism(vec![id]);
