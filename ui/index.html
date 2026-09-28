@@ -70,6 +70,10 @@
     let runtimeStatus = null;
     let historyViewTick = null;
     let historyTicks = [];
+    const worldCache = {
+      organisms: new Map(),
+      field: new Map()
+    };
 
     async function control(path) {
       try {
@@ -264,8 +268,10 @@
     function renderWorld() {
       const world = worldPayload(), viewport = viewportSize(); if (!world) return;
       for (const organism of world.organisms || []) {
-        for (const part of organism.silhouette || []) drawObservedPart(part, viewport);
-        drawSelectionBounds(organism.id, organism, viewport);
+        const physical = organism.physical;
+        if (!physical) continue;
+        for (const part of physical.silhouette || []) drawObservedPart(part, viewport);
+        drawSelectionBounds(organism.id, physical, viewport);
       }
     }
     function renderOrganism() {
@@ -366,7 +372,19 @@
       let url = '/observation/world';
       if (level === 'World') {
         const bounds = worldObservationBounds();
-        if (bounds) url += '?' + new URLSearchParams(bounds).toString();
+        const params = new URLSearchParams(bounds || {});
+        if (worldCache.organisms.size) {
+          params.set('known_organisms', JSON.stringify([...worldCache.organisms.entries()].map(([id, value]) => [
+            id, value.structure_revision, value.position_revision
+          ])));
+        }
+        if (worldCache.field.size) {
+          params.set('known_cells', JSON.stringify([...worldCache.field.entries()].map(([cellIndex, value]) => [
+            Number(cellIndex), value.revision
+          ])));
+        }
+        const query = params.toString();
+        if (query) url += '?' + query;
       }
       if (level === 'Organism' && organismId != null) {
         url = `/observation/organism/${encodeURIComponent(organismId)}`;
@@ -393,6 +411,24 @@
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const next = await response.json();
         if (serial !== requestSerial) return;
+        if (level === 'World' && next?.payload?.World) {
+          const world = next.payload.World;
+          for (const organism of world.organisms || []) {
+            const cached = worldCache.organisms.get(organism.id);
+            if (organism.physical == null && cached) {
+              organism.physical = cached.physical;
+            }
+            worldCache.organisms.set(organism.id, organism);
+          }
+          for (const cell of world.field || []) {
+            if (cell.materials == null) {
+              const cached = worldCache.field.get(cell.cell_index);
+              if (cached) cell.materials = cached.materials;
+            }
+            if (cell.materials?.length) worldCache.field.set(cell.cell_index, cell);
+            else worldCache.field.delete(cell.cell_index);
+          }
+        }
         if (
           level === 'Organism' &&
           next?.payload?.Organism?.physical == null &&
