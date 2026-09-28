@@ -29,7 +29,7 @@ function Invoke-Git([string[]]$Arguments) {
     if ($LASTEXITCODE -ne 0) {
         $detail = (($output | Out-String).Trim())
         if ($detail) {
-            throw "git $($Arguments -join ' ') failed with exit code $LASTEXITCODE: $detail"
+            throw "git $($Arguments -join ' ') failed with exit code ${LASTEXITCODE}: $detail"
         }
         throw "git $($Arguments -join ' ') failed with exit code $LASTEXITCODE"
     }
