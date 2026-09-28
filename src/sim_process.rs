@@ -185,6 +185,7 @@ fn execute(command: SimulationCommand, runtime: &Arc<Mutex<RuntimeState>>) -> Co
             CommandResponse::value(serde_json::json!({
                 "tick": state.simulation.tick,
                 "running": state.simulation.running,
+                "population": state.simulation.organisms.len(),
                 "ticks_per_second": state.simulation.ticks_per_second,
                 "history_ticks": state.history_ticks(),
                 "observed_tick": state.observed_tick(),
