@@ -146,6 +146,9 @@ pub(crate) struct Organism {
     #[serde(default)]
     pub(crate) harmonic_spectrum: crate::harmonics::ToneSpectrum,
     pub(crate) memory: Vec<MemoryPoint>,
+    /// New associative memory authority; legacy memory remains during staged migration.
+    #[serde(default)]
+    pub(crate) experience_memory: crate::memory::ExperienceMemory,
     pub(crate) decision_history: DecisionHistory,
     pub(crate) usable_energy: f64,
     pub(crate) stress: f64,
