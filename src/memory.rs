@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::state::{Environment, Organism};
+use crate::state::{Environment, Organism, MEMORY_DECAY_PER_TICK};
 
 pub(crate) const MEMORY_CAPACITY_GROWTH_EXPONENT: f64 = 0.5;
 
@@ -69,6 +69,7 @@ pub(crate) fn memory_consequence_from_action(
         developmental_delta: consequence.developmental_delta,
         material_acquired: 0.0,
         material_consumed: 0.0,
+        material_transformed: 0.0,
     }
 }
 
