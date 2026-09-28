@@ -244,7 +244,22 @@ pub(crate) struct OrganismObservation {
     pub(crate) silhouette: Vec<OrganismSilhouettePart>,
     pub(crate) unit_count: usize,
     pub(crate) bond_count: usize,
+    pub(crate) development_stage: crate::state::DevelopmentStage,
+    pub(crate) usable_energy: f64,
+    pub(crate) stress: f64,
+    pub(crate) active_transformation: Option<ActiveTransformationObservation>,
+    pub(crate) reproductive_construction_active: bool,
+    pub(crate) structure_revision: u64,
+    pub(crate) position_revision: u64,
 }
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct ActiveTransformationObservation {
+    pub(crate) id: u64,
+    pub(crate) kind: crate::state::TransformationKind,
+    pub(crate) remaining_ticks: u64,
+    pub(crate) duration_ticks: u64,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct OrganismSilhouettePart {
     pub(crate) form: crate::resources::Form,
@@ -281,6 +296,24 @@ impl OrganismObservation {
             silhouette,
             unit_count: organism.structure.units.len(),
             bond_count: organism.structure.bonds.len(),
+            development_stage: organism.development_stage.clone(),
+            usable_energy: organism.usable_energy,
+            stress: organism.stress,
+            active_transformation: organism.active_transformation_id.and_then(|id| {
+                simulation
+                    .active_transformations
+                    .iter()
+                    .find(|transformation| transformation.id == id)
+                    .map(|transformation| ActiveTransformationObservation {
+                        id: transformation.id,
+                        kind: transformation.kind,
+                        remaining_ticks: transformation.remaining_ticks,
+                        duration_ticks: transformation.duration_ticks,
+                    })
+            }),
+            reproductive_construction_active: organism.reproductive_construction.is_some(),
+            structure_revision: organism.structure_revision,
+            position_revision: organism.position_revision,
         })
     }
 }
