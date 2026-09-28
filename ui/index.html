@@ -22,7 +22,7 @@
 </head>
 <body>
   <div id="app">
-    <header><div id="status">Connecting to EvoSim…</div><div id="controls"><button id="pause">Pause</button><button id="step">Step</button><button id="resume">Resume</button><label>TPS <input id="speed" type="number" min="0.1" step="0.1" value="10"></label></div></header><div id="timeline"><button id="live">Live</button><input id="history" type="range" min="0" max="0" value="0" step="1"><span id="timeline-label">Live</span></div>
+    <header><div id="status">Connecting to EvoSim…</div><div id="controls"><button id="pause">Pause</button><button id="step">Progress 1 Tick</button><button id="resume">Resume</button><button id="reset">Reset</button><label>TPS <input id="speed" type="number" min="0.1" step="0.1" value="10"></label></div></header><div id="timeline"><button id="live">Live</button><input id="history" type="range" min="0" max="0" value="0" step="1"><span id="timeline-label">Live</span></div>
     <main><canvas id="world"></canvas></main>
   </div>
   <script>
@@ -68,6 +68,7 @@
     let interaction = null;
     let requestSerial = 0;
     let runtimeStatus = null;
+    let simulationDead = false;
     let historyViewTick = null;
     let historyTicks = [];
     const worldCache = {
@@ -90,6 +91,7 @@
         const response = await fetch('/observation/status', { cache: 'no-store' });
         if (!response.ok) throw new Error();
         runtimeStatus = await response.json();
+        simulationDead = runtimeStatus.population === 0;
         historyTicks = runtimeStatus.history_ticks || [];
         const slider = document.getElementById('history');
         slider.max = Math.max(0, historyTicks.length - 1);
@@ -144,11 +146,19 @@
 
     document.getElementById('pause').addEventListener('click', () => control('/control/pause'));
     document.getElementById('resume').addEventListener('click', () => control('/control/resume'));
-    document.getElementById('step').addEventListener('click', () => control('/control/step'));
+    document.getElementById('step').addEventListener('click', async () => {
+      if (simulationDead) return;
+      await control('/control/step');
+      await refreshRuntimeStatus();
+      if (runtimeStatus?.population > 0 && observationLevel === 'Structure' && focusedOrganismId != null) {
+        await loadObservation('Structure', focusedOrganismId);
+      }
+    });
     document.getElementById('speed').addEventListener('change', event => {
       const value = Number(event.target.value);
       if (Number.isFinite(value) && value > 0) control('/control/speed/' + encodeURIComponent(value));
     });
+    document.getElementById('reset').addEventListener('click', resetSimulation);
     document.getElementById('live').addEventListener('click', returnToLiveWorld);
     document.getElementById('history').addEventListener('input', event => {
       if (!historyTicks.length) return;
@@ -324,6 +334,10 @@
     }
     function selectedIndex() { return focusedOrganismId == null ? -1 : [...selectedIds].indexOf(focusedOrganismId); }
     function updateStatus() {
+      if (simulationDead) {
+        status.textContent = 'Organism died — simulation stopped at tick ' + (runtimeStatus?.tick ?? '?') + '. Press Reset to begin again.';
+        return;
+      }
       if (observationLevel === 'World') {
         const world = worldPayload(); status.textContent = `Observing World — ${world?.organisms?.length || 0} organisms — ${selectedIds.size} selected`;
       } else if (observationLevel === 'Organism') {
@@ -468,6 +482,23 @@
     async function enterOrganismLevel(id) { if (id == null) return; focusedOrganismId = id; selectedIds.add(id); await loadObservation('Organism', id); }
     async function enterStructureLevel(id) { if (id == null) return; focusedOrganismId = id; selectedIds.add(id); await loadObservation('Structure', id); }
     async function returnToWorld() { focusedOrganismId = null; observationLevel = 'World'; cameraInitialized = false; await loadObservation('World'); centerSelection(); render(); }
+    async function resetSimulation() {
+      try {
+        const response = await fetch('/control/reset', { method: 'POST', cache: 'no-store' });
+        if (!response.ok) throw new Error();
+        historyViewTick = null;
+        historyTicks = [];
+        clearWorldCache();
+        selectedIds.clear();
+        focusedOrganismId = '1';
+        simulationDead = false;
+        cameraInitialized = false;
+        await refreshRuntimeStatus();
+        await loadObservation('Structure', '1');
+      } catch (_) {
+        status.textContent = 'Reset unavailable — simulation may be restarting…';
+      }
+    }
     async function returnToOrganism() { if (focusedOrganismId == null) return; await loadObservation('Organism', focusedOrganismId); }
     async function cycleFocused(delta) {
       const ids = [...selectedIds]; if (ids.length < 2) return;
@@ -605,7 +636,13 @@
     awaitInitialObservation();
 
     function awaitInitialObservation() {
-      loadObservation('World').finally(connectLiveStream);
+      refreshRuntimeStatus().finally(async () => {
+        selectedIds.clear();
+        selectedIds.add('1');
+        focusedOrganismId = '1';
+        await loadObservation('Structure', '1');
+        connectLiveStream();
+      });
     }
   </script>
 </body>
