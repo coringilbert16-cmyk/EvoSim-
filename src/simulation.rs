@@ -520,7 +520,7 @@ impl Simulation {
                     &mut self.energy_ledger,
                 );
             }
-                let stored_amount_before_transfer = organism.stored_material.total_amount();
+            let stored_amount_before_transfer = organism.stored_material.total_amount();
             Self::transfer_contained_environmental_material(organism, &mut self.environment);
             let acquired_amount =
                 (organism.stored_material.total_amount() - stored_amount_before_transfer).max(0.0);
