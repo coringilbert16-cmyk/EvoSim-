@@ -84,7 +84,7 @@ pub(crate) fn record_experience(
         return;
     }
 
-    let association = consequence_value(&consequence, needs).tanh();
+    let association = consequence_value(&consequence, needs);
     let raw_magnitude = [
         consequence.energy_delta / CONSEQUENCE_ENERGY_SCALE,
         consequence.developmental_delta / CONSEQUENCE_DEVELOPMENT_SCALE,
