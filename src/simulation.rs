@@ -591,7 +591,7 @@ impl Simulation {
                                 });
                             let developmental = developmental.as_ref().map(|context| {
                                 (
-                                    context.blueprint,
+                                    &context.blueprint,
                                     context.origin,
                                     context.orientation,
                                     context.preferred_length,
