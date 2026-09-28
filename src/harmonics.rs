@@ -428,6 +428,46 @@ mod tests {
     use super::*;
 
     #[test]
+    fn spectral_similarity_is_symmetric_and_exact_match_is_one() {
+        let a = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_hz: 440.0,
+                amplitude: 1.0,
+                phase_radians: 0.0,
+            }],
+        };
+        let b = a.clone();
+        assert!((spectral_similarity(&a, &b) - 1.0).abs() < 1e-12);
+        assert!((spectral_similarity(&a, &b) - spectral_similarity(&b, &a)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn spectral_similarity_falls_with_log_frequency_distance() {
+        let a = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_hz: 440.0,
+                amplitude: 1.0,
+                phase_radians: 0.0,
+            }],
+        };
+        let near = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_hz: 460.0,
+                amplitude: 1.0,
+                phase_radians: 0.0,
+            }],
+        };
+        let far = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_hz: 1760.0,
+                amplitude: 1.0,
+                phase_radians: 0.0,
+            }],
+        };
+        assert!(spectral_similarity(&a, &near) > spectral_similarity(&a, &far));
+    }
+
+    #[test]
     fn genome_cavity_receives_environmental_material_at_realized_boundary() {
         let catalog = crate::resources::default_catalog();
         let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
