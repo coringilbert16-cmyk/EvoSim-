@@ -320,11 +320,7 @@ fn execute(command: SimulationCommand, runtime: &Arc<Mutex<RuntimeState>>) -> Co
         }
         SimulationCommand::Reset => {
             let mut state = runtime.lock();
-            let ticks_per_second = state.simulation.ticks_per_second;
-            state.simulation = Simulation::new(42, ticks_per_second);
-            state.simulation.running = false;
-            state.history.clear();
-            state.history.push_back(state.simulation.clone());
+            state.reset();
             CommandResponse::value(serde_json::json!({"tick": 0, "running": false, "session_id": state.session_id}))
         }
         SimulationCommand::Restore { tick } => {
