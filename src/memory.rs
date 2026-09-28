@@ -41,31 +41,21 @@ pub(crate) fn consequence_value(
     let reproduction = needs.reproduction.clamp(0.0, 1.0);
     let development = needs.development.clamp(0.0, 1.0);
 
-    let raw_weights = [
-        1.0 + survival,
-        1.0 + development + 0.5 * reproduction,
-        0.25 + 0.75 * (development.max(reproduction)),
-        1.0 + survival,
-        1.0 + 2.0 * survival,
-        0.25 + 0.75 * survival,
-    ];
-    let weight_total = raw_weights.iter().sum::<f64>().max(f64::EPSILON);
-    let weights = raw_weights.map(|weight| weight / weight_total);
+    let energy_weight = 1.0 + survival;
+    let development_weight = 1.0 + development + 0.5 * reproduction;
+    let acquisition_weight = 1.0 + survival;
+    let stress_penalty = 1.0 + 2.0 * survival;
+    let damage_penalty = 1.0 + 2.0 * survival;
+    let consumption_penalty = 0.25 + 0.75 * survival;
 
-    let normalized = [
-        consequence.energy_delta / CONSEQUENCE_ENERGY_SCALE,
-        consequence.developmental_delta / CONSEQUENCE_DEVELOPMENT_SCALE,
-        consequence.material_acquired / CONSEQUENCE_MATERIAL_SCALE,
-        -consequence.stress_delta / CONSEQUENCE_STRESS_SCALE,
-        -consequence.damage_delta / CONSEQUENCE_DAMAGE_SCALE,
-        -consequence.material_consumed / CONSEQUENCE_CONSUMED_MATERIAL_SCALE,
-    ];
+    let raw = consequence.energy_delta / CONSEQUENCE_ENERGY_SCALE * energy_weight
+        + consequence.developmental_delta / CONSEQUENCE_DEVELOPMENT_SCALE * development_weight
+        + consequence.material_acquired / CONSEQUENCE_MATERIAL_SCALE * acquisition_weight
+        - consequence.stress_delta / CONSEQUENCE_STRESS_SCALE * stress_penalty
+        - consequence.damage_delta / CONSEQUENCE_DAMAGE_SCALE * damage_penalty
+        - consequence.material_consumed / CONSEQUENCE_CONSUMED_MATERIAL_SCALE * consumption_penalty;
 
-    weights
-        .into_iter()
-        .zip(normalized)
-        .map(|(weight, contribution)| weight * contribution)
-        .sum()
+    raw.tanh()
 }
 
 /// Record one completed experience against all spatially attributed
