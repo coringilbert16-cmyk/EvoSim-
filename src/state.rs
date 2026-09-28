@@ -143,7 +143,7 @@ pub(crate) struct Organism {
     pub(crate) developmental_orientation_radians: f64,
     pub(crate) occupied_cells: Vec<Position>,
     pub(crate) genome: Genome,
-    /// Spectrum currently present at the organism's physically realized genome cavity.
+    /// Spectrum emitted by the organism's realized physical structure into its external resonance aura.
     #[serde(default)]
     pub(crate) harmonic_spectrum: crate::harmonics::ToneSpectrum,
     pub(crate) memory: Vec<MemoryPoint>,
@@ -181,6 +181,8 @@ pub(crate) struct Organism {
     #[serde(skip)]
     pub(crate) cached_harmonic_key: Option<(u64, u64, u64)>,
     #[serde(skip)]
+    pub(crate) cached_harmonic_radius: Option<f64>,
+    #[serde(skip)]
     pub(crate) last_movement_attempt: Option<MovementAttemptDiagnostic>,
 }
 pub(crate) const STRESS_DECAY_PER_TICK: f64 = 0.98;
@@ -199,11 +201,11 @@ impl Organism {
         self.cached_developmental_revision = None;
         self.cached_developmental_realization = None;
         self.cached_harmonic_key = None;
+        self.cached_harmonic_radius = None;
     }
 
     pub(crate) fn mark_position_changed(&mut self) {
         self.position_revision = self.position_revision.wrapping_add(1);
-        self.cached_harmonic_key = None;
     }
 
     pub(crate) fn genome_cavity_cached_ref(
