@@ -1892,3 +1892,408 @@ The governing principle is:
 > **An organism does not perceive the world. Its physically realized structure interacts with the world, and whatever information that interaction produces becomes available to the organism.**
 
 No mechanism may be introduced solely to restore the behavior previously supplied by the retired resource-perception oracle. If an exact harmonic-to-action relationship is not specified, implementation stops at the physical information boundary rather than inventing a behavioral shortcut.
+
+
+# 59. Memory / Associative Spatial Map — NEW AUTHORITY
+
+**Status: APPROVED architecture; numerical calibration values marked EXPERIMENTAL.**
+
+This section supersedes the legacy `MemoryPoint` / `DecisionHistory` behavioral model and is the authoritative memory specification going forward. Older memory implementations, assumptions, and tests that conflict with this section are legacy and must be removed or adapted; they must not be used as design authority.
+
+The approved model is:
+
+**WORLD → existing resonance physics → physical genome cavity → spatially attributed perception → current situation → action → physical consequence → experience memory → future perception/action.**
+
+Memory interprets current perception. It does not replace perception, override physics, or provide an abstract resource-value oracle.
+
+## 59.1 Approved cognitive action boundary
+
+The organism's behavioral action categories are:
+
+- **MOVE**
+- **PROCESS**
+- **EXPEL**
+- **IDLE**
+
+Existing BREAK and COMBINE mechanisms remain physical processing mechanisms and may remain implementation-level operations beneath PROCESS.
+
+There is **no ACQUIRE action**.
+
+Acquisition is a physical consequence of an action, primarily movement/overlap with physical material. The organism does not independently choose to acquire material.
+
+The authoritative learning sequence is:
+
+**perception → action → physical consequence → memory reinforcement.**
+
+## 59.2 Perception
+
+The existing resonance/harmonic system remains the physical basis of perception. No separate sensory physics is introduced.
+
+The resonance pipeline must retain enough source provenance for perception to distinguish simultaneously perceived signals spatially. A perceived signal conceptually contains:
+
+- received spectrum,
+- source/location information,
+- spatial extent associated with the existing resonance geometry,
+- perceived magnitude.
+
+The organism only perceives what its realized physical resonance geometry permits it to receive.
+
+The existing genome cavity and resonance geometry are therefore authoritative. No arbitrary perception radius is introduced.
+
+The current four-component spectrum bound remains an **EXPERIMENTAL implementation compression limit**, not a biological law.
+
+## 59.3 Spectral similarity
+
+Spectral matching is continuous and uses no resource IDs or semantic categories.
+
+For component frequencies \(f_a,f_b\):
+
+\[
+d_f=|\ln(f_a/f_b)|
+\]
+
+and the component similarity is:
+
+\[
+s_f=e^{-d_f/\sigma_f}
+\]
+
+The approved symmetric spectrum similarity is the mean of the two amplitude-weighted directional matches:
+
+\[
+S(A,B)=\frac{M(A\rightarrow B)+M(B\rightarrow A)}{2}
+\]
+
+where each directional match weights each source component by its non-negative amplitude and uses its best matching component in the target spectrum.
+
+\[
+0\le S(A,B)\le1
+\]
+
+An exact spectral match produces 1. Greater logarithmic frequency separation produces lower similarity.
+
+### Experimental spectral calibration
+
+\[
+\boxed{\sigma_f=0.25}
+\]
+
+This is an **EXPERIMENTAL calibration value** and may be changed after behavioral validation without changing the approved architecture.
+
+## 59.4 Memory layers
+
+Memory is represented conceptually through three related layers rather than one generic memory point.
+
+### Spatial memory
+
+Stores:
+
+- location/region,
+- spatial extent,
+- location association,
+- location association strength/confidence,
+- memory strength.
+
+The spatial extent comes from the actual resonance region involved in the experience. There is no arbitrary fixed merge radius.
+
+### Spectral/matter memory
+
+Stores:
+
+- a learned spectral pattern/prototype,
+- matter/spectral association,
+- matter/spectral association strength/confidence,
+- memory strength.
+
+The organism recognizes recurring matter through spectral similarity rather than an authored resource identity.
+
+### Encounter memory
+
+Stores the relationship between an actual experience's:
+
+- spatial context,
+- perceived spectrum,
+- action,
+- actual multidimensional consequence,
+- memory strength.
+
+Encounter memory prevents the organism from collapsing "this material is useful" and "this location is useful" into the same fact.
+
+## 59.5 Independent spatial and spectral associations
+
+Location and spectral/matter associations are learned independently from the same physical experience.
+
+A positive material experience does not automatically make its location positive, and a positive location does not automatically make every material found there positive.
+
+All combinations are valid, including:
+
+- positive location + positive matter,
+- positive location + negative matter,
+- negative location + positive matter,
+- unknown location + positive matter,
+- positive location + unknown matter.
+
+The same spectrum may therefore be learned positively in one context and the same location may be learned negatively because of a different experience.
+
+## 59.6 Association representation and reinforcement
+
+Association value is distinct from memory strength.
+
+Association value:
+
+\[
+A\in[-1,1]
+\]
+
+answers what the remembered consequence tends to mean.
+
+Association confidence/strength:
+
+\[
+C\in[0,1]
+\]
+
+answers how strongly the organism has learned that relationship.
+
+Memory strength answers how strongly the experience remains represented at all.
+
+New association estimates use weighted reinforcement rather than overwrite:
+
+\[
+A_{new}=\frac{A_{old}W_{old}+A_{exp}W_{exp}}{W_{old}+W_{exp}}
+\]
+
+\[
+W_{new}=W_{old}+W_{exp}
+\]
+
+The experience weight is based on the magnitude of the actual consequence rather than merely counting events.
+
+## 59.7 Memory strength and decay
+
+The approved principle is:
+
+> **memory strength = recency + accumulated experience magnitude, subject to decay and finite capacity.**
+
+A single large experience can create a strong memory. Repeated small experiences can also create a strong memory. Unreinforced memories decay.
+
+Memory capacity remains derived from the physical genome cavity rather than a universal abstract slot count.
+
+The current cavity-derived capacity/decay architecture is retained conceptually. Numerical decay and normalization values are **EXPERIMENTAL calibration parameters** and must not be treated as biological constants.
+
+The inherited `memory_strength` trait controls memory formation/reinforcement strength. It does not replace physical cavity capacity.
+
+## 59.8 Consequence representation
+
+Physical consequences are recorded multidimensionally before valuation. At minimum the model must retain:
+
+- usable-energy delta,
+- stress delta,
+- physical-damage delta,
+- developmental/blueprint-realization delta,
+- material acquired,
+- material consumed/used.
+
+Additional dimensions may be retained when they are directly produced by authoritative physical state and are useful to evaluate an experience.
+
+A consequence must not be permanently collapsed into a generic good/bad label.
+
+Acquisition is a consequence in its own right. For example:
+
+**MOVE/overlap → 2C material acquired → memory records acquisition.**
+
+Later:
+
+**PROCESS → physical transformation → energy/development/stress/etc. consequence → memory reinforces the relevant spectral and spatial associations.**
+
+This preserves the distinction between finding/acquiring material and processing it.
+
+## 59.9 State-dependent consequence valuation
+
+The same physical consequence can have different present value depending on the organism's current state.
+
+The conceptual valuation is:
+
+\[
+V(E|State)=
+ w_E(State)\Delta E
++w_D(State)\Delta D
++w_R(State)\Delta R
++w_A(State)A_q
+-w_S(State)\Delta S
+-w_X(State)\Delta X
+\]
+
+where the terms represent, as applicable:
+
+- usable-energy change,
+- developmental/blueprint progress,
+- reproduction-relevant progress,
+- material acquisition,
+- stress,
+- physical damage.
+
+Weights are state-dependent. Energy becomes more important when usable energy is scarce; developmental progress becomes more important when developmental needs remain; stress and damage become more costly when the organism is vulnerable.
+
+This valuation is a current decision interpretation, not a permanent mutation of the stored physical consequence.
+
+### Experimental valuation calibration
+
+Initial implementation values should be treated as **EXPERIMENTAL** and calibrated against observed behavior rather than as biological constants. The initial implementation should use normalized contribution magnitudes and equal unit weights as the neutral starting point, with state multipliers supplying the first-order adaptation:
+
+\[
+w_E=1+2(1-E_n)
+\]
+\[
+w_D=1+(1-R_n)
+\]
+\[
+w_S=1+2S_n
+\]
+\[
+w_X=1+2X_n
+\]
+\[
+w_A=1
+\]
+\[
+w_R=1+(1-R_{repro,n})
+\]
+
+where normalized state quantities are clamped to \([0,1]\). These values are deliberately experimental.
+
+## 59.10 Curiosity
+
+Curiosity is an inherited, mutable genome trait.
+
+It represents the organism's baseline drive to investigate unfamiliar perceived stimuli. It is not a hard-coded behavioral category and is not a substitute for perception.
+
+The initial trait is:
+
+\[
+\boxed{curiosity=0.5}
+\]
+
+with initial mutation sigma:
+
+\[
+\boxed{\sigma_{mutation}=0.05}
+\]
+
+These are **EXPERIMENTAL calibration values**.
+
+When an organism has little confidence in a perceived spectral pattern or location, curiosity supplies exploratory value in proportion to its inherited trait.
+
+## 59.11 Perception-first movement
+
+Movement is driven primarily by what the organism is experiencing **now**.
+
+Memory interprets current perception; it does not act as a second sensory system.
+
+For current spectral/matter uncertainty:
+
+\[
+U_m=C_mV_m+(1-C_m)K_m
+\]
+
+For current location uncertainty:
+
+\[
+U_l=C_lV_l+(1-C_l)K_l
+\]
+
+The combined stimulus utility is based on these independent matter and location terms and the currently perceived magnitude.
+
+For perceived stimulus \(i\):
+
+\[
+\vec D_i=\hat r_i\,M_i\,(U_{m,i}+U_{l,i})
+\]
+
+and:
+
+\[
+\vec D=\sum_i\vec D_i
+\]
+
+The organism moves according to the resulting current perceived direction, subject to physical movement constraints.
+
+If current directional information is insufficient, curiosity provides exploratory movement rather than a remembered arbitrary destination.
+
+Remembered locations may influence behavior through current perception of the remembered region; memory does not create omniscient perception of distant locations.
+
+## 59.12 Movement distance
+
+Candidate movement distances remain:
+
+\[
+d\in\{1,2,4,8\}
+\]
+
+Distance is selected from the current situation, not from a learned historical preference for a particular movement distance.
+
+For each candidate:
+
+\[
+U(d)=E[experience\ reached\ at\ d]+E[exploration\ at\ d]-C_{move}(d)
+\]
+
+Movement cost is the existing physical movement cost. No separate "4-unit movement was good" memory is retained.
+
+### Experimental movement calibration
+
+The initial implementation should use the existing movement-cost function as the authoritative physical cost. The weighting between expected experience, exploration, and cost is **EXPERIMENTAL**. The neutral starting point is equal unit weighting after each term is normalized to comparable magnitude.
+
+## 59.13 Legacy systems explicitly retired
+
+The following are superseded by this section and must not remain behavioral authorities:
+
+- `MemoryPoint` as the primary memory model,
+- the arbitrary 40-unit memory merge radius,
+- direct movement vectors toward remembered points,
+- `DecisionHistory` as a separate cognitive memory system,
+- non-decaying lifetime decision history,
+- movement-distance-specific historical preferences,
+- semantic resource desirability memories.
+
+Actual consequence information from those systems is retained only where it belongs in the new multidimensional experience-memory model.
+
+## 59.14 Experimental calibration registry
+
+The following values are explicitly **EXPERIMENTAL** and may be tuned without changing the approved architecture:
+
+| Parameter | Initial value | Purpose |
+|---|---:|---|
+| Spectral match sigma | 0.25 | Log-frequency similarity falloff |
+| Curiosity trait | 0.50 | Baseline inherited exploration drive |
+| Curiosity mutation sigma | 0.05 | Evolutionary variation in curiosity |
+| Neutral consequence weights | 1.0 | Starting contribution scale |
+| Energy scarcity multiplier | 2.0 | Increase energy value under scarcity |
+| Stress vulnerability multiplier | 2.0 | Increase stress cost under vulnerability |
+| Damage vulnerability multiplier | 2.0 | Increase damage cost under vulnerability |
+| Developmental-need multiplier | 1.0 | Increase developmental value with remaining need |
+| Movement term weights | 1:1:1 | Experience / exploration / movement-cost starting balance |
+| Memory decay normalization | current cavity-derived model | Persistence calibration; subject to validation |
+
+These numbers are **not** new biological laws. They are starting experimental values for the approved architecture.
+
+## 59.15 Implementation authority
+
+This section is now the authoritative memory design.
+
+Before implementation, existing code must be audited against each subsection. Each migration step must preserve the approved physical authorities and remove obsolete duplicate authorities rather than layering the new model on top of the old one.
+
+No code may reintroduce a retired memory mechanism merely because it is convenient for an intermediate implementation.
+
+The migration must be performed incrementally with an audit before and after each change, followed by focused behavioral tests and a long-run simulation validation.
+
+## 59.16 Changes already made in the memory-model migration
+
+The following changes have already been made on the dedicated memory-model branch:
+
+1. Added mutable inherited genome trait `curiosity` with initial value 0.5 and mutation sigma 0.05.
+2. Added the first experimental continuous spectral-similarity implementation using logarithmic frequency distance and amplitude-weighted symmetric matching.
+3. Added focused spectral-similarity tests covering exact matching, symmetry, and decreasing similarity with frequency distance.
+4. Created draft PR #145 so the migration can be validated independently before any merge to `main`.
+
+These changes are foundations only. The full memory migration described in this section is not considered complete until the legacy memory authorities have been replaced, tested, and validated by the simulation.
