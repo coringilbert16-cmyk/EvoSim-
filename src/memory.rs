@@ -806,7 +806,6 @@ mod tests {
         assert!(organism.memory[0].strength > perception_strength);
     }
 
-
     #[test]
     fn record_experience_keeps_location_and_spectrum_associations_independent() {
         let spectrum = crate::harmonics::ToneSpectrum {
