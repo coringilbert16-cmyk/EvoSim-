@@ -54,10 +54,8 @@ pub(crate) fn movement_direction_periodic(
             .spectral
             .iter()
             .map(|memory| {
-                let similarity = crate::harmonics::spectral_similarity(
-                    &memory.spectrum,
-                    &perception.spectrum,
-                );
+                let similarity =
+                    crate::harmonics::spectral_similarity(&memory.spectrum, &perception.spectrum);
                 (memory, similarity)
             })
             .filter(|(_, similarity)| similarity.is_finite())
