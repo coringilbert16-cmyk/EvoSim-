@@ -380,22 +380,27 @@ impl Simulation {
         }
     }
     fn update_external_harmonic_perceptions(&mut self) {
-        let snapshots: Vec<(String, crate::state::Position, f64, crate::harmonics::ToneSpectrum)> =
-            self.organisms
-                .iter()
-                .map(|organism| {
-                    (
-                        organism.id.clone(),
-                        organism
-                            .occupied_cells
-                            .first()
-                            .cloned()
-                            .unwrap_or(crate::state::Position { x: 0.0, y: 0.0 }),
-                        organism.cached_harmonic_radius.unwrap_or(0.0),
-                        organism.harmonic_spectrum.clone(),
-                    )
-                })
-                .collect();
+        let snapshots: Vec<(
+            String,
+            crate::state::Position,
+            f64,
+            crate::harmonics::ToneSpectrum,
+        )> = self
+            .organisms
+            .iter()
+            .map(|organism| {
+                (
+                    organism.id.clone(),
+                    organism
+                        .occupied_cells
+                        .first()
+                        .cloned()
+                        .unwrap_or(crate::state::Position { x: 0.0, y: 0.0 }),
+                    organism.cached_harmonic_radius.unwrap_or(0.0),
+                    organism.harmonic_spectrum.clone(),
+                )
+            })
+            .collect();
 
         for observer in &mut self.organisms {
             let Some(position) = observer.occupied_cells.first().cloned() else {
