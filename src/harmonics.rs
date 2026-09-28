@@ -591,10 +591,18 @@ mod tests {
     fn resonance_perception_preserves_boundary_location() {
         let catalog = crate::resources::default_catalog();
         let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
-        let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
+        let (mut structure, _, _) =
+            crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
         let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
             .unwrap()
             .expect("confirmed seed must contain a genome cavity");
+        // The initial realized structure is centered near the origin, while
+        // the field uses non-negative world coordinates. Translate only this
+        // isolated test fixture into the field's valid coordinate range.
+        for unit in &mut structure.units {
+            unit.placement.x += 500.0;
+            unit.placement.y += 500.0;
+        }
         let mut field = crate::environment::ActiveMaterialField::new(
             1000.0,
             1000.0,
