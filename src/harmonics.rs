@@ -26,6 +26,20 @@ pub(crate) struct ToneSpectrum {
     pub(crate) components: Vec<ToneComponent>,
 }
 
+/// A spatially attributed environmental signal after passing through the
+/// organism's existing realized resonance geometry. This does not add a
+/// separate sensory system: it preserves which boundary location contributed
+/// the received environmental spectrum before the cavity aggregate discards
+/// that provenance.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub(crate) struct ResonancePerception {
+    pub(crate) source_x: f64,
+    pub(crate) source_y: f64,
+    pub(crate) extent: f64,
+    pub(crate) spectrum: ToneSpectrum,
+    pub(crate) magnitude: f64,
+}
+
 impl ToneSpectrum {
     pub(crate) fn empty() -> Self {
         Self::default()
