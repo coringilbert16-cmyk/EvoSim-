@@ -257,17 +257,28 @@ try {
 
             Stop-Server
             Install-Version $remoteSha $nextExe
-            Start-Server
 
-            if (-not (Wait-ForServer)) {
+            try {
+                Start-Server
+                if (-not (Wait-ForServer)) {
+                    throw "new version did not become ready"
+                }
+            } catch {
                 Write-Host "New version failed to start. Restoring the previous known-good binary."
                 Stop-Server
-                $broken = Join-Path $RunnerRoot "previous.exe"
-                if (Test-Path $broken) {
-                    Move-Item -Force $broken $CurrentExe
-                    $previousSha = $runningSha
-                    Set-Content -Path $CurrentVersion -Value $previousSha -NoNewline
-                    Start-Server
+                $previousExe = Join-Path $RunnerRoot "previous.exe"
+                if (-not (Test-Path $previousExe)) {
+                    throw "rollback binary is unavailable"
+                }
+                if (Test-Path $CurrentExe) {
+                    Remove-Item -Force $CurrentExe
+                }
+                Move-Item -Force $previousExe $CurrentExe
+                Set-Content -Path $CurrentVersion -Value $runningSha -NoNewline
+                Start-Server
+                if (-not (Wait-ForServer)) {
+                    Stop-Server
+                    throw "rollback version also failed to become ready"
                 }
                 continue
             }
