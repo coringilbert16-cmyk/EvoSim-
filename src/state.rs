@@ -15,7 +15,7 @@ use std::sync::Arc;
 pub(crate) struct AppState {
     pub(crate) simulation: Arc<tokio::sync::Mutex<crate::runtime::SimulationProcess>>,
 }
-#[derive(Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) enum DevelopmentStage {
     Offspring,
     Juvenile,
