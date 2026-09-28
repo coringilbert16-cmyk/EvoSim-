@@ -339,10 +339,10 @@ pub(crate) fn reinforce_spectral_memory(
             .spectrum
             .components
             .push(crate::harmonics::ToneComponent {
-            frequency_hz: component.frequency_hz,
-            amplitude: component.amplitude * blend,
-            phase_radians: component.phase_radians,
-        });
+                frequency_hz: component.frequency_hz,
+                amplitude: component.amplitude * blend,
+                phase_radians: component.phase_radians,
+            });
     }
     existing.spectrum.retain_strongest();
 }
