@@ -384,6 +384,24 @@ pub(crate) fn genome_cavity_resonance_perceptions(
     perceptions
 }
 
+/// Return the spatially attributed resonance signals currently reaching the
+/// organism's genome cavity. This reuses the same physical resonance geometry
+/// as the harmonic state; it does not create a second sensory radius.
+pub(crate) fn organism_resonance_perceptions(
+    organism: &crate::state::Organism,
+    environment: &crate::state::Environment,
+) -> Vec<ResonancePerception> {
+    let Some(cavity) = organism.genome_cavity_cached(&environment.catalog) else {
+        return Vec::new();
+    };
+    genome_cavity_resonance_perceptions(
+        &organism.structure,
+        &environment.catalog,
+        &environment.field,
+        &cavity.boundary_units,
+    )
+}
+
 /// Refresh the harmonic state from the organism's actual realized genome
 /// cavity. A non-qualifying physical structure has no genome harmonic
 /// memory surface.
