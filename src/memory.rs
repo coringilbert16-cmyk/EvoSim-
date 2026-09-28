@@ -760,6 +760,21 @@ mod tests {
     }
 
     #[test]
+    fn transformed_material_is_retained_without_intrinsic_valuation() {
+        let transformed_only = MemoryConsequence {
+            material_transformed: 10.0,
+            ..Default::default()
+        };
+        let baseline = MemoryConsequence::default();
+        let needs = crate::decision::CurrentNeeds {
+            survival: 0.5,
+            ..Default::default()
+        };
+
+        assert_eq!(consequence_value(&transformed_only, needs), consequence_value(&baseline, needs));
+    }
+
+    #[test]
     fn memory_capacity_uses_diminishing_area_returns() {
         let minimum = crate::cavity::GenomeCavity {
             area: 10.0,
