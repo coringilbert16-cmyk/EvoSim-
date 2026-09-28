@@ -53,10 +53,21 @@ pub(crate) fn movement_direction_periodic(
             .experience_memory
             .spectral
             .iter()
-            .filter_map(|memory| {
-                let similarity =
-                    crate::harmonics::spectral_similarity(&memory.spectrum, &perception.spectrum);
-                similarity.is_finite().then_some((memory, similarity))
+            .filter(|memory| {
+                crate::harmonics::spectral_similarity(
+                    &memory.spectrum,
+                    &perception.spectrum,
+                )
+                .is_finite()
+            })
+            .map(|memory| {
+                (
+                    memory,
+                    crate::harmonics::spectral_similarity(
+                        &memory.spectrum,
+                        &perception.spectrum,
+                    ),
+                )
             })
             .max_by(|(_, a), (_, b)| a.total_cmp(b));
 
