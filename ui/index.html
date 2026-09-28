@@ -112,8 +112,14 @@
       label.textContent = (historyViewTick == null || tick === liveTick) ? 'Live — tick ' + (liveTick ?? tick) : 'History — tick ' + tick;
     }
 
+    function clearWorldCache() {
+      worldCache.organisms.clear();
+      worldCache.field.clear();
+    }
+
     async function loadHistoricalWorld(tick) {
       const serial = ++requestSerial;
+      clearWorldCache();
       try {
         const response = await fetch('/observation/history/' + encodeURIComponent(tick) + '/world', { cache: 'no-store' });
         if (!response.ok) throw new Error();
@@ -129,6 +135,7 @@
     }
 
     async function returnToLiveWorld() {
+      clearWorldCache();
       historyViewTick = null;
       cameraInitialized = false;
       await loadObservation('World');
@@ -578,6 +585,7 @@
           if (message.type === 'tick') {
             if (runtimeStatus?.session_id && message.session_id !== runtimeStatus.session_id) {
               historyViewTick = null;
+              clearWorldCache();
               cameraInitialized = false;
             }
             queueLiveRefresh();
