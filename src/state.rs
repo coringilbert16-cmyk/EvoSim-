@@ -206,7 +206,6 @@ impl Organism {
 
     pub(crate) fn mark_position_changed(&mut self) {
         self.position_revision = self.position_revision.wrapping_add(1);
-        self.cached_harmonic_key = None;
     }
 
     pub(crate) fn genome_cavity_cached_ref(
