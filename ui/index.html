@@ -170,6 +170,7 @@
     function payload() { return observation?.payload || null; }
     function worldPayload() { return payload()?.World || null; }
     function organismPayload() { return payload()?.Organism || null; }
+    function organismPhysicalPayload() { return organismPayload()?.physical || null; }
     function structurePayload() { return payload()?.Structure || null; }
 
     function formBounds(form, x, y, rotation = 0) {
@@ -202,7 +203,7 @@
         const world = worldPayload();
         if (world) camera.fitWorld(world.width || 1, world.height || 1, viewport.width, viewport.height);
       } else if (observationLevel === 'Organism') {
-        const organism = organismPayload();
+        const organism = organismPhysicalPayload();
         if (organism) camera.fitBounds(organism.min_x, organism.max_x, organism.min_y, organism.max_y, viewport.width, viewport.height);
       } else {
         const structure = structurePayload();
@@ -267,9 +268,9 @@
       }
     }
     function renderOrganism() {
-      const organism = organismPayload(), viewport = viewportSize(); if (!organism) return;
-      for (const part of organism.silhouette || []) drawObservedPart(part, viewport);
-      drawSelectionBounds(organism, viewport, 5);
+      const physical = organismPhysicalPayload(), viewport = viewportSize(); if (!physical) return;
+      for (const part of physical.silhouette || []) drawObservedPart(part, viewport);
+      drawSelectionBounds(physical, viewport, 5);
     }
     function renderStructure() {
       const structure = structurePayload(), viewport = viewportSize(); if (!structure) return;
@@ -311,7 +312,8 @@
       if (observationLevel === 'World') {
         const world = worldPayload(); status.textContent = `Observing World — ${world?.organisms?.length || 0} organisms — ${selectedIds.size} selected`;
       } else if (observationLevel === 'Organism') {
-        const organism = organismPayload(); status.textContent = `Observing Organism — ${organism?.id || focusedOrganismId || 'unknown'} — ${organism?.unit_count || 0} units — ${organism?.bond_count || 0} bonds`;
+        const organism = organismPayload(), physical = organismPhysicalPayload();
+        status.textContent = `Observing Organism — ${organism?.id || focusedOrganismId || 'unknown'} — ${physical?.unit_count || 0} units — ${physical?.bond_count || 0} bonds`;
       } else {
         const structure = structurePayload(), index = selectedIndex();
         const cycle = selectedIds.size > 1 ? ` — [${index + 1}/${selectedIds.size}]` : '';
@@ -364,13 +366,30 @@
         const bounds = worldObservationBounds();
         if (bounds) url += '?' + new URLSearchParams(bounds).toString();
       }
-      if (level === 'Organism' && organismId != null) url = `/observation/organism/${encodeURIComponent(organismId)}`;
+      if (level === 'Organism' && organismId != null) {
+        url = `/observation/organism/${encodeURIComponent(organismId)}`;
+        const current = organismPayload();
+        if (current?.id === organismId) {
+          const params = new URLSearchParams();
+          if (Number.isInteger(current.structure_revision)) params.set('known_structure_revision', current.structure_revision);
+          if (Number.isInteger(current.position_revision)) params.set('known_position_revision', current.position_revision);
+          const query = params.toString();
+          if (query) url += '?' + query;
+        }
+      }
       if (level === 'Structure' && organismId != null) url = `/observation/structure/${encodeURIComponent(organismId)}`;
       try {
         const response = await fetch(url, { cache: 'no-store' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const next = await response.json();
         if (serial !== requestSerial) return;
+        if (
+          level === 'Organism' &&
+          next?.payload?.Organism?.physical == null &&
+          observation?.payload?.Organism?.id === organismId
+        ) {
+          next.payload.Organism.physical = observation.payload.Organism.physical;
+        }
         observation = next; observationLevel = level;
         if (levelChanged) cameraInitialized = false;
         render();

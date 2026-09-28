@@ -235,6 +235,17 @@ impl WorldObservation {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct OrganismObservation {
     pub(crate) id: String,
+    pub(crate) physical: Option<OrganismPhysicalObservation>,
+    pub(crate) development_stage: crate::state::DevelopmentStage,
+    pub(crate) usable_energy: f64,
+    pub(crate) stress: f64,
+    pub(crate) active_transformation: Option<ActiveTransformationObservation>,
+    pub(crate) reproductive_construction_active: bool,
+    pub(crate) structure_revision: u64,
+    pub(crate) position_revision: u64,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct OrganismPhysicalObservation {
     pub(crate) x: f64,
     pub(crate) y: f64,
     pub(crate) min_x: f64,
@@ -244,14 +255,8 @@ pub(crate) struct OrganismObservation {
     pub(crate) silhouette: Vec<OrganismSilhouettePart>,
     pub(crate) unit_count: usize,
     pub(crate) bond_count: usize,
-    pub(crate) development_stage: crate::state::DevelopmentStage,
-    pub(crate) usable_energy: f64,
-    pub(crate) stress: f64,
-    pub(crate) active_transformation: Option<ActiveTransformationObservation>,
-    pub(crate) reproductive_construction_active: bool,
-    pub(crate) structure_revision: u64,
-    pub(crate) position_revision: u64,
 }
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct ActiveTransformationObservation {
     pub(crate) id: u64,
@@ -269,33 +274,51 @@ pub(crate) struct OrganismSilhouettePart {
 }
 impl OrganismObservation {
     pub(crate) fn from_simulation(simulation: &Simulation, organism_id: &str) -> Option<Self> {
+        Self::from_simulation_with_revisions(simulation, organism_id, None, None)
+    }
+
+    pub(crate) fn from_simulation_with_revisions(
+        simulation: &Simulation,
+        organism_id: &str,
+        known_structure_revision: Option<u64>,
+        known_position_revision: Option<u64>,
+    ) -> Option<Self> {
         let organism = simulation.organisms.iter().find(|o| o.id == organism_id)?;
         let position = organism.occupied_cells.first()?;
-        let geometry = OrganismBodyGeometry::from_structure(
-            &organism.structure,
-            &simulation.environment.catalog,
-        )?;
-        let silhouette = geometry
-            .parts
-            .into_iter()
-            .map(|part| OrganismSilhouettePart {
-                form: part.form,
-                x: part.x + position.x,
-                y: part.y + position.y,
-                rotation_radians: part.rotation_radians,
+        let physical_changed = known_structure_revision != Some(organism.structure_revision)
+            || known_position_revision != Some(organism.position_revision);
+        let physical = if physical_changed {
+            let geometry = OrganismBodyGeometry::from_structure(
+                &organism.structure,
+                &simulation.environment.catalog,
+            )?;
+            let silhouette = geometry
+                .parts
+                .into_iter()
+                .map(|part| OrganismSilhouettePart {
+                    form: part.form,
+                    x: part.x + position.x,
+                    y: part.y + position.y,
+                    rotation_radians: part.rotation_radians,
+                })
+                .collect();
+            Some(OrganismPhysicalObservation {
+                x: position.x,
+                y: position.y,
+                min_x: geometry.min_x + position.x,
+                max_x: geometry.max_x + position.x,
+                min_y: geometry.min_y + position.y,
+                max_y: geometry.max_y + position.y,
+                silhouette,
+                unit_count: organism.structure.units.len(),
+                bond_count: organism.structure.bonds.len(),
             })
-            .collect();
+        } else {
+            None
+        };
         Some(Self {
             id: organism.id.clone(),
-            x: position.x,
-            y: position.y,
-            min_x: geometry.min_x + position.x,
-            max_x: geometry.max_x + position.x,
-            min_y: geometry.min_y + position.y,
-            max_y: geometry.max_y + position.y,
-            silhouette,
-            unit_count: organism.structure.units.len(),
-            bond_count: organism.structure.bonds.len(),
+            physical,
             development_stage: organism.development_stage.clone(),
             usable_energy: organism.usable_energy,
             stress: organism.stress,
@@ -433,6 +456,20 @@ mod tests {
         let payload = OrganismObservation::from_simulation(&simulation, "1").unwrap();
         assert!(ObservationProjection::organism(context, payload).is_none())
     }
+    #[test]
+    fn organism_observation_omits_unchanged_physical_state() {
+        let simulation = Simulation::new(1, 20.0);
+        let organism = simulation.organisms.first().unwrap();
+        let observation = OrganismObservation::from_simulation_with_revisions(
+            &simulation,
+            &organism.id,
+            Some(organism.structure_revision),
+            Some(organism.position_revision),
+        )
+        .unwrap();
+        assert!(observation.physical.is_none());
+    }
+
     #[test]
     fn structure_observation_preserves_physical_endpoints() {
         let simulation = Simulation::new(1, 20.0);
