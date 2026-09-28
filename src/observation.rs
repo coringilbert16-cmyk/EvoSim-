@@ -268,7 +268,8 @@ impl WorldObservation {
                         cell_index,
                         x,
                         y,
-                        materials,
+                        revision: simulation.environment.field.cell_revisions[cell_index],
+                        materials: Some(materials),
                     })
                 })
                 .collect()
