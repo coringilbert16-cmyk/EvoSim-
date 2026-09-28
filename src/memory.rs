@@ -5,9 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::state::{
-    Environment, Organism, MEMORY_DECAY_PER_TICK,
-};
+use crate::state::{Environment, Organism};
 
 pub(crate) const MEMORY_CAPACITY_GROWTH_EXPONENT: f64 = 0.5;
 
