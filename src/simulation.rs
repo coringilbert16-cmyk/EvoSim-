@@ -78,6 +78,7 @@ impl Simulation {
             harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
             memory: Vec::new(),
             experience_memory: crate::memory::ExperienceMemory::default(),
+        pending_movement_experience: None,
             decision_history: crate::decision::DecisionHistory::default(),
             usable_energy: initial_energy,
             stress: 0.0,
