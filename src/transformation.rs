@@ -413,6 +413,7 @@ mod tests {
             cached_developmental_revision: None,
             peak_developmental_realization: 0.0,
             cached_harmonic_key: None,
+            cached_harmonic_radius: None,
             last_movement_attempt: None,
         };
         let environment = crate::state::Environment {
