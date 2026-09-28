@@ -82,6 +82,12 @@ impl ObservationProjection {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct WorldOrganismObservation {
     pub(crate) id: String,
+    pub(crate) structure_revision: u64,
+    pub(crate) position_revision: u64,
+    pub(crate) physical: Option<WorldOrganismPhysicalObservation>,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct WorldOrganismPhysicalObservation {
     pub(crate) x: f64,
     pub(crate) y: f64,
     pub(crate) min_x: f64,
