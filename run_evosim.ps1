@@ -25,22 +25,44 @@ if (-not $mutex.WaitOne(0)) {
 $script:serverProcess = $null
 
 function Invoke-Git([string[]]$Arguments) {
-    $output = & git @Arguments 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        $detail = (($output | Out-String).Trim())
-        if ($detail) {
-            throw "git $($Arguments -join ' ') failed with exit code ${LASTEXITCODE}: $detail"
+    $stderrPath = [System.IO.Path]::GetTempFileName()
+    try {
+        $output = & git @Arguments 2> $stderrPath
+        $exitCode = $LASTEXITCODE
+        if ($exitCode -ne 0) {
+            $stdout = (($output | Out-String).Trim())
+            $stderr = (Get-Content -Raw $stderrPath).Trim()
+            $detail = (($stdout, $stderr | Where-Object { $_ }) -join [Environment]::NewLine).Trim()
+            if ($detail) {
+                throw "git $($Arguments -join ' ') failed with exit code ${exitCode}: $detail"
+            }
+            throw "git $($Arguments -join ' ') failed with exit code ${exitCode}"
         }
-        throw "git $($Arguments -join ' ') failed with exit code $LASTEXITCODE"
+    }
+    finally {
+        Remove-Item -Force $stderrPath -ErrorAction SilentlyContinue
     }
 }
 
 function Get-GitOutput([string[]]$Arguments) {
-    $output = & git @Arguments 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw "git $($Arguments -join ' ') failed with exit code $LASTEXITCODE"
+    $stderrPath = [System.IO.Path]::GetTempFileName()
+    try {
+        $output = & git @Arguments 2> $stderrPath
+        $exitCode = $LASTEXITCODE
+        if ($exitCode -ne 0) {
+            $stdout = (($output | Out-String).Trim())
+            $stderr = (Get-Content -Raw $stderrPath).Trim()
+            $detail = (($stdout, $stderr | Where-Object { $_ }) -join [Environment]::NewLine).Trim()
+            if ($detail) {
+                throw "git $($Arguments -join ' ') failed with exit code ${exitCode}: $detail"
+            }
+            throw "git $($Arguments -join ' ') failed with exit code ${exitCode}"
+        }
+        return (($output | Out-String).Trim())
     }
-    return (($output | Out-String).Trim())
+    finally {
+        Remove-Item -Force $stderrPath -ErrorAction SilentlyContinue
+    }
 }
 
 function Test-WorktreeClean {
@@ -60,11 +82,15 @@ function Get-CurrentVersion {
 
 function Remove-StagingWorktree {
     if (Test-Path (Join-Path $StagingWorktree ".git")) {
-        & git -C $Repo worktree remove --force $StagingWorktree 2>&1 | Out-Null
+        try {
+            Invoke-Git @("-C", $Repo, "worktree", "remove", "--force", $StagingWorktree)
+        } catch {}
     } elseif (Test-Path $StagingWorktree) {
         Remove-Item -Recurse -Force $StagingWorktree
     }
-    & git -C $Repo worktree prune 2>&1 | Out-Null
+    try {
+        Invoke-Git @("-C", $Repo, "worktree", "prune")
+    } catch {}
     if (Test-Path $StagingTarget) {
         Remove-Item -Recurse -Force $StagingTarget
     }
