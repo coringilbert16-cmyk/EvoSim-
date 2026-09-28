@@ -78,7 +78,7 @@ impl Simulation {
             harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
             memory: Vec::new(),
             experience_memory: crate::memory::ExperienceMemory::default(),
-        pending_movement_experience: None,
+            pending_movement_experience: None,
             decision_history: crate::decision::DecisionHistory::default(),
             usable_energy: initial_energy,
             stress: 0.0,
@@ -520,16 +520,15 @@ impl Simulation {
                     &mut self.energy_ledger,
                 );
             }
-            let stored_amount_before_transfer = organism.stored_material.total_amount();
-        Self::transfer_contained_environmental_material(organism, &mut self.environment);
-        let acquired_amount = (organism.stored_material.total_amount()
-            - stored_amount_before_transfer)
-            .max(0.0);
-        Self::finalize_pending_movement_experience(
-            organism,
-            &self.environment,
-            acquired_amount,
-        );
+                let stored_amount_before_transfer = organism.stored_material.total_amount();
+            Self::transfer_contained_environmental_material(organism, &mut self.environment);
+            let acquired_amount =
+                (organism.stored_material.total_amount() - stored_amount_before_transfer).max(0.0);
+            Self::finalize_pending_movement_experience(
+                organism,
+                &self.environment,
+                acquired_amount,
+            );
         }
         {
             let (organisms, environment) = (&mut self.organisms, &mut self.environment);
@@ -568,10 +567,8 @@ impl Simulation {
                 if eligibility.can_move {
                     let (before, rest) = organisms.split_at_mut(index);
                     let (organism, after) = rest.split_first_mut().expect("index is in organisms");
-                    let perceptions = crate::harmonics::organism_resonance_perceptions(
-                        organism,
-                        environment,
-                    );
+                    let perceptions =
+                        crate::harmonics::organism_resonance_perceptions(organism, environment);
                     let before_energy = organism.usable_energy;
                     let before_stress = organism.stress;
                     let before_realization = developmental
@@ -616,15 +613,14 @@ impl Simulation {
                             &move_candidate,
                             consequence,
                         );
-                        organism.pending_movement_experience = Some(
-                            crate::memory::PendingMovementExperience {
+                        organism.pending_movement_experience =
+                            Some(crate::memory::PendingMovementExperience {
                                 perceptions,
                                 consequence: crate::memory::memory_consequence_from_action(
                                     consequence,
                                 ),
                                 needs,
-                            },
-                        );
+                            });
                     }
                 }
                 let context = DecisionContext { needs, eligibility };
