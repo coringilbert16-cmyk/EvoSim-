@@ -77,6 +77,7 @@ impl Simulation {
             genome,
             harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
             memory: Vec::new(),
+            experience_memory: crate::memory::ExperienceMemory::default(),
             decision_history: crate::decision::DecisionHistory::default(),
             usable_energy: initial_energy,
             stress: 0.0,
