@@ -771,7 +771,10 @@ mod tests {
             ..Default::default()
         };
 
-        assert_eq!(consequence_value(&transformed_only, needs), consequence_value(&baseline, needs));
+        assert_eq!(
+            consequence_value(&transformed_only, needs),
+            consequence_value(&baseline, needs),
+        );
     }
 
     #[test]
