@@ -390,7 +390,13 @@ impl Simulation {
                             .first()
                             .cloned()
                             .unwrap_or(crate::state::Position { x: 0.0, y: 0.0 }),
-                        crate::harmonics::structural_radius(&organism.structure),
+                        crate::harmonics::structural_radius(
+                            &organism.structure,
+                            (
+                                organism.occupied_cells.first().map(|p| p.x).unwrap_or(0.0),
+                                organism.occupied_cells.first().map(|p| p.y).unwrap_or(0.0),
+                            ),
+                        ),
                         organism.harmonic_spectrum.clone(),
                     )
                 })
