@@ -149,6 +149,8 @@ pub(crate) struct Organism {
     /// New associative memory authority; legacy memory remains during staged migration.
     #[serde(default)]
     pub(crate) experience_memory: crate::memory::ExperienceMemory,
+    #[serde(default)]
+    pub(crate) pending_movement_experience: Option<crate::memory::PendingMovementExperience>,
     pub(crate) decision_history: DecisionHistory,
     pub(crate) usable_energy: f64,
     pub(crate) stress: f64,
