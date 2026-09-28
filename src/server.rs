@@ -108,8 +108,15 @@ async fn world_observation_handler(
 ) -> impl IntoResponse {
     let bounds = match (query.min_x, query.max_x, query.min_y, query.max_y) {
         (Some(min_x), Some(max_x), Some(min_y), Some(max_y))
-            if min_x.is_finite() && max_x.is_finite() && min_y.is_finite() && max_y.is_finite()
-                && min_x <= max_x && min_y <= max_y => Some((min_x, max_x, min_y, max_y)),
+            if min_x.is_finite()
+                && max_x.is_finite()
+                && min_y.is_finite()
+                && max_y.is_finite()
+                && min_x <= max_x
+                && min_y <= max_y =>
+        {
+            Some((min_x, max_x, min_y, max_y))
+        }
         (None, None, None, None) => None,
         _ => return error_response("invalid_view_bounds"),
     };
@@ -136,7 +143,9 @@ async fn world_observation_handler(
             "known_organisms": known_organisms,
             "known_cells": known_cells,
         }),
-    ).await {
+    )
+    .await
+    {
         Ok(value) => Json(value).into_response(),
         Err(error) => error_response(error),
     }
