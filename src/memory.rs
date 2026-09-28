@@ -125,7 +125,7 @@ pub(crate) fn record_experience(
             perception.extent,
             &perception.spectrum,
             action,
-            consequence,
+            consequence.clone(),
             weight,
         );
     }
