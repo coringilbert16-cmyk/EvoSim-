@@ -316,29 +316,29 @@ pub(crate) fn reinforce_spectral_memory(
             .map(|(index, candidate)| {
                 (
                     index,
-                    (candidate.frequency_hz / component.frequency_hz)
-                        .ln()
-                        .abs(),
+                    (candidate.frequency_hz / component.frequency_hz).ln().abs(),
                 )
             })
             .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
 
         if let Some((component_index, distance)) = best {
-            let frequency_similarity = (-distance / crate::harmonics::SPECTRAL_MATCH_SIGMA)
-                .exp();
+            let frequency_similarity = (-distance / crate::harmonics::SPECTRAL_MATCH_SIGMA).exp();
             if frequency_similarity >= SPECTRAL_MEMORY_MATCH_FLOOR {
                 let existing_component = &mut existing.spectrum.components[component_index];
                 existing_component.frequency_hz = ((1.0 - blend)
                     * existing_component.frequency_hz.ln()
                     + blend * component.frequency_hz.ln())
-                    .exp();
+                .exp();
                 existing_component.amplitude =
                     existing_component.amplitude * (1.0 - blend) + component.amplitude * blend;
                 continue;
             }
         }
 
-        existing.spectrum.components.push(crate::harmonics::ToneComponent {
+        existing
+            .spectrum
+            .components
+            .push(crate::harmonics::ToneComponent {
             frequency_hz: component.frequency_hz,
             amplitude: component.amplitude * blend,
             phase_radians: component.phase_radians,
