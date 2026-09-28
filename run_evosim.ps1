@@ -106,28 +106,43 @@ function Remove-StagingWorktree {
     }
 }
 
+function Invoke-Cargo([string[]]$Arguments) {
+    $stdoutPath = [System.IO.Path]::GetTempFileName()
+    $stderrPath = [System.IO.Path]::GetTempFileName()
+    try {
+        $process = Start-Process -FilePath "cargo.exe" -ArgumentList $Arguments -WorkingDirectory $Repo -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -PassThru
+        $process.WaitForExit()
+
+        $stdout = Get-Content -Raw $stdoutPath -ErrorAction SilentlyContinue
+        $stderr = Get-Content -Raw $stderrPath -ErrorAction SilentlyContinue
+        if ($stdout) { Write-Host $stdout.TrimEnd() }
+        if ($stderr) { Write-Host $stderr.TrimEnd() }
+
+        if ($process.ExitCode -ne 0) {
+            $detail = (($stdout, $stderr | Where-Object { $_ }) -join [Environment]::NewLine).Trim()
+            if ($detail) {
+                throw "cargo $($Arguments -join " ") failed with exit code $($process.ExitCode): $detail"
+            }
+            throw "cargo $($Arguments -join " ") failed with exit code $($process.ExitCode)"
+        }
+    }
+    finally {
+        Remove-Item -Force $stdoutPath, $stderrPath -ErrorAction SilentlyContinue
+    }
+}
+
 function Build-Version([string]$Sha) {
     Write-Host "Building EvoSim $Sha ..."
     Remove-StagingWorktree
 
     Invoke-Git @("-C", $Repo, "worktree", "add", "--detach", $StagingWorktree, $Sha)
     try {
-        # Keep Cargo's live output visible, but prevent it from becoming the
-        # function's return value. Build-Version returns only the executable path.
-        & cargo build --release --target-dir $StagingTarget 2>&1 | ForEach-Object {
-            Write-Host $_
-        }
-        if ($LASTEXITCODE -ne 0) {
-            throw "cargo build failed with exit code $LASTEXITCODE"
-        }
+        # Invoke Cargo without PowerShell's native-stderr handling. PowerShell 5.1
+        # can turn ordinary Cargo progress on stderr into NativeCommandError records.
+        Invoke-Cargo @("build", "--release", "--target-dir", $StagingTarget)
 
         Write-Host "Running Rust tests for $Sha ..."
-        & cargo test --all-targets --release --target-dir $StagingTarget 2>&1 | ForEach-Object {
-            Write-Host $_
-        }
-        if ($LASTEXITCODE -ne 0) {
-            throw "cargo test failed with exit code $LASTEXITCODE"
-        }
+        Invoke-Cargo @("test", "--all-targets", "--release", "--target-dir", $StagingTarget)
 
         $builtExe = Join-Path $StagingTarget "release\evosim.exe"
         if (-not (Test-Path $builtExe)) {
