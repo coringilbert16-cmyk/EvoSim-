@@ -412,16 +412,14 @@ pub(crate) fn aura_strength(spectrum: &ToneSpectrum) -> f64 {
 /// treating the organism as a point source.
 pub(crate) fn structural_radius(
     structure: &crate::structure::OrganismStructure,
+    anchor: (f64, f64),
 ) -> f64 {
-    let Some(anchor) = structure.units.first().map(|unit| unit.placement) else {
-        return 0.0;
-    };
     structure
         .units
         .iter()
         .map(|unit| {
-            let dx = unit.placement.x - anchor.x;
-            let dy = unit.placement.y - anchor.y;
+            let dx = unit.placement.x - anchor.0;
+            let dy = unit.placement.y - anchor.1;
             (dx * dx + dy * dy).sqrt()
         })
         .fold(0.0, f64::max)
