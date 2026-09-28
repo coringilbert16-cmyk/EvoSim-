@@ -1,19 +1,20 @@
 use axum::{
-    extract::{Path, State},
+    extract::{
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        Path, Query, State,
+    },
     response::{Html, IntoResponse},
     routing::{get, post},
     Json, Router,
 };
 use serde_json::Value;
+use tokio::io::AsyncBufReadExt;
 use tower_http::cors::CorsLayer;
 
 use crate::runtime::SimulationProcess;
 use crate::state::AppState;
 
-async fn request(
-    state: &AppState,
-    command: Value,
-) -> Result<Value, &'static str> {
+async fn request(state: &AppState, command: Value) -> Result<Value, &'static str> {
     let mut process = state.simulation.lock().await;
     process.request(command).await
 }
@@ -21,9 +22,7 @@ async fn request(
 fn error_response(error: &'static str) -> axum::response::Response {
     match error {
         "not_found" => axum::http::StatusCode::NOT_FOUND.into_response(),
-        "invalid_speed" | "invalid_command" => {
-            axum::http::StatusCode::BAD_REQUEST.into_response()
-        }
+        "invalid_speed" | "invalid_command" => axum::http::StatusCode::BAD_REQUEST.into_response(),
         _ => axum::http::StatusCode::SERVICE_UNAVAILABLE.into_response(),
     }
 }
@@ -37,6 +36,49 @@ async fn index_handler() -> impl IntoResponse {
     ))
 }
 
+async fn observation_stream_handler(
+    ws: WebSocketUpgrade,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| stream_observations(socket, state))
+}
+
+async fn stream_observations(mut socket: WebSocket, state: AppState) {
+    let stream = {
+        let mut process = state.simulation.lock().await;
+        process.subscribe().await
+    };
+    let Ok(stream) = stream else {
+        return;
+    };
+
+    let mut reader = tokio::io::BufReader::new(stream);
+    let mut line = String::new();
+
+    loop {
+        tokio::select! {
+            result = reader.read_line(&mut line) => {
+                match result {
+                    Ok(0) | Err(_) => break,
+                    Ok(_) => {
+                        let message = Message::Text(line.trim_end().to_owned().into());
+                        if socket.send(message).await.is_err() {
+                            break;
+                        }
+                        line.clear();
+                    }
+                }
+            }
+            result = socket.recv() => {
+                match result {
+                    Some(Ok(Message::Close(_))) | None | Some(Err(_)) => break,
+                    Some(Ok(_)) => {}
+                }
+            }
+        }
+    }
+}
+
 async fn observation_status_handler(State(state): State<AppState>) -> impl IntoResponse {
     match request(&state, serde_json::json!({"command": "status"})).await {
         Ok(value) => Json(value).into_response(),
@@ -44,8 +86,26 @@ async fn observation_status_handler(State(state): State<AppState>) -> impl IntoR
     }
 }
 
-async fn world_observation_handler(State(state): State<AppState>) -> impl IntoResponse {
-    match request(&state, serde_json::json!({"command": "world"})).await {
+#[derive(serde::Deserialize, Default)]
+struct ViewBounds {
+    min_x: Option<f64>,
+    max_x: Option<f64>,
+    min_y: Option<f64>,
+    max_y: Option<f64>,
+}
+
+async fn world_observation_handler(
+    Query(query): Query<ViewBounds>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let bounds = match (query.min_x, query.max_x, query.min_y, query.max_y) {
+        (Some(min_x), Some(max_x), Some(min_y), Some(max_y))
+            if min_x.is_finite() && max_x.is_finite() && min_y.is_finite() && max_y.is_finite()
+                && min_x <= max_x && min_y <= max_y => Some((min_x, max_x, min_y, max_y)),
+        (None, None, None, None) => None,
+        _ => return error_response("invalid_view_bounds"),
+    };
+    match request(&state, serde_json::json!({"command": "world", "bounds": bounds})).await {
         Ok(value) => Json(value).into_response(),
         Err(error) => error_response(error),
     }
@@ -70,12 +130,7 @@ async fn organism_observation_handler(
     Path(id): Path<String>,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    match request(
-        &state,
-        serde_json::json!({"command": "organism", "id": id}),
-    )
-    .await
-    {
+    match request(&state, serde_json::json!({"command": "organism", "id": id})).await {
         Ok(value) => Json(value).into_response(),
         Err(error) => error_response(error),
     }
@@ -96,9 +151,7 @@ async fn structure_observation_handler(
     }
 }
 
-async fn resource_visualization_handler(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+async fn resource_visualization_handler(State(state): State<AppState>) -> impl IntoResponse {
     match request(&state, serde_json::json!({"command": "resources"})).await {
         Ok(value) => Json(value).into_response(),
         Err(error) => error_response(error),
@@ -168,6 +221,7 @@ pub(crate) async fn run() {
     let app = Router::new()
         .route("/", get(index_handler))
         .route("/observation/status", get(observation_status_handler))
+        .route("/observation/stream", get(observation_stream_handler))
         .route("/observation/world", get(world_observation_handler))
         .route(
             "/observation/history/{tick}/world",
