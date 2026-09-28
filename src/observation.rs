@@ -234,12 +234,19 @@ impl WorldObservation {
                         if materials.is_empty() {
                             return None;
                         }
+                        let revision = field.cell_revisions[cell_index];
+                        let changed = known_cells
+                            .iter()
+                            .find(|(known_index, _)| *known_index == cell_index)
+                            .map(|(_, known_revision)| *known_revision != revision)
+                            .unwrap_or(true);
                         let (x, y) = field.cell_center(cell_index);
                         Some(WorldFieldObservation {
                             cell_index,
                             x,
                             y,
-                            materials,
+                            revision,
+                            materials: changed.then_some(materials),
                         })
                     })
                     .collect()
