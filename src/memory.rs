@@ -291,29 +291,60 @@ pub(crate) fn reinforce_spectral_memory(
 
     let existing = &mut memory.spectral[index];
     let weighted_magnitude = experience_magnitude * similarity;
+    let previous_weight = existing.association_weight.max(0.0);
     let (association, weight) = update_association(
         existing.association,
-        existing.association_weight,
+        previous_weight,
         association,
         weighted_magnitude,
     );
     existing.association = association;
     existing.association_weight = weight;
     existing.strength = bounded_strength_after_experience(existing.strength, weighted_magnitude);
-    if similarity >= SPECTRAL_MEMORY_MATCH_FLOOR {
-        let blend = similarity.clamp(0.0, 1.0);
-        for component in &spectrum.components {
-            if let Some(existing_component) =
-                existing.spectrum.components.iter_mut().find(|candidate| {
-                    (candidate.frequency_hz - component.frequency_hz).abs() <= 1e-9
-                })
-            {
+
+    let blend = if weight <= f64::EPSILON {
+        0.0
+    } else {
+        (weighted_magnitude / weight).clamp(0.0, 1.0)
+    };
+    for component in &spectrum.components {
+        let best = existing
+            .spectrum
+            .components
+            .iter()
+            .enumerate()
+            .map(|(index, candidate)| {
+                (
+                    index,
+                    (candidate.frequency_hz / component.frequency_hz)
+                        .ln()
+                        .abs(),
+                )
+            })
+            .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+
+        if let Some((component_index, distance)) = best {
+            let frequency_similarity = (-distance / crate::harmonics::SPECTRAL_MATCH_SIGMA)
+                .exp();
+            if frequency_similarity >= SPECTRAL_MEMORY_MATCH_FLOOR {
+                let existing_component = &mut existing.spectrum.components[component_index];
+                existing_component.frequency_hz = ((1.0 - blend)
+                    * existing_component.frequency_hz.ln()
+                    + blend * component.frequency_hz.ln())
+                    .exp();
                 existing_component.amplitude =
                     existing_component.amplitude * (1.0 - blend) + component.amplitude * blend;
+                continue;
             }
         }
-        existing.spectrum.retain_strongest();
+
+        existing.spectrum.components.push(crate::harmonics::ToneComponent {
+            frequency_hz: component.frequency_hz,
+            amplitude: component.amplitude * blend,
+            phase_radians: component.phase_radians,
+        });
     }
+    existing.spectrum.retain_strongest();
 }
 
 pub(crate) fn reinforce_encounter_memory(
