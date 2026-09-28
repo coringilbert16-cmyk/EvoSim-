@@ -6,6 +6,261 @@ use crate::state::{
 
 pub(crate) const MEMORY_CAPACITY_GROWTH_EXPONENT: f64 = 0.5;
 
+/// EXPERIMENTAL: the minimum continuous spectral similarity used to merge
+/// generalized spectral memories. The similarity itself remains the weight
+/// used for reinforcement; this only prevents unrelated spectra from being
+/// forced into one prototype.
+pub(crate) const SPECTRAL_MEMORY_MATCH_FLOOR: f64 = 0.25;
+
+/// EXPERIMENTAL: memories below this strength are removed during decay.
+pub(crate) const EXPERIENCE_MEMORY_PRUNE_THRESHOLD: f64 = 0.01;
+
+fn bounded_strength_after_experience(current: f64, experience_magnitude: f64) -> f64 {
+    let current = current.clamp(0.0, 1.0);
+    let magnitude = experience_magnitude.max(0.0);
+    (current + magnitude).clamp(0.0, 1.0)
+}
+
+fn update_association(
+    current: f64,
+    current_weight: f64,
+    observed: f64,
+    observed_weight: f64,
+) -> (f64, f64) {
+    let current_weight = current_weight.max(0.0);
+    let observed_weight = observed_weight.max(0.0);
+    let total_weight = current_weight + observed_weight;
+    if total_weight <= f64::EPSILON {
+        return (observed.clamp(-1.0, 1.0), 0.0);
+    }
+    let association =
+        ((current * current_weight + observed * observed_weight) / total_weight).clamp(-1.0, 1.0);
+    (association, total_weight)
+}
+
+fn spatial_memories_overlap(a: &SpatialMemory, x: f64, y: f64, extent: f64) -> bool {
+    let dx = a.x - x;
+    let dy = a.y - y;
+    let combined_extent = a.extent.max(0.0) + extent.max(0.0);
+    dx * dx + dy * dy <= combined_extent * combined_extent
+}
+
+fn best_spectral_memory(
+    memories: &[SpectralMemory],
+    spectrum: &crate::harmonics::ToneSpectrum,
+) -> Option<(usize, f64)> {
+    memories
+        .iter()
+        .enumerate()
+        .map(|(index, memory)| {
+            (
+                index,
+                crate::harmonics::spectral_similarity(&memory.spectrum, spectrum),
+            )
+        })
+        .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+}
+
+pub(crate) fn decay_experience_memory(memory: &mut ExperienceMemory, decay: f64) {
+    let decay = decay.clamp(0.0, 1.0);
+    for spatial in &mut memory.spatial {
+        spatial.strength *= decay;
+        spatial.association_weight *= decay;
+    }
+    for spectral in &mut memory.spectral {
+        spectral.strength *= decay;
+        spectral.association_weight *= decay;
+    }
+    for encounter in &mut memory.encounters {
+        encounter.strength *= decay;
+        encounter.experience_weight *= decay;
+    }
+
+    memory
+        .spatial
+        .retain(|entry| entry.strength > EXPERIENCE_MEMORY_PRUNE_THRESHOLD);
+    memory
+        .spectral
+        .retain(|entry| entry.strength > EXPERIENCE_MEMORY_PRUNE_THRESHOLD);
+    memory
+        .encounters
+        .retain(|entry| entry.strength > EXPERIENCE_MEMORY_PRUNE_THRESHOLD);
+}
+
+pub(crate) fn reinforce_spatial_memory(
+    memory: &mut ExperienceMemory,
+    x: f64,
+    y: f64,
+    extent: f64,
+    association: f64,
+    experience_magnitude: f64,
+) {
+    let experience_magnitude = experience_magnitude.max(0.0);
+    if let Some(existing) = memory
+        .spatial
+        .iter_mut()
+        .find(|entry| spatial_memories_overlap(entry, x, y, extent))
+    {
+        let (association, weight) = update_association(
+            existing.association,
+            existing.association_weight,
+            association,
+            experience_magnitude,
+        );
+        existing.association = association;
+        existing.association_weight = weight;
+        existing.strength =
+            bounded_strength_after_experience(existing.strength, experience_magnitude);
+        return;
+    }
+
+    memory.spatial.push(SpatialMemory {
+        x,
+        y,
+        extent: extent.max(0.0),
+        association: association.clamp(-1.0, 1.0),
+        association_weight: experience_magnitude,
+        strength: experience_magnitude.clamp(0.0, 1.0),
+    });
+}
+
+pub(crate) fn reinforce_spectral_memory(
+    memory: &mut ExperienceMemory,
+    spectrum: &crate::harmonics::ToneSpectrum,
+    association: f64,
+    experience_magnitude: f64,
+) {
+    let experience_magnitude = experience_magnitude.max(0.0);
+    let Some((index, similarity)) = best_spectral_memory(&memory.spectral, spectrum) else {
+        memory.spectral.push(SpectralMemory {
+            spectrum: spectrum.clone(),
+            association: association.clamp(-1.0, 1.0),
+            association_weight: experience_magnitude,
+            strength: experience_magnitude.clamp(0.0, 1.0),
+        });
+        return;
+    };
+
+    if similarity < SPECTRAL_MEMORY_MATCH_FLOOR {
+        memory.spectral.push(SpectralMemory {
+            spectrum: spectrum.clone(),
+            association: association.clamp(-1.0, 1.0),
+            association_weight: experience_magnitude,
+            strength: experience_magnitude.clamp(0.0, 1.0),
+        });
+        return;
+    }
+
+    let existing = &mut memory.spectral[index];
+    let weighted_magnitude = experience_magnitude * similarity;
+    let (association, weight) = update_association(
+        existing.association,
+        existing.association_weight,
+        association,
+        weighted_magnitude,
+    );
+    existing.association = association;
+    existing.association_weight = weight;
+    existing.strength =
+        bounded_strength_after_experience(existing.strength, weighted_magnitude);
+    if similarity >= SPECTRAL_MEMORY_MATCH_FLOOR {
+        let blend = similarity.clamp(0.0, 1.0);
+        for component in &spectrum.components {
+            if let Some(existing_component) = existing
+                .spectrum
+                .components
+                .iter_mut()
+                .find(|candidate| {
+                    (candidate.frequency_hz - component.frequency_hz).abs() <= 1e-9
+                })
+            {
+                existing_component.amplitude =
+                    existing_component.amplitude * (1.0 - blend) + component.amplitude * blend;
+            }
+        }
+        existing.spectrum.retain_strongest();
+    }
+}
+
+pub(crate) fn reinforce_encounter_memory(
+    memory: &mut ExperienceMemory,
+    x: f64,
+    y: f64,
+    extent: f64,
+    spectrum: &crate::harmonics::ToneSpectrum,
+    action: crate::decision::ActionKind,
+    consequence: MemoryConsequence,
+    experience_magnitude: f64,
+) {
+    let experience_magnitude = experience_magnitude.max(0.0);
+    let Some((index, similarity)) = memory
+        .encounters
+        .iter()
+        .enumerate()
+        .map(|(index, entry)| {
+            let spatial = spatial_memories_overlap(
+                &SpatialMemory {
+                    x: entry.x,
+                    y: entry.y,
+                    extent: entry.extent,
+                    association: 0.0,
+                    association_weight: 0.0,
+                    strength: 0.0,
+                },
+                x,
+                y,
+                extent,
+            );
+            let spectral = crate::harmonics::spectral_similarity(&entry.spectrum, spectrum);
+            (index, spatial, spectral)
+        })
+        .filter(|(_, spatial, spectral)| *spatial && *spectral >= SPECTRAL_MEMORY_MATCH_FLOOR)
+        .max_by(|a, b| {
+            a.2.partial_cmp(&b.2)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|(index, _, spectral)| (index, spectral))
+    else {
+        memory.encounters.push(EncounterMemory {
+            x,
+            y,
+            extent: extent.max(0.0),
+            spectrum: spectrum.clone(),
+            action,
+            consequence,
+            experience_weight: experience_magnitude,
+            strength: experience_magnitude.clamp(0.0, 1.0),
+        });
+        return;
+    };
+
+    let existing = &mut memory.encounters[index];
+    let weight = experience_magnitude * similarity;
+    existing.experience_weight += weight;
+    existing.strength = bounded_strength_after_experience(existing.strength, weight);
+    existing.consequence.energy_delta =
+        weighted_average(existing.consequence.energy_delta, existing.experience_weight - weight, consequence.energy_delta, weight);
+    existing.consequence.stress_delta =
+        weighted_average(existing.consequence.stress_delta, existing.experience_weight - weight, consequence.stress_delta, weight);
+    existing.consequence.damage_delta =
+        weighted_average(existing.consequence.damage_delta, existing.experience_weight - weight, consequence.damage_delta, weight);
+    existing.consequence.developmental_delta =
+        weighted_average(existing.consequence.developmental_delta, existing.experience_weight - weight, consequence.developmental_delta, weight);
+    existing.consequence.material_acquired =
+        weighted_average(existing.consequence.material_acquired, existing.experience_weight - weight, consequence.material_acquired, weight);
+    existing.consequence.material_consumed =
+        weighted_average(existing.consequence.material_consumed, existing.experience_weight - weight, consequence.material_consumed, weight);
+}
+
+fn weighted_average(current: f64, current_weight: f64, observed: f64, observed_weight: f64) -> f64 {
+    let total = current_weight.max(0.0) + observed_weight.max(0.0);
+    if total <= f64::EPSILON {
+        return observed;
+    }
+    (current * current_weight.max(0.0) + observed * observed_weight.max(0.0)) / total
+}
+
+
 /// A physically grounded spatial association. The region is the portion of
 /// the existing resonance geometry involved in the experience; it is not an
 /// authored perception radius.
