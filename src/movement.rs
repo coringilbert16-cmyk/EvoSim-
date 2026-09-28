@@ -227,12 +227,11 @@ impl Simulation {
         let active_transformation_id = organism.active_transformation_id;
         let movement_efficiency = organism.genome.movement_efficiency();
         let realized_mass = organism.structural_mass(&environment.catalog);
-        let direction =
-            crate::movement_direction::movement_direction_periodic(
-                organism,
-                environment.height,
-                perceptions,
-            );
+        let direction = crate::movement_direction::movement_direction_periodic(
+            organism,
+            environment.height,
+            perceptions,
+        );
         let Some((x, y)) = direction else {
             organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
                 tick,
@@ -942,14 +941,17 @@ mod tests {
     fn movement_direction_uses_current_perception_through_learned_memory() {
         let simulation = Simulation::new(7, 20.0);
         let mut organism = simulation.organisms[0].clone();
-        organism.experience_memory.spatial.push(crate::memory::SpatialMemory {
-            x: organism.occupied_cells[0].x,
-            y: organism.occupied_cells[0].y - 20.0,
-            extent: 10.0,
-            association: 1.0,
-            association_weight: 1.0,
-            strength: 1.0,
-        });
+        organism
+            .experience_memory
+            .spatial
+            .push(crate::memory::SpatialMemory {
+                x: organism.occupied_cells[0].x,
+                y: organism.occupied_cells[0].y - 20.0,
+                extent: 10.0,
+                association: 1.0,
+                association_weight: 1.0,
+                strength: 1.0,
+            });
         let perceptions = vec![crate::harmonics::ResonancePerception {
             source_x: organism.occupied_cells[0].x,
             source_y: organism.occupied_cells[0].y - 20.0,
