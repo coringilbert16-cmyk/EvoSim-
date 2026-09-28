@@ -343,8 +343,9 @@ impl OrganismObservation {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct StructureObservation {
     pub(crate) id: String,
-    pub(crate) units: Vec<StructureUnitObservation>,
-    pub(crate) bonds: Vec<StructureBondObservation>,
+    pub(crate) structure_revision: u64,
+    pub(crate) units: Option<Vec<StructureUnitObservation>>,
+    pub(crate) bonds: Option<Vec<StructureBondObservation>>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct StructureUnitObservation {
@@ -364,7 +365,24 @@ pub(crate) struct StructureBondObservation {
 }
 impl StructureObservation {
     pub(crate) fn from_simulation(simulation: &Simulation, organism_id: &str) -> Option<Self> {
+        Self::from_simulation_with_revision(simulation, organism_id, None)
+    }
+
+    pub(crate) fn from_simulation_with_revision(
+        simulation: &Simulation,
+        organism_id: &str,
+        known_structure_revision: Option<u64>,
+    ) -> Option<Self> {
         let organism = simulation.organisms.iter().find(|o| o.id == organism_id)?;
+        let structure_changed = known_structure_revision != Some(organism.structure_revision);
+        if !structure_changed {
+            return Some(Self {
+                id: organism.id.clone(),
+                structure_revision: organism.structure_revision,
+                units: None,
+                bonds: None,
+            });
+        }
         let catalog = &simulation.environment.catalog;
         let units = organism
             .structure
@@ -415,8 +433,9 @@ impl StructureObservation {
             .collect::<Option<Vec<_>>>()?;
         Some(Self {
             id: organism.id.clone(),
-            units,
-            bonds,
+            structure_revision: organism.structure_revision,
+            units: Some(units),
+            bonds: Some(bonds),
         })
     }
 }
@@ -468,6 +487,20 @@ mod tests {
         )
         .unwrap();
         assert!(observation.physical.is_none());
+    }
+
+    #[test]
+    fn structure_observation_omits_unchanged_physical_state() {
+        let simulation = Simulation::new(1, 20.0);
+        let organism = simulation.organisms.first().unwrap();
+        let observation = StructureObservation::from_simulation_with_revision(
+            &simulation,
+            &organism.id,
+            Some(organism.structure_revision),
+        )
+        .unwrap();
+        assert!(observation.units.is_none());
+        assert!(observation.bonds.is_none());
     }
 
     #[test]
