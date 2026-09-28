@@ -55,8 +55,8 @@ mod transformation;
 mod math;
 mod resource_visualization;
 mod runtime;
-mod sim_process;
 mod server;
+mod sim_process;
 mod simulation;
 mod simulation_runner;
 mod state;
@@ -80,7 +80,10 @@ mod simulation_tests;
 #[tokio::main]
 async fn main() {
     if std::env::args().nth(1).as_deref() == Some("--simulation-child") {
-        let port = std::env::args().nth(2).and_then(|value| value.parse::<u16>().ok()).expect("--simulation-child requires a TCP port");
+        let port = std::env::args()
+            .nth(2)
+            .and_then(|value| value.parse::<u16>().ok())
+            .expect("--simulation-child requires a TCP port");
         sim_process::run_child(port).await;
         return;
     }
