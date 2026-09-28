@@ -35,14 +35,13 @@ pub(crate) fn movement_direction_periodic(
             .experience_memory
             .spatial
             .iter()
-            .filter_map(|memory| {
+            .filter(|memory| {
                 let memory_distance = (memory.x - perception.source_x).hypot(wrapped_delta(
                     memory.y,
                     perception.source_y,
                     environment_height,
                 ));
-                (memory_distance <= memory.extent.max(0.0) + perception.extent.max(0.0))
-                    .then_some(memory)
+                memory_distance <= memory.extent.max(0.0) + perception.extent.max(0.0)
             })
             .max_by(|a, b| {
                 a.strength
