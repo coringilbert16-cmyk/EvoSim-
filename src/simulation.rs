@@ -379,7 +379,7 @@ impl Simulation {
         }
     }
     fn update_external_harmonic_perceptions(&mut self) {
-        let snapshots: Vec<(String, crate::state::Position, crate::harmonics::ToneSpectrum)> =
+        let snapshots: Vec<(String, crate::state::Position, f64, crate::harmonics::ToneSpectrum)> =
             self.organisms
                 .iter()
                 .map(|organism| {
@@ -390,6 +390,7 @@ impl Simulation {
                             .first()
                             .cloned()
                             .unwrap_or(crate::state::Position { x: 0.0, y: 0.0 }),
+                        crate::harmonics::structural_radius(&organism.structure),
                         organism.harmonic_spectrum.clone(),
                     )
                 })
@@ -408,13 +409,14 @@ impl Simulation {
             let capacity = crate::memory::memory_capacity(cavity);
             let memory_strength = observer.genome.memory_strength().clamp(0.0, 1.0);
 
-            for (source_id, source_position, source_spectrum) in &snapshots {
+            for (source_id, source_position, source_radius, source_spectrum) in &snapshots {
                 if source_id == &observer.id {
                     continue;
                 }
                 let received = crate::harmonics::aura_from_spectrum(
                     source_spectrum,
                     (source_position.x, source_position.y),
+                    *source_radius,
                     position.x,
                     position.y,
                 );
