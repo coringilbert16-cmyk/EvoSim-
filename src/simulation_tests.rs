@@ -348,6 +348,9 @@ mod integration_tests {
     #[test]
     fn break_resolution_changes_state_on_expected_tick() {
         let mut s = Simulation::new(7, 10.0);
+        for cell in &mut s.environment.field.cells {
+            cell.physical_materials.clear();
+        }
         add_test_break_bond(&mut s);
         s.organisms[0].usable_energy = 100.0;
         start_test_break_transformation(&mut s);
