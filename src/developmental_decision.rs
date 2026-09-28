@@ -38,7 +38,7 @@ pub(crate) fn context(
             connectivity: None,
             overall: 0.0,
         });
-    let blueprint = &organism.genome.developmental_blueprint;
+    let blueprint = organism.genome.developmental_blueprint.clone();
     let origin = (
         organism.developmental_origin.x,
         organism.developmental_origin.y,
