@@ -181,6 +181,8 @@ pub(crate) struct Organism {
     #[serde(skip)]
     pub(crate) cached_harmonic_key: Option<(u64, u64, u64)>,
     #[serde(skip)]
+    pub(crate) cached_harmonic_radius: Option<f64>,
+    #[serde(skip)]
     pub(crate) last_movement_attempt: Option<MovementAttemptDiagnostic>,
 }
 pub(crate) const STRESS_DECAY_PER_TICK: f64 = 0.98;
@@ -199,6 +201,7 @@ impl Organism {
         self.cached_developmental_revision = None;
         self.cached_developmental_realization = None;
         self.cached_harmonic_key = None;
+        self.cached_harmonic_radius = None;
     }
 
     pub(crate) fn mark_position_changed(&mut self) {
