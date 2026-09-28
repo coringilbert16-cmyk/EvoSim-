@@ -1,3 +1,5 @@
+#![expect(dead_code, reason = "Staged reproduction API retained for lifecycle integration")]
+
 //! Physical reproduction lifecycle.
 //!
 //! Reproduction owns a separate developing physical graph. The child begins
