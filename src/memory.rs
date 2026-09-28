@@ -741,10 +741,12 @@ mod tests {
         assert_eq!(memory.spectral.len(), 1);
         assert!(memory.spectral[0].association < 1.0);
         assert!(memory.spectral[0].association > -1.0);
+        let prototype_frequency = memory.spectral[0].spectrum.components[0].frequency_hz;
+        assert!(prototype_frequency > 440.0 && prototype_frequency < 460.0);
     }
 
     #[test]
-    fn unrelated_spectra_remain_separate_memories() {
+    fn unrelated_spectra_remain_separate_memories {
         let mut memory = ExperienceMemory::default();
         let a = crate::harmonics::ToneSpectrum {
             components: vec![crate::harmonics::ToneComponent {
