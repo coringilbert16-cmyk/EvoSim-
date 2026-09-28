@@ -53,13 +53,6 @@ pub(crate) fn movement_direction_periodic(
             .experience_memory
             .spectral
             .iter()
-            .filter(|memory| {
-                crate::harmonics::spectral_similarity(
-                    &memory.spectrum,
-                    &perception.spectrum,
-                )
-                .is_finite()
-            })
             .map(|memory| {
                 (
                     memory,
@@ -69,6 +62,7 @@ pub(crate) fn movement_direction_periodic(
                     ),
                 )
             })
+            .filter(|(_, similarity)| similarity.is_finite())
             .max_by(|(_, a), (_, b)| a.total_cmp(b));
 
         let spatial_confidence = spatial
