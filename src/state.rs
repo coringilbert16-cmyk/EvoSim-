@@ -7,7 +7,6 @@ use crate::genome::Genome;
 use crate::material_storage::MaterialStorage;
 use crate::resources::{BaseResource, Material};
 use crate::structure::{Bond, OrganismStructure};
-use parking_lot::Mutex;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
