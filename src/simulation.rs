@@ -25,7 +25,7 @@ impl Simulation {
         Self {
             tick: 0,
             ticks_per_second,
-            running: true,
+            running: false,
             organisms: vec![organism],
             environment,
             active_transformations: Vec::new(),
