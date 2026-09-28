@@ -311,7 +311,7 @@ mod integration_tests {
 
         assert!((organism.maintenance_debt - debt).abs() < 1e-12);
         assert!((organism.usable_energy - 1.0).abs() < 1e-12);
-        let expected_stress = debt * crate::state::STRESS_DECAY_PER_TICK + demand;
+        let expected_stress = (deficit + debt) * crate::state::STRESS_DECAY_PER_TICK + demand;
         assert!((organism.stress - expected_stress).abs() < 1e-12);
     }
 
