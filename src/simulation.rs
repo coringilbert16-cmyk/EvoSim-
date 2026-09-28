@@ -124,6 +124,32 @@ impl Simulation {
         );
     }
 
+    fn finalize_pending_movement_experience(
+        organism: &mut Organism,
+        environment: &Environment,
+        acquired_amount: f64,
+    ) {
+        let Some(pending) = organism.pending_movement_experience.take() else {
+            return;
+        };
+        let mut consequence = pending.consequence;
+        consequence.material_acquired = acquired_amount.max(0.0);
+        let Some(cavity) = organism
+            .genome_cavity_cached_ref(&environment.catalog)
+            .filter(|cavity| cavity.qualifies())
+        else {
+            return;
+        };
+        crate::memory::record_experience(
+            &mut organism.experience_memory,
+            &pending.perceptions,
+            ActionKind::Move,
+            consequence,
+            pending.needs,
+            crate::memory::memory_capacity(cavity),
+        );
+    }
+
     fn action_consequence(
         before_energy: f64,
         before_stress: f64,
@@ -494,7 +520,16 @@ impl Simulation {
                     &mut self.energy_ledger,
                 );
             }
-            Self::transfer_contained_environmental_material(organism, &mut self.environment);
+            let stored_amount_before_transfer = organism.stored_material.total_amount();
+        Self::transfer_contained_environmental_material(organism, &mut self.environment);
+        let acquired_amount = (organism.stored_material.total_amount()
+            - stored_amount_before_transfer)
+            .max(0.0);
+        Self::finalize_pending_movement_experience(
+            organism,
+            &self.environment,
+            acquired_amount,
+        );
         }
         {
             let (organisms, environment) = (&mut self.organisms, &mut self.environment);
@@ -581,13 +616,15 @@ impl Simulation {
                             &move_candidate,
                             consequence,
                         );
-                        Self::record_action_experience(
-                            organism,
-                            environment,
-                            &perceptions,
-                            ActionKind::Move,
-                            consequence,
-                            needs,
+                        organism.pending_movement_experience = Some(
+                            crate::memory::PendingMovementExperience {
+                                perceptions,
+                                consequence: crate::memory::memory_consequence_from_action(
+                                    consequence,
+                                ),
+                                needs,
+                                stored_amount_after_move: organism.stored_material.total_amount(),
+                            },
                         );
                     }
                 }
