@@ -154,11 +154,16 @@ async fn organism_observation_handler(
 
 async fn structure_observation_handler(
     Path(id): Path<String>,
+    Query(query): Query<OrganismObservationQuery>,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
     match request(
         &state,
-        serde_json::json!({"command": "structure", "id": id}),
+        serde_json::json!({
+            "command": "structure",
+            "id": id,
+            "known_structure_revision": query.known_structure_revision,
+        }),
     )
     .await
     {

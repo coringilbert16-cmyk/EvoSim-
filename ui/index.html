@@ -172,6 +172,7 @@
     function organismPayload() { return payload()?.Organism || null; }
     function organismPhysicalPayload() { return organismPayload()?.physical || null; }
     function structurePayload() { return payload()?.Structure || null; }
+    function structurePhysicalPayload() { return structurePayload(); }
 
     function formBounds(form, x, y, rotation = 0) {
       if (!form || !Number.isFinite(x) || !Number.isFinite(y)) return null;
@@ -274,7 +275,7 @@
       drawSelectionBounds(organism.id, physical, viewport, 5);
     }
     function renderStructure() {
-      const structure = structurePayload(), viewport = viewportSize(); if (!structure) return;
+      const structure = structurePhysicalPayload(), viewport = viewportSize(); if (!structure) return;
       ctx.save();
       ctx.strokeStyle = '#17202a';
       ctx.lineWidth = Math.max(1, Math.min(4, camera.scale * 0.08));
@@ -378,7 +379,15 @@
           if (query) url += '?' + query;
         }
       }
-      if (level === 'Structure' && organismId != null) url = `/observation/structure/${encodeURIComponent(organismId)}`;
+      if (level === 'Structure' && organismId != null) {
+        url = `/observation/structure/${encodeURIComponent(organismId)}`;
+        const current = structurePayload();
+        if (current?.id === organismId && Number.isInteger(current.structure_revision)) {
+          url += '?' + new URLSearchParams({
+            known_structure_revision: current.structure_revision
+          }).toString();
+        }
+      }
       try {
         const response = await fetch(url, { cache: 'no-store' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -390,6 +399,14 @@
           observation?.payload?.Organism?.id === organismId
         ) {
           next.payload.Organism.physical = observation.payload.Organism.physical;
+        }
+        if (
+          level === 'Structure' &&
+          next?.payload?.Structure?.units == null &&
+          observation?.payload?.Structure?.id === organismId
+        ) {
+          next.payload.Structure.units = observation.payload.Structure.units;
+          next.payload.Structure.bonds = observation.payload.Structure.bonds;
         }
         observation = next; observationLevel = level;
         if (levelChanged) cameraInitialized = false;

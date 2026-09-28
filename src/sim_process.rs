@@ -27,7 +27,10 @@ enum SimulationCommand {
         known_structure_revision: Option<u64>,
         known_position_revision: Option<u64>,
     },
-    Structure { id: String },
+    Structure {
+        id: String,
+        known_structure_revision: Option<u64>,
+    },
     Resources,
     Pause,
     Resume,
@@ -225,12 +228,17 @@ fn execute(command: SimulationCommand, runtime: &Arc<Mutex<RuntimeState>>) -> Co
                 serde_json::to_value(projection).expect("organism observation must serialize"),
             )
         }
-        SimulationCommand::Structure { id } => {
+        SimulationCommand::Structure {
+            id,
+            known_structure_revision,
+        } => {
             let projection = {
                 let state = runtime.lock();
-                let Some(observation) =
-                    StructureObservation::from_simulation(&state.simulation, &id)
-                else {
+                let Some(observation) = StructureObservation::from_simulation_with_revision(
+                    &state.simulation,
+                    &id,
+                    known_structure_revision,
+                ) else {
                     return CommandResponse::error("not_found");
                 };
                 let context = ObservationContext::structure(vec![id.clone()], Some(id));
