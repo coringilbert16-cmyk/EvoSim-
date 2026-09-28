@@ -587,9 +587,9 @@ mod tests {
     fn structure_observation_preserves_physical_endpoints() {
         let simulation = Simulation::new(1, 20.0);
         let observation = StructureObservation::from_simulation(&simulation, "1").unwrap();
-        assert!(!observation.bonds.is_empty());
-        assert!(observation
-            .bonds
+        let bonds = observation.bonds.expect("full observation must include bonds");
+        assert!(!bonds.is_empty());
+        assert!(bonds
             .iter()
             .all(|b| b.endpoint_a.is_some() && b.endpoint_b.is_some()))
     }
