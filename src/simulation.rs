@@ -437,6 +437,7 @@ impl Simulation {
             Self::update_development_stage(organism, &self.environment, seed_reference);
             organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
             crate::harmonics::update_organism_harmonics(organism, &self.environment);
+            crate::memory::update_experience_memory(organism, &self.environment);
             Self::update_memory_from_sources(organism, &self.environment);
             let (x, y) = organism
                 .occupied_cells
