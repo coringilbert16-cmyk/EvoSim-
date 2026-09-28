@@ -87,6 +87,12 @@ async fn observation_status_handler(State(state): State<AppState>) -> impl IntoR
 }
 
 #[derive(serde::Deserialize, Default)]
+struct OrganismObservationQuery {
+    known_structure_revision: Option<u64>,
+    known_position_revision: Option<u64>,
+}
+
+#[derive(serde::Deserialize, Default)]
 struct ViewBounds {
     min_x: Option<f64>,
     max_x: Option<f64>,
@@ -128,9 +134,19 @@ async fn historical_world_observation_handler(
 
 async fn organism_observation_handler(
     Path(id): Path<String>,
+    Query(query): Query<OrganismObservationQuery>,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    match request(&state, serde_json::json!({"command": "organism", "id": id})).await {
+    match request(
+        &state,
+        serde_json::json!({
+            "command": "organism",
+            "id": id,
+            "known_structure_revision": query.known_structure_revision,
+            "known_position_revision": query.known_position_revision,
+        }),
+    )
+    .await {
         Ok(value) => Json(value).into_response(),
         Err(error) => error_response(error),
     }
