@@ -174,7 +174,14 @@ function Start-Server {
         throw "No known-good EvoSim binary exists."
     }
 
-    $script:serverProcess = Start-Process -FilePath $CurrentExe -WorkingDirectory $Repo -WindowStyle Hidden -PassThru
+    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName = $CurrentExe
+    $startInfo.WorkingDirectory = $Repo
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $script:serverProcess = New-Object System.Diagnostics.Process
+    $script:serverProcess.StartInfo = $startInfo
+    [void]$script:serverProcess.Start()
     Write-Host "Running EvoSim $((Get-CurrentVersion).Substring(0, [Math]::Min(12, (Get-CurrentVersion).Length))) (PID $($script:serverProcess.Id))."
 }
 
