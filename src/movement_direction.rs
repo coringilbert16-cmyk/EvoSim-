@@ -87,22 +87,6 @@ pub(crate) fn movement_direction_periodic(
         current_signal += perception.magnitude.max(0.0);
     }
 
-    // When current perception is absent, remembered spatial associations can
-    // still guide a return. This is deliberately weaker than live perception.
-    if current_signal <= f64::EPSILON {
-        for memory in &organism.experience_memory.spatial {
-            let dx = memory.x - px;
-            let dy = wrapped_delta(memory.y, py, environment_height);
-            let distance = dx.hypot(dy);
-            if distance <= f64::EPSILON {
-                continue;
-            }
-            let weight = memory.strength.max(0.0) * memory.association;
-            direction_x += dx / distance * weight;
-            direction_y += dy / distance * weight;
-        }
-    }
-
     let magnitude = direction_x.hypot(direction_y);
     if magnitude <= f64::EPSILON {
         let mut hash = 0xcbf29ce484222325_u64;
