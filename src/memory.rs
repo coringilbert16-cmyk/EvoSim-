@@ -80,6 +80,7 @@ pub(crate) fn record_experience(
     consequence: MemoryConsequence,
     needs: crate::decision::CurrentNeeds,
     capacity: usize,
+    formation_strength: f64,
 ) {
     if perceptions.is_empty() || capacity == 0 {
         return;
@@ -97,7 +98,9 @@ pub(crate) fn record_experience(
     .into_iter()
     .map(f64::abs)
     .sum::<f64>();
-    let experience_magnitude = (1.0 - (-raw_magnitude).exp()).clamp(0.0, 1.0);
+    let experience_magnitude = (1.0 - (-raw_magnitude).exp())
+        .mul_add(formation_strength.clamp(0.0, 1.0), 0.0)
+        .clamp(0.0, 1.0);
     if experience_magnitude <= f64::EPSILON {
         return;
     }
