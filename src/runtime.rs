@@ -31,6 +31,14 @@ impl RuntimeState {
         }
     }
 
+    pub(crate) fn reset(&mut self) {
+        let ticks_per_second = self.simulation.ticks_per_second;
+        self.simulation = Simulation::new(42, ticks_per_second);
+        self.simulation.running = false;
+        self.history.clear();
+        self.history.push_back(self.simulation.clone());
+    }
+
     pub(crate) fn record_tick(&mut self) {
         self.history.push_back(self.simulation.clone());
         while self.history.len() > HISTORY_CAPACITY {
