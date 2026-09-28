@@ -36,7 +36,6 @@ impl DevelopmentalFieldBlueprint {
             developmental_origin,
             developmental_orientation_radians,
             preferred_length,
-                &mut endpoint_opportunities,
         );
         let density_realized = self.density_realization(
             structure,
@@ -44,7 +43,6 @@ impl DevelopmentalFieldBlueprint {
             developmental_origin,
             developmental_orientation_radians,
             preferred_length,
-                &mut endpoint_opportunities,
         );
 
         let connectivity = self.connectivity_realization(
@@ -53,7 +51,6 @@ impl DevelopmentalFieldBlueprint {
             developmental_origin,
             developmental_orientation_radians,
             preferred_length,
-                &mut endpoint_opportunities,
         );
 
         let mut sum = 0.0;
@@ -154,7 +151,6 @@ impl DevelopmentalFieldBlueprint {
             developmental_origin,
             developmental_orientation_radians,
             preferred_length,
-                &mut endpoint_opportunities,
         );
         self.realization_after_break_with_components(
             structure,
@@ -364,7 +360,6 @@ impl DevelopmentalFieldBlueprint {
                 bond.endpoint_b.location,
                 catalog,
                 preferred_length,
-                &mut endpoint_opportunities,
             );
             actual_by_bond[bond_index] = score;
             actual_total += score;
@@ -421,8 +416,7 @@ impl DevelopmentalFieldBlueprint {
                         candidate.endpoint_b,
                         catalog,
                         preferred_length,
-                        &mut endpoint_opportunities,
-                    );
+                            );
                 }
             }
         }
