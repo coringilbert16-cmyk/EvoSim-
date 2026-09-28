@@ -968,15 +968,13 @@ mod tests {
     fn movement_direction_without_inputs_gets_soft_random_push() {
         let simulation = Simulation::new(7, 20.0);
         let organism = simulation.organisms[0].clone();
-        let (x, y) =
-            movement_direction(&organism, &[]).expect("initial direction should exist");
+        let (x, y) = movement_direction(&organism, &[]).expect("initial direction should exist");
         let magnitude = (x * x + y * y).sqrt();
         assert!((magnitude - 1.0).abs() < 1e-12);
 
         let mut other = organism.clone();
         other.id = "2".into();
-        let other_direction =
-            movement_direction(&other, &[]).expect("other organism should move");
+        let other_direction = movement_direction(&other, &[]).expect("other organism should move");
         assert_ne!((x, y), other_direction);
     }
 
