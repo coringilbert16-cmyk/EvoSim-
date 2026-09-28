@@ -391,7 +391,11 @@ pub(crate) fn organism_resonance_perceptions(
     organism: &crate::state::Organism,
     environment: &crate::state::Environment,
 ) -> Vec<ResonancePerception> {
-    let Some(cavity) = organism.genome_cavity_cached(&environment.catalog) else {
+    let Some(cavity) =
+        crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
+            .ok()
+            .flatten()
+    else {
         return Vec::new();
     };
     genome_cavity_resonance_perceptions(
