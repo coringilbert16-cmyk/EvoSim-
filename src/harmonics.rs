@@ -442,7 +442,8 @@ pub(crate) fn update_organism_harmonics(
         return;
     }
 
-    organism.harmonic_spectrum = organism_emitted_spectrum(&organism.structure, &environment.catalog);
+    organism.harmonic_spectrum =
+        organism_emitted_spectrum(&organism.structure, &environment.catalog);
     let anchor = organism
         .occupied_cells
         .first()
