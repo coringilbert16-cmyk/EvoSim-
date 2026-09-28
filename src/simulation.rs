@@ -378,6 +378,79 @@ impl Simulation {
             self.decomposing_bodies.remove(index);
         }
     }
+    fn update_external_harmonic_perceptions(&mut self) {
+        let snapshots: Vec<(String, crate::state::Position, crate::harmonics::ToneSpectrum)> =
+            self.organisms
+                .iter()
+                .map(|organism| {
+                    (
+                        organism.id.clone(),
+                        organism
+                            .occupied_cells
+                            .first()
+                            .cloned()
+                            .unwrap_or(crate::state::Position { x: 0.0, y: 0.0 }),
+                        organism.harmonic_spectrum.clone(),
+                    )
+                })
+                .collect();
+
+        for observer in &mut self.organisms {
+            let Some(position) = observer.occupied_cells.first().cloned() else {
+                continue;
+            };
+            let Some(cavity) = observer
+                .genome_cavity_cached_ref(&self.environment.catalog)
+                .filter(|cavity| cavity.qualifies())
+            else {
+                continue;
+            };
+            let capacity = crate::memory::memory_capacity(cavity);
+            let memory_strength = observer.genome.memory_strength().clamp(0.0, 1.0);
+
+            for (source_id, source_position, source_spectrum) in &snapshots {
+                if source_id == &observer.id {
+                    continue;
+                }
+                let received = crate::harmonics::aura_from_spectrum(
+                    source_spectrum,
+                    (source_position.x, source_position.y),
+                    position.x,
+                    position.y,
+                );
+                let strength = crate::harmonics::aura_strength(&received);
+                if strength <= crate::harmonics::AURA_DETECTION_THRESHOLD {
+                    continue;
+                }
+
+                let changed = observer
+                    .memory
+                    .iter()
+                    .find(|point| {
+                        let dx = point.x - source_position.x;
+                        let dy = point.y - source_position.y;
+                        (dx * dx + dy * dy).sqrt() < crate::state::MEMORY_MERGE_RADIUS
+                    })
+                    .map(|point| {
+                        crate::harmonics::spectrum_difference(&point.spectrum, &received)
+                            > crate::harmonics::AURA_DETECTION_THRESHOLD
+                    })
+                    .unwrap_or(true);
+
+                if changed {
+                    crate::memory::remember_perception(
+                        observer,
+                        source_position.x,
+                        source_position.y,
+                        memory_strength,
+                        capacity,
+                        &received,
+                    );
+                }
+            }
+        }
+    }
+
     pub(crate) fn step(&mut self) {
         self.tick += 1;
         let mut still_active = Vec::new();
@@ -437,25 +510,6 @@ impl Simulation {
             organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
             crate::harmonics::update_organism_harmonics(organism, &self.environment);
             Self::update_memory_from_sources(organism, &self.environment);
-            let (x, y) = organism
-                .occupied_cells
-                .first()
-                .map(|p| (p.x, p.y))
-                .unwrap_or((0.0, 0.0));
-            if let Some(cavity) = organism
-                .genome_cavity_cached_ref(&self.environment.catalog)
-                .filter(|cavity| cavity.qualifies())
-            {
-                let capacity = crate::memory::memory_capacity(cavity);
-                crate::memory::remember_perception(
-                    organism,
-                    x,
-                    y,
-                    organism.genome.memory_strength().clamp(0.0, 1.0),
-                    capacity,
-                    &organism.harmonic_spectrum,
-                );
-            }
             if matches!(organism.development_stage, DevelopmentStage::Adult)
                 && organism.reproductive_construction.is_none()
             {
@@ -468,6 +522,7 @@ impl Simulation {
             }
             Self::transfer_contained_environmental_material(organism, &mut self.environment);
         }
+        self.update_external_harmonic_perceptions();
         {
             let (organisms, environment) = (&mut self.organisms, &mut self.environment);
             let mut compatibility_cache = crate::contact::ConnectionCompatibilityCache::new();
