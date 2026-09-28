@@ -42,6 +42,12 @@ impl Genome {
         self.trait_value("memory_strength", 0.5).clamp(0.0, 1.0)
     }
 
+    /// Inherited drive to investigate unfamiliar perceived stimuli.
+    /// EXPERIMENTAL: behavioral calibration value; mutation is inherited.
+    pub fn curiosity(&self) -> f64 {
+        self.trait_value("curiosity", 0.5).clamp(0.0, 1.0)
+    }
+
     /// Inherited developmental-size preference.
     ///
     /// The normalized value is the inherited authority. Preferred mass is derived
@@ -148,6 +154,7 @@ pub fn initial_genome() -> Genome {
     Genome {
         traits: vec![
             trait_def("memory_strength", 0.5, 0.05),
+            trait_def("curiosity", 0.5, 0.05),
             trait_def("size_preference", 0.5, 0.05),
             trait_def("processing_efficiency", 0.8, 0.05),
             trait_def("movement_efficiency", 0.8, 0.05),

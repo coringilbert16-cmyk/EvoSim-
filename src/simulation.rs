@@ -76,7 +76,8 @@ impl Simulation {
             occupied_cells: vec![anchor],
             genome,
             harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
-            memory: Vec::new(),
+            experience_memory: crate::memory::ExperienceMemory::default(),
+            pending_movement_experience: None,
             decision_history: crate::decision::DecisionHistory::default(),
             usable_energy: initial_energy,
             stress: 0.0,
@@ -98,6 +99,63 @@ impl Simulation {
             last_movement_attempt: None,
         }
     }
+    fn record_action_experience(
+        organism: &mut Organism,
+        environment: &Environment,
+        perceptions: &[crate::harmonics::ResonancePerception],
+        action: ActionKind,
+        consequence: crate::decision::ActionConsequence,
+        needs: CurrentNeeds,
+        material_consumed: f64,
+    ) {
+        let capacity = organism
+            .genome_cavity_cached_ref(&environment.catalog)
+            .filter(|cavity| cavity.qualifies())
+            .map(crate::memory::memory_capacity);
+        let Some(capacity) = capacity else {
+            return;
+        };
+        let mut memory_consequence = crate::memory::memory_consequence_from_action(consequence);
+        memory_consequence.material_consumed = material_consumed.max(0.0);
+        crate::memory::record_experience(
+            &mut organism.experience_memory,
+            perceptions,
+            action,
+            memory_consequence,
+            needs,
+            capacity,
+            organism.genome.memory_strength(),
+        );
+    }
+
+    fn finalize_pending_movement_experience(
+        organism: &mut Organism,
+        environment: &Environment,
+        acquired_amount: f64,
+    ) {
+        let Some(pending) = organism.pending_movement_experience.take() else {
+            return;
+        };
+        let mut consequence = pending.consequence;
+        consequence.material_acquired = acquired_amount.max(0.0);
+        let capacity = organism
+            .genome_cavity_cached_ref(&environment.catalog)
+            .filter(|cavity| cavity.qualifies())
+            .map(crate::memory::memory_capacity);
+        let Some(capacity) = capacity else {
+            return;
+        };
+        crate::memory::record_experience(
+            &mut organism.experience_memory,
+            &pending.perceptions,
+            ActionKind::Move,
+            consequence,
+            pending.needs,
+            capacity,
+            organism.genome.memory_strength(),
+        );
+    }
+
     fn action_consequence(
         before_energy: f64,
         before_stress: f64,
@@ -436,27 +494,7 @@ impl Simulation {
             Self::update_development_stage(organism, &self.environment, seed_reference);
             organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
             crate::harmonics::update_organism_harmonics(organism, &self.environment);
-            Self::update_memory_from_sources(organism, &self.environment);
-            let (x, y) = organism
-                .occupied_cells
-                .first()
-                .map(|p| (p.x, p.y))
-                .unwrap_or((0.0, 0.0));
-            if let Some(cavity) = organism
-                .genome_cavity_cached_ref(&self.environment.catalog)
-                .filter(|cavity| cavity.qualifies())
-            {
-                let capacity = crate::memory::memory_capacity(cavity);
-                let harmonic_spectrum = organism.harmonic_spectrum.clone();
-                crate::memory::remember_perception(
-                    organism,
-                    x,
-                    y,
-                    organism.genome.memory_strength().clamp(0.0, 1.0),
-                    capacity,
-                    &harmonic_spectrum,
-                );
-            }
+            crate::memory::update_experience_memory(organism, &self.environment);
             if matches!(organism.development_stage, DevelopmentStage::Adult)
                 && organism.reproductive_construction.is_none()
             {
@@ -467,7 +505,15 @@ impl Simulation {
                     &mut self.energy_ledger,
                 );
             }
+            let stored_amount_before_transfer = organism.stored_material.total_amount();
             Self::transfer_contained_environmental_material(organism, &mut self.environment);
+            let acquired_amount =
+                (organism.stored_material.total_amount() - stored_amount_before_transfer).max(0.0);
+            Self::finalize_pending_movement_experience(
+                organism,
+                &self.environment,
+                acquired_amount,
+            );
         }
         {
             let (organisms, environment) = (&mut self.organisms, &mut self.environment);
@@ -506,6 +552,8 @@ impl Simulation {
                 if eligibility.can_move {
                     let (before, rest) = organisms.split_at_mut(index);
                     let (organism, after) = rest.split_first_mut().expect("index is in organisms");
+                    let perceptions =
+                        crate::harmonics::organism_resonance_perceptions(organism, environment);
                     let before_energy = organism.usable_energy;
                     let before_stress = organism.stress;
                     let before_realization = developmental
@@ -526,6 +574,7 @@ impl Simulation {
                         &mut self.energy_ledger,
                         self.tick,
                         &mut self.rng,
+                        &perceptions,
                     );
                     if moved {
                         let move_candidate = ActionCandidate {
@@ -550,6 +599,14 @@ impl Simulation {
                             &move_candidate,
                             consequence,
                         );
+                        organism.pending_movement_experience =
+                            Some(crate::memory::PendingMovementExperience {
+                                perceptions,
+                                consequence: crate::memory::memory_consequence_from_action(
+                                    consequence,
+                                ),
+                                needs,
+                            });
                     }
                 }
                 let context = DecisionContext { needs, eligibility };
@@ -579,8 +636,14 @@ impl Simulation {
                 ) {
                     match selected.action {
                         ActionKind::Combine => {
+                            let perceptions = crate::harmonics::organism_resonance_perceptions(
+                                &organisms[index],
+                                environment,
+                            );
                             let before_energy = organisms[index].usable_energy;
                             let before_stress = organisms[index].stress;
+                            let before_stored_material =
+                                organisms[index].stored_material.total_amount();
                             let before_realization = developmental
                                 .as_ref()
                                 .map(|context| context.current_growth_fraction)
@@ -629,18 +692,64 @@ impl Simulation {
                                 &selected,
                                 consequence,
                             );
+                            if combined {
+                                let material_consumed = (before_stored_material
+                                    - organisms[index].stored_material.total_amount())
+                                .max(0.0);
+                                Self::record_action_experience(
+                                    &mut organisms[index],
+                                    environment,
+                                    &perceptions,
+                                    ActionKind::Combine,
+                                    consequence,
+                                    needs,
+                                    material_consumed,
+                                );
+                            }
                         }
                         ActionKind::Break => {
-                            if let Some(transformation) = Self::try_start_transformation(
+                            let perceptions = crate::harmonics::organism_resonance_perceptions(
+                                &organisms[index],
+                                environment,
+                            );
+                            let before_energy = organisms[index].usable_energy;
+                            let before_stress = organisms[index].stress;
+                            let before_developmental_realization = developmental
+                                .as_ref()
+                                .map(|context| context.current_growth_fraction)
+                                .unwrap_or_else(|| {
+                                    organisms[index]
+                                        .developmental_realization_cached(&environment.catalog)
+                                        .map(|realization| realization.overall)
+                                        .unwrap_or(0.0)
+                                });
+                            if let Some(mut transformation) = Self::try_start_transformation(
                                 &mut organisms[index],
                                 &environment.catalog,
                                 &mut self.next_transformation_id,
                                 &selected,
                             ) {
+                                transformation.pending_experience =
+                                    Some(crate::memory::PendingTransformationExperience {
+                                        perceptions,
+                                        needs,
+                                        before_energy,
+                                        before_stress,
+                                        before_developmental_realization,
+                                        material_transformed: transformation
+                                            .stored_material
+                                            .as_ref()
+                                            .map(|instance| instance.material.total_amount())
+                                            .unwrap_or(0.0),
+                                    });
                                 self.active_transformations.push(transformation);
                             }
                         }
                         ActionKind::Expel => {
+                            let perceptions = crate::harmonics::organism_resonance_perceptions(
+                                &organisms[index],
+                                environment,
+                            );
                             let before_energy = organisms[index].usable_energy;
                             let before_stress = organisms[index].stress;
                             let before_realization = developmental
@@ -681,6 +790,17 @@ impl Simulation {
                                 &selected,
                                 consequence,
                             );
+                            if expelled {
+                                Self::record_action_experience(
+                                    &mut organisms[index],
+                                    environment,
+                                    &perceptions,
+                                    ActionKind::Expel,
+                                    consequence,
+                                    needs,
+                                    0.0,
+                                );
+                            }
                         }
                         ActionKind::Move => unreachable!("movement is evaluated independently"),
                     }

@@ -26,6 +26,20 @@ pub(crate) struct ToneSpectrum {
     pub(crate) components: Vec<ToneComponent>,
 }
 
+/// A spatially attributed environmental signal after passing through the
+/// organism's existing realized resonance geometry. This does not add a
+/// separate sensory system: it preserves which boundary location contributed
+/// the received environmental spectrum before the cavity aggregate discards
+/// that provenance.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub(crate) struct ResonancePerception {
+    pub(crate) source_x: f64,
+    pub(crate) source_y: f64,
+    pub(crate) extent: f64,
+    pub(crate) spectrum: ToneSpectrum,
+    pub(crate) magnitude: f64,
+}
+
 impl ToneSpectrum {
     pub(crate) fn empty() -> Self {
         Self::default()
@@ -331,6 +345,67 @@ pub(crate) fn genome_cavity_spectrum(
     spectrum
 }
 
+/// Preserve the spatial environmental signals that reached each realized
+/// genome-cavity boundary location before the organism-level spectrum is
+/// aggregated. The source region uses the boundary unit's existing physical
+/// geometry rather than an authored sensor radius.
+pub(crate) fn genome_cavity_resonance_perceptions(
+    structure: &crate::structure::OrganismStructure,
+    catalog: &[crate::resources::BaseResource],
+    field: &crate::environment::ActiveMaterialField,
+    boundary_units: &[usize],
+) -> Vec<ResonancePerception> {
+    let mut perceptions = Vec::new();
+    for &unit_index in boundary_units {
+        let Some(unit) = structure.units.get(unit_index) else {
+            continue;
+        };
+        let Some(shape) = unit.shape(catalog) else {
+            continue;
+        };
+        let spectrum =
+            environmental_spectrum_at_position(field, catalog, unit.placement.x, unit.placement.y);
+        let magnitude = spectrum
+            .components
+            .iter()
+            .map(|component| component.amplitude.max(0.0))
+            .sum::<f64>();
+        if magnitude <= f64::EPSILON {
+            continue;
+        }
+        perceptions.push(ResonancePerception {
+            source_x: unit.placement.x,
+            source_y: unit.placement.y,
+            extent: shape.form.bounding_radius().max(0.0),
+            spectrum,
+            magnitude,
+        });
+    }
+    perceptions
+}
+
+/// Return the spatially attributed resonance signals currently reaching the
+/// organism's genome cavity. This reuses the same physical resonance geometry
+/// as the harmonic state; it does not create a second sensory radius.
+pub(crate) fn organism_resonance_perceptions(
+    organism: &crate::state::Organism,
+    environment: &crate::state::Environment,
+) -> Vec<ResonancePerception> {
+    let Some(cavity) =
+        crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
+            .ok()
+            .flatten()
+    else {
+        return Vec::new();
+    };
+    genome_cavity_resonance_perceptions(
+        &organism.structure,
+        &environment.catalog,
+        &environment.field,
+        &cavity.boundary_units,
+    )
+}
+
 /// Refresh the harmonic state from the organism's actual realized genome
 /// cavity. A non-qualifying physical structure has no genome harmonic
 /// memory surface.
@@ -380,9 +455,92 @@ pub(crate) fn update_organism_harmonics(
     organism.cached_harmonic_key = Some(key);
 }
 
+/// EXPERIMENTAL: logarithmic spectral matching width. Smaller values require
+/// frequencies to be closer before they are treated as similar.
+pub(crate) const SPECTRAL_MATCH_SIGMA: f64 = 0.25;
+
+/// Return a symmetric continuous similarity ratio in [0, 1].
+///
+/// Frequency distance is logarithmic so a doubling and halving are treated
+/// symmetrically. Amplitude weights the contribution of each perceived
+/// component; phase is intentionally ignored because recognition is based on
+/// the received spectral pattern rather than instantaneous oscillator phase.
+pub(crate) fn spectral_similarity(a: &ToneSpectrum, b: &ToneSpectrum) -> f64 {
+    if a.components.is_empty() || b.components.is_empty() {
+        return 0.0;
+    }
+    fn directional(from: &ToneSpectrum, to: &ToneSpectrum) -> f64 {
+        let total = from
+            .components
+            .iter()
+            .map(|component| component.amplitude.max(0.0))
+            .sum::<f64>();
+        if total <= f64::EPSILON {
+            return 0.0;
+        }
+        from.components
+            .iter()
+            .map(|component| {
+                let best = to
+                    .components
+                    .iter()
+                    .map(|other| {
+                        let distance = (component.frequency_hz / other.frequency_hz).ln().abs();
+                        (-distance / SPECTRAL_MATCH_SIGMA).exp()
+                    })
+                    .fold(0.0_f64, f64::max);
+                component.amplitude.max(0.0) * best
+            })
+            .sum::<f64>()
+            / total
+    }
+
+    ((directional(a, b) + directional(b, a)) * 0.5).clamp(0.0, 1.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn spectral_similarity_is_symmetric_and_exact_match_is_one() {
+        let a = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_hz: 440.0,
+                amplitude: 1.0,
+                phase_radians: 0.0,
+            }],
+        };
+        let b = a.clone();
+        assert!((spectral_similarity(&a, &b) - 1.0).abs() < 1e-12);
+        assert!((spectral_similarity(&a, &b) - spectral_similarity(&b, &a)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn spectral_similarity_falls_with_log_frequency_distance() {
+        let a = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_hz: 440.0,
+                amplitude: 1.0,
+                phase_radians: 0.0,
+            }],
+        };
+        let near = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_hz: 460.0,
+                amplitude: 1.0,
+                phase_radians: 0.0,
+            }],
+        };
+        let far = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_hz: 1760.0,
+                amplitude: 1.0,
+                phase_radians: 0.0,
+            }],
+        };
+        assert!(spectral_similarity(&a, &near) > spectral_similarity(&a, &far));
+    }
 
     #[test]
     fn genome_cavity_receives_environmental_material_at_realized_boundary() {
@@ -449,6 +607,48 @@ mod tests {
             .is_none());
         let absent = genome_cavity_spectrum(&structure, &catalog, &field, &[]);
         assert!(absent.components.is_empty());
+    }
+
+    #[test]
+    fn resonance_perception_preserves_boundary_location() {
+        let catalog = crate::resources::default_catalog();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
+        let (mut structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
+        let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
+            .unwrap()
+            .expect("confirmed seed must contain a genome cavity");
+        // The initial realized structure is centered near the origin, while
+        // the field uses non-negative world coordinates. Translate only this
+        // isolated test fixture into the field's valid coordinate range.
+        for unit in &mut structure.units {
+            unit.placement.x += 500.0;
+            unit.placement.y += 500.0;
+        }
+        let mut field = crate::environment::ActiveMaterialField::new(
+            1000.0,
+            1000.0,
+            crate::environment::DEFAULT_CELL_SIZE,
+        );
+        let boundary = &structure.units[cavity.boundary_units[0]].placement;
+        assert!(field.deposit(
+            boundary.x,
+            boundary.y,
+            crate::resources::Material::free_base("Carbon", 1.0),
+        ));
+
+        let perceptions = genome_cavity_resonance_perceptions(
+            &structure,
+            &catalog,
+            &field,
+            &cavity.boundary_units,
+        );
+        assert!(!perceptions.is_empty());
+        assert!(perceptions.iter().any(|perception| {
+            (perception.source_x - boundary.x).abs() < f64::EPSILON
+                && (perception.source_y - boundary.y).abs() < f64::EPSILON
+                && perception.extent > 0.0
+                && perception.magnitude > 0.0
+        }));
     }
 
     fn properties(mass: f64, reactivity: f64, cohesion: f64) -> ResourceProperties {

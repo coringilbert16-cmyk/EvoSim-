@@ -1,3 +1,8 @@
+#![expect(
+    dead_code,
+    reason = "Staged reproduction API retained for lifecycle integration"
+)]
+
 //! Physical reproduction lifecycle.
 //!
 //! Reproduction owns a separate developing physical graph. The child begins
@@ -146,7 +151,8 @@ fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
         occupied_cells: vec![construction.developmental_origin.clone()],
         genome: construction.child_genome.clone(),
         harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
-        memory: Vec::new(),
+        experience_memory: crate::memory::ExperienceMemory::default(),
+        pending_movement_experience: None,
         decision_history: crate::decision::DecisionHistory::default(),
         usable_energy: construction.developing_energy,
         stress: construction.developing_stress,
@@ -422,7 +428,8 @@ fn anchor_structure(
         }],
         genome: child_genome.clone(),
         harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
-        memory: Vec::new(),
+        experience_memory: crate::memory::ExperienceMemory::default(),
+        pending_movement_experience: None,
         decision_history: crate::decision::DecisionHistory::default(),
         usable_energy: 0.0,
         stress: 0.0,
@@ -686,7 +693,8 @@ pub(crate) fn finish_reproduction(
         occupied_cells: vec![child_position],
         genome: construction.child_genome,
         harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
-        memory: Vec::new(),
+        experience_memory: crate::memory::ExperienceMemory::default(),
+        pending_movement_experience: None,
         decision_history: crate::decision::DecisionHistory::default(),
         usable_energy: construction.developing_energy,
         stress: construction.developing_stress,
