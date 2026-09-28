@@ -179,6 +179,7 @@ try {
 
     Write-Host "EvoSim automatic runner starting."
     Write-Host "Repository: $Repo"
+    Set-Location $Repo
 
     $clean = Test-WorktreeClean
     if (-not $clean) {
