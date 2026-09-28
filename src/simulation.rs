@@ -739,15 +739,14 @@ impl Simulation {
                                 &mut self.next_transformation_id,
                                 &selected,
                             ) {
-                                transformation.pending_experience = Some(
-                                    crate::memory::PendingTransformationExperience {
+                                transformation.pending_experience =
+                                    Some(crate::memory::PendingTransformationExperience {
                                         perceptions,
                                         needs,
                                         before_energy,
                                         before_stress,
                                         before_developmental_realization,
-                                    },
-                                );
+                                    });
                                 self.active_transformations.push(transformation);
                             }
                         }
