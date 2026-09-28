@@ -106,6 +106,7 @@ impl Simulation {
         action: ActionKind,
         consequence: crate::decision::ActionConsequence,
         needs: CurrentNeeds,
+        material_consumed: f64,
     ) {
         let capacity = organism
             .genome_cavity_cached_ref(&environment.catalog)
@@ -114,11 +115,13 @@ impl Simulation {
         let Some(capacity) = capacity else {
             return;
         };
+        let mut memory_consequence = crate::memory::memory_consequence_from_action(consequence);
+        memory_consequence.material_consumed = material_consumed.max(0.0);
         crate::memory::record_experience(
             &mut organism.experience_memory,
             perceptions,
             action,
-            crate::memory::memory_consequence_from_action(consequence),
+            memory_consequence,
             needs,
             capacity,
             organism.genome.memory_strength(),
@@ -639,6 +642,8 @@ impl Simulation {
                             );
                             let before_energy = organisms[index].usable_energy;
                             let before_stress = organisms[index].stress;
+                            let before_stored_material =
+                                organisms[index].stored_material.total_amount();
                             let before_realization = developmental
                                 .as_ref()
                                 .map(|context| context.current_growth_fraction)
@@ -695,6 +700,9 @@ impl Simulation {
                                     ActionKind::Combine,
                                     consequence,
                                     needs,
+                                    (before_stored_material
+                                        - organisms[index].stored_material.total_amount())
+                                        .max(0.0),
                                 );
                             }
                         }
@@ -784,6 +792,7 @@ impl Simulation {
                                     ActionKind::Expel,
                                     consequence,
                                     needs,
+                                    0.0,
                                 );
                             }
                         }
