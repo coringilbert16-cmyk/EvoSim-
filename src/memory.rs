@@ -666,8 +666,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
-    #[test]
     fn record_experience_keeps_location_and_spectrum_associations_independent() {
         let spectrum = crate::harmonics::ToneSpectrum {
             components: vec![crate::harmonics::ToneComponent {
