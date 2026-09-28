@@ -260,7 +260,11 @@ pub(crate) fn reinforce_encounter_memory(
             let spectral = crate::harmonics::spectral_similarity(&entry.spectrum, spectrum);
             (index, spatial, spectral)
         })
-        .filter(|(_, spatial, spectral)| *spatial && *spectral >= SPECTRAL_MEMORY_MATCH_FLOOR)
+        .filter(|(index, spatial, spectral)| {
+            memory.encounters[*index].action == action
+                && *spatial
+                && *spectral >= SPECTRAL_MEMORY_MATCH_FLOOR
+        })
         .max_by(|a, b| a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal))
         .map(|(index, _, spectral)| (index, spectral))
     else {
