@@ -158,43 +158,55 @@ impl WorldObservation {
                         return None;
                     }
                 }
-                let (min_x, max_x, min_y, max_y, silhouette) = match geometry {
-                    Some(g) => {
-                        let silhouette = g
-                            .parts
-                            .into_iter()
-                            .map(|part| OrganismSilhouettePart {
-                                form: part.form,
-                                x: part.x + position.0,
-                                y: part.y + position.1,
-                                rotation_radians: part.rotation_radians,
-                            })
-                            .collect();
-                        (
-                            g.min_x + position.0,
-                            g.max_x + position.0,
-                            g.min_y + position.1,
-                            g.max_y + position.1,
-                            silhouette,
-                        )
-                    }
-                    None => (
-                        position.0,
-                        position.0,
-                        position.1,
-                        position.1,
-                        Vec::new(),
-                    ),
+                let physical_changed = known_organisms
+                    .iter()
+                    .find(|(id, _, _)| id == &organism.id)
+                    .map(|(_, structure_revision, position_revision)| {
+                        *structure_revision != organism.structure_revision
+                            || *position_revision != organism.position_revision
+                    })
+                    .unwrap_or(true);
+                let physical = if physical_changed {
+                    Some(match geometry {
+                        Some(g) => {
+                            let silhouette = g
+                                .parts
+                                .into_iter()
+                                .map(|part| OrganismSilhouettePart {
+                                    form: part.form,
+                                    x: part.x + position.0,
+                                    y: part.y + position.1,
+                                    rotation_radians: part.rotation_radians,
+                                })
+                                .collect();
+                            WorldOrganismPhysicalObservation {
+                                x: position.0,
+                                y: position.1,
+                                min_x: g.min_x + position.0,
+                                max_x: g.max_x + position.0,
+                                min_y: g.min_y + position.1,
+                                max_y: g.max_y + position.1,
+                                silhouette,
+                            }
+                        }
+                        None => WorldOrganismPhysicalObservation {
+                            x: position.0,
+                            y: position.1,
+                            min_x: position.0,
+                            max_x: position.0,
+                            min_y: position.1,
+                            max_y: position.1,
+                            silhouette: Vec::new(),
+                        },
+                    })
+                } else {
+                    None
                 };
                 Some(WorldOrganismObservation {
                     id: organism.id.clone(),
-                    x: position.0,
-                    y: position.1,
-                    min_x,
-                    max_x,
-                    min_y,
-                    max_y,
-                    silhouette,
+                    structure_revision: organism.structure_revision,
+                    position_revision: organism.position_revision,
+                    physical,
                 })
             })
             .collect();
