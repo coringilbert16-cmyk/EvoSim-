@@ -76,7 +76,11 @@ function Get-GitOutput([string[]]$Arguments) {
 }
 
 function Test-WorktreeClean {
-    return [string]::IsNullOrWhiteSpace((Get-GitOutput @("-C", $Repo, "status", "--porcelain", "--untracked-files=all")))
+    $status = Get-GitOutput @("-C", $Repo, "status", "--porcelain", "--untracked-files=all")
+    $unexpected = @($status -split "`r?`n" | Where-Object {
+        $_ -and $_ -ne "?? Cargo.lock"
+    })
+    return $unexpected.Count -eq 0
 }
 
 function Get-RemoteMain {
