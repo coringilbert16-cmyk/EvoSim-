@@ -718,12 +718,36 @@ impl Simulation {
                             }
                         }
                         ActionKind::Break => {
-                            if let Some(transformation) = Self::try_start_transformation(
+                            let perceptions = crate::harmonics::organism_resonance_perceptions(
+                                &organisms[index],
+                                environment,
+                            );
+                            let before_energy = organisms[index].usable_energy;
+                            let before_stress = organisms[index].stress;
+                            let before_developmental_realization = developmental
+                                .as_ref()
+                                .map(|context| context.current_growth_fraction)
+                                .unwrap_or_else(|| {
+                                    organisms[index]
+                                        .developmental_realization_cached(&environment.catalog)
+                                        .map(|realization| realization.overall)
+                                        .unwrap_or(0.0)
+                                });
+                            if let Some(mut transformation) = Self::try_start_transformation(
                                 &mut organisms[index],
                                 &environment.catalog,
                                 &mut self.next_transformation_id,
                                 &selected,
                             ) {
+                                transformation.pending_experience = Some(
+                                    crate::memory::PendingTransformationExperience {
+                                        perceptions,
+                                        needs,
+                                        before_energy,
+                                        before_stress,
+                                        before_developmental_realization,
+                                    },
+                                );
                                 self.active_transformations.push(transformation);
                             }
                         }
