@@ -268,7 +268,8 @@
       }
     }
     function renderOrganism() {
-      const physical = organismPhysicalPayload(), viewport = viewportSize(); if (!physical) return;
+      const organism = organismPayload(), physical = organismPhysicalPayload(), viewport = viewportSize();
+      if (!organism || !physical) return;
       for (const part of physical.silhouette || []) drawObservedPart(part, viewport);
       drawSelectionBounds(organism.id, physical, viewport, 5);
     }
