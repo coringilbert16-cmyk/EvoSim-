@@ -343,13 +343,15 @@ pub(crate) fn update_organism_harmonics(
         .map(|cavity| cavity.boundary_units.as_slice());
     let local_environment_revision = boundary_units
         .map(|indices| {
-            environment.field.local_revision_for_positions(indices.iter().filter_map(|&index| {
-                organism
-                    .structure
-                    .units
-                    .get(index)
-                    .map(|unit| (unit.placement.x, unit.placement.y))
-            }))
+            environment
+                .field
+                .local_revision_for_positions(indices.iter().filter_map(|&index| {
+                    organism
+                        .structure
+                        .units
+                        .get(index)
+                        .map(|unit| (unit.placement.x, unit.placement.y))
+                }))
         })
         .unwrap_or(0);
     let key = (
