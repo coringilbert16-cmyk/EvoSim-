@@ -360,13 +360,15 @@ pub(crate) fn organism_emitted_spectrum(
 pub(crate) fn aura_from_spectrum(
     spectrum: &ToneSpectrum,
     source_position: (f64, f64),
+    source_radius: f64,
     x: f64,
     y: f64,
 ) -> ToneSpectrum {
     let dx = source_position.0 - x;
     let dy = source_position.1 - y;
-    let distance_squared = dx * dx + dy * dy;
-    let attenuation = 1.0 / (1.0 + distance_squared);
+    let distance = (dx * dx + dy * dy).sqrt();
+    let outside_distance = (distance - source_radius.max(0.0)).max(0.0);
+    let attenuation = 1.0 / (1.0 + outside_distance * outside_distance);
     let mut aura = spectrum.clone();
     for component in &mut aura.components {
         component.amplitude *= attenuation;
@@ -403,6 +405,26 @@ pub(crate) fn spectrum_difference(a: &ToneSpectrum, b: &ToneSpectrum) -> f64 {
 
 pub(crate) fn aura_strength(spectrum: &ToneSpectrum) -> f64 {
     spectrum.components.iter().map(|component| component.amplitude).sum()
+}
+
+/// Physical extent of the realized structure measured from its occupied-cell
+/// anchor. The aura begins at the structure's actual outer extent rather than
+/// treating the organism as a point source.
+pub(crate) fn structural_radius(
+    structure: &crate::structure::OrganismStructure,
+) -> f64 {
+    let Some(anchor) = structure.units.first().map(|unit| unit.placement) else {
+        return 0.0;
+    };
+    structure
+        .units
+        .iter()
+        .map(|unit| {
+            let dx = unit.placement.x - anchor.x;
+            let dy = unit.placement.y - anchor.y;
+            (dx * dx + dy * dy).sqrt()
+        })
+        .fold(0.0, f64::max)
 }
 
 /// Refresh the organism's emitted harmonic state from its realized physical
@@ -518,8 +540,8 @@ mod tests {
                 phase_radians: 0.0,
             }],
         };
-        let near = aura_from_spectrum(&spectrum, (0.0, 0.0), 0.0, 0.0);
-        let far = aura_from_spectrum(&spectrum, (0.0, 0.0), 10.0, 0.0);
+        let near = aura_from_spectrum(&spectrum, (0.0, 0.0), 0.0, 0.0, 0.0);
+        let far = aura_from_spectrum(&spectrum, (0.0, 0.0), 0.0, 10.0, 0.0);
         assert!(aura_strength(&near) > aura_strength(&far));
     }
 
