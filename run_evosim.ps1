@@ -110,20 +110,21 @@ function Invoke-Cargo([string[]]$Arguments) {
     $stdoutPath = [System.IO.Path]::GetTempFileName()
     $stderrPath = [System.IO.Path]::GetTempFileName()
     try {
-        $process = Start-Process -FilePath "cargo.exe" -ArgumentList $Arguments -WorkingDirectory $Repo -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -PassThru
-        $process.WaitForExit()
+        $process = Start-Process -FilePath "cargo.exe" -ArgumentList $Arguments -WorkingDirectory $Repo -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -PassThru -Wait
+        $process.Refresh()
+        $exitCode = $process.ExitCode
 
         $stdout = Get-Content -Raw $stdoutPath -ErrorAction SilentlyContinue
         $stderr = Get-Content -Raw $stderrPath -ErrorAction SilentlyContinue
         if ($stdout) { Write-Host $stdout.TrimEnd() }
         if ($stderr) { Write-Host $stderr.TrimEnd() }
 
-        if ($process.ExitCode -ne 0) {
+        if ($exitCode -ne 0) {
             $detail = (($stdout, $stderr | Where-Object { $_ }) -join [Environment]::NewLine).Trim()
             if ($detail) {
-                throw "cargo $($Arguments -join " ") failed with exit code $($process.ExitCode): $detail"
+                throw "cargo $($Arguments -join " ") failed with exit code ${exitCode}: $detail"
             }
-            throw "cargo $($Arguments -join " ") failed with exit code $($process.ExitCode)"
+            throw "cargo $($Arguments -join " ") failed with exit code $exitCode"
         }
     }
     finally {
