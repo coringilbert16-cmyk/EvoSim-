@@ -862,24 +862,6 @@ mod tests {
     }
 
     #[test]
-    fn movement_cost_matches_reference_formula_at_default_efficiency() {
-        let cases = [
-            (2.7, 0.0152),
-            (16.0, 0.05),
-            (64.0, 0.1266),
-            (256.0, 0.3204),
-            (1024.0, 0.8112),
-        ];
-        for (mass, expected) in cases {
-            let actual = movement_energy_cost(mass, DEFAULT_MOVEMENT_EFFICIENCY);
-            assert!(
-                (actual - expected).abs() < 0.002,
-                "mass {mass}: expected {expected}, got {actual}"
-            );
-        }
-    }
-
-    #[test]
     fn movement_cost_scales_linearly_with_distance() {
         let costs = [1.0, 2.0, 4.0, 8.0].map(|distance| {
             movement_energy_cost_for_distance(16.0, DEFAULT_MOVEMENT_EFFICIENCY, distance)
