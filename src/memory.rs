@@ -714,6 +714,30 @@ mod tests {
         assert!(organism.memory[0].strength > perception_strength);
     }
 
+
+    #[test]
+    fn consequence_value_changes_with_current_need() {
+        let consequence = MemoryConsequence {
+            energy_delta: 1.0,
+            ..Default::default()
+        };
+        let low_survival = consequence_value(
+            &consequence,
+            crate::decision::CurrentNeeds {
+                survival: 0.0,
+                ..Default::default()
+            },
+        );
+        let high_survival = consequence_value(
+            &consequence,
+            crate::decision::CurrentNeeds {
+                survival: 1.0,
+                ..Default::default()
+            },
+        );
+        assert!(high_survival > low_survival);
+    }
+
     #[test]
     fn memory_capacity_uses_diminishing_area_returns() {
         let minimum = crate::cavity::GenomeCavity {
