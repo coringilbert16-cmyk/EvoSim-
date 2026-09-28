@@ -65,6 +65,91 @@ pub(crate) fn consequence_value(
         .sum()
 }
 
+/// Record one completed experience against all spatially attributed
+/// resonance signals involved in it. Location and spectral associations are
+/// reinforced independently; the encounter record keeps the linkage.
+pub(crate) fn record_experience(
+    memory: &mut ExperienceMemory,
+    perceptions: &[crate::harmonics::ResonancePerception],
+    action: crate::decision::ActionKind,
+    consequence: MemoryConsequence,
+    needs: crate::decision::CurrentNeeds,
+    capacity: usize,
+) {
+    if perceptions.is_empty() || capacity == 0 {
+        return;
+    }
+
+    let association = consequence_value(&consequence, needs).tanh();
+    let raw_magnitude = [
+        consequence.energy_delta / CONSEQUENCE_ENERGY_SCALE,
+        consequence.developmental_delta / CONSEQUENCE_DEVELOPMENT_SCALE,
+        consequence.material_acquired / CONSEQUENCE_MATERIAL_SCALE,
+        consequence.stress_delta / CONSEQUENCE_STRESS_SCALE,
+        consequence.damage_delta / CONSEQUENCE_DAMAGE_SCALE,
+        consequence.material_consumed / CONSEQUENCE_CONSUMED_MATERIAL_SCALE,
+    ]
+    .into_iter()
+    .map(f64::abs)
+    .sum::<f64>();
+    let experience_magnitude = (1.0 - (-raw_magnitude).exp()).clamp(0.0, 1.0);
+    if experience_magnitude <= f64::EPSILON {
+        return;
+    }
+
+    let total_perception_magnitude = perceptions
+        .iter()
+        .map(|perception| perception.magnitude.max(0.0))
+        .sum::<f64>()
+        .max(f64::EPSILON);
+
+    for perception in perceptions {
+        let share = perception.magnitude.max(0.0) / total_perception_magnitude;
+        let weight = experience_magnitude * share;
+        if weight <= f64::EPSILON {
+            continue;
+        }
+        reinforce_spatial_memory(
+            memory,
+            perception.source_x,
+            perception.source_y,
+            perception.extent,
+            association,
+            weight,
+        );
+        reinforce_spectral_memory(&mut *memory, &perception.spectrum, association, weight);
+        reinforce_encounter_memory(
+            memory,
+            perception.source_x,
+            perception.source_y,
+            perception.extent,
+            &perception.spectrum,
+            action,
+            consequence,
+            weight,
+        );
+    }
+
+    memory.spatial.sort_by(|a, b| {
+        b.strength
+            .partial_cmp(&a.strength)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    memory.spectral.sort_by(|a, b| {
+        b.strength
+            .partial_cmp(&a.strength)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    memory.encounters.sort_by(|a, b| {
+        b.strength
+            .partial_cmp(&a.strength)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    memory.spatial.truncate(capacity);
+    memory.spectral.truncate(capacity);
+    memory.encounters.truncate(capacity);
+}
+
 fn bounded_strength_after_experience(current: f64, experience_magnitude: f64) -> f64 {
     let current = current.clamp(0.0, 1.0);
     let magnitude = experience_magnitude.max(0.0);
