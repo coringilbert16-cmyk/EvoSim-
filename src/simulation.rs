@@ -76,7 +76,6 @@ impl Simulation {
             occupied_cells: vec![anchor],
             genome,
             harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
-            memory: Vec::new(),
             experience_memory: crate::memory::ExperienceMemory::default(),
             pending_movement_experience: None,
             decision_history: crate::decision::DecisionHistory::default(),
