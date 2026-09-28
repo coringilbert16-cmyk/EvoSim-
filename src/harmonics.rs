@@ -431,7 +431,9 @@ pub(crate) fn update_organism_harmonics(
     organism: &mut crate::state::Organism,
     environment: &crate::state::Environment,
 ) {
-    let key = (organism.structure_revision, organism.position_revision, 0);
+    // Emitted frequency and intrinsic aura size depend only on realized structure.
+    // Movement changes where the cached aura is centered, not what the structure emits.
+    let key = (organism.structure_revision, 0, 0);
     if organism.cached_harmonic_key == Some(key) {
         return;
     }
