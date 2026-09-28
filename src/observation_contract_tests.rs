@@ -20,7 +20,7 @@ fn world_observation_preserves_environmental_observation_contract() {
             .field
             .cell_center(observed.cell_index);
         assert_eq!((observed.x, observed.y), (x, y));
-        assert_eq!(observed.materials, cell.total_material());
+        assert_eq!(observed.materials, Some(cell.total_material()));
     }
 }
 
