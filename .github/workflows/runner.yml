@@ -1,0 +1,45 @@
+name: Runner Validation
+
+on:
+  push:
+    paths:
+      - "run_evosim.cmd"
+      - "run_evosim.ps1"
+      - ".github/workflows/runner.yml"
+  pull_request:
+    paths:
+      - "run_evosim.cmd"
+      - "run_evosim.ps1"
+      - ".github/workflows/runner.yml"
+
+jobs:
+  windows-runner:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse PowerShell runner
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $PWD "run_evosim.ps1"),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+
+      - name: Validate launcher wiring
+        shell: pwsh
+        run: |
+          $cmd = Get-Content -Raw "run_evosim.cmd"
+          if ($cmd -notmatch "run_evosim\.ps1") {
+            throw "run_evosim.cmd does not invoke run_evosim.ps1"
+          }
+          if ($cmd -match "cargo run") {
+            throw "run_evosim.cmd still directly launches cargo"
+          }
