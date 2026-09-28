@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 #[derive(Clone)]
 pub(crate) struct AppState {
-    pub(crate) simulation: Arc<Mutex<Simulation>>,
+    pub(crate) simulation: Arc<tokio::sync::Mutex<crate::runtime::SimulationProcess>>,
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) enum DevelopmentStage {
