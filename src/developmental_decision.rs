@@ -25,7 +25,7 @@ pub(crate) fn context<'a>(
     organism: &'a mut Organism,
     environment: &Environment,
     seed_reference: (f64, f64),
-) -> Option<DevelopmentalContext<'_>> {
+) -> Option<DevelopmentalContext<'a>> {
     if !matches!(organism.development_stage, DevelopmentStage::Juvenile) {
         return None;
     }
