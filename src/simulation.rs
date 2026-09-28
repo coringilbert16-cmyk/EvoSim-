@@ -693,9 +693,8 @@ impl Simulation {
                                 consequence,
                             );
                             if combined {
-                                let material_consumed =
-                                    (before_stored_material
-                                        - organisms[index].stored_material.total_amount())
+                                let material_consumed = (before_stored_material
+                                    - organisms[index].stored_material.total_amount())
                                     .max(0.0);
                                 Self::record_action_experience(
                                     &mut organisms[index],
