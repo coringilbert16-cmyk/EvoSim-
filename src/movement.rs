@@ -967,6 +967,7 @@ mod tests {
         let mut organism = simulation.organisms.remove(0);
         organism.development_stage = crate::state::DevelopmentStage::Adult;
         let mut ledger = crate::state::EnergyLedger::default();
+        assert!(organism.store_material(crate::resources::Material::free_base("Carbon", 1.0)));
         assert!(crate::reproduction::begin_reproduction(
             &mut organism,
             &mut simulation.rng,
