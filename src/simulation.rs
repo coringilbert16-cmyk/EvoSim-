@@ -591,6 +591,7 @@ impl Simulation {
                         &mut self.energy_ledger,
                         self.tick,
                         &mut self.rng,
+                        &perceptions,
                     );
                     if moved {
                         let move_candidate = ActionCandidate {
