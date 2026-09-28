@@ -11,7 +11,9 @@
     #status { font-size: 14px; flex:1 1 260px; }
     #controls { display:flex; align-items:center; gap:6px; }
     #controls button { padding:5px 9px; cursor:pointer; }
-    #controls input { width:70px; }
+    #controls button:disabled { cursor:not-allowed; opacity:.5; }
+    #controls input { width:140px; }
+    .speed-control { display:flex; align-items:center; gap:5px; white-space:nowrap; }
     #timeline { position:fixed; left:12px; right:12px; bottom:10px; display:flex; align-items:center; gap:8px; padding:8px 10px; background:rgba(255,255,255,.94); border:1px solid #999; border-radius:6px; z-index:20; }
     #history { flex:1; min-width:120px; }
     #timeline-label { min-width:150px; font-size:12px; text-align:right; }
@@ -22,7 +24,21 @@
 </head>
 <body>
   <div id="app">
-    <header><div id="status">Connecting to EvoSim…</div><div id="controls"><button id="pause">Pause</button><button id="step">Progress 1 Tick</button><button id="resume">Resume</button><button id="reset">Reset</button><label>TPS <input id="speed" type="number" min="0.1" step="0.1" value="10"></label></div></header><div id="timeline"><button id="live">Live</button><input id="history" type="range" min="0" max="0" value="0" step="1"><span id="timeline-label">Live</span></div>
+    <header>
+      <div id="status">Connecting to EvoSim…</div>
+      <div id="controls">
+        <button id="play-toggle" type="button">Play</button>
+        <button id="step-back" type="button">Back 1 Tick</button>
+        <button id="step-forward" type="button">Forward 1 Tick</button>
+        <button id="reset" type="button">Reset</button>
+        <label class="speed-control">Speed <input id="speed" type="range" min="0.1" max="100" step="0.1" value="10"><span id="speed-value">10</span> ticks/s</label>
+      </div>
+    </header>
+    <div id="timeline">
+      <button id="live" type="button">Live</button>
+      <input id="history" type="range" min="0" max="0" value="0" step="1">
+      <span id="timeline-label">Live</span>
+    </div>
     <main><canvas id="world"></canvas></main>
   </div>
   <script>
@@ -97,6 +113,7 @@
         slider.max = Math.max(0, historyTicks.length - 1);
         if (historyViewTick == null) slider.value = Math.max(0, historyTicks.length - 1);
         updateTimeline();
+        updateControls();
         return runtimeStatus;
       } catch (_) {
         runtimeStatus = null;
@@ -144,19 +161,72 @@
       await refreshRuntimeStatus();
     }
 
-    document.getElementById('pause').addEventListener('click', () => control('/control/pause'));
-    document.getElementById('resume').addEventListener('click', () => control('/control/resume'));
-    document.getElementById('step').addEventListener('click', async () => {
+    function updateControls() {
+      const running = runtimeStatus?.running === true;
+      const currentTick = runtimeStatus?.tick ?? 0;
+      const firstTick = historyTicks.length ? historyTicks[0] : currentTick;
+      const play = document.getElementById('play-toggle');
+      const back = document.getElementById('step-back');
+      const forward = document.getElementById('step-forward');
+      const speed = document.getElementById('speed');
+      const speedValue = document.getElementById('speed-value');
+
+      play.textContent = running ? 'Pause' : 'Play';
+      play.disabled = simulationDead;
+      back.disabled = simulationDead || currentTick <= firstTick;
+      forward.disabled = simulationDead;
+      if (runtimeStatus?.ticks_per_second != null) {
+        speed.value = runtimeStatus.ticks_per_second;
+        speedValue.textContent = Number(runtimeStatus.ticks_per_second).toFixed(1).replace(/\\.0$/, '');
+      }
+    }
+
+    async function stepForward() {
       if (simulationDead) return;
+      if (historyViewTick != null) await returnToLiveWorld();
+      if (runtimeStatus?.running) await control('/control/pause');
       await control('/control/step');
       await refreshRuntimeStatus();
       if (runtimeStatus?.population > 0 && observationLevel === 'Structure' && focusedOrganismId != null) {
         await loadObservation('Structure', focusedOrganismId);
       }
+    }
+
+    async function stepBack() {
+      if (simulationDead) return;
+      if (historyViewTick != null) await returnToLiveWorld();
+      await refreshRuntimeStatus();
+      const currentTick = runtimeStatus?.tick;
+      const previousTick = Number.isInteger(currentTick) ? currentTick - 1 : -1;
+      if (previousTick < 0 || !historyTicks.includes(previousTick)) return;
+      if (runtimeStatus?.running) await control('/control/pause');
+      const response = await fetch('/control/restore/' + encodeURIComponent(previousTick), { method: 'POST', cache: 'no-store' });
+      if (!response.ok) {
+        status.textContent = 'Could not restore the previous tick.';
+        return;
+      }
+      historyViewTick = null;
+      cameraInitialized = false;
+      clearWorldCache();
+      await refreshRuntimeStatus();
+      await loadObservation(observationLevel, focusedOrganismId);
+    }
+
+    document.getElementById('play-toggle').addEventListener('click', async () => {
+      if (simulationDead) return;
+      if (historyViewTick != null) await returnToLiveWorld();
+      await control(runtimeStatus?.running ? '/control/pause' : '/control/resume');
     });
-    document.getElementById('speed').addEventListener('change', event => {
+    document.getElementById('step-back').addEventListener('click', stepBack);
+    document.getElementById('step-forward').addEventListener('click', stepForward);
+    document.getElementById('speed').addEventListener('input', event => {
       const value = Number(event.target.value);
-      if (Number.isFinite(value) && value > 0) control('/control/speed/' + encodeURIComponent(value));
+      if (!Number.isFinite(value) || value <= 0) return;
+      document.getElementById('speed-value').textContent = Number(value).toFixed(1).replace(/\\.0$/, '');
+    });
+    document.getElementById('speed').addEventListener('change', async event => {
+      const value = Number(event.target.value);
+      if (Number.isFinite(value) && value > 0) await control('/control/speed/' + encodeURIComponent(value));
     });
     document.getElementById('reset').addEventListener('click', resetSimulation);
     document.getElementById('live').addEventListener('click', returnToLiveWorld);
@@ -336,6 +406,7 @@
     function updateStatus() {
       if (simulationDead) {
         status.textContent = 'Organism died — simulation stopped at tick ' + (runtimeStatus?.tick ?? '?') + '. Press Reset to begin again.';
+        updateControls();
         return;
       }
       if (observationLevel === 'World') {
@@ -348,6 +419,7 @@
         const cycle = selectedIds.size > 1 ? ` — [${index + 1}/${selectedIds.size}]` : '';
         status.textContent = `Observing Structure — ${structure?.id || focusedOrganismId || 'unknown'} — ${structure?.units?.length || 0} units — ${structure?.bonds?.length || 0} bonds${cycle}`;
       }
+      updateControls();
     }
     function canvasPoint(event) { const rect = canvas.getBoundingClientRect(); return { x: event.clientX - rect.left, y: event.clientY - rect.top }; }
     function organismAtScreenPoint(x, y) {
