@@ -4,6 +4,10 @@
 
 $ErrorActionPreference = "Stop"
 
+# PowerShell 5.1 can surface native stderr as a terminating error even when
+# stderr is redirected. Git legitimately writes progress messages to stderr,
+# so the Git helpers temporarily allow that native stream while checking the
+# actual process exit code themselves.
 $Repo = $PSScriptRoot
 $RunnerRoot = Join-Path $Repo ".evosim-runner"
 $CurrentDir = Join-Path $RunnerRoot "current"
@@ -26,7 +30,9 @@ $script:serverProcess = $null
 
 function Invoke-Git([string[]]$Arguments) {
     $stderrPath = [System.IO.Path]::GetTempFileName()
+    $previousErrorActionPreference = $ErrorActionPreference
     try {
+        $ErrorActionPreference = "Continue"
         $output = & git @Arguments 2> $stderrPath
         $exitCode = $LASTEXITCODE
         if ($exitCode -ne 0) {
@@ -40,13 +46,16 @@ function Invoke-Git([string[]]$Arguments) {
         }
     }
     finally {
+        $ErrorActionPreference = $previousErrorActionPreference
         Remove-Item -Force $stderrPath -ErrorAction SilentlyContinue
     }
 }
 
 function Get-GitOutput([string[]]$Arguments) {
     $stderrPath = [System.IO.Path]::GetTempFileName()
+    $previousErrorActionPreference = $ErrorActionPreference
     try {
+        $ErrorActionPreference = "Continue"
         $output = & git @Arguments 2> $stderrPath
         $exitCode = $LASTEXITCODE
         if ($exitCode -ne 0) {
@@ -61,6 +70,7 @@ function Get-GitOutput([string[]]$Arguments) {
         return (($output | Out-String).Trim())
     }
     finally {
+        $ErrorActionPreference = $previousErrorActionPreference
         Remove-Item -Force $stderrPath -ErrorAction SilentlyContinue
     }
 }
