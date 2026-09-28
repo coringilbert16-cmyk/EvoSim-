@@ -121,6 +121,7 @@ impl Simulation {
             crate::memory::memory_consequence_from_action(consequence),
             needs,
             capacity,
+            organism.genome.memory_strength(),
         );
     }
 
