@@ -95,6 +95,7 @@ impl Simulation {
             cached_developmental_realization: None,
             peak_developmental_realization: 0.0,
             cached_harmonic_key: None,
+            cached_harmonic_radius: None,
             last_movement_attempt: None,
         }
     }
