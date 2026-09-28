@@ -148,6 +148,7 @@ fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
         harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
         memory: Vec::new(),
         experience_memory: crate::memory::ExperienceMemory::default(),
+        pending_movement_experience: None,
         decision_history: crate::decision::DecisionHistory::default(),
         usable_energy: construction.developing_energy,
         stress: construction.developing_stress,
