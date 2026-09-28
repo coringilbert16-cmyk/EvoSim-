@@ -380,6 +380,49 @@ pub(crate) fn update_organism_harmonics(
     organism.cached_harmonic_key = Some(key);
 }
 
+/// EXPERIMENTAL: logarithmic spectral matching width. Smaller values require
+/// frequencies to be closer before they are treated as similar.
+pub(crate) const SPECTRAL_MATCH_SIGMA: f64 = 0.25;
+
+/// Return a symmetric continuous similarity ratio in [0, 1].
+///
+/// Frequency distance is logarithmic so a doubling and halving are treated
+/// symmetrically. Amplitude weights the contribution of each perceived
+/// component; phase is intentionally ignored because recognition is based on
+/// the received spectral pattern rather than instantaneous oscillator phase.
+pub(crate) fn spectral_similarity(a: &ToneSpectrum, b: &ToneSpectrum) -> f64 {
+    if a.components.is_empty() || b.components.is_empty() {
+        return 0.0;
+    }
+    fn directional(from: &ToneSpectrum, to: &ToneSpectrum) -> f64 {
+        let total = from
+            .components
+            .iter()
+            .map(|component| component.amplitude.max(0.0))
+            .sum::<f64>();
+        if total <= f64::EPSILON {
+            return 0.0;
+        }
+        from.components
+            .iter()
+            .map(|component| {
+                let best = to
+                    .components
+                    .iter()
+                    .map(|other| {
+                        let distance = (component.frequency_hz / other.frequency_hz).ln().abs();
+                        (-distance / SPECTRAL_MATCH_SIGMA).exp()
+                    })
+                    .fold(0.0_f64, f64::max);
+                component.amplitude.max(0.0) * best
+            })
+            .sum::<f64>()
+            / total
+    }
+
+    ((directional(a, b) + directional(b, a)) * 0.5).clamp(0.0, 1.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
