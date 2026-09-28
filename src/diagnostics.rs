@@ -197,7 +197,7 @@ impl DiagnosticsRecorder {
                         genome: serde_json::to_value(&organism.genome).unwrap_or(Value::Null),
                         harmonic_spectrum: serde_json::to_value(&organism.harmonic_spectrum)
                             .unwrap_or(Value::Null),
-                        experience_memory: serde_json::to_value(&organism.experience_memory).unwrap_or(Value::Null),
+                        experience_memory: serde_json::to_value(&organism.experience_memory)\n                            .unwrap_or(Value::Null),
                         decision_history: serde_json::to_value(&organism.decision_history)
                             .unwrap_or(Value::Null),
                         occupied_cells: serde_json::to_value(&organism.occupied_cells)
