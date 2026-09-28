@@ -305,6 +305,7 @@ mod integration_tests {
 
         organism.apply_maintenance(&catalog, &mut ledger);
         let debt = organism.maintenance_debt;
+        let deficit = demand;
         organism.stress *= crate::state::STRESS_DECAY_PER_TICK;
         organism.usable_energy = demand + 1.0;
         organism.apply_maintenance(&catalog, &mut ledger);
