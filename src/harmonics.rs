@@ -591,8 +591,7 @@ mod tests {
     fn resonance_perception_preserves_boundary_location() {
         let catalog = crate::resources::default_catalog();
         let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
-        let (mut structure, _, _) =
-            crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
+        let (mut structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
         let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
             .unwrap()
             .expect("confirmed seed must contain a genome cavity");
