@@ -220,7 +220,8 @@ impl WorldObservation {
             let min_row = ((min_y - half).max(0.0) / field.cell_size).floor() as usize;
             let max_row = ((max_y + half).max(0.0) / field.cell_size)
                 .floor()
-                .min(field.height_cells.saturating_sub(1) as f64) as usize;
+                .min(field.height_cells.saturating_sub(1) as f64)
+                as usize;
             if min_col > max_col || min_row > max_row {
                 Vec::new()
             } else {
