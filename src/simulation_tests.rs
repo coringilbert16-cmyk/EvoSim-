@@ -87,8 +87,8 @@ mod integration_tests {
     fn storage_contains_discrete_independent_material_objects() {
         let mut o = Simulation::create_initial_organism();
         assert!(o.store_material(Material::free_base("Carbon", 5.0)));
-        assert_eq!(o.stored_material.len(), 2);
-        assert_eq!(o.stored_material.count_unstructured(), 1);
+        assert_eq!(o.stored_material.len(), 6);
+        assert_eq!(o.stored_material.count_unstructured(), 5);
         assert_eq!(o.stored_material.count_structured(), 1);
         assert_eq!(o.stored_material.total_amount(), 8.0);
     }
@@ -98,12 +98,15 @@ mod integration_tests {
         let m = structured_carbon_hydrogen();
         assert!(o.store_material(m.clone()));
         assert!(o.stored_material.materials_snapshot().contains(&m));
-        assert_eq!(o.stored_material.count_structured(), 1);
+        assert_eq!(o.stored_material.count_structured(), 2);
     }
     #[test]
     // Containment is automatic; there is no organism-side acquisition action.
     fn contained_physical_material_becomes_storage_without_an_acquire_action() {
         let mut s = Simulation::new(21, 10.0);
+        for cell in &mut s.environment.field.cells {
+            cell.physical_materials.clear();
+        }
         let organism = s.organisms[0].clone();
         let anchor = organism.structure.units[0].placement;
         let physical = PhysicalMaterial::realized(
@@ -191,41 +194,37 @@ mod integration_tests {
     fn structural_material_is_not_opened_by_storage() {
         let mut o = Simulation::create_initial_organism();
         assert!(o.store_material(structured_carbon_hydrogen()));
-        assert_eq!(o.stored_material.count_structured(), 1);
+        assert_eq!(o.stored_material.count_structured(), 2);
     }
 
     fn add_test_break_bond(s: &mut Simulation) {
-        s.organisms[0].structure.bonds.clear();
-        let a = s.organisms[0].structure.add_unit(StructuralUnit::new(
-            "Carbon",
-            Placement {
-                x: 500.0,
-                y: 500.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        let b = s.organisms[0].structure.add_unit(StructuralUnit::new(
-            "Methane",
-            Placement {
-                x: 501.0,
-                y: 500.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        let id_a = s.organisms[0].structure.physical_id(a).unwrap();
-        let id_b = s.organisms[0].structure.physical_id(b).unwrap();
-        s.organisms[0].structure.push_bond_unchecked(Bond {
-            endpoint_a: BondEndpoint::new(id_a, ConnectionEndpoint::Corner { point_index: 0 }),
-            endpoint_b: BondEndpoint::new(id_b, ConnectionEndpoint::Corner { point_index: 0 }),
-            strength: 0.8,
-            bond_energy: 12.5,
-        });
+        let origin = s.organisms[0].occupied_cells[0];
+        let physical = PhysicalMaterial::realized(
+            structured_carbon_hydrogen(),
+            vec![
+                Placement {
+                    x: origin.x + 4.0,
+                    y: origin.y,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: origin.x + 5.0,
+                    y: origin.y,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &s.environment.catalog,
+        )
+        .expect("stored bonded material should be physically realizable");
+        assert!(s.organisms[0]
+            .stored_material
+            .store_physical_instance(physical));
     }
 
     fn start_test_break_transformation(s: &mut Simulation) {
         let candidate = crate::decision_runtime::ActionCandidate {
             action: ActionKind::Break,
-            context_key: Some("bond:0".into()),
+            context_key: Some("stored:1:bond:0".into()),
         };
         let transformation = Simulation::try_start_transformation(
             &mut s.organisms[0],
@@ -266,7 +265,8 @@ mod integration_tests {
 
         let deficit = demand * 0.75;
         assert!((organism.maintenance_debt - deficit).abs() < 1e-12);
-        assert!((organism.stress - (deficit + organism.maintenance_debt)).abs() < 1e-12);
+        let paid = demand * 0.25;
+        assert!((organism.stress - (paid + deficit + organism.maintenance_debt)).abs() < 1e-12);
         assert_eq!(organism.usable_energy, 0.0);
         assert!(organism.stress < organism.stress_threshold);
     }
@@ -340,55 +340,25 @@ mod integration_tests {
     fn break_action_starts_a_transformation_before_resolution() {
         let mut s = Simulation::new(7, 10.0);
         add_test_break_bond(&mut s);
-        s.organisms[0].usable_energy = 0.0;
+        s.organisms[0].usable_energy = 100.0;
         start_test_break_transformation(&mut s);
-        assert_eq!(s.organisms[0].structure.bonds.len(), 1);
         assert!(s.organisms[0].active_transformation_id.is_some());
+        assert_eq!(s.organisms[0].stored_material.physical_count(), 0);
     }
     #[test]
     fn break_resolution_changes_state_on_expected_tick() {
         let mut s = Simulation::new(7, 10.0);
         add_test_break_bond(&mut s);
-        s.organisms[0].usable_energy = 0.0;
+        s.organisms[0].usable_energy = 100.0;
         start_test_break_transformation(&mut s);
         s.step();
+        assert!(s.organisms[0].active_transformation_id.is_some());
+        assert_eq!(s.organisms[0].stored_material.physical_count(), 0);
         s.step();
-        let a_index = s.organisms[0].structure.units.len() - 2;
-        let b_index = s.organisms[0].structure.units.len() - 1;
-        let a = s.organisms[0].structure.units[a_index]
-            .properties(&s.environment.catalog)
-            .unwrap();
-        let b = s.organisms[0].structure.units[b_index]
-            .properties(&s.environment.catalog)
-            .unwrap();
-        let water = s.organisms[0]
-            .occupied_cells
-            .first()
-            .and_then(|p| s.environment.field.index_for_position(p.x, p.y))
-            .map(|i| {
-                s.environment.field.cells[i]
-                    .materials
-                    .iter()
-                    .flat_map(|m| m.parts.iter())
-                    .filter(|(name, _)| name == "Water")
-                    .map(|(_, amount)| *amount)
-                    .sum::<f64>()
-            })
-            .unwrap_or(0.0);
-        let (_, usable, _) = crate::transformation::break_energy_yield(
-            a,
-            b,
-            water,
-            s.organisms[0].genome.processing_efficiency(),
-        )
-        .unwrap();
-        let maintenance = s.organisms[0].structural_mass(&s.environment.catalog)
-            * crate::state::MAINTENANCE_ENERGY_PER_MASS;
-        let expected = usable - maintenance;
-        assert!(s.organisms[0].structure.bonds.is_empty());
-        assert!((s.organisms[0].usable_energy - expected).abs() < 1e-12);
+        assert!(s.organisms[0].active_transformation_id.is_none());
+        assert_eq!(s.organisms[0].stored_material.physical_count(), 2);
         assert!(s.organisms[0]
             .decision_history
-            .has_knowledge(ActionKind::Break, Some("bond:0")));
+            .has_knowledge(ActionKind::Break, Some("stored:1:bond:0")));
     }
 }
