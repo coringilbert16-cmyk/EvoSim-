@@ -1,0 +1,283 @@
+# EvoSim persistent local runner.
+# Owns the running binary, watches origin/main, and only swaps to a
+# newly built version after the build succeeds.
+
+$ErrorActionPreference = "Stop"
+
+$Repo = Split-Path -Parent $PSScriptRoot
+$RunnerRoot = Join-Path $Repo ".evosim-runner"
+$CurrentDir = Join-Path $RunnerRoot "current"
+$StagingRoot = Join-Path $RunnerRoot "staging"
+$CurrentExe = Join-Path $CurrentDir "evosim.exe"
+$CurrentVersion = Join-Path $CurrentDir "version.txt"
+$StagingWorktree = Join-Path $StagingRoot "source"
+$StagingTarget = Join-Path $StagingRoot "target"
+$PollSeconds = 10
+
+New-Item -ItemType Directory -Force -Path $CurrentDir, $StagingRoot | Out-Null
+
+$mutex = New-Object System.Threading.Mutex($false, "Local\EvoSimAutoRunner")
+if (-not $mutex.WaitOne(0)) {
+    Write-Host "EvoSim is already running through the automatic runner."
+    exit 1
+}
+
+$serverProcess = $null
+
+function Invoke-Git([string[]]$Arguments) {
+    & git @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "git $($Arguments -join ' ') failed with exit code $LASTEXITCODE"
+    }
+}
+
+function Get-GitOutput([string[]]$Arguments) {
+    $output = & git @Arguments 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "git $($Arguments -join ' ') failed with exit code $LASTEXITCODE"
+    }
+    return (($output | Out-String).Trim())
+}
+
+function Test-WorktreeClean {
+    return [string]::IsNullOrWhiteSpace((Get-GitOutput @("status", "--porcelain", "--untracked-files=all")))
+}
+
+function Get-RemoteMain {
+    return Get-GitOutput @("rev-parse", "origin/main")
+}
+
+function Get-CurrentVersion {
+    if (Test-Path $CurrentVersion) {
+        return (Get-Content -Raw $CurrentVersion).Trim()
+    }
+    return ""
+}
+
+function Remove-StagingWorktree {
+    if (Test-Path (Join-Path $StagingWorktree ".git")) {
+        & git -C $Repo worktree remove --force $StagingWorktree 2>&1 | Out-Null
+    } elseif (Test-Path $StagingWorktree) {
+        Remove-Item -Recurse -Force $StagingWorktree
+    }
+    & git -C $Repo worktree prune 2>&1 | Out-Null
+    if (Test-Path $StagingTarget) {
+        Remove-Item -Recurse -Force $StagingTarget
+    }
+}
+
+function Build-Version([string]$Sha) {
+    Write-Host "Building EvoSim $Sha ..."
+    Remove-StagingWorktree
+
+    Invoke-Git @("-C", $Repo, "worktree", "add", "--detach", $StagingWorktree, $Sha)
+    try {
+        & cargo build --release --target-dir $StagingTarget
+        if ($LASTEXITCODE -ne 0) {
+            throw "cargo build failed with exit code $LASTEXITCODE"
+        }
+
+        $builtExe = Join-Path $StagingTarget "release\evosim.exe"
+        if (-not (Test-Path $builtExe)) {
+            throw "cargo build succeeded but $builtExe was not produced"
+        }
+
+        $nextExe = Join-Path $StagingRoot "evosim-next.exe"
+        if (Test-Path $nextExe) {
+            Remove-Item -Force $nextExe
+        }
+        Copy-Item $builtExe $nextExe
+        return $nextExe
+    }
+    finally {
+        Remove-StagingWorktree
+    }
+}
+
+function Start-Server {
+    if (-not (Test-Path $CurrentExe)) {
+        throw "No known-good EvoSim binary exists."
+    }
+
+    $serverProcess = Start-Process -FilePath $CurrentExe -WorkingDirectory $Repo -PassThru
+    Write-Host "Running EvoSim $((Get-CurrentVersion).Substring(0, [Math]::Min(12, (Get-CurrentVersion).Length))) (PID $($serverProcess.Id))."
+}
+
+function Wait-ForServer {
+    for ($i = 0; $i -lt 30; $i++) {
+        try {
+            $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:3000/" -TimeoutSec 1
+            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 500) {
+                return $true
+            }
+        } catch {}
+        Start-Sleep -Seconds 1
+    }
+    return $false
+}
+
+function Stop-Server {
+    if ($null -ne $serverProcess -and -not $serverProcess.HasExited) {
+        Write-Host "Stopping EvoSim process $($serverProcess.Id) ..."
+        Stop-Process -Id $serverProcess.Id -Force
+        $serverProcess.WaitForExit()
+    }
+    $serverProcess = $null
+}
+
+function Install-Version([string]$Sha, [string]$NextExe) {
+    $oldExe = Join-Path $RunnerRoot "previous.exe"
+    if (Test-Path $oldExe) {
+        Remove-Item -Force $oldExe
+    }
+
+    if (Test-Path $CurrentExe) {
+        Move-Item -Force $CurrentExe $oldExe
+    }
+
+    try {
+        Move-Item -Force $NextExe $CurrentExe
+        Set-Content -Path $CurrentVersion -Value $Sha -NoNewline
+    }
+    catch {
+        if ((-not (Test-Path $CurrentExe)) -and (Test-Path $oldExe)) {
+            Move-Item -Force $oldExe $CurrentExe
+        }
+        throw
+    }
+
+    if (Test-Path $oldExe) {
+        Remove-Item -Force $oldExe
+    }
+}
+
+try {
+    Set-Location $Repo
+
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+        throw "Git is required for EvoSim automatic updates."
+    }
+    if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+        throw "Cargo/Rust is required to build EvoSim updates."
+    }
+
+    Write-Host "EvoSim automatic runner starting."
+    Write-Host "Repository: $Repo"
+
+    $clean = Test-WorktreeClean
+    if (-not $clean) {
+        Write-Host "WARNING: local source changes are present. Automatic source updates are paused until the worktree is clean."
+    }
+
+    try {
+        Invoke-Git @("-C", $Repo, "fetch", "origin", "main", "--prune")
+    } catch {
+        Write-Host "Initial GitHub fetch failed; the last known-good version will be used if available."
+    }
+
+    $remoteSha = $null
+    try { $remoteSha = Get-RemoteMain } catch {}
+
+    if (-not (Test-Path $CurrentExe)) {
+        if (-not $remoteSha) {
+            $remoteSha = Get-GitOutput @("-C", $Repo, "rev-parse", "HEAD")
+        }
+        $nextExe = Build-Version $remoteSha
+        Install-Version $remoteSha $nextExe
+    }
+
+    Start-Server
+    if (-not (Wait-ForServer)) {
+        Stop-Server
+        throw "EvoSim server did not become ready on http://127.0.0.1:3000/"
+    }
+
+    Start-Process "http://127.0.0.1:3000/"
+    Write-Host "Viewer is open. Leave this runner window open; GitHub updates will be checked every $PollSeconds seconds."
+    Write-Host "The browser will reconnect automatically when a new validated build replaces the running version."
+
+    while ($true) {
+        Start-Sleep -Seconds $PollSeconds
+
+        if ($null -ne $serverProcess -and $serverProcess.HasExited) {
+            Write-Host "EvoSim server stopped. Restarting the last known-good version."
+            Start-Server
+            if (-not (Wait-ForServer)) {
+                Stop-Server
+                Write-Host "Server restart failed; retrying."
+            }
+            continue
+        }
+
+        try {
+            Invoke-Git @("-C", $Repo, "fetch", "origin", "main", "--prune")
+        } catch {
+            Write-Host "GitHub check failed; keeping the current version."
+            continue
+        }
+
+        if (-not (Test-WorktreeClean)) {
+            Write-Host "Local source changes detected; update skipped."
+            continue
+        }
+
+        try {
+            $remoteSha = Get-RemoteMain
+            $runningSha = Get-CurrentVersion
+        } catch {
+            Write-Host "Could not determine source version; keeping the current version."
+            continue
+        }
+
+        if ([string]::IsNullOrWhiteSpace($remoteSha) -or $remoteSha -eq $runningSha) {
+            continue
+        }
+
+        Write-Host "New main commit detected: $remoteSha"
+        try {
+            $nextExe = Build-Version $remoteSha
+
+            # Re-check before interrupting the running simulation. If main moved
+            # during the build, keep the current process and build the newer SHA
+            # on the next poll instead.
+            Invoke-Git @("-C", $Repo, "fetch", "origin", "main", "--prune")
+            $latestSha = Get-RemoteMain
+            if ($latestSha -ne $remoteSha) {
+                Write-Host "main changed during build; keeping the current version and retrying with $latestSha."
+                Remove-Item -Force $nextExe
+                continue
+            }
+
+            Stop-Server
+            Install-Version $remoteSha $nextExe
+            Start-Server
+
+            if (-not (Wait-ForServer)) {
+                Write-Host "New version failed to start. Restoring the previous known-good binary."
+                Stop-Server
+                $broken = Join-Path $RunnerRoot "previous.exe"
+                if (Test-Path $broken) {
+                    Move-Item -Force $broken $CurrentExe
+                    $previousSha = $runningSha
+                    Set-Content -Path $CurrentVersion -Value $previousSha -NoNewline
+                    Start-Server
+                }
+                continue
+            }
+
+            Write-Host "Updated EvoSim to $remoteSha. Browser connections can reconnect now; press Reset in the viewer to begin the new run."
+        } catch {
+            Write-Host "Update failed: $($_.Exception.Message)"
+            Write-Host "The current running version will remain in service."
+            try {
+                Remove-StagingWorktree
+            } catch {}
+        }
+    }
+}
+finally {
+    if ($null -ne $mutex) {
+        try { $mutex.ReleaseMutex() } catch {}
+        $mutex.Dispose()
+    }
+}
