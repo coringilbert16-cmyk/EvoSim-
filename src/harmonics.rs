@@ -375,22 +375,6 @@ pub(crate) fn aura_from_spectrum(
     aura
 }
 
-pub(crate) fn aura_at_position(
-    organism: &crate::state::Organism,
-    x: f64,
-    y: f64,
-) -> ToneSpectrum {
-    let Some(anchor) = organism.occupied_cells.first() else {
-        return ToneSpectrum::empty();
-    };
-    aura_from_spectrum(
-        &organism.harmonic_spectrum,
-        (anchor.x, anchor.y),
-        x,
-        y,
-    )
-}
-
 /// Measure the change in received spectral amplitude between two observations.
 pub(crate) fn spectrum_difference(a: &ToneSpectrum, b: &ToneSpectrum) -> f64 {
     let mut difference = 0.0;
