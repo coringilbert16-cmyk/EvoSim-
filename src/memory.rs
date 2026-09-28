@@ -782,6 +782,47 @@ mod tests {
     }
 
     #[test]
+    fn encounter_reinforcement_preserves_transformed_material() {
+        let spectrum = crate::harmonics::ToneSpectrum {
+            components: vec![crate::harmonics::ToneComponent {
+                frequency_hz: 440.0,
+                amplitude: 1.0,
+                phase_radians: 0.0,
+            }],
+        };
+        let mut memory = ExperienceMemory::default();
+        reinforce_encounter_memory(
+            &mut memory,
+            10.0,
+            10.0,
+            2.0,
+            &spectrum,
+            crate::decision::ActionKind::Break,
+            MemoryConsequence {
+                material_transformed: 2.0,
+                ..Default::default()
+            },
+            1.0,
+        );
+        reinforce_encounter_memory(
+            &mut memory,
+            10.0,
+            10.0,
+            2.0,
+            &spectrum,
+            crate::decision::ActionKind::Break,
+            MemoryConsequence {
+                material_transformed: 4.0,
+                ..Default::default()
+            },
+            1.0,
+        );
+
+        assert_eq!(memory.encounters.len(), 1);
+        assert!((memory.encounters[0].consequence.material_transformed - 3.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
     fn larger_cavity_has_longer_but_diminishing_memory_persistence() {
         let minimum = crate::cavity::GenomeCavity {
             area: 10.0,
