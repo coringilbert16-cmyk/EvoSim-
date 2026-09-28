@@ -359,6 +359,6 @@ mod integration_tests {
         assert_eq!(s.organisms[0].stored_material.physical_count(), 2);
         assert!(s.organisms[0]
             .decision_history
-            .has_knowledge(ActionKind::Break, Some("stored:1:bond:0")));
+            .has_knowledge(ActionKind::Break, Some("stored:0:bond:0")));
     }
 }
