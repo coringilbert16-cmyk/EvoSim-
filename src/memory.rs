@@ -707,6 +707,7 @@ mod tests {
             },
             needs,
             8,
+            1.0,
         );
         record_experience(
             &mut memory,
