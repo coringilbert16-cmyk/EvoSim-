@@ -99,6 +99,30 @@ impl Simulation {
             last_movement_attempt: None,
         }
     }
+    fn record_action_experience(
+        organism: &mut Organism,
+        environment: &Environment,
+        perceptions: &[crate::harmonics::ResonancePerception],
+        action: ActionKind,
+        consequence: crate::decision::ActionConsequence,
+        needs: CurrentNeeds,
+    ) {
+        let Some(cavity) = organism
+            .genome_cavity_cached_ref(&environment.catalog)
+            .filter(|cavity| cavity.qualifies())
+        else {
+            return;
+        };
+        crate::memory::record_experience(
+            &mut organism.experience_memory,
+            perceptions,
+            action,
+            crate::memory::memory_consequence_from_action(consequence),
+            needs,
+            crate::memory::memory_capacity(cavity),
+        );
+    }
+
     fn action_consequence(
         before_energy: f64,
         before_stress: f64,
@@ -508,6 +532,10 @@ impl Simulation {
                 if eligibility.can_move {
                     let (before, rest) = organisms.split_at_mut(index);
                     let (organism, after) = rest.split_first_mut().expect("index is in organisms");
+                    let perceptions = crate::harmonics::organism_resonance_perceptions(
+                        organism,
+                        environment,
+                    );
                     let before_energy = organism.usable_energy;
                     let before_stress = organism.stress;
                     let before_realization = developmental
@@ -552,6 +580,14 @@ impl Simulation {
                             &move_candidate,
                             consequence,
                         );
+                        Self::record_action_experience(
+                            organism,
+                            environment,
+                            &perceptions,
+                            ActionKind::Move,
+                            consequence,
+                            needs,
+                        );
                     }
                 }
                 let context = DecisionContext { needs, eligibility };
@@ -581,6 +617,10 @@ impl Simulation {
                 ) {
                     match selected.action {
                         ActionKind::Combine => {
+                            let perceptions = crate::harmonics::organism_resonance_perceptions(
+                                &organisms[index],
+                                environment,
+                            );
                             let before_energy = organisms[index].usable_energy;
                             let before_stress = organisms[index].stress;
                             let before_realization = developmental
@@ -631,6 +671,26 @@ impl Simulation {
                                 &selected,
                                 consequence,
                             );
+                            if expelled {
+                                Self::record_action_experience(
+                                    &mut organisms[index],
+                                    environment,
+                                    &perceptions,
+                                    ActionKind::Expel,
+                                    consequence,
+                                    needs,
+                                );
+                            }
+                            if combined {
+                                Self::record_action_experience(
+                                    &mut organisms[index],
+                                    environment,
+                                    &perceptions,
+                                    ActionKind::Combine,
+                                    consequence,
+                                    needs,
+                                );
+                            }
                         }
                         ActionKind::Break => {
                             if let Some(transformation) = Self::try_start_transformation(
@@ -643,6 +703,10 @@ impl Simulation {
                             }
                         }
                         ActionKind::Expel => {
+                            let perceptions = crate::harmonics::organism_resonance_perceptions(
+                                &organisms[index],
+                                environment,
+                            );
                             let before_energy = organisms[index].usable_energy;
                             let before_stress = organisms[index].stress;
                             let before_realization = developmental
