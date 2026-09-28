@@ -5,6 +5,64 @@ use crate::state::{
 
 pub(crate) const MEMORY_CAPACITY_GROWTH_EXPONENT: f64 = 0.5;
 
+/// A physically grounded spatial association. The region is the portion of
+/// the existing resonance geometry involved in the experience; it is not an
+/// authored perception radius.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub(crate) struct SpatialMemory {
+    pub(crate) x: f64,
+    pub(crate) y: f64,
+    pub(crate) extent: f64,
+    pub(crate) association: f64,
+    pub(crate) association_weight: f64,
+    pub(crate) strength: f64,
+}
+
+/// A generalized learned association for a recurring received spectrum.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub(crate) struct SpectralMemory {
+    pub(crate) spectrum: crate::harmonics::ToneSpectrum,
+    pub(crate) association: f64,
+    pub(crate) association_weight: f64,
+    pub(crate) strength: f64,
+}
+
+/// The physical result retained by an experience before current-state
+/// valuation interprets it.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub(crate) struct MemoryConsequence {
+    pub(crate) energy_delta: f64,
+    pub(crate) stress_delta: f64,
+    pub(crate) damage_delta: f64,
+    pub(crate) developmental_delta: f64,
+    pub(crate) material_acquired: f64,
+    pub(crate) material_consumed: f64,
+}
+
+/// A specific experience linking what was perceived, where it was perceived,
+/// what action occurred, and what physically happened afterward.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub(crate) struct EncounterMemory {
+    pub(crate) x: f64,
+    pub(crate) y: f64,
+    pub(crate) extent: f64,
+    pub(crate) spectrum: crate::harmonics::ToneSpectrum,
+    pub(crate) action: crate::decision::ActionKind,
+    pub(crate) consequence: MemoryConsequence,
+    pub(crate) experience_weight: f64,
+    pub(crate) strength: f64,
+}
+
+/// The organism's associative memory. This is the new memory authority;
+/// capacity and decay remain derived from the physical genome cavity.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub(crate) struct ExperienceMemory {
+    pub(crate) spatial: Vec<SpatialMemory>,
+    pub(crate) spectral: Vec<SpectralMemory>,
+    pub(crate) encounters: Vec<EncounterMemory>,
+}
+
+
 fn qualifying_genome_cavity<'a>(
     organism: &'a mut Organism,
     environment: &Environment,
