@@ -4,7 +4,7 @@ mod integration_tests {
     use crate::physical_material::PhysicalMaterial;
     use crate::resources::{InternalBond, Material};
     use crate::state::{DevelopmentStage, Simulation};
-    use crate::structure::{Bond, BondEndpoint, ConnectionEndpoint, Placement, StructuralUnit};
+    use crate::structure::Placement;
 
     fn structured_carbon_hydrogen() -> Material {
         Material {
@@ -198,7 +198,7 @@ mod integration_tests {
     }
 
     fn add_test_break_bond(s: &mut Simulation) {
-        let origin = s.organisms[0].occupied_cells[0];
+        let origin = s.organisms[0].occupied_cells[0].clone();
         let physical = PhysicalMaterial::realized(
             structured_carbon_hydrogen(),
             vec![
