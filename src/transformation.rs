@@ -344,6 +344,34 @@ impl Simulation {
                 developmental_delta: 0.0,
             },
         );
+
+        if let Some(pending) = transformation.pending_experience.as_ref() {
+            let after_developmental_realization = organism
+                .developmental_realization_cached(&environment.catalog)
+                .map(|realization| realization.overall)
+                .unwrap_or(pending.before_developmental_realization);
+            let consequence = crate::memory::MemoryConsequence {
+                energy_delta: organism.usable_energy - pending.before_energy,
+                stress_delta: organism.stress - pending.before_stress,
+                developmental_delta: after_developmental_realization
+                    - pending.before_developmental_realization,
+                ..Default::default()
+            };
+            let capacity = organism
+                .genome_cavity_cached_ref(&environment.catalog)
+                .filter(|cavity| cavity.qualifies())
+                .map(crate::memory::memory_capacity);
+            if let Some(capacity) = capacity {
+                crate::memory::record_experience(
+                    &mut organism.experience_memory,
+                    &pending.perceptions,
+                    ActionKind::Break,
+                    consequence,
+                    pending.needs,
+                    capacity,
+                );
+            }
+        }
     }
 }
 
