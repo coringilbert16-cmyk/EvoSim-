@@ -509,7 +509,6 @@ pub(crate) struct PendingMovementExperience {
     pub(crate) perceptions: Vec<crate::harmonics::ResonancePerception>,
     pub(crate) consequence: MemoryConsequence,
     pub(crate) needs: crate::decision::CurrentNeeds,
-    pub(crate) stored_amount_after_move: f64,
 }
 
 /// The organism's associative memory. This is the new memory authority;
