@@ -4,7 +4,7 @@
 
 $ErrorActionPreference = "Stop"
 
-$Repo = Split-Path -Parent $PSScriptRoot
+$Repo = $PSScriptRoot
 $RunnerRoot = Join-Path $Repo ".evosim-runner"
 $CurrentDir = Join-Path $RunnerRoot "current"
 $StagingRoot = Join-Path $RunnerRoot "staging"
