@@ -775,7 +775,7 @@ mod tests {
     }
 
     #[test]
-    fn unrelated_spectra_remain_separate_memories {
+    fn unrelated_spectra_remain_separate_memories() {
         let mut memory = ExperienceMemory::default();
         let a = crate::harmonics::ToneSpectrum {
             components: vec![crate::harmonics::ToneComponent {
