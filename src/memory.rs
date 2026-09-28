@@ -530,6 +530,35 @@ fn memory_decay_for_cavity(cavity: &crate::cavity::GenomeCavity) -> f64 {
         .clamp(MEMORY_DECAY_PER_TICK, 1.0)
 }
 
+pub(crate) fn update_experience_memory(organism: &mut Organism, environment: &Environment) {
+    let Some((capacity, decay)) = qualifying_genome_cavity(organism, environment)
+        .map(|cavity| (memory_capacity(cavity), memory_decay_for_cavity(cavity)))
+    else {
+        organism.experience_memory = ExperienceMemory::default();
+        return;
+    };
+
+    decay_experience_memory(&mut organism.experience_memory, decay);
+    organism.experience_memory.spatial.sort_by(|a, b| {
+        b.strength
+            .partial_cmp(&a.strength)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    organism.experience_memory.spectral.sort_by(|a, b| {
+        b.strength
+            .partial_cmp(&a.strength)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    organism.experience_memory.encounters.sort_by(|a, b| {
+        b.strength
+            .partial_cmp(&a.strength)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    organism.experience_memory.spatial.truncate(capacity);
+    organism.experience_memory.spectral.truncate(capacity);
+    organism.experience_memory.encounters.truncate(capacity);
+}
+
 impl Simulation {
     pub(crate) fn update_memory_from_sources(organism: &mut Organism, environment: &Environment) {
         let Some((capacity, decay)) = qualifying_genome_cavity(organism, environment)
