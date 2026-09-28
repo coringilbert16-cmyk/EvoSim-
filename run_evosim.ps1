@@ -127,6 +127,7 @@ function Stop-Server {
 
 function Install-Version([string]$Sha, [string]$NextExe) {
     $oldExe = Join-Path $RunnerRoot "previous.exe"
+
     if (Test-Path $oldExe) {
         Remove-Item -Force $oldExe
     }
@@ -140,12 +141,18 @@ function Install-Version([string]$Sha, [string]$NextExe) {
         Set-Content -Path $CurrentVersion -Value $Sha -NoNewline
     }
     catch {
+        if (Test-Path $CurrentExe) {
+            Remove-Item -Force $CurrentExe
+        }
         if ((-not (Test-Path $CurrentExe)) -and (Test-Path $oldExe)) {
             Move-Item -Force $oldExe $CurrentExe
         }
         throw
     }
+}
 
+function Confirm-InstalledVersion {
+    $oldExe = Join-Path $RunnerRoot "previous.exe"
     if (Test-Path $oldExe) {
         Remove-Item -Force $oldExe
     }
@@ -265,6 +272,7 @@ try {
                 continue
             }
 
+            Confirm-InstalledVersion
             Write-Host "Updated EvoSim to $remoteSha. Browser connections can reconnect now; press Reset in the viewer to begin the new run."
         } catch {
             Write-Host "Update failed: $($_.Exception.Message)"
