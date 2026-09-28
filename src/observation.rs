@@ -248,9 +248,20 @@ impl WorldObservation {
         let decomposing_bodies = simulation
             .decomposing_bodies
             .iter()
-            .map(|b| WorldPointObservation {
-                x: b.position.x,
-                y: b.position.y,
+            .filter_map(|b| {
+                if let Some((min_x, max_x, min_y, max_y)) = bounds {
+                    if b.position.x < min_x
+                        || b.position.x > max_x
+                        || b.position.y < min_y
+                        || b.position.y > max_y
+                    {
+                        return None;
+                    }
+                }
+                Some(WorldPointObservation {
+                    x: b.position.x,
+                    y: b.position.y,
+                })
             })
             .collect();
         Self {
