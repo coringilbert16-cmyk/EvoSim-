@@ -238,18 +238,43 @@ pub(crate) fn reinforce_encounter_memory(
     let weight = experience_magnitude * similarity;
     existing.experience_weight += weight;
     existing.strength = bounded_strength_after_experience(existing.strength, weight);
-    existing.consequence.energy_delta =
-        weighted_average(existing.consequence.energy_delta, existing.experience_weight - weight, consequence.energy_delta, weight);
-    existing.consequence.stress_delta =
-        weighted_average(existing.consequence.stress_delta, existing.experience_weight - weight, consequence.stress_delta, weight);
-    existing.consequence.damage_delta =
-        weighted_average(existing.consequence.damage_delta, existing.experience_weight - weight, consequence.damage_delta, weight);
-    existing.consequence.developmental_delta =
-        weighted_average(existing.consequence.developmental_delta, existing.experience_weight - weight, consequence.developmental_delta, weight);
-    existing.consequence.material_acquired =
-        weighted_average(existing.consequence.material_acquired, existing.experience_weight - weight, consequence.material_acquired, weight);
-    existing.consequence.material_consumed =
-        weighted_average(existing.consequence.material_consumed, existing.experience_weight - weight, consequence.material_consumed, weight);
+    let previous_weight = existing.experience_weight - weight;
+    existing.consequence.energy_delta = weighted_average(
+        existing.consequence.energy_delta,
+        previous_weight,
+        consequence.energy_delta,
+        weight,
+    );
+    existing.consequence.stress_delta = weighted_average(
+        existing.consequence.stress_delta,
+        previous_weight,
+        consequence.stress_delta,
+        weight,
+    );
+    existing.consequence.damage_delta = weighted_average(
+        existing.consequence.damage_delta,
+        previous_weight,
+        consequence.damage_delta,
+        weight,
+    );
+    existing.consequence.developmental_delta = weighted_average(
+        existing.consequence.developmental_delta,
+        previous_weight,
+        consequence.developmental_delta,
+        weight,
+    );
+    existing.consequence.material_acquired = weighted_average(
+        existing.consequence.material_acquired,
+        previous_weight,
+        consequence.material_acquired,
+        weight,
+    );
+    existing.consequence.material_consumed = weighted_average(
+        existing.consequence.material_consumed,
+        previous_weight,
+        consequence.material_consumed,
+        weight,
+    );
 }
 
 fn weighted_average(current: f64, current_weight: f64, observed: f64, observed_weight: f64) -> f64 {
@@ -497,6 +522,84 @@ pub(crate) fn reinforce_memory_point(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn experience_decay_reduces_strength_and_weight_and_prunes() {
+        let mut memory = ExperienceMemory {
+            spatial: vec![SpatialMemory {
+                x: 0.0,
+                y: 0.0,
+                extent: 1.0,
+                association: 0.5,
+                association_weight: 1.0,
+                strength: 0.5,
+            }],
+            spectral: Vec::new(),
+            encounters: Vec::new(),
+        };
+        decay_experience_memory(&mut memory, 0.5);
+        assert_eq!(memory.spatial[0].strength, 0.25);
+        assert_eq!(memory.spatial[0].association_weight, 0.5);
+
+        decay_experience_memory(&mut memory, 0.0);
+        assert!(memory.spatial.is_empty());
+    }
+
+    #[test]
+    fn spatial_reinforcement_keeps_location_association_independent() {
+        let mut memory = ExperienceMemory::default();
+        reinforce_spatial_memory(&mut memory, 10.0, 10.0, 2.0, 1.0, 1.0);
+        reinforce_spatial_memory(&mut memory, 10.5, 10.0, 2.0, -1.0, 1.0);
+        assert_eq!(memory.spatial.len(), 1);
+        assert!(memory.spatial[0].association.abs() < f64::EPSILON);
+        assert_eq!(memory.spatial[0].association_weight, 2.0);
+    }
+
+    #[test]
+    fn spectral_reinforcement_generalizes_by_similarity() {
+        let mut memory = ExperienceMemory::default();
+        let a = crate::harmonics::ToneSpectrum {
+            components: vec![crate::harmonics::ToneComponent {
+                frequency_hz: 440.0,
+                amplitude: 1.0,
+                phase_radians: 0.0,
+            }],
+        };
+        let b = crate::harmonics::ToneSpectrum {
+            components: vec![crate::harmonics::ToneComponent {
+                frequency_hz: 460.0,
+                amplitude: 1.0,
+                phase_radians: 0.0,
+            }],
+        };
+        reinforce_spectral_memory(&mut memory, &a, 1.0, 1.0);
+        reinforce_spectral_memory(&mut memory, &b, -1.0, 1.0);
+        assert_eq!(memory.spectral.len(), 1);
+        assert!(memory.spectral[0].association < 1.0);
+        assert!(memory.spectral[0].association > -1.0);
+    }
+
+    #[test]
+    fn unrelated_spectra_remain_separate_memories() {
+        let mut memory = ExperienceMemory::default();
+        let a = crate::harmonics::ToneSpectrum {
+            components: vec![crate::harmonics::ToneComponent {
+                frequency_hz: 440.0,
+                amplitude: 1.0,
+                phase_radians: 0.0,
+            }],
+        };
+        let b = crate::harmonics::ToneSpectrum {
+            components: vec![crate::harmonics::ToneComponent {
+                frequency_hz: 1760.0,
+                amplitude: 1.0,
+                phase_radians: 0.0,
+            }],
+        };
+        reinforce_spectral_memory(&mut memory, &a, 1.0, 1.0);
+        reinforce_spectral_memory(&mut memory, &b, -1.0, 1.0);
+        assert_eq!(memory.spectral.len(), 2);
+    }
 
     #[test]
     fn harmonic_experience_is_stored_with_its_consequence() {
