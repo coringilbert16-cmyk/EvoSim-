@@ -143,7 +143,7 @@ pub(crate) struct Organism {
     pub(crate) developmental_orientation_radians: f64,
     pub(crate) occupied_cells: Vec<Position>,
     pub(crate) genome: Genome,
-    /// Spectrum currently present at the organism's physically realized genome cavity.
+    /// Spectrum emitted by the organism's realized physical structure into its external resonance aura.
     #[serde(default)]
     pub(crate) harmonic_spectrum: crate::harmonics::ToneSpectrum,
     pub(crate) memory: Vec<MemoryPoint>,
