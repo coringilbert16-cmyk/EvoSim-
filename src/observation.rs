@@ -230,25 +230,32 @@ impl WorldObservation {
                     })
                     .filter_map(|cell_index| {
                         let cell = &field.cells[cell_index];
-                        let materials = cell.total_material();
                         let revision = field.cell_revisions[cell_index];
-                        if materials.is_empty()
-                            && !known_cells.iter().any(|(known_index, _)| *known_index == cell_index)
-                        {
-                            return None;
-                        }
-                        let changed = known_cells
+                        let known_revision = known_cells
                             .iter()
                             .find(|(known_index, _)| *known_index == cell_index)
-                            .map(|(_, known_revision)| *known_revision != revision)
-                            .unwrap_or(true);
+                            .map(|(_, revision)| *revision);
+                        if known_revision == Some(revision) {
+                            let (x, y) = field.cell_center(cell_index);
+                            return Some(WorldFieldObservation {
+                                cell_index,
+                                x,
+                                y,
+                                revision,
+                                materials: None,
+                            });
+                        }
+                        let materials = cell.total_material();
+                        if materials.is_empty() && known_revision.is_none() {
+                            return None;
+                        }
                         let (x, y) = field.cell_center(cell_index);
                         Some(WorldFieldObservation {
                             cell_index,
                             x,
                             y,
                             revision,
-                            materials: changed.then_some(materials),
+                            materials: Some(materials),
                         })
                     })
                     .collect()
