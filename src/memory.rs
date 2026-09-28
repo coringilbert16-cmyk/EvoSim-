@@ -162,16 +162,12 @@ pub(crate) fn reinforce_spectral_memory(
     );
     existing.association = association;
     existing.association_weight = weight;
-    existing.strength =
-        bounded_strength_after_experience(existing.strength, weighted_magnitude);
+    existing.strength = bounded_strength_after_experience(existing.strength, weighted_magnitude);
     if similarity >= SPECTRAL_MEMORY_MATCH_FLOOR {
         let blend = similarity.clamp(0.0, 1.0);
         for component in &spectrum.components {
-            if let Some(existing_component) = existing
-                .spectrum
-                .components
-                .iter_mut()
-                .find(|candidate| {
+            if let Some(existing_component) =
+                existing.spectrum.components.iter_mut().find(|candidate| {
                     (candidate.frequency_hz - component.frequency_hz).abs() <= 1e-9
                 })
             {
@@ -216,10 +212,7 @@ pub(crate) fn reinforce_encounter_memory(
             (index, spatial, spectral)
         })
         .filter(|(_, spatial, spectral)| *spatial && *spectral >= SPECTRAL_MEMORY_MATCH_FLOOR)
-        .max_by(|a, b| {
-            a.2.partial_cmp(&b.2)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
+        .max_by(|a, b| a.2.partial_cmp(&b.2).unwrap_or(std::cmp::Ordering::Equal))
         .map(|(index, _, spectral)| (index, spectral))
     else {
         memory.encounters.push(EncounterMemory {
@@ -286,7 +279,6 @@ fn weighted_average(current: f64, current_weight: f64, observed: f64, observed_w
     (current * current_weight.max(0.0) + observed * observed_weight.max(0.0)) / total
 }
 
-
 /// A physically grounded spatial association. The region is the portion of
 /// the existing resonance geometry involved in the experience; it is not an
 /// authored perception radius.
@@ -343,7 +335,6 @@ pub(crate) struct ExperienceMemory {
     pub(crate) spectral: Vec<SpectralMemory>,
     pub(crate) encounters: Vec<EncounterMemory>,
 }
-
 
 fn qualifying_genome_cavity<'a>(
     organism: &'a mut Organism,
