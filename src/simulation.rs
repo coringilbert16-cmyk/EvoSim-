@@ -1,3 +1,727 @@
+use rand::SeedableRng;
+use rand_chacha::ChaCha8Rng;
+use std::collections::HashSet;
+
+use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
+use crate::decision_runtime::{
+    select_action_with_developmental_scores, ActionCandidate, DecisionContext,
+};
+use crate::energy_ledger::EnergyLedgerAuthority;
+use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
+use crate::genome::initial_genome;
+use crate::juvenile::realize_initial;
+use crate::state::{DevelopmentStage, EnergyLedger, Environment, Organism, Position, Simulation};
+use crate::structure::Placement;
+
+const ADULTHOOD_GROWTH_FRACTION: f64 = 0.90;
+
+impl Simulation {
+    pub(crate) fn new(seed: u64, ticks_per_second: f64) -> Self {
+        let rng = ChaCha8Rng::seed_from_u64(seed);
+        let environment = Self::create_environment();
+        let seed_scale_reference =
+            crate::juvenile::confirmed_seed_scale_reference(&environment.catalog).ok();
+        let organism = Self::create_initial_organism();
+        Self {
+            tick: 0,
+            ticks_per_second,
+            running: true,
+            organisms: vec![organism],
+            environment,
+            active_transformations: Vec::new(),
+            decomposing_bodies: Vec::new(),
+            energy_ledger: EnergyLedger::default(),
+            next_organism_id: 2,
+            next_transformation_id: 1,
+            rng,
+            decision_parameters: DecisionParameters::default(),
+            seed_scale_reference,
+        }
+    }
+    fn create_environment() -> Environment {
+        let catalog = crate::resources::default_catalog();
+        let width = 1000.0;
+        let height = 1000.0;
+        let mut field = ActiveMaterialField::new(width, height, DEFAULT_CELL_SIZE);
+        crate::environmental_materials::seed_initial_landscape(&mut field, &catalog);
+        crate::environmental_materials::seed_initial_resource_cloud(&mut field, &catalog);
+        Environment {
+            width,
+            height,
+            catalog,
+            field,
+        }
+    }
+    pub(crate) fn create_initial_organism() -> Organism {
+        let genome = initial_genome();
+        let catalog = crate::resources::default_catalog();
+        let seed_baseline = crate::juvenile::confirmed_seed_baseline(&catalog)
+            .expect("confirmed original seed baseline must be valid");
+        let (mut structure, _construction_ledger, initial_energy) =
+            realize_initial(&seed_baseline, &catalog)
+                .expect("confirmed original seed must be physically realizable");
+
+        let anchor = Position { x: 500.0, y: 500.0 };
+        for unit in &mut structure.units {
+            unit.placement.x += anchor.x;
+            unit.placement.y += anchor.y;
+        }
+
+        let mut stored_material = crate::material_storage::MaterialStorage::default();
+        assert!(stored_material.store(genome.juvenile_reserve.clone()));
+        Organism {
+            id: "1".into(),
+            developmental_origin: anchor.clone(),
+            developmental_orientation_radians: 0.0,
+            occupied_cells: vec![anchor],
+            genome,
+            harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
+            experience_memory: crate::memory::ExperienceMemory::default(),
+            pending_movement_experience: None,
+            decision_history: crate::decision::DecisionHistory::default(),
+            usable_energy: initial_energy,
+            stress: 0.0,
+            maintenance_debt: 0.0,
+            stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
+            stored_material,
+            structure,
+            development_stage: DevelopmentStage::Juvenile,
+            active_transformation_id: None,
+            reproductive_construction: None,
+            structure_revision: 0,
+            position_revision: 0,
+            cached_cavity_revision: None,
+            cached_cavity: None,
+            cached_developmental_revision: None,
+            cached_developmental_realization: None,
+            peak_developmental_realization: 0.0,
+            cached_harmonic_key: None,
+            last_movement_attempt: None,
+        }
+    }
+    fn record_action_experience(
+        organism: &mut Organism,
+        environment: &Environment,
+        perceptions: &[crate::harmonics::ResonancePerception],
+        action: ActionKind,
+        consequence: crate::decision::ActionConsequence,
+        needs: CurrentNeeds,
+        material_consumed: f64,
+    ) {
+        let capacity = organism
+            .genome_cavity_cached_ref(&environment.catalog)
+            .filter(|cavity| cavity.qualifies())
+            .map(crate::memory::memory_capacity);
+        let Some(capacity) = capacity else {
+            return;
+        };
+        let mut memory_consequence = crate::memory::memory_consequence_from_action(consequence);
+        memory_consequence.material_consumed = material_consumed.max(0.0);
+        crate::memory::record_experience(
+            &mut organism.experience_memory,
+            perceptions,
+            action,
+            memory_consequence,
+            needs,
+            capacity,
+            organism.genome.memory_strength(),
+        );
+    }
+
+    fn finalize_pending_movement_experience(
+        organism: &mut Organism,
+        environment: &Environment,
+        acquired_amount: f64,
+    ) {
+        let Some(pending) = organism.pending_movement_experience.take() else {
+            return;
+        };
+        let mut consequence = pending.consequence;
+        consequence.material_acquired = acquired_amount.max(0.0);
+        let capacity = organism
+            .genome_cavity_cached_ref(&environment.catalog)
+            .filter(|cavity| cavity.qualifies())
+            .map(crate::memory::memory_capacity);
+        let Some(capacity) = capacity else {
+            return;
+        };
+        crate::memory::record_experience(
+            &mut organism.experience_memory,
+            &pending.perceptions,
+            ActionKind::Move,
+            consequence,
+            pending.needs,
+            capacity,
+            organism.genome.memory_strength(),
+        );
+    }
+
+    fn action_consequence(
+        before_energy: f64,
+        before_stress: f64,
+        before_realization: f64,
+        organism: &mut Organism,
+        environment: &Environment,
+    ) -> crate::decision::ActionConsequence {
+        let after_realization = organism
+            .developmental_realization_cached(&environment.catalog)
+            .map(|realization| realization.overall)
+            .unwrap_or(before_realization);
+        crate::decision::ActionConsequence {
+            energy_delta: organism.usable_energy - before_energy,
+            stress_delta: organism.stress - before_stress,
+            developmental_delta: after_realization - before_realization,
+        }
+    }
+
+    fn update_development_stage(
+        organism: &mut Organism,
+        environment: &Environment,
+        seed_reference: Option<(f64, f64)>,
+    ) {
+        match organism.development_stage {
+            DevelopmentStage::Offspring => {
+                if organism.reproductive_construction.is_none() {
+                    organism.development_stage = DevelopmentStage::Juvenile
+                }
+            }
+            DevelopmentStage::Juvenile => {
+                if seed_reference
+                    .map(|reference| {
+                        crate::developmental_decision::growth_fraction_for_reference(
+                            organism,
+                            environment,
+                            reference,
+                        )
+                    })
+                    .unwrap_or(0.0)
+                    >= ADULTHOOD_GROWTH_FRACTION
+                {
+                    organism.development_stage = DevelopmentStage::Adult
+                }
+            }
+            DevelopmentStage::Adult => {}
+        }
+    }
+    pub(crate) fn transfer_contained_environmental_material(
+        organism: &mut Organism,
+        environment: &mut Environment,
+    ) {
+        let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_structure(
+            &organism.structure,
+            &environment.catalog,
+        ) else {
+            return;
+        };
+        let anchor = organism
+            .occupied_cells
+            .first()
+            .cloned()
+            .unwrap_or(Position { x: 0.0, y: 0.0 });
+        for physical in environment.field.take_contained_physical_materials(&body) {
+            match organism
+                .stored_material
+                .try_store_physical_instance_at_owner_anchor(
+                    physical,
+                    Placement {
+                        x: anchor.x,
+                        y: anchor.y,
+                        rotation_radians: 0.0,
+                    },
+                ) {
+                Ok(()) => continue,
+                Err(physical) => {
+                    if let Some(placement) = physical
+                        .placements
+                        .as_ref()
+                        .and_then(|placements| placements.first())
+                    {
+                        let _ = environment
+                            .field
+                            .deposit(placement.x, placement.y, physical);
+                    }
+                }
+            }
+        }
+    }
+
+    fn current_needs(
+        organism: &mut Organism,
+        environment: &Environment,
+        parameters: DecisionParameters,
+        developmental: Option<&crate::developmental_decision::DevelopmentalContext>,
+    ) -> CurrentNeeds {
+        let survival_reserve = parameters.survival_reserve.max(f64::EPSILON);
+        let reserve_pressure = (1.0 - organism.usable_energy / survival_reserve).clamp(0.0, 1.0);
+        let current_realization = developmental
+            .map(|context| context.current_growth_fraction)
+            .or_else(|| {
+                organism
+                    .developmental_realization_cached(&environment.catalog)
+                    .map(|realization| realization.overall)
+            })
+            .unwrap_or(0.0)
+            .clamp(0.0, 1.0);
+        if organism.peak_developmental_realization <= 0.0 {
+            organism.peak_developmental_realization = current_realization;
+        } else {
+            organism.peak_developmental_realization = organism
+                .peak_developmental_realization
+                .max(current_realization);
+        }
+        let self_maintenance_pressure =
+            (organism.peak_developmental_realization - current_realization).clamp(0.0, 1.0);
+        let energy_survival = (reserve_pressure * (1.0 + organism.stress.max(0.0))).clamp(0.0, 1.0);
+        // Survival is first the pressure to preserve the organism's realized
+        // physical self. Energy fills the remaining survival deficit rather
+        // than replacing that structural pressure.
+        let survival =
+            self_maintenance_pressure + (1.0 - self_maintenance_pressure) * energy_survival;
+        let development = if developmental.is_some() {
+            (1.0 - current_realization).max(0.0)
+        } else {
+            0.0
+        };
+        CurrentNeeds {
+            survival,
+            reproduction: if matches!(organism.development_stage, DevelopmentStage::Adult) {
+                1.0
+            } else {
+                0.0
+            },
+            development,
+        }
+    }
+    fn action_eligibility(
+        organism: &Organism,
+        environment: &Environment,
+        needs: CurrentNeeds,
+    ) -> ActionEligibility {
+        let can_combine = crate::combine_runtime::can_combine(organism, environment);
+        let can_break_stored = organism.active_transformation_id.is_none()
+            && organism.stored_material.entries.iter().any(|entry| {
+                matches!(
+                    entry,
+                    crate::material_storage::StoredMaterial::Physical(instance)
+                        if instance.is_realized()
+                            && instance
+                                .internal_connections
+                                .as_ref()
+                                .is_some_and(|connections| !connections.is_empty())
+                )
+            });
+        ActionEligibility {
+            can_move: true,
+            can_combine,
+            can_break: can_break_stored
+                && (organism.reproductive_construction.is_none()
+                    || needs.survival > 0.0
+                    || needs.development > 0.0
+                    || organism
+                        .reproductive_construction
+                        .as_ref()
+                        .is_some_and(|construction| construction.needs_space)),
+            can_expel: organism.active_transformation_id.is_none()
+                && organism.stored_material.physical_count() > 0,
+        }
+    }
+    fn decision_candidates(
+        organism: &Organism,
+        _environment: &Environment,
+        needs: CurrentNeeds,
+        eligibility: ActionEligibility,
+    ) -> Vec<ActionCandidate> {
+        let mut candidates = Vec::new();
+        let relevant = |action: ActionKind| {
+            eligibility.permits(action) && needs.any_for(action.relevant_needs())
+        };
+        if relevant(ActionKind::Break) {
+            for (storage_index, entry) in organism.stored_material.entries.iter().enumerate() {
+                if let crate::material_storage::StoredMaterial::Physical(instance) = entry {
+                    if let Some(connections) = &instance.internal_connections {
+                        for bond_index in 0..connections.len() {
+                            candidates.push(ActionCandidate {
+                                action: ActionKind::Break,
+                                context_key: Some(format!(
+                                    "stored:{storage_index}:bond:{bond_index}"
+                                )),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        if relevant(ActionKind::Combine) {
+            candidates.push(ActionCandidate {
+                action: ActionKind::Combine,
+                context_key: None,
+            });
+        }
+        candidates
+    }
+
+    fn expulsion_candidates(
+        organism: &Organism,
+        needs: CurrentNeeds,
+        eligibility: ActionEligibility,
+    ) -> Vec<ActionCandidate> {
+        if !eligibility.permits(ActionKind::Expel)
+            || !needs.any_for(ActionKind::Expel.relevant_needs())
+        {
+            return Vec::new();
+        }
+        organism
+            .stored_material
+            .entries
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| {
+                matches!(entry, crate::material_storage::StoredMaterial::Physical(_))
+            })
+            .map(|(index, _)| ActionCandidate {
+                action: ActionKind::Expel,
+                context_key: Some(format!("stored:{index}")),
+            })
+            .collect()
+    }
+    fn process_decomposing_bodies(&mut self) {
+        let mut finished_indices = Vec::new();
+        for index in 0..self.decomposing_bodies.len() {
+            if self.decomposing_bodies[index].is_finished() {
+                let position = self.decomposing_bodies[index].position.clone();
+                let materials = self.decomposing_bodies[index]
+                    .release_finished_material(&self.environment.catalog);
+                for material in materials {
+                    self.environment
+                        .field
+                        .deposit(position.x, position.y, material);
+                }
+                finished_indices.push(index);
+                continue;
+            }
+            let Some(step) = crate::decomposition::resolve_one_bond_with_ledger(
+                &mut self.decomposing_bodies[index],
+                &self.environment,
+                &mut self.energy_ledger,
+            ) else {
+                continue;
+            };
+            if step.net_energy > 0.0 {
+                if let Some(organism_index) = crate::decomposition::harvestable_decomposition_energy(
+                    &self.organisms,
+                    &self.decomposing_bodies[index].position,
+                ) {
+                    let amount = step
+                        .net_energy
+                        .min(self.decomposing_bodies[index].energy_budget);
+                    let (body, organism) = {
+                        let body = &mut self.decomposing_bodies[index].energy_budget;
+                        let organism = &mut self.organisms[organism_index].usable_energy;
+                        (body, organism)
+                    };
+                    let _ = self.energy_ledger.transfer(body, organism, amount);
+                }
+            }
+            if let Some(materials) = step.released_material {
+                let position = self.decomposing_bodies[index].position.clone();
+                for material in materials {
+                    self.environment
+                        .field
+                        .deposit(position.x, position.y, material);
+                }
+                finished_indices.push(index);
+            }
+        }
+        for index in finished_indices.into_iter().rev() {
+            self.decomposing_bodies.remove(index);
+        }
+    }
+    pub(crate) fn step(&mut self) {
+        self.tick += 1;
+        let mut still_active = Vec::new();
+        let mut completed = Vec::new();
+        for mut transformation in self.active_transformations.drain(..) {
+            if transformation.remaining_ticks > 0 {
+                transformation.remaining_ticks -= 1
+            }
+            if transformation.remaining_ticks == 1 {
+                if let Some(organism) = self
+                    .organisms
+                    .iter_mut()
+                    .find(|o| o.id == transformation.organism_id)
+                {
+                    if !Self::prepare_transformation(
+                        &mut transformation,
+                        organism,
+                        &self.environment,
+                        &mut self.energy_ledger,
+                    ) {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
+            }
+            if transformation.remaining_ticks == 0 {
+                completed.push(transformation)
+            } else {
+                still_active.push(transformation)
+            }
+        }
+        self.active_transformations = still_active;
+        let mut completed_organisms = HashSet::new();
+        for transformation in &completed {
+            completed_organisms.insert(transformation.organism_id.clone());
+            if let Some(organism) = self
+                .organisms
+                .iter_mut()
+                .find(|o| o.id == transformation.organism_id)
+            {
+                Self::resolve_transformation(
+                    transformation,
+                    organism,
+                    &mut self.environment,
+                    &mut self.energy_ledger,
+                );
+            }
+        }
+        let decision_parameters = self.decision_parameters;
+        // The confirmed seed scale is deterministic for the catalog. Compute it
+        // once per simulation tick instead of rebuilding the calibration
+        // structure for every organism.
+        let seed_reference = self.seed_scale_reference;
+        for organism in &mut self.organisms {
+            Self::update_development_stage(organism, &self.environment, seed_reference);
+            organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
+            crate::harmonics::update_organism_harmonics(organism, &self.environment);
+            crate::memory::update_experience_memory(organism, &self.environment);
+            if matches!(organism.development_stage, DevelopmentStage::Adult)
+                && organism.reproductive_construction.is_none()
+            {
+                let _ = crate::reproduction::begin_reproduction(
+                    organism,
+                    &mut self.rng,
+                    &self.environment.catalog,
+                    &mut self.energy_ledger,
+                );
+            }
+            let stored_amount_before_transfer = organism.stored_material.total_amount();
+            Self::transfer_contained_environmental_material(organism, &mut self.environment);
+            let acquired_amount =
+                (organism.stored_material.total_amount() - stored_amount_before_transfer).max(0.0);
+            Self::finalize_pending_movement_experience(
+                organism,
+                &self.environment,
+                acquired_amount,
+            );
+        }
+        {
+            let (organisms, environment) = (&mut self.organisms, &mut self.environment);
+            let mut compatibility_cache = crate::contact::ConnectionCompatibilityCache::new();
+            let mut movement_spatial_index =
+                crate::movement::MovementSpatialIndex::new(organisms, environment);
+            for index in 0..organisms.len() {
+                if completed_organisms.contains(&organisms[index].id) {
+                    continue;
+                }
+                if organisms[index].structure.bonds.is_empty()
+                    && organisms[index].stress
+                        >= organisms[index]
+                            .stress_threshold
+                            .max(crate::state::MIN_STRESS_THRESHOLD)
+                {
+                    continue;
+                }
+                let developmental = seed_reference.and_then(|reference| {
+                    crate::developmental_decision::context(
+                        &mut organisms[index],
+                        environment,
+                        reference,
+                    )
+                });
+                let needs = Self::current_needs(
+                    &mut organisms[index],
+                    environment,
+                    decision_parameters,
+                    developmental.as_ref(),
+                );
+                let eligibility = Self::action_eligibility(&organisms[index], environment, needs);
+                // Movement is an independent channel. It is not gated by
+                // survival/reproduction need pressure or by the transformation
+                // selector below.
+                if eligibility.can_move {
+                    let (before, rest) = organisms.split_at_mut(index);
+                    let (organism, after) = rest.split_first_mut().expect("index is in organisms");
+                    let perceptions =
+                        crate::harmonics::organism_resonance_perceptions(organism, environment);
+                    let before_energy = organism.usable_energy;
+                    let before_stress = organism.stress;
+                    let before_realization = developmental
+                        .as_ref()
+                        .map(|context| context.current_growth_fraction)
+                        .unwrap_or_else(|| {
+                            organism
+                                .developmental_realization_cached(&environment.catalog)
+                                .map(|realization| realization.overall)
+                                .unwrap_or(0.0)
+                        });
+                    let moved = Self::update_movement(
+                        before,
+                        organism,
+                        after,
+                        &mut movement_spatial_index,
+                        environment,
+                        &mut self.energy_ledger,
+                        self.tick,
+                        &mut self.rng,
+                        &perceptions,
+                    );
+                    if moved {
+                        let move_candidate = ActionCandidate {
+                            action: ActionKind::Move,
+                            context_key: organism.last_movement_attempt.as_ref().and_then(
+                                |attempt| {
+                                    attempt
+                                        .step
+                                        .map(|distance| format!("distance:{distance:.0}"))
+                                },
+                            ),
+                        };
+                        let consequence = Self::action_consequence(
+                            before_energy,
+                            before_stress,
+                            before_realization,
+                            organism,
+                            environment,
+                        );
+                        crate::decision_runtime::record_consequence(
+                            &mut organism.decision_history,
+                            &move_candidate,
+                            consequence,
+                        );
+                        organism.pending_movement_experience =
+                            Some(crate::memory::PendingMovementExperience {
+                                perceptions,
+                                consequence: crate::memory::memory_consequence_from_action(
+                                    consequence,
+                                ),
+                                needs,
+                            });
+                    }
+                }
+                let context = DecisionContext { needs, eligibility };
+                let candidates =
+                    Self::decision_candidates(&organisms[index], environment, needs, eligibility);
+                let competing_indices = crate::decision_runtime::developmental_competition_indices(
+                    context,
+                    &organisms[index].decision_history,
+                    &candidates,
+                );
+                let developmental_scores =
+                    crate::developmental_decision::developmental_action_scores(
+                        &organisms[index],
+                        environment,
+                        needs,
+                        &candidates,
+                        &competing_indices,
+                        developmental.as_ref(),
+                        &self.energy_ledger,
+                    );
+                if let Some(selected) = select_action_with_developmental_scores(
+                    context,
+                    &organisms[index].decision_history,
+                    &candidates,
+                    &developmental_scores,
+                    &mut self.rng,
+                ) {
+                    match selected.action {
+                        ActionKind::Combine => {
+                            let perceptions = crate::harmonics::organism_resonance_perceptions(
+                                &organisms[index],
+                                environment,
+                            );
+                            let before_energy = organisms[index].usable_energy;
+                            let before_stress = organisms[index].stress;
+                            let before_stored_material =
+                                organisms[index].stored_material.total_amount();
+                            let before_realization = developmental
+                                .as_ref()
+                                .map(|context| context.current_growth_fraction)
+                                .unwrap_or_else(|| {
+                                    organisms[index]
+                                        .developmental_realization_cached(&environment.catalog)
+                                        .map(|realization| realization.overall)
+                                        .unwrap_or(0.0)
+                                });
+                            let developmental = developmental.as_ref().map(|context| {
+                                (
+                                    &context.blueprint,
+                                    context.origin,
+                                    context.orientation,
+                                    context.preferred_length,
+                                )
+                            });
+                            let combined = crate::combine_runtime::try_combine(
+                                &mut organisms[index],
+                                environment,
+                                &mut compatibility_cache,
+                                &mut self.energy_ledger,
+                                developmental,
+                            )
+                            .is_some();
+                            if combined {
+                                movement_spatial_index.refresh_organism(
+                                    index,
+                                    &organisms[index],
+                                    environment,
+                                );
+                            }
+                            let consequence = if combined {
+                                Self::action_consequence(
+                                    before_energy,
+                                    before_stress,
+                                    before_realization,
+                                    &mut organisms[index],
+                                    environment,
+                                )
+                            } else {
+                                crate::decision::ActionConsequence::default()
+                            };
+                            crate::decision_runtime::record_consequence(
+                                &mut organisms[index].decision_history,
+                                &selected,
+                                consequence,
+                            );
+                            if combined {
+                                Self::record_action_experience(
+                                    &mut organisms[index],
+                                    environment,
+                                    &perceptions,
+                                    ActionKind::Combine,
+                                    consequence,
+                                    needs,
+                                    (before_stored_material
+                                        - organisms[index].stored_material.total_amount())
+                                    .max(0.0),
+                                );
+                            }
+                        }
+                        ActionKind::Break => {
+                            let perceptions = crate::harmonics::organism_resonance_perceptions(
+                                &organisms[index],
+                                environment,
+                            );
+                            let before_energy = organisms[index].usable_energy;
+                            let before_stress = organisms[index].stress;
+                            let before_developmental_realization = developmental
+                                .as_ref()
+                                .map(|context| context.current_growth_fraction)
+                                .unwrap_or_else(|| {
+                                    organisms[index]
+                                        .developmental_realization_cached(&environment.catalog)
+                                        .map(|realization| realization.overall)
+                                        .unwrap_or(0.0)
+                                });
                             if let Some(mut transformation) = Self::try_start_transformation(
                                 &mut organisms[index],
                                 &environment.catalog,
@@ -17,3 +741,245 @@
                                             .map(|instance| instance.material.total_amount())
                                             .unwrap_or(0.0),
                                     });
+                                self.active_transformations.push(transformation);
+                            }
+                        }
+                        ActionKind::Expel => {
+                            let perceptions = crate::harmonics::organism_resonance_perceptions(
+                                &organisms[index],
+                                environment,
+                            );
+                            let before_energy = organisms[index].usable_energy;
+                            let before_stress = organisms[index].stress;
+                            let before_realization = developmental
+                                .as_ref()
+                                .map(|context| context.current_growth_fraction)
+                                .unwrap_or_else(|| {
+                                    organisms[index]
+                                        .developmental_realization_cached(&environment.catalog)
+                                        .map(|realization| realization.overall)
+                                        .unwrap_or(0.0)
+                                });
+                            let expelled = selected
+                                .context_key
+                                .as_deref()
+                                .and_then(|key| key.strip_prefix("stored:"))
+                                .and_then(|index| index.parse::<usize>().ok())
+                                .map(|storage_index| {
+                                    crate::expulsion::expel_physical_material(
+                                        &mut organisms[index],
+                                        environment,
+                                        storage_index,
+                                    )
+                                })
+                                .unwrap_or(false);
+                            let consequence = if expelled {
+                                Self::action_consequence(
+                                    before_energy,
+                                    before_stress,
+                                    before_realization,
+                                    &mut organisms[index],
+                                    environment,
+                                )
+                            } else {
+                                crate::decision::ActionConsequence::default()
+                            };
+                            crate::decision_runtime::record_consequence(
+                                &mut organisms[index].decision_history,
+                                &selected,
+                                consequence,
+                            );
+                            if expelled {
+                                Self::record_action_experience(
+                                    &mut organisms[index],
+                                    environment,
+                                    &perceptions,
+                                    ActionKind::Expel,
+                                    consequence,
+                                    needs,
+                                    0.0,
+                                );
+                            }
+                        }
+                        ActionKind::Move => unreachable!("movement is evaluated independently"),
+                    }
+                } else {
+                    let before_energy = organisms[index].usable_energy;
+                    let before_stress = organisms[index].stress;
+                    let before_realization = developmental
+                        .as_ref()
+                        .map(|context| context.current_growth_fraction)
+                        .unwrap_or_else(|| {
+                            organisms[index]
+                                .developmental_realization_cached(&environment.catalog)
+                                .map(|realization| realization.overall)
+                                .unwrap_or(0.0)
+                        });
+                    let expulsion_candidates =
+                        Self::expulsion_candidates(&organisms[index], needs, eligibility);
+                    let expulsion_competition =
+                        crate::decision_runtime::developmental_competition_indices(
+                            context,
+                            &organisms[index].decision_history,
+                            &expulsion_candidates,
+                        );
+                    let expulsion_scores =
+                        crate::developmental_decision::developmental_action_scores(
+                            &organisms[index],
+                            environment,
+                            needs,
+                            &expulsion_candidates,
+                            &expulsion_competition,
+                            developmental.as_ref(),
+                            &self.energy_ledger,
+                        );
+                    if let Some(selected) = select_action_with_developmental_scores(
+                        context,
+                        &organisms[index].decision_history,
+                        &expulsion_candidates,
+                        &expulsion_scores,
+                        &mut self.rng,
+                    ) {
+                        let expelled = selected
+                            .context_key
+                            .as_deref()
+                            .and_then(|key| key.strip_prefix("stored:"))
+                            .and_then(|index| index.parse::<usize>().ok())
+                            .map(|storage_index| {
+                                crate::expulsion::expel_physical_material(
+                                    &mut organisms[index],
+                                    environment,
+                                    storage_index,
+                                )
+                            })
+                            .unwrap_or(false);
+                        let consequence = if expelled {
+                            Self::action_consequence(
+                                before_energy,
+                                before_stress,
+                                before_realization,
+                                &mut organisms[index],
+                                environment,
+                            )
+                        } else {
+                            crate::decision::ActionConsequence::default()
+                        };
+                        crate::decision_runtime::record_consequence(
+                            &mut organisms[index].decision_history,
+                            &selected,
+                            consequence,
+                        );
+                    }
+                }
+            }
+        }
+        let mut offspring = Vec::new();
+        let mut next_organism_id = self.next_organism_id;
+        for organism in &mut self.organisms {
+            if organism.reproductive_construction.is_some() {
+                let Some(parent_body) =
+                    crate::reproduction::parent_body_geometry(organism, &self.environment.catalog)
+                else {
+                    continue;
+                };
+                let (status, stress) = {
+                    let construction = organism
+                        .reproductive_construction
+                        .as_mut()
+                        .expect("reproductive construction exists");
+                    crate::reproduction::advance_construction(
+                        &organism.structure,
+                        &mut organism.stored_material,
+                        construction,
+                        &self.environment,
+                        &mut self.energy_ledger,
+                        &mut organism.usable_energy,
+                        &mut self.rng,
+                        &parent_body,
+                        self.seed_scale_reference,
+                    )
+                };
+                if let Some(stress) = stress {
+                    organism.add_transaction_stress(stress);
+                }
+                if matches!(
+                    status,
+                    crate::reproduction::ConstructionStatus::Ready
+                        | crate::reproduction::ConstructionStatus::Detached
+                        | crate::reproduction::ConstructionStatus::Dead
+                        | crate::reproduction::ConstructionStatus::DeadEnd
+                ) {
+                    let child_id = next_organism_id.to_string();
+                    if let Some(child) = crate::reproduction::finish_reproduction(
+                        organism,
+                        child_id,
+                        &self.environment.catalog,
+                        &mut self.energy_ledger,
+                        self.seed_scale_reference,
+                    ) {
+                        next_organism_id += 1;
+                        offspring.push(child);
+                    }
+                }
+            }
+        }
+        self.next_organism_id = next_organism_id;
+        self.organisms.extend(offspring);
+        let mut survivors = Vec::with_capacity(self.organisms.len());
+        for mut organism in self.organisms.drain(..) {
+            let dead = Self::apply_survival_damage(
+                &mut organism,
+                &self.environment,
+                &mut self.energy_ledger,
+                &mut self.rng,
+            );
+            if dead {
+                if organism.reproductive_construction.is_some() {
+                    let child_id = next_organism_id.to_string();
+                    if let Some(child) = crate::reproduction::finish_reproduction(
+                        &mut organism,
+                        child_id,
+                        &self.environment.catalog,
+                        &mut self.energy_ledger,
+                        self.seed_scale_reference,
+                    ) {
+                        next_organism_id += 1;
+                        survivors.push(child);
+                    }
+                }
+                if let Some(body) = crate::recycling::recycle_dead_organism(
+                    &mut self.environment,
+                    &mut organism,
+                    &mut self.energy_ledger,
+                ) {
+                    self.decomposing_bodies.push(body);
+                }
+            } else {
+                survivors.push(organism);
+            }
+        }
+        self.organisms = survivors;
+        self.process_decomposing_bodies();
+        let live_ids: HashSet<String> = self.organisms.iter().map(|o| o.id.clone()).collect();
+        self.active_transformations
+            .retain(|t| live_ids.contains(&t.organism_id));
+        self.energy_ledger.total_usable_energy_held =
+            crate::reproduction::total_usable_energy_held(&self.organisms);
+    }
+    pub(crate) fn apply_survival_damage(
+        organism: &mut Organism,
+        environment: &Environment,
+        ledger: &mut EnergyLedger,
+        rng: &mut ChaCha8Rng,
+    ) -> bool {
+        let threshold = organism
+            .stress_threshold
+            .max(crate::state::MIN_STRESS_THRESHOLD);
+        let lethal_before_decay = organism.stress >= threshold;
+        organism.stress *= crate::state::STRESS_DECAY_PER_TICK;
+        if organism.structure.bonds.is_empty() && lethal_before_decay {
+            return true;
+        }
+        organism.apply_stress_damage(environment, ledger, rng)
+    }
+}
