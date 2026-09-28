@@ -224,7 +224,7 @@ mod integration_tests {
     fn start_test_break_transformation(s: &mut Simulation) {
         let candidate = crate::decision_runtime::ActionCandidate {
             action: ActionKind::Break,
-            context_key: Some("stored:1:bond:0".into()),
+            context_key: Some("stored:0:bond:0".into()),
         };
         let transformation = Simulation::try_start_transformation(
             &mut s.organisms[0],
