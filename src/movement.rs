@@ -1,3 +1,5 @@
+#![expect(dead_code, reason = "Staged movement API retained for subsystem integration")]
+
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
 use crate::material_geometry::PlacedMaterialPart;
 use crate::state::{EnergyLedger, Environment, Organism, Simulation};
