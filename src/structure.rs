@@ -522,6 +522,7 @@ impl PhysicalConstituentGraph {
 
         component.sort_unstable();
         component
+    }
 
     pub fn connected_components(&self) -> Vec<Vec<usize>> {
         let mut adjacency = vec![Vec::<usize>::new(); self.units.len()];
