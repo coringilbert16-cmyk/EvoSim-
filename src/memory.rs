@@ -1,4 +1,7 @@
-#![expect(dead_code, reason = "New associative memory is staged during runtime migration")]
+#![expect(
+    dead_code,
+    reason = "New associative memory is staged during runtime migration"
+)]
 
 use serde::{Deserialize, Serialize};
 
