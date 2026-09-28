@@ -1,4 +1,7 @@
-#![expect(dead_code, reason = "Staged diagnostic API retained for exploratory and UI integration")]
+#![expect(
+    dead_code,
+    reason = "Staged diagnostic API retained for exploratory and UI integration"
+)]
 
 use crate::state::Simulation;
 use serde_json::{json, Value};
