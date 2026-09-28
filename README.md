@@ -1917,7 +1917,7 @@ The organism's behavioral action categories are:
 
 Existing BREAK and COMBINE mechanisms remain physical processing mechanisms and may remain implementation-level operations beneath PROCESS.
 
-There is **no ACQUIRE action**.
+There is **no ACQUIRE action.**
 
 Acquisition is a physical consequence of an action, primarily movement/overlap with physical material. The organism does not independently choose to acquire material.
 
