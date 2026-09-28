@@ -112,13 +112,19 @@ function Build-Version([string]$Sha) {
 
     Invoke-Git @("-C", $Repo, "worktree", "add", "--detach", $StagingWorktree, $Sha)
     try {
-        & cargo build --release --target-dir $StagingTarget
+        # Keep Cargo's live output visible, but prevent it from becoming the
+        # function's return value. Build-Version returns only the executable path.
+        & cargo build --release --target-dir $StagingTarget 2>&1 | ForEach-Object {
+            Write-Host $_
+        }
         if ($LASTEXITCODE -ne 0) {
             throw "cargo build failed with exit code $LASTEXITCODE"
         }
 
         Write-Host "Running Rust tests for $Sha ..."
-        & cargo test --all-targets --release --target-dir $StagingTarget
+        & cargo test --all-targets --release --target-dir $StagingTarget 2>&1 | ForEach-Object {
+            Write-Host $_
+        }
         if ($LASTEXITCODE -ne 0) {
             throw "cargo test failed with exit code $LASTEXITCODE"
         }
