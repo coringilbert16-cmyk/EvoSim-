@@ -18,8 +18,6 @@ pub(crate) fn movement_direction_periodic(
 
     let mut direction_x = 0.0;
     let mut direction_y = 0.0;
-    let mut current_signal = 0.0;
-
     for perception in perceptions {
         if !perception.magnitude.is_finite() || perception.magnitude <= f64::EPSILON {
             continue;
@@ -84,7 +82,6 @@ pub(crate) fn movement_direction_periodic(
         let stimulus = perception.magnitude.max(0.0) * (spatial_utility + spectral_utility);
         direction_x += dx / distance * stimulus;
         direction_y += dy / distance * stimulus;
-        current_signal += perception.magnitude.max(0.0);
     }
 
     let magnitude = direction_x.hypot(direction_y);
