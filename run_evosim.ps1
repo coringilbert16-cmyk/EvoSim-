@@ -25,8 +25,12 @@ if (-not $mutex.WaitOne(0)) {
 $script:serverProcess = $null
 
 function Invoke-Git([string[]]$Arguments) {
-    & git @Arguments
+    $output = & git @Arguments 2>&1
     if ($LASTEXITCODE -ne 0) {
+        $detail = (($output | Out-String).Trim())
+        if ($detail) {
+            throw "git $($Arguments -join ' ') failed with exit code $LASTEXITCODE: $detail"
+        }
         throw "git $($Arguments -join ' ') failed with exit code $LASTEXITCODE"
     }
 }
