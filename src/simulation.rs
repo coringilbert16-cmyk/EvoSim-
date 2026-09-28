@@ -702,7 +702,7 @@ impl Simulation {
                                     needs,
                                     (before_stored_material
                                         - organisms[index].stored_material.total_amount())
-                                        .max(0.0),
+                                    .max(0.0),
                                 );
                             }
                         }
