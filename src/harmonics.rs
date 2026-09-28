@@ -439,6 +439,12 @@ pub(crate) fn update_organism_harmonics(
     }
 
     organism.harmonic_spectrum = organism_emitted_spectrum(&organism.structure, &environment.catalog);
+    let anchor = organism
+        .occupied_cells
+        .first()
+        .map(|position| (position.x, position.y))
+        .unwrap_or((0.0, 0.0));
+    organism.cached_harmonic_radius = Some(structural_radius(&organism.structure, anchor));
     organism.cached_harmonic_key = Some(key);
 }
 
