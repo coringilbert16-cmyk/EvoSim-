@@ -69,7 +69,7 @@ struct OrganismSnapshot {
     structure: Value,
     genome: Value,
     harmonic_spectrum: Value,
-    memory: Value,
+    experience_memory: Value,
     decision_history: Value,
     occupied_cells: Value,
     active_transformation_id: Option<u64>,
@@ -197,7 +197,7 @@ impl DiagnosticsRecorder {
                         genome: serde_json::to_value(&organism.genome).unwrap_or(Value::Null),
                         harmonic_spectrum: serde_json::to_value(&organism.harmonic_spectrum)
                             .unwrap_or(Value::Null),
-                        memory: serde_json::to_value(&organism.memory).unwrap_or(Value::Null),
+                        experience_memory: serde_json::to_value(&organism.experience_memory).unwrap_or(Value::Null),
                         decision_history: serde_json::to_value(&organism.decision_history)
                             .unwrap_or(Value::Null),
                         occupied_cells: serde_json::to_value(&organism.occupied_cells)
@@ -471,7 +471,7 @@ impl DiagnosticsRecorder {
             "structure": state.structure,
             "genome": state.genome,
             "harmonic_spectrum": state.harmonic_spectrum,
-            "memory": state.memory,
+            "experience_memory": state.experience_memory,
             "decision_history": state.decision_history,
             "occupied_cells": state.occupied_cells,
             "active_transformation_id": state.active_transformation_id,
