@@ -9,6 +9,9 @@ use crate::resources::{ResourceBaselines, ResourceProperties};
 
 pub(crate) const WORLD_TONE_HZ: f64 = 440.0;
 pub(crate) const MAX_SPECTRAL_COMPONENTS: usize = 4;
+/// Minimum external spectral change that can be resolved by the harmonic sense.
+/// This is a signal floor, not a spatial perception radius.
+pub(crate) const AURA_DETECTION_THRESHOLD: f64 = 0.01;
 
 /// EXPERIMENTAL: absolute damping calibration for the harmonic model.
 /// Reactivity determines relative damping; this constant sets the model scale.
@@ -331,49 +334,105 @@ pub(crate) fn genome_cavity_spectrum(
     spectrum
 }
 
-/// Refresh the harmonic state from the organism's actual realized genome
-/// cavity. A non-qualifying physical structure has no genome harmonic
-/// memory surface.
+/// The organism's emitted spectrum is produced by its realized structural material.
+/// It is the source signal for the organism's external resonance aura; it is not
+/// the spectrum received by the organism itself.
+pub(crate) fn organism_emitted_spectrum(
+    structure: &crate::structure::OrganismStructure,
+    catalog: &[crate::resources::BaseResource],
+) -> ToneSpectrum {
+    let local = realized_unit_spectra(structure, catalog);
+    let mut emitted = ToneSpectrum::empty();
+    let structural_count = structure.structural_unit_indices().len();
+    if structural_count == 0 {
+        return emitted;
+    }
+    let scale = 1.0 / structural_count as f64;
+    for spectrum in local {
+        emitted.merge_from(&spectrum, scale);
+    }
+    emitted
+}
+
+/// Apply spatial attenuation to an emitted spectrum. The resulting field has
+/// no authored perception radius; range is an emergent consequence of signal
+/// strength and distance.
+pub(crate) fn aura_from_spectrum(
+    spectrum: &ToneSpectrum,
+    source_position: (f64, f64),
+    x: f64,
+    y: f64,
+) -> ToneSpectrum {
+    let dx = source_position.0 - x;
+    let dy = source_position.1 - y;
+    let distance_squared = dx * dx + dy * dy;
+    let attenuation = 1.0 / (1.0 + distance_squared);
+    let mut aura = spectrum.clone();
+    for component in &mut aura.components {
+        component.amplitude *= attenuation;
+    }
+    aura.retain_strongest();
+    aura
+}
+
+pub(crate) fn aura_at_position(
+    organism: &crate::state::Organism,
+    x: f64,
+    y: f64,
+) -> ToneSpectrum {
+    let Some(anchor) = organism.occupied_cells.first() else {
+        return ToneSpectrum::empty();
+    };
+    aura_from_spectrum(
+        &organism.harmonic_spectrum,
+        (anchor.x, anchor.y),
+        x,
+        y,
+    )
+}
+
+/// Measure the change in received spectral amplitude between two observations.
+pub(crate) fn spectrum_difference(a: &ToneSpectrum, b: &ToneSpectrum) -> f64 {
+    let mut difference = 0.0;
+    for frequency in a
+        .components
+        .iter()
+        .map(|component| component.frequency_hz)
+        .chain(b.components.iter().map(|component| component.frequency_hz))
+    {
+        let aa = a
+            .components
+            .iter()
+            .find(|component| (component.frequency_hz - frequency).abs() <= 1e-9)
+            .map(|component| component.amplitude)
+            .unwrap_or(0.0);
+        let bb = b
+            .components
+            .iter()
+            .find(|component| (component.frequency_hz - frequency).abs() <= 1e-9)
+            .map(|component| component.amplitude)
+            .unwrap_or(0.0);
+        difference += (aa - bb).abs();
+    }
+    difference
+}
+
+pub(crate) fn aura_strength(spectrum: &ToneSpectrum) -> f64 {
+    spectrum.components.iter().map(|component| component.amplitude).sum()
+}
+
+/// Refresh the organism's emitted harmonic state from its realized physical
+/// structure. This is the source field used by external observers.
 pub(crate) fn update_organism_harmonics(
     organism: &mut crate::state::Organism,
     environment: &crate::state::Environment,
 ) {
-    let boundary_units = organism
-        .genome_cavity_cached_ref(&environment.catalog)
-        .map(|cavity| cavity.boundary_units.as_slice());
-    let local_environment_revision = boundary_units
-        .map(|indices| {
-            environment.field.local_revision_for_positions(indices.iter().filter_map(|&index| {
-                organism
-                    .structure
-                    .units
-                    .get(index)
-                    .map(|unit| (unit.placement.x, unit.placement.y))
-            }))
-        })
-        .unwrap_or(0);
-    let key = (
-        organism.structure_revision,
-        organism.position_revision,
-        local_environment_revision,
-    );
+    let key = (organism.structure_revision, organism.position_revision, 0);
     if organism.cached_harmonic_key == Some(key) {
         return;
     }
 
-    let spectrum = {
-        match boundary_units {
-            Some(boundary_units) => genome_cavity_spectrum(
-                &organism.structure,
-                &environment.catalog,
-                &environment.field,
-                boundary_units,
-            ),
-            None => ToneSpectrum::empty(),
-        }
-    };
-
-    organism.harmonic_spectrum = spectrum;
+    organism.harmonic_spectrum = organism_emitted_spectrum(&organism.structure, &environment.catalog);
     organism.cached_harmonic_key = Some(key);
 }
 
@@ -464,6 +523,41 @@ mod tests {
             reactivity: 1.0,
             cohesion: 1.0,
         }
+    }
+
+    #[test]
+    fn aura_strength_decays_with_distance() {
+        let spectrum = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_hz: WORLD_TONE_HZ,
+                amplitude: 1.0,
+                phase_radians: 0.0,
+            }],
+        };
+        let near = aura_from_spectrum(&spectrum, (0.0, 0.0), 0.0, 0.0);
+        let far = aura_from_spectrum(&spectrum, (0.0, 0.0), 10.0, 0.0);
+        assert!(aura_strength(&near) > aura_strength(&far));
+    }
+
+    #[test]
+    fn spectral_difference_detects_change_but_not_identical_signal() {
+        let a = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_hz: WORLD_TONE_HZ,
+                amplitude: 1.0,
+                phase_radians: 0.0,
+            }],
+        };
+        let b = a.clone();
+        let c = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_hz: WORLD_TONE_HZ,
+                amplitude: 0.5,
+                phase_radians: 0.0,
+            }],
+        };
+        assert_eq!(spectrum_difference(&a, &b), 0.0);
+        assert!(spectrum_difference(&a, &c) > 0.0);
     }
 
     #[test]
