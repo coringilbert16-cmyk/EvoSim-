@@ -250,10 +250,10 @@
       ctx.save(); ctx.translate(point.x, point.y); ctx.scale(camera.scale, camera.scale);
       drawForm(part.form, 0, 0, part.rotation_radians); ctx.restore();
     }
-    function drawSelectionBounds(organism, viewport, pad = 3) {
-      if (!selectedIds.has(organism.id)) return;
-      const a = camera.worldToScreen(organism.min_x, organism.min_y, viewport.width, viewport.height);
-      const b = camera.worldToScreen(organism.max_x, organism.max_y, viewport.width, viewport.height);
+    function drawSelectionBounds(id, bounds, viewport, pad = 3) {
+      if (!selectedIds.has(id)) return;
+      const a = camera.worldToScreen(bounds.min_x, bounds.min_y, viewport.width, viewport.height);
+      const b = camera.worldToScreen(bounds.max_x, bounds.max_y, viewport.width, viewport.height);
       ctx.save();
       ctx.strokeStyle = '#d14';
       ctx.lineWidth = 2;
@@ -264,13 +264,14 @@
       const world = worldPayload(), viewport = viewportSize(); if (!world) return;
       for (const organism of world.organisms || []) {
         for (const part of organism.silhouette || []) drawObservedPart(part, viewport);
-        drawSelectionBounds(organism, viewport);
+        drawSelectionBounds(organism.id, organism, viewport);
       }
     }
     function renderOrganism() {
-      const physical = organismPhysicalPayload(), viewport = viewportSize(); if (!physical) return;
+      const organism = organismPayload(), physical = organismPhysicalPayload(), viewport = viewportSize();
+      if (!organism || !physical) return;
       for (const part of physical.silhouette || []) drawObservedPart(part, viewport);
-      drawSelectionBounds(physical, viewport, 5);
+      drawSelectionBounds(organism.id, physical, viewport, 5);
     }
     function renderStructure() {
       const structure = structurePayload(), viewport = viewportSize(); if (!structure) return;
