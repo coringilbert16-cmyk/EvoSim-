@@ -983,16 +983,16 @@ mod tests {
             &mut organism,
             &mut environment,
             &mut [],
-            12.0,
-            -7.0,
+            1.0,
+            -1.0,
         ));
         let after = &organism
             .reproductive_construction
             .as_ref()
             .unwrap()
             .developmental_origin;
-        assert!((after.x - before.x - 12.0).abs() < 1e-9);
-        assert!((after.y - before.y + 7.0).abs() < 1e-9);
+        assert!((after.x - before.x - 1.0).abs() < 1e-9);
+        assert!((after.y - before.y + 1.0).abs() < 1e-9);
     }
 
     #[test]
