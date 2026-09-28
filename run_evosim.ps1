@@ -40,11 +40,11 @@ function Get-GitOutput([string[]]$Arguments) {
 }
 
 function Test-WorktreeClean {
-    return [string]::IsNullOrWhiteSpace((Get-GitOutput @("status", "--porcelain", "--untracked-files=all")))
+    return [string]::IsNullOrWhiteSpace((Get-GitOutput @("-C", $Repo, "status", "--porcelain", "--untracked-files=all")))
 }
 
 function Get-RemoteMain {
-    return Get-GitOutput @("rev-parse", "origin/main")
+    return Get-GitOutput @("-C", $Repo, "rev-parse", "origin/main")
 }
 
 function Get-CurrentVersion {
