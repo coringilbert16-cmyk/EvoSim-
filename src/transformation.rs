@@ -397,7 +397,7 @@ mod tests {
             harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
             memory: Vec::new(),
             experience_memory: crate::memory::ExperienceMemory::default(),
-        pending_movement_experience: None,
+            pending_movement_experience: None,
             decision_history: crate::decision::DecisionHistory::default(),
             usable_energy: 1_000_000.0,
             stress: 0.0,
