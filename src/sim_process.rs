@@ -18,7 +18,9 @@ use crate::state::Simulation;
 #[serde(tag = "command", rename_all = "snake_case")]
 enum SimulationCommand {
     Status,
-    World,
+    World {
+        bounds: Option<(f64, f64, f64, f64)>,
+    },
     HistoryWorld { tick: u64 },
     Organism { id: String },
     Structure { id: String },
@@ -170,10 +172,12 @@ fn execute(command: SimulationCommand, runtime: &Arc<Mutex<RuntimeState>>) -> Co
                 "session_id": state.session_id,
             }))
         }
-        SimulationCommand::World => {
+        SimulationCommand::World { bounds } => {
             let projection = {
                 let state = runtime.lock();
-                ObservationProjection::world(WorldObservation::from_simulation(&state.simulation))
+                ObservationProjection::world(
+                    WorldObservation::from_simulation_in_bounds(&state.simulation, bounds),
+                )
             };
             CommandResponse::value(
                 serde_json::to_value(projection).expect("world observation must serialize"),
