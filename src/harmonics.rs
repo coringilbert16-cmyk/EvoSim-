@@ -591,6 +591,41 @@ mod tests {
         assert!(absent.components.is_empty());
     }
 
+    #[test]
+    fn resonance_perception_preserves_boundary_location() {
+        let catalog = crate::resources::default_catalog();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
+        let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
+        let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
+            .unwrap()
+            .expect("confirmed seed must contain a genome cavity");
+        let mut field = crate::environment::ActiveMaterialField::new(
+            1000.0,
+            1000.0,
+            crate::environment::DEFAULT_CELL_SIZE,
+        );
+        let boundary = &structure.units[cavity.boundary_units[0]].placement;
+        assert!(field.deposit(
+            boundary.x,
+            boundary.y,
+            crate::resources::Material::free_base("Carbon", 1.0),
+        ));
+
+        let perceptions = genome_cavity_resonance_perceptions(
+            &structure,
+            &catalog,
+            &field,
+            &cavity.boundary_units,
+        );
+        assert!(!perceptions.is_empty());
+        assert!(perceptions.iter().any(|perception| {
+            (perception.source_x - boundary.x).abs() < f64::EPSILON
+                && (perception.source_y - boundary.y).abs() < f64::EPSILON
+                && perception.extent > 0.0
+                && perception.magnitude > 0.0
+        }));
+    }
+
     fn properties(mass: f64, reactivity: f64, cohesion: f64) -> ResourceProperties {
         ResourceProperties {
             mass,
