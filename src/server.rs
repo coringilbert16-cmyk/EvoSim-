@@ -98,6 +98,8 @@ struct ViewBounds {
     max_x: Option<f64>,
     min_y: Option<f64>,
     max_y: Option<f64>,
+    known_organisms: Option<String>,
+    known_cells: Option<String>,
 }
 
 async fn world_observation_handler(
@@ -111,7 +113,30 @@ async fn world_observation_handler(
         (None, None, None, None) => None,
         _ => return error_response("invalid_view_bounds"),
     };
-    match request(&state, serde_json::json!({"command": "world", "bounds": bounds})).await {
+    let known_organisms = query
+        .known_organisms
+        .as_deref()
+        .map(serde_json::from_str::<Vec<(String, u64, u64)>>)
+        .transpose()
+        .map_err(|_| "invalid_view_bounds");
+    let known_cells = query
+        .known_cells
+        .as_deref()
+        .map(serde_json::from_str::<Vec<(usize, u64)>>)
+        .transpose()
+        .map_err(|_| "invalid_view_bounds");
+    let (Ok(known_organisms), Ok(known_cells)) = (known_organisms, known_cells) else {
+        return error_response("invalid_view_bounds");
+    };
+    match request(
+        &state,
+        serde_json::json!({
+            "command": "world",
+            "bounds": bounds,
+            "known_organisms": known_organisms,
+            "known_cells": known_cells,
+        }),
+    ).await {
         Ok(value) => Json(value).into_response(),
         Err(error) => error_response(error),
     }
