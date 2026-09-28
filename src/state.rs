@@ -90,6 +90,9 @@ pub(crate) struct ActiveTransformation {
     /// Energy transaction prepared during the middle tick, before structural mutation.
     #[serde(default)]
     pub(crate) prepared_energy: Option<(f64, f64, f64)>,
+    /// Perception and needs captured when a voluntary BREAK begins.
+    #[serde(default)]
+    pub(crate) pending_experience: Option<crate::memory::PendingTransformationExperience>,
     pub(crate) decision_context_key: Option<String>,
 }
 #[derive(Serialize, Deserialize, Clone)]
