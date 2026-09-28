@@ -404,7 +404,11 @@ pub(crate) fn spectrum_difference(a: &ToneSpectrum, b: &ToneSpectrum) -> f64 {
 }
 
 pub(crate) fn aura_strength(spectrum: &ToneSpectrum) -> f64 {
-    spectrum.components.iter().map(|component| component.amplitude).sum()
+    spectrum
+        .components
+        .iter()
+        .map(|component| component.amplitude)
+        .sum()
 }
 
 /// Physical extent of the realized structure measured from its occupied-cell
