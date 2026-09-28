@@ -416,7 +416,7 @@ impl DevelopmentalFieldBlueprint {
                         candidate.endpoint_b,
                         catalog,
                         preferred_length,
-                            );
+                    );
                 }
             }
         }
@@ -546,7 +546,7 @@ impl DevelopmentalFieldBlueprint {
                         candidate.endpoint_b,
                         catalog,
                         preferred_length,
-                &mut endpoint_opportunities,
+                        &mut endpoint_opportunities,
                     );
                 }
             }
