@@ -189,32 +189,62 @@ impl WorldObservation {
                 })
             })
             .collect();
-        let field = simulation
-            .environment
-            .field
-            .cells
-            .iter()
-            .enumerate()
-            .filter_map(|(cell_index, cell)| {
-                let materials = cell.total_material();
-                if materials.is_empty() {
-                    return None;
-                }
-                let (x, y) = simulation.environment.field.cell_center(cell_index);
-                if let Some((min_x, max_x, min_y, max_y)) = bounds {
-                    let half = simulation.environment.field.cell_size * 0.5;
-                    if x + half < min_x || x - half > max_x || y + half < min_y || y - half > max_y {
+        let field = if let Some((min_x, max_x, min_y, max_y)) = bounds {
+            let field = &simulation.environment.field;
+            let half = field.cell_size * 0.5;
+            let min_col = ((min_x - half).max(0.0) / field.cell_size).floor() as usize;
+            let max_col = ((max_x + half).max(0.0) / field.cell_size)
+                .floor()
+                .min(field.width_cells.saturating_sub(1) as f64) as usize;
+            let min_row = ((min_y - half).max(0.0) / field.cell_size).floor() as usize;
+            let max_row = ((max_y + half).max(0.0) / field.cell_size)
+                .floor()
+                .min(field.height_cells.saturating_sub(1) as f64) as usize;
+            if min_col > max_col || min_row > max_row {
+                Vec::new()
+            } else {
+                (min_row..=max_row)
+                    .flat_map(|row| {
+                        (min_col..=max_col).map(move |col| row * field.width_cells + col)
+                    })
+                    .filter_map(|cell_index| {
+                        let cell = &field.cells[cell_index];
+                        let materials = cell.total_material();
+                        if materials.is_empty() {
+                            return None;
+                        }
+                        let (x, y) = field.cell_center(cell_index);
+                        Some(WorldFieldObservation {
+                            cell_index,
+                            x,
+                            y,
+                            materials,
+                        })
+                    })
+                    .collect()
+            }
+        } else {
+            simulation
+                .environment
+                .field
+                .cells
+                .iter()
+                .enumerate()
+                .filter_map(|(cell_index, cell)| {
+                    let materials = cell.total_material();
+                    if materials.is_empty() {
                         return None;
                     }
-                }
-                Some(WorldFieldObservation {
-                    cell_index,
-                    x,
-                    y,
-                    materials,
+                    let (x, y) = simulation.environment.field.cell_center(cell_index);
+                    Some(WorldFieldObservation {
+                        cell_index,
+                        x,
+                        y,
+                        materials,
+                    })
                 })
-            })
-            .collect();
+                .collect()
+        };
         let decomposing_bodies = simulation
             .decomposing_bodies
             .iter()
