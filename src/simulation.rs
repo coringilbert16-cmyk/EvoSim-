@@ -108,10 +108,11 @@ impl Simulation {
         consequence: crate::decision::ActionConsequence,
         needs: CurrentNeeds,
     ) {
-        let Some(cavity) = organism
+        let capacity = organism
             .genome_cavity_cached_ref(&environment.catalog)
             .filter(|cavity| cavity.qualifies())
-        else {
+            .map(crate::memory::memory_capacity);
+        let Some(capacity) = capacity else {
             return;
         };
         crate::memory::record_experience(
@@ -120,7 +121,7 @@ impl Simulation {
             action,
             crate::memory::memory_consequence_from_action(consequence),
             needs,
-            crate::memory::memory_capacity(cavity),
+            capacity,
         );
     }
 
@@ -134,10 +135,11 @@ impl Simulation {
         };
         let mut consequence = pending.consequence;
         consequence.material_acquired = acquired_amount.max(0.0);
-        let Some(cavity) = organism
+        let capacity = organism
             .genome_cavity_cached_ref(&environment.catalog)
             .filter(|cavity| cavity.qualifies())
-        else {
+            .map(crate::memory::memory_capacity);
+        let Some(capacity) = capacity else {
             return;
         };
         crate::memory::record_experience(
@@ -146,7 +148,7 @@ impl Simulation {
             ActionKind::Move,
             consequence,
             pending.needs,
-            crate::memory::memory_capacity(cavity),
+            capacity,
         );
     }
 
