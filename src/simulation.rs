@@ -149,6 +149,7 @@ impl Simulation {
             consequence,
             pending.needs,
             capacity,
+            organism.genome.memory_strength(),
         );
     }
 
