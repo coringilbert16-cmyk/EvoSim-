@@ -334,7 +334,8 @@
       const viewport = viewportSize(), point = camera.screenToWorld(x, y, viewport.width, viewport.height);
       for (let i = (world.organisms?.length || 0) - 1; i >= 0; i -= 1) {
         const organism = world.organisms[i];
-        if (point.x >= organism.min_x && point.x <= organism.max_x && point.y >= organism.min_y && point.y <= organism.max_y) return organism;
+        const physical = organism.physical;
+        if (physical && point.x >= physical.min_x && point.x <= physical.max_x && point.y >= physical.min_y && point.y <= physical.max_y) return organism;
       }
       return null;
     }
@@ -342,12 +343,18 @@
       const world = worldPayload(); if (!world) return [];
       const viewport = viewportSize(), a = camera.screenToWorld(startX, startY, viewport.width, viewport.height), b = camera.screenToWorld(endX, endY, viewport.width, viewport.height);
       const minX = Math.min(a.x, b.x), maxX = Math.max(a.x, b.x), minY = Math.min(a.y, b.y), maxY = Math.max(a.y, b.y);
-      return (world.organisms || []).filter(o => o.max_x >= minX && o.min_x <= maxX && o.max_y >= minY && o.min_y <= maxY);
+      return (world.organisms || []).filter(o => {
+        const p = o.physical;
+        return p && p.max_x >= minX && p.min_x <= maxX && p.max_y >= minY && p.min_y <= maxY;
+      });
     }
     function centerSelection() {
       const world = worldPayload(); if (!world || !selectedIds.size) return;
       const selected = (world.organisms || []).filter(o => selectedIds.has(o.id)); if (!selected.length) return;
-      const center = selected.reduce((sum, o) => ({ x: sum.x + (o.min_x + o.max_x) / 2, y: sum.y + (o.min_y + o.max_y) / 2 }), { x: 0, y: 0 });
+      const center = selected.reduce((sum, o) => {
+        const p = o.physical;
+        return { x: sum.x + (p.min_x + p.max_x) / 2, y: sum.y + (p.min_y + p.max_y) / 2 };
+      }, { x: 0, y: 0 });
       camera.centerOn(center.x / selected.length, center.y / selected.length);
     }
     function finishWorldSelection(point) {
