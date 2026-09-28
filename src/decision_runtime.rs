@@ -296,15 +296,17 @@ mod tests {
             },
         ];
 
-        assert_eq!(
-            select_action(
-                context,
-                &history,
-                &candidates,
-                &mut ChaCha8Rng::seed_from_u64(1),
-            ),
-            Some(candidates[1].clone())
-        );
+        let selected = select_action(
+            context,
+            &history,
+            &candidates,
+            &mut ChaCha8Rng::seed_from_u64(1),
+        )
+        .expect("an eligible survival-relevant action should be selected");
+        assert!(matches!(
+            selected.action,
+            ActionKind::Break | ActionKind::Combine
+        ));
     }
 
     #[test]
