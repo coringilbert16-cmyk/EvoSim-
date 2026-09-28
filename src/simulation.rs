@@ -671,16 +671,6 @@ impl Simulation {
                                 &selected,
                                 consequence,
                             );
-                            if expelled {
-                                Self::record_action_experience(
-                                    &mut organisms[index],
-                                    environment,
-                                    &perceptions,
-                                    ActionKind::Expel,
-                                    consequence,
-                                    needs,
-                                );
-                            }
                             if combined {
                                 Self::record_action_experience(
                                     &mut organisms[index],
@@ -747,6 +737,16 @@ impl Simulation {
                                 &selected,
                                 consequence,
                             );
+                            if expelled {
+                                Self::record_action_experience(
+                                    &mut organisms[index],
+                                    environment,
+                                    &perceptions,
+                                    ActionKind::Expel,
+                                    consequence,
+                                    needs,
+                                );
+                            }
                         }
                         ActionKind::Move => unreachable!("movement is evaluated independently"),
                     }
