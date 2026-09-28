@@ -221,6 +221,13 @@ async fn pause_handler(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
+async fn reset_handler(State(state): State<AppState>) -> impl IntoResponse {
+    match request(&state, serde_json::json!({"command": "reset"})).await {
+        Ok(value) => Json(value).into_response(),
+        Err(error) => error_response(error),
+    }
+}
+
 async fn resume_handler(State(state): State<AppState>) -> impl IntoResponse {
     match request(&state, serde_json::json!({"command": "resume"})).await {
         Ok(value) => Json(value).into_response(),
@@ -297,6 +304,7 @@ pub(crate) async fn run() {
         )
         .route("/control/pause", post(pause_handler))
         .route("/control/resume", axum::routing::post(resume_handler))
+        .route("/control/reset", axum::routing::post(reset_handler))
         .route("/control/step", axum::routing::post(step_handler))
         .route(
             "/control/speed/{ticks_per_second}",
