@@ -345,6 +345,49 @@ pub(crate) fn genome_cavity_spectrum(
     spectrum
 }
 
+/// Preserve the spatial environmental signals that reached each realized
+/// genome-cavity boundary location before the organism-level spectrum is
+/// aggregated. The source region uses the boundary unit's existing physical
+/// geometry rather than an authored sensor radius.
+pub(crate) fn genome_cavity_resonance_perceptions(
+    structure: &crate::structure::OrganismStructure,
+    catalog: &[crate::resources::BaseResource],
+    field: &crate::environment::ActiveMaterialField,
+    boundary_units: &[usize],
+) -> Vec<ResonancePerception> {
+    let mut perceptions = Vec::new();
+    for &unit_index in boundary_units {
+        let Some(unit) = structure.units.get(unit_index) else {
+            continue;
+        };
+        let Some(shape) = unit.shape(catalog) else {
+            continue;
+        };
+        let spectrum = environmental_spectrum_at_position(
+            field,
+            catalog,
+            unit.placement.x,
+            unit.placement.y,
+        );
+        let magnitude = spectrum
+            .components
+            .iter()
+            .map(|component| component.amplitude.max(0.0))
+            .sum::<f64>();
+        if magnitude <= f64::EPSILON {
+            continue;
+        }
+        perceptions.push(ResonancePerception {
+            source_x: unit.placement.x,
+            source_y: unit.placement.y,
+            extent: shape.form.bounding_radius().max(0.0),
+            spectrum,
+            magnitude,
+        });
+    }
+    perceptions
+}
+
 /// Refresh the harmonic state from the organism's actual realized genome
 /// cavity. A non-qualifying physical structure has no genome harmonic
 /// memory surface.
