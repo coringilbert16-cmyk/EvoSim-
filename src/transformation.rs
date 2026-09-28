@@ -207,6 +207,7 @@ impl Simulation {
             duration_ticks: duration,
             remaining_ticks: duration,
             prepared_energy: None,
+            pending_experience: None,
             decision_context_key: decision.context_key.clone(),
         };
         *next_id += 1;
