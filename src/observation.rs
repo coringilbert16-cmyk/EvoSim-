@@ -82,6 +82,12 @@ impl ObservationProjection {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct WorldOrganismObservation {
     pub(crate) id: String,
+    pub(crate) structure_revision: u64,
+    pub(crate) position_revision: u64,
+    pub(crate) physical: Option<WorldOrganismPhysicalObservation>,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct WorldOrganismPhysicalObservation {
     pub(crate) x: f64,
     pub(crate) y: f64,
     pub(crate) min_x: f64,
@@ -95,7 +101,8 @@ pub(crate) struct WorldFieldObservation {
     pub(crate) cell_index: usize,
     pub(crate) x: f64,
     pub(crate) y: f64,
-    pub(crate) materials: Vec<(String, f64)>,
+    pub(crate) revision: u64,
+    pub(crate) materials: Option<Vec<(String, f64)>>,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub(crate) struct WorldPointObservation {
