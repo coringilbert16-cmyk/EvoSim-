@@ -23,7 +23,9 @@ enum SimulationCommand {
         known_organisms: Vec<(String, u64, u64)>,
         known_cells: Vec<(usize, u64)>,
     },
-    HistoryWorld { tick: u64 },
+    HistoryWorld {
+        tick: u64,
+    },
     Organism {
         id: String,
         known_structure_revision: Option<u64>,
@@ -37,8 +39,12 @@ enum SimulationCommand {
     Pause,
     Resume,
     Step,
-    Speed { ticks_per_second: f64 },
-    Restore { tick: u64 },
+    Speed {
+        ticks_per_second: f64,
+    },
+    Restore {
+        tick: u64,
+    },
 }
 
 #[derive(Serialize)]
@@ -181,12 +187,19 @@ fn execute(command: SimulationCommand, runtime: &Arc<Mutex<RuntimeState>>) -> Co
                 "session_id": state.session_id,
             }))
         }
-        SimulationCommand::World { bounds, known_organisms, known_cells } => {
+        SimulationCommand::World {
+            bounds,
+            known_organisms,
+            known_cells,
+        } => {
             let projection = {
                 let state = runtime.lock();
-                ObservationProjection::world(
-                    WorldObservation::from_simulation_in_bounds(&state.simulation, bounds, &known_organisms, &known_cells),
-                )
+                ObservationProjection::world(WorldObservation::from_simulation_in_bounds(
+                    &state.simulation,
+                    bounds,
+                    &known_organisms,
+                    &known_cells,
+                ))
             };
             CommandResponse::value(
                 serde_json::to_value(projection).expect("world observation must serialize"),
