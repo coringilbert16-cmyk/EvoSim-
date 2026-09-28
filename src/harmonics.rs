@@ -339,8 +339,8 @@ pub(crate) fn update_organism_harmonics(
     environment: &crate::state::Environment,
 ) {
     let boundary_units = organism
-        .genome_cavity_cached_ref(&environment.catalog)
-        .map(|cavity| cavity.boundary_units.as_slice());
+        .genome_cavity_cached(&environment.catalog)
+        .map(|cavity| cavity.boundary_units);
     let local_environment_revision = boundary_units
         .map(|indices| {
             environment
@@ -369,7 +369,7 @@ pub(crate) fn update_organism_harmonics(
                 &organism.structure,
                 &environment.catalog,
                 &environment.field,
-                boundary_units,
+                boundary_units.as_slice(),
             ),
             None => ToneSpectrum::empty(),
         }
