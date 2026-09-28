@@ -363,12 +363,8 @@ pub(crate) fn genome_cavity_resonance_perceptions(
         let Some(shape) = unit.shape(catalog) else {
             continue;
         };
-        let spectrum = environmental_spectrum_at_position(
-            field,
-            catalog,
-            unit.placement.x,
-            unit.placement.y,
-        );
+        let spectrum =
+            environmental_spectrum_at_position(field, catalog, unit.placement.x, unit.placement.y);
         let magnitude = spectrum
             .components
             .iter()
