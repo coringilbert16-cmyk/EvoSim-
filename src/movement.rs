@@ -607,6 +607,7 @@ fn push_blockers_for_parts(
                 before,
                 after,
                 moving_index,
+                spatial_index,
                 environment,
                 dx,
                 dy,
