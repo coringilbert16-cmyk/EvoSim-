@@ -20,6 +20,8 @@ enum SimulationCommand {
     Status,
     World {
         bounds: Option<(f64, f64, f64, f64)>,
+        known_organisms: Vec<(String, u64, u64)>,
+        known_cells: Vec<(usize, u64)>,
     },
     HistoryWorld { tick: u64 },
     Organism {
@@ -179,11 +181,11 @@ fn execute(command: SimulationCommand, runtime: &Arc<Mutex<RuntimeState>>) -> Co
                 "session_id": state.session_id,
             }))
         }
-        SimulationCommand::World { bounds } => {
+        SimulationCommand::World { bounds, known_organisms, known_cells } => {
             let projection = {
                 let state = runtime.lock();
                 ObservationProjection::world(
-                    WorldObservation::from_simulation_in_bounds(&state.simulation, bounds),
+                    WorldObservation::from_simulation_in_bounds(&state.simulation, bounds, &known_organisms, &known_cells),
                 )
             };
             CommandResponse::value(
