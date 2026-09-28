@@ -27,6 +27,7 @@ if (-not $mutex.WaitOne(0)) {
 }
 
 $script:serverProcess = $null
+$script:CargoWorkingDirectory = $Repo
 
 function Invoke-Git([string[]]$Arguments) {
     $stderrPath = [System.IO.Path]::GetTempFileName()
@@ -114,7 +115,7 @@ function Invoke-Cargo([string[]]$Arguments) {
     $stdoutPath = [System.IO.Path]::GetTempFileName()
     $stderrPath = [System.IO.Path]::GetTempFileName()
     try {
-        $process = Start-Process -FilePath "cargo.exe" -ArgumentList $Arguments -WorkingDirectory $Repo -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -PassThru -Wait
+        $process = Start-Process -FilePath "cargo.exe" -ArgumentList $Arguments -WorkingDirectory $script:CargoWorkingDirectory -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -PassThru -Wait
         $process.Refresh()
         $exitCode = $process.ExitCode
 
@@ -142,6 +143,7 @@ function Build-Version([string]$Sha) {
 
     Invoke-Git @("-C", $Repo, "worktree", "add", "--detach", $StagingWorktree, $Sha)
     try {
+        $script:CargoWorkingDirectory = $StagingWorktree
         # Invoke Cargo without PowerShell's native-stderr handling. PowerShell 5.1
         # can turn ordinary Cargo progress on stderr into NativeCommandError records.
         Invoke-Cargo @("build", "--release", "--target-dir", $StagingTarget)
@@ -162,6 +164,7 @@ function Build-Version([string]$Sha) {
         return $nextExe
     }
     finally {
+        $script:CargoWorkingDirectory = $Repo
         Remove-StagingWorktree
     }
 }
@@ -171,7 +174,7 @@ function Start-Server {
         throw "No known-good EvoSim binary exists."
     }
 
-    $script:serverProcess = Start-Process -FilePath $CurrentExe -WorkingDirectory $Repo -PassThru
+    $script:serverProcess = Start-Process -FilePath $CurrentExe -WorkingDirectory $Repo -WindowStyle Hidden -PassThru
     Write-Host "Running EvoSim $((Get-CurrentVersion).Substring(0, [Math]::Min(12, (Get-CurrentVersion).Length))) (PID $($script:serverProcess.Id))."
 }
 
@@ -284,12 +287,15 @@ try {
 
         if ($null -ne $script:serverProcess -and $script:serverProcess.HasExited) {
             Write-Host "EvoSim server stopped. Restarting the last known-good version."
-            Start-Server
-            if (-not (Wait-ForServer)) {
-                Stop-Server
-                Write-Host "Server restart failed; retrying."
+            try {
+                Start-Server
+                if (-not (Wait-ForServer)) {
+                    Stop-Server
+                    Write-Host "Server restart failed; continuing to monitor GitHub updates."
+                }
+            } catch {
+                Write-Host "Server restart failed: $($_.Exception.Message)"
             }
-            continue
         }
 
         try {
