@@ -118,12 +118,14 @@ pub(crate) struct WorldObservation {
 }
 impl WorldObservation {
     pub(crate) fn from_simulation(simulation: &Simulation) -> Self {
-        Self::from_simulation_in_bounds(simulation, None)
+        Self::from_simulation_in_bounds(simulation, None, &[], &[])
     }
 
     pub(crate) fn from_simulation_in_bounds(
         simulation: &Simulation,
         bounds: Option<(f64, f64, f64, f64)>,
+        known_organisms: &[(String, u64, u64)],
+        known_cells: &[(usize, u64)],
     ) -> Self {
         let catalog = &simulation.environment.catalog;
         let organisms = simulation
