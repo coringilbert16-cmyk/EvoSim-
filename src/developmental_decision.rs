@@ -21,11 +21,11 @@ pub(crate) struct DevelopmentalContext {
     pub(crate) current_density_realized: Option<f64>,
 }
 
-pub(crate) fn context<'a>(
-    organism: &'a mut Organism,
+pub(crate) fn context(
+    organism: &mut Organism,
     environment: &Environment,
     seed_reference: (f64, f64),
-) -> Option<DevelopmentalContext<'a>> {
+) -> Option<DevelopmentalContext> {
     if !matches!(organism.development_stage, DevelopmentStage::Juvenile) {
         return None;
     }
