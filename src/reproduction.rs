@@ -809,7 +809,7 @@ mod tests {
     }
 
     #[test]
-    fn crossing_parent_boundary_is_detachment_not_rejection() {
+    fn crossing_parent_boundary_does_not_detach_while_contact_remains() {
         let mut simulation = Simulation::new(17, 20.0);
         let mut parent = simulation.organisms.remove(0);
         parent.development_stage = DevelopmentStage::Adult;
@@ -847,7 +847,7 @@ mod tests {
         );
         assert!(
             inside,
-            "crossing the boundary while material remains inside must not detach the child"
+            "crossing the boundary while contact remains must not detach the child"
         );
     }
 
