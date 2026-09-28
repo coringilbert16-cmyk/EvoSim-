@@ -1,4 +1,7 @@
-#![expect(dead_code, reason = "Staged transformation API retained for subsystem integration")]
+#![expect(
+    dead_code,
+    reason = "Staged transformation API retained for subsystem integration"
+)]
 
 use crate::decision::ActionKind;
 use crate::decision_runtime::ActionCandidate;
