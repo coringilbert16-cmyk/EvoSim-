@@ -623,7 +623,6 @@ impl Simulation {
                                     consequence,
                                 ),
                                 needs,
-                                stored_amount_after_move: organism.stored_material.total_amount(),
                             },
                         );
                     }
