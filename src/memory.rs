@@ -717,6 +717,7 @@ mod tests {
             },
             needs,
             8,
+            1.0,
         );
 
         assert_eq!(memory.spatial.len(), 2);
