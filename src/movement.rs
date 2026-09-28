@@ -1,3 +1,8 @@
+#![expect(
+    dead_code,
+    reason = "Staged movement API retained for subsystem integration"
+)]
+
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
 use crate::material_geometry::PlacedMaterialPart;
 use crate::state::{EnergyLedger, Environment, Organism, Simulation};
@@ -220,14 +225,18 @@ impl Simulation {
         ledger: &mut EnergyLedger,
         tick: u64,
         rng: &mut ChaCha8Rng,
+        perceptions: &[crate::harmonics::ResonancePerception],
     ) -> bool {
         let old_position = organism.occupied_cells.first().cloned();
         let usable_energy = organism.usable_energy;
         let active_transformation_id = organism.active_transformation_id;
         let movement_efficiency = organism.genome.movement_efficiency();
         let realized_mass = organism.structural_mass(&environment.catalog);
-        let direction =
-            crate::movement_direction::movement_direction_periodic(organism, environment.height);
+        let direction = crate::movement_direction::movement_direction_periodic(
+            organism,
+            environment.height,
+            perceptions,
+        );
         let Some((x, y)) = direction else {
             organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
                 tick,
@@ -848,8 +857,11 @@ mod tests {
     use super::*;
     use rand::SeedableRng;
 
-    fn movement_direction(organism: &Organism) -> Option<(f64, f64)> {
-        crate::movement_direction::movement_direction_periodic(organism, 0.0)
+    fn movement_direction(
+        organism: &Organism,
+        perceptions: &[crate::harmonics::ResonancePerception],
+    ) -> Option<(f64, f64)> {
+        crate::movement_direction::movement_direction_periodic(organism, 0.0, perceptions)
     }
 
     fn empty_environment(simulation: &Simulation) -> Environment {
@@ -931,17 +943,28 @@ mod tests {
     }
 
     #[test]
-    fn movement_direction_uses_learned_memory_experience() {
+    fn movement_direction_uses_current_perception_through_learned_memory() {
         let simulation = Simulation::new(7, 20.0);
         let mut organism = simulation.organisms[0].clone();
-        organism.memory.push(crate::state::MemoryPoint {
-            x: organism.occupied_cells[0].x,
-            y: organism.occupied_cells[0].y - 20.0,
-            strength: 1.0,
+        organism
+            .experience_memory
+            .spatial
+            .push(crate::memory::SpatialMemory {
+                x: organism.occupied_cells[0].x,
+                y: organism.occupied_cells[0].y - 20.0,
+                extent: 10.0,
+                association: 1.0,
+                association_weight: 1.0,
+                strength: 1.0,
+            });
+        let perceptions = vec![crate::harmonics::ResonancePerception {
+            source_x: organism.occupied_cells[0].x,
+            source_y: organism.occupied_cells[0].y - 20.0,
+            extent: 10.0,
             spectrum: crate::harmonics::ToneSpectrum::empty(),
-            consequence: None,
-        });
-        let (x, y) = movement_direction(&organism).expect("direction should exist");
+            magnitude: 1.0,
+        }];
+        let (x, y) = movement_direction(&organism, &perceptions).expect("direction should exist");
         assert!(x.abs() < f64::EPSILON);
         assert!(y < 0.0);
     }
@@ -950,13 +973,13 @@ mod tests {
     fn movement_direction_without_inputs_gets_soft_random_push() {
         let simulation = Simulation::new(7, 20.0);
         let organism = simulation.organisms[0].clone();
-        let (x, y) = movement_direction(&organism).expect("initial direction should exist");
+        let (x, y) = movement_direction(&organism, &[]).expect("initial direction should exist");
         let magnitude = (x * x + y * y).sqrt();
         assert!((magnitude - 1.0).abs() < 1e-12);
 
         let mut other = organism.clone();
         other.id = "2".into();
-        let other_direction = movement_direction(&other).expect("other organism should move");
+        let other_direction = movement_direction(&other, &[]).expect("other organism should move");
         assert_ne!((x, y), other_direction);
     }
 

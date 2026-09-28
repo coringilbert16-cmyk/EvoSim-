@@ -1,3 +1,8 @@
+#![expect(
+    dead_code,
+    reason = "Staged observation API retained for UI integration"
+)]
+
 //! Browser-facing observation contracts derived from simulation truth.
 use crate::organism_geometry::OrganismBodyGeometry;
 use crate::state::Simulation;

@@ -1,3 +1,8 @@
+#![expect(
+    dead_code,
+    reason = "Staged transformation API retained for subsystem integration"
+)]
+
 use crate::decision::ActionKind;
 use crate::decision_runtime::ActionCandidate;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
@@ -207,6 +212,7 @@ impl Simulation {
             duration_ticks: duration,
             remaining_ticks: duration,
             prepared_energy: None,
+            pending_experience: None,
             decision_context_key: decision.context_key.clone(),
         };
         *next_id += 1;
@@ -343,6 +349,36 @@ impl Simulation {
                 developmental_delta: 0.0,
             },
         );
+
+        if let Some(pending) = transformation.pending_experience.as_ref() {
+            let after_developmental_realization = organism
+                .developmental_realization_cached(&environment.catalog)
+                .map(|realization| realization.overall)
+                .unwrap_or(pending.before_developmental_realization);
+            let consequence = crate::memory::MemoryConsequence {
+                energy_delta: organism.usable_energy - pending.before_energy,
+                stress_delta: organism.stress - pending.before_stress,
+                developmental_delta: after_developmental_realization
+                    - pending.before_developmental_realization,
+                material_transformed: pending.material_transformed,
+                ..Default::default()
+            };
+            let capacity = organism
+                .genome_cavity_cached_ref(&environment.catalog)
+                .filter(|cavity| cavity.qualifies())
+                .map(crate::memory::memory_capacity);
+            if let Some(capacity) = capacity {
+                crate::memory::record_experience(
+                    &mut organism.experience_memory,
+                    &pending.perceptions,
+                    ActionKind::Break,
+                    consequence,
+                    pending.needs,
+                    capacity,
+                    organism.genome.memory_strength(),
+                );
+            }
+        }
     }
 }
 
@@ -395,7 +431,8 @@ mod tests {
             occupied_cells: vec![crate::state::Position { x: 0.0, y: 0.0 }],
             genome,
             harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
-            memory: Vec::new(),
+            experience_memory: crate::memory::ExperienceMemory::default(),
+            pending_movement_experience: None,
             decision_history: crate::decision::DecisionHistory::default(),
             usable_energy: 1_000_000.0,
             stress: 0.0,

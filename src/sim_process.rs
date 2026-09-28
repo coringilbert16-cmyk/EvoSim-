@@ -339,3 +339,4 @@ fn execute(command: SimulationCommand, runtime: &Arc<Mutex<RuntimeState>>) -> Co
         }
     }
 }
+

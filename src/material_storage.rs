@@ -1,3 +1,7 @@
+#![expect(
+    clippy::result_large_err,
+    reason = "Physical material is intentionally returned intact on failed storage transactions"
+)]
 #![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 //! Organism material inventory.
 use crate::physical_material::PhysicalMaterial;
