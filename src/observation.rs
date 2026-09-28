@@ -231,10 +231,12 @@ impl WorldObservation {
                     .filter_map(|cell_index| {
                         let cell = &field.cells[cell_index];
                         let materials = cell.total_material();
-                        if materials.is_empty() {
+                        let revision = field.cell_revisions[cell_index];
+                        if materials.is_empty()
+                            && !known_cells.iter().any(|(known_index, _)| *known_index == cell_index)
+                        {
                             return None;
                         }
-                        let revision = field.cell_revisions[cell_index];
                         let changed = known_cells
                             .iter()
                             .find(|(known_index, _)| *known_index == cell_index)
