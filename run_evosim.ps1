@@ -22,7 +22,7 @@ if (-not $mutex.WaitOne(0)) {
     exit 1
 }
 
-$serverProcess = $null
+$script:serverProcess = $null
 
 function Invoke-Git([string[]]$Arguments) {
     & git @Arguments
@@ -105,8 +105,8 @@ function Start-Server {
         throw "No known-good EvoSim binary exists."
     }
 
-    $serverProcess = Start-Process -FilePath $CurrentExe -WorkingDirectory $Repo -PassThru
-    Write-Host "Running EvoSim $((Get-CurrentVersion).Substring(0, [Math]::Min(12, (Get-CurrentVersion).Length))) (PID $($serverProcess.Id))."
+    $script:serverProcess = Start-Process -FilePath $CurrentExe -WorkingDirectory $Repo -PassThru
+    Write-Host "Running EvoSim $((Get-CurrentVersion).Substring(0, [Math]::Min(12, (Get-CurrentVersion).Length))) (PID $($script:serverProcess.Id))."
 }
 
 function Wait-ForServer {
@@ -126,12 +126,12 @@ function Wait-ForServer {
 }
 
 function Stop-Server {
-    if ($null -ne $serverProcess -and -not $serverProcess.HasExited) {
-        Write-Host "Stopping EvoSim process $($serverProcess.Id) ..."
-        Stop-Process -Id $serverProcess.Id -Force
-        $serverProcess.WaitForExit()
+    if ($null -ne $script:serverProcess -and -not $script:serverProcess.HasExited) {
+        Write-Host "Stopping EvoSim process $($script:serverProcess.Id) ..."
+        Stop-Process -Id $script:serverProcess.Id -Force
+        $script:serverProcess.WaitForExit()
     }
-    $serverProcess = $null
+    $script:serverProcess = $null
 }
 
 function Install-Version([string]$Sha, [string]$NextExe) {
@@ -215,7 +215,7 @@ try {
     while ($true) {
         Start-Sleep -Seconds $PollSeconds
 
-        if ($null -ne $serverProcess -and $serverProcess.HasExited) {
+        if ($null -ne $script:serverProcess -and $script:serverProcess.HasExited) {
             Write-Host "EvoSim server stopped. Restarting the last known-good version."
             Start-Server
             if (-not (Wait-ForServer)) {
