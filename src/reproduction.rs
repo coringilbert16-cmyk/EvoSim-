@@ -754,6 +754,7 @@ mod tests {
         parent.development_stage = DevelopmentStage::Adult;
         let parent_structure = parent.structure.clone();
         let mut ledger = EnergyLedger::default();
+        assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
         assert!(begin_reproduction(
             &mut parent,
             &mut simulation.rng,
@@ -783,6 +784,7 @@ mod tests {
         let mut parent = simulation.organisms.remove(0);
         parent.development_stage = DevelopmentStage::Adult;
         let mut ledger = EnergyLedger::default();
+        assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
         assert!(begin_reproduction(
             &mut parent,
             &mut simulation.rng,
@@ -814,6 +816,7 @@ mod tests {
         let mut parent = simulation.organisms.remove(0);
         parent.development_stage = DevelopmentStage::Adult;
         let mut ledger = EnergyLedger::default();
+        assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
         assert!(begin_reproduction(
             &mut parent,
             &mut simulation.rng,
@@ -857,6 +860,7 @@ mod tests {
         let mut parent = simulation.organisms.remove(0);
         parent.development_stage = DevelopmentStage::Adult;
         let mut ledger = EnergyLedger::default();
+        assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
         assert!(begin_reproduction(
             &mut parent,
             &mut simulation.rng,
@@ -884,6 +888,7 @@ mod tests {
         let mut parent = simulation.organisms.remove(0);
         parent.development_stage = DevelopmentStage::Adult;
         let mut ledger = EnergyLedger::default();
+        assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
         assert!(begin_reproduction(
             &mut parent,
             &mut simulation.rng,
