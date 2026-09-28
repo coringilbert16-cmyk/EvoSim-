@@ -77,6 +77,12 @@ function Build-Version([string]$Sha) {
             throw "cargo build failed with exit code $LASTEXITCODE"
         }
 
+        Write-Host "Running Rust tests for $Sha ..."
+        & cargo test --all-targets --release --target-dir $StagingTarget
+        if ($LASTEXITCODE -ne 0) {
+            throw "cargo test failed with exit code $LASTEXITCODE"
+        }
+
         $builtExe = Join-Path $StagingTarget "release\evosim.exe"
         if (-not (Test-Path $builtExe)) {
             throw "cargo build succeeded but $builtExe was not produced"
@@ -106,9 +112,12 @@ function Start-Server {
 function Wait-ForServer {
     for ($i = 0; $i -lt 30; $i++) {
         try {
-            $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:3000/" -TimeoutSec 1
-            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 500) {
-                return $true
+            $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:3000/observation/status" -TimeoutSec 1
+            if ($response.StatusCode -eq 200) {
+                $status = $response.Content | ConvertFrom-Json
+                if ($null -ne $status.tick -and $null -ne $status.session_id) {
+                    return $true
+                }
             }
         } catch {}
         Start-Sleep -Seconds 1
