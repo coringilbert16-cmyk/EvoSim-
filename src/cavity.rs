@@ -149,7 +149,10 @@ fn analyze_genome_cavity_in_indices(
     candidate_indices: &[usize],
 ) -> Result<Option<GenomeCavity>, String> {
     let minimum_area = minimum_genome_cavity_area(catalog)?;
-    let structural_indices = candidate_indices.iter().copied();
+    let structural_indices = candidate_indices.iter().copied().filter(|&index| {
+        structure.genome_constituent_ids().is_empty()
+            || structure.is_structurally_qualified(index, catalog)
+    });
     let mut polygons = Vec::<(usize, Vec<Point>)>::new();
     for index in structural_indices {
         let unit = &structure.units[index];
