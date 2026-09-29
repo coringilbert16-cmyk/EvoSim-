@@ -687,7 +687,7 @@ fn try_combine_environmental(
             continue;
         }
         let mut trial_structure = organism.structure.clone();
-        let indices = crate::material_restoration::restore_material(
+        let Some(indices) = crate::material_restoration::restore_material(
             &mut trial_structure,
             &instance,
             Placement {
@@ -696,8 +696,14 @@ fn try_combine_environmental(
                 rotation_radians: 0.0,
             },
             &environment.catalog,
-        )?;
-        let restored_ub = *indices.get(ub.saturating_sub(organism.structure.units.len()))?;
+        ) else {
+            continue;
+        };
+        let Some(restored_ub) =
+            indices.get(ub.saturating_sub(organism.structure.units.len())).copied()
+        else {
+            continue;
+        };
         let mut trial_ledger = *ledger;
         let mut trial_energy = organism.usable_energy;
         let Some(attempt) = form_bond(
@@ -717,13 +723,12 @@ fn try_combine_environmental(
             continue;
         };
 
-        let removed = environment
-            .field
-            .cells
-            .get_mut(cell_index)?
-            .physical_materials
-            .get(material_index)?
-            .clone();
+        let Some(cell) = environment.field.cells.get_mut(cell_index) else {
+            continue;
+        };
+        let Some(removed) = cell.physical_materials.get(material_index).cloned() else {
+            continue;
+        };
         if removed != instance {
             continue;
         }
