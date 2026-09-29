@@ -116,20 +116,94 @@ mod integration_tests {
         let region = regions
             .first()
             .expect("initial organism should have an accessible interior region");
-        // The topology sample point is intentionally only nudged into the
-        // region from a boundary face. A finite Carbon constituent placed
-        // there would touch the wall and therefore is not fully contained.
-        // Use the interior vertex-average for this containment test instead.
-        let (x, y) = region
+        // Find a point with enough clearance for Carbon's realized
+        // geometry. Being merely inside the topology is insufficient: the
+        // entire finite physical constituent must fit inside the region.
+        let carbon_radius = match s
+            .environment
+            .catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .expect("default catalog must contain Carbon")
+            .shape
+            .form
+        {
+            crate::resources::Form::RegularPolygon { radius, .. } => radius,
+            _ => panic!("Carbon test resource must remain polygonal"),
+        };
+        let min_x = region
             .boundary
             .iter()
-            .fold((0.0, 0.0), |(x, y), &(px, py)| (x + px, y + py));
-        let count = region.boundary.len() as f64;
-        let anchor = Placement {
-            x: x / count,
-            y: y / count,
-            rotation_radians: 0.0,
-        };
+            .map(|(x, _)| *x)
+            .fold(f64::INFINITY, f64::min);
+        let max_x = region
+            .boundary
+            .iter()
+            .map(|(x, _)| *x)
+            .fold(f64::NEG_INFINITY, f64::max);
+        let min_y = region
+            .boundary
+            .iter()
+            .map(|(_, y)| *y)
+            .fold(f64::INFINITY, f64::min);
+        let max_y = region
+            .boundary
+            .iter()
+            .map(|(_, y)| *y)
+            .fold(f64::NEG_INFINITY, f64::max);
+
+        fn point_segment_distance(
+            point: (f64, f64),
+            a: (f64, f64),
+            b: (f64, f64),
+        ) -> f64 {
+            let (px, py) = point;
+            let (ax, ay) = a;
+            let (bx, by) = b;
+            let dx = bx - ax;
+            let dy = by - ay;
+            let length_sq = dx * dx + dy * dy;
+            if length_sq <= f64::EPSILON {
+                return (px - ax).hypot(py - ay);
+            }
+            let t = ((px - ax) * dx + (py - ay) * dy) / length_sq;
+            let t = t.clamp(0.0, 1.0);
+            let qx = ax + t * dx;
+            let qy = ay + t * dy;
+            (px - qx).hypot(py - qy)
+        }
+
+        let mut anchor = None;
+        for iy in 0..=80 {
+            let y = min_y + (max_y - min_y) * iy as f64 / 80.0;
+            for ix in 0..=80 {
+                let x = min_x + (max_x - min_x) * ix as f64 / 80.0;
+                if !region.contains_point(x, y) {
+                    continue;
+                }
+                let clearance = (0..region.boundary.len())
+                    .map(|index| {
+                        point_segment_distance(
+                            (x, y),
+                            region.boundary[index],
+                            region.boundary[(index + 1) % region.boundary.len()],
+                        )
+                    })
+                    .fold(f64::INFINITY, f64::min);
+                if clearance >= carbon_radius + 1e-9 {
+                    anchor = Some(Placement {
+                        x,
+                        y,
+                        rotation_radians: 0.0,
+                    });
+                    break;
+                }
+            }
+            if anchor.is_some() {
+                break;
+            }
+        }
+        let anchor = anchor.expect("accessible region must contain room for Carbon");
         assert!(region.contains_point(anchor.x, anchor.y));
         let physical = PhysicalMaterial::realized(
             Material::free_base("Carbon", 1.0),
