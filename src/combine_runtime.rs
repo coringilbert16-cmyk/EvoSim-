@@ -599,17 +599,24 @@ fn try_combine_environmental(
                         &environment.catalog,
                         cache,
                     ) {
-                        if !crate::interior_geometry::endpoint_in_accessible_interior(
-                            candidate.endpoint_a,
+                        let Some(a) = candidate.endpoint_a.world_point(
                             &hypothetical.units[ua],
                             &environment.catalog,
-                            &regions,
-                        ) || !crate::interior_geometry::endpoint_in_accessible_interior(
-                            candidate.endpoint_b,
+                        ) else {
+                            continue;
+                        };
+                        let Some(b) = candidate.endpoint_b.world_point(
                             &hypothetical.units[ub],
                             &environment.catalog,
-                            &regions,
-                        ) {
+                        ) else {
+                            continue;
+                        };
+                        let contact_x = (a.x + b.x) * 0.5;
+                        let contact_y = (a.y + b.y) * 0.5;
+                        if !regions
+                            .iter()
+                            .any(|region| region.contains_point(contact_x, contact_y))
+                        {
                             continue;
                         }
                         if let Some((evaluation, _, _, _, required)) = evaluate_candidate(
