@@ -355,9 +355,9 @@ pub(crate) fn has_environmental_break_candidate(
                 let Some(target) = connections.get(bond_index).cloned() else {
                     continue;
                 };
-                let Some(placements) = instance.placements.as_ref() else {
+                if instance.placements.is_none() {
                     continue;
-                };
+                }
                 let mut hypothetical = organism.structure.clone();
                 let indices = crate::material_restoration::restore_material(
                     &mut hypothetical,
