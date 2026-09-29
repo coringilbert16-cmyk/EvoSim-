@@ -10,38 +10,17 @@ use crate::state::{ActiveTransformation, EnergyLedger, Environment, Organism, Si
 use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 
-fn water_field_amount(environment: &Environment, organism: &Organism) -> f64 {
-    organism
-        .occupied_cells
-        .first()
-        .and_then(|p| environment.field.index_for_position(p.x, p.y))
-        .map(|i| {
-            environment.field.cells[i]
-                .materials
-                .iter()
-                .flat_map(|m| m.parts.iter())
-                .filter(|(n, _)| n == "Water")
-                .map(|(_, a)| *a)
-                .sum()
-        })
-        .unwrap_or(0.0)
-}
-
 pub(crate) fn break_energy_yield(
     a: crate::resources::ResourceProperties,
     b: crate::resources::ResourceProperties,
-    water_field: f64,
     processing_efficiency: f64,
 ) -> Option<(f64, f64, f64)> {
     let gross = a.potential_energy + b.potential_energy;
     if !gross.is_finite() || gross < 0.0 {
         return None;
     }
-    let reactivity = (crate::math::exponential_influence(crate::resources::effective_reactivity(
-        a.reactivity.max(0.0),
-        water_field,
-    )) + crate::math::exponential_influence(
-        crate::resources::effective_reactivity(b.reactivity.max(0.0), water_field),
+    let reactivity = (crate::math::exponential_influence(a.reactivity.max(0.0)) + crate::math::exponential_influence(
+        b.reactivity.max(0.0),
     )) * 0.5;
     let cohesion =
         ((a.cohesion.clamp(0.0, 1.0) + b.cohesion.clamp(0.0, 1.0)) * 0.5).clamp(0.0, 1.0);
@@ -150,7 +129,6 @@ pub(crate) fn resolve_stress_break(
     let Some((gross, usable, heat)) = break_energy_yield(
         a,
         b,
-        water_field_amount(environment, organism),
         organism.genome.processing_efficiency(),
     ) else {
         return false;
