@@ -424,6 +424,12 @@ pub(crate) fn has_environmental_break_candidate(
                     prepared_energy: None,
                     pending_experience: None,
                     decision_context_key: decision.context_key.clone(),
+                    prepared_structure: None,
+                    prepared_stored_material: None,
+                    prepared_usable_energy: None,
+                    prepared_stress: None,
+                    prepared_ledger: None,
+                    combine_environmental_source: None,
                 };
                 *next_id += 1;
                 organism.active_transformation_id = Some(t.id);
