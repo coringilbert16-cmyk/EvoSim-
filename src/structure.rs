@@ -114,7 +114,8 @@ impl StructuralUnit {
         };
         if self.material.parts.len() != 1
             || self.material.has_internal_structure()
-            || (*amount - 1.0).abs() > f64::EPSILON
+            || !amount.is_finite()
+            || *amount <= 0.0
         {
             return false;
         }
