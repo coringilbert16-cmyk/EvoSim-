@@ -45,24 +45,6 @@ struct BondFormationRequest {
     endpoint_a: ConnectionEndpoint,
     endpoint_b: ConnectionEndpoint,
     investment: f64,
-    water: f64,
-}
-
-fn water_field_amount(environment: &Environment, organism: &Organism) -> f64 {
-    organism
-        .occupied_cells
-        .first()
-        .and_then(|p| environment.field.index_for_position(p.x, p.y))
-        .map(|i| {
-            environment.field.cells[i]
-                .materials
-                .iter()
-                .flat_map(|m| m.parts.iter())
-                .filter(|(n, _)| n == "Water")
-                .map(|(_, a)| *a)
-                .sum()
-        })
-        .unwrap_or(0.0)
 }
 
 fn energy_requirement(investment: f64, work: f64, interaction: f64) -> Option<f64> {
@@ -84,7 +66,6 @@ fn evaluate_candidate(
     ub: usize,
     candidate: crate::contact::ConnectionPairCandidate,
     catalog: &[BaseResource],
-    water: f64,
 ) -> Option<(FormationEvaluation, ExperimentalInteraction, f64, f64, f64)> {
     if candidate.distance > COMBINE_CONTACT_TOLERANCE
         || !candidate.available_a
@@ -95,7 +76,7 @@ fn evaluate_candidate(
     let a = structure.units.get(ua)?.properties(catalog)?;
     let b = structure.units.get(ub)?.properties(catalog)?;
     let evaluation = crate::combine::evaluate_formation(candidate, a.cohesion, b.cohesion);
-    let (interaction, work, investment) = required_investment(a, b, evaluation, water).ok()?;
+    let (interaction, work, investment) = required_investment(a, b, evaluation).ok()?;
     let required = energy_requirement(investment, work, interaction.signed_value)?;
     Some((evaluation, interaction, work, investment, required))
 }
@@ -114,7 +95,6 @@ fn form_bond(
         endpoint_a,
         endpoint_b,
         investment,
-        water,
     } = request;
     if ua >= structure.units.len() || ub >= structure.units.len() || ua == ub {
         return None;
@@ -137,7 +117,7 @@ fn form_bond(
     if !crate::combine::formation_succeeds(evaluation, investment) {
         return None;
     }
-    let (interaction, work, threshold) = required_investment(a, b, evaluation, water).ok()?;
+    let (interaction, work, threshold) = required_investment(a, b, evaluation).ok()?;
     if (threshold - investment).abs() > EPSILON || interaction.signed_value < 0.0 {
         return None;
     }
@@ -294,7 +274,6 @@ pub(crate) fn try_combine_stored_unit(
                             ub,
                             candidate,
                             &environment.catalog,
-                            water,
                         ) {
                             let developmental_score = developmental
                                 .map(|(blueprint, origin_ref, orientation, preferred_length)| {
@@ -372,7 +351,6 @@ pub(crate) fn try_combine_stored_unit(
                     endpoint_a: evaluation.candidate.endpoint_a,
                     endpoint_b: evaluation.candidate.endpoint_b,
                     investment: evaluation.threshold,
-                    water,
                 },
                 &environment.catalog,
                 cache,
@@ -438,7 +416,6 @@ pub(crate) fn try_combine_stored_unit(
                     ub,
                     candidate,
                     &environment.catalog,
-                    water,
                 ) {
                     let developmental_score = developmental
                         .map(|(blueprint, origin, orientation, preferred_length)| {
@@ -522,8 +499,7 @@ pub(crate) fn try_combine_stored_unit(
                 endpoint_a: evaluation.candidate.endpoint_a,
                 endpoint_b: evaluation.candidate.endpoint_b,
                 investment: evaluation.threshold,
-                water,
-            },
+                },
             &environment.catalog,
             cache,
             &mut candidate_ledger,
@@ -550,7 +526,6 @@ pub(crate) fn combine_specific_pair(
     unit_a: usize,
     unit_b: usize,
     catalog: &[BaseResource],
-    water: f64,
     cache: &mut ConnectionCompatibilityCache,
     ledger: &mut EnergyLedger,
     energy: &mut f64,
@@ -562,7 +537,7 @@ pub(crate) fn combine_specific_pair(
         .into_iter()
         .filter_map(|candidate| {
             let (evaluation, _, _, _, required) =
-                evaluate_candidate(structure, unit_a, unit_b, candidate, catalog, water)?;
+                evaluate_candidate(structure, unit_a, unit_b, candidate, catalog)?;
             Some((evaluation, candidate.distance, required))
         })
         .collect::<Vec<_>>();
