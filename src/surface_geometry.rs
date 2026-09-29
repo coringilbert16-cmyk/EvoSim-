@@ -107,7 +107,19 @@ pub fn boundary_point_toward(shape: &Shape, target_x: f64, target_y: f64) -> Opt
                 target_y,
             )
         }
-        Form::Fluid { .. } => None,
+        Form::Fluid { nominal_area, boundary } => {
+            if let Some(vertices) = boundary.as_ref() {
+                polygon_boundary_toward(vertices.as_slice(), target_x, target_y)
+            } else {
+                let (ux, uy) = normalized(target_x, target_y)?;
+                Some(BoundaryPoint {
+                    x: (nominal_area / std::f64::consts::PI).sqrt() * ux,
+                    y: (nominal_area / std::f64::consts::PI).sqrt() * uy,
+                    normal_x: ux,
+                    normal_y: uy,
+                })
+            }
+        },
     }
 }
 #[allow(dead_code)]
@@ -191,7 +203,7 @@ mod tests {
     #[test]
     fn fluid_placeholder_has_no_boundary_until_realized_geometry_exists() {
         let s = Shape {
-            form: Form::Fluid { nominal_area: 0.5 },
+            form: Form::Fluid { nominal_area: 0.5, boundary: None },
         };
         assert!(boundary_point_toward(&s, 1.0, 0.0).is_none())
     }
