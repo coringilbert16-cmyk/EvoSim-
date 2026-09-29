@@ -487,12 +487,36 @@ pub(crate) fn realize_initial_with_reserve(
     let mut structure = structure;
     structure.set_genome_constituent_ids(genome_ids);
     realize_initial_boundary_water(&mut structure, catalog)?;
+
+    // Interior Water is part of the initial physical construction. Determine its
+    // one-time construction cost separately so the organism still receives the
+    // complete declared juvenile energy reserve after the structure is finished.
+    let mut water_trial_structure = structure.clone();
+    let mut water_trial_ledger = ledger;
+    let mut water_trial_energy = TRIAL_ENERGY;
+    crate::interior_geometry::fill_enclosed_regions_with_water(
+        &mut water_trial_structure,
+        catalog,
+        &mut water_trial_ledger,
+        &mut water_trial_energy,
+    )?;
+    let water_cost = TRIAL_ENERGY - water_trial_energy;
+    if !water_cost.is_finite() || water_cost < 0.0 {
+        return Err("initial Water construction produced an invalid energy requirement".into());
+    }
+    energy += water_cost;
+
     crate::interior_geometry::fill_enclosed_regions_with_water(
         &mut structure,
         catalog,
         &mut ledger,
         &mut energy,
     )?;
+    if !energy.is_finite() || energy + EPS < reserve_energy {
+        return Err(format!(
+            "juvenile initialization could not preserve its reserve after Water construction: remaining={energy}"
+        ));
+    }
     Ok((structure, ledger, energy))
 }
 
