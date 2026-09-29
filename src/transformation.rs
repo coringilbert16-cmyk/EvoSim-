@@ -460,9 +460,11 @@ pub(crate) fn has_environmental_break_candidate(
             }
             // Tick 2: settle the exact transaction selected on tick 1. The
             // structure and storage remain untouched until tick 3.
+            let before_energy = organism.usable_energy;
+            let before_stress = organism.stress;
             organism.usable_energy = prepared_energy;
             *ledger = prepared_ledger;
-            transformation.prepared_energy = Some((0.0, 0.0, 0.0));
+            transformation.prepared_energy = Some((before_energy, before_stress, 0.0));
             return true;
         }
         let Some(stored) = transformation.stored_material.as_ref() else {
@@ -538,8 +540,8 @@ pub(crate) fn has_environmental_break_candidate(
     organism: &Organism,
 ) -> f64 {
     transformation
-        .prepared_usable_energy
-        .map(|prepared| organism.usable_energy - prepared)
+        .prepared_energy
+        .map(|(before, _, _)| organism.usable_energy - before)
         .unwrap_or(0.0)
 }
 
@@ -548,8 +550,8 @@ fn pending_stress_delta(
     organism: &Organism,
 ) -> f64 {
     transformation
-        .prepared_stress
-        .map(|prepared| organism.stress - prepared)
+        .prepared_energy
+        .map(|(_, before, _)| organism.stress - before)
         .unwrap_or(0.0)
 }
 
