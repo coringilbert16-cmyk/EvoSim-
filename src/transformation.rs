@@ -806,7 +806,6 @@ pub(crate) fn resolve_transformation(
         }
     }
 }
-
 pub(crate) fn break_work_cost(
     a: crate::resources::ResourceProperties,
     b: crate::resources::ResourceProperties,
