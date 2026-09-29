@@ -167,20 +167,20 @@ mod integration_tests {
         let region = regions
             .first()
             .expect("initial organism should have an accessible interior region");
-        // Find a point with enough clearance for Carbon's realized
-        // geometry. Being merely inside the topology is insufficient: the
-        // entire finite physical constituent must fit inside the region.
-        let carbon_radius = match s
+        // Find a point with enough clearance for Hydrogen's finite geometry.
+        // Being merely inside the topology is insufficient: the entire
+        // physical constituent must fit inside the region.
+        let hydrogen_half_length = match s
             .environment
             .catalog
             .iter()
-            .find(|resource| resource.name == "Carbon")
-            .expect("default catalog must contain Carbon")
+            .find(|resource| resource.name == "Hydrogen")
+            .expect("default catalog must contain Hydrogen")
             .shape
             .form
         {
-            crate::resources::Form::RegularPolygon { radius, .. } => radius,
-            _ => panic!("Carbon test resource must remain polygonal"),
+            crate::resources::Form::Line { length } => length / 2.0,
+            _ => panic!("Hydrogen test resource must remain a line"),
         };
         let min_x = region
             .boundary
@@ -237,7 +237,7 @@ mod integration_tests {
                         )
                     })
                     .fold(f64::INFINITY, f64::min);
-                if clearance >= carbon_radius + 1e-9 {
+                if clearance >= hydrogen_half_length + 1e-9 {
                     anchor = Some(Placement {
                         x,
                         y,
@@ -250,10 +250,10 @@ mod integration_tests {
                 break;
             }
         }
-        let anchor = anchor.expect("accessible region must contain room for Carbon");
+        let anchor = anchor.expect("accessible region must contain room for Hydrogen");
         assert!(region.contains_point(anchor.x, anchor.y));
         let physical = PhysicalMaterial::realized(
-            Material::free_base("Carbon", 1.0),
+            Material::free_base("Hydrogen", 1.0),
             vec![anchor],
             &s.environment.catalog,
         )
