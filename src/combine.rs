@@ -288,7 +288,7 @@ mod tests {
             potential_energy: 10.0,
             ..low
         };
-        let e = experimental_interaction(low, high, candidate(0.0, 0.0), 0.0);
+        let e = experimental_interaction(low, high, candidate(0.0, 0.0));
         assert_eq!(e.direction, 1.0)
     }
     #[test]
@@ -309,8 +309,8 @@ mod tests {
             ..close
         };
         assert!(
-            experimental_interaction(a, b, close, 0.0).magnitude
-                > experimental_interaction(a, b, far, 0.0).magnitude
+            experimental_interaction(a, b, close).magnitude
+                > experimental_interaction(a, b, far).magnitude
         )
     }
     #[test]
