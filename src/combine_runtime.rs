@@ -459,7 +459,7 @@ pub(crate) fn try_combine_stored_unit(
                 endpoint_a: evaluation.candidate.endpoint_a,
                 endpoint_b: evaluation.candidate.endpoint_b,
                     investment: evaluation.threshold,
-                },
+            },
             &environment.catalog,
             cache,
             &mut candidate_ledger,
