@@ -235,10 +235,12 @@ impl Simulation {
             .first()
             .cloned()
             .unwrap_or(Position { x: 0.0, y: 0.0 });
-        let interior_regions = crate::interior_geometry::find_enclosed_regions(
+        let Ok(interior_regions) = crate::interior_geometry::find_accessible_interior_regions(
             &organism.structure,
             &environment.catalog,
-        );
+        ) else {
+            return;
+        };
         for physical in environment
             .field
             .take_contained_physical_materials_in_regions(&body, &interior_regions)
