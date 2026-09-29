@@ -250,8 +250,31 @@ impl Organism {
         self.cached_developmental_realization
     }
 
+    /// Test/construction convenience that immediately realizes the supplied
+    /// material as a physical object before placing it in organism storage.
+    /// No logical material is ever inserted into storage.
     pub(crate) fn store_material(&mut self, material: Material) -> bool {
-        self.stored_material.store(material)
+        let origin = self
+            .occupied_cells
+            .first()
+            .cloned()
+            .unwrap_or(Position { x: 0.0, y: 0.0 });
+        let placements = vec![
+            Placement {
+                x: origin.x,
+                y: origin.y,
+                rotation_radians: 0.0,
+            };
+            material.parts.len()
+        ];
+        let Some(instance) = crate::physical_material::PhysicalMaterial::realized(
+            material,
+            placements,
+            &crate::resources::default_catalog(),
+        ) else {
+            return false;
+        };
+        self.stored_material.store_physical_instance(instance)
     }
     pub(crate) fn structural_mass(&self, catalog: &[BaseResource]) -> f64 {
         self.structure
