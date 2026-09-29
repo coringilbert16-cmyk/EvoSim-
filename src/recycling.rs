@@ -17,9 +17,6 @@ pub(crate) fn recycle_dead_organism(
     if let Some(mut construction) = organism.reproductive_construction.take() {
         for entry in construction.committed_material.drain_entries() {
             match entry {
-                crate::material_storage::StoredMaterial::Logical(material) => {
-                    environment.field.deposit(position.x, position.y, material);
-                }
                 crate::material_storage::StoredMaterial::Physical(material) => {
                     environment.field.deposit(position.x, position.y, material);
                 }
