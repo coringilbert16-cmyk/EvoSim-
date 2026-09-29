@@ -128,6 +128,9 @@ impl StructuralUnit {
         if !matches!(shape.form, crate::resources::Form::Fluid { boundary: Some(_), .. }) {
             return false;
         }
+        if self.geometry.is_none() {
+            self.geometry = Some(PhysicalGeometry::from_default(&resource.shape));
+        }
         let Some(geometry) = self.geometry.as_mut() else {
             return false;
         };
