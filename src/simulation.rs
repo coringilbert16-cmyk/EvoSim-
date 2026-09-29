@@ -719,8 +719,6 @@ impl Simulation {
                             );
                             let before_energy = organisms[index].usable_energy;
                             let before_stress = organisms[index].stress;
-                            let before_stored_material =
-                                organisms[index].stored_material.total_amount();
                             let before_realization = developmental
                                 .as_ref()
                                 .map(|context| context.current_growth_fraction)
@@ -730,29 +728,12 @@ impl Simulation {
                                         .map(|realization| realization.overall)
                                         .unwrap_or(0.0)
                                 });
-                            let developmental = developmental.as_ref().map(|context| {
-                                (
-                                    &context.blueprint,
-                                    context.origin,
-                                    context.orientation,
-                                    context.preferred_length,
-                                )
-                            });
                             if let Some(mut transformation) =
                                 crate::combine_runtime::try_start_combine(
                                     &mut organisms[index],
-                                    environment,
-                                    &mut compatibility_cache,
-                                    &mut self.energy_ledger,
                                     &mut self.next_transformation_id,
-                                    developmental,
                                 )
                             {
-                                let material_after = transformation
-                                    .prepared_stored_material
-                                    .as_ref()
-                                    .map(|storage| storage.total_amount())
-                                    .unwrap_or(before_stored_material);
                                 transformation.pending_experience =
                                     Some(crate::memory::PendingTransformationExperience {
                                         perceptions,
@@ -760,9 +741,7 @@ impl Simulation {
                                         before_energy,
                                         before_stress,
                                         before_developmental_realization: before_realization,
-                                        material_transformed: (before_stored_material
-                                            - material_after)
-                                        .max(0.0),
+                                        material_transformed: 0.0,
                                     });
                                 self.active_transformations.push(transformation);
                             }
