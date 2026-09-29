@@ -383,8 +383,8 @@ pub fn find_enclosed_regions(
         }
         let sample = a.add(b).scale(0.5).add(
             Point {
-                x: -tangent.y / length,
-                y: tangent.x / length,
+                x: tangent.y / length,
+                y: -tangent.x / length,
             }
             .scale(NODE_TOLERANCE * 10.0),
         );
@@ -592,8 +592,8 @@ mod tests {
                     if length > EPS {
                         let sample = a.add(b).scale(0.5).add(
                             Point {
-                                x: -tangent.y / length,
-                                y: tangent.x / length,
+                                x: tangent.y / length,
+                                y: -tangent.x / length,
                             }
                             .scale(NODE_TOLERANCE * 10.0),
                         );
