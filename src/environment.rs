@@ -239,9 +239,9 @@ impl ActiveMaterialField {
         indices
     }
 
-    /// Remove already-realized physical constituents whose placement points are
-    /// wholly inside one realized enclosed region. The body bounds are only a
-    /// spatial index; enclosed topology is authoritative for containment.
+    /// Remove already-realized physical constituents only when their entire
+    /// realized geometry is inside one accessible enclosed region. The body
+    /// bounds are only a spatial index; enclosed topology is authoritative.
     pub(crate) fn take_contained_physical_materials_in_regions(
         &mut self,
         body: &crate::organism_geometry::OrganismBodyGeometry,
@@ -255,27 +255,13 @@ impl ActiveMaterialField {
             let mut remaining = Vec::with_capacity(cell.physical_materials.len());
             let mut changed = false;
             for physical in cell.physical_materials.drain(..) {
-                let Some(placements) = physical.placements.as_ref() else {
-                    remaining.push(physical);
-                    continue;
-                };
-                if placements.len() != physical.material.parts.len() {
-                    remaining.push(physical);
-                    continue;
-                }
-                let all_inside = regions.iter().any(|region| {
-                    placements
-                        .iter()
-                        .all(|placement| region.contains_point(placement.x, placement.y))
-                });
-                if all_inside {
+                if physical_is_fully_inside_any_region(&physical, regions, &self.catalog) {
                     contained.push(physical);
                     changed = true;
                 } else {
-                    // A physical component is indivisible at the membrane.
-                    // Crossing the boundary never creates or destroys bonds.
-                    // If even one constituent remains outside, leave the
-                    // complete realized object in the environment.
+                    // Straddling components remain environmental material. They
+                    // may still participate in boundary bond interactions when
+                    // an accessible connection point is reached.
                     remaining.push(physical);
                 }
             }
@@ -286,6 +272,157 @@ impl ActiveMaterialField {
         }
         contained
     }
+
+fn physical_is_fully_inside_any_region(
+    physical: &PhysicalMaterial,
+    regions: &[crate::interior_geometry::EnclosedRegion],
+    catalog: &[crate::resources::BaseResource],
+) -> bool {
+    let Some(placements) = physical.placements.as_ref() else {
+        return false;
+    };
+    if placements.len() != physical.material.parts.len() || placements.is_empty() {
+        return false;
+    }
+    regions.iter().any(|region| {
+        physical
+            .material
+            .parts
+            .iter()
+            .zip(placements.iter())
+            .all(|((name, _), placement)| {
+                let Some(resource) = catalog.iter().find(|resource| resource.name == *name) else {
+                    return false;
+                };
+                realized_form_fully_inside_region(
+                    &resource.shape.form,
+                    *placement,
+                    region,
+                )
+            })
+    })
+}
+
+fn realized_form_fully_inside_region(
+    form: &crate::resources::Form,
+    placement: crate::structure::Placement,
+    region: &crate::interior_geometry::EnclosedRegion,
+) -> bool {
+    let (sin, cos) = placement.rotation_radians.sin_cos();
+    let transform = |x: f64, y: f64| {
+        (
+            placement.x + x * cos - y * sin,
+            placement.y + x * sin + y * cos,
+        )
+    };
+
+    match form {
+        crate::resources::Form::Circle { radius } => {
+            if !region.contains_point(placement.x, placement.y) {
+                return false;
+            }
+            let boundary = &region.boundary;
+            let mut minimum = f64::INFINITY;
+            for index in 0..boundary.len() {
+                let a = boundary[index];
+                let b = boundary[(index + 1) % boundary.len()];
+                minimum = minimum.min(point_segment_distance(
+                    (placement.x, placement.y),
+                    a,
+                    b,
+                ));
+            }
+            minimum + 1e-9 >= *radius
+        }
+        crate::resources::Form::Line { length } => {
+            let half = *length * 0.5;
+            let a = transform(-half, 0.0);
+            let b = transform(half, 0.0);
+            segment_fully_inside_region(a, b, region)
+        }
+        _ => {
+            let Some(vertices) = form.polygon_vertices() else {
+                return false;
+            };
+            if vertices.len() < 3 {
+                return false;
+            }
+            let world = vertices.into_iter().map(|point| transform(point.0, point.1)).collect::<Vec<_>>();
+            world.iter().all(|&(x, y)| region.contains_point(x, y))
+                && world.iter().enumerate().all(|(index, &a)| {
+                    let b = world[(index + 1) % world.len()];
+                    segment_fully_inside_region(a, b, region)
+                })
+        }
+    }
+}
+
+fn segment_fully_inside_region(
+    a: (f64, f64),
+    b: (f64, f64),
+    region: &crate::interior_geometry::EnclosedRegion,
+) -> bool {
+    if !region.contains_point(a.0, a.1) || !region.contains_point(b.0, b.1) {
+        return false;
+    }
+    let boundary = &region.boundary;
+    !(0..boundary.len()).any(|index| {
+        segments_intersect(
+            a,
+            b,
+            boundary[index],
+            boundary[(index + 1) % boundary.len()],
+        )
+    })
+}
+
+fn point_segment_distance(
+    point: (f64, f64),
+    a: (f64, f64),
+    b: (f64, f64),
+) -> f64 {
+    let (px, py) = point;
+    let (ax, ay) = a;
+    let (bx, by) = b;
+    let dx = bx - ax;
+    let dy = by - ay;
+    let length_sq = dx * dx + dy * dy;
+    if length_sq <= f64::EPSILON {
+        return (px - ax).hypot(py - ay);
+    }
+    let t = ((px - ax) * dx + (py - ay) * dy) / length_sq;
+    let t = t.clamp(0.0, 1.0);
+    let qx = ax + t * dx;
+    let qy = ay + t * dy;
+    (px - qx).hypot(py - qy)
+}
+
+fn segments_intersect(
+    a: (f64, f64),
+    b: (f64, f64),
+    c: (f64, f64),
+    d: (f64, f64),
+) -> bool {
+    fn orientation(a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> f64 {
+        (b.0 - a.0) * (c.1 - a.1) - (b.1 - a.1) * (c.0 - a.0)
+    }
+    fn on_segment(a: (f64, f64), b: (f64, f64), p: (f64, f64)) -> bool {
+        p.0 >= a.0.min(b.0) - 1e-9
+            && p.0 <= a.0.max(b.0) + 1e-9
+            && p.1 >= a.1.min(b.1) - 1e-9
+            && p.1 <= a.1.max(b.1) + 1e-9
+    }
+    let o1 = orientation(a, b, c);
+    let o2 = orientation(a, b, d);
+    let o3 = orientation(c, d, a);
+    let o4 = orientation(c, d, b);
+    let eps = 1e-9;
+    if o1.abs() <= eps && on_segment(a, b, c) { return true; }
+    if o2.abs() <= eps && on_segment(a, b, d) { return true; }
+    if o3.abs() <= eps && on_segment(c, d, a) { return true; }
+    if o4.abs() <= eps && on_segment(c, d, b) { return true; }
+    (o1 > 0.0) != (o2 > 0.0) && (o3 > 0.0) != (o4 > 0.0)
+}
 
     pub(crate) fn local_revision_for_positions<I>(&self, positions: I) -> u64
     where
