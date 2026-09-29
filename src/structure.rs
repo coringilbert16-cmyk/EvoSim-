@@ -125,7 +125,13 @@ impl StructuralUnit {
         if resource.physical_state != crate::resources::PhysicalState::Fluid {
             return false;
         }
-        if !matches!(shape.form, crate::resources::Form::Fluid { boundary: Some(_), .. }) {
+        if !matches!(
+            shape.form,
+            crate::resources::Form::Fluid {
+                boundary: Some(_),
+                ..
+            }
+        ) {
             return false;
         }
         if self.geometry.is_none() {
