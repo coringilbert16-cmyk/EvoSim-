@@ -243,7 +243,11 @@ impl Simulation {
         };
         for physical in environment
             .field
-            .take_contained_physical_materials_in_regions(&body, &interior_regions)
+            .take_contained_physical_materials_in_regions(
+                &body,
+                &interior_regions,
+                &environment.catalog,
+            )
         {
             match organism
                 .stored_material
