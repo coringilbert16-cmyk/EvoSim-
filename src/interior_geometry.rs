@@ -219,7 +219,10 @@ fn region_boundary_contains_water(
     catalog: &[BaseResource],
 ) -> bool {
     region.boundary_units.iter().any(|&index| {
-        structure.units.get(index).and_then(|unit| unit.material.parts.first())
+        structure
+            .units
+            .get(index)
+            .and_then(|unit| unit.material.parts.first())
             .is_some_and(|(name, _)| name == "Water")
     })
 }
