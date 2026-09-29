@@ -606,11 +606,7 @@ impl PhysicalConstituentGraph {
         neighbors
     }
 
-    pub fn component_contains_nonfluid(
-        &self,
-        unit_index: usize,
-        catalog: &[BaseResource],
-    ) -> bool {
+    pub fn component_contains_nonfluid(&self, unit_index: usize, catalog: &[BaseResource]) -> bool {
         self.connected_component_containing(unit_index)
             .into_iter()
             .any(|index| {
@@ -751,7 +747,14 @@ mod tests {
     #[test]
     fn only_fluid_resources_can_take_context_fitting_geometry() {
         let catalog = crate::resources::default_catalog();
-        let mut water = StructuralUnit::new("Water", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 });
+        let mut water = StructuralUnit::new(
+            "Water",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
         assert!(water.realize_default_geometry(&catalog));
         let fitted = crate::resources::Shape {
             form: crate::resources::Form::Fluid {
@@ -764,13 +767,24 @@ mod tests {
 
         let mut bulk_water = StructuralUnit::from_material(
             Material::free_base("Water", 4.0),
-            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
         )
         .unwrap();
         assert!(bulk_water.realize_fluid_geometry(fitted.clone(), &catalog));
         assert_eq!(bulk_water.geometry.as_ref().unwrap().shape(), &fitted);
 
-        let mut carbon = StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 });
+        let mut carbon = StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
         assert!(carbon.realize_default_geometry(&catalog));
         assert!(!carbon.realize_fluid_geometry(fitted, &catalog));
     }
