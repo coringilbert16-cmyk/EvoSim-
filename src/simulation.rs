@@ -693,50 +693,33 @@ impl Simulation {
                                     context.preferred_length,
                                 )
                             });
-                            let combined = crate::combine_runtime::try_combine(
-                                &mut organisms[index],
-                                environment,
-                                &mut compatibility_cache,
-                                &mut self.energy_ledger,
-                                developmental,
-                            )
-                            .is_some();
-                            if combined {
-                                movement_spatial_index.refresh_organism(
-                                    index,
-                                    &organisms[index],
-                                    environment,
-                                );
-                            }
-                            let consequence = if combined {
-                                Self::action_consequence(
-                                    before_energy,
-                                    before_stress,
-                                    before_realization,
+                            if let Some(mut transformation) =
+                                crate::combine_runtime::try_start_combine(
                                     &mut organisms[index],
                                     environment,
+                                    &mut compatibility_cache,
+                                    &mut self.energy_ledger,
+                                    &mut self.next_transformation_id,
+                                    developmental,
                                 )
-                            } else {
-                                crate::decision::ActionConsequence::default()
-                            };
-                            crate::decision_runtime::record_consequence(
-                                &mut organisms[index].decision_history,
-                                &selected,
-                                consequence,
-                            );
-                            if combined {
-                                let material_consumed = (before_stored_material
-                                    - organisms[index].stored_material.total_amount())
-                                .max(0.0);
-                                Self::record_action_experience(
-                                    &mut organisms[index],
-                                    environment,
-                                    &perceptions,
-                                    ActionKind::Combine,
-                                    consequence,
-                                    needs,
-                                    material_consumed,
-                                );
+                            {
+                                let material_after = transformation
+                                    .prepared_stored_material
+                                    .as_ref()
+                                    .map(|storage| storage.total_amount())
+                                    .unwrap_or(before_stored_material);
+                                transformation.pending_experience =
+                                    Some(crate::memory::PendingTransformationExperience {
+                                        perceptions,
+                                        needs,
+                                        before_energy,
+                                        before_stress,
+                                        before_developmental_realization: before_realization,
+                                        material_transformed: (before_stored_material
+                                            - material_after)
+                                        .max(0.0),
+                                    });
+                                self.active_transformations.push(transformation);
                             }
                         }
                         ActionKind::Break => {
