@@ -463,7 +463,11 @@ pub(crate) fn has_environmental_break_candidate(
             let before_energy = organism.usable_energy;
             let before_stress = organism.stress;
             organism.usable_energy = prepared_energy;
-            *ledger = prepared_ledger;
+            ledger.total_potential_energy_released +=
+                prepared_ledger.total_potential_energy_released;
+            ledger.total_usable_energy_gained += prepared_ledger.total_usable_energy_gained;
+            ledger.total_heat_dissipated += prepared_ledger.total_heat_dissipated;
+            ledger.total_usable_energy_held += prepared_ledger.total_usable_energy_held;
             transformation.prepared_energy = Some((before_energy, before_stress, 0.0));
             return true;
         }
