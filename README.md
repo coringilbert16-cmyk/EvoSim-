@@ -2712,6 +2712,8 @@ The implementation must preserve these invariants:
 - environmental composites retain their internal bonds during passage;
 - a straddling environmental component can participate in COMBINE when its bond
   contact point is inside an accessible interior;
+- a straddling environmental component can participate in BREAK when either endpoint
+  of the relevant pre-existing internal bond is inside an accessible interior;
 - a straddling environmental component is not treated as freely manipulable merely
   because it has an accessible connection point;
 - fully enclosed material can still transfer to organism storage and be manipulated normally;
