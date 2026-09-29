@@ -748,10 +748,7 @@ mod tests {
         assert!(s.genome_connected(a));
         assert!(!s.genome_connected(b));
         s.push_bond_unchecked(Bond {
-            endpoint_a: BondEndpoint::new(
-                ida,
-                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
-            ),
+            endpoint_a: BondEndpoint::new(ida, ConnectionEndpoint::Boundary { angle_radians: 0.0 }),
             endpoint_b: BondEndpoint::new(
                 idb,
                 ConnectionEndpoint::Boundary {
@@ -854,14 +851,8 @@ mod tests {
         let wid = s.physical_id(water).unwrap();
         s.set_genome_constituent_ids([gid]);
         s.push_bond_unchecked(Bond {
-            endpoint_a: BondEndpoint::new(
-                gid,
-                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
-            ),
-            endpoint_b: BondEndpoint::new(
-                wid,
-                ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 },
-            ),
+            endpoint_a: BondEndpoint::new(gid, ConnectionEndpoint::Boundary { angle_radians: 0.0 }),
+            endpoint_b: BondEndpoint::new(wid, ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 }),
             strength: 0.5,
             bond_energy: 1.0,
         });
@@ -907,14 +898,8 @@ mod tests {
             bond_energy: 1.0,
         });
         s.push_bond_unchecked(Bond {
-            endpoint_a: BondEndpoint::new(
-                w1id,
-                ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 },
-            ),
-            endpoint_b: BondEndpoint::new(
-                w2id,
-                ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 },
-            ),
+            endpoint_a: BondEndpoint::new(w1id, ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 }),
+            endpoint_b: BondEndpoint::new(w2id, ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 }),
             strength: 0.5,
             bond_energy: 1.0,
         });
