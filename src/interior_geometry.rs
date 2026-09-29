@@ -77,25 +77,13 @@ pub fn fill_enclosed_regions_with_water(
         return Err("Water nominal area is invalid".into());
     }
 
-    let regions = find_enclosed_regions(structure, catalog);
+    let regions = find_accessible_interior_regions(structure, catalog)?;
     if regions.is_empty() {
         return Ok(0);
     }
 
-    let genome_boundary = crate::cavity::analyze_genome_cavity(structure, catalog)?
-        .map(|cavity| {
-            let mut ids = cavity.boundary_units;
-            ids.sort_unstable();
-            ids
-        });
-
     let mut filled = 0;
     for region in regions {
-        let mut region_boundary = region.boundary_units.clone();
-        region_boundary.sort_unstable();
-        if genome_boundary.as_ref().is_some_and(|ids| *ids == region_boundary) {
-            continue;
-        }
         if region.area <= EPS || region.boundary.len() < 3 {
             continue;
         }
@@ -174,6 +162,29 @@ pub fn fill_enclosed_regions_with_water(
     }
 
     Ok(filled)
+}
+
+/// Find enclosed interior regions that are owned by the organism and are
+/// available for ordinary material or Water. The genome cavity is deliberately
+/// excluded: it is inside the organism, but remains genuinely empty.
+pub fn find_accessible_interior_regions(
+    structure: &OrganismStructure,
+    catalog: &[BaseResource],
+) -> Result<Vec<EnclosedRegion>, String> {
+    let regions = find_enclosed_regions(structure, catalog);
+    let Some(genome) = crate::cavity::analyze_genome_cavity(structure, catalog)? else {
+        return Ok(regions);
+    };
+    let mut genome_boundary = genome.boundary_units;
+    genome_boundary.sort_unstable();
+    Ok(regions
+        .into_iter()
+        .filter(|region| {
+            let mut boundary = region.boundary_units.clone();
+            boundary.sort_unstable();
+            boundary != genome_boundary
+        })
+        .collect())
 }
 
 pub fn find_enclosed_regions(
