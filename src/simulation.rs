@@ -355,15 +355,12 @@ impl Simulation {
         if relevant(ActionKind::Break) {
             for (storage_index, entry) in organism.stored_material.entries.iter().enumerate() {
                 let crate::material_storage::StoredMaterial::Physical(instance) = entry;
-                    if let Some(connections) = &instance.internal_connections {
-                        for bond_index in 0..connections.len() {
-                            candidates.push(ActionCandidate {
-                                action: ActionKind::Break,
-                                context_key: Some(format!(
-                                    "stored:{storage_index}:bond:{bond_index}"
-                                )),
-                            });
-                        }
+                if let Some(connections) = &instance.internal_connections {
+                    for bond_index in 0..connections.len() {
+                        candidates.push(ActionCandidate {
+                            action: ActionKind::Break,
+                            context_key: Some(format!("stored:{storage_index}:bond:{bond_index}")),
+                        });
                     }
                 }
             }

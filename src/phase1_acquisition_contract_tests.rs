@@ -55,6 +55,22 @@ mod tests {
         }
     }
 
+    fn large_body() -> OrganismBodyGeometry {
+        OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 0,
+                form: Form::Circle { radius: 2.0 },
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: -2.0,
+            max_x: 2.0,
+            min_y: -2.0,
+            max_y: 2.0,
+        }
+    }
+
     fn compound() -> Material {
         Material {
             parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
@@ -123,7 +139,7 @@ mod tests {
                     rotation_radians: 0.0,
                 },
                 Placement {
-                    x: 0.2,
+                    x: 1.0,
                     y: 0.0,
                     rotation_radians: 0.0,
                 },
@@ -134,7 +150,7 @@ mod tests {
 
         let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
         field.deposit(0.0, 0.0, physical);
-        let contained = field.take_contained_physical_materials(&body());
+        let contained = field.take_contained_physical_materials(&large_body());
 
         assert_eq!(contained.len(), 1);
         assert_eq!(contained[0].material, compound());

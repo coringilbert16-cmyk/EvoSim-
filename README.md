@@ -513,11 +513,11 @@ Do not introduce mutable `is_structural` or equivalent flags that can become sta
 
 ## 14.2 Phase 2 — Eliminate Logical Material From Organism Storage
 
-In `src/material_storage.rs`, organism storage must contain **physical material only**.
+In `src/material_storage.rs`, organism storage contains **physical material only**.
 
-The current `StoredMaterial::Logical(Material)` path is legacy and must be removed from organism-facing storage.
+`StoredMaterial` has no logical-material variant. All storage operations operate on existing realized `PhysicalMaterial` instances.
 
-All storage operations must operate on existing `PhysicalMaterial` instances.
+Abstract `Material` values may still exist in the genome and environmental aggregate field because those are recipes/aggregate environmental stock, but they are never inserted into organism storage.
 
 Callers that currently request abstract `Material` values from storage must be audited and refactored rather than recreating physical material from descriptions.
 
@@ -2518,3 +2518,6 @@ The following changes have already been made on the dedicated memory-model branc
 4. Created draft PR #145 so the migration can be validated independently before any merge to `main`.
 
 These changes are foundations only. The full memory migration described in this section is not considered complete until the legacy memory authorities have been replaced, tested, and validated by the simulation.
+
+
+<!-- CI validation marker: final construction combine call cleanup -->

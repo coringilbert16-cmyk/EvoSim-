@@ -261,7 +261,10 @@ impl Organism {
     }
 
     /// Test/construction convenience that immediately realizes the supplied
-    /// material as a physical object before placing it in organism storage.
+    /// material before placing it in organism storage.
+    ///
+    /// Unstructured aggregate quantities are expanded into individual physical
+    /// objects. Structured material is realized as one intact physical object.
     /// No logical material is ever inserted into storage.
     pub(crate) fn store_material(&mut self, material: Material) -> bool {
         let origin = self
@@ -269,22 +272,56 @@ impl Organism {
             .first()
             .cloned()
             .unwrap_or(Position { x: 0.0, y: 0.0 });
-        let placements = vec![
-            Placement {
-                x: origin.x,
-                y: origin.y,
-                rotation_radians: 0.0,
-            };
-            material.parts.len()
-        ];
-        let Some(instance) = crate::physical_material::PhysicalMaterial::realized(
-            material,
-            placements,
-            &crate::resources::default_catalog(),
-        ) else {
-            return false;
+        let placement = Placement {
+            x: origin.x,
+            y: origin.y,
+            rotation_radians: 0.0,
         };
-        self.stored_material.store_physical_instance(instance)
+        let catalog = crate::resources::default_catalog();
+
+        if material.has_internal_structure() {
+            if material
+                .parts
+                .iter()
+                .any(|(_, amount)| (*amount - 1.0).abs() > 1e-9)
+            {
+                return false;
+            }
+            let part_count = material.parts.len();
+            let Some(instance) = crate::physical_material::PhysicalMaterial::realized(
+                material,
+                vec![placement; part_count],
+                &catalog,
+            ) else {
+                return false;
+            };
+            return self.stored_material.store_physical_instance(instance);
+        }
+
+        let mut instances = Vec::new();
+        for (name, amount) in material.parts {
+            if !amount.is_finite() || amount < 0.0 || amount.fract().abs() > 1e-9 {
+                return false;
+            }
+            for _ in 0..amount as usize {
+                let Some(instance) = crate::physical_material::PhysicalMaterial::realized(
+                    Material::free_base(name.clone(), 1.0),
+                    vec![placement],
+                    &catalog,
+                ) else {
+                    return false;
+                };
+                instances.push(instance);
+            }
+        }
+
+        if instances.is_empty() {
+            return false;
+        }
+        for instance in instances {
+            debug_assert!(self.stored_material.store_physical_instance(instance));
+        }
+        true
     }
     pub(crate) fn structural_mass(&self, catalog: &[BaseResource]) -> f64 {
         self.structure

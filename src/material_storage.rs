@@ -323,17 +323,15 @@ mod tests {
     #[test]
     fn peek_does_not_consume_free_material() {
         let mut storage = MaterialStorage::default();
-        storage
-            .store_physical(
-                Material::free_base("Carbon", 1.0),
-                vec![Placement {
-                    x: 0.0,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                }],
-                &catalog(),
-            )
-            .unwrap();
+        assert!(storage.store_physical(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog(),
+        ));
         let peeked = storage.peek_one_unstructured().expect("stored unit");
         assert_eq!(peeked.material, Material::free_base("Carbon", 1.0));
         assert_eq!(storage.count_unstructured(), 1);
@@ -367,20 +365,18 @@ mod tests {
     fn structured_material_is_taken_intact() {
         let mut storage = MaterialStorage::default();
         let m = compound();
-        storage
-            .store_physical(
-                m.clone(),
-                vec![
-                    Placement {
-                        x: 0.0,
-                        y: 0.0,
-                        rotation_radians: 0.0
-                    };
-                    2
-                ],
-                &catalog(),
-            )
-            .unwrap();
+        assert!(storage.store_physical(
+            m.clone(),
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0
+                };
+                2
+            ],
+            &catalog(),
+        ));
         assert_eq!(
             storage.take_matching(&m).map(|instance| instance.material),
             Some(m.clone())
@@ -440,28 +436,24 @@ mod tests {
     #[test]
     fn storage_never_merges_independent_atoms() {
         let mut storage = MaterialStorage::default();
-        storage
-            .store_physical(
-                Material::free_base("Carbon", 1.0),
-                vec![Placement {
-                    x: 0.0,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                }],
-                &catalog(),
-            )
-            .unwrap();
-        storage
-            .store_physical(
-                Material::free_base("Carbon", 1.0),
-                vec![Placement {
-                    x: 1.0,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                }],
-                &catalog(),
-            )
-            .unwrap();
+        assert!(storage.store_physical(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog(),
+        ));
+        assert!(storage.store_physical(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 1.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog(),
+        ));
         assert_eq!(storage.len(), 2);
     }
 
@@ -469,7 +461,22 @@ mod tests {
     fn storage_never_opens_a_compound() {
         let mut storage = MaterialStorage::default();
         let m = compound();
-        storage.store(m.clone());
+        assert!(storage.store_physical(
+            m.clone(),
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.838,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }
+            ],
+            &catalog(),
+        ));
         assert!(storage.take_unstructured(1).is_none());
         assert_eq!(storage.materials_snapshot(), vec![m]);
     }
@@ -477,7 +484,15 @@ mod tests {
     #[test]
     fn fractional_material_is_rejected_at_storage_boundary() {
         let mut storage = MaterialStorage::default();
-        assert!(!storage.store(Material::free_base("Carbon", 1.5)));
+        assert!(!storage.store_physical(
+            Material::free_base("Carbon", 1.5),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog(),
+        ));
         assert!(storage.is_empty());
     }
 }
