@@ -487,6 +487,7 @@ impl Simulation {
                         organism,
                         &mut self.environment,
                         &mut self.energy_ledger,
+                        self.seed_scale_reference,
                     ) {
                         if let Some((cell_index, source)) =
                             transformation.combine_environmental_source.as_ref()
