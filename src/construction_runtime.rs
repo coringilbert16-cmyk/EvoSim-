@@ -290,7 +290,6 @@ fn solve_external_groups(
                 new_id,
                 target,
                 catalog,
-                0.0,
                 &mut cache,
                 &mut candidate_ledger,
                 &mut candidate_energy,
