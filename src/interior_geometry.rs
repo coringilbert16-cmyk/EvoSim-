@@ -231,7 +231,7 @@ fn region_already_has_fitted_water(
                 return false;
             };
             let Form::Fluid {
-                boundary: Some(local_boundary),
+                boundary: Some(ref local_boundary),
                 ..
             } = geometry.shape().form
             else {
