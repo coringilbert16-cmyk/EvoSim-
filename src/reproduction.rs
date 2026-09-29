@@ -945,7 +945,7 @@ mod tests {
             rotation_radians: 0.0,
         };
         let mut storage = MaterialStorage::default();
-        assert!(storage.store(anchor));
+        assert!(storage.store_physical(anchor, vec![placement], &catalog));
         assert!(anchor_structure(&genome, storage, placement, &catalog).is_some());
     }
 }
