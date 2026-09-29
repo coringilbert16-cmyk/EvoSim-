@@ -148,11 +148,15 @@ fn form_contains_point(
         // A line has no interior area. It can form part of the boundary but
         // cannot by itself contain a constituent point.
         Form::Line { .. } => false,
-        Form::Fluid { nominal_area, boundary } => {
+        Form::Fluid {
+            nominal_area,
+            boundary,
+        } => {
             if let Some(vertices) = boundary {
                 point_in_polygon((local_x, local_y), vertices)
             } else {
-                local_x.hypot(local_y) <= (nominal_area / std::f64::consts::PI).sqrt() + f64::EPSILON
+                local_x.hypot(local_y)
+                    <= (nominal_area / std::f64::consts::PI).sqrt() + f64::EPSILON
             }
         }
     }
