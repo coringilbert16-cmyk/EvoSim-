@@ -107,19 +107,9 @@ pub fn boundary_point_toward(shape: &Shape, target_x: f64, target_y: f64) -> Opt
                 target_y,
             )
         }
-        Form::Fluid { nominal_area, boundary } => {
-            if let Some(vertices) = boundary.as_ref() {
-                polygon_boundary_toward(vertices.as_slice(), target_x, target_y)
-            } else {
-                let (ux, uy) = normalized(target_x, target_y)?;
-                Some(BoundaryPoint {
-                    x: (nominal_area / std::f64::consts::PI).sqrt() * ux,
-                    y: (nominal_area / std::f64::consts::PI).sqrt() * uy,
-                    normal_x: ux,
-                    normal_y: uy,
-                })
-            }
-        },
+        Form::Fluid { boundary, .. } => boundary
+            .as_ref()
+            .and_then(|vertices| polygon_boundary_toward(vertices.as_slice(), target_x, target_y)),
     }
 }
 #[allow(dead_code)]
