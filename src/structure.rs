@@ -793,6 +793,20 @@ mod tests {
         assert_ne!(s.physical_id(a), s.physical_id(b));
     }
     #[test]
+    fn genome_constituent_ids_round_trip_through_serialization() {
+        let mut s = OrganismStructure::new();
+        let unit = s.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+        ));
+        let id = s.physical_id(unit).unwrap();
+        s.set_genome_constituent_ids([id]);
+        let encoded = serde_json::to_string(&s).unwrap();
+        let decoded: OrganismStructure = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(decoded.genome_constituent_ids(), &[id]);
+    }
+
+    #[test]
     fn bond_identity_uses_physical_ids() {
         let a = PhysicalConstituentId(11);
         let b = PhysicalConstituentId(22);
