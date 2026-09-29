@@ -235,7 +235,14 @@ impl Simulation {
             .first()
             .cloned()
             .unwrap_or(Position { x: 0.0, y: 0.0 });
-        for physical in environment.field.take_contained_physical_materials(&body) {
+        let interior_regions = crate::interior_geometry::find_enclosed_regions(
+            &organism.structure,
+            &environment.catalog,
+        );
+        for physical in environment
+            .field
+            .take_contained_physical_materials_in_regions(&body, &interior_regions)
+        {
             match organism
                 .stored_material
                 .try_store_physical_instance_at_owner_anchor(
