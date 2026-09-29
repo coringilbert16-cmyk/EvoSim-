@@ -88,7 +88,10 @@ mod tests {
         };
         let mut geometry = PhysicalGeometry::from_default(&default_shape);
         assert!(!geometry.replace_fluid_realization(Shape {
-            form: crate::resources::Form::Fluid { nominal_area: 1.0, boundary: Some(vec![(0.0, 0.0), (1.0, 0.0)]), },
+            form: crate::resources::Form::Fluid {
+                nominal_area: 1.0,
+                boundary: Some(vec![(0.0, 0.0), (1.0, 0.0)]),
+            },
         }));
         assert_eq!(geometry.shape(), &default_shape);
     }
