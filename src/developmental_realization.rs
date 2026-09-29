@@ -177,7 +177,7 @@ impl DevelopmentalFieldBlueprint {
             return None;
         }
         let mut realized = 0.0;
-        for index in structure.structural_unit_indices() {
+        for index in structure.structural_unit_indices(catalog) {
             let unit = &structure.units[index];
             let Some(shape) = unit.shape(catalog) else {
                 continue;
@@ -224,7 +224,7 @@ impl DevelopmentalFieldBlueprint {
             return None;
         }
         let mut realized = 0.0;
-        for index in structure.structural_unit_indices() {
+        for index in structure.structural_unit_indices(catalog) {
             let unit = &structure.units[index];
             let Some(shape) = unit.shape(catalog) else {
                 continue;
@@ -320,7 +320,7 @@ impl DevelopmentalFieldBlueprint {
         preferred_length: f64,
     ) -> Vec<Option<f64>> {
         let mut endpoint_opportunities = EndpointOpportunityCache::default();
-        let structural_indices = structure.structural_unit_indices();
+        let structural_indices = structure.structural_unit_indices(catalog);
         let mut actual_total = 0.0;
         let mut actual_by_bond = vec![0.0; structure.bonds.len()];
 
@@ -451,7 +451,7 @@ impl DevelopmentalFieldBlueprint {
         preferred_length: f64,
         excluded_bond: Option<usize>,
     ) -> Option<f64> {
-        let structural_indices = structure.structural_unit_indices();
+        let structural_indices = structure.structural_unit_indices(catalog);
         let mut endpoint_opportunities = EndpointOpportunityCache::default();
         let mut actual_value = 0.0;
         let mut available_value = 0.0;
