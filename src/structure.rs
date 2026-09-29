@@ -357,6 +357,10 @@ fn units_strictly_overlap(
 pub struct PhysicalConstituentGraph {
     pub units: Vec<StructuralUnit>,
     pub bonds: Vec<Bond>,
+    /// Stable physical constituents that established the genome cavity.
+    /// Structural membership is derived from connectivity to these IDs.
+    #[serde(default)]
+    genome_constituent_ids: Vec<PhysicalConstituentId>,
     #[serde(default)]
     next_constituent_id: u64,
 }
@@ -423,6 +427,7 @@ impl<'de> Deserialize<'de> for PhysicalConstituentGraph {
         Ok(Self {
             units: s.units,
             bonds: s.bonds,
+            genome_constituent_ids: Vec::new(),
             next_constituent_id: next,
         })
     }
@@ -432,6 +437,7 @@ impl PhysicalConstituentGraph {
         Self {
             units: Vec::new(),
             bonds: Vec::new(),
+            genome_constituent_ids: Vec::new(),
             next_constituent_id: 1,
         }
     }
@@ -485,14 +491,43 @@ impl PhysicalConstituentGraph {
         let strength = crate::combine::bond_strength(pa, pb);
         strength.is_finite() && (0.0..=1.0).contains(&strength)
     }
-    /// The organism's structural body is the connected component containing
-    /// its stable first constituent. Disconnected physical material is not
-    /// structural merely because it remains inside the organism boundary.
+    /// Stable physical IDs that established the qualifying genome cavity.
+    pub fn genome_constituent_ids(&self) -> &[PhysicalConstituentId] {
+        &self.genome_constituent_ids
+    }
+
+    /// Persist the actual physical constituents forming a qualifying genome
+    /// cavity. No material recipe, topology, unit index, or first-unit rule is
+    /// introduced; identity is carried by the stable physical IDs.
+    pub fn set_genome_constituent_ids(&mut self, ids: impl IntoIterator<Item = PhysicalConstituentId>) {
+        let mut ids: Vec<_> = ids.filter(|id| id.0 != 0).collect();
+        ids.sort_unstable_by_key(|id| id.0);
+        ids.dedup();
+        ids.retain(|id| self.unit_index(*id).is_some());
+        self.genome_constituent_ids = ids;
+    }
+
+    pub fn clear_genome_constituent_ids(&mut self) {
+        self.genome_constituent_ids.clear();
+    }
+
+    /// The structural body is the connected component containing the persisted
+    /// physical genome constituents. Disconnected material is not structural
+    /// merely because it remains inside the organism boundary.
     pub fn structural_unit_indices(&self) -> Vec<usize> {
-        if self.units.is_empty() {
+        let Some(&genome_id) = self.genome_constituent_ids.first() else {
+            return Vec::new();
+        };
+        let Some(start) = self.unit_index(genome_id) else {
+            return Vec::new();
+        };
+        self.connected_component_containing(start)
+    }
+
+    pub fn connected_component_containing(&self, start: usize) -> Vec<usize> {
+        if start >= self.units.len() {
             return Vec::new();
         }
-
         let mut adjacency = vec![Vec::<usize>::new(); self.units.len()];
         for bond in &self.bonds {
             let (Some(a), Some(b)) = (
@@ -504,12 +539,10 @@ impl PhysicalConstituentGraph {
             adjacency[a].push(b);
             adjacency[b].push(a);
         }
-
         let mut visited = vec![false; self.units.len()];
-        let mut stack = vec![0usize];
-        visited[0] = true;
+        let mut stack = vec![start];
+        visited[start] = true;
         let mut component = Vec::new();
-
         while let Some(unit) = stack.pop() {
             component.push(unit);
             for &next in &adjacency[unit] {
@@ -519,7 +552,6 @@ impl PhysicalConstituentGraph {
                 }
             }
         }
-
         component.sort_unstable();
         component
     }
