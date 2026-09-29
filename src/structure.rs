@@ -722,21 +722,49 @@ mod tests {
     #[test]
     fn structural_membership_uses_persisted_physical_genome_ids() {
         let mut s = OrganismStructure::new();
-        let a = s.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }));
-        let b = s.add_unit(StructuralUnit::new("Carbon", Placement { x: 2.0, y: 0.0, rotation_radians: 0.0 }));
+        let a = s.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let b = s.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 2.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
         let ida = s.physical_id(a).unwrap();
         let idb = s.physical_id(b).unwrap();
         s.set_genome_constituent_ids([ida]);
-        assert_eq!(s.structural_unit_indices(&crate::resources::default_catalog()), vec![a]);
+        assert_eq!(
+            s.structural_unit_indices(&crate::resources::default_catalog()),
+            vec![a]
+        );
         assert!(s.genome_connected(a));
         assert!(!s.genome_connected(b));
         s.push_bond_unchecked(Bond {
-            endpoint_a: BondEndpoint::new(ida, ConnectionEndpoint::Boundary { angle_radians: 0.0 }),
-            endpoint_b: BondEndpoint::new(idb, ConnectionEndpoint::Boundary { angle_radians: std::f64::consts::PI }),
+            endpoint_a: BondEndpoint::new(
+                ida,
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                idb,
+                ConnectionEndpoint::Boundary {
+                    angle_radians: std::f64::consts::PI,
+                },
+            ),
             strength: 0.5,
             bond_energy: 1.0,
         });
-        assert_eq!(s.structural_unit_indices(&crate::resources::default_catalog()), vec![a, b]);
+        assert_eq!(
+            s.structural_unit_indices(&crate::resources::default_catalog()),
+            vec![a, b]
+        );
         assert!(s.genome_connected(b));
     }
 
@@ -806,14 +834,34 @@ mod tests {
     fn direct_nonfluid_neighbor_qualifies_fluid_water() {
         let catalog = crate::resources::default_catalog();
         let mut s = OrganismStructure::new();
-        let genome = s.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }));
-        let water = s.add_unit(StructuralUnit::new("Water", Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 }));
+        let genome = s.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let water = s.add_unit(StructuralUnit::new(
+            "Water",
+            Placement {
+                x: 1.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
         let gid = s.physical_id(genome).unwrap();
         let wid = s.physical_id(water).unwrap();
         s.set_genome_constituent_ids([gid]);
         s.push_bond_unchecked(Bond {
-            endpoint_a: BondEndpoint::new(gid, ConnectionEndpoint::Boundary { angle_radians: 0.0 }),
-            endpoint_b: BondEndpoint::new(wid, ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 }),
+            endpoint_a: BondEndpoint::new(
+                gid,
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                wid,
+                ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 },
+            ),
             strength: 0.5,
             bond_energy: 1.0,
         });
@@ -824,9 +872,30 @@ mod tests {
     fn water_water_bond_does_not_qualify_second_water() {
         let catalog = crate::resources::default_catalog();
         let mut s = OrganismStructure::new();
-        let genome = s.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }));
-        let w1 = s.add_unit(StructuralUnit::new("Water", Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 }));
-        let w2 = s.add_unit(StructuralUnit::new("Water", Placement { x: 2.0, y: 0.0, rotation_radians: 0.0 }));
+        let genome = s.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let w1 = s.add_unit(StructuralUnit::new(
+            "Water",
+            Placement {
+                x: 1.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let w2 = s.add_unit(StructuralUnit::new(
+            "Water",
+            Placement {
+                x: 2.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
         let gid = s.physical_id(genome).unwrap();
         let w1id = s.physical_id(w1).unwrap();
         let w2id = s.physical_id(w2).unwrap();
@@ -838,8 +907,14 @@ mod tests {
             bond_energy: 1.0,
         });
         s.push_bond_unchecked(Bond {
-            endpoint_a: BondEndpoint::new(w1id, ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 }),
-            endpoint_b: BondEndpoint::new(w2id, ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 }),
+            endpoint_a: BondEndpoint::new(
+                w1id,
+                ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                w2id,
+                ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 },
+            ),
             strength: 0.5,
             bond_energy: 1.0,
         });
@@ -873,7 +948,11 @@ mod tests {
         let mut s = OrganismStructure::new();
         let unit = s.add_unit(StructuralUnit::new(
             "Carbon",
-            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
         ));
         let id = s.physical_id(unit).unwrap();
         s.set_genome_constituent_ids([id]);
