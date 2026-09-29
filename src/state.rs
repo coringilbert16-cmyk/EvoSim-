@@ -287,9 +287,10 @@ impl Organism {
             {
                 return false;
             }
+            let part_count = material.parts.len();
             let Some(instance) = crate::physical_material::PhysicalMaterial::realized(
                 material,
-                vec![placement; material.parts.len()],
+                vec![placement; part_count],
                 &catalog,
             ) else {
                 return false;
