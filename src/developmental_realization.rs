@@ -682,7 +682,9 @@ fn point_in_form(
         crate::resources::Form::Rectangle { .. }
         | crate::resources::Form::RegularPolygon { .. }
         | crate::resources::Form::Polygon { .. }
-        | crate::resources::Form::Fluid { boundary: Some(_), .. } => {
+        | crate::resources::Form::Fluid {
+            boundary: Some(_), ..
+        } => {
             let Some(local_vertices) = form.polygon_vertices() else {
                 return false;
             };
@@ -701,7 +703,8 @@ fn point_in_form(
             }
             inside
         }
-        crate::resources::Form::Line { .. } | crate::resources::Form::Fluid { boundary: None, .. } => false,
+        crate::resources::Form::Line { .. }
+        | crate::resources::Form::Fluid { boundary: None, .. } => false,
     }
 }
 
@@ -717,24 +720,33 @@ mod fitted_water_tests {
         let mut structure = OrganismStructure::new();
         let mut water = StructuralUnit::new(
             "Water",
-            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
         );
         assert!(water.realize_default_geometry(&catalog));
         let fitted = Shape {
             form: Form::Fluid {
                 nominal_area: 4.0,
-                boundary: Some(vec![
-                    (-1.0, -1.0),
-                    (1.0, -1.0),
-                    (1.0, 1.0),
-                    (-1.0, 1.0),
-                ]),
+                boundary: Some(vec![(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]),
             },
         };
         assert!(water.realize_fluid_geometry(fitted, &catalog));
         let index = structure.add_unit(water);
-        let form = &structure.units[index].geometry.as_ref().unwrap().shape().form;
-        assert!(point_in_form(form, structure.units[index].placement, 0.5, 0.5));
+        let form = &structure.units[index]
+            .geometry
+            .as_ref()
+            .unwrap()
+            .shape()
+            .form;
+        assert!(point_in_form(
+            form,
+            structure.units[index].placement,
+            0.5,
+            0.5
+        ));
     }
 }
 
