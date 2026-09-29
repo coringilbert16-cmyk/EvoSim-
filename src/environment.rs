@@ -308,6 +308,10 @@ impl ActiveMaterialField {
         self.revision = self.revision.wrapping_add(1);
     }
 
+    pub(crate) fn mark_changed_at_index(&mut self, index: usize) {
+        self.mark_cell_changed(index);
+    }
+
     pub fn neighbor_indices(&self, index: usize) -> Vec<usize> {
         let (row, col) = self.row_col_for_index(index);
         let mut out = Vec::with_capacity(4);
