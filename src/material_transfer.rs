@@ -120,5 +120,4 @@ mod tests {
         assert!(take_whole_unstructured(&mut material, 1).is_none());
         assert_eq!(material.total_amount(), 2.0);
     }
-
 }
