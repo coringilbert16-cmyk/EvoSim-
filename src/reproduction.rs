@@ -642,7 +642,10 @@ pub(crate) fn advance_construction(
 
     if let Some(material) = transferred {
         let mut parent_trial = parent_storage.clone();
-        if parent_trial.take_matching_physical(&material.material).is_none() {
+        if parent_trial
+            .take_matching_physical(&material.material)
+            .is_none()
+        {
             return (ConstructionStatus::Waiting, None);
         }
         *parent_storage = parent_trial;
@@ -756,12 +759,9 @@ mod tests {
             };
             genome.juvenile_reserve.parts.len()
         ];
-        let instance = PhysicalMaterial::realized(
-            genome.juvenile_reserve.clone(),
-            placements,
-            &catalog,
-        )
-        .expect("reserve must be physically realizable");
+        let instance =
+            PhysicalMaterial::realized(genome.juvenile_reserve.clone(), placements, &catalog)
+                .expect("reserve must be physically realizable");
         assert!(storage.store_physical_instance(instance));
         assert_eq!(
             storage
