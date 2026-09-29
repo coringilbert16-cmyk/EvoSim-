@@ -1,3 +1,5 @@
+use crate::resources::Material;
+
 //! Physical material transfer helpers.
 
 /// Extract up to `requested` whole unstructured units from an ecological aggregate.
