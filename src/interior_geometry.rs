@@ -72,7 +72,7 @@ pub fn fill_enclosed_regions_with_water(
     let Form::Circle { radius } = &water.shape.form else {
         return Err("Water catalog realization must retain its default circle".into());
     };
-    let nominal_area = std::f64::consts::PI * radius * radius;
+    let nominal_area = std::f64::consts::PI * *radius * *radius;
     if !nominal_area.is_finite() || nominal_area <= 0.0 {
         return Err("Water nominal area is invalid".into());
     }
