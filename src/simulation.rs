@@ -595,7 +595,6 @@ impl Simulation {
         }
         {
             let (organisms, environment) = (&mut self.organisms, &mut self.environment);
-            let mut compatibility_cache = crate::contact::ConnectionCompatibilityCache::new();
             let mut movement_spatial_index =
                 crate::movement::MovementSpatialIndex::new(organisms, environment);
             for index in 0..organisms.len() {
