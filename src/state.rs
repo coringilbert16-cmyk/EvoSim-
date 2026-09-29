@@ -287,9 +287,11 @@ impl Organism {
             {
                 return false;
             }
-            let Some(instance) =
-                crate::physical_material::PhysicalMaterial::realized(material, vec![placement; material.parts.len()], &catalog)
-            else {
+            let Some(instance) = crate::physical_material::PhysicalMaterial::realized(
+                material,
+                vec![placement; material.parts.len()],
+                &catalog,
+            ) else {
                 return false;
             };
             return self.stored_material.store_physical_instance(instance);
