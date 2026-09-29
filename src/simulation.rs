@@ -485,9 +485,31 @@ impl Simulation {
                     if !Self::prepare_transformation(
                         &mut transformation,
                         organism,
-                        &self.environment,
+                        &mut self.environment,
                         &mut self.energy_ledger,
                     ) {
+                        if let Some((cell_index, source)) =
+                            transformation.combine_environmental_source.as_ref()
+                        {
+                            if let Some(cell) = self.environment.field.cells.get_mut(*cell_index) {
+                                cell.physical_materials.push(source.clone());
+                                self.environment.field.mark_changed_at_index(*cell_index);
+                            }
+                        } else if transformation.environmental_source {
+                            if let Some(source) = transformation.stored_material.as_ref() {
+                                if let Some(placement) = source
+                                    .placements
+                                    .as_ref()
+                                    .and_then(|placements| placements.first())
+                                {
+                                    let _ = self.environment.field.deposit(
+                                        placement.x,
+                                        placement.y,
+                                        source.clone(),
+                                    );
+                                }
+                            }
+                        }
                         continue;
                     }
                 } else {
