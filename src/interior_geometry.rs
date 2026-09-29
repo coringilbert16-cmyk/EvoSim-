@@ -31,6 +31,16 @@ pub struct EnclosedRegion {
 /// This deliberately remains separate from genome-cavity qualification. Fluid
 /// forms are not converted into artificial rigid polygons here; connected Water
 /// receives context-fitting realization in the next implementation stage.
+/// Number of one-unit Water constituents needed to cover an enclosed region
+/// at the Water resource's nominal physical area. This is planning information;
+/// it does not create Water or mutate the organism.
+pub fn required_water_units(region: &EnclosedRegion, water_nominal_area: f64) -> usize {
+    if !region.area.is_finite() || region.area <= 0.0 || !water_nominal_area.is_finite() || water_nominal_area <= 0.0 {
+        return 0;
+    }
+    (region.area / water_nominal_area).ceil() as usize
+}
+
 pub fn find_enclosed_regions(
     structure: &OrganismStructure,
     catalog: &[BaseResource],
@@ -223,6 +233,17 @@ mod tests {
     #[test]
     fn closed_polygon_has_an_enclosed_region() {
         assert_eq!(region_count(square()), 1);
+    }
+
+    #[test]
+    fn water_quantity_is_derived_from_enclosed_area() {
+        let region = EnclosedRegion {
+            area: 2.1,
+            boundary_units: vec![],
+            sample_point: (0.0, 0.0),
+        };
+        assert_eq!(required_water_units(&region, 0.5), 5);
+        assert_eq!(required_water_units(&region, 1.0), 3);
     }
 
     #[test]
