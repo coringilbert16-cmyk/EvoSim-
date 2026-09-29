@@ -99,11 +99,7 @@ pub(crate) fn resolve_one_bond_with_ledger(
     };
 
     let before = body.energy_budget;
-    let (gross, usable, heat) = crate::transformation::break_energy_yield(
-        a,
-        b,
-        1.0,
-    )?;
+    let (gross, usable, heat) = crate::transformation::break_energy_yield(a, b, 1.0)?;
     let transaction = EnergyTransaction {
         reason: EnergyReason::Decomposition,
         potential_released: gross,
