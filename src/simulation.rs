@@ -68,14 +68,17 @@ impl Simulation {
         }
 
         let mut stored_material = crate::material_storage::MaterialStorage::default();
-        let reserve_placements = vec![
-            Placement {
-                x: anchor.x,
+        let reserve_placements = genome
+            .juvenile_reserve
+            .parts
+            .iter()
+            .enumerate()
+            .map(|(index, _)| Placement {
+                x: anchor.x + (index as f64 - 1.0) * 0.4,
                 y: anchor.y,
                 rotation_radians: 0.0,
-            };
-            genome.juvenile_reserve.parts.len()
-        ];
+            })
+            .collect();
         let reserve = crate::physical_material::PhysicalMaterial::realized(
             genome.juvenile_reserve.clone(),
             reserve_placements,
