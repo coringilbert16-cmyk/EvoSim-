@@ -69,7 +69,7 @@ pub fn fill_enclosed_regions_with_water(
         .iter()
         .find(|resource| resource.name == "Water")
         .ok_or_else(|| "catalog is missing Water".to_string())?;
-    let Form::Circle { radius } = water.shape.form else {
+    let Form::Circle { radius } = &water.shape.form else {
         return Err("Water catalog realization must retain its default circle".into());
     };
     let nominal_area = std::f64::consts::PI * radius * radius;
