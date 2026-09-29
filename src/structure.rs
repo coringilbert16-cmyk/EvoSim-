@@ -639,7 +639,7 @@ impl PhysicalConstituentGraph {
         if resource.physical_state != crate::resources::PhysicalState::Fluid {
             return true;
         }
-        self.has_nonfluid_ancestor_in_component(unit_index, catalog)
+        self.component_contains_nonfluid(unit_index, catalog)
     }
 
     pub fn connected_component_containing(&self, start: usize) -> Vec<usize> {
