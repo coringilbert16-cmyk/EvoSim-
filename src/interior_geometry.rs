@@ -633,20 +633,38 @@ mod tests {
             vec![
                 Point { x: -1.0, y: -1.0 },
                 Point { x: 1.0, y: -1.0 },
-                Point { x: 1.0, y: -1.0 + wall_thickness },
-                Point { x: -1.0, y: -1.0 + wall_thickness },
+                Point {
+                    x: 1.0,
+                    y: -1.0 + wall_thickness,
+                },
+                Point {
+                    x: -1.0,
+                    y: -1.0 + wall_thickness,
+                },
             ],
             vec![
                 Point { x: -1.0, y: -1.0 },
-                Point { x: -1.0 + wall_thickness, y: -1.0 },
-                Point { x: -1.0 + wall_thickness, y: 1.0 },
+                Point {
+                    x: -1.0 + wall_thickness,
+                    y: -1.0,
+                },
+                Point {
+                    x: -1.0 + wall_thickness,
+                    y: 1.0,
+                },
                 Point { x: -1.0, y: 1.0 },
             ],
             vec![
-                Point { x: 1.0 - wall_thickness, y: -1.0 },
+                Point {
+                    x: 1.0 - wall_thickness,
+                    y: -1.0,
+                },
                 Point { x: 1.0, y: -1.0 },
                 Point { x: 1.0, y: 1.0 },
-                Point { x: 1.0 - wall_thickness, y: 1.0 },
+                Point {
+                    x: 1.0 - wall_thickness,
+                    y: 1.0,
+                },
             ],
         ];
         assert_eq!(region_count(p), 0);
