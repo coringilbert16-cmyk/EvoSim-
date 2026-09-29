@@ -509,7 +509,7 @@ impl PhysicalConstituentGraph {
         &mut self,
         ids: impl IntoIterator<Item = PhysicalConstituentId>,
     ) {
-        let mut ids: Vec<_> = ids.filter(|id| id.0 != 0).collect();
+        let mut ids: Vec<_> = ids.into_iter().filter(|id| id.0 != 0).collect();
         ids.sort_unstable_by_key(|id| id.0);
         ids.dedup();
         ids.retain(|id| self.unit_index(*id).is_some());
