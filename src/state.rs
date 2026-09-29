@@ -69,6 +69,10 @@ pub(crate) struct ActiveTransformation {
     pub(crate) stored_material: Option<crate::physical_material::PhysicalMaterial>,
     #[serde(default)]
     pub(crate) stored_bond: Option<crate::physical_material::PhysicalMaterialBond>,
+    /// True when the transformed physical material came directly from the
+    /// environment rather than organism storage.
+    #[serde(default)]
+    pub(crate) environmental_source: bool,
     pub(crate) complexity: f64,
     pub(crate) duration_ticks: u64,
     pub(crate) remaining_ticks: u64,
