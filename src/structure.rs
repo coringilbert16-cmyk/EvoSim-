@@ -762,6 +762,14 @@ mod tests {
         assert!(water.realize_fluid_geometry(fitted.clone(), &catalog));
         assert_eq!(water.geometry.as_ref().unwrap().shape(), &fitted);
 
+        let mut bulk_water = StructuralUnit::from_material(
+            Material::free_base("Water", 4.0),
+            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+        )
+        .unwrap();
+        assert!(bulk_water.realize_fluid_geometry(fitted.clone(), &catalog));
+        assert_eq!(bulk_water.geometry.as_ref().unwrap().shape(), &fitted);
+
         let mut carbon = StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 });
         assert!(carbon.realize_default_geometry(&catalog));
         assert!(!carbon.realize_fluid_geometry(fitted, &catalog));
