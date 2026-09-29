@@ -379,9 +379,10 @@ impl Simulation {
                     }
                 }
             }
-            candidates.extend(
-                crate::transformation::environmental_break_candidates(organism, _environment),
-            );
+            candidates.extend(crate::transformation::environmental_break_candidates(
+                organism,
+                _environment,
+            ));
         }
         if relevant(ActionKind::Combine) {
             candidates.push(ActionCandidate {
