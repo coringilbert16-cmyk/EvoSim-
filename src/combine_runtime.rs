@@ -746,11 +746,7 @@ fn try_combine_environmental(
 
 pub(crate) fn try_start_combine(
     organism: &mut Organism,
-    environment: &mut Environment,
-    cache: &mut ConnectionCompatibilityCache,
-    ledger: &mut EnergyLedger,
     next_id: &mut u64,
-    developmental: Option<DevelopmentalContext<'_>>,
 ) -> Option<crate::state::ActiveTransformation> {
     if organism.active_transformation_id.is_some() || organism.structure.units.is_empty() {
         return None;
