@@ -533,7 +533,27 @@ pub(crate) fn has_environmental_break_candidate(
         true
     }
 
-    pub(crate) fn resolve_transformation(
+    fn pending_energy_delta(
+    transformation: &ActiveTransformation,
+    organism: &Organism,
+) -> f64 {
+    transformation
+        .prepared_usable_energy
+        .map(|prepared| organism.usable_energy - prepared)
+        .unwrap_or(0.0)
+}
+
+fn pending_stress_delta(
+    transformation: &ActiveTransformation,
+    organism: &Organism,
+) -> f64 {
+    transformation
+        .prepared_stress
+        .map(|prepared| organism.stress - prepared)
+        .unwrap_or(0.0)
+}
+
+pub(crate) fn resolve_transformation(
         transformation: &ActiveTransformation,
         organism: &mut Organism,
         environment: &mut Environment,
@@ -545,6 +565,26 @@ pub(crate) fn has_environmental_break_candidate(
                 transformation.prepared_stored_material.as_ref(),
                 transformation.prepared_stress,
             ) else {
+                if let Some((cell_index, source)) =
+                    transformation.combine_environmental_source.as_ref()
+                {
+                    let _ = environment
+                        .field
+                        .deposit(
+                            source.placements
+                                .as_ref()
+                                .and_then(|placements| placements.first())
+                                .map(|placement| placement.x)
+                                .unwrap_or(0.0),
+                            source.placements
+                                .as_ref()
+                                .and_then(|placements| placements.first())
+                                .map(|placement| placement.y)
+                                .unwrap_or(0.0),
+                            source.clone(),
+                        );
+                    let _ = cell_index;
+                }
                 organism.active_transformation_id = None;
                 return;
             };
@@ -564,8 +604,8 @@ pub(crate) fn has_environmental_break_candidate(
                     context_key: transformation.decision_context_key.clone(),
                 },
                 crate::decision::ActionConsequence {
-                    energy_delta: 0.0,
-                    stress_delta: 0.0,
+                    energy_delta: pending_energy_delta(transformation, organism),
+                    stress_delta: pending_stress_delta(transformation, organism),
                     developmental_delta: 0.0,
                 },
             );
