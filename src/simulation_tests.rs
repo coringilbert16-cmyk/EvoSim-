@@ -108,7 +108,19 @@ mod integration_tests {
             cell.physical_materials.clear();
         }
         let organism = s.organisms[0].clone();
-        let anchor = organism.structure.units[0].placement;
+        let regions = crate::interior_geometry::find_accessible_interior_regions(
+            &organism.structure,
+            &s.environment.catalog,
+        )
+        .expect("initial organism should expose an accessible interior region");
+        let region = regions
+            .first()
+            .expect("initial organism should have an accessible interior region");
+        let anchor = Placement {
+            x: region.sample_point.0,
+            y: region.sample_point.1,
+            rotation_radians: 0.0,
+        };
         let physical = PhysicalMaterial::realized(
             Material::free_base("Carbon", 1.0),
             vec![anchor],
