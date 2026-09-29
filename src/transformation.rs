@@ -442,7 +442,7 @@ pub(crate) fn has_environmental_break_candidate(
     pub(crate) fn prepare_transformation(
         transformation: &mut ActiveTransformation,
         organism: &mut Organism,
-        environment: &Environment,
+        environment: &mut Environment,
         ledger: &mut EnergyLedger,
     ) -> bool {
         if matches!(transformation.kind, crate::state::TransformationKind::Combine) {
