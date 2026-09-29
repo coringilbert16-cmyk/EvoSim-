@@ -7,6 +7,7 @@ use crate::decision::ActionKind;
 use crate::decision_runtime::ActionCandidate;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
 use crate::state::{ActiveTransformation, EnergyLedger, Environment, Organism, Simulation};
+use crate::structure::Placement;
 use rand::Rng;
 use rand_chacha::ChaCha8Rng;
 
@@ -472,22 +473,21 @@ impl Simulation {
             let original_ledger = *ledger;
             let mut trial_ledger = original_ledger;
             let mut cache = crate::contact::ConnectionCompatibilityCache::default();
-            let developmental = seed_scale_reference
-                .and_then(|reference| {
-                    crate::developmental_decision::context(
-                        &mut trial_organism,
-                        &trial_environment,
-                        reference,
-                    )
-                })
-                .map(|context| {
-                    (
-                        &context.blueprint,
-                        context.origin,
-                        context.orientation,
-                        context.preferred_length,
-                    )
-                });
+            let developmental_context = seed_scale_reference.and_then(|reference| {
+                crate::developmental_decision::context(
+                    &mut trial_organism,
+                    &trial_environment,
+                    reference,
+                )
+            });
+            let developmental = developmental_context.as_ref().map(|context| {
+                (
+                    &context.blueprint,
+                    context.origin,
+                    context.orientation,
+                    context.preferred_length,
+                )
+            });
             let Some(_attempt) = crate::combine_runtime::try_combine(
                 &mut trial_organism,
                 &mut trial_environment,
@@ -671,6 +671,8 @@ pub(crate) fn resolve_transformation(
         organism.mark_structure_changed();
         organism.active_transformation_id = None;
 
+        let energy_delta = pending_energy_delta(transformation, organism);
+        let stress_delta = pending_stress_delta(transformation, organism);
         crate::decision_runtime::record_consequence(
             &mut organism.decision_history,
             &ActionCandidate {
@@ -678,8 +680,8 @@ pub(crate) fn resolve_transformation(
                 context_key: transformation.decision_context_key.clone(),
             },
             crate::decision::ActionConsequence {
-                energy_delta: pending_energy_delta(transformation, organism),
-                stress_delta: pending_stress_delta(transformation, organism),
+                energy_delta,
+                stress_delta,
                 developmental_delta: 0.0,
             },
         );
