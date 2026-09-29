@@ -23,6 +23,7 @@ mod contact;
 mod juvenile;
 mod juvenile_requirements;
 mod organism_geometry;
+mod interior_geometry;
 mod physical_geometry;
 mod rigid_boundary;
 mod surface_geometry;
