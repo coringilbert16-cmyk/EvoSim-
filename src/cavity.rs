@@ -156,6 +156,15 @@ fn analyze_genome_cavity_in_indices(
     let mut polygons = Vec::<(usize, Vec<Point>)>::new();
     for index in structural_indices {
         let unit = &structure.units[index];
+        let Some((name, _)) = unit.material.parts.first() else {
+            continue;
+        };
+        let Some(resource) = catalog.iter().find(|resource| resource.name == *name) else {
+            continue;
+        };
+        if resource.physical_state == crate::resources::PhysicalState::Fluid {
+            continue;
+        }
         let Some(geometry) = unit.geometry.as_ref() else {
             continue;
         };
