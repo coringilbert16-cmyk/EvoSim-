@@ -2630,36 +2630,41 @@ logical substance stored inside the organism.
 The genome cavity remains governed by the established genome rules and must not
 be indiscriminately filled in a way that destroys genome qualification.
 
-## 26.6 Acquisition occurs through the boundary into the interior
+## 26.6 Acquisition and bond interaction at the boundary
 
-Environmental material acquisition is a physical boundary-crossing process.
+Environmental material does not need to cross the boundary as a complete physical
+component before the organism can interact with it.
 
-The intended sequence is:
+The boundary is a constraint on **accessible connection points**:
 
-> environmental physical material → boundary interaction → passage through the
-> realized boundary → enclosed interior → organism possession/storage or further
-> processing
+> environmental physical material → boundary interaction → accessible connection
+> point → COMBINE/BREAK through the existing action system
 
-An environmental physical object that merely overlaps the structural material
-is not automatically acquired.
+A bond may be combined with or broken when the relevant connection point lies inside an
+accessible enclosed interior. The interacting physical material may therefore straddle
+the organism boundary while the interaction occurs.
 
-Passage is supplied by the realized boundary's existing physical behavior rather than by
-a special acquisition rule: rigid boundary material participates in collision and blocks
-penetration, while Water remains fluid and does not create a penetration barrier. A
-physical environmental object therefore reaches the interior through the passable
-portions of the realized boundary by ordinary physical movement/interaction. Acquisition
-only transfers it after the complete physical component is within one accessible enclosed
-region.
+This is deliberately different from free manipulation. A physical material is freely
+movable, rotatable, or otherwise manipulable as an interior object only when its entire
+realized physical geometry is inside an accessible enclosed region. A straddling or
+partly external component remains boundary-constrained until it becomes fully enclosed.
 
-A material fully inside an **accessible** enclosed interior may be classified as inside even
-when there is no structural material occupying the same location. The genome cavity is
-inside the organism but is excluded from accessible interior classification and remains
-empty.
+Passage is still supplied by the realized boundary's existing physical behavior rather
+than by a special acquisition probability: rigid boundary material participates in
+collision and blocks penetration, while Water remains fluid and does not create a
+penetration barrier.
 
-A composite physical object remains intact while crossing the boundary unless an
-existing EvoSim transformation explicitly breaks it.
+A material fully inside an **accessible** enclosed interior may therefore be transferred
+to organism possession/storage and manipulated normally. A material that only has an
+accessible connection point is not automatically transferred to storage; it can instead
+participate directly in the appropriate physical bond interaction.
 
-Logical environmental material is never promoted directly into organism storage.
+The genome cavity is inside the organism but is excluded from accessible interior
+classification and remains genuinely empty.
+
+Composite internal bonds remain intact unless an existing EvoSim transformation
+explicitly breaks them. Logical environmental material is never promoted directly into
+organism storage.
 
 ## 26.7 Permeability is derived, not authored
 
