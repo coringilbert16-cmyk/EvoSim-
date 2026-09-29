@@ -75,7 +75,7 @@ mod tests {
     }
 
     #[test]
-    fn composite_is_partitioned_at_constituent_boundary() {
+    fn composite_straddling_boundary_remains_intact() {
         let catalog = catalog();
         let physical = PhysicalMaterial::realized(
             compound(),
@@ -99,9 +99,7 @@ mod tests {
         field.deposit(0.0, 0.0, physical);
         let contained = field.take_contained_physical_materials(&body());
 
-        assert_eq!(contained.len(), 1);
-        assert_eq!(contained[0].material.parts, vec![("Carbon".into(), 1.0)]);
-        assert!(contained[0].material.internal_bonds.is_empty());
+        assert!(contained.is_empty());
 
         let remaining: Vec<_> = field
             .cells
@@ -109,7 +107,33 @@ mod tests {
             .flat_map(|cell| cell.physical_materials.iter())
             .collect();
         assert_eq!(remaining.len(), 1);
-        assert_eq!(remaining[0].material.parts, vec![("Hydrogen".into(), 1.0)]);
-        assert!(remaining[0].material.internal_bonds.is_empty());
+        assert_eq!(remaining[0].material, compound());
+        assert_eq!(remaining[0].material.internal_bonds.len(), 1);
+    }
+
+    #[test]
+    fn fully_enclosed_composite_transfers_as_one_physical_component() {
+        let catalog = catalog();
+        let physical = PhysicalMaterial::realized(
+            compound(),
+            vec![
+                Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                Placement { x: 0.2, y: 0.0, rotation_radians: 0.0 },
+            ],
+            &catalog,
+        )
+        .expect("test composite must have a valid physical realization");
+
+        let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
+        field.deposit(0.0, 0.0, physical);
+        let contained = field.take_contained_physical_materials(&body());
+
+        assert_eq!(contained.len(), 1);
+        assert_eq!(contained[0].material, compound());
+        assert_eq!(contained[0].material.internal_bonds.len(), 1);
+        assert!(field
+            .cells
+            .iter()
+            .all(|cell| cell.physical_materials.is_empty()));
     }
 }
