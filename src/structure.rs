@@ -726,6 +726,68 @@ mod tests {
         assert!(s.genome_connected(b));
     }
 
+    fn connect(s: &mut OrganismStructure, a: usize, b: usize) {
+        let ida = s.physical_id(a).unwrap();
+        let idb = s.physical_id(b).unwrap();
+        s.push_bond_unchecked(Bond {
+            endpoint_a: BondEndpoint::new(
+                ida,
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                idb,
+                ConnectionEndpoint::Boundary {
+                    angle_radians: std::f64::consts::PI,
+                },
+            ),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+    }
+
+    fn water_chain_structure(names: &[&str]) -> (OrganismStructure, Vec<usize>) {
+        let mut s = OrganismStructure::new();
+        let mut units = Vec::new();
+        for (index, name) in names.iter().enumerate() {
+            units.push(s.add_unit(StructuralUnit::new(
+                *name,
+                Placement {
+                    x: index as f64,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            )));
+        }
+        for index in 0..units.len().saturating_sub(1) {
+            connect(&mut s, units[index], units[index + 1]);
+        }
+        let genome_id = s.physical_id(units[0]).unwrap();
+        s.set_genome_constituent_ids([genome_id]);
+        (s, units)
+    }
+
+    #[test]
+    fn water_structural_matrix_follows_direct_nonfluid_neighbor_rule() {
+        let catalog = crate::resources::default_catalog();
+
+        let (s, u) = water_chain_structure(&["Carbon", "Water"]);
+        assert!(s.is_structurally_qualified(u[1], &catalog));
+
+        let (s, u) = water_chain_structure(&["Carbon", "Water", "Water"]);
+        assert!(s.is_structurally_qualified(u[1], &catalog));
+        assert!(!s.is_structurally_qualified(u[2], &catalog));
+
+        let (s, u) = water_chain_structure(&["Carbon", "Water", "Water", "Water", "Carbon"]);
+        assert!(s.is_structurally_qualified(u[1], &catalog));
+        assert!(!s.is_structurally_qualified(u[2], &catalog));
+        assert!(!s.is_structurally_qualified(u[3], &catalog));
+        assert!(s.is_structurally_qualified(u[4], &catalog));
+
+        let (s, u) = water_chain_structure(&["Carbon", "Water", "Carbon", "Water", "Carbon"]);
+        assert!(s.is_structurally_qualified(u[1], &catalog));
+        assert!(s.is_structurally_qualified(u[3], &catalog));
+    }
+
     #[test]
     fn direct_nonfluid_neighbor_qualifies_fluid_water() {
         let catalog = crate::resources::default_catalog();
