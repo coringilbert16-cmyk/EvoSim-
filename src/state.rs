@@ -6,7 +6,7 @@ use crate::environment::ActiveMaterialField;
 use crate::genome::Genome;
 use crate::material_storage::MaterialStorage;
 use crate::resources::{BaseResource, Material};
-use crate::structure::{Bond, OrganismStructure};
+use crate::structure::{Bond, OrganismStructure, Placement};
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
