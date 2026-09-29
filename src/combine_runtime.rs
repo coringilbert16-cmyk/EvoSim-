@@ -845,8 +845,8 @@ pub(crate) fn try_start_combine(
         decision_context_key: None,
         prepared_structure: Some(trial_organism.structure),
         prepared_stored_material: Some(trial_organism.stored_material),
-        prepared_usable_energy: Some(trial_organism.usable_energy),
-        prepared_stress: Some(trial_organism.stress),
+        prepared_usable_energy: Some(trial_organism.usable_energy - organism.usable_energy),
+        prepared_stress: Some(trial_organism.stress - organism.stress),
         prepared_ledger: Some(ledger_delta),
         combine_environmental_source: environmental_source,
     };
