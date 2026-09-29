@@ -578,7 +578,7 @@ fn try_combine_environmental(
                 continue;
             }
             let mut hypothetical = organism.structure.clone();
-            let indices = crate::material_restoration::restore_material(
+            let Some(indices) = crate::material_restoration::restore_material(
                 &mut hypothetical,
                 &instance,
                 Placement {
@@ -587,8 +587,10 @@ fn try_combine_environmental(
                     rotation_radians: 0.0,
                 },
                 &environment.catalog,
-            )?;
-            for &ua in 0..organism.structure.units.len() {
+            ) else {
+                continue;
+            };
+            for ua in 0..organism.structure.units.len() {
                 for &ub in &indices {
                     for candidate in crate::contact::connection_pair_candidates_cached(
                         &hypothetical,
