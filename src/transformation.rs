@@ -574,22 +574,13 @@ pub(crate) fn resolve_transformation(
                 if let Some((cell_index, source)) =
                     transformation.combine_environmental_source.as_ref()
                 {
-                    let _ = environment
-                        .field
-                        .deposit(
-                            source.placements
-                                .as_ref()
-                                .and_then(|placements| placements.first())
-                                .map(|placement| placement.x)
-                                .unwrap_or(0.0),
-                            source.placements
-                                .as_ref()
-                                .and_then(|placements| placements.first())
-                                .map(|placement| placement.y)
-                                .unwrap_or(0.0),
-                            source.clone(),
-                        );
-                    let _ = cell_index;
+                    // Restore to the exact field cell from which the source was
+                    // reserved. Re-depositing by coordinates can land in a
+                    // different cell after field partitioning changes.
+                    if let Some(cell) = environment.field.cells.get_mut(*cell_index) {
+                        cell.physical_materials.push(source.clone());
+                        environment.field.mark_changed_at_index(*cell_index);
+                    }
                 }
                 organism.active_transformation_id = None;
                 return;
