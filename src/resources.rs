@@ -358,17 +358,17 @@ pub fn combine_materials(inputs: &[Material]) -> Material {
     result
 }
 
-pub fn combine_work_cost(material: &Material, catalog: &[BaseResource], water_field: f64) -> f64 {
+pub fn combine_work_cost(material: &Material, catalog: &[BaseResource]) -> f64 {
     let n = material.total_amount().max(2.0);
     let props = material.weighted_properties(catalog);
-    let reac = exponential_influence(effective_reactivity(props.reactivity, water_field));
+    let reac = exponential_influence(props.reactivity.max(0.0));
     let cohesion = props.cohesion.clamp(0.0, 1.0);
     let c = complexity(n);
     (c * (1.0 + cohesion) * (1.25 - reac)).max(0.2)
 }
 
-pub fn effective_reactivity(reactivity: f64, water_field: f64) -> f64 {
-    reactivity / (1.0 + water_field.max(0.0))
+pub fn effective_reactivity(reactivity: f64) -> f64 {
+    reactivity.max(0.0)
 }
 
 pub fn property_ranges(catalog: &[BaseResource]) -> ResourceProperties {
