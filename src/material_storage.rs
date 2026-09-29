@@ -324,14 +324,14 @@ mod tests {
     fn peek_does_not_consume_free_material() {
         let mut storage = MaterialStorage::default();
         assert!(storage.store_physical(
-                Material::free_base("Carbon", 1.0),
-                vec![Placement {
-                    x: 0.0,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                }],
-                &catalog(),
-            ));
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog(),
+        ));
         let peeked = storage.peek_one_unstructured().expect("stored unit");
         assert_eq!(peeked.material, Material::free_base("Carbon", 1.0));
         assert_eq!(storage.count_unstructured(), 1);
@@ -366,17 +366,17 @@ mod tests {
         let mut storage = MaterialStorage::default();
         let m = compound();
         assert!(storage.store_physical(
-                m.clone(),
-                vec![
-                    Placement {
-                        x: 0.0,
-                        y: 0.0,
-                        rotation_radians: 0.0
-                    };
-                    2
-                ],
-                &catalog(),
-            ));
+            m.clone(),
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0
+                };
+                2
+            ],
+            &catalog(),
+        ));
         assert_eq!(
             storage.take_matching(&m).map(|instance| instance.material),
             Some(m.clone())
@@ -437,23 +437,23 @@ mod tests {
     fn storage_never_merges_independent_atoms() {
         let mut storage = MaterialStorage::default();
         assert!(storage.store_physical(
-                Material::free_base("Carbon", 1.0),
-                vec![Placement {
-                    x: 0.0,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                }],
-                &catalog(),
-            ));
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog(),
+        ));
         assert!(storage.store_physical(
-                Material::free_base("Carbon", 1.0),
-                vec![Placement {
-                    x: 1.0,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                }],
-                &catalog(),
-            ));
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 1.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog(),
+        ));
         assert_eq!(storage.len(), 2);
     }
 
@@ -463,15 +463,18 @@ mod tests {
         let m = compound();
         assert!(storage.store_physical(
             m.clone(),
-            vec![Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            }, Placement {
-                x: 0.838,
-                y: 0.0,
-                rotation_radians: 0.0,
-            }],
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.838,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }
+            ],
             &catalog(),
         ));
         assert!(storage.take_unstructured(1).is_none());
