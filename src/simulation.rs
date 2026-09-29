@@ -555,7 +555,7 @@ impl Simulation {
                 .iter_mut()
                 .find(|o| o.id == transformation.organism_id)
             {
-                Self::resolve_transformation(
+                crate::transformation::resolve_transformation(
                     transformation,
                     organism,
                     &mut self.environment,
