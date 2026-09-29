@@ -399,5 +399,14 @@ pub(crate) fn realize_initial_with_reserve(
         catalog,
         JuvenileViabilityRequirements::default(),
     )?;
+    let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)?
+        .ok_or_else(|| "juvenile realization has no qualifying physical genome cavity".to_string())?;
+    let genome_ids = cavity
+        .boundary_units
+        .iter()
+        .filter_map(|&index| structure.physical_id(index))
+        .collect::<Vec<_>>();
+    let mut structure = structure;
+    structure.set_genome_constituent_ids(genome_ids);
     Ok((structure, ledger, energy))
 }
