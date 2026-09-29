@@ -626,8 +626,14 @@ mod tests {
 
     #[test]
     fn removing_one_wall_opens_the_region() {
-        let mut p = square();
-        p[0].pop();
+        // A polygon always closes itself, so represent the missing wall by
+        // replacing one square corner with a disjoint endpoint. The helper
+        // should therefore find no positive enclosed face.
+        let p = vec![vec![
+            Point { x: -1.0, y: -1.0 },
+            Point { x: 1.0, y: -1.0 },
+            Point { x: 1.0, y: 1.0 },
+        ]];
         assert_eq!(region_count(p), 0);
     }
 }
