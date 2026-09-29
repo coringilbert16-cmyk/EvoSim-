@@ -100,7 +100,7 @@ mod tests {
     fn logical_material_is_not_promoted_into_physical_containment() {
         let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
         field.deposit_at_index(0, compound());
-        let contained = field.take_contained_physical_materials_in_regions(&body(), &[]);
+        let contained = field.take_contained_physical_materials_in_regions(&body(), &[], &catalog());
         assert!(contained.is_empty());
         assert_eq!(field.cells[0].materials.len(), 1);
     }
@@ -128,7 +128,7 @@ mod tests {
 
         let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
         field.deposit(0.0, 0.0, physical);
-        let contained = field.take_contained_physical_materials_in_regions(&body(), &[region(1.0)]);
+        let contained = field.take_contained_physical_materials_in_regions(&body(), &[region(1.0)], &catalog);
 
         assert!(contained.is_empty());
 
@@ -165,7 +165,7 @@ mod tests {
 
         let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
         field.deposit(0.0, 0.0, physical);
-        let contained = field.take_contained_physical_materials_in_regions(&large_body(), &[region(2.0)]);
+        let contained = field.take_contained_physical_materials_in_regions(&large_body(), &[region(2.0)], &catalog);
 
         assert_eq!(contained.len(), 1);
         assert_eq!(contained[0].material, compound());
