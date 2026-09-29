@@ -246,6 +246,7 @@ impl ActiveMaterialField {
         &mut self,
         body: &crate::organism_geometry::OrganismBodyGeometry,
         regions: &[crate::interior_geometry::EnclosedRegion],
+        catalog: &[crate::resources::BaseResource],
     ) -> Vec<PhysicalMaterial> {
         let candidate_indices =
             self.cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y);
@@ -255,7 +256,7 @@ impl ActiveMaterialField {
             let mut remaining = Vec::with_capacity(cell.physical_materials.len());
             let mut changed = false;
             for physical in cell.physical_materials.drain(..) {
-                if physical_is_fully_inside_any_region(&physical, regions, &self.catalog) {
+                if physical_is_fully_inside_any_region(&physical, regions, catalog) {
                     contained.push(physical);
                     changed = true;
                 } else {
