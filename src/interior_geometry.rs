@@ -262,8 +262,8 @@ fn region_already_has_fitted_water(
             let area = transformed
                 .iter()
                 .enumerate()
-                .map(|(i, &(x1, y1))| {
-                    let (x2, y2) = transformed[(i + 1) % transformed.len()];
+                .map(|(i, &Point { x: x1, y: y1 })| {
+                    let Point { x: x2, y: y2 } = transformed[(i + 1) % transformed.len()];
                     x1 * y2 - y1 * x2
                 })
                 .sum::<f64>()
