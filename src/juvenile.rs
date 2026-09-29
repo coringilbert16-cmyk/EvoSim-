@@ -336,7 +336,6 @@ fn form_declared_bonds(
             connection.element_a,
             connection.element_b,
             catalog,
-            0.0,
             &mut cache,
             &mut ledger,
             &mut energy,
