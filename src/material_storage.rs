@@ -123,7 +123,8 @@ impl MaterialStorage {
         else {
             return Err(instance);
         };
-        if instance.material.parts.is_empty()
+        if !instance.is_realized()
+            || instance.material.parts.is_empty()
             || !instance.material.is_valid()
             || !Self::is_discrete(&instance.material)
         {
