@@ -744,8 +744,24 @@ mod tests {
     fn reserve_requirement_is_genome_defined() {
         let mut storage = MaterialStorage::default();
         let genome = initial_genome();
-        assert!(storage.store(genome.juvenile_reserve.clone()));
-        assert!(storage.take_matching(&genome.juvenile_reserve).is_some());
+        let catalog = default_catalog();
+        let placements = vec![
+            crate::state::Position { x: 0.0, y: 0.0 }.into();
+            genome.juvenile_reserve.parts.len()
+        ];
+        let instance = PhysicalMaterial::realized(
+            genome.juvenile_reserve.clone(),
+            placements,
+            &catalog,
+        )
+        .expect("reserve must be physically realizable");
+        assert!(storage.store_physical_instance(instance));
+        assert_eq!(
+            storage
+                .take_matching(&genome.juvenile_reserve)
+                .map(|instance| instance.material),
+            Some(genome.juvenile_reserve.clone())
+        );
         assert!(genome.juvenile_energy_reserve > 0.0);
     }
 
