@@ -284,6 +284,19 @@ mod tests {
     }
 
     #[test]
+    fn every_storage_entry_is_a_realized_physical_instance() {
+        let mut storage = MaterialStorage::default();
+        assert!(storage.store_physical(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }],
+            &catalog(),
+        ));
+        assert!(storage.entries.iter().all(|entry| {
+            matches!(entry, StoredMaterial::Physical(instance) if instance.is_realized())
+        }));
+    }
+
+    #[test]
     fn free_material_is_stored_as_discrete_units() {
         let mut storage = MaterialStorage::default();
         for x in 0..3 {
