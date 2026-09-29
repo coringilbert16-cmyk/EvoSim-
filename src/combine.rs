@@ -28,10 +28,9 @@ pub fn experimental_interaction(
     } else {
         0.0
     };
-    let reactivity =
-        (exponential_influence(a.reactivity.max(0.0))
-            + exponential_influence(b.reactivity.max(0.0)))
-            / 2.0;
+    let reactivity = (exponential_influence(a.reactivity.max(0.0))
+        + exponential_influence(b.reactivity.max(0.0)))
+        / 2.0;
     let facing = ((candidate.facing.clamp(-1.0, 1.0) + 1.0) * 0.5).clamp(0.0, 1.0);
     let distance = if candidate.distance.is_finite() {
         candidate.distance.max(0.0)
