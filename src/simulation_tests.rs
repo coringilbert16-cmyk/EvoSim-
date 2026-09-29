@@ -199,6 +199,7 @@ mod integration_tests {
     }
 
     fn add_test_break_bond(s: &mut Simulation) {
+        s.organisms[0].stored_material.entries.clear();
         let origin = s.organisms[0].occupied_cells[0].clone();
         let physical = PhysicalMaterial::realized(
             structured_carbon_hydrogen(),
