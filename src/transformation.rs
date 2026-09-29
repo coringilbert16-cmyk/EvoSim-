@@ -287,30 +287,11 @@ pub(crate) fn has_environmental_break_candidate(
     organism: &Organism,
     environment: &Environment,
 ) -> bool {
-    let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_structure(
-        &organism.structure,
-        &environment.catalog,
-    ) else {
-        return false;
-    };
-    environment
-        .field
-        .cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y)
-        .into_iter()
-        .any(|cell_index| {
-            environment
-                .field
-                .cells
-                .get(cell_index)
-                .into_iter()
-                .flat_map(|cell| cell.physical_materials.iter())
-                .any(|instance| {
-                    instance
-                        .internal_connections
-                        .as_ref()
-                        .is_some_and(|connections| !connections.is_empty())
-                })
-        })
+    // Eligibility must use the same endpoint-access rule as candidate
+    // generation. Merely finding a bonded environmental component near the
+    // organism is not enough: at least one endpoint of the target bond must
+    // actually lie inside accessible organism interior.
+    !environmental_break_candidates(organism, environment).is_empty()
 }
 
     pub(crate) fn try_start_environmental_break(
@@ -359,7 +340,7 @@ pub(crate) fn has_environmental_break_candidate(
                     continue;
                 }
                 let mut hypothetical = organism.structure.clone();
-                let indices = crate::material_restoration::restore_material(
+                let Some(indices) = crate::material_restoration::restore_material(
                     &mut hypothetical,
                     instance,
                     Placement {
@@ -368,7 +349,9 @@ pub(crate) fn has_environmental_break_candidate(
                         rotation_radians: 0.0,
                     },
                     &environment.catalog,
-                )?;
+                ) else {
+                    continue;
+                };
                 let Some(&a_index) = indices.get(target.part_a) else {
                     continue;
                 };
