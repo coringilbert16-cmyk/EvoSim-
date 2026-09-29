@@ -514,7 +514,7 @@ impl PhysicalConstituentGraph {
     /// The structural body is the connected component containing the persisted
     /// physical genome constituents. Disconnected material is not structural
     /// merely because it remains inside the organism boundary.
-    pub fn structural_unit_indices(&self) -> Vec<usize> {
+    pub fn structural_unit_indices(&self, catalog: &[BaseResource]) -> Vec<usize> {
         let Some(&genome_id) = self.genome_constituent_ids.first() else {
             return Vec::new();
         };
@@ -707,7 +707,7 @@ mod tests {
         let ida = s.physical_id(a).unwrap();
         let idb = s.physical_id(b).unwrap();
         s.set_genome_constituent_ids([ida]);
-        assert_eq!(s.structural_unit_indices(), vec![a]);
+        assert_eq!(s.structural_unit_indices(&crate::resources::default_catalog()), vec![a]);
         assert!(s.genome_connected(a));
         assert!(!s.genome_connected(b));
         s.push_bond_unchecked(Bond {
@@ -716,7 +716,7 @@ mod tests {
             strength: 0.5,
             bond_energy: 1.0,
         });
-        assert_eq!(s.structural_unit_indices(), vec![a, b]);
+        assert_eq!(s.structural_unit_indices(&crate::resources::default_catalog()), vec![a, b]);
         assert!(s.genome_connected(b));
     }
 
