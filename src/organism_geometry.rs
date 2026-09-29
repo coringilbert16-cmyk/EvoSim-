@@ -34,7 +34,7 @@ impl OrganismBodyGeometry {
             return None;
         }
 
-        let structural_indices = structure.structural_unit_indices();
+        let structural_indices = structure.structural_unit_indices(catalog);
         if structural_indices.is_empty() {
             return None;
         }
