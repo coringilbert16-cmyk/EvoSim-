@@ -101,6 +101,34 @@ impl StructuralUnit {
         self.geometry = Some(PhysicalGeometry::from_default(&shape));
         true
     }
+
+    /// Re-realize a connected fluid constituent into geometry supplied by the
+    /// surrounding structural context. Rigid resources cannot use this path.
+    pub fn realize_fluid_geometry(
+        &mut self,
+        shape: crate::resources::Shape,
+        catalog: &[BaseResource],
+    ) -> bool {
+        let Some((name, amount)) = self.material.parts.first() else {
+            return false;
+        };
+        if self.material.parts.len() != 1
+            || self.material.has_internal_structure()
+            || (*amount - 1.0).abs() > f64::EPSILON
+        {
+            return false;
+        }
+        let Some(resource) = catalog.iter().find(|resource| resource.name == *name) else {
+            return false;
+        };
+        if resource.physical_state != crate::resources::PhysicalState::Fluid {
+            return false;
+        }
+        let Some(geometry) = self.geometry.as_mut() else {
+            return false;
+        };
+        geometry.replace_fluid_realization(shape)
+    }
 }
 impl<'de> Deserialize<'de> for StructuralUnit {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
