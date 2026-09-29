@@ -294,7 +294,7 @@ pub(crate) fn has_environmental_break_candidate(
     !environmental_break_candidates(organism, environment).is_empty()
 }
 
-    pub(crate) fn try_start_environmental_break(
+pub(crate) fn try_start_environmental_break(
         organism: &mut Organism,
         environment: &mut Environment,
         next_id: &mut u64,
