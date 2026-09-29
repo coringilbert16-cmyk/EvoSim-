@@ -524,6 +524,78 @@ impl PhysicalConstituentGraph {
         self.connected_component_containing(start)
     }
 
+    pub fn genome_connected(&self, unit_index: usize) -> bool {
+        if unit_index >= self.units.len() || self.genome_constituent_ids.is_empty() {
+            return false;
+        }
+        self.connected_component_containing(unit_index)
+            .into_iter()
+            .any(|index| self.genome_constituent_ids.contains(&self.units[index].physical_id))
+    }
+
+    pub fn direct_neighbor_indices(&self, unit_index: usize) -> Vec<usize> {
+        let Some(id) = self.physical_id(unit_index) else {
+            return Vec::new();
+        };
+        let mut neighbors = Vec::new();
+        for bond in &self.bonds {
+            let other = if bond.endpoint_a.constituent_id == id {
+                bond.endpoint_b.constituent_id
+            } else if bond.endpoint_b.constituent_id == id {
+                bond.endpoint_a.constituent_id
+            } else {
+                continue;
+            };
+            if let Some(index) = self.unit_index(other) {
+                if !neighbors.contains(&index) {
+                    neighbors.push(index);
+                }
+            }
+        }
+        neighbors.sort_unstable();
+        neighbors
+    }
+
+    pub fn has_direct_nonfluid_neighbor(
+        &self,
+        unit_index: usize,
+        catalog: &[BaseResource],
+    ) -> bool {
+        self.direct_neighbor_indices(unit_index).into_iter().any(|neighbor| {
+            let is_genome = self
+                .genome_constituent_ids
+                .contains(&self.units[neighbor].physical_id);
+            is_genome || self.units[neighbor]
+                .material
+                .parts
+                .first()
+                .and_then(|(name, _)| catalog.iter().find(|resource| resource.name == *name))
+                .is_some_and(|resource| {
+                    resource.physical_state != crate::resources::PhysicalState::Fluid
+                })
+        })
+    }
+
+    pub fn is_structurally_qualified(
+        &self,
+        unit_index: usize,
+        catalog: &[BaseResource],
+    ) -> bool {
+        if !self.genome_connected(unit_index) {
+            return false;
+        }
+        let Some((name, _)) = self.units.get(unit_index).and_then(|unit| unit.material.parts.first()) else {
+            return false;
+        };
+        let Some(resource) = catalog.iter().find(|resource| resource.name == *name) else {
+            return false;
+        };
+        if resource.physical_state != crate::resources::PhysicalState::Fluid {
+            return true;
+        }
+        self.has_direct_nonfluid_neighbor(unit_index, catalog)
+    }
+
     pub fn connected_component_containing(&self, start: usize) -> Vec<usize> {
         if start >= self.units.len() {
             return Vec::new();
@@ -627,6 +699,72 @@ pub fn formation_threshold(a: f64, b: f64, la: f64, lb: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn structural_membership_uses_persisted_physical_genome_ids() {
+        let mut s = OrganismStructure::new();
+        let a = s.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }));
+        let b = s.add_unit(StructuralUnit::new("Carbon", Placement { x: 2.0, y: 0.0, rotation_radians: 0.0 }));
+        let ida = s.physical_id(a).unwrap();
+        let idb = s.physical_id(b).unwrap();
+        s.set_genome_constituent_ids([ida]);
+        assert_eq!(s.structural_unit_indices(), vec![a]);
+        assert!(s.genome_connected(a));
+        assert!(!s.genome_connected(b));
+        s.push_bond_unchecked(Bond {
+            endpoint_a: BondEndpoint::new(ida, ConnectionEndpoint::Boundary { angle_radians: 0.0 }),
+            endpoint_b: BondEndpoint::new(idb, ConnectionEndpoint::Boundary { angle_radians: std::f64::consts::PI }),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+        assert_eq!(s.structural_unit_indices(), vec![a, b]);
+        assert!(s.genome_connected(b));
+    }
+
+    #[test]
+    fn direct_nonfluid_neighbor_qualifies_fluid_water() {
+        let catalog = crate::resources::default_catalog();
+        let mut s = OrganismStructure::new();
+        let genome = s.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }));
+        let water = s.add_unit(StructuralUnit::new("Water", Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 }));
+        let gid = s.physical_id(genome).unwrap();
+        let wid = s.physical_id(water).unwrap();
+        s.set_genome_constituent_ids([gid]);
+        s.push_bond_unchecked(Bond {
+            endpoint_a: BondEndpoint::new(gid, ConnectionEndpoint::Boundary { angle_radians: 0.0 }),
+            endpoint_b: BondEndpoint::new(wid, ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 }),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+        assert!(s.is_structurally_qualified(water, &catalog));
+    }
+
+    #[test]
+    fn water_water_bond_does_not_qualify_second_water() {
+        let catalog = crate::resources::default_catalog();
+        let mut s = OrganismStructure::new();
+        let genome = s.add_unit(StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }));
+        let w1 = s.add_unit(StructuralUnit::new("Water", Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 }));
+        let w2 = s.add_unit(StructuralUnit::new("Water", Placement { x: 2.0, y: 0.0, rotation_radians: 0.0 }));
+        let gid = s.physical_id(genome).unwrap();
+        let w1id = s.physical_id(w1).unwrap();
+        let w2id = s.physical_id(w2).unwrap();
+        s.set_genome_constituent_ids([gid]);
+        s.push_bond_unchecked(Bond {
+            endpoint_a: BondEndpoint::new(gid, ConnectionEndpoint::Boundary { angle_radians: 0.0 }),
+            endpoint_b: BondEndpoint::new(w1id, ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 }),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+        s.push_bond_unchecked(Bond {
+            endpoint_a: BondEndpoint::new(w1id, ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 }),
+            endpoint_b: BondEndpoint::new(w2id, ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 }),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+        assert!(s.is_structurally_qualified(w1, &catalog));
+        assert!(!s.is_structurally_qualified(w2, &catalog));
+    }
+
     #[test]
     fn physical_constituents_receive_stable_ids() {
         let mut s = OrganismStructure::new();
