@@ -450,7 +450,37 @@ pub(crate) fn has_environmental_break_candidate(
             // Tick 2: resolve the candidate and settle its transaction. The
             // resulting physical structure is held until Tick 3.
             let mut trial_organism = organism.clone();
-            let mut trial_environment = environment.clone();
+            // Candidate COMBINE only touches material in the organism's local
+            // field bounds. Keep the trial environment sparse so a large
+            // persistent resource field is not cloned for every transformation.
+            let mut trial_environment = Environment {
+                width: environment.width,
+                height: environment.height,
+                catalog: environment.catalog.clone(),
+                field: crate::environment::ActiveMaterialField::new(
+                    environment.width,
+                    environment.height,
+                    environment.field.cell_size,
+                ),
+            };
+            if let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_structure(
+                &organism.structure,
+                &environment.catalog,
+            ) {
+                for cell_index in environment.field.cells_intersecting_bounds(
+                    body.min_x,
+                    body.max_x,
+                    body.min_y,
+                    body.max_y,
+                ) {
+                    if let (Some(source), Some(target)) = (
+                        environment.field.cells.get(cell_index),
+                        trial_environment.field.cells.get_mut(cell_index),
+                    ) {
+                        target.physical_materials = source.physical_materials.clone();
+                    }
+                }
+            }
             let original_ledger = *ledger;
             let mut trial_ledger = original_ledger;
             let mut cache = crate::contact::ConnectionCompatibilityCache::default();
