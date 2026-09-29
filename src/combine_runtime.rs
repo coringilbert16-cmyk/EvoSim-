@@ -10,9 +10,9 @@ use crate::combine::{
 use crate::contact::ConnectionCompatibilityCache;
 use crate::developmental_blueprint::DevelopmentalFieldBlueprint;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
-use crate::resources::{BaseResource, Material};
+use crate::resources::BaseResource;
 use crate::state::{EnergyLedger, Environment, Organism};
-use crate::structure::{BondEndpoint, ConnectionEndpoint, Placement, StructuralUnit};
+use crate::structure::{BondEndpoint, ConnectionEndpoint, Placement};
 
 const EPSILON: f64 = 1e-12;
 pub(crate) const COMBINE_CONTACT_TOLERANCE: f64 = 1.0;
