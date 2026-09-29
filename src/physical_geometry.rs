@@ -66,6 +66,33 @@ mod tests {
     }
 
     #[test]
+    fn fluid_geometry_can_be_re_realized() {
+        let default_shape = Shape {
+            form: crate::resources::Form::Circle { radius: 1.0 },
+        };
+        let mut geometry = PhysicalGeometry::from_default(&default_shape);
+        let fitted = Shape {
+            form: crate::resources::Form::Polygon {
+                vertices: vec![(-1.0, 0.0), (0.0, 1.0), (1.0, 0.0), (0.0, -1.0)],
+            },
+        };
+        assert!(geometry.replace_fluid_realization(fitted.clone()));
+        assert_eq!(geometry.shape(), &fitted);
+    }
+
+    #[test]
+    fn invalid_fluid_realization_is_rejected() {
+        let default_shape = Shape {
+            form: crate::resources::Form::Circle { radius: 1.0 },
+        };
+        let mut geometry = PhysicalGeometry::from_default(&default_shape);
+        assert!(!geometry.replace_fluid_realization(Shape {
+            form: crate::resources::Form::Polygon { vertices: vec![(0.0, 0.0), (1.0, 0.0)] },
+        }));
+        assert_eq!(geometry.shape(), &default_shape);
+    }
+
+    #[test]
     fn different_shape_cannot_replace_rigid_geometry() {
         let default_shape = Shape {
             form: crate::resources::Form::Circle { radius: 1.0 },
