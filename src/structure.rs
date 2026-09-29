@@ -505,7 +505,10 @@ impl PhysicalConstituentGraph {
     /// Persist the actual physical constituents forming a qualifying genome
     /// cavity. No material recipe, topology, unit index, or first-unit rule is
     /// introduced; identity is carried by the stable physical IDs.
-    pub fn set_genome_constituent_ids(&mut self, ids: impl IntoIterator<Item = PhysicalConstituentId>) {
+    pub fn set_genome_constituent_ids(
+        &mut self,
+        ids: impl IntoIterator<Item = PhysicalConstituentId>,
+    ) {
         let mut ids: Vec<_> = ids.filter(|id| id.0 != 0).collect();
         ids.sort_unstable_by_key(|id| id.0);
         ids.dedup();
@@ -528,6 +531,9 @@ impl PhysicalConstituentGraph {
             return Vec::new();
         };
         self.connected_component_containing(start)
+            .into_iter()
+            .filter(|&index| self.is_structurally_qualified(index, catalog))
+            .collect()
     }
 
     pub fn genome_connected(&self, unit_index: usize) -> bool {
@@ -536,7 +542,10 @@ impl PhysicalConstituentGraph {
         }
         self.connected_component_containing(unit_index)
             .into_iter()
-            .any(|index| self.genome_constituent_ids.contains(&self.units[index].physical_id))
+            .any(|index| {
+                self.genome_constituent_ids
+                    .contains(&self.units[index].physical_id)
+            })
     }
 
     pub fn direct_neighbor_indices(&self, unit_index: usize) -> Vec<usize> {
@@ -567,30 +576,35 @@ impl PhysicalConstituentGraph {
         unit_index: usize,
         catalog: &[BaseResource],
     ) -> bool {
-        self.direct_neighbor_indices(unit_index).into_iter().any(|neighbor| {
-            let is_genome = self
-                .genome_constituent_ids
-                .contains(&self.units[neighbor].physical_id);
-            is_genome || self.units[neighbor]
-                .material
-                .parts
-                .first()
-                .and_then(|(name, _)| catalog.iter().find(|resource| resource.name == *name))
-                .is_some_and(|resource| {
-                    resource.physical_state != crate::resources::PhysicalState::Fluid
-                })
-        })
+        self.direct_neighbor_indices(unit_index)
+            .into_iter()
+            .any(|neighbor| {
+                let is_genome = self
+                    .genome_constituent_ids
+                    .contains(&self.units[neighbor].physical_id);
+                is_genome
+                    || self.units[neighbor]
+                        .material
+                        .parts
+                        .first()
+                        .and_then(|(name, _)| {
+                            catalog.iter().find(|resource| resource.name == *name)
+                        })
+                        .is_some_and(|resource| {
+                            resource.physical_state != crate::resources::PhysicalState::Fluid
+                        })
+            })
     }
 
-    pub fn is_structurally_qualified(
-        &self,
-        unit_index: usize,
-        catalog: &[BaseResource],
-    ) -> bool {
+    pub fn is_structurally_qualified(&self, unit_index: usize, catalog: &[BaseResource]) -> bool {
         if !self.genome_connected(unit_index) {
             return false;
         }
-        let Some((name, _)) = self.units.get(unit_index).and_then(|unit| unit.material.parts.first()) else {
+        let Some((name, _)) = self
+            .units
+            .get(unit_index)
+            .and_then(|unit| unit.material.parts.first())
+        else {
             return false;
         };
         let Some(resource) = catalog.iter().find(|resource| resource.name == *name) else {
