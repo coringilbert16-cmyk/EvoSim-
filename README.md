@@ -318,7 +318,7 @@ A Water-Water bond therefore never satisfies the non-fluid-neighbor requirement 
 
 The structural predicate is:
 
-> `structural(Water) = genome_connected(Water) AND has_direct_nonfluid_neighbor(Water)`
+> `structural(Water) = genome_connected(Water) AND component_contains_nonfluid(Water)`
 
 For non-Water material, structural membership is determined by genome connectivity under the normal physical graph rules.
 
