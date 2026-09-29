@@ -119,7 +119,12 @@ mod integration_tests {
         let water_count = structure
             .units
             .iter()
-            .filter(|unit| unit.material.parts.first().is_some_and(|(name, _)| name == "Water"))
+            .filter(|unit| {
+                unit.material
+                    .parts
+                    .first()
+                    .is_some_and(|(name, _)| name == "Water")
+            })
             .count();
         assert!(water_count > 0);
 
@@ -198,11 +203,7 @@ mod integration_tests {
             .map(|(_, y)| *y)
             .fold(f64::NEG_INFINITY, f64::max);
 
-        fn point_segment_distance(
-            point: (f64, f64),
-            a: (f64, f64),
-            b: (f64, f64),
-        ) -> f64 {
+        fn point_segment_distance(point: (f64, f64), a: (f64, f64), b: (f64, f64)) -> f64 {
             let (px, py) = point;
             let (ax, ay) = a;
             let (bx, by) = b;
