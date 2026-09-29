@@ -605,18 +605,11 @@ fn try_combine_environmental(
                         ) else {
                             continue;
                         };
-                        let Some(b) = candidate.endpoint_b.world_point(
-                            &hypothetical.units[ub],
-                            &environment.catalog,
-                        ) else {
-                            continue;
-                        };
-                        let contact_x = (a.x + b.x) * 0.5;
-                        let contact_y = (a.y + b.y) * 0.5;
-                        if !regions
-                            .iter()
-                            .any(|region| region.contains_point(contact_x, contact_y))
-                        {
+                        // The organism-side connection point is the relevant
+                        // access point. A contact midpoint is not sufficient: it
+                        // could be inside while the actual organism connection
+                        // point is outside the accessible interior.
+                        if !regions.iter().any(|region| region.contains_point(a.x, a.y)) {
                             continue;
                         }
                         if let Some((evaluation, _, _, _, required)) = evaluate_candidate(
@@ -634,15 +627,9 @@ fn try_combine_environmental(
                                     ) else {
                                         return 0.0;
                                     };
-                                    let Some(b) = candidate.endpoint_b.world_point(
-                                        &hypothetical.units[ub],
-                                        &environment.catalog,
-                                    ) else {
-                                        return 0.0;
-                                    };
                                     let local = crate::developmental_blueprint::developmental_point(
-                                        (a.x + b.x) * 0.5,
-                                        (a.y + b.y) * 0.5,
+                                        a.x,
+                                        a.y,
                                         origin,
                                         orientation,
                                     );
