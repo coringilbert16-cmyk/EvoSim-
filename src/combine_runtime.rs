@@ -664,7 +664,8 @@ fn try_combine_environmental(
             .then_with(|| a.5.partial_cmp(&b.5).unwrap_or(std::cmp::Ordering::Equal))
     });
 
-    for (cell_index, material_index, ua, ub, evaluation, _distance, required, _score) in candidates {
+    for (cell_index, material_index, ua, ub, evaluation, _distance, required, _score) in candidates
+    {
         if organism.usable_energy + EPSILON < required {
             continue;
         }
