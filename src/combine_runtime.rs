@@ -770,7 +770,8 @@ pub(crate) fn try_start_combine(
     // commits the physical mutation.
     let mut trial_organism = organism.clone();
     let mut trial_environment = environment.clone();
-    let mut trial_ledger = *ledger;
+    let original_ledger = *ledger;
+    let mut trial_ledger = original_ledger;
     let _attempt = try_combine(
         &mut trial_organism,
         &mut trial_environment,
@@ -815,6 +816,16 @@ pub(crate) fn try_start_combine(
         environment.field.mark_changed_at_index(*cell_index);
     }
 
+    let ledger_delta = EnergyLedger {
+        total_potential_energy_released: trial_ledger.total_potential_energy_released
+            - original_ledger.total_potential_energy_released,
+        total_usable_energy_gained: trial_ledger.total_usable_energy_gained
+            - original_ledger.total_usable_energy_gained,
+        total_heat_dissipated: trial_ledger.total_heat_dissipated
+            - original_ledger.total_heat_dissipated,
+        total_usable_energy_held: trial_ledger.total_usable_energy_held
+            - original_ledger.total_usable_energy_held,
+    };
     let complexity = 2.0;
     let duration = 1_u64.max(complexity.ceil() as u64);
     let transformation = crate::state::ActiveTransformation {
@@ -836,7 +847,7 @@ pub(crate) fn try_start_combine(
         prepared_stored_material: Some(trial_organism.stored_material),
         prepared_usable_energy: Some(trial_organism.usable_energy),
         prepared_stress: Some(trial_organism.stress),
-        prepared_ledger: Some(trial_ledger),
+        prepared_ledger: Some(ledger_delta),
         combine_environmental_source: environmental_source,
     };
     *next_id += 1;
