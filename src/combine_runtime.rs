@@ -698,7 +698,7 @@ fn try_combine_environmental(
         let restored_ub = *indices.get(ub.saturating_sub(organism.structure.units.len()))?;
         let mut trial_ledger = *ledger;
         let mut trial_energy = organism.usable_energy;
-        let attempt = form_bond(
+        let Some(attempt) = form_bond(
             &mut trial_structure,
             BondFormationRequest {
                 unit_a: ua,
@@ -711,7 +711,9 @@ fn try_combine_environmental(
             cache,
             &mut trial_ledger,
             &mut trial_energy,
-        )?;
+        ) else {
+            continue;
+        };
 
         let removed = environment
             .field
