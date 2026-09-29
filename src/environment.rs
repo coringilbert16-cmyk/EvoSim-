@@ -239,13 +239,13 @@ impl ActiveMaterialField {
         indices
     }
 
-    /// Remove the already-realized physical constituents whose placement points
-    /// are inside the organism's realized body geometry. The field grid is a
-    /// spatial index: only cells intersecting the body's bounds are examined,
-    /// while physical containment remains authoritative.
-    pub(crate) fn take_contained_physical_materials(
+    /// Remove already-realized physical constituents whose placement points are
+    /// wholly inside one realized enclosed region. The body bounds are only a
+    /// spatial index; enclosed topology is authoritative for containment.
+    pub(crate) fn take_contained_physical_materials_in_regions(
         &mut self,
         body: &crate::organism_geometry::OrganismBodyGeometry,
+        regions: &[crate::interior_geometry::EnclosedRegion],
     ) -> Vec<PhysicalMaterial> {
         let candidate_indices =
             self.cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y);
@@ -263,9 +263,11 @@ impl ActiveMaterialField {
                     remaining.push(physical);
                     continue;
                 }
-                let all_inside = placements
-                    .iter()
-                    .all(|placement| body.contains_point(placement.x, placement.y));
+                let all_inside = regions.iter().any(|region| {
+                    placements
+                        .iter()
+                        .all(|placement| region.contains_point(placement.x, placement.y))
+                });
                 if all_inside {
                     contained.push(physical);
                     changed = true;
