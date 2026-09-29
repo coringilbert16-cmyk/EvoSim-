@@ -296,7 +296,11 @@ impl ActiveMaterialField {
                     else {
                         return false;
                     };
-                    Self::realized_form_fully_inside_region(&resource.shape.form, *placement, region)
+                    Self::realized_form_fully_inside_region(
+                        &resource.shape.form,
+                        *placement,
+                        region,
+                    )
                 })
         })
     }
@@ -324,7 +328,11 @@ impl ActiveMaterialField {
                 for index in 0..boundary.len() {
                     let a = boundary[index];
                     let b = boundary[(index + 1) % boundary.len()];
-                    minimum = minimum.min(Self::point_segment_distance((placement.x, placement.y), a, b));
+                    minimum = minimum.min(Self::point_segment_distance(
+                        (placement.x, placement.y),
+                        a,
+                        b,
+                    ));
                 }
                 minimum + 1e-9 >= *radius
             }
