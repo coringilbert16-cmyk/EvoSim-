@@ -262,16 +262,16 @@ pub(crate) fn environmental_break_candidates(
                 let Some(&b_index) = indices.get(connection.part_b) else {
                     continue;
                 };
-                let Some(a) = connection.endpoint_a.world_point(
-                    &hypothetical.units[a_index],
-                    &environment.catalog,
-                ) else {
+                let Some(a) = connection
+                    .endpoint_a
+                    .world_point(&hypothetical.units[a_index], &environment.catalog)
+                else {
                     continue;
                 };
-                let Some(b) = connection.endpoint_b.world_point(
-                    &hypothetical.units[b_index],
-                    &environment.catalog,
-                ) else {
+                let Some(b) = connection
+                    .endpoint_b
+                    .world_point(&hypothetical.units[b_index], &environment.catalog)
+                else {
                     continue;
                 };
                 if regions.iter().any(|region| {
@@ -367,14 +367,10 @@ pub(crate) fn try_start_environmental_break(
             };
             let endpoint_a = target.endpoint_a;
             let endpoint_b = target.endpoint_b;
-            let point_a = endpoint_a.world_point(
-                &hypothetical.units[a_index],
-                &environment.catalog,
-            )?;
-            let point_b = endpoint_b.world_point(
-                &hypothetical.units[b_index],
-                &environment.catalog,
-            )?;
+            let point_a =
+                endpoint_a.world_point(&hypothetical.units[a_index], &environment.catalog)?;
+            let point_b =
+                endpoint_b.world_point(&hypothetical.units[b_index], &environment.catalog)?;
             let accessible = regions.iter().any(|region| {
                 region.contains_point(point_a.x, point_a.y)
                     || region.contains_point(point_b.x, point_b.y)
@@ -620,7 +616,6 @@ impl Simulation {
         transformation.prepared_energy = Some((gross, usable, heat));
         true
     }
-
 }
 
 fn pending_energy_delta(transformation: &ActiveTransformation, organism: &Organism) -> f64 {
@@ -652,8 +647,7 @@ pub(crate) fn resolve_transformation(
             transformation.prepared_stored_material.as_ref(),
             transformation.prepared_stress,
         ) else {
-            if let Some((cell_index, source)) =
-                transformation.combine_environmental_source.as_ref()
+            if let Some((cell_index, source)) = transformation.combine_environmental_source.as_ref()
             {
                 // Restore to the exact field cell from which the source was
                 // reserved. Re-depositing by coordinates can land in a
