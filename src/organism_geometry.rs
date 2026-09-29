@@ -25,6 +25,22 @@ pub struct OrganismBodyGeometry {
     pub max_y: f64,
 }
 
+fn point_in_polygon(point: (f64, f64), vertices: &[(f64, f64)]) -> bool {
+    let (px, py) = point;
+    let mut inside = false;
+    for i in 0..vertices.len() {
+        let (ax, ay) = vertices[i];
+        let (bx, by) = vertices[(i + 1) % vertices.len()];
+        if (ay > py) != (by > py) {
+            let x_at_y = (bx - ax) * (py - ay) / (by - ay) + ax;
+            if px < x_at_y {
+                inside = !inside;
+            }
+        }
+    }
+    inside
+}
+
 impl OrganismBodyGeometry {
     pub fn from_structure(structure: &OrganismStructure, catalog: &[BaseResource]) -> Option<Self> {
         if structure.units.is_empty() {
