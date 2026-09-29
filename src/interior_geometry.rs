@@ -36,6 +36,23 @@ impl EnclosedRegion {
     }
 }
 
+/// Whether a structural connection endpoint lies in an accessible enclosed
+/// interior region. The genome cavity is already excluded when callers supply
+/// regions from `find_accessible_interior_regions`.
+pub fn endpoint_in_accessible_interior(
+    endpoint: crate::structure::ConnectionEndpoint,
+    unit: &crate::structure::StructuralUnit,
+    catalog: &[BaseResource],
+    regions: &[EnclosedRegion],
+) -> bool {
+    let Some(point) = endpoint.world_point(unit, catalog) else {
+        return false;
+    };
+    regions
+        .iter()
+        .any(|region| region.contains_point(point.x, point.y))
+}
+
 /// Find finite enclosed regions of a realized organism.
 ///
 /// This deliberately remains separate from genome-cavity qualification. Fluid
