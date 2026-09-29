@@ -220,6 +220,23 @@ impl Simulation {
             DevelopmentStage::Adult => {}
         }
     }
+    fn fill_accessible_interiors_with_water(
+        organism: &mut Organism,
+        environment: &Environment,
+        ledger: &mut EnergyLedger,
+    ) {
+        let _ = crate::interior_geometry::fill_enclosed_regions_with_water(
+            &mut organism.structure,
+            &environment.catalog,
+            ledger,
+            &mut organism.usable_energy,
+        );
+        organism.cached_cavity_revision = None;
+        organism.cached_cavity = None;
+        organism.cached_developmental_revision = None;
+        organism.cached_developmental_realization = None;
+    }
+
     pub(crate) fn transfer_contained_environmental_material(
         organism: &mut Organism,
         environment: &mut Environment,
@@ -583,6 +600,11 @@ impl Simulation {
                     &mut self.energy_ledger,
                 );
             }
+            Self::fill_accessible_interiors_with_water(
+                organism,
+                &self.environment,
+                &mut self.energy_ledger,
+            );
             let stored_amount_before_transfer = organism.stored_material.total_amount();
             Self::transfer_contained_environmental_material(organism, &mut self.environment);
             let acquired_amount =
