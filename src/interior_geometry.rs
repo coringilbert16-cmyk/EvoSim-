@@ -244,10 +244,10 @@ fn region_already_has_fitted_water(
                 .iter()
                 .map(|&(x, y)| {
                     let (sin, cos) = unit.placement.rotation_radians.sin_cos();
-                    (
-                        unit.placement.x + x * cos - y * sin,
-                        unit.placement.y + x * sin + y * cos,
-                    )
+                    Point {
+                        x: unit.placement.x + x * cos - y * sin,
+                        y: unit.placement.y + x * sin + y * cos,
+                    }
                 })
                 .collect::<Vec<_>>();
             if !point_in_polygon(
