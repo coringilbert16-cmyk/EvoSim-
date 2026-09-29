@@ -279,17 +279,196 @@ A numerical approximation may be useful internally, but it must not replace the 
 
 # 12. Organism Membership
 
-If a physical piece is bonded directly or indirectly to the genome, it is part of the organism.
+Physical graph connectivity is the authority for structural organism membership.
 
-This gives physical connectivity a central role in determining organism structure.
+A physical constituent is **structurally part of the organism** when it has a valid bonded path to the genome, subject to any material-specific structural qualification defined below.
 
-The system must move toward a universal physical membership rule rather than maintaining an independent abstract body list that can disagree with the actual structure.
+The genome itself is composed of non-fluid material. Therefore, a direct genome-to-Water bond is a valid structural connection.
 
-The physical graph should ultimately be able to answer:
+The system must not maintain a separate mutable structural-membership flag that can disagree with the physical graph.
 
-> What material is actually part of this organism?
+The physical graph must be able to answer:
 
-based on its relationship to the genome.
+> What physical constituents are structurally connected to this organism's genome?
+
+Disconnected material is not structural merely because it remains inside the organism boundary.
+
+## 12.1 Structural Water
+
+Water is a normal physical material in the same connectivity system as every other material. It has **no special acquisition mechanism** and does not receive a special energetic bonus merely because it is Water.
+
+Water does have one structural qualification because Water is fluid:
+
+> **Every Water constituent that is classified as structural must have at least one direct physical bond to a non-fluid constituent.**
+
+The genome counts as a non-fluid constituent.
+
+Therefore:
+
+- `G-W` → structural Water is valid.
+- `G-C-W` → the Water is structural.
+- `G-W-C` → the Water is structural.
+- `G-C-W-C-W` → both Water constituents are structural.
+- `G-W-C-W-C` → both Water constituents are structural.
+- `G-W-W` → the first Water is structural; the second Water is not structural because its only direct bond is to Water.
+- `G-C-W-W-W-C` → Water constituents connected only to Water do not become structural merely because another Water elsewhere in the chain is bonded to Carbon.
+- `G-W-W-W-C` → only the Water directly bonded to the genome can qualify; Water-Water connectivity alone does not qualify the downstream Water constituents.
+
+A Water-Water bond therefore never satisfies the non-fluid-neighbor requirement by itself.
+
+The structural predicate is:
+
+> `structural(Water) = genome_connected(Water) AND has_direct_nonfluid_neighbor(Water)`
+
+For non-Water material, structural membership is determined by genome connectivity under the normal physical graph rules.
+
+## 12.2 Internal Storage
+
+**Storage means physical material that is completely enclosed by the organism boundary but is not structurally connected to the genome.**
+
+Storage is therefore a derived physical classification, not a separate kind of material.
+
+A stored object:
+
+- already physically exists,
+- remains the same physical material instance,
+- retains its constituents,
+- retains its bonds,
+- retains its geometry and placement,
+- and may be manipulated by the organism's physical transformation machinery.
+
+A constituent that is connected to a larger physical component that still extends outside the organism is **not** converted into storage merely because part of it lies inside the boundary.
+
+The complete connected physical component remains intact and boundary-constrained until an actual physical operation changes its connectivity.
+
+## 12.3 Physical Containment and Acquisition — CURRENT AUTHORITY
+
+There is **no ACQUIRE action**.
+
+Acquisition is a physical consequence of material entering the organism's boundary. It is not a semantic transfer operation and it is not a special behavior available to the organism.
+
+The authoritative sequence is:
+
+`environmental physical material → physical movement/overlap → boundary interaction → containment classification → organism transformation`
+
+The key rule is:
+
+> **A physical material constituent becomes available to the organism when it is physically inside the organism's realized outer boundary.**
+
+This applies equally to Water, atomic resources, composite material, and any other physically realized material.
+
+### 12.3.1 Boundary Crossing Never Changes Connectivity
+
+Crossing the organism boundary is **not** BREAK.
+
+Crossing the organism boundary is **not** COMBINE.
+
+Crossing the organism boundary does **not** create, destroy, or rearrange physical bonds.
+
+If a connected physical component is entirely inside the organism, it may become internally stored or structural according to its graph relationship to the genome.
+
+If a connected physical component straddles the boundary, the **entire connected component remains intact and constrained**. The simulation must not split off the inside constituents simply because they crossed the membrane.
+
+If the organism needs that material separated from the outside portion, an actual physical transformation such as BREAK must remove the relevant bond.
+
+This is a critical invariant:
+
+> **Membrane crossing changes physical location/containment, never physical connectivity.**
+
+### 12.3.2 No Abstract-to-Physical Acquisition
+
+The organism must never acquire a material description and then manufacture a new physical object from that description.
+
+There is no intermediate "acquired material" representation.
+
+The authoritative object is always the existing physical material instance.
+
+Transfers and storage must preserve, where applicable:
+
+- constituent identity,
+- quantity,
+- internal relationships,
+- bonds,
+- geometry,
+- relative placement,
+- orientation,
+- physical state,
+- and other information required to preserve physical identity.
+
+The environment grid may be used as a spatial index for finding candidate material, but the grid is not the authority for containment, geometry, connectivity, or physical identity.
+
+## 12.4 Current Acquisition/Storage Lifecycle
+
+The current correct material lifecycle is:
+
+`ENVIRONMENT
+  → physical movement/overlap
+  → boundary interaction
+      → fully outside: remains environmental
+      → straddling boundary: remains one intact, constrained physical component
+      → fully enclosed: becomes internally available
+  → if genome-connected and structurally qualified: structural/living
+  → if fully enclosed and not structural: stored/nonliving
+  → COMBINE: creates one physical bond
+  → BREAK: removes one physical bond
+  → EXPEL: moves an eligible stored physical component outward
+`
+
+Only physical connectivity mutations change the bond graph:
+
+- **COMBINE creates bonds.**
+- **BREAK removes bonds.**
+- **Movement changes positions.**
+- **Containment changes accessibility/classification.**
+- **EXPEL changes location/ownership.**
+
+No one of these operations may silently perform another operation.
+
+## 12.5 Organism-Directed EXPEL
+
+EXPEL is an explicit organism action.
+
+EXPEL operates only on an existing, fully enclosed, **nonstructural physical component**.
+
+It must not reconstruct the material from composition.
+
+The selected material retains its:
+
+- constituents,
+- internal relationships,
+- bonds,
+- geometry,
+- relative placement,
+- orientation,
+- physical state,
+- and physical identity.
+
+EXPEL does not silently BREAK, deform, dissolve, or otherwise transform material merely to make expulsion possible.
+
+After successful expulsion, the existing physical material becomes owned by the active environmental field. The environment grid only indexes the resulting physical realization.
+
+Structural material is not eligible for EXPEL.
+
+If valid physical placement outside the organism cannot be achieved under the existing geometry and field topology, EXPEL fails without consuming or reconstructing the material.
+
+## 12.6 Implementation Authority
+
+The implementation must derive structural/storage status from authoritative physical state rather than storing independent mutable flags.
+
+The intended authority chain is:
+
+> **physical geometry + physical containment + physical bond graph + genome identity → structural/storage classification**
+
+The following are prohibited as substitutes for that authority:
+
+- abstract acquired-material objects,
+- logical material stored inside organisms,
+- membrane-crossing bond deletion,
+- membrane-crossing bond creation,
+- special Water acquisition rules,
+- Water-specific environmental energy bonuses,
+- arbitrary storage flags,
+- or composition-only reconstruction of physical material.
 
 # 13. Initial Seed Cell
 
@@ -300,186 +479,11 @@ The initial organism must have enough physical structure to:
 1. fully encompass the genome,
 2. provide the required genome cavity,
 3. exist as a physical organism,
-4. and have sufficient internal space to contain material from the environment.
+4. and have sufficient internal space to contain physical material from the environment.
 
 The seed is therefore not simply a data structure marked "alive."
 
 It must be an actual physically realized organism.
-
-# 14. Physical Material Availability
-
-There is no ACQUIRE action.
-
-Material availability is a consequence of physical containment rather than a separate organism action.
-
-The environment is a physical material system. The active field may contain individual resources, bonded composites, larger connected structures, loose material, fluid material, and other physical arrangements that emerge from the underlying resource and material rules.
-
-The authoritative rule is evaluated at the constituent scale:
-
-> A physical constituent is available to the organism when that constituent is physically within the organism's outer boundary.
-
-A composite material does **not** have to be entirely within the organism to interact with it. A composite may straddle the organism boundary, with some constituents inside and others outside.
-
-This does not itself break the composite or dissolve an existing bond. The physical material remains one structure until an actual physical transformation changes its connectivity.
-
-When a transformation acts on only the constituents within the organism, the material system may partition the existing physical material at constituent boundaries. Internal bonds are preserved only when both bonded constituents remain in the same resulting partition. A bond crossing the boundary is not silently recreated or destroyed merely because of containment.
-
-The organism therefore does not "pick up" a composite through a transfer action. Physical containment makes constituent material available to the organism's existing transformation machinery.
-
-This applies to both base and composite material.
-
-No transfer operation may convert abstract composition into a newly invented physical object. Existing physical material must preserve, where applicable:
-
-- constituents,
-- quantities,
-- internal relationships,
-- bonds,
-- geometry,
-- relative placement,
-- orientation,
-- physical state,
-- and other information required to preserve its physical identity.
-
-COMBINE may use physically available material directly. BREAK may act on existing physical bonds, and any resulting disconnected material remains governed by its actual physical location.
-
-The environment-grid system may remain the spatial indexing mechanism used to locate candidate material, but the grid is not itself the ultimate authority for physical geometry or containment.
-
-## 14.1 Organism-Directed EXPEL
-
-EXPEL is an organism-directed behavioral action.
-
-Unlike material availability, which requires no ACQUIRE action, EXPEL is an explicit decision that causes selected contained physical material to move outward from the organism.
-
-The action operates on an existing realized physical-material instance. It must not reconstruct the material from composition.
-
-The exit direction is:
-1. the organism's current movement direction when one exists;
-2. otherwise, the direction from the organism's current anchor toward the selected material;
-3. if neither direction exists, EXPEL is ineligible rather than inventing a random direction.
-
-The material is translated through the organism's realized physical boundary until its physical constituents are outside the organism's boundary in the selected direction.
-
-The placement calculation uses the realized constituent geometry of the organism. The organism bounding box is not physical authority.
-
-The translation distance is the minimum distance required to place the expelled material outside the organism in that direction. There is no authored ejection distance.
-
-The material retains its:
-- constituents,
-- internal relationships,
-- bonds,
-- geometry,
-- relative placement,
-- orientation,
-- physical state,
-- and other information required to preserve its physical identity.
-
-If the existing physical material cannot be validly placed outside the organism under the existing physical geometry and field topology, EXPEL fails without consuming the material.
-
-After successful expulsion, the existing physical material becomes owned by the active environmental field. The environment grid only indexes the resulting physical realization.
-
-EXPEL does not silently BREAK, deform, dissolve, or otherwise transform the material merely to make expulsion possible.
-
-## 14.1 The Active Field Is a Physical Material Layer
-
-The active field is not merely a collection of independent resource quantities.
-
-It is the environment's spatially organized physical-material layer.
-
-Its contents may be analogous, at different scales and configurations, to:
-
-- bedrock,
-- rocks,
-- rock fragments,
-- soil,
-- sediment,
-- loose deposits,
-- accumulated material,
-- and fluid material.
-
-These are **emergent descriptions**, not fundamental environmental object types.
-
-The implementation must not introduce hard-coded `Rock`, `Bedrock`, `Soil`, `Sediment`, `Food`, `Waste`, or equivalent ecological categories merely to represent these arrangements.
-
-A large environmental formation may be represented as a physically connected structure, while smaller fragments may exist as separate structures. The underlying constituents and physical relationships remain authoritative in either case.
-
-## 14.2 Environmental Physical Authority
-
-While material exists in the environment, the environment owns its physical realization.
-
-A physically existing composite is therefore not permitted to collapse into composition-only state if doing so would lose information required to determine later physical interactions.
-
-The governing rule is:
-
-> **A physical material object does not lose its physical identity merely because it changes location or ownership.**
-
-When material crosses from the environment into an organism, the transfer changes ownership; it does not require reconstruction of the material's existing physical structure.
-
-## 14.3 Composition Does Not Invent Geometry
-
-Knowing that an environmental material contains particular constituents is not sufficient authorization to choose a particular physical arrangement for that material instance.
-
-For example, knowing that a material contains Carbon, Methane, and Water does not authorize a transfer to arbitrarily choose their relative positions or orientations.
-
-If a physically existing material instance has no authoritative physical realization, the transfer system must not silently invent one merely to complete the transfer.
-
-Physical realization must instead come from an authoritative physical process.
-
-## 14.4 Environmental Structures and Scale
-
-The active field must support physical structures ranging from individual resource units to large connected formations.
-
-There is no authored environmental size corresponding to a category such as rock or soil.
-
-Scale emerges from physical arrangement, connectivity, quantity, geometry, and environmental processes.
-
-Performance-oriented aggregation is permitted only when it preserves enough information to produce the physical interactions that the simulation needs to calculate.
-
-An optimization must not become a second physical authority.
-
-### 14.5 Initial Physical Formation Seeding
-
-The initial active field is seeded with a **small number of physical formations separated by empty field space**.
-
-Each formation:
-- is physically realized rather than remaining composition-only,
-- may contain multiple different aggregate material compositions,
-- uses a repeating spatial pattern derived from its elemental composition,
-- receives bounded random variation in that pattern so formations develop irregular outlines, protrusions, and other non-circular features,
-- is represented through the existing physical-material realization rather than a hard-coded terrain category.
-
-Formation extent is described by its realized width and height; when a single scale value is required, the larger of those two extents is used. There is no separate authoritative diameter.
-
-The environment grid remains a spatial index. The physical realization and its geometry remain authoritative.
-
-## 14.5 Environmental Fragmentation and Accumulation
-
-Environmental material may fragment into smaller physical structures and may accumulate into larger structures through established physical processes.
-
-BREAK may participate in physical fragmentation where its rules permit.
-
-Movement, deposition, cohesion, geometry, and other established environmental interactions may produce accumulation.
-
-Neither process requires conversion into a special environmental resource type.
-
-## 14.6 Rigid and Fluid Environmental Material
-
-Environmental material retains the physical-state rules of its constituents.
-
-Rigid material retains its established geometry and interacts through actual geometry and connection points.
-
-Fluid material retains its fluid behavior.
-
-Water remains a fluid resource with a default circular representation; the representation is not an authored rigid solid shape.
-
-## 14.7 No Environmental Biological Roles
-
-Environmental material has no inherent biological purpose.
-
-There is no fundamental distinction between food, construction material, waste, nutrient, obstacle, shelter, or useful/unused resource.
-
-The same physical material may be used differently by different organisms.
-
-Its biological significance emerges from organism behavior and physical interaction rather than from an environmental role flag.
 
 # 15. Active Environmental Field
 
