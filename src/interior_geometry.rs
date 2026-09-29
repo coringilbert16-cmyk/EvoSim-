@@ -24,7 +24,7 @@ pub struct EnclosedRegion {
     pub area: f64,
     pub boundary_units: Vec<usize>,
     pub sample_point: (f64, f64),
-    boundary: Vec<(f64, f64)>,
+    pub(crate) boundary: Vec<(f64, f64)>,
 }
 
 impl EnclosedRegion {
@@ -41,6 +41,7 @@ impl EnclosedRegion {
 /// This deliberately remains separate from genome-cavity qualification. Fluid
 /// forms are not converted into artificial rigid polygons here; connected Water
 /// receives context-fitting realization in the next implementation stage.
+///
 /// Number of one-unit Water constituents needed to cover an enclosed region
 /// at the Water resource's nominal physical area. This is planning information;
 /// it does not create Water or mutate the organism.
