@@ -392,7 +392,6 @@ fn solve_parts(
                 a,
                 b,
                 catalog,
-                0.0,
                 &mut cache,
                 &mut candidate_ledger,
                 &mut candidate_energy,
