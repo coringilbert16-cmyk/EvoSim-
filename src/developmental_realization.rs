@@ -681,7 +681,8 @@ fn point_in_form(
         }
         crate::resources::Form::Rectangle { .. }
         | crate::resources::Form::RegularPolygon { .. }
-        | crate::resources::Form::Polygon { .. } => {
+        | crate::resources::Form::Polygon { .. }
+        | crate::resources::Form::Fluid { boundary: Some(_), .. } => {
             let Some(local_vertices) = form.polygon_vertices() else {
                 return false;
             };
@@ -700,7 +701,7 @@ fn point_in_form(
             }
             inside
         }
-        crate::resources::Form::Line { .. } | crate::resources::Form::Fluid { .. } => false,
+        crate::resources::Form::Line { .. } | crate::resources::Form::Fluid { boundary: None, .. } => false,
     }
 }
 
