@@ -746,7 +746,11 @@ mod tests {
         let genome = initial_genome();
         let catalog = default_catalog();
         let placements = vec![
-            crate::state::Position { x: 0.0, y: 0.0 }.into();
+            crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            };
             genome.juvenile_reserve.parts.len()
         ];
         let instance = PhysicalMaterial::realized(
