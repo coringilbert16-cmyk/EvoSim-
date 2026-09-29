@@ -287,7 +287,30 @@ pub(crate) fn has_environmental_break_candidate(
     organism: &Organism,
     environment: &Environment,
 ) -> bool {
-    !environmental_break_candidates(organism, environment).is_empty()
+    let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_structure(
+        &organism.structure,
+        &environment.catalog,
+    ) else {
+        return false;
+    };
+    environment
+        .field
+        .cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y)
+        .into_iter()
+        .any(|cell_index| {
+            environment
+                .field
+                .cells
+                .get(cell_index)
+                .into_iter()
+                .flat_map(|cell| cell.physical_materials.iter())
+                .any(|instance| {
+                    instance
+                        .internal_connections
+                        .as_ref()
+                        .is_some_and(|connections| !connections.is_empty())
+                })
+        })
 }
 
     pub(crate) fn try_start_environmental_break(
