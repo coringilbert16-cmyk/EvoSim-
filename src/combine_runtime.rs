@@ -756,68 +756,38 @@ pub(crate) fn try_start_combine(
         return None;
     }
 
-    // Tick 1 selects the exact COMBINE outcome without mutating the real
-    // organism, energy ledger, or environment. The selected result is held
-    // until the middle tick prepares the transaction and the final tick
-    // commits the physical mutation.
-    let mut trial_organism = organism.clone();
-    let mut trial_environment = environment.clone();
-    let original_ledger = *ledger;
-    let mut trial_ledger = original_ledger;
-    let _attempt = try_combine(
-        &mut trial_organism,
-        &mut trial_environment,
-        cache,
-        &mut trial_ledger,
-        developmental,
-    )?;
-
-    let mut environmental_source = None;
-    for (cell_index, original_cell) in environment.field.cells.iter().enumerate() {
-        let Some(trial_cell) = trial_environment.field.cells.get(cell_index) else {
-            continue;
-        };
-        for instance in &original_cell.physical_materials {
-            let original_count = original_cell
-                .physical_materials
-                .iter()
-                .filter(|candidate| *candidate == instance)
-                .count();
-            let trial_count = trial_cell
-                .physical_materials
-                .iter()
-                .filter(|candidate| *candidate == instance)
-                .count();
-            if trial_count < original_count {
-                environmental_source = Some((cell_index, instance.clone()));
-                break;
-            }
-        }
-        if environmental_source.is_some() {
-            break;
-        }
-    }
-
-    if let Some((cell_index, source)) = environmental_source.as_ref() {
-        let cell = environment.field.cells.get_mut(*cell_index)?;
-        let index = cell
-            .physical_materials
-            .iter()
-            .position(|candidate| candidate == source)?;
-        cell.physical_materials.remove(index);
-        environment.field.mark_changed_at_index(*cell_index);
-    }
-
-    let ledger_delta = EnergyLedger {
-        total_potential_energy_released: trial_ledger.total_potential_energy_released
-            - original_ledger.total_potential_energy_released,
-        total_usable_energy_gained: trial_ledger.total_usable_energy_gained
-            - original_ledger.total_usable_energy_gained,
-        total_heat_dissipated: trial_ledger.total_heat_dissipated
-            - original_ledger.total_heat_dissipated,
-        total_usable_energy_held: trial_ledger.total_usable_energy_held
-            - original_ledger.total_usable_energy_held,
+    // Tick 1 selects COMBINE as an action only. Candidate finding and the
+    // physical transaction remain deferred to Tick 2, matching BREAK's phase
+    // boundary. No environmental material is reserved on this tick.
+    let complexity = 2.0;
+    let duration = 1_u64.max(complexity.ceil() as u64);
+    let transformation = crate::state::ActiveTransformation {
+        id: *next_id,
+        organism_id: organism.id.clone(),
+        kind: crate::state::TransformationKind::Combine,
+        material: crate::resources::Material::free_base("", 0.0),
+        bond: None,
+        stored_material: None,
+        stored_bond: None,
+        environmental_source: false,
+        complexity,
+        duration_ticks: duration,
+        remaining_ticks: duration,
+        prepared_energy: None,
+        pending_experience: None,
+        decision_context_key: None,
+        prepared_structure: None,
+        prepared_stored_material: None,
+        prepared_usable_energy: None,
+        prepared_stress: None,
+        prepared_ledger: None,
+        combine_environmental_source: None,
     };
+    *next_id += 1;
+    organism.active_transformation_id = Some(transformation.id);
+    Some(transformation)
+}
+
     let complexity = 2.0;
     let duration = 1_u64.max(complexity.ceil() as u64);
     let transformation = crate::state::ActiveTransformation {
