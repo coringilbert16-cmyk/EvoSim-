@@ -28,15 +28,6 @@ pub(crate) struct PhysicalMaterial {
 }
 
 impl PhysicalMaterial {
-    pub(crate) fn logical(material: Material) -> Self {
-        Self {
-            material,
-            placements: None,
-            internal_connections: None,
-            owner_relative_origin: None,
-        }
-    }
-
     pub(crate) fn realized(
         material: Material,
         placements: Vec<Placement>,
