@@ -55,22 +55,6 @@ pub(crate) struct DecompositionStep {
     pub(crate) released_material: Option<Vec<PhysicalMaterial>>,
 }
 
-fn water_field_amount(environment: &Environment, position: &Position) -> f64 {
-    environment
-        .field
-        .index_for_position(position.x, position.y)
-        .map(|index| {
-            environment.field.cells[index]
-                .materials
-                .iter()
-                .flat_map(|material| material.parts.iter())
-                .filter(|(name, _)| name == "Water")
-                .map(|(_, amount)| *amount)
-                .sum()
-        })
-        .unwrap_or(0.0)
-}
-
 pub(crate) fn resolve_one_bond_with_ledger(
     body: &mut DecomposingBody,
     environment: &Environment,
@@ -118,7 +102,6 @@ pub(crate) fn resolve_one_bond_with_ledger(
     let (gross, usable, heat) = crate::transformation::break_energy_yield(
         a,
         b,
-        water_field_amount(environment, &body.position),
         1.0,
     )?;
     let transaction = EnergyTransaction {
