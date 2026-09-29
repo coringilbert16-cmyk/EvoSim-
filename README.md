@@ -2643,6 +2643,14 @@ The intended sequence is:
 An environmental physical object that merely overlaps the structural material
 is not automatically acquired.
 
+Passage is supplied by the realized boundary's existing physical behavior rather than by
+a special acquisition rule: rigid boundary material participates in collision and blocks
+penetration, while Water remains fluid and does not create a penetration barrier. A
+physical environmental object therefore reaches the interior through the passable
+portions of the realized boundary by ordinary physical movement/interaction. Acquisition
+only transfers it after the complete physical component is within one accessible enclosed
+region.
+
 A material fully inside an **accessible** enclosed interior may be classified as inside even
 when there is no structural material occupying the same location. The genome cavity is
 inside the organism but is excluded from accessible interior classification and remains
