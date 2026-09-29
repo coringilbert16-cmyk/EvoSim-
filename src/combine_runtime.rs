@@ -194,7 +194,7 @@ pub(crate) fn instantiate_one_unit(
     )?;
     organism.stored_material.take_matching_physical(&material)?;
     organism.structure = trial;
-    Some(indices.first().copied()?)
+    indices.first().copied()
 }
 
 pub(crate) fn try_combine_stored_unit(
