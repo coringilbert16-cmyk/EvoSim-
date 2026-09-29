@@ -10,9 +10,9 @@ use crate::combine::{
 use crate::contact::ConnectionCompatibilityCache;
 use crate::developmental_blueprint::DevelopmentalFieldBlueprint;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
+use crate::physical_material::PhysicalMaterial;
 use crate::resources::BaseResource;
 use crate::state::{EnergyLedger, Environment, Organism};
-use crate::physical_material::PhysicalMaterial;
 use crate::structure::{BondEndpoint, ConnectionEndpoint, Placement};
 
 const EPSILON: f64 = 1e-12;
@@ -561,12 +561,9 @@ fn try_combine_environmental(
         &environment.catalog,
     )?;
 
-    let candidate_cells = environment.field.cells_intersecting_bounds(
-        body.min_x,
-        body.max_x,
-        body.min_y,
-        body.max_y,
-    );
+    let candidate_cells = environment
+        .field
+        .cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y);
     let mut candidates = Vec::new();
 
     for cell_index in candidate_cells {
@@ -602,10 +599,10 @@ fn try_combine_environmental(
                         &environment.catalog,
                         cache,
                     ) {
-                        let Some(a) = candidate.endpoint_a.world_point(
-                            &hypothetical.units[ua],
-                            &environment.catalog,
-                        ) else {
+                        let Some(a) = candidate
+                            .endpoint_a
+                            .world_point(&hypothetical.units[ua], &environment.catalog)
+                        else {
                             continue;
                         };
                         // The organism-side connection point is the relevant
@@ -624,10 +621,10 @@ fn try_combine_environmental(
                         ) {
                             let developmental_score = developmental
                                 .map(|(blueprint, origin, orientation, preferred_length)| {
-                                    let Some(a) = candidate.endpoint_a.world_point(
-                                        &hypothetical.units[ua],
-                                        &environment.catalog,
-                                    ) else {
+                                    let Some(a) = candidate
+                                        .endpoint_a
+                                        .world_point(&hypothetical.units[ua], &environment.catalog)
+                                    else {
                                         return 0.0;
                                     };
                                     let local = crate::developmental_blueprint::developmental_point(
@@ -668,17 +665,8 @@ fn try_combine_environmental(
             .then_with(|| a.6.partial_cmp(&b.6).unwrap_or(std::cmp::Ordering::Equal))
     });
 
-    for (
-        cell_index,
-        material_index,
-        instance,
-        ua,
-        ub,
-        evaluation,
-        _distance,
-        required,
-        _score,
-    ) in candidates
+    for (cell_index, material_index, instance, ua, ub, evaluation, _distance, required, _score) in
+        candidates
     {
         if organism.usable_energy + EPSILON < required {
             continue;
@@ -696,8 +684,9 @@ fn try_combine_environmental(
         ) else {
             continue;
         };
-        let Some(restored_ub) =
-            indices.get(ub.saturating_sub(organism.structure.units.len())).copied()
+        let Some(restored_ub) = indices
+            .get(ub.saturating_sub(organism.structure.units.len()))
+            .copied()
         else {
             continue;
         };
