@@ -332,7 +332,7 @@ impl ActiveMaterialField {
                 let half = *length * 0.5;
                 let a = transform(-half, 0.0);
                 let b = transform(half, 0.0);
-                Self::Self::segment_fully_inside_region(a, b, region)
+                Self::segment_fully_inside_region(a, b, region)
             }
             _ => {
                 let Some(vertices) = form.polygon_vertices() else {
@@ -348,7 +348,7 @@ impl ActiveMaterialField {
                 world.iter().all(|&(x, y)| region.contains_point(x, y))
                     && world.iter().enumerate().all(|(index, &a)| {
                         let b = world[(index + 1) % world.len()];
-                        segment_fully_inside_region(a, b, region)
+                        Self::segment_fully_inside_region(a, b, region)
                     })
             }
         }
