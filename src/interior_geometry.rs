@@ -134,7 +134,9 @@ pub fn fill_enclosed_regions_with_water(
         if region.area <= EPS || region.boundary.len() < 3 {
             continue;
         }
-        if region_already_has_fitted_water(structure, &region, catalog) {
+        if region_already_has_fitted_water(structure, &region, catalog)
+            || region_boundary_contains_water(structure, &region, catalog)
+        {
             continue;
         }
 
@@ -209,6 +211,17 @@ pub fn fill_enclosed_regions_with_water(
     }
 
     Ok(filled)
+}
+
+fn region_boundary_contains_water(
+    structure: &OrganismStructure,
+    region: &EnclosedRegion,
+    catalog: &[BaseResource],
+) -> bool {
+    region.boundary_units.iter().any(|&index| {
+        structure.units.get(index).and_then(|unit| unit.material.parts.first())
+            .is_some_and(|(name, _)| name == "Water")
+    })
 }
 
 fn region_already_has_fitted_water(
