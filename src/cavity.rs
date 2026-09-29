@@ -115,8 +115,41 @@ pub fn analyze_genome_cavity(
     structure: &OrganismStructure,
     catalog: &[BaseResource],
 ) -> Result<Option<GenomeCavity>, String> {
+    if let Some(&genome_id) = structure.genome_constituent_ids().first() {
+        let Some(start) = structure.unit_index(genome_id) else {
+            return Ok(None);
+        };
+        return analyze_genome_cavity_in_indices(
+            structure,
+            catalog,
+            &structure.connected_component_containing(start),
+        );
+    }
+
+    // Legacy/uninitialized structures have no persisted genome IDs yet.
+    // Qualification is therefore established from the realized physical graph
+    // across connected components; once a cavity qualifies, its actual
+    // boundary IDs are persisted by the caller.
+    let mut best = None;
+    for component in structure.connected_components() {
+        let candidate = analyze_genome_cavity_in_indices(structure, catalog, &component)?;
+        if candidate.as_ref().is_some_and(|candidate| {
+            best.as_ref()
+                .is_none_or(|current: &GenomeCavity| candidate.area > current.area)
+        }) {
+            best = candidate;
+        }
+    }
+    Ok(best)
+}
+
+fn analyze_genome_cavity_in_indices(
+    structure: &OrganismStructure,
+    catalog: &[BaseResource],
+    candidate_indices: &[usize],
+) -> Result<Option<GenomeCavity>, String> {
     let minimum_area = minimum_genome_cavity_area(catalog)?;
-    let structural_indices = structure.structural_unit_indices();
+    let structural_indices = candidate_indices.iter().copied();
     let mut polygons = Vec::<(usize, Vec<Point>)>::new();
     for index in structural_indices {
         let unit = &structure.units[index];
