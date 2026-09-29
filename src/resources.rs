@@ -651,7 +651,7 @@ mod shape_tests {
         for resource in default_catalog() {
             let area = match &resource.shape.form {
                 Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-                Form::Fluid { nominal_area } => nominal_area.to_owned(),
+                Form::Fluid { nominal_area, .. } => nominal_area.to_owned(),
                 Form::Line { .. } => continue,
                 other => polygon_area(&other.polygon_vertices().unwrap()),
             };
