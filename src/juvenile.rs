@@ -350,7 +350,6 @@ fn form_declared_bonds(
     Ok((structure, ledger, energy))
 }
 
-
 /// Make the confirmed initial organism's outer interface permeable by replacing
 /// alternating outer-shell constituents with fitted Water while preserving their
 /// existing constituent IDs and bonds. The same realized seed persists through
@@ -497,7 +496,6 @@ pub(crate) fn realize_initial_with_reserve(
     Ok((structure, ledger, energy))
 }
 
-
 #[cfg(test)]
 mod water_initialization_tests {
     use super::*;
@@ -525,15 +523,20 @@ mod water_initialization_tests {
 
         assert!(water_indices.len() >= 5);
 
-        let fitted_boundary = water_indices.iter().filter(|&&index| {
-            matches!(
-                structure.units[index].shape(&catalog).map(|shape| &shape.form),
-                Some(crate::resources::Form::Fluid {
-                    boundary: Some(_),
-                    ..
-                })
-            )
-        }).count();
+        let fitted_boundary = water_indices
+            .iter()
+            .filter(|&&index| {
+                matches!(
+                    structure.units[index]
+                        .shape(&catalog)
+                        .map(|shape| &shape.form),
+                    Some(crate::resources::Form::Fluid {
+                        boundary: Some(_),
+                        ..
+                    })
+                )
+            })
+            .count();
         assert!(fitted_boundary >= 5);
 
         let water_resource = catalog
@@ -545,11 +548,9 @@ mod water_initialization_tests {
         let genome = crate::cavity::analyze_genome_cavity(&structure, &catalog)
             .expect("genome cavity analysis")
             .expect("genome cavity");
-        let accessible = crate::interior_geometry::find_accessible_interior_regions(
-            &structure,
-            &catalog,
-        )
-        .expect("accessible interior analysis");
+        let accessible =
+            crate::interior_geometry::find_accessible_interior_regions(&structure, &catalog)
+                .expect("accessible interior analysis");
 
         assert!(accessible
             .iter()
