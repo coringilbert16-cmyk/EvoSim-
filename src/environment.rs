@@ -256,7 +256,7 @@ impl ActiveMaterialField {
             let mut remaining = Vec::with_capacity(cell.physical_materials.len());
             let mut changed = false;
             for physical in cell.physical_materials.drain(..) {
-                if physical_is_fully_inside_any_region(&physical, regions, catalog) {
+                if Self::physical_is_fully_inside_any_region(&physical, regions, catalog) {
                     contained.push(physical);
                     changed = true;
                 } else {
@@ -296,7 +296,7 @@ impl ActiveMaterialField {
                     else {
                         return false;
                     };
-                    realized_form_fully_inside_region(&resource.shape.form, *placement, region)
+                    Self::realized_form_fully_inside_region(&resource.shape.form, *placement, region)
                 })
         })
     }
@@ -324,7 +324,7 @@ impl ActiveMaterialField {
                 for index in 0..boundary.len() {
                     let a = boundary[index];
                     let b = boundary[(index + 1) % boundary.len()];
-                    minimum = minimum.min(point_segment_distance((placement.x, placement.y), a, b));
+                    minimum = minimum.min(Self::point_segment_distance((placement.x, placement.y), a, b));
                 }
                 minimum + 1e-9 >= *radius
             }
@@ -332,7 +332,7 @@ impl ActiveMaterialField {
                 let half = *length * 0.5;
                 let a = transform(-half, 0.0);
                 let b = transform(half, 0.0);
-                segment_fully_inside_region(a, b, region)
+                Self::Self::segment_fully_inside_region(a, b, region)
             }
             _ => {
                 let Some(vertices) = form.polygon_vertices() else {
@@ -364,7 +364,7 @@ impl ActiveMaterialField {
         }
         let boundary = &region.boundary;
         !(0..boundary.len()).any(|index| {
-            segments_intersect(
+            Self::segments_intersect(
                 a,
                 b,
                 boundary[index],
