@@ -222,7 +222,7 @@ fn realized_unit_spectra(
     let baselines = ResourceBaselines::from_catalog(catalog);
     let mut local = Vec::with_capacity(structure.units.len());
 
-    let structural_indices = structure.structural_unit_indices();
+    let structural_indices = structure.structural_unit_indices(catalog);
     let mut is_structural = vec![false; structure.units.len()];
     for index in structural_indices {
         if let Some(flag) = is_structural.get_mut(index) {
