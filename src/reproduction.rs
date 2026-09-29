@@ -497,7 +497,7 @@ pub(crate) fn begin_reproduction(
     // Structured logical material remains intact; an already-realized
     // structured object may be used directly.
     for entry in parent.stored_material.entries.clone() {
-        let StoredMaterial::Physical(instance) = &entry;
+        let crate::material_storage::StoredMaterial::Physical(instance) = &entry;
         let anchor = instance.material.clone();
         let Some(placement) = parent_child_position(parent, &anchor, catalog) else {
             continue;
@@ -639,7 +639,7 @@ pub(crate) fn advance_construction(
 
     if let Some(material) = transferred {
         let mut parent_trial = parent_storage.clone();
-        if parent_trial.take_matching(&material).is_none() {
+        if parent_trial.take_matching_physical(&material.material).is_none() {
             return (ConstructionStatus::Waiting, None);
         }
         *parent_storage = parent_trial;
