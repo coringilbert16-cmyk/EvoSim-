@@ -159,9 +159,6 @@ pub fn fill_enclosed_regions_with_water(
             origin,
         )
         .ok_or_else(|| "failed to create fitted Water constituent".to_string())?;
-        if !water_unit.realize_default_geometry(catalog) {
-            return Err("failed to realize default Water geometry".into());
-        }
         if !water_unit.realize_fluid_geometry(
             crate::resources::Shape {
                 form: Form::Fluid {
