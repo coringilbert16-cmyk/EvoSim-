@@ -212,33 +212,22 @@ pub(crate) fn instantiate_one_unit(
     catalog: &[BaseResource],
 ) -> Option<usize> {
     let material = organism.stored_material.first_material()?;
+    if !material.is_valid() || material.is_empty() {
+        return None;
+    }
+    let instance = organism.stored_material.peek_matching_physical(&material)?;
+    if !instance.is_realized() {
+        return None;
+    }
     let (x, y) = organism
         .occupied_cells
         .first()
         .map(|p| (p.x, p.y))
         .unwrap_or((0.0, 0.0));
-    if material.has_internal_structure() {
-        let instance = organism.stored_material.peek_matching_physical(&material)?;
-        if !instance.is_realized() {
-            return None;
-        }
-        let mut trial = organism.structure.clone();
-        let indices = crate::material_restoration::restore_material(
-            &mut trial,
-            &instance,
-            Placement {
-                x,
-                y,
-                rotation_radians: 0.0,
-            },
-            catalog,
-        )?;
-        organism.stored_material.take_matching_physical(&material)?;
-        organism.structure = trial;
-        return indices.first().copied();
-    }
-    let unit = physical_material_candidate(
-        &material,
+    let mut trial = organism.structure.clone();
+    let indices = crate::material_restoration::restore_material(
+        &mut trial,
+        &instance,
         Placement {
             x,
             y,
@@ -246,8 +235,9 @@ pub(crate) fn instantiate_one_unit(
         },
         catalog,
     )?;
-    organism.stored_material.take_matching(&material)?;
-    Some(organism.structure.add_unit(unit))
+    organism.stored_material.take_matching_physical(&material)?;
+    organism.structure = trial;
+    Some(indices.first().copied()?)
 }
 
 pub(crate) fn try_combine_stored_unit(
