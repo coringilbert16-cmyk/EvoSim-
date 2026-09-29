@@ -59,6 +59,11 @@ pub fn find_enclosed_regions(
     let mut polygons = Vec::<(usize, Vec<Point>)>::new();
     for index in structure.structural_unit_indices(catalog) {
         let unit = &structure.units[index];
+        let Some((name, _)) = unit.material.parts.first() else { continue };
+        let Some(resource) = catalog.iter().find(|resource| resource.name == *name) else { continue };
+        if resource.physical_state == crate::resources::PhysicalState::Fluid {
+            continue;
+        }
         let Some(geometry) = unit.geometry.as_ref() else { continue };
         let Some(polygon) = transformed_polygon(&geometry.shape().form, unit.placement) else { continue };
         if polygon.len() >= 3 { polygons.push((index, polygon)); }
