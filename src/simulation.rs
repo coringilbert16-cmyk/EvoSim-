@@ -354,7 +354,7 @@ impl Simulation {
         };
         if relevant(ActionKind::Break) {
             for (storage_index, entry) in organism.stored_material.entries.iter().enumerate() {
-                if let crate::material_storage::StoredMaterial::Physical(instance) = entry {
+                let crate::material_storage::StoredMaterial::Physical(instance) = entry;
                     if let Some(connections) = &instance.internal_connections {
                         for bond_index in 0..connections.len() {
                             candidates.push(ActionCandidate {
