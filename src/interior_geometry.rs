@@ -192,17 +192,51 @@ pub fn find_enclosed_regions(
     catalog: &[BaseResource],
 ) -> Vec<EnclosedRegion> {
     let mut polygons = Vec::<(usize, Vec<Point>)>::new();
+    let mut fluid_polygons = Vec::<(usize, Vec<Point>)>::new();
     for index in structure.structural_unit_indices(catalog) {
         let unit = &structure.units[index];
         let Some((name, _)) = unit.material.parts.first() else { continue };
         let Some(resource) = catalog.iter().find(|resource| resource.name == *name) else { continue };
-        if resource.physical_state == crate::resources::PhysicalState::Fluid {
-            continue;
-        }
         let Some(geometry) = unit.geometry.as_ref() else { continue };
         let Some(polygon) = transformed_polygon(&geometry.shape().form, unit.placement) else { continue };
-        if polygon.len() >= 3 { polygons.push((index, polygon)); }
+        if polygon.len() < 3 { continue; }
+        if resource.physical_state == crate::resources::PhysicalState::Fluid {
+            fluid_polygons.push((index, polygon));
+        } else {
+            polygons.push((index, polygon));
+        }
     }
+
+    // A fitted Water constituent can itself be part of the organism's outer
+    // boundary. It participates in the enclosure topology for interior
+    // detection, but interior Water must not become a second artificial wall.
+    if !fluid_polygons.is_empty() {
+        let mut min_x = f64::INFINITY;
+        let mut max_x = f64::NEG_INFINITY;
+        let mut min_y = f64::INFINITY;
+        let mut max_y = f64::NEG_INFINITY;
+        for (_, polygon) in polygons.iter().chain(fluid_polygons.iter()) {
+            for point in polygon {
+                min_x = min_x.min(point.x);
+                max_x = max_x.max(point.x);
+                min_y = min_y.min(point.y);
+                max_y = max_y.max(point.y);
+            }
+        }
+        let tolerance = NODE_TOLERANCE * 10.0;
+        for (index, polygon) in fluid_polygons {
+            let on_outer_envelope = polygon.iter().any(|point| {
+                (point.x - min_x).abs() <= tolerance
+                    || (point.x - max_x).abs() <= tolerance
+                    || (point.y - min_y).abs() <= tolerance
+                    || (point.y - max_y).abs() <= tolerance
+            });
+            if on_outer_envelope {
+                polygons.push((index, polygon));
+            }
+        }
+    }
+
     if polygons.is_empty() { return Vec::new(); }
 
     let mut points = Vec::new();
