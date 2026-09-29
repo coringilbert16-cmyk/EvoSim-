@@ -751,8 +751,9 @@ mod tests {
         let mut water = StructuralUnit::new("Water", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 });
         assert!(water.realize_default_geometry(&catalog));
         let fitted = crate::resources::Shape {
-            form: crate::resources::Form::Polygon {
-                vertices: vec![(-1.0, 0.0), (0.0, 1.0), (1.0, 0.0), (0.0, -1.0)],
+            form: crate::resources::Form::Fluid {
+                nominal_area: 2.0,
+                boundary: Some(vec![(-1.0, 0.0), (0.0, 1.0), (1.0, 0.0), (0.0, -1.0)]),
             },
         };
         assert!(water.realize_fluid_geometry(fitted.clone(), &catalog));
@@ -847,7 +848,7 @@ mod tests {
     }
 
     #[test]
-    fn water_structural_matrix_follows_direct_nonfluid_neighbor_rule() {
+    fn water_structural_matrix_follows_component_nonfluid_rule() {
         let catalog = crate::resources::default_catalog();
 
         let (s, u) = water_chain_structure(&["Carbon", "Water"]);
@@ -869,7 +870,7 @@ mod tests {
     }
 
     #[test]
-    fn direct_nonfluid_neighbor_qualifies_fluid_water() {
+    fn component_nonfluid_member_qualifies_fluid_water() {
         let catalog = crate::resources::default_catalog();
         let mut s = OrganismStructure::new();
         let genome = s.add_unit(StructuralUnit::new(
@@ -901,7 +902,7 @@ mod tests {
     }
 
     #[test]
-    fn water_water_bond_does_not_qualify_second_water() {
+    fn water_water_chain_qualifies_when_component_contains_nonfluid() {
         let catalog = crate::resources::default_catalog();
         let mut s = OrganismStructure::new();
         let genome = s.add_unit(StructuralUnit::new(
@@ -945,7 +946,7 @@ mod tests {
             bond_energy: 1.0,
         });
         assert!(s.is_structurally_qualified(w1, &catalog));
-        assert!(!s.is_structurally_qualified(w2, &catalog));
+        assert!(s.is_structurally_qualified(w2, &catalog));
     }
 
     #[test]
