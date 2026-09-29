@@ -273,7 +273,10 @@ fn try_child_construction(
             crate::material_storage::StoredMaterial::Physical(instance) => instance.clone(),
         };
         let mut candidate = child.clone();
-        if !candidate.stored_material.store_physical_instance(material.clone()) {
+        if !candidate
+            .stored_material
+            .store_physical_instance(material.clone())
+        {
             continue;
         }
         let last = candidate.stored_material.entries.len().saturating_sub(1);
