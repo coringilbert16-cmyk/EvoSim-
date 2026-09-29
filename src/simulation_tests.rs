@@ -184,7 +184,10 @@ mod integration_tests {
             .collect();
         assert_eq!(remaining.len(), 1);
         assert_eq!(remaining[0].material, original.material);
-        assert_eq!(remaining[0].internal_connections, original.internal_connections);
+        assert_eq!(
+            remaining[0].internal_connections,
+            original.internal_connections
+        );
         assert_eq!(remaining[0].placements, original.placements);
     }
 
