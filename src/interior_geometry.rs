@@ -378,7 +378,7 @@ mod tests {
     fn connection_endpoint_accessibility_is_point_based() {
         let catalog = crate::resources::default_catalog();
         let unit = crate::structure::StructuralUnit::new(
-            "Carbon",
+            "Water",
             crate::structure::Placement {
                 x: 0.0,
                 y: 0.0,
@@ -397,9 +397,7 @@ mod tests {
             ],
         };
         assert!(endpoint_in_accessible_interior(
-            crate::structure::ConnectionEndpoint::Boundary {
-                angle_radians: 0.0,
-            },
+            crate::structure::ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 },
             &unit,
             &catalog,
             std::slice::from_ref(&region),
