@@ -263,30 +263,18 @@ impl ActiveMaterialField {
                     remaining.push(physical);
                     continue;
                 }
-                let selected: Vec<usize> = placements
+                let all_inside = placements
                     .iter()
-                    .enumerate()
-                    .filter_map(|(index, placement)| {
-                        body.contains_point(placement.x, placement.y)
-                            .then_some(index)
-                    })
-                    .collect();
-                if selected.is_empty() {
-                    remaining.push(physical);
-                    continue;
-                }
-                if selected.len() == placements.len() {
+                    .all(|placement| body.contains_point(placement.x, placement.y));
+                if all_inside {
                     contained.push(physical);
                     changed = true;
-                    continue;
-                }
-                match crate::material_transfer::split_physical_material(&physical, &selected) {
-                    Some((inside, outside)) => {
-                        contained.push(inside);
-                        remaining.push(outside);
-                        changed = true;
-                    }
-                    None => remaining.push(physical),
+                } else {
+                    // A physical component is indivisible at the membrane.
+                    // Crossing the boundary never creates or destroys bonds.
+                    // If even one constituent remains outside, leave the
+                    // complete realized object in the environment.
+                    remaining.push(physical);
                 }
             }
             cell.physical_materials = remaining;
