@@ -359,9 +359,7 @@ impl Simulation {
                     for bond_index in 0..connections.len() {
                         candidates.push(ActionCandidate {
                             action: ActionKind::Break,
-                            context_key: Some(format!(
-                                "stored:{storage_index}:bond:{bond_index}"
-                            )),
+                            context_key: Some(format!("stored:{storage_index}:bond:{bond_index}")),
                         });
                     }
                 }
