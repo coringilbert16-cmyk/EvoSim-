@@ -3,9 +3,7 @@
 //! resource-derived bond strength.
 use crate::contact::{ConnectionCompatibilityCache, ConnectionPairCandidate};
 use crate::math::exponential_influence;
-use crate::resources::{
-    combine_materials, effective_reactivity, BaseResource, Material, ResourceProperties,
-};
+use crate::resources::{combine_materials, BaseResource, Material, ResourceProperties};
 use crate::structure::{formation_threshold, OrganismStructure};
 use std::collections::HashMap;
 const EPSILON: f64 = 1e-12;
@@ -21,7 +19,6 @@ pub fn experimental_interaction(
     a: ResourceProperties,
     b: ResourceProperties,
     candidate: ConnectionPairCandidate,
-    water_field: f64,
 ) -> ExperimentalInteraction {
     let potential_delta = b.potential_energy - a.potential_energy;
     let direction = if potential_delta > EPSILON {
@@ -32,8 +29,8 @@ pub fn experimental_interaction(
         0.0
     };
     let reactivity =
-        (exponential_influence(effective_reactivity(a.reactivity.max(0.0), water_field))
-            + exponential_influence(effective_reactivity(b.reactivity.max(0.0), water_field)))
+        (exponential_influence(a.reactivity.max(0.0))
+            + exponential_influence(b.reactivity.max(0.0)))
             / 2.0;
     let facing = ((candidate.facing.clamp(-1.0, 1.0) + 1.0) * 0.5).clamp(0.0, 1.0);
     let distance = if candidate.distance.is_finite() {
@@ -57,9 +54,8 @@ pub fn experimental_combine_work_cost(
     a: ResourceProperties,
     b: ResourceProperties,
     candidate: ConnectionPairCandidate,
-    water_field: f64,
 ) -> f64 {
-    let interaction = experimental_interaction(a, b, candidate, water_field);
+    let interaction = experimental_interaction(a, b, candidate);
     let complexity_factor = 1.0 + ((a.mass.max(0.0) + b.mass.max(0.0)) * 0.5).sqrt();
     let cohesion_factor = 1.0 + ((a.cohesion.clamp(0.0, 1.0) + b.cohesion.clamp(0.0, 1.0)) * 0.5);
     (0.25 + interaction.magnitude) * complexity_factor * cohesion_factor
@@ -180,10 +176,9 @@ pub fn required_investment(
     a: ResourceProperties,
     b: ResourceProperties,
     evaluation: FormationEvaluation,
-    water_field: f64,
 ) -> Result<(ExperimentalInteraction, f64, f64), CombineEvaluationError> {
-    let interaction = experimental_interaction(a, b, evaluation.candidate, water_field);
-    let work = experimental_combine_work_cost(a, b, evaluation.candidate, water_field);
+    let interaction = experimental_interaction(a, b, evaluation.candidate);
+    let work = experimental_combine_work_cost(a, b, evaluation.candidate);
     if !work.is_finite() || work < 0.0 {
         return Err(CombineEvaluationError::NonFiniteWorkCost);
     }
