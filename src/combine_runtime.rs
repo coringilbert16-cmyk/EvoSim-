@@ -644,7 +644,6 @@ fn try_combine_environmental(
                             candidates.push((
                                 cell_index,
                                 material_index,
-                                instance,
                                 ua,
                                 ub,
                                 evaluation,
@@ -665,12 +664,19 @@ fn try_combine_environmental(
             .then_with(|| a.6.partial_cmp(&b.6).unwrap_or(std::cmp::Ordering::Equal))
     });
 
-    for (cell_index, material_index, instance, ua, ub, evaluation, _distance, required, _score) in
-        candidates
-    {
+    for (cell_index, material_index, ua, ub, evaluation, _distance, required, _score) in candidates {
         if organism.usable_energy + EPSILON < required {
             continue;
         }
+        let instance = environment
+            .field
+            .cells
+            .get(cell_index)
+            .and_then(|cell| cell.physical_materials.get(material_index))
+            .cloned();
+        let Some(instance) = instance else {
+            continue;
+        };
         let mut trial_structure = organism.structure.clone();
         let Some(indices) = crate::material_restoration::restore_material(
             &mut trial_structure,
