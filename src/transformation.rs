@@ -194,6 +194,102 @@ impl Simulation {
         Some(t)
     }
 
+pub(crate) fn environmental_break_candidates(
+    organism: &Organism,
+    environment: &Environment,
+) -> Vec<ActionCandidate> {
+    let Ok(regions) = crate::interior_geometry::find_accessible_interior_regions(
+        &organism.structure,
+        &environment.catalog,
+    ) else {
+        return Vec::new();
+    };
+    if regions.is_empty() {
+        return Vec::new();
+    }
+    let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_structure(
+        &organism.structure,
+        &environment.catalog,
+    ) else {
+        return Vec::new();
+    };
+
+    let cells = environment
+        .field
+        .cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y);
+    let mut candidates = Vec::new();
+
+    for cell_index in cells {
+        let Some(cell) = environment.field.cells.get(cell_index) else {
+            continue;
+        };
+        for instance in &cell.physical_materials {
+            let Some(connections) = instance.internal_connections.as_ref() else {
+                continue;
+            };
+            let Some(placements) = instance.placements.as_ref() else {
+                continue;
+            };
+            if placements.len() != instance.material.parts.len() {
+                continue;
+            }
+
+            let mut hypothetical = organism.structure.clone();
+            let Some(indices) = crate::material_restoration::restore_material(
+                &mut hypothetical,
+                instance,
+                crate::structure::Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                &environment.catalog,
+            ) else {
+                continue;
+            };
+
+            for (bond_index, connection) in connections.iter().enumerate() {
+                let Some(&a_index) = indices.get(connection.part_a) else {
+                    continue;
+                };
+                let Some(&b_index) = indices.get(connection.part_b) else {
+                    continue;
+                };
+                let Some(a) = connection.endpoint_a.world_point(
+                    &hypothetical.units[a_index],
+                    &environment.catalog,
+                ) else {
+                    continue;
+                };
+                let Some(b) = connection.endpoint_b.world_point(
+                    &hypothetical.units[b_index],
+                    &environment.catalog,
+                ) else {
+                    continue;
+                };
+                if regions.iter().any(|region| {
+                    region.contains_point(a.x, a.y) || region.contains_point(b.x, b.y)
+                }) {
+                    candidates.push(ActionCandidate {
+                        action: ActionKind::Break,
+                        context_key: Some(format!(
+                            "environment:cell:{cell_index}:bond:{bond_index}"
+                        )),
+                    });
+                }
+            }
+        }
+    }
+    candidates
+}
+
+pub(crate) fn has_environmental_break_candidate(
+    organism: &Organism,
+    environment: &Environment,
+) -> bool {
+    !environmental_break_candidates(organism, environment).is_empty()
+}
+
     pub(crate) fn try_start_environmental_break(
         organism: &mut Organism,
         environment: &mut Environment,
