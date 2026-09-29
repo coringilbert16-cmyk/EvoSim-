@@ -408,5 +408,11 @@ pub(crate) fn realize_initial_with_reserve(
         .collect::<Vec<_>>();
     let mut structure = structure;
     structure.set_genome_constituent_ids(genome_ids);
+    crate::interior_geometry::fill_enclosed_regions_with_water(
+        &mut structure,
+        catalog,
+        &mut ledger,
+        &mut energy,
+    )?;
     Ok((structure, ledger, energy))
 }
