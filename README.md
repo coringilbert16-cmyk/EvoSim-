@@ -2518,3 +2518,5 @@ The following changes have already been made on the dedicated memory-model branc
 4. Created draft PR #145 so the migration can be validated independently before any merge to `main`.
 
 These changes are foundations only. The full memory migration described in this section is not considered complete until the legacy memory authorities have been replaced, tested, and validated by the simulation.
+
+<!-- CI validation branch 7: no functional changes beyond main. -->
