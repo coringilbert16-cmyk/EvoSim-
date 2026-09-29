@@ -602,28 +602,22 @@ impl PhysicalConstituentGraph {
         neighbors
     }
 
-    pub fn has_direct_nonfluid_neighbor(
+    pub fn has_nonfluid_ancestor_in_component(
         &self,
         unit_index: usize,
         catalog: &[BaseResource],
     ) -> bool {
-        self.direct_neighbor_indices(unit_index)
+        self.connected_component_containing(unit_index)
             .into_iter()
-            .any(|neighbor| {
-                let is_genome = self
-                    .genome_constituent_ids
-                    .contains(&self.units[neighbor].physical_id);
-                is_genome
-                    || self.units[neighbor]
-                        .material
-                        .parts
-                        .first()
-                        .and_then(|(name, _)| {
-                            catalog.iter().find(|resource| resource.name == *name)
-                        })
-                        .is_some_and(|resource| {
-                            resource.physical_state != crate::resources::PhysicalState::Fluid
-                        })
+            .any(|index| {
+                self.units[index]
+                    .material
+                    .parts
+                    .first()
+                    .and_then(|(name, _)| catalog.iter().find(|resource| resource.name == *name))
+                    .is_some_and(|resource| {
+                        resource.physical_state != crate::resources::PhysicalState::Fluid
+                    })
             })
     }
 
@@ -644,7 +638,7 @@ impl PhysicalConstituentGraph {
         if resource.physical_state != crate::resources::PhysicalState::Fluid {
             return true;
         }
-        self.has_direct_nonfluid_neighbor(unit_index, catalog)
+        self.has_nonfluid_ancestor_in_component(unit_index, catalog)
     }
 
     pub fn connected_component_containing(&self, start: usize) -> Vec<usize> {
@@ -860,11 +854,11 @@ mod tests {
 
         let (s, u) = water_chain_structure(&["Carbon", "Water", "Water"]);
         assert!(s.is_structurally_qualified(u[1], &catalog));
-        assert!(!s.is_structurally_qualified(u[2], &catalog));
+        assert!(s.is_structurally_qualified(u[2], &catalog));
 
         let (s, u) = water_chain_structure(&["Carbon", "Water", "Water", "Water", "Carbon"]);
         assert!(s.is_structurally_qualified(u[1], &catalog));
-        assert!(!s.is_structurally_qualified(u[2], &catalog));
+        assert!(s.is_structurally_qualified(u[2], &catalog));
         assert!(s.is_structurally_qualified(u[3], &catalog));
         assert!(s.is_structurally_qualified(u[4], &catalog));
 
