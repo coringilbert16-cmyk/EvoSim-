@@ -28,6 +28,9 @@ if (-not $mutex.WaitOne(0)) {
 
 $script:serverProcess = $null
 $script:CargoWorkingDirectory = $Repo
+$script:knownGoodVersion = ""
+$script:rollbackExe = $null
+$script:rejectedVersion = ""
 
 function Invoke-Git([string[]]$Arguments) {
     $stderrPath = [System.IO.Path]::GetTempFileName()
@@ -182,17 +185,36 @@ function Start-Server {
     $script:serverProcess = New-Object System.Diagnostics.Process
     $script:serverProcess.StartInfo = $startInfo
     [void]$script:serverProcess.Start()
-    Write-Host "Running EvoSim $((Get-CurrentVersion).Substring(0, [Math]::Min(12, (Get-CurrentVersion).Length))) (PID $($script:serverProcess.Id))."
+
+    $version = Get-CurrentVersion
+    if ([string]::IsNullOrWhiteSpace($version)) {
+        $version = "unknown"
+    }
+    $shortVersion = $version.Substring(0, [Math]::Min(12, $version.Length))
+    Write-Host "Running EvoSim $shortVersion (PID $($script:serverProcess.Id))."
 }
 
 function Wait-ForServer {
     for ($i = 0; $i -lt 30; $i++) {
+        if ($null -ne $script:serverProcess) {
+            $script:serverProcess.Refresh()
+            if ($script:serverProcess.HasExited) {
+                Write-Host "EvoSim process $($script:serverProcess.Id) exited before becoming ready (exit code $($script:serverProcess.ExitCode))."
+                return $false
+            }
+        }
+
         try {
             $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:3000/observation/status" -TimeoutSec 1
             if ($response.StatusCode -eq 200) {
                 $status = $response.Content | ConvertFrom-Json
                 if ($null -ne $status.tick -and $null -ne $status.session_id) {
-                    return $true
+                    $script:serverProcess.Refresh()
+                    if (-not $script:serverProcess.HasExited) {
+                        return $true
+                    }
+                    Write-Host "EvoSim answered health check but exited immediately afterward (exit code $($script:serverProcess.ExitCode))."
+                    return $false
                 }
             }
         } catch {}
@@ -202,45 +224,65 @@ function Wait-ForServer {
 }
 
 function Stop-Server {
-    if ($null -ne $script:serverProcess -and -not $script:serverProcess.HasExited) {
-        Write-Host "Stopping EvoSim process $($script:serverProcess.Id) ..."
-        Stop-Process -Id $script:serverProcess.Id -Force
-        $script:serverProcess.WaitForExit()
+    if ($null -ne $script:serverProcess) {
+        $script:serverProcess.Refresh()
+        if (-not $script:serverProcess.HasExited) {
+            Write-Host "Stopping EvoSim process $($script:serverProcess.Id) ..."
+            Stop-Process -Id $script:serverProcess.Id -Force
+            $script:serverProcess.WaitForExit()
+        }
+        $script:serverProcess.Refresh()
+        if ($script:serverProcess.HasExited) {
+            Write-Host "EvoSim process $($script:serverProcess.Id) stopped (exit code $($script:serverProcess.ExitCode))."
+        }
     }
     $script:serverProcess = $null
 }
 
-function Install-Version([string]$Sha, [string]$NextExe) {
-    $oldExe = Join-Path $RunnerRoot "previous.exe"
+function Install-Version([string]$Sha, [string]$NextExe, [string]$PreviousSha) {
+    if (-not (Test-Path $NextExe)) {
+        throw "Candidate binary does not exist: $NextExe"
+    }
 
-    if (Test-Path $oldExe) {
-        Remove-Item -Force $oldExe
+    $shortPreviousSha = if ([string]::IsNullOrWhiteSpace($PreviousSha)) { "initial" } else { $PreviousSha.Substring(0, [Math]::Min(12, $PreviousSha.Length)) }
+    $backupExe = Join-Path $RunnerRoot ("previous-$shortPreviousSha.exe")
+    if (Test-Path $backupExe) {
+        Remove-Item -Force $backupExe
     }
 
     if (Test-Path $CurrentExe) {
-        Move-Item -Force $CurrentExe $oldExe
+        Move-Item -Force $CurrentExe $backupExe
     }
 
     try {
         Move-Item -Force $NextExe $CurrentExe
         Set-Content -Path $CurrentVersion -Value $Sha -NoNewline
+        $script:rollbackExe = $backupExe
     }
     catch {
         if (Test-Path $CurrentExe) {
             Remove-Item -Force $CurrentExe
         }
-        if ((-not (Test-Path $CurrentExe)) -and (Test-Path $oldExe)) {
-            Move-Item -Force $oldExe $CurrentExe
+        if ((-not (Test-Path $CurrentExe)) -and (Test-Path $backupExe)) {
+            Move-Item -Force $backupExe $CurrentExe
         }
         throw
     }
 }
 
 function Confirm-InstalledVersion {
-    $oldExe = Join-Path $RunnerRoot "previous.exe"
-    if (Test-Path $oldExe) {
-        Remove-Item -Force $oldExe
+    if ($null -eq $script:rollbackExe) {
+        return
     }
+
+    if (Test-Path $script:rollbackExe) {
+        try {
+            Remove-Item -Force $script:rollbackExe
+        } catch {
+            Write-Host "Previous binary could not be deleted yet; leaving it in place: $script:rollbackExe"
+        }
+    }
+    $script:rollbackExe = $null
 }
 
 try {
@@ -276,9 +318,11 @@ try {
             $remoteSha = Get-GitOutput @("-C", $Repo, "rev-parse", "HEAD")
         }
         $nextExe = Build-Version $remoteSha
-        Install-Version $remoteSha $nextExe
+        Install-Version $remoteSha $nextExe (Get-CurrentVersion)
+        $script:knownGoodVersion = $remoteSha
     }
 
+    $script:knownGoodVersion = Get-CurrentVersion
     Start-Server
     if (-not (Wait-ForServer)) {
         Stop-Server
@@ -292,16 +336,30 @@ try {
     while ($true) {
         Start-Sleep -Seconds $PollSeconds
 
-        if ($null -ne $script:serverProcess -and $script:serverProcess.HasExited) {
-            Write-Host "EvoSim server stopped. Restarting the last known-good version."
-            try {
-                Start-Server
-                if (-not (Wait-ForServer)) {
-                    Stop-Server
-                    Write-Host "Server restart failed; continuing to monitor GitHub updates."
+        if ($null -ne $script:serverProcess) {
+            $script:serverProcess.Refresh()
+            if ($script:serverProcess.HasExited) {
+                $exitCode = $script:serverProcess.ExitCode
+                Write-Host "EvoSim server stopped unexpectedly (exit code $exitCode)."
+
+                if ($script:rejectedVersion -eq $script:knownGoodVersion) {
+                    Write-Host "The known-good version is repeatedly exiting; automatic restart is paused until the runner is restarted."
+                    $script:serverProcess = $null
+                    Start-Sleep -Seconds $PollSeconds
+                    continue
                 }
-            } catch {
-                Write-Host "Server restart failed: $($_.Exception.Message)"
+
+                try {
+                    Start-Server
+                    if (-not (Wait-ForServer)) {
+                        Stop-Server
+                        Write-Host "Known-good server restart failed; automatic restart is paused until the runner is restarted."
+                        $script:rejectedVersion = $script:knownGoodVersion
+                    }
+                } catch {
+                    Write-Host "Known-good server restart failed: $($_.Exception.Message)"
+                    $script:rejectedVersion = $script:knownGoodVersion
+                }
             }
         }
 
@@ -345,38 +403,52 @@ try {
             }
 
             Stop-Server
-            Install-Version $remoteSha $nextExe
+            Install-Version $remoteSha $nextExe $runningSha
 
             try {
                 Start-Server
                 if (-not (Wait-ForServer)) {
                     throw "new version did not become ready"
                 }
+
+                # The candidate is not known-good until its own process has
+                # passed the health check and is still alive.
+                $script:knownGoodVersion = $remoteSha
+                $script:rejectedVersion = ""
+                Confirm-InstalledVersion
+                Write-Host "Updated EvoSim to $remoteSha. Browser connections can reconnect now; press Reset in the viewer to begin the new run."
             } catch {
-                Write-Host "New version failed to start. Restoring the previous known-good binary."
+                Write-Host "New version failed to start or remain healthy: $($_.Exception.Message)"
+                Write-Host "Restoring the previous known-good binary."
                 Stop-Server
-                $previousExe = Join-Path $RunnerRoot "previous.exe"
-                if (-not (Test-Path $previousExe)) {
+
+                if ($null -eq $script:rollbackExe -or -not (Test-Path $script:rollbackExe)) {
                     throw "rollback binary is unavailable"
                 }
+
                 if (Test-Path $CurrentExe) {
                     Remove-Item -Force $CurrentExe
                 }
-                Move-Item -Force $previousExe $CurrentExe
+                Move-Item -Force $script:rollbackExe $CurrentExe
+                $script:rollbackExe = $null
                 Set-Content -Path $CurrentVersion -Value $runningSha -NoNewline
+                $script:knownGoodVersion = $runningSha
+                $script:rejectedVersion = $remoteSha
+
                 Start-Server
                 if (-not (Wait-ForServer)) {
                     Stop-Server
                     throw "rollback version also failed to become ready"
                 }
+                Write-Host "Rollback succeeded. Candidate $remoteSha is rejected for this runner session and will not be retried."
                 continue
             }
-
-            Confirm-InstalledVersion
-            Write-Host "Updated EvoSim to $remoteSha. Browser connections can reconnect now; press Reset in the viewer to begin the new run."
         } catch {
             Write-Host "Update failed: $($_.Exception.Message)"
             Write-Host "The current running version will remain in service."
+            if ($null -ne $script:rollbackExe -and (Test-Path $script:rollbackExe)) {
+                Write-Host "A rollback binary remains at $script:rollbackExe."
+            }
             try {
                 Remove-StagingWorktree
             } catch {}
