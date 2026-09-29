@@ -289,7 +289,11 @@ mod tests {
         let mut storage = MaterialStorage::default();
         assert!(storage.store_physical(
             Material::free_base("Carbon", 1.0),
-            vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }],
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
             &catalog(),
         ));
         assert!(storage.entries.iter().all(|entry| {
@@ -303,7 +307,11 @@ mod tests {
         for x in 0..3 {
             assert!(storage.store_physical(
                 Material::free_base("Carbon", 1.0),
-                vec![Placement { x: x as f64, y: 0.0, rotation_radians: 0.0 }],
+                vec![Placement {
+                    x: x as f64,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
                 &catalog(),
             ));
         }
@@ -315,7 +323,17 @@ mod tests {
     #[test]
     fn peek_does_not_consume_free_material() {
         let mut storage = MaterialStorage::default();
-        storage.store_physical(Material::free_base("Carbon", 1.0), vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }], &catalog()).unwrap();
+        storage
+            .store_physical(
+                Material::free_base("Carbon", 1.0),
+                vec![Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog(),
+            )
+            .unwrap();
         let peeked = storage.peek_one_unstructured().expect("stored unit");
         assert_eq!(peeked.material, Material::free_base("Carbon", 1.0));
         assert_eq!(storage.count_unstructured(), 1);
@@ -328,8 +346,16 @@ mod tests {
         assert!(storage.store_physical(
             m.clone(),
             vec![
-                Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                Placement { x: 0.838, y: 0.0, rotation_radians: 0.0 },
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.838,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
             ],
             &catalog(),
         ));
@@ -341,8 +367,21 @@ mod tests {
     fn structured_material_is_taken_intact() {
         let mut storage = MaterialStorage::default();
         let m = compound();
-        storage.store_physical(m.clone(), vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }; 2], &catalog()).unwrap();
-        assert_eq!(storage.take_matching(&m).map(|instance| instance.material), Some(m.clone()));
+        storage
+            .store_physical(
+                m.clone(),
+                vec![Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0
+                }; 2],
+                &catalog(),
+            )
+            .unwrap();
+        assert_eq!(
+            storage.take_matching(&m).map(|instance| instance.material),
+            Some(m.clone())
+        );
         assert!(storage.is_empty());
     }
 
@@ -398,8 +437,28 @@ mod tests {
     #[test]
     fn storage_never_merges_independent_atoms() {
         let mut storage = MaterialStorage::default();
-        storage.store_physical(Material::free_base("Carbon", 1.0), vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }], &catalog()).unwrap();
-        storage.store_physical(Material::free_base("Carbon", 1.0), vec![Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 }], &catalog()).unwrap();
+        storage
+            .store_physical(
+                Material::free_base("Carbon", 1.0),
+                vec![Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog(),
+            )
+            .unwrap();
+        storage
+            .store_physical(
+                Material::free_base("Carbon", 1.0),
+                vec![Placement {
+                    x: 1.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog(),
+            )
+            .unwrap();
         assert_eq!(storage.len(), 2);
     }
 
