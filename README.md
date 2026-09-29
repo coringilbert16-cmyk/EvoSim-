@@ -2710,6 +2710,11 @@ The implementation must preserve these invariants:
 - an open boundary does not create a sealed interior;
 - nested enclosed regions remain distinguishable;
 - environmental composites retain their internal bonds during passage;
+- a straddling environmental component can participate in COMBINE when its bond
+  contact point is inside an accessible interior;
+- a straddling environmental component is not treated as freely manipulable merely
+  because it has an accessible connection point;
+- fully enclosed material can still transfer to organism storage and be manipulated normally;
 - organism storage contains only realized physical material;
 - logical Water is never inserted directly into organism storage;
 - the finite non-Water resource cloud remains separate from infinite logical Water;
