@@ -88,11 +88,7 @@ fn line_endpoint_toward(length: f64, target_x: f64, target_y: f64) -> Option<Bou
             normal_y: ny,
         })
 }
-pub fn boundary_point_toward(
-    shape: &Shape,
-    target_x: f64,
-    target_y: f64,
-) -> Option<BoundaryPoint> {
+pub fn boundary_point_toward(shape: &Shape, target_x: f64, target_y: f64) -> Option<BoundaryPoint> {
     match &shape.form {
         Form::Circle { radius } => {
             let (ux, uy) = normalized(target_x, target_y)?;
