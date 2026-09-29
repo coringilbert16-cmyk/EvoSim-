@@ -127,7 +127,7 @@ mod integration_tests {
     }
 
     #[test]
-    fn a_composite_crossing_the_boundary_is_partitioned_at_constituent_scale() {
+    fn a_composite_crossing_the_boundary_stays_intact() {
         let mut s = Simulation::new(23, 10.0);
         for cell in &mut s.environment.field.cells {
             cell.materials.clear();
@@ -167,17 +167,14 @@ mod integration_tests {
         }
         let (anchor, physical) =
             realization.expect("test composite must straddle the realized body");
+        let original = physical.clone();
         let before = s.organisms[0].stored_material.total_amount();
         s.environment.field.deposit(anchor.x, anchor.y, physical);
         Simulation::transfer_contained_environmental_material(
             &mut s.organisms[0],
             &mut s.environment,
         );
-        assert_eq!(s.organisms[0].stored_material.total_amount(), before + 1.0);
-        let stored = s.organisms[0].stored_material.materials_snapshot();
-        assert!(stored
-            .iter()
-            .any(|m| m.parts == vec![("Carbon".into(), 1.0)]));
+        assert_eq!(s.organisms[0].stored_material.total_amount(), before);
         let remaining: Vec<_> = s
             .environment
             .field
@@ -186,8 +183,9 @@ mod integration_tests {
             .flat_map(|cell| cell.physical_materials.iter())
             .collect();
         assert_eq!(remaining.len(), 1);
-        assert_eq!(remaining[0].material.parts, vec![("Hydrogen".into(), 1.0)]);
-        assert!(remaining[0].material.internal_bonds.is_empty());
+        assert_eq!(remaining[0].material, original.material);
+        assert_eq!(remaining[0].internal_connections, original.internal_connections);
+        assert_eq!(remaining[0].placements, original.placements);
     }
 
     #[test]
