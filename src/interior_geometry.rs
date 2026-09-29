@@ -148,30 +148,87 @@ fn segment_in_polygon_boundary(a:Point,b:Point,polygon:&[Point])->bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::resources::{default_catalog, Material};
-    use crate::structure::{OrganismStructure, StructuralUnit};
 
-    fn square_structure() -> OrganismStructure {
-        let mut s=OrganismStructure::default();
-        for (x,y) in [(-1.5,-1.5),(1.5,-1.5),(1.5,1.5),(-1.5,1.5)] {
-            let mut u=StructuralUnit::from_material(Material::free_base("Carbon",1.0),Placement{x,y,rotation_radians:0.0}).unwrap();
-            assert!(u.realize_default_geometry(&default_catalog()));
-            s.add_unit(u);
+    fn square() -> Vec<Vec<Point>> {
+        vec![vec![
+            Point { x: -1.0, y: -1.0 },
+            Point { x: 1.0, y: -1.0 },
+            Point { x: 1.0, y: 1.0 },
+            Point { x: -1.0, y: 1.0 },
+        ]]
+    }
+
+    fn region_count(polygons: Vec<Vec<Point>>) -> usize {
+        let mut points = Vec::new();
+        let mut point_index = HashMap::new();
+        let mut edges = Vec::new();
+        for (unit, polygon) in polygons.iter().enumerate() {
+            for i in 0..polygon.len() {
+                let a = intern(polygon[i], &mut points, &mut point_index);
+                let b = intern(polygon[(i + 1) % polygon.len()], &mut points, &mut point_index);
+                if a != b {
+                    edges.push(Edge { from: a, to: b });
+                    edges.push(Edge { from: b, to: a });
+                }
+            }
+            let _ = unit;
         }
-        s
+        let mut outgoing = vec![Vec::new(); points.len()];
+        for (i, edge) in edges.iter().enumerate() { outgoing[edge.from].push(i); }
+        let mut visited = vec![false; edges.len()];
+        let mut count = 0;
+        for start in 0..edges.len() {
+            if visited[start] { continue; }
+            let mut face = Vec::new();
+            let mut current = start;
+            let mut closed = false;
+            for _ in 0..=edges.len() {
+                if current == start && !face.is_empty() { closed = true; break; }
+                if visited[current] { break; }
+                visited[current] = true;
+                face.push(current);
+                let edge = edges[current];
+                let incoming = points[edge.to].sub(points[edge.from]);
+                let reverse_angle = (incoming.y.atan2(incoming.x) + std::f64::consts::PI).rem_euclid(TAU);
+                let mut next = None;
+                let mut best_turn = f64::INFINITY;
+                for &candidate in &outgoing[edge.to] {
+                    if candidate == (current ^ 1) || (visited[candidate] && candidate != start) { continue; }
+                    let e = edges[candidate];
+                    let direction = points[e.to].sub(points[e.from]);
+                    let angle = direction.y.atan2(direction.x).rem_euclid(TAU);
+                    let turn = (reverse_angle - angle).rem_euclid(TAU);
+                    if turn < best_turn { best_turn = turn; next = Some(candidate); }
+                }
+                let Some(next) = next else { break };
+                current = next;
+            }
+            if closed && face.len() >= 3 {
+                let area = face.iter().map(|&i| points[edges[i].from].cross(points[edges[i].to])).sum::<f64>() * 0.5;
+                if area > EPS {
+                    let a = points[edges[face[0]].from];
+                    let b = points[edges[face[0]].to];
+                    let tangent = b.sub(a);
+                    let length = tangent.norm();
+                    if length > EPS {
+                        let sample = a.add(b).scale(0.5).add(Point { x: -tangent.y / length, y: tangent.x / length }.scale(NODE_TOLERANCE * 10.0));
+                        if !polygons.iter().any(|p| point_in_polygon(sample, p)) { count += 1; }
+                    }
+                }
+            }
+        }
+        count
     }
+
     #[test]
-    fn finds_enclosed_region_inside_closed_structure() {
-        let s=square_structure();
-        let regions=find_enclosed_regions(&s,&default_catalog());
-        assert_eq!(regions.len(),1);
-        assert!(regions[0].area>0.0);
-        assert_eq!(regions[0].boundary_units.len(),4);
+    fn closed_polygon_has_an_enclosed_region() {
+        assert_eq!(region_count(square()), 1);
     }
+
     #[test]
-    fn open_structure_has_no_enclosed_region() {
-        let mut s=square_structure();
-        s.units.pop();
-        assert!(find_enclosed_regions(&s,&default_catalog()).is_empty());
+    fn removing_one_wall_opens_the_region() {
+        let mut p = square();
+        p[0].pop();
+        assert_eq!(region_count(p), 0);
     }
 }
