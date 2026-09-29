@@ -31,6 +31,19 @@ impl PhysicalGeometry {
         &self.shape
     }
 
+    /// Rigid geometry cannot be replaced. Fluid geometry may be re-realized
+    /// when the surrounding structure requires a context-fitting shape.
+    ///
+    /// The caller is responsible for establishing that this constituent is a
+    /// fluid resource. The method itself only accepts a valid replacement.
+    pub fn replace_fluid_realization(&mut self, shape: Shape) -> bool {
+        if !shape.is_valid() {
+            return false;
+        }
+        self.shape = shape;
+        true
+    }
+
     /// Rigid geometry cannot be replaced. This compatibility method accepts
     /// only an identical shape and never mutates the realized geometry.
     #[allow(dead_code)]
