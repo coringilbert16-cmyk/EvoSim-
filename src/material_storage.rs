@@ -11,34 +11,23 @@ use serde::{Deserialize, Serialize};
 
 const MATERIAL_EPSILON: f64 = 1e-12;
 
-/// One authoritative stored-material entry. A physical entry carries the
-/// complete realized material; a logical entry carries only a material
-/// description and therefore cannot masquerade as an existing physical object.
+/// One authoritative stored-material entry. Every stored object is an actual
+/// realized physical material; there is no logical/invented inventory state.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) enum StoredMaterial {
-    Logical(Material),
     Physical(PhysicalMaterial),
 }
 
 impl StoredMaterial {
     fn material(&self) -> &Material {
         match self {
-            Self::Logical(material) => material,
             Self::Physical(instance) => &instance.material,
         }
     }
 
-    fn into_material(self) -> Material {
+    fn into_physical(self) -> PhysicalMaterial {
         match self {
-            Self::Logical(material) => material,
-            Self::Physical(instance) => instance.material,
-        }
-    }
-
-    fn physical(&self) -> Option<PhysicalMaterial> {
-        match self {
-            Self::Logical(_) => None,
-            Self::Physical(instance) => Some(instance.clone()),
+            Self::Physical(instance) => instance,
         }
     }
 }
@@ -92,27 +81,6 @@ impl MaterialStorage {
         material.parts.iter().all(|(_, amount)| {
             amount.is_finite() && *amount > 0.0 && amount.fract().abs() <= MATERIAL_EPSILON
         })
-    }
-
-    pub(crate) fn store(&mut self, material: Material) -> bool {
-        if material.parts.is_empty() || !material.is_valid() || !Self::is_discrete(&material) {
-            return false;
-        }
-        if material.has_internal_structure() {
-            self.entries.push(StoredMaterial::Logical(material));
-            return true;
-        }
-        for (name, amount) in material.parts {
-            let count = amount.round() as u64;
-            for _ in 0..count {
-                self.entries
-                    .push(StoredMaterial::Logical(Material::free_base(
-                        name.clone(),
-                        1.0,
-                    )));
-            }
-        }
-        true
     }
 
     /// Store an already-realized physical instance without reconstructing its
@@ -185,12 +153,17 @@ impl MaterialStorage {
         self.store_physical_instance(instance)
     }
 
-    pub(crate) fn peek_one_unstructured(&self) -> Option<Material> {
-        self.entries
-            .iter()
-            .map(StoredMaterial::material)
-            .find(|material| !material.has_internal_structure() && !material.is_empty())
-            .cloned()
+    pub(crate) fn peek_one_unstructured(&self) -> Option<PhysicalMaterial> {
+        self.entries.iter().find_map(|entry| match entry {
+            StoredMaterial::Physical(instance)
+                if !instance.material.has_internal_structure()
+                    && !instance.material.is_empty()
+                    && instance.is_realized() =>
+            {
+                Some(instance.clone())
+            }
+            _ => None,
+        })
     }
 
     pub(crate) fn peek_matching_physical(&self, target: &Material) -> Option<PhysicalMaterial> {
@@ -204,7 +177,7 @@ impl MaterialStorage {
         })
     }
 
-    pub(crate) fn take_one_unstructured_named(&mut self, name: &str) -> Option<Material> {
+    pub(crate) fn take_one_unstructured_named(&mut self, name: &str) -> Option<PhysicalMaterial> {
         let index = self.entries.iter().position(|entry| {
             let material = entry.material();
             !material.has_internal_structure()
@@ -213,15 +186,15 @@ impl MaterialStorage {
                 && material.parts[0].0 == name
                 && (material.parts[0].1 - 1.0).abs() <= MATERIAL_EPSILON
         })?;
-        Some(self.entries.swap_remove(index).into_material())
+        Some(self.entries.swap_remove(index).into_physical())
     }
 
-    pub(crate) fn take_matching(&mut self, target: &Material) -> Option<Material> {
+    pub(crate) fn take_matching(&mut self, target: &Material) -> Option<PhysicalMaterial> {
         let index = self
             .entries
             .iter()
             .position(|entry| entry.material() == target && !entry.material().is_empty())?;
-        Some(self.entries.swap_remove(index).into_material())
+        Some(self.entries.swap_remove(index).into_physical())
     }
 
     pub(crate) fn take_physical_at(&mut self, index: usize) -> Option<PhysicalMaterial> {
@@ -231,7 +204,6 @@ impl MaterialStorage {
         }
         match self.entries.swap_remove(index) {
             StoredMaterial::Physical(instance) => Some(instance),
-            StoredMaterial::Logical(_) => None,
         }
     }
 
@@ -242,11 +214,10 @@ impl MaterialStorage {
         })?;
         match self.entries.swap_remove(index) {
             StoredMaterial::Physical(instance) => Some(instance),
-            StoredMaterial::Logical(_) => None,
         }
     }
 
-    pub(crate) fn take_unstructured(&mut self, count: usize) -> Option<Vec<Material>> {
+    pub(crate) fn take_unstructured(&mut self, count: usize) -> Option<Vec<PhysicalMaterial>> {
         if self.count_unstructured() < count {
             return None;
         }
@@ -256,7 +227,7 @@ impl MaterialStorage {
             if !self.entries[i].material().has_internal_structure()
                 && !self.entries[i].material().is_empty()
             {
-                out.push(self.entries.swap_remove(i).into_material());
+                out.push(self.entries.swap_remove(i).into_physical());
             } else {
                 i += 1;
             }
@@ -314,7 +285,7 @@ mod tests {
     #[test]
     fn peek_does_not_consume_free_material() {
         let mut storage = MaterialStorage::default();
-        storage.store(Material::free_base("Carbon", 1.0));
+        storage.store_physical(Material::free_base("Carbon", 1.0), vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }], &catalog()).unwrap();
         let peeked = storage.peek_one_unstructured().expect("stored unit");
         assert_eq!(peeked, Material::free_base("Carbon", 1.0));
         assert_eq!(storage.count_unstructured(), 1);
@@ -333,7 +304,7 @@ mod tests {
     fn structured_material_is_taken_intact() {
         let mut storage = MaterialStorage::default();
         let m = compound();
-        storage.store(m.clone());
+        storage.store_physical(m.clone(), vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }; 2], &catalog()).unwrap();
         assert_eq!(storage.take_matching(&m), Some(m.clone()));
         assert!(storage.is_empty());
     }
@@ -390,8 +361,8 @@ mod tests {
     #[test]
     fn storage_never_merges_independent_atoms() {
         let mut storage = MaterialStorage::default();
-        storage.store(Material::free_base("Carbon", 1.0));
-        storage.store(Material::free_base("Carbon", 1.0));
+        storage.store_physical(Material::free_base("Carbon", 1.0), vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }], &catalog()).unwrap();
+        storage.store_physical(Material::free_base("Carbon", 1.0), vec![Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 }], &catalog()).unwrap();
         assert_eq!(storage.len(), 2);
     }
 
