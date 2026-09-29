@@ -541,6 +541,7 @@ mod tests {
         let fluid = part(
             Form::Fluid {
                 nominal_area: 100.0,
+                boundary: None,
             },
             0.0,
             0.0,
