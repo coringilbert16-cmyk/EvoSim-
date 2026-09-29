@@ -444,30 +444,90 @@ pub(crate) fn has_environmental_break_candidate(
         organism: &mut Organism,
         environment: &mut Environment,
         ledger: &mut EnergyLedger,
+        seed_scale_reference: Option<(f64, f64)>,
     ) -> bool {
         if matches!(transformation.kind, crate::state::TransformationKind::Combine) {
-            let Some(prepared_energy) = transformation.prepared_usable_energy else {
+            // Tick 2: resolve the candidate and settle its transaction. The
+            // resulting physical structure is held until Tick 3.
+            let mut trial_organism = organism.clone();
+            let mut trial_environment = environment.clone();
+            let original_ledger = *ledger;
+            let mut trial_ledger = original_ledger;
+            let mut cache = crate::contact::ConnectionCompatibilityCache::default();
+            let developmental = seed_scale_reference
+                .and_then(|reference| {
+                    crate::developmental_decision::context(
+                        &mut trial_organism,
+                        &trial_environment,
+                        reference,
+                    )
+                })
+                .map(|context| {
+                    (
+                        &context.blueprint,
+                        context.origin,
+                        context.orientation,
+                        context.preferred_length,
+                    )
+                });
+            let Some(_attempt) = crate::combine_runtime::try_combine(
+                &mut trial_organism,
+                &mut trial_environment,
+                &mut cache,
+                &mut trial_ledger,
+                developmental,
+            ) else {
                 organism.active_transformation_id = None;
                 return false;
             };
-            let Some(prepared_ledger) = transformation.prepared_ledger else {
-                organism.active_transformation_id = None;
-                return false;
-            };
-            if !prepared_energy.is_finite() {
+
+            let prepared_energy = trial_organism.usable_energy - organism.usable_energy;
+            let prepared_stress = trial_organism.stress - organism.stress;
+            if !prepared_energy.is_finite() || !prepared_stress.is_finite() {
                 organism.active_transformation_id = None;
                 return false;
             }
-            // Tick 2: settle the exact transaction selected on tick 1. The
-            // structure and storage remain untouched until tick 3.
+            let ledger_delta = EnergyLedger {
+                total_potential_energy_released: trial_ledger.total_potential_energy_released
+                    - original_ledger.total_potential_energy_released,
+                total_usable_energy_gained: trial_ledger.total_usable_energy_gained
+                    - original_ledger.total_usable_energy_gained,
+                total_heat_dissipated: trial_ledger.total_heat_dissipated
+                    - original_ledger.total_heat_dissipated,
+                total_usable_energy_held: trial_ledger.total_usable_energy_held
+                    - original_ledger.total_usable_energy_held,
+            };
+            if let Some((cell_index, source)) = _attempt.environmental_source.as_ref() {
+                let Some(cell) = environment.field.cells.get_mut(*cell_index) else {
+                    organism.active_transformation_id = None;
+                    return false;
+                };
+                let Some(index) = cell
+                    .physical_materials
+                    .iter()
+                    .position(|candidate| candidate == source)
+                else {
+                    organism.active_transformation_id = None;
+                    return false;
+                };
+                cell.physical_materials.remove(index);
+                environment.field.mark_changed_at_index(*cell_index);
+                transformation.environmental_source = true;
+                transformation.combine_environmental_source = Some((*cell_index, source.clone()));
+            }
+            transformation.prepared_structure = Some(trial_organism.structure);
+            transformation.prepared_stored_material = Some(trial_organism.stored_material);
+            transformation.prepared_usable_energy = Some(prepared_energy);
+            transformation.prepared_stress = Some(prepared_stress);
+            transformation.prepared_ledger = Some(ledger_delta);
+
             let before_energy = organism.usable_energy;
             let before_stress = organism.stress;
             organism.usable_energy += prepared_energy;
-            ledger.total_potential_energy_released +=
-                prepared_ledger.total_potential_energy_released;
-            ledger.total_usable_energy_gained += prepared_ledger.total_usable_energy_gained;
-            ledger.total_heat_dissipated += prepared_ledger.total_heat_dissipated;
-            ledger.total_usable_energy_held += prepared_ledger.total_usable_energy_held;
+            ledger.total_potential_energy_released += ledger_delta.total_potential_energy_released;
+            ledger.total_usable_energy_gained += ledger_delta.total_usable_energy_gained;
+            ledger.total_heat_dissipated += ledger_delta.total_heat_dissipated;
+            ledger.total_usable_energy_held += ledger_delta.total_usable_energy_held;
             transformation.prepared_energy = Some((before_energy, before_stress, 0.0));
             return true;
         }
