@@ -57,6 +57,8 @@ pub enum Form {
     /// New resource definitions must express fluidity through `PhysicalState`.
     Fluid {
         nominal_area: f64,
+        #[serde(default)]
+        boundary: Option<Vec<(f64, f64)>>,
     },
 }
 
@@ -74,13 +76,20 @@ impl Form {
             Form::Polygon { vertices } => {
                 vertices.len() >= 3 && vertices.iter().all(|(x, y)| x.is_finite() && y.is_finite())
             }
-            Form::Fluid { nominal_area } => nominal_area.is_finite() && *nominal_area > 0.0,
+            Form::Fluid { nominal_area, boundary } => {
+                if !nominal_area.is_finite() || *nominal_area <= 0.0 { return false; }
+                boundary.as_ref().map_or(true, |vertices| {
+                    vertices.len() >= 3
+                        && vertices.iter().all(|(x, y)| x.is_finite() && y.is_finite())
+                })
+            },
         }
     }
 
     pub fn polygon_vertices(&self) -> Option<Vec<(f64, f64)>> {
         match self {
-            Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. } => None,
+            Form::Circle { .. } | Form::Line { .. } => None,
+            Form::Fluid { boundary, .. } => boundary.clone(),
             Form::Rectangle { width, height } => {
                 let hw = width / 2.0;
                 let hh = height / 2.0;
@@ -113,7 +122,11 @@ impl Form {
                 .iter()
                 .map(|(x, y)| (x * x + y * y).sqrt())
                 .fold(0.0_f64, f64::max),
-            Form::Fluid { nominal_area } => (nominal_area / std::f64::consts::PI).sqrt(),
+            Form::Fluid { nominal_area, boundary } => boundary
+                .as_ref()
+                .map(|vertices| vertices.iter().map(|(x, y)| x.hypot(*y)).fold(0.0_f64, f64::max))
+                .filter(|radius| *radius > 0.0)
+                .unwrap_or_else(|| (nominal_area / std::f64::consts::PI).sqrt()),
         }
     }
 }
