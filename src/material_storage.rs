@@ -370,11 +370,14 @@ mod tests {
         storage
             .store_physical(
                 m.clone(),
-                vec![Placement {
-                    x: 0.0,
-                    y: 0.0,
-                    rotation_radians: 0.0
-                }; 2],
+                vec![
+                    Placement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0
+                    };
+                    2
+                ],
                 &catalog(),
             )
             .unwrap();
