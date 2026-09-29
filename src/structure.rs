@@ -769,10 +769,7 @@ mod tests {
         let ida = s.physical_id(a).unwrap();
         let idb = s.physical_id(b).unwrap();
         s.push_bond_unchecked(Bond {
-            endpoint_a: BondEndpoint::new(
-                ida,
-                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
-            ),
+            endpoint_a: BondEndpoint::new(ida, ConnectionEndpoint::Boundary { angle_radians: 0.0 }),
             endpoint_b: BondEndpoint::new(
                 idb,
                 ConnectionEndpoint::Boundary {
