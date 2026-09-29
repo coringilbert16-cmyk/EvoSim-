@@ -7,6 +7,7 @@ mod tests {
         BaseResource, Form, InternalBond, Material, PhysicalState, ResourceProperties, Shape,
     };
     use crate::structure::Placement;
+    use crate::interior_geometry::EnclosedRegion;
 
     fn catalog() -> Vec<BaseResource> {
         vec![
@@ -55,6 +56,20 @@ mod tests {
         }
     }
 
+    fn region(half_extent: f64) -> EnclosedRegion {
+        EnclosedRegion {
+            area: (half_extent * 2.0).powi(2),
+            boundary_units: vec![],
+            sample_point: (0.0, 0.0),
+            boundary: vec![
+                (-half_extent, -half_extent),
+                (half_extent, -half_extent),
+                (half_extent, half_extent),
+                (-half_extent, half_extent),
+            ],
+        }
+    }
+
     fn large_body() -> OrganismBodyGeometry {
         OrganismBodyGeometry {
             parts: vec![PlacedForm {
@@ -85,7 +100,7 @@ mod tests {
     fn logical_material_is_not_promoted_into_physical_containment() {
         let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
         field.deposit_at_index(0, compound());
-        let contained = field.take_contained_physical_materials(&body());
+        let contained = field.take_contained_physical_materials_in_regions(&body(), &[]);
         assert!(contained.is_empty());
         assert_eq!(field.cells[0].materials.len(), 1);
     }
@@ -113,7 +128,7 @@ mod tests {
 
         let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
         field.deposit(0.0, 0.0, physical);
-        let contained = field.take_contained_physical_materials(&body());
+        let contained = field.take_contained_physical_materials_in_regions(&body(), &[region(1.0)]);
 
         assert!(contained.is_empty());
 
@@ -150,7 +165,7 @@ mod tests {
 
         let mut field = ActiveMaterialField::new(50.0, 50.0, 25.0);
         field.deposit(0.0, 0.0, physical);
-        let contained = field.take_contained_physical_materials(&large_body());
+        let contained = field.take_contained_physical_materials_in_regions(&large_body(), &[region(2.0)]);
 
         assert_eq!(contained.len(), 1);
         assert_eq!(contained[0].material, compound());
