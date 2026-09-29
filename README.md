@@ -2616,6 +2616,14 @@ The approved construction sequence is:
 The automatic interior Water is therefore ordinary physical structural material,
 not a separate internal Water inventory.
 
+For the confirmed initial organism, Water is also realized as part of the outer
+boundary itself. Alternating outer-shell constituents are replaced by fitted
+connected Water, leaving rigid material between permeable boundary sections.
+This is part of the initial realized structure, not a separate membrane organ.
+The initial organism keeps that same realized structure when its developmental
+stage later becomes Adult; adulthood does not rebuild the seed into a different
+outer-boundary model.
+
 Water added this way must not bypass the physical graph or become a special
 logical substance stored inside the organism.
 
