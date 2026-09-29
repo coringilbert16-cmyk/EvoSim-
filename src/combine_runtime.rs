@@ -378,13 +378,9 @@ pub(crate) fn try_combine_stored_unit(
                 &environment.catalog,
                 cache,
             ) {
-                if let Some((evaluation, _, _, _, required)) = evaluate_candidate(
-                    &hypothetical,
-                    ua,
-                    ub,
-                    candidate,
-                    &environment.catalog,
-                ) {
+                if let Some((evaluation, _, _, _, required)) =
+                    evaluate_candidate(&hypothetical, ua, ub, candidate, &environment.catalog)
+                {
                     let developmental_score = developmental
                         .map(|(blueprint, origin, orientation, preferred_length)| {
                             let Some(wa) = candidate
@@ -458,8 +454,8 @@ pub(crate) fn try_combine_stored_unit(
                 unit_b: ub,
                 endpoint_a: evaluation.candidate.endpoint_a,
                 endpoint_b: evaluation.candidate.endpoint_b,
-                    investment: evaluation.threshold,
-            },
+                        investment: evaluation.threshold,
+                },
             &environment.catalog,
             cache,
             &mut candidate_ledger,
