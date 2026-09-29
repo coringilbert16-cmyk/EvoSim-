@@ -240,11 +240,9 @@ impl Simulation {
             organism.active_transformation_id = None;
             return false;
         };
-        let Some((gross, usable, heat)) = break_energy_yield(
-            a,
-            b,
-            organism.genome.processing_efficiency(),
-        ) else {
+        let Some((gross, usable, heat)) =
+            break_energy_yield(a, b, organism.genome.processing_efficiency())
+        else {
             organism.active_transformation_id = None;
             return false;
         };
