@@ -126,11 +126,9 @@ pub(crate) fn resolve_stress_break(
     else {
         return false;
     };
-    let Some((gross, usable, heat)) = break_energy_yield(
-        a,
-        b,
-        organism.genome.processing_efficiency(),
-    ) else {
+    let Some((gross, usable, heat)) =
+        break_energy_yield(a, b, organism.genome.processing_efficiency())
+    else {
         return false;
     };
     settle_break_energy(organism, target, usable, gross, heat, ledger)
