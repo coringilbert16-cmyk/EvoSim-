@@ -55,6 +55,7 @@ pub(crate) const BREAK_PROCESSING_RATE: usize = 1;
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone, Copy)]
 pub(crate) enum TransformationKind {
     Break,
+    Combine,
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct ActiveTransformation {
@@ -83,6 +84,21 @@ pub(crate) struct ActiveTransformation {
     #[serde(default)]
     pub(crate) pending_experience: Option<crate::memory::PendingTransformationExperience>,
     pub(crate) decision_context_key: Option<String>,
+    /// Deferred COMBINE state. Selection occurs on the first tick, energy
+    /// preparation on the second, and physical mutation on the third.
+    #[serde(default)]
+    pub(crate) prepared_structure: Option<OrganismStructure>,
+    #[serde(default)]
+    pub(crate) prepared_stored_material: Option<MaterialStorage>,
+    #[serde(default)]
+    pub(crate) prepared_usable_energy: Option<f64>,
+    #[serde(default)]
+    pub(crate) prepared_stress: Option<f64>,
+    #[serde(default)]
+    pub(crate) prepared_ledger: Option<EnergyLedger>,
+    /// Environmental material removed when COMBINE begins, held until resolve.
+    #[serde(default)]
+    pub(crate) combine_environmental_source: Option<(usize, crate::physical_material::PhysicalMaterial)>,
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct ReproductiveConstruction {
