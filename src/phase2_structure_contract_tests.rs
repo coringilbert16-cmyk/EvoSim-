@@ -156,7 +156,6 @@ fn new_structure_bond_is_formed_only_through_combine() {
         ua,
         ub,
         &catalog,
-        0.0,
         &mut cache,
         &mut ledger,
         &mut energy,
