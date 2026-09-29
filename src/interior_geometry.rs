@@ -24,6 +24,16 @@ pub struct EnclosedRegion {
     pub area: f64,
     pub boundary_units: Vec<usize>,
     pub sample_point: (f64, f64),
+    boundary: Vec<(f64, f64)>,
+}
+
+impl EnclosedRegion {
+    /// Whether a world-space point lies in this enclosed region.
+    pub fn contains_point(&self, x: f64, y: f64) -> bool {
+        let point = Point { x, y };
+        let polygon: Vec<Point> = self.boundary.iter().map(|&(x, y)| Point { x, y }).collect();
+        point_in_polygon(point, &polygon)
+    }
 }
 
 /// Find finite enclosed regions of a realized organism.
@@ -121,7 +131,11 @@ pub fn find_enclosed_regions(
             }
         }
         if boundary_units.is_empty() { continue; }
-        regions.push(EnclosedRegion { area, boundary_units, sample_point:(sample.x,sample.y) });
+        let boundary = face.iter().map(|&edge_index| {
+                let point = points[edges[edge_index].from];
+                (point.x, point.y)
+            }).collect();
+        regions.push(EnclosedRegion { area, boundary_units, sample_point:(sample.x,sample.y), boundary });
     }
     regions.sort_by(|a,b| b.area.total_cmp(&a.area));
     regions
@@ -241,6 +255,7 @@ mod tests {
             area: 2.1,
             boundary_units: vec![],
             sample_point: (0.0, 0.0),
+            boundary: vec![(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)],
         };
         assert_eq!(required_water_units(&region, 0.5), 5);
         assert_eq!(required_water_units(&region, 1.0), 3);
