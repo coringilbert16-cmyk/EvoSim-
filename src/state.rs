@@ -98,7 +98,8 @@ pub(crate) struct ActiveTransformation {
     pub(crate) prepared_ledger: Option<EnergyLedger>,
     /// Environmental material removed when COMBINE begins, held until resolve.
     #[serde(default)]
-    pub(crate) combine_environmental_source: Option<(usize, crate::physical_material::PhysicalMaterial)>,
+    pub(crate) combine_environmental_source:
+        Option<(usize, crate::physical_material::PhysicalMaterial)>,
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct ReproductiveConstruction {
