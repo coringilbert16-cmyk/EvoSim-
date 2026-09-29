@@ -216,7 +216,10 @@ fn region_already_has_fitted_water(
     region: &EnclosedRegion,
     catalog: &[BaseResource],
 ) -> bool {
-    structure.structural_unit_indices(catalog).iter().any(|&index| {
+    structure
+        .structural_unit_indices(catalog)
+        .iter()
+        .any(|&index| {
         let unit = &structure.units[index];
         let Some((name, _)) = unit.material.parts.first() else {
             return false;
@@ -267,7 +270,7 @@ fn region_already_has_fitted_water(
             .abs()
             * 0.5;
         (area - region.area).abs() <= 1e-6 * region.area.max(1.0)
-    })
+        })
 }
 
 /// Find enclosed interior regions that are owned by the organism and are
