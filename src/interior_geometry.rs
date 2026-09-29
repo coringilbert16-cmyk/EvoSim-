@@ -134,6 +134,9 @@ pub fn fill_enclosed_regions_with_water(
         if region.area <= EPS || region.boundary.len() < 3 {
             continue;
         }
+        if region_already_has_fitted_water(structure, &region, catalog) {
+            continue;
+        }
 
         let amount = region.area / nominal_area;
         if !amount.is_finite() || amount <= 0.0 {
@@ -206,6 +209,65 @@ pub fn fill_enclosed_regions_with_water(
     }
 
     Ok(filled)
+}
+
+fn region_already_has_fitted_water(
+    structure: &OrganismStructure,
+    region: &EnclosedRegion,
+    catalog: &[BaseResource],
+) -> bool {
+    structure.structural_unit_indices(catalog).iter().any(|&index| {
+        let unit = &structure.units[index];
+        let Some((name, _)) = unit.material.parts.first() else {
+            return false;
+        };
+        if name != "Water" {
+            return false;
+        }
+        let Some(geometry) = unit.geometry.as_ref() else {
+            return false;
+        };
+        let Form::Fluid {
+            boundary: Some(local_boundary),
+            ..
+        } = geometry.shape().form
+        else {
+            return false;
+        };
+        if local_boundary.len() < 3 {
+            return false;
+        }
+        let transformed = local_boundary
+            .iter()
+            .map(|&(x, y)| {
+                let (sin, cos) = unit.placement.rotation_radians.sin_cos();
+                (
+                    unit.placement.x + x * cos - y * sin,
+                    unit.placement.y + x * sin + y * cos,
+                )
+            })
+            .collect::<Vec<_>>();
+        if !point_in_polygon(
+            Point {
+                x: region.sample_point.0,
+                y: region.sample_point.1,
+            },
+            &transformed
+        ) {
+            return false;
+        }
+        let area = transformed
+            .iter()
+            .enumerate()
+            .map(|(i, &(x1, y1))| {
+                let (x2, y2) = transformed[(i + 1) % transformed.len()];
+                x1 * y2 - y1 * x2
+            })
+            .sum::<f64>()
+            .abs()
+            * 0.5;
+        (area - region.area).abs() <= 1e-6 * region.area.max(1.0)
+    })
 }
 
 /// Find enclosed interior regions that are owned by the organism and are
