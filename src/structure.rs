@@ -748,6 +748,24 @@ pub fn formation_threshold(a: f64, b: f64, la: f64, lb: f64) -> f64 {
 mod tests {
     use super::*;
     #[test]
+    fn only_fluid_resources_can_take_context_fitting_geometry() {
+        let catalog = crate::resources::default_catalog();
+        let mut water = StructuralUnit::new("Water", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 });
+        assert!(water.realize_default_geometry(&catalog));
+        let fitted = crate::resources::Shape {
+            form: crate::resources::Form::Polygon {
+                vertices: vec![(-1.0, 0.0), (0.0, 1.0), (1.0, 0.0), (0.0, -1.0)],
+            },
+        };
+        assert!(water.realize_fluid_geometry(fitted.clone(), &catalog));
+        assert_eq!(water.geometry.as_ref().unwrap().shape(), &fitted);
+
+        let mut carbon = StructuralUnit::new("Carbon", Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 });
+        assert!(carbon.realize_default_geometry(&catalog));
+        assert!(!carbon.realize_fluid_geometry(fitted, &catalog));
+    }
+
+    #[test]
     fn structural_membership_uses_persisted_physical_genome_ids() {
         let mut s = OrganismStructure::new();
         let a = s.add_unit(StructuralUnit::new(
