@@ -28,7 +28,7 @@ pub struct OrganismBodyGeometry {
 impl OrganismBodyGeometry {
     pub fn from_structure(
         structure: &OrganismStructure,
-        _catalog: &[BaseResource],
+        catalog: &[BaseResource],
     ) -> Option<Self> {
         if structure.units.is_empty() {
             return None;
