@@ -52,6 +52,130 @@ pub fn required_water_units(region: &EnclosedRegion, water_nominal_area: f64) ->
     (region.area / water_nominal_area).ceil() as usize
 }
 
+/// Materialize one fitted Water constituent for each qualifying enclosed region.
+///
+/// The Water constituent carries the region's physical area as its amount,
+/// using the catalog nominal area as the unit scale. The fitted Fluid boundary
+/// is the actual region boundary, so no rigid polygon is introduced merely to
+/// represent the medium. Each new Water constituent is then connected through
+/// the existing COMBINE runtime to an enclosing non-fluid constituent.
+pub fn fill_enclosed_regions_with_water(
+    structure: &mut OrganismStructure,
+    catalog: &[BaseResource],
+    ledger: &mut crate::state::EnergyLedger,
+    energy: &mut f64,
+) -> Result<usize, String> {
+    let water = catalog
+        .iter()
+        .find(|resource| resource.name == "Water")
+        .ok_or_else(|| "catalog is missing Water".to_string())?;
+    let Form::Circle { radius } = water.shape.form else {
+        return Err("Water catalog realization must retain its default circle".into());
+    };
+    let nominal_area = std::f64::consts::PI * radius * radius;
+    if !nominal_area.is_finite() || nominal_area <= 0.0 {
+        return Err("Water nominal area is invalid".into());
+    }
+
+    let regions = find_enclosed_regions(structure, catalog);
+    if regions.is_empty() {
+        return Ok(0);
+    }
+
+    let genome_boundary = crate::cavity::analyze_genome_cavity(structure, catalog)?
+        .map(|cavity| {
+            let mut ids = cavity.boundary_units;
+            ids.sort_unstable();
+            ids
+        });
+
+    let mut filled = 0;
+    for region in regions {
+        let mut region_boundary = region.boundary_units.clone();
+        region_boundary.sort_unstable();
+        if genome_boundary.as_ref().is_some_and(|ids| *ids == region_boundary) {
+            continue;
+        }
+        if region.area <= EPS || region.boundary.len() < 3 {
+            continue;
+        }
+
+        let amount = region.area / nominal_area;
+        if !amount.is_finite() || amount <= 0.0 {
+            continue;
+        }
+
+        let origin = Placement {
+            x: region.sample_point.0,
+            y: region.sample_point.1,
+            rotation_radians: 0.0,
+        };
+        let local_boundary = region
+            .boundary
+            .iter()
+            .map(|&(x, y)| (x - origin.x, y - origin.y))
+            .collect::<Vec<_>>();
+
+        let mut candidate = structure.clone();
+        let mut candidate_ledger = *ledger;
+        let mut candidate_energy = *energy;
+        let mut water_unit = crate::structure::StructuralUnit::from_material(
+            crate::resources::Material::free_base("Water", amount),
+            origin,
+        )
+        .ok_or_else(|| "failed to create fitted Water constituent".to_string())?;
+        if !water_unit.realize_default_geometry(catalog) {
+            return Err("failed to realize default Water geometry".into());
+        }
+        if !water_unit.realize_fluid_geometry(
+            crate::resources::Shape {
+                form: Form::Fluid {
+                    nominal_area,
+                    boundary: Some(local_boundary),
+                },
+            },
+            catalog,
+        ) {
+            return Err("failed to realize fitted Water geometry".into());
+        }
+        let water_index = candidate.add_unit(water_unit);
+
+        let mut connected = false;
+        for &boundary_unit in &region.boundary_units {
+            let mut trial = candidate.clone();
+            let mut trial_ledger = candidate_ledger;
+            let mut trial_energy = candidate_energy;
+            let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+            if crate::combine_runtime::combine_specific_pair(
+                &mut trial,
+                water_index,
+                boundary_unit,
+                catalog,
+                &mut cache,
+                &mut trial_ledger,
+                &mut trial_energy,
+            )
+            .is_some()
+            {
+                candidate = trial;
+                candidate_ledger = trial_ledger;
+                candidate_energy = trial_energy;
+                connected = true;
+                break;
+            }
+        }
+
+        if connected {
+            *structure = candidate;
+            *ledger = candidate_ledger;
+            *energy = candidate_energy;
+            filled += 1;
+        }
+    }
+
+    Ok(filled)
+}
+
 pub fn find_enclosed_regions(
     structure: &OrganismStructure,
     catalog: &[BaseResource],
