@@ -659,9 +659,9 @@ fn try_combine_environmental(
     }
 
     candidates.sort_by(|a, b| {
-        b.8.partial_cmp(&a.8)
+        b.7.partial_cmp(&a.7)
             .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| a.6.partial_cmp(&b.6).unwrap_or(std::cmp::Ordering::Equal))
+            .then_with(|| a.5.partial_cmp(&b.5).unwrap_or(std::cmp::Ordering::Equal))
     });
 
     for (cell_index, material_index, ua, ub, evaluation, _distance, required, _score) in candidates {
