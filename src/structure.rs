@@ -780,7 +780,7 @@ mod tests {
         let (s, u) = water_chain_structure(&["Carbon", "Water", "Water", "Water", "Carbon"]);
         assert!(s.is_structurally_qualified(u[1], &catalog));
         assert!(!s.is_structurally_qualified(u[2], &catalog));
-        assert!(!s.is_structurally_qualified(u[3], &catalog));
+        assert!(s.is_structurally_qualified(u[3], &catalog));
         assert!(s.is_structurally_qualified(u[4], &catalog));
 
         let (s, u) = water_chain_structure(&["Carbon", "Water", "Carbon", "Water", "Carbon"]);
