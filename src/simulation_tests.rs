@@ -257,7 +257,7 @@ mod integration_tests {
             vec![anchor],
             &s.environment.catalog,
         )
-        .expect("carbon should have a valid physical realization");
+        .expect("Hydrogen should have a valid physical realization");
         let before = s.organisms[0].stored_material.total_amount();
         let field_before = s.environment.field.total_amount();
         s.environment.field.deposit(anchor.x, anchor.y, physical);
