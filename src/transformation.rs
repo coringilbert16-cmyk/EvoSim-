@@ -332,11 +332,9 @@ pub(crate) fn try_start_environmental_break(
     let candidates = environment
         .field
         .cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y);
-    for candidate_cell in candidates {
-        if candidate_cell != cell_index {
-            continue;
-        }
+    let selected = if candidates.iter().any(|&candidate_cell| candidate_cell == cell_index) {
         let cell = environment.field.cells.get(cell_index)?;
+        let mut selected = None;
         for (material_index, instance) in cell.physical_materials.iter().enumerate() {
             let Some(connections) = instance.internal_connections.as_ref() else {
                 continue;
@@ -376,25 +374,23 @@ pub(crate) fn try_start_environmental_break(
                 region.contains_point(point_a.x, point_a.y)
                     || region.contains_point(point_b.x, point_b.y)
             });
-            if !accessible {
-                continue;
+            if accessible {
+                selected = Some((material_index, instance.clone(), target));
+                break;
             }
-            let removed = environment
-                .field
-                .cells
-                .get_mut(cell_index)?
-                .physical_materials
-                .get(material_index)?
-                .clone();
-            if removed != *instance {
-                continue;
-            }
-            environment.field.cells[cell_index]
-                .physical_materials
-                .remove(material_index);
-            environment.field.mark_changed_at_index(cell_index);
+        }
+        selected
+    } else {
+        None
+    };
+    let (material_index, removed, target) = selected?;
 
-            let complexity = crate::math::complexity(2.0);
+    environment.field.cells[cell_index]
+        .physical_materials
+        .remove(material_index);
+    environment.field.mark_changed_at_index(cell_index);
+
+    let complexity = crate::math::complexity(2.0);
             let duration = 1_u64.max(complexity.ceil() as u64);
             let t = ActiveTransformation {
                 id: *next_id,
