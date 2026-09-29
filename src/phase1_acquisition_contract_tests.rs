@@ -117,8 +117,16 @@ mod tests {
         let physical = PhysicalMaterial::realized(
             compound(),
             vec![
-                Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                Placement { x: 0.2, y: 0.0, rotation_radians: 0.0 },
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.2,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
             ],
             &catalog,
         )
