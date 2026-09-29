@@ -299,22 +299,13 @@ Water is a normal physical material in the same connectivity system as every oth
 
 Water does have one structural qualification because Water is fluid:
 
-> **Every Water constituent that is classified as structural must have at least one direct physical bond to a non-fluid constituent.**
+> **Every Water constituent that is classified as structural must have a genome-connected bonded path whose connected component contains at least one non-fluid constituent.
 
 The genome counts as a non-fluid constituent.
 
-Therefore:
-
-- `G-W` → structural Water is valid.
-- `G-C-W` → the Water is structural.
-- `G-W-C` → the Water is structural.
-- `G-C-W-C-W` → both Water constituents are structural.
-- `G-W-C-W-C` → both Water constituents are structural.
-- `G-W-W` → the first Water is structural; the second Water is not structural because its only direct bond is to Water.
-- `G-C-W-W-W-C` → Water constituents connected only to Water do not become structural merely because another Water elsewhere in the chain is bonded to Carbon.
-- `G-W-W-W-C` → only the Water directly bonded to the genome can qualify; Water-Water connectivity alone does not qualify the downstream Water constituents.
-
-A Water-Water bond therefore never satisfies the non-fluid-neighbor requirement by itself.
+Therefore Water-Water connectivity can carry structural membership onward when the same
+connected component is anchored by non-fluid material. A Water chain does not become a
+separate organism merely because its immediate neighbor is Water.
 
 The structural predicate is:
 
@@ -2644,8 +2635,10 @@ The intended sequence is:
 An environmental physical object that merely overlaps the structural material
 is not automatically acquired.
 
-A material fully inside an enclosed interior may be classified as inside even
-when there is no structural material occupying the same location.
+A material fully inside an **accessible** enclosed interior may be classified as inside even
+when there is no structural material occupying the same location. The genome cavity is
+inside the organism but is excluded from accessible interior classification and remains
+empty.
 
 A composite physical object remains intact while crossing the boundary unless an
 existing EvoSim transformation explicitly breaks it.
