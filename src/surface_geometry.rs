@@ -88,7 +88,11 @@ fn line_endpoint_toward(length: f64, target_x: f64, target_y: f64) -> Option<Bou
             normal_y: ny,
         })
 }
-pub fn boundary_point_toward(shape: &Shape, target_x: f64, target_y: f64) -> Option<BoundaryPoint> {
+pub fn boundary_point_toward(
+    shape: &Shape,
+    target_x: f64,
+    target_y: f64,
+) -> Option<BoundaryPoint> {
     match &shape.form {
         Form::Circle { radius } => {
             let (ux, uy) = normalized(target_x, target_y)?;
@@ -193,7 +197,10 @@ mod tests {
     #[test]
     fn fluid_placeholder_has_no_boundary_until_realized_geometry_exists() {
         let s = Shape {
-            form: Form::Fluid { nominal_area: 0.5, boundary: None },
+            form: Form::Fluid {
+                nominal_area: 0.5,
+                boundary: None,
+            },
         };
         assert!(boundary_point_toward(&s, 1.0, 0.0).is_none())
     }
