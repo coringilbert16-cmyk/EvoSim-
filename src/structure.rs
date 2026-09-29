@@ -374,6 +374,8 @@ impl<'de> Deserialize<'de> for PhysicalConstituentGraph {
             units: Vec<StructuralUnit>,
             bonds: Vec<Bond>,
             #[serde(default)]
+            genome_constituent_ids: Vec<PhysicalConstituentId>,
+            #[serde(default)]
             next_constituent_id: u64,
         }
         let mut s = Stored::deserialize(deserializer)?;
@@ -427,7 +429,11 @@ impl<'de> Deserialize<'de> for PhysicalConstituentGraph {
         Ok(Self {
             units: s.units,
             bonds: s.bonds,
-            genome_constituent_ids: Vec::new(),
+            genome_constituent_ids: s
+                .genome_constituent_ids
+                .into_iter()
+                .filter(|id| id.0 != 0 && used.contains(id))
+                .collect(),
             next_constituent_id: next,
         })
     }
