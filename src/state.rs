@@ -206,6 +206,16 @@ impl Organism {
                 .ok()
                 .flatten()
                 .filter(|cavity| cavity.qualifies());
+            if self.structure.genome_constituent_ids().is_empty() {
+                if let Some(cavity) = cavity.as_ref() {
+                    let ids = cavity
+                        .boundary_units
+                        .iter()
+                        .filter_map(|&index| self.structure.physical_id(index))
+                        .collect::<Vec<_>>();
+                    self.structure.set_genome_constituent_ids(ids);
+                }
+            }
             self.cached_cavity = Some(cavity);
             self.cached_cavity_revision = Some(self.structure_revision);
         }
