@@ -31,6 +31,7 @@ $script:CargoWorkingDirectory = $Repo
 $script:knownGoodVersion = ""
 $script:rollbackExe = $null
 $script:rejectedVersion = ""
+$script:restartAttempted = $false
 
 function Invoke-Git([string[]]$Arguments) {
     $stderrPath = [System.IO.Path]::GetTempFileName()
@@ -223,12 +224,39 @@ function Wait-ForServer {
     return $false
 }
 
+function Stop-ProcessTree([int]$ProcessId) {
+    $taskkill = Start-Process -FilePath "taskkill.exe" -ArgumentList @("/PID", $ProcessId.ToString(), "/T", "/F") -PassThru -Wait
+    $taskkill.Refresh()
+    if ($taskkill.ExitCode -ne 0) {
+        throw "taskkill failed for EvoSim process $ProcessId with exit code $($taskkill.ExitCode)"
+    }
+}
+
+function Stop-OrphanedEvoSimProcesses {
+    if (-not (Test-Path $CurrentExe)) {
+        return
+    }
+
+    $processes = @(Get-CimInstance Win32_Process -Filter "Name = 'evosim.exe'" | Where-Object {
+        $_.ExecutablePath -and [string]::Equals($_.ExecutablePath, $CurrentExe, [System.StringComparison]::OrdinalIgnoreCase)
+    })
+
+    foreach ($process in $processes) {
+        Write-Host "Stopping orphaned EvoSim process $($process.ProcessId) holding the runner binary (PID $($process.ProcessId))."
+        try {
+            Stop-ProcessTree ([int]$process.ProcessId)
+        } catch {
+            Write-Host "Could not stop orphaned EvoSim process $($process.ProcessId): $($_.Exception.Message)"
+        }
+    }
+}
+
 function Stop-Server {
     if ($null -ne $script:serverProcess) {
         $script:serverProcess.Refresh()
         if (-not $script:serverProcess.HasExited) {
             Write-Host "Stopping EvoSim process $($script:serverProcess.Id) ..."
-            Stop-Process -Id $script:serverProcess.Id -Force
+            Stop-ProcessTree $script:serverProcess.Id
             $script:serverProcess.WaitForExit()
         }
         $script:serverProcess.Refresh()
@@ -319,10 +347,10 @@ try {
         }
         $nextExe = Build-Version $remoteSha
         Install-Version $remoteSha $nextExe (Get-CurrentVersion)
-        $script:knownGoodVersion = $remoteSha
     }
 
     $script:knownGoodVersion = Get-CurrentVersion
+    Stop-OrphanedEvoSimProcesses
     Start-Server
     if (-not (Wait-ForServer)) {
         Stop-Server
@@ -341,24 +369,26 @@ try {
             if ($script:serverProcess.HasExited) {
                 $exitCode = $script:serverProcess.ExitCode
                 Write-Host "EvoSim server stopped unexpectedly (exit code $exitCode)."
+                $script:serverProcess = $null
+                Stop-OrphanedEvoSimProcesses
 
-                if ($script:rejectedVersion -eq $script:knownGoodVersion) {
-                    Write-Host "The known-good version is repeatedly exiting; automatic restart is paused until the runner is restarted."
-                    $script:serverProcess = $null
+                if ($script:restartAttempted) {
+                    Write-Host "EvoSim has already required an automatic restart during this runner session; automatic restart is now paused until the runner is restarted."
                     Start-Sleep -Seconds $PollSeconds
                     continue
                 }
 
+                $script:restartAttempted = $true
                 try {
                     Start-Server
                     if (-not (Wait-ForServer)) {
                         Stop-Server
                         Write-Host "Known-good server restart failed; automatic restart is paused until the runner is restarted."
-                        $script:rejectedVersion = $script:knownGoodVersion
+                    } else {
+                        Write-Host "Known-good server restart succeeded."
                     }
                 } catch {
                     Write-Host "Known-good server restart failed: $($_.Exception.Message)"
-                    $script:rejectedVersion = $script:knownGoodVersion
                 }
             }
         }
@@ -415,6 +445,7 @@ try {
                 # passed the health check and is still alive.
                 $script:knownGoodVersion = $remoteSha
                 $script:rejectedVersion = ""
+                $script:restartAttempted = $false
                 Confirm-InstalledVersion
                 Write-Host "Updated EvoSim to $remoteSha. Browser connections can reconnect now; press Reset in the viewer to begin the new run."
             } catch {
@@ -434,6 +465,7 @@ try {
                 Set-Content -Path $CurrentVersion -Value $runningSha -NoNewline
                 $script:knownGoodVersion = $runningSha
                 $script:rejectedVersion = $remoteSha
+                $script:restartAttempted = $false
 
                 Start-Server
                 if (-not (Wait-ForServer)) {
