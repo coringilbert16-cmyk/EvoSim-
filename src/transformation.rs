@@ -391,35 +391,32 @@ pub(crate) fn try_start_environmental_break(
     environment.field.mark_changed_at_index(cell_index);
 
     let complexity = crate::math::complexity(2.0);
-            let duration = 1_u64.max(complexity.ceil() as u64);
-            let t = ActiveTransformation {
-                id: *next_id,
-                organism_id: organism.id.clone(),
-                kind: crate::state::TransformationKind::Break,
-                material: crate::resources::Material::free_base("", 0.0),
-                bond: None,
-                stored_material: Some(removed),
-                stored_bond: Some(target),
-                environmental_source: true,
-                complexity,
-                duration_ticks: duration,
-                remaining_ticks: duration,
-                prepared_energy: None,
-                pending_experience: None,
-                decision_context_key: decision.context_key.clone(),
-                prepared_structure: None,
-                prepared_stored_material: None,
-                prepared_usable_energy: None,
-                prepared_stress: None,
-                prepared_ledger: None,
-                combine_environmental_source: None,
-            };
-            *next_id += 1;
-            organism.active_transformation_id = Some(t.id);
-            return Some(t);
-        }
-    }
-    None
+    let duration = 1_u64.max(complexity.ceil() as u64);
+    let t = ActiveTransformation {
+        id: *next_id,
+        organism_id: organism.id.clone(),
+        kind: crate::state::TransformationKind::Break,
+        material: crate::resources::Material::free_base("", 0.0),
+        bond: None,
+        stored_material: Some(removed),
+        stored_bond: Some(target),
+        environmental_source: true,
+        complexity,
+        duration_ticks: duration,
+        remaining_ticks: duration,
+        prepared_energy: None,
+        pending_experience: None,
+        decision_context_key: decision.context_key.clone(),
+        prepared_structure: None,
+        prepared_stored_material: None,
+        prepared_usable_energy: None,
+        prepared_stress: None,
+        prepared_ledger: None,
+        combine_environmental_source: None,
+    };
+    *next_id += 1;
+    organism.active_transformation_id = Some(t.id);
+    Some(t)
 }
 
 impl Simulation {
