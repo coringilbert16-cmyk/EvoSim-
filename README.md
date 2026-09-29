@@ -2518,3 +2518,229 @@ The following changes have already been made on the dedicated memory-model branc
 4. Created draft PR #145 so the migration can be validated independently before any merge to `main`.
 
 These changes are foundations only. The full memory migration described in this section is not considered complete until the legacy memory authorities have been replaced, tested, and validated by the simulation.
+
+# 26. Interior, Water, Permeability, and Boundary Interaction
+
+This section formalizes the approved physical model for the organism interior and
+supersedes earlier descriptions that treated the union of structural material
+as the organism's interior.
+
+## 26.1 Structure is membership, not solidity
+
+**Structural** is a membership/connectivity label.
+
+A constituent is structural when it belongs to the organism's physical structural
+graph under the established genome-connectivity rules. Structural membership does
+**not** mean that the constituent is a rigid, impermeable wall.
+
+The material itself determines physical behavior.
+
+In particular:
+
+- rigid materials contribute solid physical boundaries according to their actual
+  realized geometry and physical properties;
+- Water is a fluid medium and remains permeable;
+- increasing Water content can make a structure more permeable;
+- a structure can therefore be structurally connected while containing fluid,
+  porous, or otherwise passable material.
+
+No separate universal "solidness" flag is introduced merely because a constituent
+is structural.
+
+## 26.2 Organism interior is enclosed space
+
+The organism's **interior** is the physical region enclosed by its realized
+structural boundary.
+
+It is **not** the union of the areas occupied by structural constituents.
+
+Therefore an environmental material is not inside merely because its point lies
+inside a structural-material bounding shape, and an empty cavity is not outside
+merely because it contains no structural material.
+
+The physical model must distinguish:
+
+1. **structural geometry** — the realized material that makes up the organism;
+2. **boundary geometry** — the realized outer boundary through which the
+   environment can interact with the organism;
+3. **interior regions** — spaces enclosed by that boundary.
+
+A sealed cavity is an interior region. An opening to the environment is not a
+sealed interior region.
+
+Interior classification must be derived from actual realized geometry/topology,
+not from a bounding box and not from a union-of-material containment test.
+
+## 26.3 Water is everywhere logically
+
+Water is present everywhere in the environment as an effectively unlimited
+**logical** material.
+
+This is not a finite environmental reservoir.
+
+Water is materialized physically only when a physical representation is required
+at a location, such as when an organism's structure requires interior medium.
+
+There is therefore:
+
+- no finite Water resource cloud,
+- no Water depletion mechanic,
+- no Water replenishment mechanic,
+- no environmental Water stock that organisms compete to exhaust.
+
+Only physical Water participates in physical interaction.
+
+## 26.4 Water's physical realization
+
+Water has a default circular physical representation when it must be represented
+as a free/uncontextualized physical object.
+
+The circle is **not** a universal rigid shape for Water.
+
+When Water is structurally connected to an organism, its physical realization may
+take the geometry necessary to fit the surrounding structural context. The
+implementation may use an efficient equivalent representation when needed for
+performance, provided the resulting physical behavior remains equivalent.
+
+Thus the intended rule is:
+
+> Free Water uses its default realization; connected Water is realized to fit
+> the physical structure it belongs to.
+
+Connected Water remains fluid even when its realized geometry conforms to a
+non-circular structural region.
+
+## 26.5 Filling the interior with Water
+
+The approved construction sequence is:
+
+1. construct the ordinary structural material according to the existing
+   construction rules;
+2. determine the resulting enclosed interior regions;
+3. fill the appropriate qualifying gaps with the quantity of Water that can fit;
+4. physically realize that Water using geometry appropriate to each gap;
+5. connect the realized Water into the organism's structural graph under the
+   existing structural qualification rules.
+
+The automatic interior Water is therefore ordinary physical structural material,
+not a separate internal Water inventory.
+
+Water added this way must not bypass the physical graph or become a special
+logical substance stored inside the organism.
+
+The genome cavity remains governed by the established genome rules and must not
+be indiscriminately filled in a way that destroys genome qualification.
+
+## 26.6 Acquisition occurs through the boundary into the interior
+
+Environmental material acquisition is a physical boundary-crossing process.
+
+The intended sequence is:
+
+> environmental physical material → boundary interaction → passage through the
+> realized boundary → enclosed interior → organism possession/storage or further
+> processing
+
+An environmental physical object that merely overlaps the structural material
+is not automatically acquired.
+
+A material fully inside an enclosed interior may be classified as inside even
+when there is no structural material occupying the same location.
+
+A composite physical object remains intact while crossing the boundary unless an
+existing EvoSim transformation explicitly breaks it.
+
+Logical environmental material is never promoted directly into organism storage.
+
+## 26.7 Permeability is derived, not authored
+
+Permeability is an emergent physical consequence of:
+
+- the material composition of the realized boundary,
+- the actual geometry/topology of that boundary,
+- the arrangement of materials along the boundary,
+- and the established physical properties of those materials.
+
+Water content is an important contributor, but **permeability is not equal to
+Water occupancy or Water percentage alone**.
+
+For example, a structure that is 98% Carbon and 2% Water must not become 100%
+permeable merely because the small amount of Water happens to occupy every local
+gap.
+
+Likewise:
+
+- the same topology with different material composition can have different
+  boundary behavior;
+- the same composition with different topology can have different boundary
+  behavior.
+
+No dedicated permeability gene is introduced.
+
+No arbitrary random pass-through probability is introduced.
+
+No general soft-body collision rewrite is introduced merely to obtain permeability.
+
+Permeability belongs to the boundary-interaction layer and must coexist with the
+existing rigid collision/movement system.
+
+## 26.8 Required implementation invariants
+
+The implementation must preserve these invariants:
+
+- structural membership remains graph/connectivity-derived;
+- free Water retains its default physical representation;
+- connected Water can be re-realized to fit its structural context;
+- Water remains fluid regardless of structural membership;
+- interior classification is topological/enclosure-based;
+- an open boundary does not create a sealed interior;
+- nested enclosed regions remain distinguishable;
+- environmental composites retain their internal bonds during passage;
+- organism storage contains only realized physical material;
+- logical Water is never inserted directly into organism storage;
+- the finite non-Water resource cloud remains separate from infinite logical Water;
+- permeability is derived from physical composition plus realized boundary geometry;
+- no new gene, energy battery, or arbitrary probability is required for these rules.
+
+## 26.9 Controlled implementation sequence
+
+These changes are intentionally staged so that each architectural authority can
+be tested independently:
+
+1. **Realized interior topology** — generalize the existing geometric face/boundary
+   machinery so enclosed regions are a reusable physical concept rather than a
+   genome-only calculation.
+2. **Connected Water realization** — allow connected Water to assume geometry that
+   fits its structural context while preserving fluid behavior.
+3. **Automatic interior Water** — after ordinary construction, materialize physical
+   Water into appropriate qualifying interior gaps and connect it to the structure.
+4. **Boundary/interior acquisition** — replace union-of-structural-material
+   containment with boundary crossing plus enclosed-interior classification.
+5. **Derived boundary behavior** — make permeability a consequence of realized
+   boundary composition and topology without adding a dedicated permeability
+   variable or random pass-through.
+
+Do not change movement costs, COMBINE/BREAK timing, genome connectivity rules,
+reproduction architecture, the finite non-Water resource cloud, or the Water
+resource's infinite logical availability as part of these stages unless a direct
+dependency is demonstrated.
+
+## 26.10 Regression requirements
+
+Before these changes are considered complete, tests must cover at minimum:
+
+- material outside an organism versus material inside an enclosed cavity;
+- sealed cavity versus cavity with an opening;
+- nested enclosed regions;
+- narrow passages;
+- touching/overlapping boundary geometry;
+- free Water retaining its default representation;
+- connected Water receiving a context-fitting realization;
+- no logical Water entering storage;
+- intact composite material remaining intact while crossing a boundary;
+- a high-solid/low-Water boundary remaining substantially resistant to passage;
+- same topology with different composition producing different boundary behavior;
+- same composition with different topology producing different boundary behavior.
+
+This section is the authoritative reference for the interior/permeability work.
+
