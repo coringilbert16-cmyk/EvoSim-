@@ -245,7 +245,6 @@ impl Simulation {
         let Some((gross, usable, heat)) = break_energy_yield(
             a,
             b,
-            water_field_amount(environment, organism),
             organism.genome.processing_efficiency(),
         ) else {
             organism.active_transformation_id = None;
@@ -386,7 +385,7 @@ mod tests {
             cohesion: 0.1,
             ..carbon
         };
-        let (gross, usable, heat) = break_energy_yield(carbon, methane, 0.0, 0.8).unwrap();
+        let (gross, usable, heat) = break_energy_yield(carbon, methane, 0.8).unwrap();
         assert_eq!(gross, 21.0);
         assert!(usable > 0.0);
         assert!(heat >= 0.0);
