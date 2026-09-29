@@ -637,141 +637,55 @@ fn pending_stress_delta(transformation: &ActiveTransformation, organism: &Organi
         .unwrap_or(0.0)
 }
 
-    pub(crate) fn resolve_transformation(
-        transformation: &ActiveTransformation,
-        organism: &mut Organism,
-        environment: &mut Environment,
-        _ledger: &mut EnergyLedger,
+pub(crate) fn resolve_transformation(
+    transformation: &ActiveTransformation,
+    organism: &mut Organism,
+    environment: &mut Environment,
+    _ledger: &mut EnergyLedger,
+) {
+    if matches!(
+        transformation.kind,
+        crate::state::TransformationKind::Combine
     ) {
-        if matches!(
-            transformation.kind,
-            crate::state::TransformationKind::Combine
-        ) {
-            let (Some(structure), Some(stored_material), Some(stress)) = (
-                transformation.prepared_structure.as_ref(),
-                transformation.prepared_stored_material.as_ref(),
-                transformation.prepared_stress,
-            ) else {
-                if let Some((cell_index, source)) =
-                    transformation.combine_environmental_source.as_ref()
-                {
-                    // Restore to the exact field cell from which the source was
-                    // reserved. Re-depositing by coordinates can land in a
-                    // different cell after field partitioning changes.
-                    if let Some(cell) = environment.field.cells.get_mut(*cell_index) {
-                        cell.physical_materials.push(source.clone());
-                        environment.field.mark_changed_at_index(*cell_index);
-                    }
-                }
-                organism.active_transformation_id = None;
-                return;
-            };
-
-            // Tick 3: commit the physical mutation selected on tick 1 and
-            // prepared on tick 2.
-            organism.structure = structure.clone();
-            organism.stored_material = stored_material.clone();
-            if stress.is_finite() {
-                organism.stress += stress;
-            }
-            organism.mark_structure_changed();
-            organism.active_transformation_id = None;
-
-            crate::decision_runtime::record_consequence(
-                &mut organism.decision_history,
-                &ActionCandidate {
-                    action: ActionKind::Combine,
-                    context_key: transformation.decision_context_key.clone(),
-                },
-                crate::decision::ActionConsequence {
-                    energy_delta: pending_energy_delta(transformation, organism),
-                    stress_delta: pending_stress_delta(transformation, organism),
-                    developmental_delta: 0.0,
-                },
-            );
-
-            if let Some(pending) = transformation.pending_experience.as_ref() {
-                let after_developmental_realization = organism
-                    .developmental_realization_cached(&environment.catalog)
-                    .map(|realization| realization.overall)
-                    .unwrap_or(pending.before_developmental_realization);
-                let consequence = crate::memory::MemoryConsequence {
-                    energy_delta: organism.usable_energy - pending.before_energy,
-                    stress_delta: organism.stress - pending.before_stress,
-                    developmental_delta: after_developmental_realization
-                        - pending.before_developmental_realization,
-                    material_transformed: pending.material_transformed,
-                    ..Default::default()
-                };
-                let capacity = organism
-                    .genome_cavity_cached_ref(&environment.catalog)
-                    .filter(|cavity| cavity.qualifies())
-                    .map(crate::memory::memory_capacity);
-                if let Some(capacity) = capacity {
-                    crate::memory::record_experience(
-                        &mut organism.experience_memory,
-                        &pending.perceptions,
-                        ActionKind::Combine,
-                        consequence,
-                        pending.needs,
-                        capacity,
-                        organism.genome.memory_strength(),
-                    );
-                }
-            }
-            return;
-        }
-        let Some(stored) = transformation.stored_material.as_ref() else {
-            organism.active_transformation_id = None;
-            return;
-        };
-        let Some(target) = transformation.stored_bond.as_ref() else {
-            organism.active_transformation_id = None;
-            return;
-        };
-        if transformation.prepared_energy.is_none() {
-            organism.active_transformation_id = None;
-            return;
-        }
-        let Some(pieces) = stored.break_internal_bond(target) else {
-            organism.active_transformation_id = None;
-            return;
-        };
-
-        for piece in pieces {
-            if transformation.environmental_source {
-                if let Some(placement) = piece
-                    .placements
-                    .as_ref()
-                    .and_then(|placements| placements.first())
-                {
-                    let _ = environment.field.deposit(placement.x, placement.y, piece);
-                }
-            } else if !organism
-                .stored_material
-                .store_physical_instance(piece.clone())
+        let (Some(structure), Some(stored_material), Some(stress)) = (
+            transformation.prepared_structure.as_ref(),
+            transformation.prepared_stored_material.as_ref(),
+            transformation.prepared_stress,
+        ) else {
+            if let Some((cell_index, source)) =
+                transformation.combine_environmental_source.as_ref()
             {
-                if let Some(placement) = piece
-                    .placements
-                    .as_ref()
-                    .and_then(|placements| placements.first())
-                {
-                    let _ = environment.field.deposit(placement.x, placement.y, piece);
+                // Restore to the exact field cell from which the source was
+                // reserved. Re-depositing by coordinates can land in a
+                // different cell after field partitioning changes.
+                if let Some(cell) = environment.field.cells.get_mut(*cell_index) {
+                    cell.physical_materials.push(source.clone());
+                    environment.field.mark_changed_at_index(*cell_index);
                 }
             }
+            organism.active_transformation_id = None;
+            return;
+        };
+
+        // Tick 3: commit the physical mutation selected on tick 1 and
+        // prepared on tick 2.
+        organism.structure = structure.clone();
+        organism.stored_material = stored_material.clone();
+        if stress.is_finite() {
+            organism.stress += stress;
         }
-        let (_, usable, heat) = transformation.prepared_energy.unwrap();
-        organism.add_transaction_stress(heat);
+        organism.mark_structure_changed();
         organism.active_transformation_id = None;
+
         crate::decision_runtime::record_consequence(
             &mut organism.decision_history,
             &ActionCandidate {
-                action: ActionKind::Break,
+                action: ActionKind::Combine,
                 context_key: transformation.decision_context_key.clone(),
             },
             crate::decision::ActionConsequence {
-                energy_delta: usable,
-                stress_delta: heat,
+                energy_delta: pending_energy_delta(transformation, organism),
+                stress_delta: pending_stress_delta(transformation, organism),
                 developmental_delta: 0.0,
             },
         );
@@ -797,7 +711,7 @@ fn pending_stress_delta(transformation: &ActiveTransformation, organism: &Organi
                 crate::memory::record_experience(
                     &mut organism.experience_memory,
                     &pending.perceptions,
-                    ActionKind::Break,
+                    ActionKind::Combine,
                     consequence,
                     pending.needs,
                     capacity,
@@ -805,7 +719,93 @@ fn pending_stress_delta(transformation: &ActiveTransformation, organism: &Organi
                 );
             }
         }
+        return;
     }
+    let Some(stored) = transformation.stored_material.as_ref() else {
+        organism.active_transformation_id = None;
+        return;
+    };
+    let Some(target) = transformation.stored_bond.as_ref() else {
+        organism.active_transformation_id = None;
+        return;
+    };
+    if transformation.prepared_energy.is_none() {
+        organism.active_transformation_id = None;
+        return;
+    }
+    let Some(pieces) = stored.break_internal_bond(target) else {
+        organism.active_transformation_id = None;
+        return;
+    };
+
+    for piece in pieces {
+        if transformation.environmental_source {
+            if let Some(placement) = piece
+                .placements
+                .as_ref()
+                .and_then(|placements| placements.first())
+            {
+                let _ = environment.field.deposit(placement.x, placement.y, piece);
+            }
+        } else if !organism
+            .stored_material
+            .store_physical_instance(piece.clone())
+        {
+            if let Some(placement) = piece
+                .placements
+                .as_ref()
+                .and_then(|placements| placements.first())
+            {
+                let _ = environment.field.deposit(placement.x, placement.y, piece);
+            }
+        }
+    }
+    let (_, usable, heat) = transformation.prepared_energy.unwrap();
+    organism.add_transaction_stress(heat);
+    organism.active_transformation_id = None;
+    crate::decision_runtime::record_consequence(
+        &mut organism.decision_history,
+        &ActionCandidate {
+            action: ActionKind::Break,
+            context_key: transformation.decision_context_key.clone(),
+        },
+        crate::decision::ActionConsequence {
+            energy_delta: usable,
+            stress_delta: heat,
+            developmental_delta: 0.0,
+        },
+    );
+
+    if let Some(pending) = transformation.pending_experience.as_ref() {
+        let after_developmental_realization = organism
+            .developmental_realization_cached(&environment.catalog)
+            .map(|realization| realization.overall)
+            .unwrap_or(pending.before_developmental_realization);
+        let consequence = crate::memory::MemoryConsequence {
+            energy_delta: organism.usable_energy - pending.before_energy,
+            stress_delta: organism.stress - pending.before_stress,
+            developmental_delta: after_developmental_realization
+                - pending.before_developmental_realization,
+            material_transformed: pending.material_transformed,
+            ..Default::default()
+        };
+        let capacity = organism
+            .genome_cavity_cached_ref(&environment.catalog)
+            .filter(|cavity| cavity.qualifies())
+            .map(crate::memory::memory_capacity);
+        if let Some(capacity) = capacity {
+            crate::memory::record_experience(
+                &mut organism.experience_memory,
+                &pending.perceptions,
+                ActionKind::Break,
+                consequence,
+                pending.needs,
+                capacity,
+                organism.genome.memory_strength(),
+            );
+        }
+    }
+}
 }
 
 pub(crate) fn break_work_cost(
