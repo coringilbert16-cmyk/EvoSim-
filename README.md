@@ -485,6 +485,207 @@ The seed is therefore not simply a data structure marked "alive."
 
 It must be an actual physically realized organism.
 
+# 14. Current Acquisition and Water Implementation Plan
+
+This section is the **current approved implementation plan** for the physical acquisition, storage, structural-membership, Water, COMBINE, BREAK, EXPEL, reproduction, and death/recycling systems.
+
+It is subordinate to the physical rules in Sections 12–13 and is the implementation roadmap for bringing existing code into conformance with those rules.
+
+## 14.1 Phase 1 — Establish Physical Graph Authority
+
+In `src/structure.rs`, make the physical constituent graph the explicit authority for structural membership.
+
+The graph must provide authoritative queries for:
+
+- genome-connected constituents,
+- direct physical neighbors,
+- whether a direct neighbor is non-fluid,
+- whether a constituent is structurally qualified,
+- and which connected components result after BREAK.
+
+The Water rule is:
+
+> `structural(Water) = genome_connected(Water) AND has_direct_nonfluid_neighbor(Water)`
+
+The genome is non-fluid and therefore qualifies as the required direct neighbor.
+
+Do not introduce mutable `is_structural` or equivalent flags that can become stale.
+
+## 14.2 Phase 2 — Eliminate Logical Material From Organism Storage
+
+In `src/material_storage.rs`, organism storage must contain **physical material only**.
+
+The current `StoredMaterial::Logical(Material)` path is legacy and must be removed from organism-facing storage.
+
+All storage operations must operate on existing `PhysicalMaterial` instances.
+
+Callers that currently request abstract `Material` values from storage must be audited and refactored rather than recreating physical material from descriptions.
+
+This establishes the invariant:
+
+> **No logical material may enter, remain in, or be generated inside organism storage.**
+
+## 14.3 Phase 3 — Correct Boundary Containment
+
+Audit `src/environment.rs` and `src/simulation.rs` so containment never mutates physical connectivity.
+
+When evaluating an environmental physical component:
+
+1. If it is fully outside, it remains environmental.
+2. If the connected component straddles the organism boundary, the **entire component remains intact and constrained**.
+3. If the complete connected component is inside, it becomes available to the organism.
+4. Once fully enclosed, it is classified as structural or stored according to the physical graph rules.
+
+The containment operation must never delete cross-boundary bonds.
+
+A component may become separated only through an actual physical connectivity operation such as BREAK.
+
+The environment's spatial grid remains an index, not physical authority.
+
+## 14.4 Phase 4 — Remove Water-Specific Energetic Modifiers
+
+Audit `src/combine.rs`, `src/combine_runtime.rs`, `src/resources.rs`, `src/transformation.rs`, and `src/decomposition.rs` for Water-specific energy or reactivity modifiers.
+
+Remove rules in which environmental Water changes the energetic cost or yield of an operation merely by being nearby or present as a field quantity.
+
+Water participates exactly like other physical material through its own physical properties when it is actually involved in a transformation.
+
+There is no Water acquisition bonus and no Water-specific "medium energy" rule.
+
+## 14.5 Phase 5 — Derive Classification After COMBINE and BREAK
+
+COMBINE creates one physical bond.
+
+BREAK removes one physical bond.
+
+After the connectivity mutation, structural/storage classification must be derived from the resulting physical graph and containment.
+
+Examples:
+
+- stored Carbon + structural Carbon → the new bond can make the Carbon component genome-connected and therefore structural;
+- stored Carbon + stored Hydrogen → the bonded component remains nonstructural if it is not genome-connected;
+- stored Water + structural Carbon → the Water is structural only when its direct-neighbor rule is satisfied;
+- stored Water + genome → Water is structural because the genome is a non-fluid direct neighbor;
+- BREAK may turn previously structural material into stored material when a resulting component is no longer structurally connected to the genome.
+
+No classification flag should be manually toggled as a side effect of these operations.
+
+## 14.6 Phase 6 — Enforce EXPEL Eligibility
+
+EXPEL may operate only on a fully enclosed, nonstructural, physical component.
+
+It must:
+
+- preserve the existing physical identity,
+- preserve bonds within the expelled component,
+- move the actual geometry,
+- and transfer ownership back to the environmental field.
+
+It must not:
+
+- reconstruct material,
+- silently BREAK material,
+- silently COMBINE material,
+- deform material,
+- or expel structural material.
+
+## 14.7 Phase 7 — Refactor Reproduction Around Physical Material
+
+Audit `src/reproduction.rs` so offspring construction uses actual physical stored material.
+
+Remove logical-material shortcuts in which an abstract `Material` description is converted into newly created physical material.
+
+The child must be constructed from physically realized material. Its structural membership must then be determined by its actual physical graph and genome connectivity.
+
+No reproduction path may bypass the physical-material authority.
+
+## 14.8 Phase 8 — Refactor Death, Recycling, and Decomposition
+
+Audit `src/recycling.rs`, `src/decomposition.rs`, and related death paths.
+
+Death must release the organism's existing physical material.
+
+No death/recycling path may:
+
+- manufacture new physical material from abstract descriptions,
+- deposit `StoredMaterial::Logical`,
+- or replace existing geometry/bonds with composition-only equivalents.
+
+Released material remains physically realized and is returned to the environment through the same physical-material authority.
+
+## 14.9 Phase 9 — Verification Matrix
+
+The implementation is not complete until focused tests cover at minimum:
+
+### Containment
+
+- free Carbon outside → environmental;
+- free Carbon fully inside → stored;
+- bonded Carbon-Hydrogen fully inside → whole physical component stored;
+- bonded Carbon-Hydrogen straddling boundary → remains one intact constrained component;
+- membrane crossing → zero bond changes.
+
+### Genome connectivity
+
+- G-C → C structural;
+- G-C-H → C and H structural;
+- G-C plus enclosed unbonded H → H stored.
+
+### Water
+
+- G-W → Water structural;
+- G-C-W → Water structural;
+- G-W-C → Water structural;
+- G-C-W-C-W → both Water constituents structural;
+- G-W-C-W-C → both Water constituents structural;
+- G-W-W → first Water structural, second Water stored/nonstructural;
+- Water-Water bond alone never satisfies the structural Water requirement;
+- a Water directly bonded to genome is valid because genome is non-fluid.
+
+### COMBINE
+
+- stored + structural physical material can become structural when the resulting graph qualifies;
+- stored + stored material remains nonstructural until connected to the genome;
+- Water follows the same COMBINE mechanics as every other physical material.
+
+### BREAK
+
+- breaking a structural/nonstructural bond reclassifies resulting components from the resulting physical graph;
+- breaking a bond does not manufacture or consume material;
+- a straddling environmental component cannot be split by containment alone.
+
+### EXPEL
+
+- stored physical component can be expelled;
+- structural component cannot be expelled;
+- expulsion preserves physical identity, geometry, and internal bonds.
+
+### Lifecycle integrity
+
+- no logical material can enter organism storage;
+- no logical material can be consumed for reproduction;
+- no logical material can be generated by death;
+- all transferred/released matter remains physically realized.
+
+## 14.10 Audit and Implementation Order
+
+The implementation must follow this order:
+
+1. physical graph authority;
+2. physical-only organism storage;
+3. boundary containment correction;
+4. Water-specific energetic-rule removal;
+5. COMBINE/BREAK post-mutation classification;
+6. EXPEL eligibility and physical transfer;
+7. reproduction migration;
+8. death/recycling/decomposition migration;
+9. focused verification matrix;
+10. long-run simulation validation.
+
+Each phase requires an audit before implementation and a second audit after implementation.
+
+No phase may introduce a workaround that contradicts Sections 12–14.
+
 # 15. Active Environmental Field
 
 The active ecological field is the complete environmental material layer.
@@ -499,25 +700,41 @@ Environmental acquisition, expulsion, decomposition, and other material transfer
 
 # 16. Material Storage
 
-Material storage is physical material storage.
+Material storage is **physical material storage**.
 
-Stored material must retain its physical form.
+Organism storage contains only existing `PhysicalMaterial` instances. There is no logical/composition-only material representation inside organism storage.
 
-For a composite material, this means preserving:
+Stored material must retain its physical form, including:
 
 - constituents,
 - bonds,
 - geometry,
+- relative placement,
+- orientation,
+- physical state,
 - and internal structure.
+
+Storage is a classification of a physical object, not a separate material type.
+
+The authoritative storage rule is:
+
+> **Completely enclosed physical material that is not structurally connected to the genome is stored/nonliving material.**
 
 Stored material must be available to both:
 
 - **BREAK**
 - **COMBINE**
 
-There are no special exclusions where the established rules say all stored material is available.
+There are no Water-specific storage or acquisition exceptions.
 
-The storage system must preserve a physically contained material instance rather than reducing it to composition-only state.
+A physical component that remains connected to material outside the organism is not converted into stored material merely because some constituents lie inside the boundary. It remains one intact, constrained physical component until an actual connectivity operation changes it.
+
+The storage system must never:
+
+- accept `StoredMaterial::Logical`,
+- generate physical material from an abstract `Material` description,
+- delete bonds because of membrane crossing,
+- or use a mutable storage flag as a substitute for physical containment and graph classification.
 
 # 17. BREAK
 
