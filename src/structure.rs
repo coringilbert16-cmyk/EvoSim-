@@ -603,7 +603,7 @@ impl PhysicalConstituentGraph {
         neighbors
     }
 
-    pub fn has_nonfluid_ancestor_in_component(
+    pub fn component_contains_nonfluid(
         &self,
         unit_index: usize,
         catalog: &[BaseResource],
