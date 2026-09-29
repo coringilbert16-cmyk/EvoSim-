@@ -116,11 +116,21 @@ mod integration_tests {
         let region = regions
             .first()
             .expect("initial organism should have an accessible interior region");
+        // The topology sample point is intentionally only nudged into the
+        // region from a boundary face. A finite Carbon constituent placed
+        // there would touch the wall and therefore is not fully contained.
+        // Use the interior vertex-average for this containment test instead.
+        let (x, y) = region
+            .boundary
+            .iter()
+            .fold((0.0, 0.0), |(x, y), &(px, py)| (x + px, y + py));
+        let count = region.boundary.len() as f64;
         let anchor = Placement {
-            x: region.sample_point.0,
-            y: region.sample_point.1,
+            x: x / count,
+            y: y / count,
             rotation_radians: 0.0,
         };
+        assert!(region.contains_point(anchor.x, anchor.y));
         let physical = PhysicalMaterial::realized(
             Material::free_base("Carbon", 1.0),
             vec![anchor],
