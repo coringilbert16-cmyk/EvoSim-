@@ -231,7 +231,6 @@ pub(crate) fn try_combine_stored_unit(
     if !raw.is_valid() || raw.is_empty() {
         return None;
     }
-    let water = water_field_amount(environment, organism);
 
     if raw.has_internal_structure() {
         let instance = organism.stored_material.peek_matching_physical(&raw)?;
@@ -557,7 +556,6 @@ pub(crate) fn combine_specific_pair(
                 endpoint_a: evaluation.candidate.endpoint_a,
                 endpoint_b: evaluation.candidate.endpoint_b,
                 investment: evaluation.threshold,
-                water,
             },
             catalog,
             cache,
@@ -605,13 +603,12 @@ pub(crate) fn try_combine(
         return None;
     }
     let catalog = &environment.catalog;
-    let water = water_field_amount(environment, organism);
     let mut pairs = Vec::new();
     for ua in 0..organism.structure.units.len() {
         for ub in ua + 1..organism.structure.units.len() {
             for candidate in eligible_candidates(&organism.structure, ua, ub, catalog, cache) {
                 if let Some((evaluation, _, _, _, required)) =
-                    evaluate_candidate(&organism.structure, ua, ub, candidate, catalog, water)
+                    evaluate_candidate(&organism.structure, ua, ub, candidate, catalog)
                 {
                     let developmental_score = developmental
                         .map(|(blueprint, origin, orientation, preferred_length)| {
@@ -678,7 +675,6 @@ pub(crate) fn try_combine(
                 endpoint_a: evaluation.candidate.endpoint_a,
                 endpoint_b: evaluation.candidate.endpoint_b,
                 investment: evaluation.threshold,
-                water,
             },
             catalog,
             cache,
