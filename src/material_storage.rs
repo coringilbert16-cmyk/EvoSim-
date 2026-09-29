@@ -276,7 +276,13 @@ mod tests {
     #[test]
     fn free_material_is_stored_as_discrete_units() {
         let mut storage = MaterialStorage::default();
-        assert!(storage.store(Material::free_base("Carbon", 3.0)));
+        for x in 0..3 {
+            assert!(storage.store_physical(
+                Material::free_base("Carbon", 1.0),
+                vec![Placement { x: x as f64, y: 0.0, rotation_radians: 0.0 }],
+                &catalog(),
+            ));
+        }
         assert_eq!(storage.len(), 3);
         assert_eq!(storage.count_unstructured(), 3);
         assert_eq!(storage.total_amount(), 3.0);
@@ -287,7 +293,7 @@ mod tests {
         let mut storage = MaterialStorage::default();
         storage.store_physical(Material::free_base("Carbon", 1.0), vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }], &catalog()).unwrap();
         let peeked = storage.peek_one_unstructured().expect("stored unit");
-        assert_eq!(peeked, Material::free_base("Carbon", 1.0));
+        assert_eq!(peeked.material, Material::free_base("Carbon", 1.0));
         assert_eq!(storage.count_unstructured(), 1);
     }
 
@@ -295,7 +301,14 @@ mod tests {
     fn structured_material_is_stored_intact() {
         let mut storage = MaterialStorage::default();
         let m = compound();
-        assert!(storage.store(m.clone()));
+        assert!(storage.store_physical(
+            m.clone(),
+            vec![
+                Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                Placement { x: 0.838, y: 0.0, rotation_radians: 0.0 },
+            ],
+            &catalog(),
+        ));
         assert_eq!(storage.materials_snapshot(), vec![m]);
         assert_eq!(storage.count_structured(), 1);
     }
@@ -305,7 +318,7 @@ mod tests {
         let mut storage = MaterialStorage::default();
         let m = compound();
         storage.store_physical(m.clone(), vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }; 2], &catalog()).unwrap();
-        assert_eq!(storage.take_matching(&m), Some(m.clone()));
+        assert_eq!(storage.take_matching(&m).map(|instance| instance.material), Some(m.clone()));
         assert!(storage.is_empty());
     }
 
