@@ -181,6 +181,7 @@ impl Simulation {
             bond: None,
             stored_material: Some(stored_material),
             stored_bond: Some(stored_bond),
+            environmental_source: false,
             complexity,
             duration_ticks: duration,
             remaining_ticks: duration,
@@ -191,6 +192,126 @@ impl Simulation {
         *next_id += 1;
         organism.active_transformation_id = Some(t.id);
         Some(t)
+    }
+
+    pub(crate) fn try_start_environmental_break(
+        organism: &mut Organism,
+        environment: &mut Environment,
+        next_id: &mut u64,
+        decision: &ActionCandidate,
+    ) -> Option<ActiveTransformation> {
+        if decision.action != ActionKind::Break || organism.active_transformation_id.is_some() {
+            return None;
+        }
+        let key = decision.context_key.as_deref()?;
+        let rest = key.strip_prefix("environment:")?;
+        let (cell_part, bond_part) = rest.rsplit_once(":bond:")?;
+        let cell_index = cell_part.strip_prefix("cell:")?.parse::<usize>().ok()?;
+        let bond_index = bond_part.parse::<usize>().ok()?;
+
+        let regions = crate::interior_geometry::find_accessible_interior_regions(
+            &organism.structure,
+            &environment.catalog,
+        )
+        .ok()?;
+        if regions.is_empty() {
+            return None;
+        }
+        let body = crate::organism_geometry::OrganismBodyGeometry::from_structure(
+            &organism.structure,
+            &environment.catalog,
+        )?;
+        let candidates = environment
+            .field
+            .cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y);
+        for candidate_cell in candidates {
+            if candidate_cell != cell_index {
+                continue;
+            }
+            let cell = environment.field.cells.get(cell_index)?;
+            for (material_index, instance) in cell.physical_materials.iter().enumerate() {
+                let Some(connections) = instance.internal_connections.as_ref() else {
+                    continue;
+                };
+                let Some(target) = connections.get(bond_index).cloned() else {
+                    continue;
+                };
+                let Some(placements) = instance.placements.as_ref() else {
+                    continue;
+                };
+                let mut hypothetical = organism.structure.clone();
+                let indices = crate::material_restoration::restore_material(
+                    &mut hypothetical,
+                    instance,
+                    Placement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                    &environment.catalog,
+                )?;
+                let Some(&a_index) = indices.get(target.part_a) else {
+                    continue;
+                };
+                let Some(&b_index) = indices.get(target.part_b) else {
+                    continue;
+                };
+                let endpoint_a = target.endpoint_a;
+                let endpoint_b = target.endpoint_b;
+                let point_a = endpoint_a.world_point(
+                    &hypothetical.units[a_index],
+                    &environment.catalog,
+                )?;
+                let point_b = endpoint_b.world_point(
+                    &hypothetical.units[b_index],
+                    &environment.catalog,
+                )?;
+                let accessible = regions.iter().any(|region| {
+                    region.contains_point(point_a.x, point_a.y)
+                        || region.contains_point(point_b.x, point_b.y)
+                });
+                if !accessible {
+                    continue;
+                }
+                let removed = environment
+                    .field
+                    .cells
+                    .get_mut(cell_index)?
+                    .physical_materials
+                    .get(material_index)?
+                    .clone();
+                if removed != *instance {
+                    continue;
+                }
+                environment.field.cells[cell_index]
+                    .physical_materials
+                    .remove(material_index);
+                environment.field.mark_changed_at_index(cell_index);
+
+                let complexity = crate::math::complexity(2.0);
+                let duration = 1_u64.max(complexity.ceil() as u64);
+                let t = ActiveTransformation {
+                    id: *next_id,
+                    organism_id: organism.id.clone(),
+                    kind: crate::state::TransformationKind::Break,
+                    material: crate::resources::Material::free_base("", 0.0),
+                    bond: None,
+                    stored_material: Some(removed),
+                    stored_bond: Some(target),
+                    environmental_source: true,
+                    complexity,
+                    duration_ticks: duration,
+                    remaining_ticks: duration,
+                    prepared_energy: None,
+                    pending_experience: None,
+                    decision_context_key: decision.context_key.clone(),
+                };
+                *next_id += 1;
+                organism.active_transformation_id = Some(t.id);
+                return Some(t);
+            }
+        }
+        None
     }
 
     pub(crate) fn prepare_transformation(
@@ -291,7 +412,15 @@ impl Simulation {
         };
 
         for piece in pieces {
-            if !organism
+            if transformation.environmental_source {
+                if let Some(placement) = piece
+                    .placements
+                    .as_ref()
+                    .and_then(|placements| placements.first())
+                {
+                    let _ = environment.field.deposit(placement.x, placement.y, piece);
+                }
+            } else if !organism
                 .stored_material
                 .store_physical_instance(piece.clone())
             {
