@@ -166,6 +166,16 @@ impl MaterialStorage {
         })
     }
 
+    pub(crate) fn take_first_unstructured(&mut self) -> Option<PhysicalMaterial> {
+        let index = self.entries.iter().position(|entry| {
+            let material = entry.material();
+            !material.has_internal_structure()
+                && !material.is_empty()
+                && matches!(entry, StoredMaterial::Physical(instance) if instance.is_realized())
+        })?;
+        self.take_physical_at(index)
+    }
+
     pub(crate) fn peek_matching_physical(&self, target: &Material) -> Option<PhysicalMaterial> {
         self.entries.iter().find_map(|entry| match entry {
             StoredMaterial::Physical(instance)
