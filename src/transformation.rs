@@ -454,7 +454,7 @@ pub(crate) fn has_environmental_break_candidate(
                 organism.active_transformation_id = None;
                 return false;
             };
-            if !prepared_energy.is_finite() || prepared_energy < 0.0 {
+            if !prepared_energy.is_finite() {
                 organism.active_transformation_id = None;
                 return false;
             }
@@ -462,7 +462,7 @@ pub(crate) fn has_environmental_break_candidate(
             // structure and storage remain untouched until tick 3.
             let before_energy = organism.usable_energy;
             let before_stress = organism.stress;
-            organism.usable_energy = prepared_energy;
+            organism.usable_energy += prepared_energy;
             ledger.total_potential_energy_released +=
                 prepared_ledger.total_potential_energy_released;
             ledger.total_usable_energy_gained += prepared_ledger.total_usable_energy_gained;
@@ -599,7 +599,9 @@ pub(crate) fn resolve_transformation(
             // prepared on tick 2.
             organism.structure = structure.clone();
             organism.stored_material = stored_material.clone();
-            organism.stress = stress;
+            if stress.is_finite() {
+                organism.stress += stress;
+            }
             organism.mark_structure_changed();
             organism.active_transformation_id = None;
 
