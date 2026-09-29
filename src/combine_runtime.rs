@@ -529,18 +529,216 @@ pub(crate) fn can_combine(organism: &Organism, _environment: &Environment) -> bo
         return false;
     }
 
-    // Eligibility only answers whether COMBINE is mechanically worth considering.
-    // Candidate search belongs to the action's resolution phase; running
-    // try_combine here would duplicate the full physical search every tick.
-    if !organism.stored_material.is_empty() && !organism.structure.units.is_empty() {
+    // Environmental physical material can participate directly in COMBINE when
+    // a relevant connection point is inside an accessible interior region.
+    // Candidate search remains deferred to action resolution.
+    if !organism.structure.units.is_empty() {
         return true;
     }
-    organism.structure.units.len() >= 2
+    !organism.stored_material.is_empty()
+}
+
+fn try_combine_environmental(
+    organism: &mut Organism,
+    environment: &mut Environment,
+    cache: &mut ConnectionCompatibilityCache,
+    ledger: &mut EnergyLedger,
+    developmental: Option<DevelopmentalContext<'_>>,
+) -> Option<CombineAttempt> {
+    let regions = crate::interior_geometry::find_accessible_interior_regions(
+        &organism.structure,
+        &environment.catalog,
+    )
+    .ok()?;
+    if regions.is_empty() {
+        return None;
+    }
+    let body = crate::organism_geometry::OrganismBodyGeometry::from_structure(
+        &organism.structure,
+        &environment.catalog,
+    )?;
+
+    let candidate_cells = environment.field.cells_intersecting_bounds(
+        body.min_x,
+        body.max_x,
+        body.min_y,
+        body.max_y,
+    );
+    let mut candidates = Vec::new();
+
+    for cell_index in candidate_cells {
+        let physicals = environment
+            .field
+            .cells
+            .get(cell_index)
+            .map(|cell| cell.physical_materials.clone())
+            .unwrap_or_default();
+        for (material_index, instance) in physicals.into_iter().enumerate() {
+            if !instance.is_realized() || instance.material.is_empty() {
+                continue;
+            }
+            let mut hypothetical = organism.structure.clone();
+            let indices = crate::material_restoration::restore_material(
+                &mut hypothetical,
+                &instance,
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                &environment.catalog,
+            )?;
+            for &ua in 0..organism.structure.units.len() {
+                for &ub in &indices {
+                    for candidate in crate::contact::connection_pair_candidates_cached(
+                        &hypothetical,
+                        ua,
+                        ub,
+                        &environment.catalog,
+                        cache,
+                    ) {
+                        if !crate::interior_geometry::endpoint_in_accessible_interior(
+                            candidate.endpoint_a,
+                            &hypothetical.units[ua],
+                            &environment.catalog,
+                            &regions,
+                        ) || !crate::interior_geometry::endpoint_in_accessible_interior(
+                            candidate.endpoint_b,
+                            &hypothetical.units[ub],
+                            &environment.catalog,
+                            &regions,
+                        ) {
+                            continue;
+                        }
+                        if let Some((evaluation, _, _, _, required)) = evaluate_candidate(
+                            &hypothetical,
+                            ua,
+                            ub,
+                            candidate,
+                            &environment.catalog,
+                        ) {
+                            let developmental_score = developmental
+                                .map(|(blueprint, origin, orientation, preferred_length)| {
+                                    let Some(a) = candidate.endpoint_a.world_point(
+                                        &hypothetical.units[ua],
+                                        &environment.catalog,
+                                    ) else {
+                                        return 0.0;
+                                    };
+                                    let Some(b) = candidate.endpoint_b.world_point(
+                                        &hypothetical.units[ub],
+                                        &environment.catalog,
+                                    ) else {
+                                        return 0.0;
+                                    };
+                                    let local = crate::developmental_blueprint::developmental_point(
+                                        (a.x + b.x) * 0.5,
+                                        (a.y + b.y) * 0.5,
+                                        origin,
+                                        orientation,
+                                    );
+                                    crate::developmental_blueprint::CANDIDATE_CONNECTIVITY_WEIGHT
+                                        * blueprint.connectivity_preference_scaled(
+                                            local.0,
+                                            local.1,
+                                            preferred_length,
+                                        )
+                                })
+                                .unwrap_or(0.0);
+                            candidates.push((
+                                cell_index,
+                                material_index,
+                                instance,
+                                ua,
+                                ub,
+                                evaluation,
+                                candidate.distance,
+                                required,
+                                developmental_score,
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    candidates.sort_by(|a, b| {
+        b.8.partial_cmp(&a.8)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.6.partial_cmp(&b.6).unwrap_or(std::cmp::Ordering::Equal))
+    });
+
+    for (
+        cell_index,
+        material_index,
+        instance,
+        ua,
+        ub,
+        evaluation,
+        _distance,
+        required,
+        _score,
+    ) in candidates
+    {
+        if organism.usable_energy + EPSILON < required {
+            continue;
+        }
+        let mut trial_structure = organism.structure.clone();
+        let indices = crate::material_restoration::restore_material(
+            &mut trial_structure,
+            &instance,
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            &environment.catalog,
+        )?;
+        let restored_ub = *indices.get(ub.saturating_sub(organism.structure.units.len()))?;
+        let mut trial_ledger = *ledger;
+        let mut trial_energy = organism.usable_energy;
+        let attempt = form_bond(
+            &mut trial_structure,
+            BondFormationRequest {
+                unit_a: ua,
+                unit_b: restored_ub,
+                endpoint_a: evaluation.candidate.endpoint_a,
+                endpoint_b: evaluation.candidate.endpoint_b,
+                investment: evaluation.threshold,
+            },
+            &environment.catalog,
+            cache,
+            &mut trial_ledger,
+            &mut trial_energy,
+        )?;
+
+        let removed = environment
+            .field
+            .cells
+            .get_mut(cell_index)?
+            .physical_materials
+            .get(material_index)?
+            .clone();
+        if removed != instance {
+            continue;
+        }
+        environment.field.cells[cell_index]
+            .physical_materials
+            .remove(material_index);
+        environment.field.mark_changed_at_index(cell_index);
+        organism.structure = trial_structure;
+        organism.usable_energy = trial_energy;
+        *ledger = trial_ledger;
+        organism.add_transaction_stress(attempt.work_cost);
+        return Some(attempt);
+    }
+    None
 }
 
 pub(crate) fn try_combine(
     organism: &mut Organism,
-    environment: &Environment,
+    environment: &mut Environment,
     cache: &mut ConnectionCompatibilityCache,
     ledger: &mut EnergyLedger,
     developmental: Option<DevelopmentalContext<'_>>,
@@ -551,6 +749,11 @@ pub(crate) fn try_combine(
         {
             return Some(attempt);
         }
+    }
+    if let Some(attempt) =
+        try_combine_environmental(organism, environment, cache, ledger, developmental)
+    {
+        return Some(attempt);
     }
     if organism.structure.units.len() < 2 {
         return None;
