@@ -12,6 +12,7 @@ use crate::developmental_blueprint::DevelopmentalFieldBlueprint;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
 use crate::resources::BaseResource;
 use crate::state::{EnergyLedger, Environment, Organism};
+use crate::physical_material::PhysicalMaterial;
 use crate::structure::{BondEndpoint, ConnectionEndpoint, Placement};
 
 const EPSILON: f64 = 1e-12;
@@ -21,7 +22,7 @@ pub(crate) const COMBINE_CONTACT_TOLERANCE: f64 = 1.0;
 /// established by the normal COMBINE candidate and formation checks.
 pub(crate) type DevelopmentalContext<'a> = (&'a DevelopmentalFieldBlueprint, (f64, f64), f64, f64);
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct CombineAttempt {
     pub unit_a: usize,
     pub unit_b: usize,
@@ -36,6 +37,7 @@ pub(crate) struct CombineAttempt {
     pub net_energy_change: f64,
     pub bond_strength: f64,
     pub bond_energy: f64,
+    pub environmental_source: Option<(usize, PhysicalMaterial)>,
 }
 
 #[derive(Clone, Copy)]
@@ -161,6 +163,7 @@ fn form_bond(
         net_energy_change: net,
         bond_strength: strength,
         bond_energy: investment,
+        environmental_source: None,
     })
 }
 
@@ -730,6 +733,8 @@ fn try_combine_environmental(
             .physical_materials
             .remove(material_index);
         environment.field.mark_changed_at_index(cell_index);
+        let mut attempt = attempt;
+        attempt.environmental_source = Some((cell_index, removed));
         organism.structure = trial_structure;
         organism.usable_energy = trial_energy;
         *ledger = trial_ledger;
