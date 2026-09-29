@@ -340,10 +340,12 @@ impl Simulation {
                                 .is_some_and(|connections| !connections.is_empty())
                 )
             });
+        let can_break_environment = organism.active_transformation_id.is_none()
+            && crate::transformation::has_environmental_break_candidate(organism, environment);
         ActionEligibility {
             can_move: true,
             can_combine,
-            can_break: can_break_stored
+            can_break: (can_break_stored || can_break_environment)
                 && (organism.reproductive_construction.is_none()
                     || needs.survival > 0.0
                     || needs.development > 0.0
@@ -377,6 +379,9 @@ impl Simulation {
                     }
                 }
             }
+            candidates.extend(
+                crate::transformation::environmental_break_candidates(organism, _environment),
+            );
         }
         if relevant(ActionKind::Combine) {
             candidates.push(ActionCandidate {
@@ -750,12 +755,22 @@ impl Simulation {
                                         .map(|realization| realization.overall)
                                         .unwrap_or(0.0)
                                 });
-                            if let Some(mut transformation) = Self::try_start_transformation(
-                                &mut organisms[index],
-                                &environment.catalog,
-                                &mut self.next_transformation_id,
-                                &selected,
-                            ) {
+                            if let Some(mut transformation) =
+                                crate::transformation::try_start_environmental_break(
+                                    &mut organisms[index],
+                                    environment,
+                                    &mut self.next_transformation_id,
+                                    &selected,
+                                )
+                                .or_else(|| {
+                                    Self::try_start_transformation(
+                                        &mut organisms[index],
+                                        &environment.catalog,
+                                        &mut self.next_transformation_id,
+                                        &selected,
+                                    )
+                                })
+                            {
                                 transformation.pending_experience =
                                     Some(crate::memory::PendingTransformationExperience {
                                         perceptions,
