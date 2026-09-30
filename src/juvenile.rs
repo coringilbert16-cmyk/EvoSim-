@@ -41,7 +41,7 @@ pub(crate) fn confirmed_seed_baseline(
     // voids are ordinary consequences of the mesh and may contain environmental
     // material later.
     let _ = (carbon, hydrogen, sulfur);
-    let radius = 1.10;
+    let radius = 1.25;
     let positions = [
         (0.0, radius),
         (-radius * 0.866_025_403_8, radius * 0.5),
