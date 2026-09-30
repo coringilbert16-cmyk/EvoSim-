@@ -117,18 +117,18 @@ impl GenomeMeasurementScaffold {
             crate::resources::Form::RegularPolygon { radius, .. } => radius,
             _ => return Err("Carbon genome measurement requires a polygonal Carbon shape".into()),
         };
-        // The measurement piece is a compact three-carbon reference, not a
-        // diameter laid across the future cavity. An equilateral arrangement
-        // preserves the carbon-derived spacing while keeping the temporary
-        // scaffold inside the smallest intended genome cavity.
-        let spacing = radius * 3.0_f64.sqrt();
-        let circumradius = spacing / 3.0_f64.sqrt();
+        // Carbon is a rigid regular hexagon. The scaffold must be physical:
+        // neighboring Carbon pieces are placed exactly far enough apart that
+        // their boundaries can touch without their interiors overlapping.
+        // An equilateral triangle with side 2 * radius provides that spacing.
+        let side = radius * 2.0;
+        let circumradius = side / 3.0_f64.sqrt();
         Ok(Self {
             placements: [
                 BlueprintPlacement {
                     x: 0.0,
                     y: circumradius,
-                    rotation_radians: std::f64::consts::FRAC_PI_6,
+                    rotation_radians: 0.0,
                 },
                 BlueprintPlacement {
                     x: -circumradius * (3.0_f64).sqrt() / 2.0,
