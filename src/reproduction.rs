@@ -356,8 +356,13 @@ fn next_construction_resource_status(
     ledger: &EnergyLedger,
     context: Option<DevelopmentalContext<'_>>,
 ) -> NextConstructionResourceStatus {
-    let has_material = !child.stored_material.is_empty() || !parent_storage.is_empty();
-    if !has_material {
+    let has_physical_material = |storage: &MaterialStorage| {
+        storage
+            .entries
+            .iter()
+            .any(|entry| matches!(entry, crate::material_storage::StoredMaterial::Physical(_)))
+    };
+    if !has_physical_material(&child.stored_material) && !has_physical_material(parent_storage) {
         return NextConstructionResourceStatus::Missing;
     }
 
