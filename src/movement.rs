@@ -216,7 +216,46 @@ fn movement_energy_cost(realized_mass: f64, movement_efficiency: f64) -> f64 {
 }
 
 impl Simulation {
-    pub(crate) fn update_movement(
+    pub(crate) fn start_movement(
+        organism: &mut Organism,
+        environment: &Environment,
+        realized_mass: f64,
+        movement_efficiency: f64,
+        usable_energy: f64,
+        rng: &mut ChaCha8Rng,
+        perceptions: &[crate::harmonics::ResonancePerception],
+    ) -> Result<crate::state::ActiveMovement, crate::state::MovementFailureReason> {
+        let direction = crate::movement_direction::movement_direction_periodic(
+            organism,
+            environment.height,
+            perceptions,
+        )
+        .ok_or(crate::state::MovementFailureReason::NoDirection)?;
+        let (x, y) = direction;
+        let distance = select_movement_distance(
+            organism,
+            realized_mass,
+            movement_efficiency,
+            usable_energy,
+            rng,
+        )
+        .ok_or(crate::state::MovementFailureReason::InsufficientEnergy)?;
+        let total_cost =
+            movement_energy_cost_for_distance(realized_mass, movement_efficiency, distance);
+        if !total_cost.is_finite() || usable_energy + f64::EPSILON < total_cost {
+            return Err(crate::state::MovementFailureReason::InsufficientEnergy);
+        }
+        Ok(crate::state::ActiveMovement {
+            direction_x: x,
+            direction_y: y,
+            remaining_steps: distance.round() as u32,
+            step_interval: organism.genome.movement_step_interval(),
+            ticks_until_step: 0,
+            decision_distance: distance,
+        })
+    }
+
+    pub(crate) fn advance_movement(
         before: &mut [Organism],
         organism: &mut Organism,
         after: &mut [Organism],
@@ -224,78 +263,35 @@ impl Simulation {
         environment: &mut Environment,
         ledger: &mut EnergyLedger,
         tick: u64,
-        rng: &mut ChaCha8Rng,
-        perceptions: &[crate::harmonics::ResonancePerception],
-    ) -> bool {
+        active: &mut crate::state::ActiveMovement,
+    ) -> Result<MovementProgress, crate::state::MovementFailureReason> {
+        if active.remaining_steps == 0 {
+            return Ok(MovementProgress::Complete);
+        }
+        if active.ticks_until_step > 0 {
+            active.ticks_until_step -= 1;
+            return Ok(MovementProgress::Waiting);
+        }
+
         let old_position = organism.occupied_cells.first().cloned();
         let usable_energy = organism.usable_energy;
-        let active_transformation_id = organism.active_transformation_id;
-        let movement_efficiency = organism.genome.movement_efficiency();
         let realized_mass = organism.structural_mass(&environment.catalog);
-        let direction = crate::movement_direction::movement_direction_periodic(
-            organism,
-            environment.height,
-            perceptions,
-        );
-        let Some((x, y)) = direction else {
-            organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
-                tick,
-                direction_x: None,
-                direction_y: None,
-                step: None,
-                usable_energy,
-                active_transformation_id,
-                result: Err(crate::state::MovementFailureReason::NoDirection),
-                old_position,
-                new_position: None,
-            });
-            return false;
-        };
-
-        let Some(step) = select_movement_distance(
-            organism,
-            realized_mass,
-            movement_efficiency,
-            organism.usable_energy,
-            rng,
-        ) else {
-            organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
-                tick,
-                direction_x: Some(x),
-                direction_y: Some(y),
-                step: None,
-                usable_energy,
-                active_transformation_id,
-                result: Err(crate::state::MovementFailureReason::InsufficientEnergy),
-                old_position,
-                new_position: None,
-            });
-            return false;
-        };
-
-        let requested_dx = x * step;
-        let requested_dy = y * step;
-        let old = organism
-            .occupied_cells
-            .first()
-            .expect("movement direction requires an occupied cell");
-        let actual_dx = (old.x + requested_dx).clamp(0.0, environment.width) - old.x;
-        let actual_distance = actual_dx.hypot(requested_dy);
+        let movement_efficiency = organism.genome.movement_efficiency();
         let cost =
-            movement_energy_cost_for_distance(realized_mass, movement_efficiency, actual_distance);
-        if !cost.is_finite() || organism.usable_energy + f64::EPSILON < cost {
+            movement_energy_cost_for_distance(realized_mass, movement_efficiency, 1.0);
+        if !cost.is_finite() || usable_energy + f64::EPSILON < cost {
             organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
                 tick,
-                direction_x: Some(x),
-                direction_y: Some(y),
-                step: Some(step),
+                direction_x: Some(active.direction_x),
+                direction_y: Some(active.direction_y),
+                step: Some(active.decision_distance),
                 usable_energy,
-                active_transformation_id,
+                active_transformation_id: organism.active_transformation_id,
                 result: Err(crate::state::MovementFailureReason::InsufficientEnergy),
                 old_position,
                 new_position: None,
             });
-            return false;
+            return Err(crate::state::MovementFailureReason::InsufficientEnergy);
         }
 
         let result = Self::try_move_cell_with_reason(
@@ -305,47 +301,72 @@ impl Simulation {
             after,
             before.len(),
             spatial_index,
-            requested_dx,
-            requested_dy,
+            active.direction_x,
+            active.direction_y,
         );
         let diagnostic_result = result.clone();
         let new_position = organism.occupied_cells.first().cloned();
-        if result.is_ok() {
-            let transaction = EnergyTransaction {
-                reason: EnergyReason::Move,
-                potential_released: 0.0,
-                usable_delta: -cost,
-                structural_delta: 0.0,
-                heat_dissipated: cost,
-            };
-            if !ledger.settle_transaction(&mut organism.usable_energy, transaction) {
-                organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
-                    tick,
-                    direction_x: Some(x),
-                    direction_y: Some(y),
-                    step: Some(step),
-                    usable_energy,
-                    active_transformation_id,
-                    result: Err(crate::state::MovementFailureReason::InsufficientEnergy),
-                    old_position,
-                    new_position,
-                });
-                return false;
-            }
+        if let Err(reason) = result {
+            organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
+                tick,
+                direction_x: Some(active.direction_x),
+                direction_y: Some(active.direction_y),
+                step: Some(active.decision_distance),
+                usable_energy,
+                active_transformation_id: organism.active_transformation_id,
+                result: Err(reason.clone()),
+                old_position,
+                new_position,
+            });
+            return Err(reason);
         }
+
+        let transaction = EnergyTransaction {
+            reason: EnergyReason::Move,
+            potential_released: 0.0,
+            usable_delta: -cost,
+            structural_delta: 0.0,
+            heat_dissipated: cost,
+        };
+        if !ledger.settle_transaction(&mut organism.usable_energy, transaction) {
+            organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
+                tick,
+                direction_x: Some(active.direction_x),
+                direction_y: Some(active.direction_y),
+                step: Some(active.decision_distance),
+                usable_energy,
+                active_transformation_id: organism.active_transformation_id,
+                result: Err(crate::state::MovementFailureReason::InsufficientEnergy),
+                old_position,
+                new_position,
+            });
+            return Err(crate::state::MovementFailureReason::InsufficientEnergy);
+        }
+
+        active.remaining_steps = active.remaining_steps.saturating_sub(1);
+        active.ticks_until_step = if active.remaining_steps == 0 {
+            0
+        } else {
+            active.step_interval.saturating_sub(1)
+        };
         organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
             tick,
-            direction_x: Some(x),
-            direction_y: Some(y),
-            step: Some(step),
+            direction_x: Some(active.direction_x),
+            direction_y: Some(active.direction_y),
+            step: Some(active.decision_distance),
             usable_energy,
-            active_transformation_id,
+            active_transformation_id: organism.active_transformation_id,
             result: diagnostic_result,
             old_position,
             new_position,
         });
-        result.is_ok()
+        if active.remaining_steps == 0 {
+            Ok(MovementProgress::Complete)
+        } else {
+            Ok(MovementProgress::Moved)
+        }
     }
+
 
     pub(crate) fn try_move_cell(
         organism: &mut Organism,
@@ -432,6 +453,13 @@ impl Simulation {
         spatial_index.refresh_organism(moving_index, organism, environment);
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MovementProgress {
+    Waiting,
+    Moved,
+    Complete,
 }
 
 fn organism_at<'a>(
