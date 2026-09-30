@@ -831,7 +831,7 @@ fn realize_next_bond_driven(
     catalog: &[BaseResource],
     structure: &OrganismStructure,
     realized_units: &[Option<usize>],
-    index: usize,
+    _index: usize,
     neighbor: usize,
     genome_anchor: Placement,
     new_resource: &BaseResource,
