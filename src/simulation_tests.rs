@@ -158,7 +158,8 @@ mod integration_tests {
         )
         .expect("initial organism should expose an accessible interior region");
         let region = regions
-            .first()
+            .iter()
+            .max_by(|a, b| a.area.partial_cmp(&b.area).unwrap_or(std::cmp::Ordering::Equal))
             .expect("initial organism should have an accessible interior region");
         // The topological sample point only proves that the point is inside;
         // it is not guaranteed to contain an entire rigid resource. Find a
