@@ -800,7 +800,8 @@ mod tests {
     }
 
     #[test]
-    fn structural_membership_uses_persisted_physical_genome_ids() {
+    fn structural_membership_follows_realized_bonded_components() {
+        let catalog = crate::resources::default_catalog();
         let mut s = OrganismStructure::new();
         let a = s.add_unit(StructuralUnit::new(
             "Carbon",
@@ -820,13 +821,7 @@ mod tests {
         ));
         let ida = s.physical_id(a).unwrap();
         let idb = s.physical_id(b).unwrap();
-        s.set_genome_constituent_ids([ida]);
-        assert_eq!(
-            s.structural_unit_indices(&crate::resources::default_catalog()),
-            vec![a]
-        );
-        assert!(s.genome_connected(a));
-        assert!(!s.genome_connected(b));
+        assert!(s.structural_unit_indices(&catalog).is_empty());
         s.push_bond_unchecked(Bond {
             endpoint_a: BondEndpoint::new(ida, ConnectionEndpoint::Boundary { angle_radians: 0.0 }),
             endpoint_b: BondEndpoint::new(
@@ -838,11 +833,9 @@ mod tests {
             strength: 0.5,
             bond_energy: 1.0,
         });
-        assert_eq!(
-            s.structural_unit_indices(&crate::resources::default_catalog()),
-            vec![a, b]
-        );
-        assert!(s.genome_connected(b));
+        assert_eq!(s.structural_unit_indices(&catalog), vec![a, b]);
+        s.set_genome_constituent_ids([idb]);
+        assert_eq!(s.structural_unit_indices(&catalog), vec![a, b]);
     }
 
     fn connect(s: &mut OrganismStructure, a: usize, b: usize) {
