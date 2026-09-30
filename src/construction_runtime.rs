@@ -1264,4 +1264,3 @@ mod tests {
         assert!(structure.bonds.is_empty());
     }
 }
-
