@@ -1035,7 +1035,6 @@ mod tests {
             moving,
             &environment,
             &carbon,
-            &destination,
             1.0,
             0.0
         ));
@@ -1075,7 +1074,6 @@ mod tests {
             moving,
             &environment,
             &carbon,
-            &destination,
             1.0,
             0.0
         ));
