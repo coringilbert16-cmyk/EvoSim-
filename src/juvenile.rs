@@ -97,9 +97,7 @@ pub(crate) fn confirmed_seed_baseline(
     let largest_connection_span = largest_rigid_connection_span(catalog);
     let connection_clearance = 0.25;
     let required_chamber_gap = largest_connection_span + connection_clearance;
-    let outer_apothem = inner_offset
-        + inner_thickness / 2.0
-        + required_chamber_gap;
+    let outer_apothem = inner_offset + inner_thickness / 2.0 + required_chamber_gap;
     let outer_side_length =
         2.0 * outer_apothem * (std::f64::consts::PI / outer_side_count as f64).tan();
     let outer_center_radius = outer_apothem + inner_thickness / 2.0;
@@ -215,7 +213,10 @@ fn largest_rigid_connection_span(catalog: &[BaseResource]) -> f64 {
         .iter()
         .enumerate()
         .flat_map(|(i, &(ax, ay))| {
-            points.iter().skip(i + 1).map(move |&(bx, by)| (ax - bx).hypot(ay - by))
+            points
+                .iter()
+                .skip(i + 1)
+                .map(move |&(bx, by)| (ax - bx).hypot(ay - by))
         })
         .fold(0.0, f64::max)
 }
