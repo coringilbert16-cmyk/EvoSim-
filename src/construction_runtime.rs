@@ -906,8 +906,12 @@ fn realize_next_bond_driven(
     for endpoint_a in existing_endpoints {
         let joint = endpoint_a.world_point(&structure.units[existing_index], catalog)?;
         for (part_index, endpoint_b) in new_endpoints.iter().copied() {
-            let local_b =
-                physical_material_endpoint_local_point(new_material, part_index, endpoint_b, catalog)?;
+            let local_b = physical_material_endpoint_local_point(
+                new_material,
+                part_index,
+                endpoint_b,
+                catalog,
+            )?;
 
             for step in 0..360 {
                 let angle = std::f64::consts::TAU * step as f64 / 360.0;
@@ -947,12 +951,7 @@ fn realize_next_bond_driven(
 
                 let ignored_units = indices.clone();
                 if indices.iter().any(|index| {
-                    placed_unit_overlaps(
-                        &trial,
-                        &trial.units[*index],
-                        &ignored_units,
-                        catalog,
-                    )
+                    placed_unit_overlaps(&trial, &trial.units[*index], &ignored_units, catalog)
                 }) {
                     continue;
                 }
@@ -1114,7 +1113,8 @@ fn construct_blueprint_bond_driven_internal(
             crate::resources::Material::free_base(anchor_resource.name.clone(), 1.0),
             vec![placement(anchor_element.placement)],
             catalog,
-        ).ok_or_else(|| "construction anchor has invalid geometry".to_string())?
+        )
+        .ok_or_else(|| "construction anchor has invalid geometry".to_string())?
     };
 
     let anchor_origin = placement(anchor_element.placement);
@@ -1123,7 +1123,8 @@ fn construct_blueprint_bond_driven_internal(
         &anchor_instance,
         anchor_origin,
         catalog,
-    ).ok_or_else(|| "construction anchor has invalid physical realization".to_string())?;
+    )
+    .ok_or_else(|| "construction anchor has invalid physical realization".to_string())?;
     if let Some(storage) = available_materials.as_deref_mut() {
         let storage_index = rank_available_construction_materials(storage, &anchor_preferred, catalog)
             .map_err(|e| e.to_string())?
@@ -1236,12 +1237,19 @@ fn construct_blueprint_bond_driven_internal(
                 endpoint_b,
                 trial_attempt,
                 candidate_origin,
-            )) =
-                realize_next_bond_driven(
-                    blueprint, catalog, &structure, &realized_units, index, neighbor,
-                    genome_anchor, &candidate_instance, &mut nodes, ledger, remaining_energy,
-                )
-            {
+            )) = realize_next_bond_driven(
+                blueprint,
+                catalog,
+                &structure,
+                &realized_units,
+                index,
+                neighbor,
+                genome_anchor,
+                &candidate_instance,
+                &mut nodes,
+                ledger,
+                remaining_energy,
+            ) {
                 let existing_index = realized_units[neighbor]
                     .ok_or_else(|| format!("realized neighbor {neighbor} has no structure unit"))?;
                 let origin = candidate_origin;
@@ -1252,12 +1260,17 @@ fn construct_blueprint_bond_driven_internal(
                 ).ok_or_else(|| {
                     format!("validated physical material could not be restored for blueprint element {index}")
                 })?;
-                let new_unit_index = *new_indices.get(part_index)
+                let new_unit_index = *new_indices
+                    .get(part_index)
                     .ok_or_else(|| "successful material endpoint index disappeared".to_string())?;
 
                 let mut cache = crate::contact::ConnectionCompatibilityCache::new();
                 let candidate = crate::contact::connection_pair_candidates_cached(
-                    &commit_structure, existing_index, new_unit_index, catalog, &mut cache,
+                    &commit_structure,
+                    existing_index,
+                    new_unit_index,
+                    catalog,
+                    &mut cache,
                 )
                 .into_iter()
                 .find(|candidate| {
@@ -1267,18 +1280,35 @@ fn construct_blueprint_bond_driven_internal(
                         && candidate.available_a
                         && candidate.available_b
                 });
-                let Some(candidate) = candidate else { continue; };
+                let Some(candidate) = candidate else {
+                    continue;
+                };
                 let Some((_, _, _, _, investment)) =
                     crate::combine_runtime::construction_candidate_evaluation(
-                        &commit_structure, existing_index, new_unit_index, candidate, catalog,
+                        &commit_structure,
+                        existing_index,
+                        new_unit_index,
+                        candidate,
+                        catalog,
                     )
-                else { continue; };
+                else {
+                    continue;
+                };
                 let mut commit_energy = remaining_energy;
                 let mut commit_ledger = *ledger;
                 let Some(commit_attempt) = crate::combine_runtime::form_construction_bond(
-                    &mut commit_structure, existing_index, new_unit_index, candidate,
-                    investment, catalog, &mut cache, &mut commit_ledger, &mut commit_energy,
-                ) else { continue; };
+                    &mut commit_structure,
+                    existing_index,
+                    new_unit_index,
+                    candidate,
+                    investment,
+                    catalog,
+                    &mut cache,
+                    &mut commit_ledger,
+                    &mut commit_energy,
+                ) else {
+                    continue;
+                };
 
                 debug_assert_eq!(commit_attempt.endpoint_a, trial_attempt.endpoint_a);
                 debug_assert_eq!(commit_attempt.endpoint_b, trial_attempt.endpoint_b);
