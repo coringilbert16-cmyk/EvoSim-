@@ -238,7 +238,7 @@ pub(crate) fn realize_initial_with_reserve(
     let (structure, mut ledger, energy) = if blueprint.genome_measurement.is_some() {
         let mut trial_ledger = EnergyLedger::default();
         let mut trial_energy = TRIAL_ENERGY;
-        let (_, _, trial_remaining) =
+        let (_, trial_remaining) =
             blueprint.realize_with_context(catalog, &mut trial_ledger, &mut trial_energy)?;
         let required_initial_energy = TRIAL_ENERGY - trial_remaining;
         if !required_initial_energy.is_finite() || required_initial_energy < 0.0 {
