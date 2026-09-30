@@ -265,7 +265,8 @@ mod integration_tests {
                 break;
             }
         }
-        let anchor = anchor.expect("accessible region must contain room for Hydrogen");        assert!(region.contains_point(anchor.x, anchor.y));
+        let anchor = anchor.expect("accessible region must contain room for Hydrogen");
+        assert!(region.contains_point(anchor.x, anchor.y));
         let physical = PhysicalMaterial::realized(
             Material::free_base("Hydrogen", 1.0),
             vec![anchor],
