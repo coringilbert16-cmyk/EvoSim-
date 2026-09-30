@@ -67,10 +67,8 @@ pub(crate) fn confirmed_seed_baseline(
         std::f64::consts::FRAC_PI_2,
     ];
     let mut elements = Vec::with_capacity(positions.len());
-    for (((x, y), material), rotation_radians) in positions
-        .into_iter()
-        .zip(materials)
-        .zip(rotations)
+    for (((x, y), material), rotation_radians) in
+        positions.into_iter().zip(materials).zip(rotations)
     {
         if !catalog.iter().any(|resource| resource.name == material) {
             return Err(format!("catalog is missing seed {material}"));
@@ -91,14 +89,38 @@ pub(crate) fn confirmed_seed_baseline(
     // The four Nitrogen pieces seal the genome cavity. Each outer mixed
     // material is physically attached to one side of that inner boundary.
     let connections = vec![
-        BlueprintConnection { element_a: 0, element_b: 1 },
-        BlueprintConnection { element_a: 0, element_b: 2 },
-        BlueprintConnection { element_a: 1, element_b: 3 },
-        BlueprintConnection { element_a: 2, element_b: 3 },
-        BlueprintConnection { element_a: 0, element_b: 4 },
-        BlueprintConnection { element_a: 1, element_b: 5 },
-        BlueprintConnection { element_a: 3, element_b: 6 },
-        BlueprintConnection { element_a: 2, element_b: 7 },
+        BlueprintConnection {
+            element_a: 0,
+            element_b: 1,
+        },
+        BlueprintConnection {
+            element_a: 0,
+            element_b: 2,
+        },
+        BlueprintConnection {
+            element_a: 1,
+            element_b: 3,
+        },
+        BlueprintConnection {
+            element_a: 2,
+            element_b: 3,
+        },
+        BlueprintConnection {
+            element_a: 0,
+            element_b: 4,
+        },
+        BlueprintConnection {
+            element_a: 1,
+            element_b: 5,
+        },
+        BlueprintConnection {
+            element_a: 3,
+            element_b: 6,
+        },
+        BlueprintConnection {
+            element_a: 2,
+            element_b: 7,
+        },
     ];
 
     let mut baseline =
