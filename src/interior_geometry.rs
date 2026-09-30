@@ -391,6 +391,17 @@ pub fn find_enclosed_regions(
         return Vec::new();
     }
 
+    // Only line constituents that physically reach an area boundary can
+    // contribute to an enclosed face. Internal line constituents remain
+    // ordinary structural geometry and stay out of this planar topology graph.
+    line_segments.retain(|(_, (a, b))| {
+        [*a, *b].iter().any(|point| {
+            polygons
+                .iter()
+                .any(|(_, polygon)| point_on_polygon_boundary(*point, polygon))
+        })
+    });
+
     let mut points = Vec::new();
     let mut point_index = HashMap::new();
     let mut edges = Vec::new();
@@ -572,6 +583,27 @@ fn point_in_polygon(point: Point, polygon: &[Point]) -> bool {
     }
     inside
 }
+fn point_on_polygon_boundary(point: Point, polygon: &[Point]) -> bool {
+    (0..polygon.len()).any(|i| {
+        let a = polygon[i];
+        let b = polygon[(i + 1) % polygon.len()];
+        let ab = b.sub(a);
+        let length_sq = ab.x * ab.x + ab.y * ab.y;
+        if length_sq <= EPS {
+            return point.sub(a).norm() <= NODE_TOLERANCE;
+        }
+        let t = ((point.x - a.x) * ab.x + (point.y - a.y) * ab.y) / length_sq;
+        if !(0.0..=1.0).contains(&t) {
+            return false;
+        }
+        let projection = Point {
+            x: a.x + t * ab.x,
+            y: a.y + t * ab.y,
+        };
+        projection.sub(point).norm() <= NODE_TOLERANCE
+    })
+}
+
 fn segment_in_polygon_boundary(a: Point, b: Point, polygon: &[Point]) -> bool {
     (0..polygon.len()).any(|i| {
         let p = polygon[i];
