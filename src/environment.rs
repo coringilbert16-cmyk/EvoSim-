@@ -274,7 +274,7 @@ impl ActiveMaterialField {
         contained
     }
 
-    fn physical_is_fully_inside_any_region(
+    pub(crate) fn physical_is_fully_inside_any_region(
         physical: &PhysicalMaterial,
         regions: &[crate::interior_geometry::EnclosedRegion],
         catalog: &[crate::resources::BaseResource],
