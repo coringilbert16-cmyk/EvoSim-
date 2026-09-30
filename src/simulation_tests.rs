@@ -202,13 +202,15 @@ mod integration_tests {
                     &s.environment.catalog,
                 )
                 .expect("initial organism should have a realized body");
-                let mut probe = s.environment.field.clone();
-                probe.deposit(candidate.x, candidate.y, physical);
-                let contained = probe.take_contained_physical_materials_in_regions(
-                    &body,
-                    std::slice::from_ref(region),
-                    &s.environment.catalog,
-                );
+                s.environment.field.deposit(candidate.x, candidate.y, physical);
+                let contained = s
+                    .environment
+                    .field
+                    .take_contained_physical_materials_in_regions(
+                        &body,
+                        std::slice::from_ref(region),
+                        &s.environment.catalog,
+                    );
                 if contained.len() == 1 {
                     anchor = Some(candidate);
                     break 'candidate;
