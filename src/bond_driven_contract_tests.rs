@@ -87,10 +87,9 @@ mod tests {
     }
 
     #[test]
-    fn carbon_units_can_form_a_physical_boundary_bond() {
+    fn exact_construction_bond_forms_the_supplied_contact() {
         let catalog = default_catalog();
         let mut structure = crate::structure::OrganismStructure::new();
-        let carbon = catalog.iter().find(|r| r.name == "Carbon").unwrap();
         let anchor = crate::structure::StructuralUnit::new(
             "Carbon",
             crate::structure::Placement {
@@ -100,6 +99,8 @@ mod tests {
             },
         );
         structure.add_unit(anchor);
+
+        let carbon = catalog.iter().find(|r| r.name == "Carbon").unwrap();
         let placements = crate::construction_runtime::candidate_placements(
             &structure,
             carbon,
@@ -111,31 +112,127 @@ mod tests {
             &[0],
             &catalog,
         );
-        assert!(!placements.is_empty());
-        let mut ledger = EnergyLedger::default();
-        let mut energy = 1.0e12;
-        let mut succeeded = false;
+
+        let mut found = false;
         for placement in placements {
             let mut trial = structure.clone();
             trial.add_unit(crate::structure::StructuralUnit::new("Carbon", placement));
             let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-            let mut trial_ledger = ledger;
-            let mut trial_energy = energy;
-            if crate::combine_runtime::combine_specific_pair(
-                &mut trial,
+            let candidate = crate::contact::connection_pair_candidates_cached(
+                &trial,
                 0,
                 1,
                 &catalog,
                 &mut cache,
-                &mut trial_ledger,
-                &mut trial_energy,
             )
-            .is_some()
-            {
-                succeeded = true;
+            .into_iter()
+            .find(|candidate| candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE);
+
+            let Some(candidate) = candidate else {
+                continue;
+            };
+            let Some((_, _, _, _, investment)) =
+                crate::combine_runtime::construction_candidate_evaluation(
+                    &trial,
+                    0,
+                    1,
+                    candidate,
+                    &catalog,
+                )
+            else {
+                continue;
+            };
+
+            let mut ledger = EnergyLedger::default();
+            let mut energy = 1.0e12;
+            let before_units = trial.units.len();
+            let attempt = crate::combine_runtime::form_construction_bond(
+                &mut trial,
+                0,
+                1,
+                candidate,
+                investment,
+                &catalog,
+                &mut cache,
+                &mut ledger,
+                &mut energy,
+            );
+
+            if let Some(attempt) = attempt {
+                assert_eq!(attempt.unit_a, 0);
+                assert_eq!(attempt.unit_b, 1);
+                assert_eq!(trial.units.len(), before_units);
+                assert_eq!(trial.bonds.len(), 1);
+                found = true;
                 break;
             }
         }
-        assert!(succeeded, "no carbon-carbon placement could pass COMBINE");
+
+        assert!(found, "no exact carbon construction contact could be formed");
+    }
+
+    #[test]
+    fn exact_construction_bond_rejects_stale_contact_without_mutation() {
+        let catalog = default_catalog();
+        let mut structure = crate::structure::OrganismStructure::new();
+        structure.add_unit(crate::structure::StructuralUnit::new(
+            "Carbon",
+            crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+
+        let carbon = catalog.iter().find(|r| r.name == "Carbon").unwrap();
+        let placement = crate::construction_runtime::candidate_placements(
+            &structure,
+            carbon,
+            crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            &[0],
+            &catalog,
+        )
+        .into_iter()
+        .next()
+        .expect("carbon should have candidate placements");
+
+        structure.add_unit(crate::structure::StructuralUnit::new("Carbon", placement));
+        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+        let candidate = crate::contact::connection_pair_candidates_cached(
+            &structure,
+            0,
+            1,
+            &catalog,
+            &mut cache,
+        )
+        .into_iter()
+        .next()
+        .expect("candidate contact should exist");
+
+        structure.units[1].placement.x += 10.0;
+        let before = structure.clone();
+        let mut ledger = EnergyLedger::default();
+        let mut energy = 1.0e12;
+
+        let result = crate::combine_runtime::form_construction_bond(
+            &mut structure,
+            0,
+            1,
+            candidate,
+            1.0,
+            &catalog,
+            &mut cache,
+            &mut ledger,
+            &mut energy,
+        );
+
+        assert!(result.is_none());
+        assert_eq!(structure.bonds, before.bonds);
+        assert_eq!(structure.units, before.units);
+        assert_eq!(energy, 1.0e12);
     }
 }
