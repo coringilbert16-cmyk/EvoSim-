@@ -368,7 +368,7 @@ fn candidate_penetrates_measurement(
         return true;
     };
     let transform = |placement: BlueprintPlacement| {
-        let (s, c) = anchor.rotation_radians.sin_cos();
+        let (s, c) = anchor_world.rotation_radians.sin_cos();
         Placement {
             x: anchor_world.x
                 + (placement.x - anchor_declared.x) * c
@@ -446,7 +446,17 @@ pub(crate) fn placement_penetrates_genome_measurement(
     if !candidate.realize_default_geometry(catalog) {
         return true;
     }
-    candidate_penetrates_measurement(&candidate, scaffold, placement, catalog)
+    candidate_penetrates_measurement(
+        &candidate,
+        scaffold,
+        placement,
+        BlueprintPlacement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        },
+        catalog,
+    )
 }
 
 fn install_genome_measurement_scaffold(
@@ -721,6 +731,7 @@ fn realize_next_bond_driven(
     _index: usize,
     neighbor: usize,
     genome_anchor: Placement,
+    anchor_declared: BlueprintPlacement,
     new_material: &crate::physical_material::PhysicalMaterial,
     nodes: &mut usize,
     ledger: &EnergyLedger,
@@ -780,7 +791,7 @@ fn realize_next_bond_driven(
                             &trial.units[*index],
                             scaffold,
                             genome_anchor,
-                            anchor_element.placement,
+                            anchor_declared,
                             catalog,
                         )
                     }) {
@@ -1115,6 +1126,7 @@ fn construct_blueprint_bond_driven_internal(
                 index,
                 neighbor,
                 genome_anchor,
+                anchor_element.placement,
                 &candidate_instance,
                 &mut nodes,
                 &construction_ledger,
