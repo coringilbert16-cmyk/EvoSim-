@@ -846,8 +846,10 @@ fn realize_next_bond_driven(
 )> {
     let new_endpoints = blueprint_endpoint_options(new_resource);
     let existing_index = realized_units[neighbor]?;
-    let existing_resource =
-        resource(catalog, &blueprint.elements[neighbor].material.parts[0].0)?;
+    let existing_resource = resource(
+        catalog,
+        &blueprint.elements[neighbor].material.parts[0].0,
+    )?;
     let existing_endpoints = blueprint_endpoint_options(existing_resource);
 
     if new_endpoints.is_empty() || existing_endpoints.is_empty() {
@@ -903,8 +905,7 @@ fn realize_next_bond_driven(
 
                 let mut trial_ledger = *ledger;
                 let mut trial_energy = available_energy;
-                let mut bond_cache =
-                    crate::contact::ConnectionCompatibilityCache::new();
+                let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
 
                 let attempt = crate::combine_runtime::form_specific_bond(
                     &mut trial,
@@ -1032,9 +1033,10 @@ fn construct_blueprint_bond_driven_internal(
                     .filter(|c| c.element_a == index || c.element_b == index)
                     .count(),
             );
-            if next.as_ref().is_none_or(|(_, current, current_degree)| {
-                score > (*current, *current_degree)
-            }) {
+            if next
+                .as_ref()
+                .is_none_or(|(_, current, current_degree)| score > (*current, *current_degree))
+            {
                 next = Some((index, neighbors, score.1));
             }
         }
