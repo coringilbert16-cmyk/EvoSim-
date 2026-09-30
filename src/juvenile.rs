@@ -34,8 +34,6 @@ pub(crate) fn confirmed_seed_baseline(
     let inner_thickness = 0.330_719;
     let inner_offset = (inner_side + inner_thickness) / 2.0;
 
-    let outer_offset = 2.55;
-    let outer_half_segment = inner_side / 2.0;
 
     let mut elements = Vec::new();
     elements.extend([
@@ -92,10 +90,10 @@ pub(crate) fn confirmed_seed_baseline(
         },
     ];
 
-    // The outer shell is a regular decagon made from the same Nitrogen
-    // rectangles. A decagon gives each side enough physical length to form a
-    // genuinely larger enclosed chamber while preserving ordinary pairwise
-    // bonds between neighboring structural units.
+    // The outer shell is a regular dodecagon made from the same Nitrogen
+    // rectangles. The side length is the same as the inner shell, while the
+    // larger apothem leaves a genuinely accessible chamber for finite rigid
+    // resources such as Methane.
     let outer_side_count = 12usize;
     let outer_side_length = inner_side;
     let outer_apothem =
@@ -124,10 +122,9 @@ pub(crate) fn confirmed_seed_baseline(
         });
     }
 
-    // Two symmetric two-segment Hydrogen bridges keep the two shells one
-    // connected organism without turning the acquisition chamber into a set of
-    // narrow radial tunnels. Each bridge spans the shell gap as an ordinary
-    // physical chain; no resource-specific intake port is introduced.
+    // Three Hydrogen segments form each symmetric bridge. The chamber is
+    // deliberately wider than one Hydrogen length, so the bridge uses an
+    // ordinary zig-zag chain rather than a special connector or an intake port.
     let hydrogen_length = catalog
         .iter()
         .find(|resource| resource.name == "Hydrogen")
@@ -140,48 +137,53 @@ pub(crate) fn confirmed_seed_baseline(
     let inner_boundary = inner_offset + inner_thickness / 2.0;
     let outer_boundary = outer_apothem;
     let shell_gap = outer_boundary - inner_boundary;
-    let half_gap = shell_gap / 2.0;
-    if !shell_gap.is_finite() || shell_gap <= 0.0 || hydrogen_length <= half_gap {
+    if !shell_gap.is_finite() || shell_gap <= 0.0 {
+        return Err("initial shell spacing is invalid".into());
+    }
+
+    let segment_rise = shell_gap / 3.0;
+    if !segment_rise.is_finite() || segment_rise >= hydrogen_length {
         return Err("initial shell spacing cannot be bridged by Hydrogen".into());
     }
-    // Two Hydrogen segments form each symmetric bridge. Their endpoints
-    // meet exactly at a shared interior vertex, so the shell spacing is solved
-    // by ordinary finite line geometry rather than by a special connector.
-    let bridge_half_gap = shell_gap / 2.0;
-    let bridge_height = (hydrogen_length.powi(2) - bridge_half_gap.powi(2)).sqrt();
-    let bridge_midpoint = (inner_boundary + outer_boundary) / 2.0;
+    let lateral_offset = (hydrogen_length.powi(2) - segment_rise.powi(2)).sqrt();
     let bridge_start = elements.len();
 
-    let upper_first_dx = bridge_height;
-    let upper_first_dy = bridge_half_gap;
-    let upper_second_dx = -bridge_height;
-    let upper_second_dy = bridge_half_gap;
-    let upper_first_rotation = upper_first_dy.atan2(upper_first_dx);
-    let upper_second_rotation = upper_second_dy.atan2(upper_second_dx);
-
+    // Upper chain: (0, inner_boundary) -> (offset, inner_boundary+r) ->
+    // (0, inner_boundary+2r) -> (0, outer_boundary).
     let upper_bridge = [
         BlueprintPlacement {
-            x: bridge_height / 2.0,
-            y: (inner_boundary + bridge_midpoint) / 2.0,
-            rotation_radians: upper_first_rotation,
+            x: lateral_offset / 2.0,
+            y: inner_boundary + segment_rise / 2.0,
+            rotation_radians: segment_rise.atan2(lateral_offset),
         },
         BlueprintPlacement {
-            x: bridge_height / 2.0,
-            y: (bridge_midpoint + outer_boundary) / 2.0,
-            rotation_radians: upper_second_rotation,
+            x: lateral_offset / 2.0,
+            y: inner_boundary + segment_rise * 1.5,
+            rotation_radians: (-segment_rise).atan2(lateral_offset),
+        },
+        BlueprintPlacement {
+            x: 0.0,
+            y: inner_boundary + segment_rise * 2.5,
+            rotation_radians: std::f64::consts::FRAC_PI_2,
         },
     ];
 
+    // Mirror the same ordinary chain across the origin for the lower bridge.
     let lower_bridge = [
         BlueprintPlacement {
-            x: -bridge_height / 2.0,
-            y: -(inner_boundary + bridge_midpoint) / 2.0,
-            rotation_radians: -upper_first_rotation,
+            x: -lateral_offset / 2.0,
+            y: -(inner_boundary + segment_rise / 2.0),
+            rotation_radians: -upper_bridge[0].rotation_radians,
         },
         BlueprintPlacement {
-            x: -bridge_height / 2.0,
-            y: -(bridge_midpoint + outer_boundary) / 2.0,
-            rotation_radians: -upper_second_rotation,
+            x: -lateral_offset / 2.0,
+            y: -(inner_boundary + segment_rise * 1.5),
+            rotation_radians: -upper_bridge[1].rotation_radians,
+        },
+        BlueprintPlacement {
+            x: 0.0,
+            y: -(inner_boundary + segment_rise * 2.5),
+            rotation_radians: -std::f64::consts::FRAC_PI_2,
         },
     ];
 
@@ -203,18 +205,26 @@ pub(crate) fn confirmed_seed_baseline(
         },
         BlueprintConnection {
             element_a: bridge_start + 1,
-            element_b: outer_start,
-        },
-        BlueprintConnection {
-            element_a: 3,
-            element_b: bridge_start + 3,
-        },
-        BlueprintConnection {
-            element_a: bridge_start + 3,
             element_b: bridge_start + 2,
         },
         BlueprintConnection {
             element_a: bridge_start + 2,
+            element_b: outer_start,
+        },
+        BlueprintConnection {
+            element_a: 3,
+            element_b: bridge_start + 5,
+        },
+        BlueprintConnection {
+            element_a: bridge_start + 5,
+            element_b: bridge_start + 4,
+        },
+        BlueprintConnection {
+            element_a: bridge_start + 4,
+            element_b: bridge_start + 3,
+        },
+        BlueprintConnection {
+            element_a: bridge_start + 3,
             element_b: outer_start + 6,
         },
     ]);
@@ -324,10 +334,10 @@ fn realize_initial_boundary_water(
         return Err("Water nominal area is invalid".into());
     }
 
-    // The confirmed seed baseline's outer shell is the eight units after the
-    // four-unit inner shell. Alternating them leaves rigid structural material
-    // between permeable sections instead of making the entire boundary fluid.
-    let outer_shell = 4..14;
+    // The confirmed seed baseline's outer shell is the twelve units after
+    // the four-unit inner shell. Alternating them leaves rigid structural
+    // material between permeable sections instead of making the entire boundary fluid.
+    let outer_shell = 4..16;
     let mut changed = 0usize;
     for index in outer_shell.step_by(2) {
         let Some(unit) = structure.units.get_mut(index) else {
