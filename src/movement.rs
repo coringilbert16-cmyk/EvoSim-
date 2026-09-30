@@ -146,15 +146,18 @@ fn select_movement_distance(
     usable_energy: f64,
     rng: &mut ChaCha8Rng,
 ) -> Option<f64> {
-    let affordable: Vec<f64> = MOVEMENT_DISTANCE_OPTIONS
-        .into_iter()
-        .filter(|distance| {
-            movement_energy_cost_for_distance(realized_mass, movement_efficiency, *distance)
-                .is_finite()
-                && movement_energy_cost_for_distance(realized_mass, movement_efficiency, *distance)
-                    <= usable_energy + f64::EPSILON
-        })
-        .collect();
+    let one_step_cost = movement_energy_cost_for_distance(
+        realized_mass,
+        movement_efficiency,
+        1.0,
+    );
+    let affordable: Vec<f64> = if one_step_cost.is_finite()
+        && one_step_cost <= usable_energy + f64::EPSILON
+    {
+        MOVEMENT_DISTANCE_OPTIONS.to_vec()
+    } else {
+        Vec::new()
+    };
     if affordable.is_empty() {
         return None;
     }
@@ -240,11 +243,6 @@ impl Simulation {
             rng,
         )
         .ok_or(crate::state::MovementFailureReason::InsufficientEnergy)?;
-        let total_cost =
-            movement_energy_cost_for_distance(realized_mass, movement_efficiency, distance);
-        if !total_cost.is_finite() || usable_energy + f64::EPSILON < total_cost {
-            return Err(crate::state::MovementFailureReason::InsufficientEnergy);
-        }
         Ok(crate::state::ActiveMovement {
             direction_x: x,
             direction_y: y,
@@ -639,7 +637,15 @@ fn push_blockers_for_parts(
             }
             let candidate_parts = physical_parts_at(candidate, environment, 0.0, 0.0);
             if candidate_parts.is_empty()
-                || !parts_penetrate(moving_destination, &candidate_parts, environment.height)
+                || !moving_destination.iter().any(|moving_part| {
+                    candidate_parts.iter().any(|candidate_part| {
+                        crate::material_geometry::placed_forms_boundary_contact(
+                            moving_part,
+                            candidate_part,
+                            0.0,
+                        )
+                    })
+                })
             {
                 continue;
             }
