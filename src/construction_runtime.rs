@@ -1035,7 +1035,7 @@ pub(crate) fn construct_blueprint_bond_driven(
             let mut commit_ledger = *ledger;
             let Some(commit_attempt) = crate::combine_runtime::form_specific_bond(
                 &mut structure,
-                neighbor_unit_index_or_error(&realized_units, neighbor)?,
+                realized_units[neighbor].ok_or_else(|| format!("realized neighbor {neighbor} has no structure unit"))?,
                 new_index,
                 endpoint_a,
                 endpoint_b,
