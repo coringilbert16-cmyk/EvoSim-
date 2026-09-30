@@ -982,7 +982,7 @@ pub(crate) fn construct_blueprint_bond_driven(
                                 (a, b)
                             };
 
-                            let Some(attempt) = crate::combine_runtime::form_specific_bond(
+                            if crate::combine_runtime::form_specific_bond(
                                 &mut trial,
                                 existing,
                                 new_unit_index,
@@ -992,10 +992,12 @@ pub(crate) fn construct_blueprint_bond_driven(
                                 &mut bond_cache,
                                 &mut trial_ledger,
                                 &mut trial_energy,
-                            ) else {
+                            )
+                            .is_none()
+                            {
                                 all_bonds_ok = false;
                                 break;
-                            };
+                            }
                         }
                         if !all_bonds_ok {
                             continue;
