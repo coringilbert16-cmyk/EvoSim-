@@ -85,4 +85,58 @@ mod tests {
             "coincident declared poses must not force physical overlap"
         );
     }
+
+    #[test]
+    fn carbon_units_can_form_a_physical_boundary_bond() {
+        let catalog = default_catalog();
+        let mut structure = crate::structure::OrganismStructure::new();
+        let carbon = catalog.iter().find(|r| r.name == "Carbon").unwrap();
+        let anchor = crate::structure::StructuralUnit::new(
+            "Carbon",
+            crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        structure.add_unit(anchor);
+        let placements = crate::construction_runtime::candidate_placements(
+            &structure,
+            carbon,
+            crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            &[0],
+            &catalog,
+        );
+        assert!(!placements.is_empty());
+        let mut ledger = EnergyLedger::default();
+        let mut energy = 1.0e12;
+        let mut succeeded = false;
+        for placement in placements {
+            let mut trial = structure.clone();
+            trial.add_unit(crate::structure::StructuralUnit::new("Carbon", placement));
+            let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+            let mut trial_ledger = ledger;
+            let mut trial_energy = energy;
+            if crate::combine_runtime::combine_specific_pair(
+                &mut trial,
+                0,
+                1,
+                &catalog,
+                &mut cache,
+                &mut trial_ledger,
+                &mut trial_energy,
+            )
+            .is_some()
+            {
+                succeeded = true;
+                break;
+            }
+        }
+        assert!(succeeded, "no carbon-carbon placement could pass COMBINE");
+    }
+
 }
