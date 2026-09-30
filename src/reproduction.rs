@@ -251,8 +251,7 @@ fn try_child_construction(
             &environment.catalog,
         )
         .ok()?
-        .into_iter()
-        
+        .into_iter();
 
     for (storage_index, _, _) in child_candidates {
         let crate::material_storage::StoredMaterial::Physical(instance) =
@@ -298,8 +297,7 @@ fn try_child_construction(
             &environment.catalog,
         )
         .ok()?
-        .into_iter()
-        
+        .into_iter();
 
     for (parent_index, _, _) in parent_candidates {
         let crate::material_storage::StoredMaterial::Physical(instance) =
