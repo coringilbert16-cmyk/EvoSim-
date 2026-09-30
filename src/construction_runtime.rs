@@ -826,6 +826,53 @@ fn already_realized_neighbors(
 /// a later connection would overshoot a previously established anchor, the
 /// constructor tries the other connection points on that anchor rather than
 /// abandoning the cavity.
+fn physical_material_endpoint_options(
+    instance: &crate::physical_material::PhysicalMaterial,
+    catalog: &[BaseResource],
+) -> Vec<(usize, ConnectionEndpoint)> {
+    let Some(placements) = instance.placements.as_ref() else {
+        return Vec::new();
+    };
+    instance
+        .material
+        .parts
+        .iter()
+        .zip(placements.iter())
+        .enumerate()
+        .flat_map(|(part_index, ((name, amount), placement))| {
+            if (*amount - 1.0).abs() > 1e-9 {
+                return Vec::new();
+            }
+            let Some(unit) = StructuralUnit::from_material(
+                crate::resources::Material::free_base(name.clone(), *amount),
+                *placement,
+            ) else {
+                return Vec::new();
+            };
+            crate::contact::endpoint_indices(&unit, catalog)
+                .into_iter()
+                .map(move |endpoint| (part_index, endpoint))
+                .collect()
+        })
+        .collect()
+}
+
+fn physical_material_endpoint_local_point(
+    instance: &crate::physical_material::PhysicalMaterial,
+    part_index: usize,
+    endpoint: ConnectionEndpoint,
+    catalog: &[BaseResource],
+) -> Option<crate::connection_geometry::WorldConnectionPoint> {
+    let placements = instance.placements.as_ref()?;
+    let (name, amount) = instance.material.parts.get(part_index)?;
+    let placement = *placements.get(part_index)?;
+    let unit = StructuralUnit::from_material(
+        crate::resources::Material::free_base(name.clone(), *amount),
+        placement,
+    )?;
+    endpoint.world_point(&unit, catalog)
+}
+
 fn realize_next_bond_driven(
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     catalog: &[BaseResource],
@@ -834,107 +881,76 @@ fn realize_next_bond_driven(
     _index: usize,
     neighbor: usize,
     genome_anchor: Placement,
-    new_resource: &BaseResource,
+    new_material: &crate::physical_material::PhysicalMaterial,
     nodes: &mut usize,
     ledger: &EnergyLedger,
     available_energy: f64,
 ) -> Option<(
-    StructuralUnit,
+    crate::physical_material::PhysicalMaterial,
+    Vec<usize>,
+    usize,
     ConnectionEndpoint,
     ConnectionEndpoint,
     crate::combine_runtime::CombineAttempt,
 )> {
-    let new_endpoints = blueprint_endpoint_options(new_resource);
     let existing_index = realized_units[neighbor]?;
     let existing_resource = resource(catalog, &blueprint.elements[neighbor].material.parts[0].0)?;
     let existing_endpoints = blueprint_endpoint_options(existing_resource);
+    let new_endpoints = physical_material_endpoint_options(new_material, catalog);
 
-    if new_endpoints.is_empty() || existing_endpoints.is_empty() {
+    if existing_endpoints.is_empty() || new_endpoints.is_empty() {
         return None;
     }
 
-    // Construction is deliberately myopic. This invocation creates exactly
-    // ONE bond. It may consider the immediately following blueprint neighbor
-    // as a placement preference, but it must never require that future bond to
-    // be possible before accepting the current one.
     for endpoint_a in existing_endpoints {
         let joint = endpoint_a.world_point(&structure.units[existing_index], catalog)?;
-        for endpoint_b in new_endpoints.iter().copied() {
-            let local_b = endpoint_local_point(new_resource, endpoint_b, catalog)?;
+        for (part_index, endpoint_b) in new_endpoints.iter().copied() {
+            let local_b =
+                physical_material_endpoint_local_point(new_material, part_index, endpoint_b, catalog)?;
 
-            // First use geometry-derived orientations. These are still
-            // rotations of B around the selected joint; they simply avoid
-            // wasting the search on angles that cannot place the selected
-            // endpoint on that joint.
-            let mut placements = candidate_placements(
-                structure,
-                new_resource,
-                structure.units[existing_index].placement,
-                &[existing_index],
-                catalog,
-            )
-            .into_iter()
-            .filter(|placement| {
-                endpoint_b
-                    .world_point(
-                        &StructuralUnit::new(new_resource.name.clone(), *placement),
-                        catalog,
-                    )
-                    .is_some_and(|point| {
-                        (point.x - joint.x).hypot(point.y - joint.y) <= 1e-9
-                    })
-            })
-            .collect::<Vec<_>>();
-
-            // Keep a uniform angular fallback. This preserves the biological
-            // degree of freedom even when no geometry-derived orientation is
-            // available for an endpoint type.
             for step in 0..360 {
                 let angle = std::f64::consts::TAU * step as f64 / 360.0;
-                placements.push(placement_for_joint(
-                    local_b,
-                    (joint.x, joint.y),
-                    angle,
-                ));
-            }
-            placements.dedup_by(|a, b| {
-                (a.x - b.x).abs() <= 1e-10
-                    && (a.y - b.y).abs() <= 1e-10
-                    && (a.rotation_radians - b.rotation_radians).abs() <= 1e-10
-            });
+                let candidate_origin =
+                    placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
 
-            for candidate_placement in placements {
                 *nodes += 1;
                 if *nodes > 500_000 {
                     return None;
                 }
 
-                let mut candidate_unit =
-                    StructuralUnit::new(new_resource.name.clone(), candidate_placement);
-                if !candidate_unit.realize_default_geometry(catalog) {
-                    continue;
-                }
+                let mut trial = structure.clone();
+                let indices = crate::material_restoration::restore_material(
+                    &mut trial,
+                    new_material,
+                    candidate_origin,
+                    catalog,
+                )?;
+
+                let new_unit_index = *indices.get(part_index)?;
+                let candidate_unit = trial.units.get(new_unit_index)?.clone();
 
                 if let Some(scaffold) = blueprint.genome_measurement.as_ref() {
-                    if candidate_penetrates_measurement(
-                        &candidate_unit,
-                        scaffold,
-                        genome_anchor,
-                        catalog,
-                    ) {
+                    if indices.iter().any(|index| {
+                        candidate_penetrates_measurement(
+                            &trial.units[*index],
+                            scaffold,
+                            genome_anchor,
+                            catalog,
+                        )
+                    }) {
                         continue;
                     }
                 }
 
-                let mut trial = structure.clone();
-                let new_unit_index = trial.add_unit(candidate_unit.clone());
-                let ignored_units = [new_unit_index];
-                if placed_unit_overlaps(
-                    &trial,
-                    &trial.units[new_unit_index],
-                    &ignored_units,
-                    catalog,
-                ) {
+                let ignored_units = indices.clone();
+                if indices.iter().any(|index| {
+                    placed_unit_overlaps(
+                        &trial,
+                        &trial.units[*index],
+                        &ignored_units,
+                        catalog,
+                    )
+                }) {
                     continue;
                 }
 
@@ -986,15 +1002,21 @@ fn realize_next_bond_driven(
                     continue;
                 };
 
-                // The exact successful endpoint pair and pose are returned.
-                // Nothing about the next bond is prevalidated here.
-                return Some((candidate_unit, endpoint_a, endpoint_b, attempt));
+                return Some((
+                    new_material.clone(),
+                    indices,
+                    part_index,
+                    endpoint_a,
+                    endpoint_b,
+                    attempt,
+                ));
             }
         }
     }
 
     None
 }
+
 /// Bond-driven construction is forward-only. Once a bond is formed it is
 /// never undone. When a requested joint cannot be realized, the constructor
 /// keeps trying available material variants and orientations until it finds a
