@@ -23,7 +23,7 @@ pub(crate) fn placement_penetrates_genome_measurement(
     scaffold: &crate::structural_blueprint::GenomeMeasurementScaffold,
     catalog: &[BaseResource],
 ) -> bool {
-    let Some(candidate) = crate::material_geometry::crate::material_geometry::MaterialGeometry::new(
+    let Some(candidate) = crate::material_geometry::crate::material_geometry::crate::material_geometry::MaterialGeometry::new(
         &Material::free_base(candidate_resource.name.clone(), 1.0),
         &[placement],
         catalog,
@@ -758,7 +758,7 @@ fn candidate_penetrates_measurement(
         (triangle_points[0].0 + triangle_points[1].0 + triangle_points[2].0) / 3.0,
         (triangle_points[0].1 + triangle_points[1].1 + triangle_points[2].1) / 3.0,
     );
-    if crate::organism_geometry::point_in_form(
+    if point_inside_form(
         &candidate_shape.form,
         candidate.placement,
         centroid.0,
