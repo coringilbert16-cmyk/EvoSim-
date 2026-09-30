@@ -51,12 +51,12 @@ mod tests {
         let a = structure
             .units
             .iter()
-            .find(|unit| unit.id == bond.endpoint_a.constituent_id)
+            .find(|unit| unit.physical_id == bond.endpoint_a.constituent_id)
             .expect("bond endpoint A must identify a realized constituent");
         let b = structure
             .units
             .iter()
-            .find(|unit| unit.id == bond.endpoint_b.constituent_id)
+            .find(|unit| unit.physical_id == bond.endpoint_b.constituent_id)
             .expect("bond endpoint B must identify a realized constituent");
 
         let pa = bond.endpoint_a.location.world_point(a, &catalog).unwrap();
