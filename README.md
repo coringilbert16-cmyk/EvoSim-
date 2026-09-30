@@ -22,7 +22,7 @@ The authoritative developmental construction pipeline is:
 
 `developmental blueprint preference → actual physical material selection → existing physical endpoint A → actual physical endpoint B → rotation of B around the selected joint → immediate geometry validation → exact one-bond transaction → permanent commit → next bond`
 
-The blueprint is a **developmental preference**, not a command to reproduce an exact future physical graph. The realized physical structure is authoritative. A construction step may try different acceptable physical materials, endpoints, and orientations. A failed candidate does not undo an already committed bond. Once a bond is committed, it is never backtracked by construction. The constructor does not validate future bonds before committing the current bond.
+The blueprint is a **developmental preference**, not a command to reproduce an exact future physical graph. The realized physical structure is authoritative. A construction step may try different acceptable physical materials, endpoints, and orientations. A failed candidate does not undo an already committed bond. Once a bond is committed, it is never backtracked by construction. The constructor does not validate future bonds before committing the current bond. If the physical inventory has no usable material left for the next bond, construction does not fail or abort: it enters a pending/waiting state for that tick and resumes the same unfinished bond when material is acquired. This is a simulation action state, never a blocking thread sleep.
 
 ## B. Material-selection authority
 
