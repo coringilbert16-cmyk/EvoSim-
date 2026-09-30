@@ -834,7 +834,7 @@ fn realize_next_bond_driven(
                     continue;
                 };
 
-                let Some(attempt) = crate::combine_runtime::form_construction_bond(
+                let Some(mut attempt) = crate::combine_runtime::form_construction_bond(
                     &mut trial,
                     existing_index,
                     new_unit_index,
@@ -847,6 +847,87 @@ fn realize_next_bond_driven(
                 ) else {
                     continue;
                 };
+
+                // These are current constraints, not future lookahead. The
+                // provisional placement is admitted only after every
+                // connection from this element to an already-realized
+                // neighbor has been formed.
+                let additional_neighbors = blueprint
+                    .connections
+                    .iter()
+                    .filter_map(|connection| {
+                        let other = if connection.element_a == _index {
+                            connection.element_b
+                        } else if connection.element_b == _index {
+                            connection.element_a
+                        } else {
+                            return None;
+                        };
+                        if other == neighbor || realized_units.get(other)?.is_none() {
+                            None
+                        } else {
+                            realized_units[other]
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                let mut additional_bond_succeeded = true;
+                for other_index in additional_neighbors {
+                    let mut extra_cache =
+                        crate::contact::ConnectionCompatibilityCache::new();
+                    let Some(extra_candidate) =
+                        crate::contact::connection_pair_candidates_cached(
+                            &trial,
+                            new_unit_index,
+                            other_index,
+                            catalog,
+                            &mut extra_cache,
+                        )
+                        .into_iter()
+                        .find(|candidate| {
+                            candidate.distance
+                                <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                                && candidate.available_a
+                                && candidate.available_b
+                        })
+                    else {
+                        additional_bond_succeeded = false;
+                        break;
+                    };
+
+                    let Some((_, _, _, extra_investment, _)) =
+                        crate::combine_runtime::construction_candidate_evaluation(
+                            &trial,
+                            new_unit_index,
+                            other_index,
+                            extra_candidate,
+                            catalog,
+                        )
+                    else {
+                        additional_bond_succeeded = false;
+                        break;
+                    };
+
+                    let Some(extra_attempt) = crate::combine_runtime::form_construction_bond(
+                        &mut trial,
+                        new_unit_index,
+                        other_index,
+                        extra_candidate,
+                        extra_investment,
+                        catalog,
+                        &mut extra_cache,
+                        &mut trial_ledger,
+                        &mut trial_energy,
+                    ) else {
+                        additional_bond_succeeded = false;
+                        break;
+                    };
+                    attempt.work_cost += extra_attempt.work_cost;
+                }
+
+                if !additional_bond_succeeded {
+                    continue;
+                }
 
                 return Some((
                     trial,
