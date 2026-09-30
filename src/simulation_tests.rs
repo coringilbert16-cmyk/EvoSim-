@@ -64,8 +64,21 @@ mod integration_tests {
         let initial_units = organism.structure.units.len();
         assert!(initial_units > 0);
 
-        s.step();
+        let dead = Simulation::apply_survival_damage(
+            &mut s.organisms[0],
+            &s.environment,
+            &mut s.energy_ledger,
+            &mut s.rng,
+        );
+        assert!(dead);
 
+        let mut dead_organism = s.organisms.pop().expect("dead organism should be present");
+        let recycled = crate::recycling::recycle_dead_organism(
+            &mut s.environment,
+            &mut dead_organism,
+            &mut s.energy_ledger,
+        );
+        assert!(recycled.is_some());
         assert!(s.organisms.is_empty());
         assert!(s.decomposing_bodies.is_empty());
         assert!(s.environment.field.total_amount() > before_environment_amount);
