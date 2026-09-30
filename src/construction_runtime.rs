@@ -922,6 +922,127 @@ fn physical_material_endpoint_local_point(
     endpoint.world_point(&unit, catalog)
 }
 
+
+pub(crate) fn try_attach_physical_material_bond_driven(
+    structure: &OrganismStructure,
+    existing_index: usize,
+    new_material: &crate::physical_material::PhysicalMaterial,
+    catalog: &[BaseResource],
+    nodes: &mut usize,
+    ledger: &EnergyLedger,
+    available_energy: f64,
+) -> Option<(
+    crate::physical_material::PhysicalMaterial,
+    Vec<usize>,
+    usize,
+    ConnectionEndpoint,
+    ConnectionEndpoint,
+    crate::combine_runtime::CombineAttempt,
+    Placement,
+)> {
+    let existing_unit = structure.units.get(existing_index)?;
+    let existing_endpoints = structure_unit_endpoint_options(existing_unit, catalog);
+    let new_endpoints = physical_material_endpoint_options(new_material, catalog);
+    if existing_endpoints.is_empty() || new_endpoints.is_empty() {
+        return None;
+    }
+
+    for endpoint_a in existing_endpoints {
+        let joint = endpoint_a.world_point(existing_unit, catalog)?;
+        for (part_index, endpoint_b) in new_endpoints.iter().copied() {
+            let local_b =
+                physical_material_endpoint_local_point(new_material, part_index, endpoint_b, catalog)?;
+
+            for step in 0..360 {
+                let angle = std::f64::consts::TAU * step as f64 / 360.0;
+                let candidate_origin =
+                    placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
+
+                *nodes += 1;
+                if *nodes > 500_000 {
+                    return None;
+                }
+
+                let mut trial = structure.clone();
+                let Some(indices) = crate::material_restoration::restore_material(
+                    &mut trial,
+                    new_material,
+                    candidate_origin,
+                    catalog,
+                ) else {
+                    continue;
+                };
+                let new_unit_index = *indices.get(part_index)?;
+
+                let ignored_units = indices.clone();
+                if indices.iter().any(|index| {
+                    placed_unit_overlaps(&trial, &trial.units[*index], &ignored_units, catalog)
+                }) {
+                    continue;
+                }
+
+                let mut trial_ledger = *ledger;
+                let mut trial_energy = available_energy;
+                let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
+                let Some(candidate) = crate::contact::connection_pair_candidates_cached(
+                    &trial,
+                    existing_index,
+                    new_unit_index,
+                    catalog,
+                    &mut bond_cache,
+                )
+                .into_iter()
+                .find(|candidate| {
+                    candidate.endpoint_a == endpoint_a
+                        && candidate.endpoint_b == endpoint_b
+                        && candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                        && candidate.available_a
+                        && candidate.available_b
+                }) else {
+                    continue;
+                };
+
+                let Some((_, _, _, _, required_investment)) =
+                    crate::combine_runtime::construction_candidate_evaluation(
+                        &trial,
+                        existing_index,
+                        new_unit_index,
+                        candidate,
+                        catalog,
+                    )
+                else {
+                    continue;
+                };
+
+                let Some(attempt) = crate::combine_runtime::form_construction_bond(
+                    &mut trial,
+                    existing_index,
+                    new_unit_index,
+                    candidate,
+                    required_investment,
+                    catalog,
+                    &mut bond_cache,
+                    &mut trial_ledger,
+                    &mut trial_energy,
+                ) else {
+                    continue;
+                };
+
+                return Some((
+                    new_material.clone(),
+                    indices,
+                    part_index,
+                    endpoint_a,
+                    endpoint_b,
+                    attempt,
+                    candidate_origin,
+                ));
+            }
+        }
+    }
+    None
+}
+
 fn realize_next_bond_driven(
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     catalog: &[BaseResource],
