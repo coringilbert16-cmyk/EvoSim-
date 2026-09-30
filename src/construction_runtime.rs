@@ -267,23 +267,6 @@ fn structure_unit_endpoint_options(
     }
 }
 
-fn endpoint_local_point(
-    resource: &BaseResource,
-    endpoint: ConnectionEndpoint,
-    catalog: &[BaseResource],
-) -> Option<(f64, f64)> {
-    let unit = StructuralUnit::new(
-        resource.name.clone(),
-        Placement {
-            x: 0.0,
-            y: 0.0,
-            rotation_radians: 0.0,
-        },
-    );
-    let point = endpoint.world_point(&unit, catalog)?;
-    Some((point.x, point.y))
-}
-
 fn placement_for_joint(
     local_point: (f64, f64),
     joint: (f64, f64),
@@ -295,19 +278,6 @@ fn placement_for_joint(
         y: joint.1 - (local_point.0 * s + local_point.1 * c),
         rotation_radians,
     }
-}
-
-fn angle_error(a: f64, b: f64) -> f64 {
-    let mut d = (a - b).rem_euclid(std::f64::consts::TAU);
-    if d > std::f64::consts::PI {
-        d -= std::f64::consts::TAU;
-    }
-    d.abs()
-}
-
-fn blueprint_pose_score(candidate: Placement, target: BlueprintPlacement) -> f64 {
-    (candidate.x - target.x).hypot(candidate.y - target.y)
-        + 0.25 * angle_error(candidate.rotation_radians, target.rotation_radians)
 }
 
 fn placed_unit_overlaps(
