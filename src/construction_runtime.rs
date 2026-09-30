@@ -834,7 +834,12 @@ fn realize_next_bond_driven(
     genome_anchor: Placement,
     preferred_resource_name: &str,
     nodes: &mut usize,
-) -> Option<(StructuralUnit, ConnectionEndpoint, ConnectionEndpoint, EnergyLedger, f64)> {
+) -> Option<(
+    StructuralUnit,
+    ConnectionEndpoint,
+    ConnectionEndpoint,
+    crate::combine_runtime::CombineAttempt,
+)> {
     let element = &blueprint.elements[index];
     let new_resource = resource(catalog, preferred_resource_name)?;
     let new_endpoints = blueprint_endpoint_options(new_resource);
@@ -897,7 +902,7 @@ fn realize_next_bond_driven(
                 let mut bond_cache =
                     crate::contact::ConnectionCompatibilityCache::new();
 
-                if crate::combine_runtime::form_specific_bond(
+                let Some(attempt) = crate::combine_runtime::form_specific_bond(
                     &mut trial,
                     existing_index,
                     new_unit_index,
@@ -907,12 +912,14 @@ fn realize_next_bond_driven(
                     &mut bond_cache,
                     &mut trial_ledger,
                     &mut trial_energy,
-                )
-                .is_none()
-                {
+                ) else {
                     continue;
-                }
+                };
 
+                // Preserve the exact successful endpoint pair and the exact
+                // successful physical pose. The live commit consumes these
+                // identities; it never asks COMBINE to rediscover a joint.
+                return Some((candidate_unit, endpoint_a, endpoint_b, attempt));
                 // Once this bond is formed it is permanent. Return the
                 // successfully attached unit; the caller never rewinds it.
                 let heat = trial_ledger.total_heat_dissipated;
@@ -1023,7 +1030,7 @@ pub(crate) fn construct_blueprint_bond_driven(
         // Try every already-realized neighbor as the attachment opportunity.
         // Once one succeeds, that bond is permanent and we continue forward.
         for neighbor in neighbors {
-            if let Some((unit, endpoint_a, endpoint_b, mut bond_ledger, bond_energy)) =
+            if let Some((unit, endpoint_a, endpoint_b, trial_attempt)) =
                 realize_next_bond_driven(
                     blueprint,
                     catalog,
@@ -1037,10 +1044,6 @@ pub(crate) fn construct_blueprint_bond_driven(
                     &mut nodes,
                 )
             {
-                if bond_energy >= remaining_energy {
-                    continue;
-                }
-
                 let new_index = structure.units.len();
                 structure.units.push(unit);
                 let existing_index = realized_units[neighbor].unwrap();
@@ -1051,8 +1054,9 @@ pub(crate) fn construct_blueprint_bond_driven(
                 // the forward-only constructor contract.
                 let mut cache =
                     crate::contact::ConnectionCompatibilityCache::new();
+                let mut commit_ledger = EnergyLedger::default();
                 let mut commit_energy = remaining_energy;
-                if crate::combine_runtime::form_specific_bond(
+                let Some(commit_attempt) = crate::combine_runtime::form_specific_bond(
                     &mut structure,
                     existing_index,
                     new_index,
@@ -1060,9 +1064,9 @@ pub(crate) fn construct_blueprint_bond_driven(
                     endpoint_b,
                     catalog,
                     &mut cache,
-                    &mut bond_ledger,
+                    &mut commit_ledger,
                     &mut commit_energy,
-                ).is_none() {
+                ) else {
                     // The live structure should be identical to the trial
                     // immediately before this commit. A mismatch is an
                     // internal invariant failure, not a reason to search for a
@@ -1071,10 +1075,17 @@ pub(crate) fn construct_blueprint_bond_driven(
                     return Err(format!(
                         "successful trial joint could not be committed for blueprint element {index}"
                     ));
-                }
+                };
+
+                // The trial and live transaction must agree on the exact joint
+                // and work. The live transaction is authoritative for the
+                // actual energy ledger; the trial ledger was only exploratory.
+                debug_assert_eq!(commit_attempt.endpoint_a, trial_attempt.endpoint_a);
+                debug_assert_eq!(commit_attempt.endpoint_b, trial_attempt.endpoint_b);
+                debug_assert!((commit_attempt.work_cost - trial_attempt.work_cost).abs() <= 1e-10);
 
                 remaining_energy = commit_energy;
-                total_heat += bond_ledger.total_heat_dissipated;
+                total_heat += commit_attempt.work_cost;
                 realized[index] = true;
                 realized_units[index] = Some(new_index);
                 attached = true;
