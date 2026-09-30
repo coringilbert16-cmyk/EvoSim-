@@ -64,11 +64,11 @@ mod state;
 
 // Integration and contract tests.
 #[cfg(test)]
-mod bond_driven_contract_tests;
-#[cfg(test)]
 mod blueprint_diagnostics;
 #[cfg(test)]
 mod blueprint_spatial_target_tests;
+#[cfg(test)]
+mod bond_driven_contract_tests;
 #[cfg(test)]
 mod observation_contract_tests;
 #[cfg(test)]
