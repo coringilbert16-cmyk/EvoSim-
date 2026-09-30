@@ -295,13 +295,15 @@ fn form_bond_from_candidate(
 
 pub(crate) fn form_internal_construction_bond(
     structure: &mut crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
     candidate: crate::contact::ConnectionPairCandidate,
     catalog: &[BaseResource],
 ) -> Result<(), String> {
-    if candidate.unit_a >= structure.units.len() || candidate.unit_b >= structure.units.len() {
+    if unit_a >= structure.units.len() || unit_b >= structure.units.len() {
         return Err("construction bond references a missing unit".into());
     }
-    if candidate.unit_a == candidate.unit_b
+    if unit_a == unit_b
         || candidate.distance > COMBINE_CONTACT_TOLERANCE
         || !candidate.available_a
         || !candidate.available_b
@@ -309,10 +311,10 @@ pub(crate) fn form_internal_construction_bond(
         return Err("construction bond candidate is not an admissible contact".into());
     }
     let id_a = structure
-        .physical_id(candidate.unit_a)
+        .physical_id(unit_a)
         .ok_or_else(|| "construction bond is missing endpoint A".to_string())?;
     let id_b = structure
-        .physical_id(candidate.unit_b)
+        .physical_id(unit_b)
         .ok_or_else(|| "construction bond is missing endpoint B".to_string())?;
     let bond = crate::structure::Bond {
         endpoint_a: BondEndpoint::new(id_a, candidate.endpoint_a),
@@ -321,6 +323,7 @@ pub(crate) fn form_internal_construction_bond(
         bond_energy: 0.0,
     };
     crate::contact::try_add_bond(structure, bond, catalog)
+        .map(|_| ())
         .map_err(|_| "construction bond admission was rejected".into())
 }
 
