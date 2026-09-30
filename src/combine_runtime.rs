@@ -293,7 +293,6 @@ fn form_bond_from_candidate(
     })
 }
 
-
 pub(crate) fn form_internal_construction_bond(
     structure: &mut crate::structure::OrganismStructure,
     candidate: crate::contact::ConnectionPairCandidate,
