@@ -399,6 +399,16 @@ pub(crate) fn try_combine_stored_unit(
                     origin,
                     &environment.catalog,
                 )?;
+                if indices.iter().any(|index| {
+                    crate::construction_runtime::placed_unit_overlaps(
+                        &hypothetical,
+                        &hypothetical.units[*index],
+                        &indices,
+                        &environment.catalog,
+                    )
+                }) {
+                    continue;
+                }
                 for (part_index, &ub) in indices.iter().enumerate() {
                     for candidate in crate::contact::connection_pair_candidates_cached(
                         &hypothetical,
@@ -533,6 +543,16 @@ pub(crate) fn try_combine_stored_unit(
                 placement,
                 &environment.catalog,
             )?;
+            if indices.iter().any(|index| {
+                crate::construction_runtime::placed_unit_overlaps(
+                    &hypothetical,
+                    &hypothetical.units[*index],
+                    &indices,
+                    &environment.catalog,
+                )
+            }) {
+                continue;
+            }
             let ub = *indices.first()?;
             for candidate in crate::contact::connection_pair_candidates_cached(
                 &hypothetical,
