@@ -145,10 +145,7 @@ pub(crate) fn rank_available_construction_materials(
                         structural_similarity(preferred, candidate, catalog),
                     ))
                 })
-                .max_by(|a, b| {
-                    a.1.partial_cmp(&b.1)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                })?;
+                .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))?;
             Some((index, resource_name, score))
         })
         .collect::<Vec<_>>();
