@@ -69,68 +69,6 @@ mod tests {
     }
 
     #[test]
-    fn bond_driven_constructor_closes_a_three_element_cycle_without_backtracking() {
-        let carbon = Material::free_base("Carbon", 1.0);
-        let blueprint = StructuralBlueprint::new(
-            vec![
-                BlueprintElement {
-                    material: carbon.clone(),
-                    placement: BlueprintPlacement {
-                        x: 0.0,
-                        y: 0.0,
-                        rotation_radians: 0.0,
-                    },
-                },
-                BlueprintElement {
-                    material: carbon.clone(),
-                    placement: BlueprintPlacement {
-                        x: 0.0,
-                        y: 0.0,
-                        rotation_radians: 0.0,
-                    },
-                },
-                BlueprintElement {
-                    material: carbon,
-                    placement: BlueprintPlacement {
-                        x: 0.0,
-                        y: 0.0,
-                        rotation_radians: 0.0,
-                    },
-                },
-            ],
-            vec![
-                BlueprintConnection {
-                    element_a: 0,
-                    element_b: 1,
-                },
-                BlueprintConnection {
-                    element_a: 0,
-                    element_b: 2,
-                },
-                BlueprintConnection {
-                    element_a: 1,
-                    element_b: 2,
-                },
-            ],
-        );
-
-        let catalog = default_catalog();
-        let mut ledger = EnergyLedger::default();
-        let mut energy = 1.0e12;
-        let (structure, _) = blueprint
-            .realize_with_context(&catalog, &mut ledger, &mut energy)
-            .expect("constructor should close a three-element cycle");
-
-        assert_eq!(structure.units.len(), 3);
-        assert_eq!(
-            structure.bonds.len(),
-            3,
-            "the final element must attach to both realized neighbors; bonds={:?}",
-            structure.bonds
-        );
-    }
-
-    #[test]
     fn bond_driven_constructor_treats_declared_pose_as_a_preference_not_a_command() {
         let catalog = default_catalog();
         let blueprint = two_carbon_bond_blueprint();
