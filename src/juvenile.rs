@@ -19,77 +19,91 @@ pub(crate) fn confirmed_seed_baseline(
     use crate::resources::Material;
     use crate::structural_blueprint::{BlueprintConnection, BlueprintElement, BlueprintPlacement};
 
-    let nitrogen = catalog
-        .iter()
-        .find(|resource| resource.name == "Nitrogen")
-        .ok_or_else(|| "catalog is missing seed Nitrogen".to_string())?;
-    let carbon = catalog
-        .iter()
-        .find(|resource| resource.name == "Carbon")
-        .ok_or_else(|| "catalog is missing seed Carbon".to_string())?;
-    let hydrogen = catalog
-        .iter()
-        .find(|resource| resource.name == "Hydrogen")
-        .ok_or_else(|| "catalog is missing seed Hydrogen".to_string())?;
-    let sulfur = catalog
-        .iter()
-        .find(|resource| resource.name == "Sulfur")
-        .ok_or_else(|| "catalog is missing seed Sulfur".to_string())?;
-
-    // The seed is a continuous mesh, not nested storage shells. Different rigid
-    // materials are interleaved around one protected genome cavity. Any other
-    // voids are ordinary consequences of the mesh and may contain environmental
-    // material later.
-    let _ = (carbon, hydrogen, sulfur);
-    let radius = 2.25;
-    let diagonal = radius * 0.707_106_781_2;
-    let positions = [
-        (0.0, radius),
-        (-diagonal, diagonal),
-        (-radius, 0.0),
-        (-diagonal, -diagonal),
-        (0.0, -radius),
-        (diagonal, -diagonal),
-        (radius, 0.0),
-        (diagonal, diagonal),
-    ];
-    let materials = [
-        "Carbon", "Sulfur", "Methane", "Carbon", "Sulfur", "Methane", "Carbon", "Sulfur",
-    ];
-    let mut elements = Vec::with_capacity(positions.len());
-    for ((x, y), material) in positions.into_iter().zip(materials) {
+    for material in ["Nitrogen", "Sulfur", "Carbon"] {
         if !catalog.iter().any(|resource| resource.name == material) {
             return Err(format!("catalog is missing seed {material}"));
         }
-        elements.push(BlueprintElement {
-            material: Material::free_base(material, 1.0),
-            placement: BlueprintPlacement {
-                x,
-                y,
-                rotation_radians: y.atan2(x),
-            },
-        });
     }
 
-    // The ring is intentionally connected all the way around. The enclosed
-    // center is the genome cavity; it is the only cavity the seed explicitly
-    // creates. There is no separate storage chamber or hollow outer shell.
-    let connections = (0..elements.len())
-        .map(|index| BlueprintConnection {
-            element_a: index,
-            element_b: (index + 1) % elements.len(),
-        })
-        .collect::<Vec<_>>();
+    // Calibration fixture only: four Nitrogen walls form the smallest
+    // physically realized genome boundary. Sulfur and Carbon are attached
+    // outward as ordinary mesh material; they are not a predefined core.
+    let side = 1.511_858;
+    let thickness = 0.330_719;
+    let offset = (side + thickness) / 2.0;
+    let outer = offset + 0.65;
 
-    let baseline =
-        StructuralBlueprint::with_anchor_elements(elements, connections, (0..8).collect())
-            .with_genome_measurement(
-                crate::structural_blueprint::GenomeMeasurementScaffold::three_carbon_reference(
-                    catalog,
-                )?,
-            );
+    let mut elements = vec![
+        BlueprintElement {
+            material: Material::free_base("Nitrogen", 1.0),
+            placement: BlueprintPlacement { x: 0.0, y: offset, rotation_radians: 0.0 },
+        },
+        BlueprintElement {
+            material: Material::free_base("Nitrogen", 1.0),
+            placement: BlueprintPlacement { x: -offset, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_2 },
+        },
+        BlueprintElement {
+            material: Material::free_base("Nitrogen", 1.0),
+            placement: BlueprintPlacement { x: offset, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_2 },
+        },
+        BlueprintElement {
+            material: Material::free_base("Nitrogen", 1.0),
+            placement: BlueprintPlacement { x: 0.0, y: -offset, rotation_radians: 0.0 },
+        },
+        BlueprintElement {
+            material: Material::free_base("Sulfur", 1.0),
+            placement: BlueprintPlacement { x: 0.0, y: outer, rotation_radians: 0.0 },
+        },
+        BlueprintElement {
+            material: Material::free_base("Sulfur", 1.0),
+            placement: BlueprintPlacement { x: -outer, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_2 },
+        },
+        BlueprintElement {
+            material: Material::free_base("Sulfur", 1.0),
+            placement: BlueprintPlacement { x: outer, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_2 },
+        },
+        BlueprintElement {
+            material: Material::free_base("Sulfur", 1.0),
+            placement: BlueprintPlacement { x: 0.0, y: -outer, rotation_radians: 0.0 },
+        },
+        BlueprintElement {
+            material: Material::free_base("Carbon", 1.0),
+            placement: BlueprintPlacement { x: 0.0, y: outer + 0.65, rotation_radians: 0.0 },
+        },
+        BlueprintElement {
+            material: Material::free_base("Carbon", 1.0),
+            placement: BlueprintPlacement { x: -outer - 0.65, y: 0.0, rotation_radians: 0.0 },
+        },
+        BlueprintElement {
+            material: Material::free_base("Carbon", 1.0),
+            placement: BlueprintPlacement { x: outer + 0.65, y: 0.0, rotation_radians: 0.0 },
+        },
+        BlueprintElement {
+            material: Material::free_base("Carbon", 1.0),
+            placement: BlueprintPlacement { x: 0.0, y: -outer - 0.65, rotation_radians: 0.0 },
+        },
+    ];
+
+    let mut connections = vec![
+        BlueprintConnection { element_a: 0, element_b: 1 },
+        BlueprintConnection { element_a: 0, element_b: 2 },
+        BlueprintConnection { element_a: 1, element_b: 3 },
+        BlueprintConnection { element_a: 2, element_b: 3 },
+    ];
+    for i in 0..4 {
+        connections.push(BlueprintConnection { element_a: i, element_b: 4 + i });
+        connections.push(BlueprintConnection { element_a: 4 + i, element_b: 8 + i });
+    }
+
+    let baseline = StructuralBlueprint::with_anchor_elements(
+        elements,
+        connections,
+        (0..12).collect(),
+    )
+    .with_genome_measurement(
+        crate::structural_blueprint::GenomeMeasurementScaffold::three_carbon_reference(catalog)?,
+    );
     baseline.validate()?;
-    let _ = nitrogen;
     Ok(baseline)
 }
 
