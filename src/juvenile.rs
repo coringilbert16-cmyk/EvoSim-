@@ -122,10 +122,10 @@ pub(crate) fn confirmed_seed_baseline(
         });
     }
 
-    // Two Hydrogen segments form each symmetric bridge. The decagon uses a
-    // slightly longer Nitrogen side than the inner shell so its enclosed
-    // chamber has real clearance for Methane while retaining an exact lower
-    // counterpart for ordinary Hydrogen geometry.
+    // Two Hydrogen segments form one ordinary structural bridge from a
+    // real inner-shell corner to a real outer-shell corner. Using actual
+    // boundary vertices makes the bridge part of the same planar topology
+    // without introducing an intake port or resource-specific interface.
     let hydrogen_length = catalog
         .iter()
         .find(|resource| resource.name == "Hydrogen")
@@ -135,32 +135,39 @@ pub(crate) fn confirmed_seed_baseline(
         })
         .ok_or_else(|| "catalog Hydrogen must retain its line geometry".to_string())?;
 
-    let shell_gap = outer_apothem - inner_boundary;
-    let bridge_half_gap = shell_gap / 2.0;
-    if !shell_gap.is_finite()
-        || shell_gap <= 0.0
-        || bridge_half_gap <= 0.0
-        || hydrogen_length <= bridge_half_gap
+    let inner_corner = (inner_boundary, inner_boundary);
+    let outer_corner = (outer_side_length / 2.0, outer_apothem);
+    let dx = outer_corner.0 - inner_corner.0;
+    let dy = outer_corner.1 - inner_corner.1;
+    let direct_distance = dx.hypot(dy);
+    if !direct_distance.is_finite()
+        || direct_distance <= 0.0
+        || direct_distance > 2.0 * hydrogen_length
     {
-        return Err("initial shell spacing cannot be bridged by Hydrogen".into());
+        return Err("initial shell corners cannot be bridged by Hydrogen".into());
     }
-    let bridge_lateral_offset = (hydrogen_length.powi(2) - bridge_half_gap.powi(2)).sqrt();
-    let bridge_midpoint = (inner_boundary + outer_apothem) / 2.0;
+
+    let half_distance = direct_distance / 2.0;
+    let offset = (hydrogen_length.powi(2) - half_distance.powi(2)).sqrt();
+    let midpoint = (
+        (inner_corner.0 + outer_corner.0) / 2.0,
+        (inner_corner.1 + outer_corner.1) / 2.0,
+    );
+    let normal = (-dy / direct_distance, dx / direct_distance);
+    let bridge_midpoint = (
+        midpoint.0 + offset * normal.0,
+        midpoint.1 + offset * normal.1,
+    );
     let bridge_start = elements.len();
 
-    let upper_first_rotation = bridge_half_gap.atan2(bridge_lateral_offset);
-    let upper_second_rotation = bridge_half_gap.atan2(-bridge_lateral_offset);
+    let line_placement = |a: (f64, f64), b: (f64, f64)| BlueprintPlacement {
+        x: (a.0 + b.0) / 2.0,
+        y: (a.1 + b.1) / 2.0,
+        rotation_radians: (b.1 - a.1).atan2(b.0 - a.0),
+    };
     let upper_bridge = [
-        BlueprintPlacement {
-            x: bridge_lateral_offset / 2.0,
-            y: (inner_boundary + bridge_midpoint) / 2.0,
-            rotation_radians: upper_first_rotation,
-        },
-        BlueprintPlacement {
-            x: bridge_lateral_offset / 2.0,
-            y: (bridge_midpoint + outer_apothem) / 2.0,
-            rotation_radians: upper_second_rotation,
-        },
+        line_placement(inner_corner, bridge_midpoint),
+        line_placement(bridge_midpoint, outer_corner),
     ];
 
     for placement in upper_bridge {
