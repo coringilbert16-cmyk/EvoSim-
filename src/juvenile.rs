@@ -36,40 +36,28 @@ pub(crate) fn confirmed_seed_baseline(
         .find(|resource| resource.name == "Sulfur")
         .ok_or_else(|| "catalog is missing seed Sulfur".to_string())?;
 
-    // The genome cavity is a physically realized inner Nitrogen square. The
-    // mixed Carbon/Sulfur/Methane pieces are attached outside that boundary so
-    // they contribute real structural diversity without being asked to bridge
-    // an unrealizable ring of dissimilar polygons.
-    let side = 1.511_858;
-    let thickness = 0.330_719;
-    let inner_offset = (side + thickness) / 2.0;
+    // The seed is a continuous mesh, not nested storage shells. Different rigid
+    // materials are interleaved around one protected genome cavity. Any other
+    // voids are ordinary consequences of the mesh and may contain environmental
+    // material later.
+    let _ = (carbon, hydrogen, sulfur);
+    let radius = 1.50;
+    let diagonal = radius * 0.707_106_781_2;
     let positions = [
-        (0.0, inner_offset),
-        (-inner_offset, 0.0),
-        (inner_offset, 0.0),
-        (0.0, -inner_offset),
-        (0.0, 1.525_000),
-        (-1.525_000, 0.0),
-        (0.0, -1.600_000),
-        (1.525_000, 0.0),
+        (0.0, radius),
+        (-diagonal, diagonal),
+        (-radius, 0.0),
+        (-diagonal, -diagonal),
+        (0.0, -radius),
+        (diagonal, -diagonal),
+        (radius, 0.0),
+        (diagonal, diagonal),
     ];
     let materials = [
-        "Nitrogen", "Nitrogen", "Nitrogen", "Nitrogen", "Carbon", "Sulfur", "Methane", "Carbon",
-    ];
-    let rotations = [
-        0.0,
-        std::f64::consts::FRAC_PI_2,
-        std::f64::consts::FRAC_PI_2,
-        0.0,
-        0.0,
-        std::f64::consts::FRAC_PI_2,
-        0.0,
-        std::f64::consts::FRAC_PI_2,
+        "Carbon", "Sulfur", "Methane", "Carbon", "Sulfur", "Methane", "Carbon", "Sulfur",
     ];
     let mut elements = Vec::with_capacity(positions.len());
-    for (((x, y), material), rotation_radians) in
-        positions.into_iter().zip(materials).zip(rotations)
-    {
+    for ((x, y), material) in positions.into_iter().zip(materials) {
         if !catalog.iter().any(|resource| resource.name == material) {
             return Err(format!("catalog is missing seed {material}"));
         }
@@ -78,7 +66,7 @@ pub(crate) fn confirmed_seed_baseline(
             placement: BlueprintPlacement {
                 x,
                 y,
-                rotation_radians,
+                rotation_radians: y.atan2(x),
             },
         });
     }
@@ -86,42 +74,12 @@ pub(crate) fn confirmed_seed_baseline(
     // The ring is intentionally connected all the way around. The enclosed
     // center is the genome cavity; it is the only cavity the seed explicitly
     // creates. There is no separate storage chamber or hollow outer shell.
-    // The four Nitrogen pieces seal the genome cavity. Each outer mixed
-    // material is physically attached to one side of that inner boundary.
-    let connections = vec![
-        BlueprintConnection {
-            element_a: 0,
-            element_b: 1,
-        },
-        BlueprintConnection {
-            element_a: 0,
-            element_b: 2,
-        },
-        BlueprintConnection {
-            element_a: 1,
-            element_b: 3,
-        },
-        BlueprintConnection {
-            element_a: 2,
-            element_b: 3,
-        },
-        BlueprintConnection {
-            element_a: 0,
-            element_b: 4,
-        },
-        BlueprintConnection {
-            element_a: 1,
-            element_b: 5,
-        },
-        BlueprintConnection {
-            element_a: 3,
-            element_b: 6,
-        },
-        BlueprintConnection {
-            element_a: 2,
-            element_b: 7,
-        },
-    ];
+    let connections = (0..elements.len())
+        .map(|index| BlueprintConnection {
+            element_a: index,
+            element_b: (index + 1) % elements.len(),
+        })
+        .collect::<Vec<_>>();
 
     let mut baseline =
         StructuralBlueprint::with_anchor_elements(elements, connections, (0..8).collect())
