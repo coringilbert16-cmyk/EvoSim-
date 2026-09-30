@@ -461,12 +461,8 @@ fn install_genome_measurement_scaffold(
     }
 
     for (a, b) in scaffold.bonds {
-        let candidates = crate::contact::connection_pair_candidates(
-            structure,
-            indices[a],
-            indices[b],
-            catalog,
-        );
+        let candidates =
+            crate::contact::connection_pair_candidates(structure, indices[a], indices[b], catalog);
         let candidate = candidates
             .into_iter()
             .filter(|candidate| {
@@ -479,7 +475,9 @@ fn install_genome_measurement_scaffold(
                     .partial_cmp(&right.distance)
                     .unwrap_or(std::cmp::Ordering::Equal)
             })
-            .ok_or_else(|| "genome measurement scaffold cannot realize its internal Carbon bond".to_string())?;
+            .ok_or_else(|| {
+                "genome measurement scaffold cannot realize its internal Carbon bond".to_string()
+            })?;
         let bond = crate::structure::Bond {
             endpoint_a: crate::structure::BondEndpoint::new(
                 structure.units[indices[a]].physical_id,
@@ -580,7 +578,6 @@ fn physical_material_endpoint_local_point(
     endpoint.world_point(&unit, catalog)
 }
 
-
 pub(crate) fn try_attach_physical_material_bond_driven(
     structure: &OrganismStructure,
     existing_index: usize,
@@ -611,8 +608,12 @@ pub(crate) fn try_attach_physical_material_bond_driven(
     for endpoint_a in existing_endpoints {
         let joint = endpoint_a.world_point(existing_unit, catalog)?;
         for (part_index, endpoint_b) in new_endpoints.iter().copied() {
-            let local_b =
-                physical_material_endpoint_local_point(new_material, part_index, endpoint_b, catalog)?;
+            let local_b = physical_material_endpoint_local_point(
+                new_material,
+                part_index,
+                endpoint_b,
+                catalog,
+            )?;
 
             for step in 0..360 {
                 let angle = std::f64::consts::TAU * step as f64 / 360.0;
@@ -971,7 +972,9 @@ fn construct_blueprint_bond_driven_internal(
             .and_then(|storage| storage.entries.get(storage_index))
             .is_none()
         {
-            return Err("selected construction anchor material disappeared before commit".to_string());
+            return Err(
+                "selected construction anchor material disappeared before commit".to_string(),
+            );
         }
         reserved_storage_indices.push(storage_index);
     }
@@ -984,8 +987,10 @@ fn construct_blueprint_bond_driven_internal(
     let temporary_scaffold_ids = blueprint
         .genome_measurement
         .as_ref()
-        .map(|scaffold| install_genome_measurement_scaffold(&mut structure, scaffold, genome_anchor, catalog))
-        .transpose()? 
+        .map(|scaffold| {
+            install_genome_measurement_scaffold(&mut structure, scaffold, genome_anchor, catalog)
+        })
+        .transpose()?
         .unwrap_or_default();
 
     while !realized.iter().all(|value| *value) {
@@ -1073,9 +1078,16 @@ fn construct_blueprint_bond_driven_internal(
                 })?;
                 crate::physical_material::PhysicalMaterial::realized(
                     crate::resources::Material::free_base(candidate_resource.name.clone(), 1.0),
-                    vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }],
+                    vec![Placement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    }],
                     catalog,
-                ).ok_or_else(|| "preferred construction material could not be realized".to_string())?
+                )
+                .ok_or_else(|| {
+                    "preferred construction material could not be realized".to_string()
+                })?
             };
 
             if let Some((
@@ -1214,10 +1226,11 @@ mod tests {
     #[test]
     fn temporary_genome_scaffold_is_real_physical_geometry_and_is_removed() {
         let catalog = crate::resources::default_catalog();
-        let scaffold = crate::structural_blueprint::GenomeMeasurementScaffold::three_carbon_reference(
-            &catalog,
-        )
-        .unwrap();
+        let scaffold =
+            crate::structural_blueprint::GenomeMeasurementScaffold::three_carbon_reference(
+                &catalog,
+            )
+            .unwrap();
         let mut structure = OrganismStructure::new();
         let ids = install_genome_measurement_scaffold(
             &mut structure,
