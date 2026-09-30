@@ -18,13 +18,13 @@ type ConstructionSolution = (
 );
 
 fn placement_penetrates_genome_measurement(
-    resource: &BaseResource,
+    candidate_resource: &BaseResource,
     placement: Placement,
     scaffold: &crate::structural_blueprint::GenomeMeasurementScaffold,
     catalog: &[BaseResource],
 ) -> bool {
     let Some(candidate) = crate::material_geometry::MaterialGeometry::new(
-        &Material::free_base(resource.name.clone(), 1.0),
+        &Material::free_base(candidate_resource.name.clone(), 1.0),
         &[placement],
         catalog,
     ) else {
