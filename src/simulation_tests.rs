@@ -160,18 +160,64 @@ mod integration_tests {
         let region = regions
             .first()
             .expect("initial organism should have an accessible interior region");
-        // Use the topology-derived sample point rather than duplicating the
-        // seed's geometric constants in the acquisition test.
-        let anchor = Placement {
-            x: region.sample_point.0,
-            y: region.sample_point.1,
-            rotation_radians: 0.0,
-        };
-        assert!(region.contains_point(anchor.x, anchor.y));
-
-        let resource_name = "Carbon";
+        // The topological sample point only proves that the point is inside;
+        // it is not guaranteed to contain an entire rigid resource. Find a
+        // placement where the actual Carbon geometry fits, then exercise the
+        // production containment path. This keeps the test independent of
+        // arbitrary chamber coordinates while still requiring real geometry.
+        let (min_x, max_x, min_y, max_y) = region.boundary.iter().fold(
+            (
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+            ),
+            |(min_x, max_x, min_y, max_y), &(x, y)| {
+                (
+                    min_x.min(x),
+                    max_x.max(x),
+                    min_y.min(y),
+                    max_y.max(y),
+                )
+            },
+        );
+        let mut anchor = None;
+        'candidate: for ix in 0..=80 {
+            let x = min_x + (max_x - min_x) * ix as f64 / 80.0;
+            for iy in 0..=80 {
+                let y = min_y + (max_y - min_y) * iy as f64 / 80.0;
+                let candidate = Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                };
+                let physical = PhysicalMaterial::realized(
+                    Material::free_base("Carbon", 1.0),
+                    vec![candidate],
+                    &s.environment.catalog,
+                )
+                .expect("base resource should have a valid physical realization");
+                let body = crate::organism_geometry::OrganismBodyGeometry::from_structure(
+                    &organism.structure,
+                    &s.environment.catalog,
+                )
+                .expect("initial organism should have a realized body");
+                let mut probe = s.environment.field.clone();
+                probe.deposit(candidate.x, candidate.y, physical);
+                let contained = probe.take_contained_physical_materials_in_regions(
+                    &body,
+                    std::slice::from_ref(region),
+                    &s.environment.catalog,
+                );
+                if contained.len() == 1 {
+                    anchor = Some(candidate);
+                    break 'candidate;
+                }
+            }
+        }
+        let anchor = anchor.expect("seed chamber must contain a full Carbon constituent");
         let physical = PhysicalMaterial::realized(
-            Material::free_base(resource_name, 1.0),
+            Material::free_base("Carbon", 1.0),
             vec![anchor],
             &s.environment.catalog,
         )
