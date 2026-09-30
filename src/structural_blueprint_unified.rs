@@ -35,6 +35,9 @@ pub struct StructuralBlueprint {
     /// not a biological genome definition and do not identify the genome.
     #[serde(default = "default_anchor_elements")]
     pub anchor_elements: Vec<usize>,
+    /// If true, single-constituent elements use their declared physical placement directly.
+    #[serde(default)]
+    pub authoritative_placements: bool,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -125,6 +128,7 @@ impl StructuralBlueprint {
             elements,
             connections: Self::canonical_connections(connections),
             anchor_elements: default_anchor_elements(),
+            authoritative_placements: false,
         }
     }
 
@@ -137,6 +141,7 @@ impl StructuralBlueprint {
             elements,
             connections: Self::canonical_connections(connections),
             anchor_elements,
+            authoritative_placements: false,
         }
     }
 
@@ -208,6 +213,9 @@ impl StructuralBlueprint {
         energy: &mut f64,
     ) -> Result<(OrganismStructure, f64), String> {
         self.validate()?;
+        if self.authoritative_placements {
+            return self.realize_authoritative_with_context(catalog, ledger, energy);
+        }
         let mut structure = OrganismStructure::new();
         let mut realized = HashMap::<usize, Vec<usize>>::new();
         let mut order = Vec::with_capacity(self.elements.len());
@@ -268,6 +276,56 @@ impl StructuralBlueprint {
         }
 
         Ok((structure, total_heat))
+    }
+
+
+    fn realize_authoritative_with_context(
+        &self,
+        catalog: &[BaseResource],
+        ledger: &mut EnergyLedger,
+        energy: &mut f64,
+    ) -> Result<(OrganismStructure, f64), String> {
+        if self.elements.iter().any(|element| element.material.parts.len() != 1) {
+            return Err("authoritative developmental placement requires single-constituent blueprint elements".into());
+        }
+        let mut structure = OrganismStructure::new();
+        for element in &self.elements {
+            let resource_name = &element.material.parts[0].0;
+            let resource = catalog.iter().find(|resource| resource.name == *resource_name)
+                .ok_or_else(|| format!("blueprint references unknown resource {resource_name}"))?;
+            let mut unit = crate::structure::StructuralUnit::new(
+                resource.name.clone(),
+                crate::structure::Placement {
+                    x: element.placement.x,
+                    y: element.placement.y,
+                    rotation_radians: element.placement.rotation_radians,
+                },
+            );
+            if !unit.realize_default_geometry(catalog) {
+                return Err(format!("resource {resource_name} has invalid physical geometry"));
+            }
+            structure.add_unit(unit);
+        }
+        let mut heat = 0.0;
+        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+        for connection in &self.connections {
+            let Some(attempt) = crate::combine_runtime::combine_specific_pair(
+                &mut structure,
+                connection.element_a,
+                connection.element_b,
+                catalog,
+                &mut cache,
+                ledger,
+                energy,
+            ) else {
+                return Err(format!(
+                    "authoritative developmental bond could not be realized: {}-{}",
+                    connection.element_a, connection.element_b
+                ));
+            };
+            heat += attempt.work_cost;
+        }
+        Ok((structure, heat))
     }
 
     pub fn is_connected(&self) -> bool {
