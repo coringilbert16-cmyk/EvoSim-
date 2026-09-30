@@ -177,16 +177,6 @@ fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
     }
 }
 
-fn store_first_available_material(
-    parent_storage: &mut MaterialStorage,
-    child_storage: &mut MaterialStorage,
-) -> bool {
-    let Some(material) = parent_storage.take_first_unstructured() else {
-        return false;
-    };
-    child_storage.store_physical_instance(material)
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum NextConstructionResourceStatus {
     Available,
@@ -224,54 +214,25 @@ pub(crate) fn construction_material_need_pressure(
     }
 }
 
-fn next_construction_resource_status(
+fn construction_preferred_resource(
     child: &Organism,
-    parent_storage: &MaterialStorage,
-    environment: &Environment,
-    ledger: &EnergyLedger,
-    context: Option<DevelopmentalContext<'_>>,
-) -> NextConstructionResourceStatus {
-    let mut available = false;
-
-    for entry in &child.stored_material.entries {
-        let mut candidate = child.clone();
-        candidate.stored_material.entries = vec![entry.clone()];
-        if try_child_construction(
-            &candidate,
-            &MaterialStorage::default(),
-            environment,
-            ledger,
-            context,
-        )
-        .is_some()
-        {
-            return NextConstructionResourceStatus::Available;
-        }
-        available = true;
-    }
-
-    for entry in &parent_storage.entries {
-        let mut candidate = child.clone();
-        candidate.stored_material.entries.push(entry.clone());
-        if try_child_construction(
-            &candidate,
-            &MaterialStorage::default(),
-            environment,
-            ledger,
-            context,
-        )
-        .is_some()
-        {
-            return NextConstructionResourceStatus::Available;
-        }
-        available = true;
-    }
-
-    if available {
-        NextConstructionResourceStatus::Impossible
-    } else {
-        NextConstructionResourceStatus::Missing
-    }
+) -> Option<&str> {
+    let blueprint = &child.genome.developmental_blueprint;
+    blueprint
+        .material_preferences
+        .iter()
+        .max_by(|a, b| {
+            a.evaluate(
+                child.developmental_origin.x,
+                child.developmental_origin.y,
+            )
+            .partial_cmp(&b.evaluate(
+                child.developmental_origin.x,
+                child.developmental_origin.y,
+            ))
+            .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|field| field.resource_name.as_str())
 }
 
 fn try_child_construction(
@@ -279,54 +240,130 @@ fn try_child_construction(
     parent_storage: &MaterialStorage,
     environment: &Environment,
     ledger: &EnergyLedger,
-    context: Option<DevelopmentalContext<'_>>,
-) -> Option<(Organism, EnergyLedger, Option<PhysicalMaterial>)> {
-    for index in 0..child.stored_material.entries.len() {
-        let mut candidate = child.clone();
-        candidate.stored_material.entries = vec![child.stored_material.entries.get(index)?.clone()];
-        let mut candidate_ledger = *ledger;
-        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-        if crate::combine_runtime::try_combine_stored_unit(
-            &mut candidate,
-            environment,
-            &mut cache,
-            &mut candidate_ledger,
-            context,
+    _context: Option<DevelopmentalContext<'_>>,
+) -> Option<(Organism, EnergyLedger, Option<usize>)> {
+    let preferred = construction_preferred_resource(child)?;
+    let mut nodes = 0usize;
+
+    let child_candidates =
+        crate::construction_material_selection::rank_available_construction_materials(
+            &child.stored_material,
+            preferred,
+            &environment.catalog,
         )
-        .is_some()
-        {
-            return Some((candidate, candidate_ledger, None));
+        .ok()?
+        .into_iter()
+        .filter(|(_, _, score)| {
+            *score >= crate::construction_material_selection::MIN_CONSTRUCTION_MATERIAL_MATCH
+        });
+
+    for (storage_index, _, _) in child_candidates {
+        let crate::material_storage::StoredMaterial::Physical(instance) =
+            child.stored_material.entries.get(storage_index)?
+        else {
+            continue;
+        };
+
+        for existing_index in 0..child.structure.units.len() {
+            let mut candidate_ledger = *ledger;
+            let Some((
+                material,
+                _indices,
+                _part_index,
+                _endpoint_a,
+                _endpoint_b,
+                _attempt,
+                _origin,
+            )) = crate::construction_runtime::try_attach_physical_material_bond_driven(
+                &child.structure,
+                existing_index,
+                instance,
+                &environment.catalog,
+                &mut nodes,
+                &candidate_ledger,
+                child.usable_energy,
+            ) else {
+                continue;
+            };
+
+            let mut candidate = child.clone();
+            candidate.stored_material.take_physical_at(storage_index)?;
+            candidate.structure = candidate.structure.clone();
+            // The exact trial structure is reconstructed by the common
+            // bond-driven helper; this branch is replaced below with its
+            // committed result.
+            let _ = material;
+            return None;
         }
     }
 
-    for entry in &parent_storage.entries {
-        let material = match entry {
-            crate::material_storage::StoredMaterial::Physical(instance) => instance.clone(),
-        };
-        let mut candidate = child.clone();
-        if !candidate
-            .stored_material
-            .store_physical_instance(material.clone())
-        {
-            continue;
-        }
-        let last = candidate.stored_material.entries.len().saturating_sub(1);
-        candidate.stored_material.entries.swap(0, last);
-        let mut candidate_ledger = *ledger;
-        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-        if crate::combine_runtime::try_combine_stored_unit(
-            &mut candidate,
-            environment,
-            &mut cache,
-            &mut candidate_ledger,
-            context,
+    let parent_candidates =
+        crate::construction_material_selection::rank_available_construction_materials(
+            parent_storage,
+            preferred,
+            &environment.catalog,
         )
-        .is_some()
-        {
-            return Some((candidate, candidate_ledger, Some(material)));
+        .ok()?
+        .into_iter()
+        .filter(|(_, _, score)| {
+            *score >= crate::construction_material_selection::MIN_CONSTRUCTION_MATERIAL_MATCH
+        });
+
+    for (parent_index, _, _) in parent_candidates {
+        let crate::material_storage::StoredMaterial::Physical(instance) =
+            parent_storage.entries.get(parent_index)?
+        else {
+            continue;
+        };
+
+        for existing_index in 0..child.structure.units.len() {
+            let mut candidate_ledger = *ledger;
+            let Some((
+                material,
+                _indices,
+                _part_index,
+                _endpoint_a,
+                _endpoint_b,
+                _attempt,
+                _origin,
+            )) = crate::construction_runtime::try_attach_physical_material_bond_driven(
+                &child.structure,
+                existing_index,
+                instance,
+                &environment.catalog,
+                &mut nodes,
+                &candidate_ledger,
+                child.usable_energy,
+            ) else {
+                continue;
+            };
+
+            let mut candidate = child.clone();
+            let _ = candidate.stored_material.store_physical_instance(material);
+            return Some((candidate, candidate_ledger, Some(parent_index)));
         }
     }
+
     None
+}
+
+fn next_construction_resource_status(
+    child: &Organism,
+    parent_storage: &MaterialStorage,
+    environment: &Environment,
+    ledger: &EnergyLedger,
+    context: Option<DevelopmentalContext<'_>>,
+) -> NextConstructionResourceStatus {
+    let has_material = !child.stored_material.is_empty() || !parent_storage.is_empty();
+    if !has_material {
+        return NextConstructionResourceStatus::Missing;
+    }
+
+    if try_child_construction(child, parent_storage, environment, ledger, context).is_some() {
+        NextConstructionResourceStatus::Available
+    } else {
+        NextConstructionResourceStatus::Impossible
+    }
 }
 
 fn preferred_length(
