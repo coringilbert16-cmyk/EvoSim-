@@ -180,8 +180,7 @@ pub(crate) fn confirmed_seed_baseline(
     {
         return Err("initial lower shell spacing cannot be bridged by Hydrogen".into());
     }
-    let lower_perpendicular =
-        (hydrogen_length.powi(2) - lower_half_distance.powi(2)).sqrt();
+    let lower_perpendicular = (hydrogen_length.powi(2) - lower_half_distance.powi(2)).sqrt();
     let lower_midpoint_x = lower_outer_x / 2.0;
     let lower_midpoint_y = (-inner_boundary + lower_outer_y) / 2.0;
     let lower_normal_x = -lower_dy / lower_distance;
