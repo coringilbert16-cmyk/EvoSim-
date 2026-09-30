@@ -533,10 +533,9 @@ pub fn find_enclosed_regions(
             }
             .scale(NODE_TOLERANCE * 10.0),
         );
-        if polygons.iter().any(|(_, p)| point_in_polygon(sample, p)) {
-            continue;
-        }
-
+        // Keep the geometric face even when its initial epsilon sample
+        // falls inside a wall polygon. The caller can validate accessibility
+        // using the complete boundary topology.
         let mut boundary_units = Vec::new();
         for &edge_index in &face {
             let a = points[edges[edge_index].from];
