@@ -1422,3 +1422,38 @@ fn construct_blueprint_bond_driven_internal(
     *energy = remaining_energy;
     Ok((structure, total_heat))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn temporary_genome_scaffold_is_real_physical_geometry_and_is_removed() {
+        let catalog = crate::resources::default_catalog();
+        let scaffold = crate::structural_blueprint::GenomeMeasurementScaffold::three_carbon_reference(
+            &catalog,
+        )
+        .unwrap();
+        let mut structure = OrganismStructure::new();
+        let ids = install_genome_measurement_scaffold(
+            &mut structure,
+            &scaffold,
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        )
+        .unwrap();
+
+        assert_eq!(ids.len(), 3);
+        assert_eq!(structure.units.len(), 3);
+        assert_eq!(structure.bonds.len(), 3);
+        assert!(structure.bonds.iter().all(|bond| bond.bond_energy == 0.0));
+
+        structure.remove_units_by_physical_ids(&ids);
+        assert!(structure.units.is_empty());
+        assert!(structure.bonds.is_empty());
+    }
+}
