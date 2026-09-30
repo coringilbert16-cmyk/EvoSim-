@@ -51,7 +51,7 @@ pub(crate) fn confirmed_seed_baseline(
         (radius * 0.866_025_403_8, radius * 0.5),
     ];
     let materials = [
-        "Carbon", "Nitrogen", "Sulfur", "Carbon", "Nitrogen", "Hydrogen",
+        "Carbon", "Sulfur", "Carbon", "Sulfur", "Carbon", "Sulfur",
     ];
     let mut elements = Vec::with_capacity(positions.len());
     for ((x, y), material) in positions.into_iter().zip(materials) {
