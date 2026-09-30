@@ -273,10 +273,7 @@ impl StructuralBlueprint {
     ) -> Result<(OrganismStructure, f64), String> {
         self.validate()?;
         let (structure, total_heat) = crate::construction_runtime::construct_blueprint_bond_driven(
-            self,
-            catalog,
-            ledger,
-            energy,
+            self, catalog, ledger, energy,
         )?;
         Ok((structure, total_heat))
     }
