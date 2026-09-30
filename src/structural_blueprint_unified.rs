@@ -13,7 +13,7 @@ use crate::resources::{BaseResource, Material};
 use crate::state::EnergyLedger;
 use crate::structure::OrganismStructure;
 use serde::{Deserialize, Deserializer, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 fn default_anchor_elements() -> Vec<usize> {
     vec![0]
@@ -197,7 +197,6 @@ impl StructuralBlueprint {
             connections: Self::canonical_connections(connections),
             anchor_elements,
             genome_measurement: None,
-            authoritative_placements: false,
         }
     }
 
@@ -283,11 +282,10 @@ impl StructuralBlueprint {
             ledger,
             energy,
         )?;
-        let structure = structure;
         Ok((structure, total_heat))
     }
 
-        pub fn is_connected(&self) -> bool {
+    pub fn is_connected(&self) -> bool {
         if self.elements.is_empty() {
             return false;
         }
