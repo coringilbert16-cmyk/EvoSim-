@@ -146,13 +146,12 @@ pub(crate) fn realize_initial_with_reserve(
 
     let mut trial_ledger = EnergyLedger::default();
     let mut trial_energy = TRIAL_ENERGY;
-    let (_, trial_remaining) =
-        crate::construction_runtime::construct_blueprint_bond_driven(
-            blueprint,
-            catalog,
-            &mut trial_ledger,
-            &mut trial_energy,
-        )?;
+    let (_, trial_remaining) = crate::construction_runtime::construct_blueprint_bond_driven(
+        blueprint,
+        catalog,
+        &mut trial_ledger,
+        &mut trial_energy,
+    )?;
     let required_initial_energy = TRIAL_ENERGY - trial_remaining;
     if !required_initial_energy.is_finite() || required_initial_energy < 0.0 {
         return Err("juvenile construction produced an invalid energy requirement".into());
@@ -180,8 +179,9 @@ pub(crate) fn realize_initial_with_reserve(
         JuvenileViabilityRequirements::default(),
     )?;
 
-    let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)?
-        .ok_or_else(|| "juvenile realization has no qualifying physical genome cavity".to_string())?;
+    let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)?.ok_or_else(|| {
+        "juvenile realization has no qualifying physical genome cavity".to_string()
+    })?;
     let genome_ids = cavity
         .boundary_units
         .iter()
