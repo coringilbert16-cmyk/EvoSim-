@@ -146,18 +146,13 @@ fn select_movement_distance(
     usable_energy: f64,
     rng: &mut ChaCha8Rng,
 ) -> Option<f64> {
-    let one_step_cost = movement_energy_cost_for_distance(
-        realized_mass,
-        movement_efficiency,
-        1.0,
-    );
-    let affordable: Vec<f64> = if one_step_cost.is_finite()
-        && one_step_cost <= usable_energy + f64::EPSILON
-    {
-        MOVEMENT_DISTANCE_OPTIONS.to_vec()
-    } else {
-        Vec::new()
-    };
+    let one_step_cost = movement_energy_cost_for_distance(realized_mass, movement_efficiency, 1.0);
+    let affordable: Vec<f64> =
+        if one_step_cost.is_finite() && one_step_cost <= usable_energy + f64::EPSILON {
+            MOVEMENT_DISTANCE_OPTIONS.to_vec()
+        } else {
+            Vec::new()
+        };
     if affordable.is_empty() {
         return None;
     }
