@@ -219,12 +219,12 @@ impl Simulation {
     pub(crate) fn start_movement(
         organism: &mut Organism,
         environment: &Environment,
-        realized_mass: f64,
-        movement_efficiency: f64,
-        usable_energy: f64,
         rng: &mut ChaCha8Rng,
         perceptions: &[crate::harmonics::ResonancePerception],
     ) -> Result<crate::state::ActiveMovement, crate::state::MovementFailureReason> {
+        let realized_mass = organism.structural_mass(&environment.catalog);
+        let movement_efficiency = organism.genome.movement_efficiency();
+        let usable_energy = organism.usable_energy;
         let direction = crate::movement_direction::movement_direction_periodic(
             organism,
             environment.height,
