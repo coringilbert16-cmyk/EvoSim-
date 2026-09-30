@@ -120,20 +120,42 @@ pub(crate) fn confirmed_seed_baseline(
         });
     }
 
-    // One ordinary Nitrogen partition connects the two shells. It is
-    // deliberately area-based so the interior topology is derived entirely
-    // from rigid physical boundaries rather than zero-area line semantics.
+    // Two ordinary Hydrogen constituents bridge the chamber at the center of
+    // the top boundary. They are structural material, not an intake port.
     let inner_boundary = inner_offset + inner_thickness / 2.0;
     let outer_inner_boundary = outer_apothem;
+    let chamber_gap = outer_inner_boundary - inner_boundary;
+    let hydrogen_length = catalog
+        .iter()
+        .find(|resource| resource.name == "Hydrogen")
+        .and_then(|resource| match &resource.shape.form {
+            crate::resources::Form::Line { length } => Some(*length),
+            _ => None,
+        })
+        .ok_or_else(|| "catalog Hydrogen must retain its line geometry".to_string())?;
+    if chamber_gap <= 0.0 || chamber_gap > 2.0 * hydrogen_length {
+        return Err("initial shell spacing cannot be bridged by Hydrogen".into());
+    }
+
     let bridge_start = elements.len();
-    elements.push(BlueprintElement {
-        material: Material::free_base(nitrogen, 1.0),
-        placement: BlueprintPlacement {
-            x: 0.0,
-            y: (inner_boundary + outer_inner_boundary) / 2.0,
-            rotation_radians: std::f64::consts::FRAC_PI_2,
-        },
-    });
+    let half_distance = chamber_gap / 2.0;
+    let lateral_offset = (hydrogen_length.powi(2) - half_distance.powi(2)).sqrt();
+    let midpoint_y = (inner_boundary + outer_inner_boundary) / 2.0;
+    let bridge_midpoint = (lateral_offset, midpoint_y);
+    let line_placement = |a: (f64, f64), b: (f64, f64)| BlueprintPlacement {
+        x: (a.0 + b.0) / 2.0,
+        y: (a.1 + b.1) / 2.0,
+        rotation_radians: (b.1 - a.1).atan2(b.0 - a.0),
+    };
+    for (a, b) in [
+        ((0.0, inner_boundary), bridge_midpoint),
+        (bridge_midpoint, (0.0, outer_inner_boundary)),
+    ] {
+        elements.push(BlueprintElement {
+            material: Material::free_base("Hydrogen", 1.0),
+            placement: line_placement(a, b),
+        });
+    }
 
     connections.extend([
         BlueprintConnection {
@@ -142,6 +164,10 @@ pub(crate) fn confirmed_seed_baseline(
         },
         BlueprintConnection {
             element_a: bridge_start,
+            element_b: bridge_start + 1,
+        },
+        BlueprintConnection {
+            element_a: bridge_start + 1,
             element_b: outer_start,
         },
     ]);
