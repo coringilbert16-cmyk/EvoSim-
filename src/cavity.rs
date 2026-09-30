@@ -3,7 +3,7 @@
 
 use crate::resources::{BaseResource, Form};
 use crate::structure::{OrganismStructure, Placement};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::f64::consts::TAU;
 
 const EPS: f64 = 1e-8;
@@ -309,6 +309,42 @@ fn analyze_genome_cavity_in_indices(
             best = Some(candidate);
         }
     }
+    if best.is_none() {
+        // The general interior-region tracer already handles the same realized
+        // geometry, including contacts whose epsilon sample lies inside a wall.
+        // Reuse that geometric face only as a fallback; the genome still must
+        // have a sufficiently large area and a bonded closed boundary.
+        let component_set: HashSet<usize> = candidate_indices.iter().copied().collect();
+        for region in crate::interior_geometry::find_enclosed_regions(structure, catalog) {
+            if region.area + EPS < minimum_area
+                || region.boundary_units.len() < 3
+                || !region
+                    .boundary_units
+                    .iter()
+                    .all(|index| component_set.contains(index))
+            {
+                continue;
+            }
+            let boundary: HashSet<usize> = region.boundary_units.iter().copied().collect();
+            let closed = region.boundary_units.iter().all(|&unit| {
+                structure
+                    .direct_neighbor_indices(unit)
+                    .into_iter()
+                    .filter(|neighbor| boundary.contains(neighbor))
+                    .count()
+                    >= 2
+            });
+            if closed {
+                best = Some(GenomeCavity {
+                    area: region.area,
+                    boundary_units: region.boundary_units,
+                    minimum_area,
+                });
+                break;
+            }
+        }
+    }
+
     Ok(best)
 }
 
