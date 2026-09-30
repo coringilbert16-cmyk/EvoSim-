@@ -1108,7 +1108,7 @@ fn construct_blueprint_bond_driven_internal(
                     .get(part_index)
                     .ok_or_else(|| "successful material endpoint index disappeared".to_string())?;
 
-                 construction_ledger = trial_ledger;
+                construction_ledger = trial_ledger;
                 remaining_energy = trial_energy;
                 total_heat += trial_attempt.work_cost;
                 structure = trial_structure;
