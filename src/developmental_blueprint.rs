@@ -386,7 +386,6 @@ pub struct DevelopmentalRealization {
     pub overall: f64,
 }
 
-
 fn mutate_influence(
     influence: &mut RadialInfluence,
     rng: &mut impl Rng,
