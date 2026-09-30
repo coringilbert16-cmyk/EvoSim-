@@ -714,13 +714,9 @@ fn realize_next_bond_driven(
     available_energy: f64,
 ) -> Option<(
     OrganismStructure,
-    crate::physical_material::PhysicalMaterial,
     Vec<usize>,
     usize,
-    ConnectionEndpoint,
-    ConnectionEndpoint,
     crate::combine_runtime::CombineAttempt,
-    Placement,
     EnergyLedger,
     f64,
 )> {
