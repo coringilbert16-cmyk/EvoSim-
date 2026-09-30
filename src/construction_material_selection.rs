@@ -282,5 +282,4 @@ mod tests {
         assert_eq!(storage.len(), 1);
         assert_eq!(storage.materials_snapshot(), vec![material]);
     }
-
 }
