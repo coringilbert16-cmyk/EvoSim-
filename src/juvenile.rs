@@ -140,8 +140,11 @@ pub(crate) fn confirmed_seed_baseline(
         return Err("initial shell spacing is invalid".into());
     }
 
-    let segment_rise = shell_gap / 3.0;
-    if !segment_rise.is_finite() || segment_rise >= hydrogen_length {
+    // The final segment uses its full Hydrogen length vertically. The first
+    // two segments use equal and opposite lateral offsets so the three-link
+    // chain lands exactly on the outer shell without protruding through it.
+    let segment_rise = (shell_gap - hydrogen_length) / 2.0;
+    if !segment_rise.is_finite() || segment_rise <= 0.0 || segment_rise >= hydrogen_length {
         return Err("initial shell spacing cannot be bridged by Hydrogen".into());
     }
     let lateral_offset = (hydrogen_length.powi(2) - segment_rise.powi(2)).sqrt();
@@ -162,7 +165,7 @@ pub(crate) fn confirmed_seed_baseline(
         },
         BlueprintPlacement {
             x: 0.0,
-            y: inner_boundary + segment_rise * 2.5,
+            y: inner_boundary + segment_rise * 2.0 + hydrogen_length / 2.0,
             rotation_radians: std::f64::consts::FRAC_PI_2,
         },
     ];
