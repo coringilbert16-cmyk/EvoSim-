@@ -340,7 +340,6 @@ impl StructuralBlueprint {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
