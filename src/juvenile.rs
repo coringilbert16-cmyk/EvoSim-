@@ -41,10 +41,11 @@ pub(crate) fn confirmed_seed_baseline(
     // voids are ordinary consequences of the mesh and may contain environmental
     // material later.
     let _ = (carbon, hydrogen, sulfur);
-    // The measurement scaffold is a real construction exclusion volume. The
-    // original 1.50 radius leaves the methane vertices inside that volume, so
-    // the cavity must be physically larger rather than weakening the scaffold.
-    let radius = 2.00;
+    // The three-carbon measurement scaffold is compact enough to fit inside
+    // the established seed cavity. Keep the original physical seed radius;
+    // enlarging the ring to accommodate the old linear reference would change
+    // the calibrated seed geometry rather than fixing the measurement model.
+    let radius = 1.50;
     let diagonal = radius * 0.707_106_781_2;
     let positions = [
         (0.0, radius),
