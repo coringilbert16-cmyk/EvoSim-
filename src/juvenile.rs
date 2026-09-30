@@ -125,7 +125,6 @@ pub(crate) fn confirmed_seed_baseline(
     // from rigid physical boundaries rather than zero-area line semantics.
     let inner_boundary = inner_offset + inner_thickness / 2.0;
     let outer_inner_boundary = outer_apothem;
-    let chamber_gap = outer_inner_boundary - inner_boundary;
     let bridge_start = elements.len();
     elements.push(BlueprintElement {
         material: Material::free_base(nitrogen, 1.0),
