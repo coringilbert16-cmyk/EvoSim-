@@ -17,6 +17,45 @@ type ConstructionSolution = (
     f64,
 );
 
+fn placement_penetrates_genome_measurement(
+    resource: &BaseResource,
+    placement: Placement,
+    scaffold: &crate::structural_blueprint::GenomeMeasurementScaffold,
+    catalog: &[BaseResource],
+) -> bool {
+    let Some(candidate) = crate::material_geometry::MaterialGeometry::new(
+        &Material::free_base(resource.name.clone(), 1.0),
+        &[placement],
+        catalog,
+    ) else {
+        return true;
+    };
+    let Some(carbon) = resource(catalog, "Carbon") else {
+        return true;
+    };
+    for guide_placement in scaffold.placements {
+        let Some(guide) = crate::material_geometry::MaterialGeometry::new(
+            &Material::free_base(carbon.name.clone(), 1.0),
+            &[Placement {
+                x: guide_placement.x,
+                y: guide_placement.y,
+                rotation_radians: guide_placement.rotation_radians,
+            }],
+            catalog,
+        ) else {
+            return true;
+        };
+        if candidate.parts.iter().any(|part| {
+            guide.parts.iter().any(|guide_part| {
+                crate::material_geometry::placed_forms_penetrate(part, guide_part, 1e-10)
+            })
+        }) {
+            return true;
+        }
+    }
+    false
+}
+
 fn resource<'a>(catalog: &'a [BaseResource], name: &str) -> Option<&'a BaseResource> {
     catalog.iter().find(|r| r.name == name)
 }
@@ -323,6 +362,7 @@ fn solve_parts(
     anchor: Placement,
     catalog: &[BaseResource],
     external: &[Vec<usize>],
+    genome_measurement: Option<&crate::structural_blueprint::GenomeMeasurementScaffold>,
     heat: f64,
     score: f64,
 ) -> Option<ConstructionSolution> {
@@ -346,6 +386,11 @@ fn solve_parts(
     let mut best = None;
     for candidate_placement in candidate_placements(structure, resource, anchor, &targets, catalog)
     {
+        if let Some(scaffold) = genome_measurement {
+            if placement_penetrates_genome_measurement(resource, candidate_placement, scaffold, catalog) {
+                continue;
+            }
+        }
         let placement_score =
             (candidate_placement.x - anchor.x).hypot(candidate_placement.y - anchor.y);
         let candidate_score = score + placement_score;
@@ -435,6 +480,7 @@ pub(crate) fn realize_material_with_context(
     ledger: &mut EnergyLedger,
     energy: &mut f64,
     external: &[Vec<usize>],
+    genome_measurement: Option<&crate::structural_blueprint::GenomeMeasurementScaffold>,
 ) -> Result<(Vec<usize>, f64), String> {
     let material = &element.material;
     let anchor = placement(element.placement);
@@ -444,7 +490,8 @@ pub(crate) fn realize_material_with_context(
 
     let assigned = vec![None; material.parts.len()];
     let Some((trial, trial_ledger, trial_energy, assigned, heat, _score)) = solve_parts(
-        0, structure, ledger, *energy, &assigned, material, anchor, catalog, external, 0.0, 0.0,
+        0, structure, ledger, *energy, &assigned, material, anchor, catalog, external,
+        genome_measurement, 0.0, 0.0,
     ) else {
         let resource_name = material
             .parts
