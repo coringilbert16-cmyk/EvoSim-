@@ -1224,11 +1224,16 @@ fn construct_blueprint_bond_driven_internal(
                 catalog,
                 &mut crate::contact::ConnectionCompatibilityCache::new(),
             );
+            let total_candidates = candidates.len();
+            let mut contact_candidates = 0usize;
+            let mut evaluated_candidates = 0usize;
+            let mut rejected_by_bond_admission = 0usize;
             for candidate in candidates.into_iter().filter(|candidate| {
                 candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
                     && candidate.available_a
                     && candidate.available_b
             }) {
+                contact_candidates += 1;
                 let Some((_, _, _, investment, _)) =
                     crate::combine_runtime::construction_candidate_evaluation(
                         &structure, unit_a, unit_b, candidate, catalog,
@@ -1236,6 +1241,7 @@ fn construct_blueprint_bond_driven_internal(
                 else {
                     continue;
                 };
+                evaluated_candidates += 1;
 
                 // A prescribed realized-realized bond is still one ordinary
                 // construction bond. Try every physically admissible endpoint
@@ -1256,6 +1262,7 @@ fn construct_blueprint_bond_driven_internal(
                     &mut trial_ledger,
                     &mut trial_energy,
                 ) else {
+                    rejected_by_bond_admission += 1;
                     continue;
                 };
 
@@ -1272,10 +1279,15 @@ fn construct_blueprint_bond_driven_internal(
             }
         }
         if !progressed {
-            return Err(
-                "bond-driven construction could not close a prescribed bond between realized elements"
-                    .into(),
-            );
+            return Err(format!(
+                "bond-driven construction could not close prescribed connection {connection_index}                 (elements {}-{}): candidates={}, contacts={}, evaluated={}, bond_admission_rejections={}",
+                connection.element_a,
+                connection.element_b,
+                total_candidates,
+                contact_candidates,
+                evaluated_candidates,
+                rejected_by_bond_admission,
+            ));
         }
     }
 
