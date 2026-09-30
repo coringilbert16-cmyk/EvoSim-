@@ -1291,6 +1291,78 @@ mod tests {
     use super::*;
 
     #[test]
+    fn bond_driven_triangle_commits_all_realized_neighbor_bonds() {
+        use crate::resources::Material;
+        use crate::structural_blueprint::{
+            BlueprintConnection, BlueprintElement, BlueprintPlacement,
+        };
+
+        let catalog = crate::resources::default_catalog();
+        let radius = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .and_then(|resource| match resource.shape.form {
+                crate::resources::Form::RegularPolygon { radius, .. } => Some(radius),
+                _ => None,
+            })
+            .unwrap();
+
+        let spacing = (3.0_f64).sqrt() * radius;
+        let blueprint = crate::structural_blueprint::StructuralBlueprint::with_anchor_elements(
+            vec![
+                BlueprintElement {
+                    material: Material::free_base("Carbon", 1.0),
+                    placement: BlueprintPlacement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                },
+                BlueprintElement {
+                    material: Material::free_base("Carbon", 1.0),
+                    placement: BlueprintPlacement {
+                        x: spacing,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                },
+                BlueprintElement {
+                    material: Material::free_base("Carbon", 1.0),
+                    placement: BlueprintPlacement {
+                        x: spacing / 2.0,
+                        y: spacing * 0.8660254037844386,
+                        rotation_radians: 0.0,
+                    },
+                },
+            ],
+            vec![
+                BlueprintConnection {
+                    element_a: 0,
+                    element_b: 1,
+                },
+                BlueprintConnection {
+                    element_a: 0,
+                    element_b: 2,
+                },
+                BlueprintConnection {
+                    element_a: 1,
+                    element_b: 2,
+                },
+            ],
+            vec![0],
+        );
+
+        let mut ledger = EnergyLedger::default();
+        let mut energy = 1.0e6;
+        let (structure, _) =
+            construct_blueprint_bond_driven(&blueprint, &catalog, &mut ledger, &mut energy)
+                .unwrap();
+
+        assert_eq!(structure.units.len(), 3);
+        assert_eq!(structure.bonds.len(), 3);
+    }
+
+    #[test]
     fn genome_measurement_scaffold_uses_blueprint_frame_not_anchor_as_its_center() {
         let catalog = crate::resources::default_catalog();
         let scaffold =
