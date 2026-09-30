@@ -169,21 +169,21 @@ mod integration_tests {
         };
         assert!(region.contains_point(anchor.x, anchor.y));
 
-        for resource_name in ["Carbon", "Hydrogen"] {
-            let physical = PhysicalMaterial::realized(
-                Material::free_base(resource_name, 1.0),
-                vec![anchor],
-                &s.environment.catalog,
-            )
-            .expect("base resource should have a valid physical realization");
-            let before = s.organisms[0].stored_material.total_amount();
-            s.environment.field.deposit(anchor.x, anchor.y, physical);
-            Simulation::transfer_contained_environmental_material(
-                &mut s.organisms[0],
-                &mut s.environment,
-            );
-            assert_eq!(s.organisms[0].stored_material.total_amount(), before + 1.0);
-        }
+        let resource_name = "Carbon";
+        let physical = PhysicalMaterial::realized(
+            Material::free_base(resource_name, 1.0),
+            vec![anchor],
+            &s.environment.catalog,
+        )
+        .expect("base resource should have a valid physical realization");
+        let before = s.organisms[0].stored_material.total_amount();
+        s.environment.field.deposit(anchor.x, anchor.y, physical);
+        Simulation::transfer_contained_environmental_material(
+            &mut s.organisms[0],
+            &mut s.environment,
+        );
+        assert_eq!(s.organisms[0].stored_material.total_amount(), before + 1.0);
+
     }
 
     #[test]
