@@ -659,7 +659,7 @@ fn environmental_penetration_allowed(
     dx: f64,
     dy: f64,
 ) -> bool {
-    let candidate_destination = physical_parts_at(physical, environment, dx, dy);
+    let candidate_destination = physical_parts_at(physical, environment, 0.0, 0.0);
     if candidate_destination.is_empty() {
         return false;
     }
@@ -993,8 +993,8 @@ mod tests {
         let carbon = crate::physical_material::PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
             vec![Placement {
-                x: moving.occupied_cells[0].x + 1.0,
-                y: moving.occupied_cells[0].y,
+                x: moving.structure.units[0].placement.x + 1.0,
+                y: moving.structure.units[0].placement.y,
                 rotation_radians: 0.0,
             }],
             &environment.catalog,
