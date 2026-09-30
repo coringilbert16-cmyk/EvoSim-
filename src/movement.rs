@@ -720,7 +720,11 @@ fn environmental_penetration_allowed(
     for _ in 0..24 {
         let mid = (low + high) * 0.5;
         let destination = organism_parts_at(moving, environment, dx * mid, dy * mid);
-        if parts_penetrate(&destination, &physical_parts_at(physical, environment, 0.0, 0.0), environment.height) {
+        if parts_penetrate(
+            &destination,
+            &physical_parts_at(physical, environment, 0.0, 0.0),
+            environment.height,
+        ) {
             high = mid;
         } else {
             low = mid;
@@ -980,7 +984,11 @@ mod tests {
         let moving = simulation.organisms.first().expect("default seed organism");
         let carbon = crate::physical_material::PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
-            vec![Placement { x: moving.occupied_cells[0].x + 1.0, y: moving.occupied_cells[0].y, rotation_radians: 0.0 }],
+            vec![Placement {
+                x: moving.occupied_cells[0].x + 1.0,
+                y: moving.occupied_cells[0].y,
+                rotation_radians: 0.0,
+            }],
             &environment.catalog,
         ).expect("valid carbon realization");
         let destination = organism_parts_at(moving, &environment, 1.0, 0.0);
