@@ -138,5 +138,4 @@ mod tests {
         }
         assert!(succeeded, "no carbon-carbon placement could pass COMBINE");
     }
-
 }
