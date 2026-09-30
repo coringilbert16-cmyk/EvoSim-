@@ -476,7 +476,7 @@ pub(crate) fn try_combine_stored_unit(
     None
 }
 
-pub(crate) fn combine_specific_pair(
+fn combine_pair_in_direction(
     structure: &mut crate::structure::OrganismStructure,
     unit_a: usize,
     unit_b: usize,
@@ -485,9 +485,6 @@ pub(crate) fn combine_specific_pair(
     ledger: &mut EnergyLedger,
     energy: &mut f64,
 ) -> Option<CombineAttempt> {
-    if unit_a >= structure.units.len() || unit_b >= structure.units.len() || unit_a == unit_b {
-        return None;
-    }
     let mut candidates = eligible_candidates(structure, unit_a, unit_b, catalog, cache)
         .into_iter()
         .filter_map(|candidate| {
@@ -525,6 +522,28 @@ pub(crate) fn combine_specific_pair(
         }
     }
     None
+}
+
+pub(crate) fn combine_specific_pair(
+    structure: &mut crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    catalog: &[BaseResource],
+    cache: &mut ConnectionCompatibilityCache,
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> Option<CombineAttempt> {
+    if unit_a >= structure.units.len() || unit_b >= structure.units.len() || unit_a == unit_b {
+        return None;
+    }
+
+    // Bond direction is a biological choice. Try the requested orientation first,
+    // then let the same physical pair form in the reverse orientation if the
+    // first direction cannot produce a valid interaction.
+    combine_pair_in_direction(
+        structure, unit_a, unit_b, catalog, cache, ledger, energy,
+    )
+    .or_else(|| combine_pair_in_direction(structure, unit_b, unit_a, catalog, cache, ledger, energy))
 }
 
 pub(crate) fn can_combine(organism: &Organism, _environment: &Environment) -> bool {
