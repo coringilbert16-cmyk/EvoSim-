@@ -184,7 +184,6 @@ impl StructuralBlueprint {
             connections: Self::canonical_connections(connections),
             anchor_elements: default_anchor_elements(),
             genome_measurement: None,
-            authoritative_placements: false,
         }
     }
 
@@ -278,164 +277,17 @@ impl StructuralBlueprint {
         energy: &mut f64,
     ) -> Result<(OrganismStructure, f64), String> {
         self.validate()?;
-        if self.authoritative_placements {
-            return self.realize_authoritative_with_context(catalog, ledger, energy);
-        }
-        let mut structure = OrganismStructure::new();
-        let mut realized = HashMap::<usize, Vec<usize>>::new();
-        let mut order = Vec::with_capacity(self.elements.len());
-        let mut visited = vec![false; self.elements.len()];
-        let mut queue = vec![self.anchor_elements[0]];
-        visited[self.anchor_elements[0]] = true;
-        while let Some(current) = queue.pop() {
-            order.push(current);
-            for connection in &self.connections {
-                let neighbor = if connection.element_a == current {
-                    connection.element_b
-                } else if connection.element_b == current {
-                    connection.element_a
-                } else {
-                    continue;
-                };
-                if !visited[neighbor] {
-                    visited[neighbor] = true;
-                    queue.push(neighbor);
-                }
-            }
-        }
-        if order.len() != self.elements.len() {
-            return Err(
-                "blueprint realization stalled before all elements were constructed".into(),
-            );
-        }
-
-        let mut total_heat = 0.0;
-        for index in order {
-            let external = self
-                .connections
-                .iter()
-                .filter_map(|connection| {
-                    let neighbor = if connection.element_a == index {
-                        connection.element_b
-                    } else if connection.element_b == index {
-                        connection.element_a
-                    } else {
-                        return None;
-                    };
-                    realized.get(&neighbor).cloned()
-                })
-                .collect::<Vec<_>>();
-            let (ids, heat) = crate::construction_runtime::realize_material_with_context(
-                &mut structure,
-                &self.elements[index],
-                catalog,
-                ledger,
-                energy,
-                &external,
-                self.genome_measurement.as_ref(),
-            )
-            .map_err(|error| format!("element {index} construction failed: {error}"))?;
-            validate_element_contact(&structure, &ids, &external, catalog)
-                .map_err(|error| format!("element {index} contact validation failed: {error}"))?;
-            realized.insert(index, ids);
-            total_heat += heat;
-        }
-
+        let (structure, total_heat) = crate::construction_runtime::construct_blueprint_bond_driven(
+            self,
+            catalog,
+            ledger,
+            energy,
+        )?;
         let structure = structure;
-        if self.genome_measurement.is_some()
-            && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_none()
-        {
-            return Err(
-                "genome measurement scaffold did not produce a qualifying final cavity".into(),
-            );
-        }
-
         Ok((structure, total_heat))
     }
 
-    fn realize_authoritative_with_context(
-        &self,
-        catalog: &[BaseResource],
-        ledger: &mut EnergyLedger,
-        energy: &mut f64,
-    ) -> Result<(OrganismStructure, f64), String> {
-        if self
-            .elements
-            .iter()
-            .any(|element| element.material.parts.len() != 1)
-        {
-            return Err(
-                "authoritative developmental placement requires single-constituent blueprint elements"
-                    .into(),
-            );
-        }
-
-        let mut structure = OrganismStructure::new();
-        for element in &self.elements {
-            let resource_name = &element.material.parts[0].0;
-            let resource = catalog
-                .iter()
-                .find(|resource| resource.name == *resource_name)
-                .ok_or_else(|| format!("blueprint references unknown resource {resource_name}"))?;
-
-            let placement = crate::structure::Placement {
-                x: element.placement.x,
-                y: element.placement.y,
-                rotation_radians: element.placement.rotation_radians,
-            };
-
-            if let Some(scaffold) = self.genome_measurement.as_ref() {
-                if crate::construction_runtime::placement_penetrates_genome_measurement(
-                    resource, placement, scaffold, catalog,
-                ) {
-                    return Err(format!(
-                        "authoritative developmental placement penetrates genome measurement: {resource_name}"
-                    ));
-                }
-            }
-
-            let mut unit = crate::structure::StructuralUnit::new(resource.name.clone(), placement);
-            if !unit.realize_default_geometry(catalog) {
-                return Err(format!(
-                    "resource {resource_name} has invalid physical geometry"
-                ));
-            }
-            structure.add_unit(unit);
-        }
-
-        let mut heat = 0.0;
-        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-        for connection in &self.connections {
-            let Some(attempt) = crate::combine_runtime::combine_specific_pair(
-                &mut structure,
-                connection.element_a,
-                connection.element_b,
-                catalog,
-                &mut cache,
-                ledger,
-                energy,
-            ) else {
-                return Err(format!(
-                    "authoritative developmental bond could not be realized: {}-{}",
-                    connection.element_a, connection.element_b
-                ));
-            };
-            heat += attempt.work_cost;
-        }
-
-        if self.genome_measurement.is_some()
-            && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_none()
-        {
-            return Err(
-                "authoritative developmental geometry did not produce a qualifying final cavity"
-                    .into(),
-            );
-        }
-
-        Ok((structure, heat))
-    }
-
-    pub fn is_connected(&self) -> bool {
+        pub fn is_connected(&self) -> bool {
         if self.elements.is_empty() {
             return false;
         }
