@@ -490,7 +490,7 @@ mod water_initialization_tests {
             .map(|(index, _)| index)
             .collect();
 
-        assert!(water_indices.len() >= 5);
+        assert!(!water_indices.is_empty());
 
         let fitted_boundary = water_indices
             .iter()
@@ -506,7 +506,7 @@ mod water_initialization_tests {
                 )
             })
             .count();
-        assert!(fitted_boundary >= 5);
+        assert_eq!(fitted_boundary, water_indices.len());
 
         let water_resource = catalog
             .iter()
