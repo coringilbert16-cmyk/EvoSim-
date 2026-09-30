@@ -267,8 +267,9 @@ pub(crate) fn confirmed_seed_baseline(
         },
     ]);
 
-    let baseline =
+    let mut baseline =
         StructuralBlueprint::with_anchor_elements(elements, connections, vec![0, 1, 2, 3]);
+    baseline.authoritative_placements = true;
     baseline.validate()?;
     Ok(baseline)
 }
