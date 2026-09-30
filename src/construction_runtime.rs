@@ -462,6 +462,7 @@ fn solve_parts(
             anchor,
             catalog,
             external,
+            genome_measurement,
             candidate_heat,
             candidate_score,
         ) {
@@ -531,6 +532,6 @@ pub(crate) fn realize_material(
             rotation_radians: anchor.rotation_radians,
         },
     };
-    realize_material_with_context(structure, &element, catalog, ledger, energy, &[])
+    realize_material_with_context(structure, &element, catalog, ledger, energy, &[], None)
         .map(|(indices, _)| indices)
 }
