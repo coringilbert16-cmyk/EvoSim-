@@ -112,6 +112,56 @@ pub fn placed_forms_overlap(
         _ => polygons_overlap(a, b, tolerance),
     }
 }
+/// Returns whether two realized material parts are in geometric contact,
+/// including contact with the explicit boundary of a fluid form.
+///
+/// Fluid material is not a collision wall: its interior remains freely
+/// traversable. Its boundary is nevertheless real geometry, so an approaching
+/// object can interact with that boundary and let the material's cohesion
+/// determine how much resistance it presents.
+pub fn placed_forms_boundary_contact(
+    a: &PlacedMaterialPart,
+    b: &PlacedMaterialPart,
+    tolerance: f64,
+) -> bool {
+    if placed_forms_overlap(a, b, tolerance) || placed_forms_penetrate(a, b, tolerance) {
+        return true;
+    }
+
+    fn fluid_boundary_part(part: &PlacedMaterialPart) -> Option<PlacedMaterialPart> {
+        let Form::Fluid {
+            boundary: Some(vertices),
+            ..
+        } = &part.form
+        else {
+            return None;
+        };
+        Some(PlacedMaterialPart {
+            part_index: part.part_index,
+            form: Form::Polygon {
+                vertices: vertices.clone(),
+            },
+            placement: part.placement,
+        })
+    }
+
+    if let Some(fluid_boundary) = fluid_boundary_part(a) {
+        if placed_forms_overlap(&fluid_boundary, b, tolerance)
+            || placed_forms_penetrate(&fluid_boundary, b, tolerance)
+        {
+            return true;
+        }
+    }
+    if let Some(fluid_boundary) = fluid_boundary_part(b) {
+        if placed_forms_overlap(a, &fluid_boundary, tolerance)
+            || placed_forms_penetrate(a, &fluid_boundary, tolerance)
+        {
+            return true;
+        }
+    }
+    false
+}
+
 pub fn placed_forms_penetrate(
     a: &PlacedMaterialPart,
     b: &PlacedMaterialPart,
