@@ -137,28 +137,39 @@ pub(crate) fn confirmed_seed_baseline(
             _ => None,
         })
         .ok_or_else(|| "catalog Hydrogen must retain its line geometry".to_string())?;
-    if chamber_gap <= 0.0 || chamber_gap > 2.0 * hydrogen_length {
-        return Err("initial shell spacing cannot be bridged by Hydrogen".into());
+    if chamber_gap <= 0.0 || chamber_gap > 3.0 * hydrogen_length {
+        return Err("initial shell spacing cannot be bridged by three Hydrogen links".into());
     }
 
+    // Three ordinary Hydrogen links connect the shells. Their directions are
+    // chosen as +theta, 0, -theta so the chain spans the required gap while
+    // remaining an ordinary physical bonded chain.
     let bridge_start = elements.len();
-    let half_distance = chamber_gap / 2.0;
-    let lateral_offset = (hydrogen_length.powi(2) - half_distance.powi(2)).sqrt();
-    let midpoint_y = (inner_boundary + outer_inner_boundary) / 2.0;
-    let bridge_midpoint = (lateral_offset, midpoint_y);
-    let line_placement = |a: (f64, f64), b: (f64, f64)| BlueprintPlacement {
-        x: (a.0 + b.0) / 2.0,
-        y: (a.1 + b.1) / 2.0,
-        rotation_radians: (b.1 - a.1).atan2(b.0 - a.0),
+    let theta = if chamber_gap <= hydrogen_length {
+        0.0
+    } else {
+        ((chamber_gap - hydrogen_length) / (2.0 * hydrogen_length)).acos()
     };
-    for (a, b) in [
-        ((0.0, inner_boundary), bridge_midpoint),
-        (bridge_midpoint, (0.0, outer_inner_boundary)),
-    ] {
+    let midpoint_y = (inner_boundary + outer_inner_boundary) / 2.0;
+    let bridge_origin = (0.0, inner_boundary);
+    let directions = [theta, 0.0, -theta];
+    let mut cursor = bridge_origin;
+    for direction in directions {
+        let next = (
+            cursor.0 + hydrogen_length * direction.cos(),
+            cursor.1 + hydrogen_length * direction.sin(),
+        );
         elements.push(BlueprintElement {
             material: Material::free_base("Hydrogen", 1.0),
-            placement: line_placement(a, b),
+            placement: line_placement(cursor, next),
         });
+        cursor = next;
+    }
+
+    // Translate the symmetric three-link chain onto the chamber centerline.
+    let y_offset = midpoint_y - (bridge_origin.1 + cursor.1) / 2.0;
+    for element in &mut elements[bridge_start..bridge_start + 3] {
+        element.placement.y += y_offset;
     }
 
     connections.extend([
@@ -172,6 +183,10 @@ pub(crate) fn confirmed_seed_baseline(
         },
         BlueprintConnection {
             element_a: bridge_start + 1,
+            element_b: bridge_start + 2,
+        },
+        BlueprintConnection {
+            element_a: bridge_start + 2,
             element_b: outer_start,
         },
     ]);
