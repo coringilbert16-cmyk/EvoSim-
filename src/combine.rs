@@ -199,19 +199,20 @@ pub fn eligible_candidates(
     let Some(b) = structure.units.get(unit_b) else {
         return Vec::new();
     };
-    let both_fluid = a
-        .material
-        .parts
-        .first()
-        .and_then(|(name, _)| catalog.iter().find(|resource| resource.name == *name))
-        .is_some_and(|resource| resource.physical_state == crate::resources::PhysicalState::Fluid)
-        && b.material
-            .parts
-            .first()
-            .and_then(|(name, _)| catalog.iter().find(|resource| resource.name == *name))
-            .is_some_and(|resource| {
-                resource.physical_state == crate::resources::PhysicalState::Fluid
-            });
+    let is_water_only = |material: &Material| {
+        !material.parts.is_empty()
+            && material.parts.iter().all(|(name, amount)| {
+                *amount > EPSILON
+                    && catalog
+                        .iter()
+                        .find(|resource| resource.name == *name)
+                        .is_some_and(|resource| {
+                            resource.name == "Water"
+                                && resource.physical_state == crate::resources::PhysicalState::Fluid
+                        })
+            })
+    };
+    let both_fluid = is_water_only(&a.material) && is_water_only(&b.material);
     if both_fluid {
         return Vec::new();
     }
