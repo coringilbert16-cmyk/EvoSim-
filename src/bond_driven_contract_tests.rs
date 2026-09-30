@@ -40,7 +40,7 @@ mod tests {
         let mut ledger = EnergyLedger::default();
         let mut energy = 1.0e12;
 
-        let (structure, _) = blueprint
+        let (structure, _, _) = blueprint
             .realize_with_context(&catalog, &mut ledger, &mut energy)
             .expect("bond-driven constructor should realize a valid two-carbon bond");
 
