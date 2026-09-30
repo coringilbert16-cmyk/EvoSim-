@@ -19,6 +19,8 @@ mod structure_authority;
 mod cavity;
 mod connection_geometry;
 mod construction_runtime;
+#[cfg(test)]
+mod bond_driven_contract_tests;
 mod contact;
 mod interior_geometry;
 mod juvenile;
