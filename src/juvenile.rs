@@ -201,85 +201,6 @@ fn form_declared_bonds(
     Ok((structure, ledger, energy))
 }
 
-/// Make the confirmed initial organism's outer interface permeable by replacing
-/// alternating outer-shell constituents with fitted Water while preserving their
-/// existing constituent IDs and bonds. The same realized seed persists through
-/// development, so this boundary treatment is present in both juvenile and adult
-/// states of the initial organism.
-fn realize_initial_boundary_water(
-    structure: &mut OrganismStructure,
-    catalog: &[BaseResource],
-) -> Result<usize, String> {
-    use crate::resources::{Form, Material};
-    let water = catalog
-        .iter()
-        .find(|resource| resource.name == "Water")
-        .ok_or_else(|| "catalog is missing Water".to_string())?;
-
-    let Form::Circle { radius } = &water.shape.form else {
-        return Err("Water catalog realization must retain its default circle".into());
-    };
-    let nominal_area = std::f64::consts::PI * *radius * *radius;
-    if !nominal_area.is_finite() || nominal_area <= 0.0 {
-        return Err("Water nominal area is invalid".into());
-    }
-
-    // The confirmed seed baseline's outer shell is the ten units after
-    // the four-unit inner shell. Two Water constituents are followed by two
-    // rigid constituents around the membrane, producing an ordinary
-    // R-R-W-W-R-R-W-W pattern rather than a special intake port.
-    let water_sections = [2usize, 3, 6, 7];
-    let mut changed = 0usize;
-    for index in water_sections.into_iter().map(|offset| 4 + offset) {
-        let Some(unit) = structure.units.get_mut(index) else {
-            return Err("confirmed seed outer shell is incomplete".into());
-        };
-        let Some(old_shape) = unit.shape(catalog).cloned() else {
-            return Err("confirmed seed outer boundary has unrealizable geometry".into());
-        };
-        let Some(vertices) = old_shape.form.polygon_vertices() else {
-            return Err("confirmed seed outer boundary must be polygonal".into());
-        };
-        if vertices.len() < 3 {
-            return Err("confirmed seed outer boundary polygon is degenerate".into());
-        }
-
-        let area = polygon_area(&vertices).abs();
-        let amount = area / nominal_area;
-        if !amount.is_finite() || amount <= 0.0 {
-            return Err("confirmed seed Water boundary amount is invalid".into());
-        }
-
-        unit.material = Material::free_base("Water", amount);
-        if !unit.realize_fluid_geometry(
-            crate::resources::Shape {
-                form: Form::Fluid {
-                    nominal_area,
-                    boundary: Some(vertices),
-                },
-            },
-            catalog,
-        ) {
-            return Err("failed to realize fitted Water on the initial outer boundary".into());
-        }
-        changed += 1;
-    }
-
-    Ok(changed)
-}
-
-fn polygon_area(vertices: &[(f64, f64)]) -> f64 {
-    vertices
-        .iter()
-        .enumerate()
-        .map(|(i, &(x1, y1))| {
-            let (x2, y2) = vertices[(i + 1) % vertices.len()];
-            x1 * y2 - y1 * x2
-        })
-        .sum::<f64>()
-        * 0.5
-}
-
 pub(crate) const JUVENILE_INITIAL_ENERGY_RESERVE: f64 = 16.0;
 const TRIAL_ENERGY: f64 = 1.0e12;
 const EPS: f64 = 1e-8;
@@ -338,11 +259,9 @@ pub(crate) fn realize_initial_with_reserve(
         .collect::<Vec<_>>();
     let mut structure = structure;
     structure.set_genome_constituent_ids(genome_ids);
-    realize_initial_boundary_water(&mut structure, catalog)?;
-
-    // The initial boundary water is ordinary realized structure. Interior Water is
-    // no longer synthesized into enclosed regions; environmental physical material
-    // enters through the realized boundary and is acquired only after containment.
+    // Environmental material enters through the realized mesh according to its
+    // physical geometry and cohesion-derived permeability. Nothing is synthesized
+    // inside the organism during initialization.
     if !energy.is_finite() || energy + EPS < reserve_energy {
         return Err(format!(
             "juvenile initialization could not preserve its reserve after Water construction: remaining={energy}"
