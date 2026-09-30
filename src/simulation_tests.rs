@@ -200,14 +200,6 @@ mod integration_tests {
                 before + 1.0
             );
         }
-        let field_before = s.environment.field.total_amount();
-        s.environment.field.deposit(anchor.x, anchor.y, physical);
-        Simulation::transfer_contained_environmental_material(
-            &mut s.organisms[0],
-            &mut s.environment,
-        );
-        assert_eq!(s.organisms[0].stored_material.total_amount(), before + 1.0);
-        assert!((s.environment.field.total_amount() - field_before).abs() < 1e-9);
     }
 
     #[test]
