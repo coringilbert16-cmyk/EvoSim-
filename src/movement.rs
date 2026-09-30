@@ -978,10 +978,11 @@ mod tests {
         let simulation = Simulation::default();
         let environment = simulation.environment.clone();
         let moving = simulation.organisms.first().expect("default seed organism");
-        let carbon = crate::physical_material::PhysicalMaterial::from_material(
-            Material::free_base("Carbon", 1.0),
+        let carbon = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
             vec![Placement { x: moving.occupied_cells[0].x + 1.0, y: moving.occupied_cells[0].y, rotation_radians: 0.0 }],
-        );
+            &environment.catalog,
+        ).expect("valid carbon realization");
         let destination = organism_parts_at(moving, &environment, 1.0, 0.0);
         assert!(parts_penetrate(
             &destination,
@@ -998,10 +999,11 @@ mod tests {
         let simulation = Simulation::default();
         let environment = simulation.environment.clone();
         let moving = simulation.organisms.first().expect("default seed organism");
-        let water = crate::physical_material::PhysicalMaterial::from_material(
-            Material::free_base("Water", 1.0),
+        let water = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Water", 1.0),
             vec![Placement { x: moving.occupied_cells[0].x + 1.0, y: moving.occupied_cells[0].y, rotation_radians: 0.0 }],
-        );
+            &environment.catalog,
+        ).expect("valid water realization");
         let destination = organism_parts_at(moving, &environment, 1.0, 0.0);
         assert!(environmental_penetration_allowed(
             moving, &environment, &water, &destination, 1.0, 0.0
