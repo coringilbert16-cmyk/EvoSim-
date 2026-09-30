@@ -1024,9 +1024,14 @@ fn construct_blueprint_bond_driven_internal(
             if neighbors.is_empty() {
                 continue;
             }
-            let score = (neighbors.len(), blueprint.connections.iter().filter(|c| {
-                c.element_a == index || c.element_b == index
-            }).count());
+            let score = (
+                neighbors.len(),
+                blueprint
+                    .connections
+                    .iter()
+                    .filter(|c| c.element_a == index || c.element_b == index)
+                    .count(),
+            );
             if next.as_ref().is_none_or(|(_, current, current_degree)| {
                 score > (*current, *current_degree)
             }) {
@@ -1035,7 +1040,9 @@ fn construct_blueprint_bond_driven_internal(
         }
 
         let Some((index, neighbors, _)) = next else {
-            return Err("bond-driven constructor reached an unrealized disconnected element".into());
+            return Err(
+                "bond-driven constructor reached an unrealized disconnected element".into(),
+            );
         };
 
         // One bond, one committed construction step. The constructor does
@@ -1089,50 +1096,54 @@ fn construct_blueprint_bond_driven_internal(
                     remaining_energy,
                 )
             {
-            let new_index = structure.units.len();
-            structure.units.push(unit);
+                let new_index = structure.units.len();
+                structure.units.push(unit);
 
-            let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-            let mut commit_energy = remaining_energy;
-            let mut commit_ledger = *ledger;
-            let Some(commit_attempt) = crate::combine_runtime::form_specific_bond(
-                &mut structure,
-                realized_units[neighbor].ok_or_else(|| format!("realized neighbor {neighbor} has no structure unit"))?,
-                new_index,
-                endpoint_a,
-                endpoint_b,
-                catalog,
-                &mut cache,
-                &mut commit_ledger,
-                &mut commit_energy,
-            ) else {
-                structure.units.pop();
-                return Err(format!(
-                    "validated bond could not be committed for blueprint element {index}"
-                ));
-            };
-
-            debug_assert_eq!(commit_attempt.endpoint_a, trial_attempt.endpoint_a);
-            debug_assert_eq!(commit_attempt.endpoint_b, trial_attempt.endpoint_b);
-            debug_assert!(
-                (commit_attempt.work_cost - trial_attempt.work_cost).abs() <= 1e-10
-            );
-
-            *ledger = commit_ledger;
-            remaining_energy = commit_energy;
-            total_heat += commit_attempt.work_cost;
-            realized[index] = true;
-            realized_units[index] = Some(new_index);
-            if let Some(storage) = available_materials.as_deref_mut() {
-                if storage_index != usize::MAX && storage.take_physical_at(storage_index).is_none() {
+                let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+                let mut commit_energy = remaining_energy;
+                let mut commit_ledger = *ledger;
+                let Some(commit_attempt) = crate::combine_runtime::form_specific_bond(
+                    &mut structure,
+                    realized_units[neighbor].ok_or_else(|| {
+                        format!("realized neighbor {neighbor} has no structure unit")
+                    })?,
+                    new_index,
+                    endpoint_a,
+                    endpoint_b,
+                    catalog,
+                    &mut cache,
+                    &mut commit_ledger,
+                    &mut commit_energy,
+                ) else {
+                    structure.units.pop();
                     return Err(format!(
-                        "construction consumed candidate material index {storage_index} after bond commit"
+                        "validated bond could not be committed for blueprint element {index}"
                     ));
+                };
+
+                debug_assert_eq!(commit_attempt.endpoint_a, trial_attempt.endpoint_a);
+                debug_assert_eq!(commit_attempt.endpoint_b, trial_attempt.endpoint_b);
+                debug_assert!(
+                    (commit_attempt.work_cost - trial_attempt.work_cost).abs() <= 1e-10
+                );
+
+                *ledger = commit_ledger;
+                remaining_energy = commit_energy;
+                total_heat += commit_attempt.work_cost;
+                realized[index] = true;
+                realized_units[index] = Some(new_index);
+                if let Some(storage) = available_materials.as_deref_mut() {
+                    if storage_index != usize::MAX
+                        && storage.take_physical_at(storage_index).is_none()
+                    {
+                        return Err(format!(
+                            "construction consumed candidate material index {storage_index} after bond commit"
+                        ));
+                    }
                 }
+                attached = true;
+                break;
             }
-            attached = true;
-            break;
-        }
         }
 
         if !attached {
@@ -1145,7 +1156,9 @@ fn construct_blueprint_bond_driven_internal(
     if blueprint.genome_measurement.is_some() {
         let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)
             .map_err(|e| e.to_string())?
-            .ok_or_else(|| "bond-driven construction did not form a qualifying genome cavity".to_string())?;
+            .ok_or_else(|| {
+                "bond-driven construction did not form a qualifying genome cavity".to_string()
+            })?;
         if !cavity.qualifies() {
             return Err("bond-driven construction did not form a qualifying genome cavity".into());
         }
