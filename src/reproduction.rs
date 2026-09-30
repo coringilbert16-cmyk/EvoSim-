@@ -251,7 +251,10 @@ fn try_child_construction(
             &environment.catalog,
         )
         .ok()?
-        .into_iter();
+        .into_iter()
+        .filter(|(_, _, score)| {
+            *score >= crate::construction_material_selection::MIN_CONSTRUCTION_MATERIAL_MATCH
+        });
 
     for (storage_index, _, _) in child_candidates {
         let crate::material_storage::StoredMaterial::Physical(instance) =
@@ -297,7 +300,10 @@ fn try_child_construction(
             &environment.catalog,
         )
         .ok()?
-        .into_iter();
+        .into_iter()
+        .filter(|(_, _, score)| {
+            *score >= crate::construction_material_selection::MIN_CONSTRUCTION_MATERIAL_MATCH
+        });
 
     for (parent_index, _, _) in parent_candidates {
         let crate::material_storage::StoredMaterial::Physical(instance) =
@@ -348,13 +354,16 @@ fn next_construction_resource_status(
     let preferred = construction_preferred_resource(child);
     let has_acceptable_physical_material = preferred.is_some_and(|preferred| {
         let acceptable = |storage: &MaterialStorage| {
-            crate::construction_material_selection::rank_available_construction_materials(
+            crate::construction_material_selection::select_construction_material(
                 storage,
                 preferred,
                 &environment.catalog,
             )
-            .map(|candidates| {
-                !candidates.is_empty()
+            .map(|decision| {
+                matches!(
+                    decision,
+                    crate::construction_material_selection::ConstructionMaterialDecision::Selected { .. }
+                )
             })
             .unwrap_or(false)
         };
