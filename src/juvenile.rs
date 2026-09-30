@@ -193,7 +193,7 @@ pub(crate) fn realize_initial_with_reserve(
 
     Ok((structure, ledger, remaining_energy))
 }
-\nfn largest_rigid_connection_span(catalog: &[BaseResource]) -> f64 {
+fn largest_rigid_connection_span(catalog: &[BaseResource]) -> f64 {
     let mut points = Vec::<(f64, f64)>::new();
 
     for resource in catalog {
