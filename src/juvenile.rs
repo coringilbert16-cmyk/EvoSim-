@@ -88,6 +88,7 @@ pub(crate) fn confirmed_seed_baseline(
                     catalog,
                 )?,
             );
+    baseline.authoritative_placements = true;
     baseline.validate()?;
     let _ = nitrogen;
     Ok(baseline)
