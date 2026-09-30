@@ -44,13 +44,11 @@ pub(crate) fn confirmed_seed_baseline(
     let radius = 1.25;
     let positions = [
         (0.0, radius),
-        (-radius * 0.866_025_403_8, radius * 0.5),
-        (-radius * 0.866_025_403_8, -radius * 0.5),
+        (-radius, 0.0),
         (0.0, -radius),
-        (radius * 0.866_025_403_8, -radius * 0.5),
-        (radius * 0.866_025_403_8, radius * 0.5),
+        (radius, 0.0),
     ];
-    let materials = ["Carbon", "Sulfur", "Carbon", "Sulfur", "Carbon", "Sulfur"];
+    let materials = ["Carbon", "Sulfur", "Carbon", "Sulfur"];
     let mut elements = Vec::with_capacity(positions.len());
     for ((x, y), material) in positions.into_iter().zip(materials) {
         if !catalog.iter().any(|resource| resource.name == material) {
@@ -77,7 +75,7 @@ pub(crate) fn confirmed_seed_baseline(
         .collect::<Vec<_>>();
 
     let baseline =
-        StructuralBlueprint::with_anchor_elements(elements, connections, (0..6).collect());
+        StructuralBlueprint::with_anchor_elements(elements, connections, (0..4).collect());
     baseline.validate()?;
     let _ = nitrogen;
     Ok(baseline)
