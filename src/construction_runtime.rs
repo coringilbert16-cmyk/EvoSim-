@@ -782,8 +782,20 @@ fn realize_next_bond_driven(
             );
             let ideal_angle = (joint.y - target_world.1).atan2(joint.x - target_world.0)
                 - local_b.y.atan2(local_b.x);
+            // Search outward from the blueprint-preferred orientation rather than
+            // accepting an arbitrary first contact. This remains forward-only:
+            // only the winning candidate is committed, and no committed bond is
+            // ever moved or undone.
             for step in 0..360 {
-                let offset = std::f64::consts::TAU * step as f64 / 360.0;
+                let signed_step = if step == 0 {
+                    0
+                } else if step % 2 == 1 {
+                    (step + 1) / 2
+                } else {
+                    -(step / 2)
+                };
+                let offset =
+                    std::f64::consts::TAU * signed_step as f64 / 360.0;
                 let angle = ideal_angle + offset;
                 let candidate_origin =
                     placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
