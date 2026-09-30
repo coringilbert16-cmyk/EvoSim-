@@ -594,8 +594,9 @@ pub(crate) fn begin_reproduction(
             continue;
         };
 
-        let mut trial_storage = MaterialStorage::default();
-        trial_storage.entries.push(entry.clone());
+        // The anchor becomes part of the developing physical graph immediately.
+        // It must not remain duplicated in the child's inventory.
+        let trial_storage = MaterialStorage::default();
         let Some((structure, child_storage, anchor_unit_index)) =
             anchor_structure(&child_genome, trial_storage, placement, catalog)
         else {
