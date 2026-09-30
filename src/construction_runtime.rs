@@ -873,24 +873,20 @@ fn realize_next_bond_driven(
 
                 let mut additional_bond_succeeded = true;
                 for other_index in additional_neighbors {
-                    let mut extra_cache =
-                        crate::contact::ConnectionCompatibilityCache::new();
-                    let Some(extra_candidate) =
-                        crate::contact::connection_pair_candidates_cached(
-                            &trial,
-                            new_unit_index,
-                            other_index,
-                            catalog,
-                            &mut extra_cache,
-                        )
-                        .into_iter()
-                        .find(|candidate| {
-                            candidate.distance
-                                <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                                && candidate.available_a
-                                && candidate.available_b
-                        })
-                    else {
+                    let mut extra_cache = crate::contact::ConnectionCompatibilityCache::new();
+                    let Some(extra_candidate) = crate::contact::connection_pair_candidates_cached(
+                        &trial,
+                        new_unit_index,
+                        other_index,
+                        catalog,
+                        &mut extra_cache,
+                    )
+                    .into_iter()
+                    .find(|candidate| {
+                        candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                            && candidate.available_a
+                            && candidate.available_b
+                    }) else {
                         additional_bond_succeeded = false;
                         break;
                     };
