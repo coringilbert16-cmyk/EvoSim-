@@ -31,6 +31,10 @@ pub struct BlueprintPlacement {
 pub struct StructuralBlueprint {
     pub elements: Vec<BlueprintElement>,
     pub connections: Vec<BlueprintConnection>,
+    /// Transient construction-only genome measurement piece. It is never
+    /// serialized, bonded, acquired, or retained in the organism structure.
+    #[serde(skip)]
+    pub(crate) genome_measurement: Option<GenomeMeasurementScaffold>,
     /// Construction anchors identify where realization may begin. They are
     /// not a biological genome definition and do not identify the genome.
     #[serde(default = "default_anchor_elements")]
@@ -93,6 +97,34 @@ pub struct BlueprintConnection {
     pub element_b: usize,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct GenomeMeasurementScaffold {
+    /// Three bonded Carbon guide pieces. The guide occupies real construction
+    /// volume but has no organism units or bonds of its own.
+    pub(crate) placements: [BlueprintPlacement; 3],
+}
+
+impl GenomeMeasurementScaffold {
+    pub(crate) fn three_carbon_reference(catalog: &[BaseResource]) -> Result<Self, String> {
+        let carbon = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .ok_or_else(|| "catalog has no Carbon resource".to_string())?;
+        let radius = match carbon.shape.form {
+            crate::resources::Form::RegularPolygon { radius, .. } => radius,
+            _ => return Err("Carbon genome measurement requires a polygonal Carbon shape".into()),
+        };
+        let spacing = radius * 3.0_f64.sqrt();
+        Ok(Self {
+            placements: [
+                BlueprintPlacement { x: -spacing, y: 0.0, rotation_radians: 0.0 },
+                BlueprintPlacement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                BlueprintPlacement { x: spacing, y: 0.0, rotation_radians: 0.0 },
+            ],
+        })
+    }
+}
+
 impl BlueprintConnection {
     pub fn canonical(self) -> Self {
         if self.element_a <= self.element_b {
@@ -125,6 +157,7 @@ impl StructuralBlueprint {
             elements,
             connections: Self::canonical_connections(connections),
             anchor_elements: default_anchor_elements(),
+            genome_measurement: None,
         }
     }
 
@@ -137,6 +170,7 @@ impl StructuralBlueprint {
             elements,
             connections: Self::canonical_connections(connections),
             anchor_elements,
+            genome_measurement: None,
         }
     }
 
@@ -147,6 +181,11 @@ impl StructuralBlueprint {
             .map(BlueprintConnection::canonical)
             .filter(|c| seen.insert((c.element_a, c.element_b)))
             .collect()
+    }
+
+    pub(crate) fn with_genome_measurement(mut self, scaffold: GenomeMeasurementScaffold) -> Self {
+        self.genome_measurement = Some(scaffold);
+        self
     }
 
     pub fn is_valid(&self) -> bool {
@@ -259,6 +298,7 @@ impl StructuralBlueprint {
                 ledger,
                 energy,
                 &external,
+                self.genome_measurement.as_ref(),
             )
             .map_err(|error| format!("element {index} construction failed: {error}"))?;
             validate_element_contact(&structure, &ids, &external, catalog)
@@ -268,6 +308,11 @@ impl StructuralBlueprint {
         }
 
         let structure = structure;
+        if self.genome_measurement.is_some()
+            && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_none()
+        {
+            return Err("genome measurement scaffold did not produce a qualifying final cavity".into());
+        }
 
         Ok((structure, total_heat))
     }
