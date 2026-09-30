@@ -495,3 +495,38 @@ fn validate_element_contact(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod developmental_geometry_authority_tests {
+    use super::*;
+    use crate::resources::default_catalog;
+
+    #[test]
+    fn scaffolded_seed_realizes_declared_geometry_without_solver_reinterpretation() {
+        let catalog = default_catalog();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
+        assert!(blueprint.authoritative_placements);
+        assert!(blueprint.genome_measurement.is_some());
+
+        let mut ledger = EnergyLedger::default();
+        let mut energy = 1.0e12;
+        let (structure, _) = blueprint
+            .realize_with_context(&catalog, &mut ledger, &mut energy)
+            .unwrap();
+
+        assert_eq!(structure.units.len(), blueprint.elements.len());
+        for (unit, element) in structure.units.iter().zip(&blueprint.elements) {
+            assert!((unit.placement.x - element.placement.x).abs() < 1e-10);
+            assert!((unit.placement.y - element.placement.y).abs() < 1e-10);
+            assert!(
+                (unit.placement.rotation_radians - element.placement.rotation_radians).abs()
+                    < 1e-10
+            );
+        }
+
+        let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
+            .unwrap()
+            .expect("declared scaffolded geometry must produce a qualifying cavity");
+        assert!(cavity.qualifies());
+    }
+}
