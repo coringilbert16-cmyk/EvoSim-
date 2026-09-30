@@ -129,20 +129,27 @@ pub(crate) fn rank_available_construction_materials(
             if !instance.is_realized() || instance.material.parts.is_empty() {
                 return None;
             }
-            if instance
+            let (resource_name, score) = instance
                 .material
                 .parts
                 .iter()
-                .any(|(_, amount)| (amount - 1.0).abs() > 1e-12)
-            {
-                return None;
-            }
-            let (resource_name, _) = instance.material.parts.first()?;
-            let candidate = catalog
-                .iter()
-                .find(|resource| resource.name == *resource_name)?;
-            let score = structural_similarity(preferred, candidate, catalog);
-            Some((index, resource_name.clone(), score))
+                .filter_map(|(resource_name, amount)| {
+                    if (*amount - 1.0).abs() > 1e-12 {
+                        return None;
+                    }
+                    let candidate = catalog
+                        .iter()
+                        .find(|resource| resource.name == *resource_name)?;
+                    Some((
+                        resource_name.clone(),
+                        structural_similarity(preferred, candidate, catalog),
+                    ))
+                })
+                .max_by(|a, b| {
+                    a.1.partial_cmp(&b.1)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })?;
+            Some((index, resource_name, score))
         })
         .collect::<Vec<_>>();
 
