@@ -125,15 +125,21 @@ mod integration_tests {
         let mut ledger = s.energy_ledger;
         let mut energy = s.organisms[0].usable_energy;
         let regions = crate::interior_geometry::find_enclosed_regions(&structure, &catalog);
+        let line_units: Vec<_> = structure
+            .units
+            .iter()
+            .enumerate()
+            .filter(|(_, unit)| {
+                matches!(
+                    unit.shape(&catalog).map(|shape| &shape.form),
+                    Some(crate::resources::Form::Line { .. })
+                )
+            })
+            .map(|(index, unit)| (index, unit.placement))
+            .collect();
         assert!(
             !regions.is_empty(),
-            "seed topology produced no enclosed region; units={:?}",
-            structure
-                .units
-                .iter()
-                .enumerate()
-                .map(|(i, u)| (i, u.material.parts.first().map(|(n, _)| n.clone()), u.placement))
-                .collect::<Vec<_>>()
+            "seed topology produced no enclosed region; lines={line_units:?}"
         );
 
         let first = crate::interior_geometry::fill_enclosed_regions_with_water(
