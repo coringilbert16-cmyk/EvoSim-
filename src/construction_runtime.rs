@@ -279,7 +279,7 @@ fn placement_for_joint(
     }
 }
 
-fn placed_unit_overlaps(
+pub(crate) fn placed_unit_overlaps(
     structure: &OrganismStructure,
     candidate: &StructuralUnit,
     ignored_units: &[usize],
