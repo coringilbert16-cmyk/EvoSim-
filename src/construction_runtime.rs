@@ -467,7 +467,7 @@ fn install_genome_measurement_scaffold(
     let carbon = resource(catalog, "Carbon")
         .ok_or_else(|| "genome measurement scaffold requires Carbon".to_string())?;
     let transform = |p: BlueprintPlacement| {
-        let (s, c) = anchor.rotation_radians.sin_cos();
+        let (s, c) = anchor_world.rotation_radians.sin_cos();
         Placement {
             x: anchor_world.x + (p.x - anchor_declared.x) * c - (p.y - anchor_declared.y) * s,
             y: anchor_world.y + (p.x - anchor_declared.x) * s + (p.y - anchor_declared.y) * c,
