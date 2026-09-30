@@ -135,7 +135,7 @@ pub fn fill_enclosed_regions_with_water(
             continue;
         }
         if region_already_has_fitted_water(structure, &region, catalog)
-            || region_boundary_contains_water(structure, &region, catalog)
+            || region_boundary_contains_water(structure, &region)
         {
             continue;
         }
