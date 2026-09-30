@@ -1231,11 +1231,7 @@ fn construct_blueprint_bond_driven_internal(
             }) {
                 let Some((_, _, _, investment, _)) =
                     crate::combine_runtime::construction_candidate_evaluation(
-                        &structure,
-                        unit_a,
-                        unit_b,
-                        candidate,
-                        catalog,
+                        &structure, unit_a, unit_b, candidate, catalog,
                     )
                 else {
                     continue;
