@@ -129,7 +129,7 @@ mod tests {
             let Some(candidate) = candidate else {
                 continue;
             };
-            let Some((_, _, _, _, investment)) =
+            let Some((_, _, _, investment, _required_energy)) =
                 crate::combine_runtime::construction_candidate_evaluation(
                     &trial, 0, 1, candidate, &catalog,
                 )
