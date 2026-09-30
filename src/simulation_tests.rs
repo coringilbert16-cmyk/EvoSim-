@@ -122,11 +122,9 @@ mod integration_tests {
         let structure = blueprint
             .realize(&catalog)
             .expect("baseline should realize without initial Water");
-        let regions = crate::interior_geometry::find_accessible_interior_regions(
-            &structure,
-            &catalog,
-        )
-        .expect("baseline should expose accessible topology");
+        let regions =
+            crate::interior_geometry::find_accessible_interior_regions(&structure, &catalog)
+                .expect("baseline should expose accessible topology");
         assert!(!regions.is_empty());
         assert!(structure.units.iter().all(|unit| {
             unit.material
