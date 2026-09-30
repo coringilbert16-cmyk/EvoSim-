@@ -721,6 +721,7 @@ fn realize_next_bond_driven(
     ledger: &EnergyLedger,
     available_energy: f64,
 ) -> Option<(
+    OrganismStructure,
     crate::physical_material::PhysicalMaterial,
     Vec<usize>,
     usize,
@@ -728,6 +729,8 @@ fn realize_next_bond_driven(
     ConnectionEndpoint,
     crate::combine_runtime::CombineAttempt,
     Placement,
+    EnergyLedger,
+    f64,
 )> {
     let existing_index = realized_units[neighbor]?;
     let existing_unit = structure.units.get(existing_index)?;
@@ -840,6 +843,7 @@ fn realize_next_bond_driven(
                 };
 
                 return Some((
+                    trial,
                     new_material.clone(),
                     indices,
                     part_index,
@@ -847,6 +851,8 @@ fn realize_next_bond_driven(
                     endpoint_b,
                     attempt,
                     candidate_origin,
+                    trial_ledger,
+                    trial_energy,
                 ));
             }
         }
@@ -1091,13 +1097,16 @@ fn construct_blueprint_bond_driven_internal(
             };
 
             if let Some((
+                trial_structure,
                 material,
-                _indices,
+                new_indices,
                 part_index,
                 endpoint_a,
                 endpoint_b,
                 trial_attempt,
                 candidate_origin,
+                trial_ledger,
+                trial_energy,
             )) = realize_next_bond_driven(
                 blueprint,
                 catalog,
@@ -1111,72 +1120,16 @@ fn construct_blueprint_bond_driven_internal(
                 ledger,
                 remaining_energy,
             ) {
-                let existing_index = realized_units[neighbor]
-                    .ok_or_else(|| format!("realized neighbor {neighbor} has no structure unit"))?;
-                let origin = candidate_origin;
-
-                let mut commit_structure = structure.clone();
-                let new_indices = crate::material_restoration::restore_material(
-                    &mut commit_structure, &material, origin, catalog,
-                ).ok_or_else(|| {
-                    format!("validated physical material could not be restored for blueprint element {index}")
-                })?;
                 let new_unit_index = *new_indices
                     .get(part_index)
                     .ok_or_else(|| "successful material endpoint index disappeared".to_string())?;
 
-                let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-                let candidate = crate::contact::connection_pair_candidates_cached(
-                    &commit_structure,
-                    existing_index,
-                    new_unit_index,
-                    catalog,
-                    &mut cache,
-                )
-                .into_iter()
-                .find(|candidate| {
-                    candidate.endpoint_a == endpoint_a
-                        && candidate.endpoint_b == endpoint_b
-                        && candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                        && candidate.available_a
-                        && candidate.available_b
-                });
-                let Some(candidate) = candidate else {
-                    continue;
-                };
-                let Some((_, _, _, _, investment)) =
-                    crate::combine_runtime::construction_candidate_evaluation(
-                        &commit_structure,
-                        existing_index,
-                        new_unit_index,
-                        candidate,
-                        catalog,
-                    )
-                else {
-                    continue;
-                };
-                let mut commit_energy = remaining_energy;
-                let mut commit_ledger = *ledger;
-                let Some(commit_attempt) = crate::combine_runtime::form_construction_bond(
-                    &mut commit_structure,
-                    existing_index,
-                    new_unit_index,
-                    candidate,
-                    investment,
-                    catalog,
-                    &mut cache,
-                    &mut commit_ledger,
-                    &mut commit_energy,
-                ) else {
-                    continue;
-                };
-
-                debug_assert_eq!(commit_attempt.endpoint_a, trial_attempt.endpoint_a);
-                debug_assert_eq!(commit_attempt.endpoint_b, trial_attempt.endpoint_b);
-                *ledger = commit_ledger;
-                remaining_energy = commit_energy;
-                total_heat += commit_attempt.work_cost;
-                structure = commit_structure;
+                debug_assert_eq!(trial_attempt.endpoint_a, endpoint_a);
+                debug_assert_eq!(trial_attempt.endpoint_b, endpoint_b);
+                *ledger = trial_ledger;
+                remaining_energy = trial_energy;
+                total_heat += trial_attempt.work_cost;
+                structure = trial_structure;
                 realized[index] = true;
                 realized_units[index] = Some(new_unit_index);
                 if storage_index != usize::MAX {
