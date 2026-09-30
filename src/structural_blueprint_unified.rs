@@ -343,7 +343,6 @@ impl StructuralBlueprint {
         Ok((structure, total_heat))
     }
 
-
     fn realize_authoritative_with_context(
         &self,
         catalog: &[BaseResource],
