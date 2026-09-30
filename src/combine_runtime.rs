@@ -120,7 +120,7 @@ fn form_bond(
         return None;
     }
     let (interaction, work, threshold) = required_investment(a, b, evaluation).ok()?;
-    if (threshold - investment).abs() > EPSILON || interaction.signed_value < 0.0 {
+    if (threshold - investment).abs() > EPSILON {
         return None;
     }
     let strength = bond_strength(a, b);
