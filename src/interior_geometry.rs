@@ -213,10 +213,7 @@ pub fn fill_enclosed_regions_with_water(
     Ok(filled)
 }
 
-fn region_boundary_contains_water(
-    structure: &OrganismStructure,
-    region: &EnclosedRegion,
-) -> bool {
+fn region_boundary_contains_water(structure: &OrganismStructure, region: &EnclosedRegion) -> bool {
     region.boundary_units.iter().any(|&index| {
         structure
             .units
