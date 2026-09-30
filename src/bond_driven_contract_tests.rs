@@ -301,4 +301,85 @@ mod tests {
         assert_eq!(structure.bonds.len(), 2);
         assert!(storage.is_empty());
     }
+
+    #[test]
+    fn failed_later_bond_does_not_commit_earlier_ledger_or_energy() {
+        let catalog = default_catalog();
+        let blueprint = StructuralBlueprint::new(
+            vec![
+                BlueprintElement {
+                    material: Material::free_base("Carbon", 1.0),
+                    placement: BlueprintPlacement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                },
+                BlueprintElement {
+                    material: Material::free_base("Carbon", 1.0),
+                    placement: BlueprintPlacement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                },
+                BlueprintElement {
+                    material: Material::free_base("Carbon", 1.0),
+                    placement: BlueprintPlacement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                },
+            ],
+            vec![
+                BlueprintConnection {
+                    element_a: 0,
+                    element_b: 1,
+                },
+                BlueprintConnection {
+                    element_a: 1,
+                    element_b: 2,
+                },
+            ],
+        );
+        let mut storage = crate::material_storage::MaterialStorage::default();
+        for _ in 0..2 {
+            assert!(storage.store_physical(
+                Material::free_base("Carbon", 1.0),
+                vec![crate::structure::Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            ));
+        }
+        assert!(storage.store_physical(
+            Material::free_base("Hydrogen", 1.0),
+            vec![crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        ));
+
+        let before_storage = storage.materials_snapshot();
+        let mut ledger = EnergyLedger::default();
+        let before_ledger = ledger;
+        let mut energy = 1.0e12;
+        let before_energy = energy;
+
+        assert!(blueprint
+            .realize_with_materials(&catalog, &mut storage, &mut ledger, &mut energy)
+            .is_err());
+
+        assert_eq!(storage.materials_snapshot(), before_storage);
+        assert_eq!(ledger.total_potential_energy_released, before_ledger.total_potential_energy_released);
+        assert_eq!(ledger.total_usable_energy_gained, before_ledger.total_usable_energy_gained);
+        assert_eq!(ledger.total_heat_dissipated, before_ledger.total_heat_dissipated);
+        assert_eq!(energy, before_energy);
+    }
+
 }
