@@ -603,8 +603,17 @@ fn push_blockers_for_parts(
                 continue;
             }
             let candidate_parts = physical_parts_at(candidate, environment, 0.0, 0.0);
-            if !parts_penetrate(moving_destination, &candidate_parts, environment.height) {
-                continue;
+            if parts_penetrate(moving_destination, &candidate_parts, environment.height)
+                && !environmental_penetration_allowed(
+                    moving,
+                    environment,
+                    candidate,
+                    moving_destination,
+                    dx,
+                    dy,
+                )
+            {
+                return false;
             }
             if !can_translate_physical(candidate, environment, dx, dy) {
                 return false;
@@ -630,6 +639,97 @@ fn push_blockers_for_parts(
         }
     }
     true
+}
+
+fn environmental_penetration_allowed(
+    moving: &Organism,
+    environment: &Environment,
+    physical: &crate::physical_material::PhysicalMaterial,
+    moving_destination: &[PlacedMaterialPart],
+    dx: f64,
+    dy: f64,
+) -> bool {
+    let candidate_destination = physical_parts_at(physical, environment, dx, dy);
+    if candidate_destination.is_empty() {
+        return false;
+    }
+
+    let mut permeability = 1.0;
+    let mut contacted = false;
+
+    for (unit_index, unit) in moving.structure.units.iter().enumerate() {
+        let Some(shape) = unit.shape(&environment.catalog) else {
+            continue;
+        };
+        let boundary_part = PlacedMaterialPart {
+            part_index: unit_index,
+            form: shape.form.clone(),
+            placement: Placement {
+                x: unit.placement.x + dx,
+                y: unit.placement.y + dy,
+                rotation_radians: unit.placement.rotation_radians,
+            },
+        };
+
+        for candidate_part in &candidate_destination {
+            if !parts_penetrate(
+                std::slice::from_ref(&boundary_part),
+                std::slice::from_ref(candidate_part),
+                environment.height,
+            ) {
+                continue;
+            }
+
+            let Some((name, _)) = unit.material.parts.first() else {
+                continue;
+            };
+            let cohesion = environment
+                .catalog
+                .iter()
+                .find(|resource| resource.name == *name)
+                .map(|resource| resource.properties.cohesion)
+                .unwrap_or(1.0);
+            permeability = permeability.min(
+                crate::resources::permeability_from_cohesion(
+                    cohesion,
+                    &environment.catalog,
+                ),
+            );
+            contacted = true;
+        }
+    }
+
+    if !contacted {
+        return false;
+    }
+
+    // Permeability is the fraction of the requested movement that may occur
+    // after first boundary contact. This makes the response continuous:
+    // Carbon (0) stops at contact, Water (1) permits the full displacement,
+    // and intermediate cohesion permits partial penetration without a
+    // random acquisition roll.
+    if permeability >= 1.0 - 1e-12 {
+        return true;
+    }
+    if permeability <= 1e-12 {
+        return false;
+    }
+
+    let mut low = 0.0;
+    let mut high = 1.0;
+    for _ in 0..24 {
+        let mid = (low + high) * 0.5;
+        let destination = organism_parts_at(moving, environment, dx * mid, dy * mid);
+        if parts_penetrate(&destination, &physical_parts_at(physical, environment, 0.0, 0.0), environment.height) {
+            high = mid;
+        } else {
+            low = mid;
+        }
+    }
+
+    let first_contact = high;
+    let penetration_fraction = 1.0 - first_contact;
+    penetration_fraction <= permeability + 1e-9
 }
 
 fn apply_push_plan(
@@ -871,6 +971,41 @@ mod tests {
             cell.physical_materials.clear();
         }
         environment
+    }
+
+    #[test]
+    fn impermeable_boundary_blocks_environmental_material() {
+        let simulation = Simulation::default();
+        let environment = simulation.environment.clone();
+        let moving = simulation.organisms.first().expect("default seed organism");
+        let carbon = crate::physical_material::PhysicalMaterial::from_material(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement { x: moving.occupied_cells[0].x + 1.0, y: moving.occupied_cells[0].y, rotation_radians: 0.0 }],
+        );
+        let destination = organism_parts_at(moving, &environment, 1.0, 0.0);
+        assert!(parts_penetrate(
+            &destination,
+            &physical_parts_at(&carbon, &environment, 0.0, 0.0),
+            environment.height
+        ));
+        assert!(!environmental_penetration_allowed(
+            moving, &environment, &carbon, &destination, 1.0, 0.0
+        ));
+    }
+
+    #[test]
+    fn water_boundary_permits_full_environmental_penetration() {
+        let simulation = Simulation::default();
+        let environment = simulation.environment.clone();
+        let moving = simulation.organisms.first().expect("default seed organism");
+        let water = crate::physical_material::PhysicalMaterial::from_material(
+            Material::free_base("Water", 1.0),
+            vec![Placement { x: moving.occupied_cells[0].x + 1.0, y: moving.occupied_cells[0].y, rotation_radians: 0.0 }],
+        );
+        let destination = organism_parts_at(moving, &environment, 1.0, 0.0);
+        assert!(environmental_penetration_allowed(
+            moving, &environment, &water, &destination, 1.0, 0.0
+        ));
     }
 
     #[test]
