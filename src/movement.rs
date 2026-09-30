@@ -630,6 +630,7 @@ fn push_blockers_for_parts(
             let destination = physical_parts_at(candidate, environment, dx, dy);
             physical_visited.insert(key);
             if !push_blockers_for_parts(
+                moving,
                 &destination,
                 before,
                 after,
