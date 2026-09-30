@@ -149,9 +149,23 @@ pub(crate) fn form_construction_bond(
     ledger: &mut EnergyLedger,
     energy: &mut f64,
 ) -> Option<CombineAttempt> {
-    if candidate.distance > COMBINE_CONTACT_TOLERANCE
+    if unit_a >= structure.units.len()
+        || unit_b >= structure.units.len()
+        || unit_a == unit_b
+        || candidate.distance > COMBINE_CONTACT_TOLERANCE
         || !candidate.available_a
         || !candidate.available_b
+    {
+        return None;
+    }
+    let point_a = candidate
+        .endpoint_a
+        .world_point(&structure.units[unit_a], catalog)?;
+    let point_b = candidate
+        .endpoint_b
+        .world_point(&structure.units[unit_b], catalog)?;
+    if (point_a.x - point_b.x).hypot(point_a.y - point_b.y)
+        > COMBINE_CONTACT_TOLERANCE
     {
         return None;
     }
