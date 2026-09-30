@@ -656,12 +656,6 @@ pub(crate) fn advance_construction(
         return (ConstructionStatus::Detached, None);
     }
 
-    if child.stored_material.is_empty()
-        && !store_first_available_material(parent_storage, &mut child.stored_material)
-    {
-        return (ConstructionStatus::Waiting, None);
-    }
-
     let genome_qualified = crate::cavity::analyze_genome_cavity(
         &construction.developing_structure,
         &environment.catalog,
@@ -714,15 +708,10 @@ pub(crate) fn advance_construction(
         }
     };
 
-    if let Some(material) = transferred {
-        let mut parent_trial = parent_storage.clone();
-        if parent_trial
-            .take_matching_physical(&material.material)
-            .is_none()
-        {
+    if let Some(parent_index) = transferred {
+        if parent_storage.take_physical_at(parent_index).is_none() {
             return (ConstructionStatus::Waiting, None);
         }
-        *parent_storage = parent_trial;
     }
     *ledger = candidate_ledger;
     construction.committed_material = child.stored_material;
