@@ -316,9 +316,9 @@ impl DevelopmentalFieldBlueprint {
         }
 
         if rng.gen::<f64>() < PROBABILITY {
-            self.structural_density.center_preference =
-                (self.structural_density.center_preference + gaussian_unit(rng) * SIGMA)
-                    .clamp(0.0, 1.0);
+            self.structural_density.center_preference = (self.structural_density.center_preference
+                + gaussian_unit(rng) * SIGMA)
+                .clamp(0.0, 1.0);
         }
         if rng.gen::<f64>() < PROBABILITY {
             self.structural_density.radial_falloff =
