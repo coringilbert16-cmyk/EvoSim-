@@ -553,10 +553,15 @@ pub(crate) fn realize_material(
 
 fn blueprint_endpoint_options(resource: &BaseResource) -> Vec<ConnectionEndpoint> {
     match &resource.shape.form {
-        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
-            resource.shape.form.polygon_vertices().unwrap_or_default().iter()
-                .enumerate().map(|(point_index, _)| ConnectionEndpoint::Corner { point_index }).collect()
-        }
+        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => resource
+            .shape
+            .form
+            .polygon_vertices()
+            .unwrap_or_default()
+            .iter()
+            .enumerate()
+            .map(|(point_index, _)| ConnectionEndpoint::Corner { point_index })
+            .collect(),
         Form::Line { .. } => vec![
             ConnectionEndpoint::LineEndpoint { point_index: 0 },
             ConnectionEndpoint::LineEndpoint { point_index: 1 },
