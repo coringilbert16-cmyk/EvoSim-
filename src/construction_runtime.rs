@@ -818,7 +818,11 @@ fn already_realized_neighbors(
 }
 
 /// Sequential developmental constructor: choose A.x and B.y, rotate B about
-/// that joint, score the locked pose against the blueprint, then commit bonds.
+/// that exact joint, and keep searching all available endpoint pairs and
+/// orientations until a physically valid joint is found. In particular, when
+/// a later connection would overshoot a previously established anchor, the
+/// constructor tries the other connection points on that anchor rather than
+/// abandoning the cavity.
 fn realize_next_bond_driven(
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     catalog: &[BaseResource],
@@ -830,7 +834,7 @@ fn realize_next_bond_driven(
     genome_anchor: Placement,
     preferred_resource_name: &str,
     nodes: &mut usize,
-) -> Option<(StructuralUnit, usize, usize, EnergyLedger, f64)> {
+) -> Option<(StructuralUnit, ConnectionEndpoint, ConnectionEndpoint, EnergyLedger, f64)> {
     let element = &blueprint.elements[index];
     let new_resource = resource(catalog, preferred_resource_name)?;
     let new_endpoints = blueprint_endpoint_options(new_resource);
@@ -912,10 +916,13 @@ fn realize_next_bond_driven(
                 // Once this bond is formed it is permanent. Return the
                 // successfully attached unit; the caller never rewinds it.
                 let heat = trial_ledger.total_heat_dissipated;
+                // Preserve the exact successful endpoint pair. The live
+                // commit must consume these identities rather than rediscovering
+                // a different connection point after the trial succeeds.
                 return Some((
                     candidate_unit,
-                    new_unit_index,
-                    existing_index,
+                    endpoint_a,
+                    endpoint_b,
                     trial_ledger,
                     trial_energy - heat,
                 ));
@@ -1016,7 +1023,7 @@ pub(crate) fn construct_blueprint_bond_driven(
         // Try every already-realized neighbor as the attachment opportunity.
         // Once one succeeds, that bond is permanent and we continue forward.
         for neighbor in neighbors {
-            if let Some((unit, _, _, mut bond_ledger, bond_energy)) =
+            if let Some((unit, endpoint_a, endpoint_b, mut bond_ledger, bond_energy)) =
                 realize_next_bond_driven(
                     blueprint,
                     catalog,
@@ -1038,8 +1045,10 @@ pub(crate) fn construct_blueprint_bond_driven(
                 structure.units.push(unit);
                 let existing_index = realized_units[neighbor].unwrap();
 
-                // Recreate only the committed bond transaction on the actual
-                // structure. There is no rollback path after this point.
+                // Commit the exact successful joint found by the trial.
+                // Never reconstruct endpoint identities after a successful
+                // placement: doing so can select a different point and violate
+                // the forward-only constructor contract.
                 let mut cache =
                     crate::contact::ConnectionCompatibilityCache::new();
                 let mut commit_energy = remaining_energy;
@@ -1047,23 +1056,21 @@ pub(crate) fn construct_blueprint_bond_driven(
                     &mut structure,
                     existing_index,
                     new_index,
-                    blueprint_endpoint_options(resource(
-                        catalog,
-                        &blueprint.elements[neighbor].material.parts[0].0,
-                    ).unwrap())[0],
-                    blueprint_endpoint_options(resource(
-                        catalog,
-                        &blueprint.elements[index].material.parts[0].0,
-                    ).unwrap())[0],
+                    endpoint_a,
+                    endpoint_b,
                     catalog,
                     &mut cache,
                     &mut bond_ledger,
                     &mut commit_energy,
                 ).is_none() {
-                    // The trial transaction was valid; this should only be
-                    // reachable if the live structure diverged unexpectedly.
+                    // The live structure should be identical to the trial
+                    // immediately before this commit. A mismatch is an
+                    // internal invariant failure, not a reason to search for a
+                    // different bond and silently change the successful joint.
                     structure.units.pop();
-                    continue;
+                    return Err(format!(
+                        "successful trial joint could not be committed for blueprint element {index}"
+                    ));
                 }
 
                 remaining_energy = commit_energy;
