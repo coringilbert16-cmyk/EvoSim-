@@ -788,6 +788,16 @@ fn try_combine_environmental(
             ) else {
                 continue;
             };
+            if indices.iter().any(|index| {
+                crate::construction_runtime::placed_unit_overlaps(
+                    &hypothetical,
+                    &hypothetical.units[*index],
+                    &indices,
+                    &environment.catalog,
+                )
+            }) {
+                continue;
+            }
             for ua in 0..organism.structure.units.len() {
                 for &ub in &indices {
                     for candidate in crate::contact::connection_pair_candidates_cached(
