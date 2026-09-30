@@ -555,27 +555,27 @@ pub(crate) fn realize_material(
         .map(|(indices, _)| indices)
 }
 
-fn blueprint_endpoint_options(resource: &BaseResource) -> Vec<ConnectionEndpoint> {
-    match &resource.shape.form {
-        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => resource
-            .shape
+fn structure_unit_endpoint_options(
+    unit: &StructuralUnit,
+    catalog: &[BaseResource],
+) -> Vec<ConnectionEndpoint> {
+    let Some(shape) = unit.shape(catalog) else {
+        return Vec::new();
+    };
+    match &shape.form {
+        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => shape
             .form
             .polygon_vertices()
-            .unwrap_or_default()
-            .iter()
-            .enumerate()
-            .map(|(point_index, _)| ConnectionEndpoint::Corner { point_index })
-            .collect(),
-        Form::Line { .. } => vec![
-            ConnectionEndpoint::LineEndpoint { point_index: 0 },
-            ConnectionEndpoint::LineEndpoint { point_index: 1 },
-        ],
-        Form::Circle { .. } => (0..72)
-            .map(|i| ConnectionEndpoint::Boundary {
-                angle_radians: std::f64::consts::TAU * i as f64 / 72.0,
+            .map(|vertices| {
+                (0..vertices.len())
+                    .map(|point_index| ConnectionEndpoint::Corner { point_index })
+                    .collect()
             })
+            .unwrap_or_default(),
+        Form::Line { .. } => (0..2)
+            .map(|point_index| ConnectionEndpoint::LineEndpoint { point_index })
             .collect(),
-        Form::Fluid { .. } => Vec::new(),
+        Form::Circle { .. } | Form::Fluid { .. } => Vec::new(),
     }
 }
 
@@ -895,8 +895,8 @@ fn realize_next_bond_driven(
     Placement,
 )> {
     let existing_index = realized_units[neighbor]?;
-    let existing_resource = resource(catalog, &blueprint.elements[neighbor].material.parts[0].0)?;
-    let existing_endpoints = blueprint_endpoint_options(existing_resource);
+    let existing_unit = structure.units.get(existing_index)?;
+    let existing_endpoints = structure_unit_endpoint_options(existing_unit, catalog);
     let new_endpoints = physical_material_endpoint_options(new_material, catalog);
 
     if existing_endpoints.is_empty() || new_endpoints.is_empty() {
