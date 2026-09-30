@@ -205,12 +205,13 @@ pub fn eligible_candidates(
         .first()
         .and_then(|(name, _)| catalog.iter().find(|resource| resource.name == *name))
         .is_some_and(|resource| resource.physical_state == crate::resources::PhysicalState::Fluid)
-        && b
-            .material
+        && b.material
             .parts
             .first()
             .and_then(|(name, _)| catalog.iter().find(|resource| resource.name == *name))
-            .is_some_and(|resource| resource.physical_state == crate::resources::PhysicalState::Fluid);
+            .is_some_and(|resource| {
+                resource.physical_state == crate::resources::PhysicalState::Fluid
+            });
     if both_fluid {
         return Vec::new();
     }
@@ -371,11 +372,19 @@ mod tests {
         let mut s = OrganismStructure::new();
         s.add_unit(StructuralUnit::new(
             "Water",
-            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
         ));
         s.add_unit(StructuralUnit::new(
             "Water",
-            Placement { x: 0.8, y: 0.0, rotation_radians: 0.0 },
+            Placement {
+                x: 0.8,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
         ));
         let mut cache = ConnectionCompatibilityCache::new();
         assert!(eligible_candidates(&s, 0, 1, &catalog, &mut cache).is_empty());
