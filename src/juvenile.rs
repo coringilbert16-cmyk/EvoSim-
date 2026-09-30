@@ -34,7 +34,6 @@ pub(crate) fn confirmed_seed_baseline(
     let inner_thickness = 0.330_719;
     let inner_offset = (inner_side + inner_thickness) / 2.0;
 
-
     let mut elements = Vec::new();
     elements.extend([
         BlueprintElement {
