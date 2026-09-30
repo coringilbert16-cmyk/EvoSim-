@@ -920,12 +920,14 @@ fn realize_next_bond_driven(
                 }
 
                 let mut trial = structure.clone();
-                let indices = crate::material_restoration::restore_material(
+                let Some(indices) = crate::material_restoration::restore_material(
                     &mut trial,
                     new_material,
                     candidate_origin,
                     catalog,
-                )?;
+                ) else {
+                    continue;
+                };
 
                 let new_unit_index = *indices.get(part_index)?;
                 let candidate_unit = trial.units.get(new_unit_index)?.clone();
@@ -1104,9 +1106,6 @@ fn construct_blueprint_bond_driven_internal(
             storage.entries.get(storage_index).cloned().ok_or_else(|| {
                 "selected construction anchor material disappeared from storage".to_string()
             })?;
-        storage.take_physical_at(storage_index).ok_or_else(|| {
-            "selected construction anchor material could not be consumed".to_string()
-        })?;
         instance
     } else {
         let anchor_resource = resource(catalog, &anchor_preferred)
@@ -1118,12 +1117,24 @@ fn construct_blueprint_bond_driven_internal(
         ).ok_or_else(|| "construction anchor has invalid geometry".to_string())?
     };
 
+    let anchor_origin = placement(anchor_element.placement);
     let anchor_indices = crate::material_restoration::restore_material(
         &mut structure,
         &anchor_instance,
-        placement(anchor_element.placement),
+        anchor_origin,
         catalog,
     ).ok_or_else(|| "construction anchor has invalid physical realization".to_string())?;
+    if let Some(storage) = available_materials.as_deref_mut() {
+        let storage_index = rank_available_construction_materials(storage, &anchor_preferred, catalog)
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .find(|(_, _, score)| *score >= MIN_CONSTRUCTION_MATERIAL_MATCH)
+            .map(|candidate| candidate.0)
+            .ok_or_else(|| "selected construction anchor material disappeared before commit".to_string())?;
+        storage.take_physical_at(storage_index).ok_or_else(|| {
+            "selected construction anchor material could not be consumed after successful restoration".to_string()
+        })?;
+    }
     let anchor_unit_index = *anchor_indices
         .first()
         .ok_or_else(|| "construction anchor restored no physical units".to_string())?;
