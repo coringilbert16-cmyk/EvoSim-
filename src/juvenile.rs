@@ -93,8 +93,8 @@ pub(crate) fn confirmed_seed_baseline(
     // rectangles. The side length is the same as the inner shell, while the
     // larger apothem leaves a genuinely accessible chamber for finite rigid
     // resources such as Methane.
-    let outer_side_count = 11usize;
-    let outer_side_length = inner_side;
+    let outer_side_count = 10usize;
+    let outer_side_length = 1.53;
     let outer_apothem =
         outer_side_length / (2.0 * (std::f64::consts::PI / outer_side_count as f64).tan());
     let inner_boundary = inner_offset + inner_thickness / 2.0;
@@ -122,9 +122,10 @@ pub(crate) fn confirmed_seed_baseline(
         });
     }
 
-    // Two Hydrogen segments form each bridge. The 11-sided outer ring keeps
-    // the Nitrogen side length unchanged, while its apothem leaves enough
-    // chamber width for Methane and remains bridgeable by Hydrogen.
+    // Two Hydrogen segments form each symmetric bridge. The decagon uses a
+    // slightly longer Nitrogen side than the inner shell so its enclosed
+    // chamber has real clearance for Methane while retaining an exact lower
+    // counterpart for ordinary Hydrogen geometry.
     let hydrogen_length = catalog
         .iter()
         .find(|resource| resource.name == "Hydrogen")
@@ -134,72 +135,45 @@ pub(crate) fn confirmed_seed_baseline(
         })
         .ok_or_else(|| "catalog Hydrogen must retain its line geometry".to_string())?;
 
+    let shell_gap = outer_apothem - inner_boundary;
+    let bridge_half_gap = shell_gap / 2.0;
+    if !shell_gap.is_finite()
+        || shell_gap <= 0.0
+        || bridge_half_gap <= 0.0
+        || hydrogen_length <= bridge_half_gap
+    {
+        return Err("initial shell spacing cannot be bridged by Hydrogen".into());
+    }
+    let bridge_lateral_offset =
+        (hydrogen_length.powi(2) - bridge_half_gap.powi(2)).sqrt();
+    let bridge_midpoint = (inner_boundary + outer_apothem) / 2.0;
     let bridge_start = elements.len();
 
-    let upper_gap = outer_apothem - inner_boundary;
-    let upper_half_gap = upper_gap / 2.0;
-    if !upper_gap.is_finite()
-        || upper_gap <= 0.0
-        || upper_half_gap <= 0.0
-        || hydrogen_length <= upper_half_gap
-    {
-        return Err("initial upper shell spacing cannot be bridged by Hydrogen".into());
-    }
-    let upper_lateral_offset = (hydrogen_length.powi(2) - upper_half_gap.powi(2)).sqrt();
-    let upper_midpoint = (inner_boundary + outer_apothem) / 2.0;
-    let upper_first_rotation = upper_half_gap.atan2(upper_lateral_offset);
-    let upper_second_rotation = upper_half_gap.atan2(-upper_lateral_offset);
+    let upper_first_rotation = bridge_half_gap.atan2(bridge_lateral_offset);
+    let upper_second_rotation = bridge_half_gap.atan2(-bridge_lateral_offset);
     let upper_bridge = [
         BlueprintPlacement {
-            x: upper_lateral_offset / 2.0,
-            y: (inner_boundary + upper_midpoint) / 2.0,
+            x: bridge_lateral_offset / 2.0,
+            y: (inner_boundary + bridge_midpoint) / 2.0,
             rotation_radians: upper_first_rotation,
         },
         BlueprintPlacement {
-            x: upper_lateral_offset / 2.0,
-            y: (upper_midpoint + outer_apothem) / 2.0,
+            x: bridge_lateral_offset / 2.0,
+            y: (bridge_midpoint + outer_apothem) / 2.0,
             rotation_radians: upper_second_rotation,
         },
     ];
 
-    // The lower bridge lands on the midpoint of the lower-left outer side.
-    // Its endpoint pair is shorter than two Hydrogen lengths, so an ordinary
-    // two-link bent chain spans it without becoming an intake port.
-    let lower_outer_angle =
-        std::f64::consts::FRAC_PI_2 + 5.0 * (2.0 * std::f64::consts::PI / outer_side_count as f64);
-    let lower_outer_x = outer_apothem * lower_outer_angle.cos();
-    let lower_outer_y = outer_apothem * lower_outer_angle.sin();
-    let lower_dx = lower_outer_x;
-    let lower_dy = lower_outer_y + inner_boundary;
-    let lower_distance = lower_dx.hypot(lower_dy);
-    let lower_half_distance = lower_distance / 2.0;
-    if !lower_distance.is_finite()
-        || lower_distance <= 0.0
-        || lower_half_distance >= hydrogen_length
-    {
-        return Err("initial lower shell spacing cannot be bridged by Hydrogen".into());
-    }
-    let lower_perpendicular = (hydrogen_length.powi(2) - lower_half_distance.powi(2)).sqrt();
-    let lower_midpoint_x = lower_outer_x / 2.0;
-    let lower_midpoint_y = (-inner_boundary + lower_outer_y) / 2.0;
-    let lower_normal_x = -lower_dy / lower_distance;
-    let lower_normal_y = lower_dx / lower_distance;
-    let lower_waypoint_x = lower_midpoint_x + lower_normal_x * lower_perpendicular;
-    let lower_waypoint_y = lower_midpoint_y + lower_normal_y * lower_perpendicular;
-    let lower_first_dx = lower_waypoint_x;
-    let lower_first_dy = lower_waypoint_y + inner_boundary;
-    let lower_second_dx = lower_outer_x - lower_waypoint_x;
-    let lower_second_dy = lower_outer_y - lower_waypoint_y;
     let lower_bridge = [
         BlueprintPlacement {
-            x: lower_first_dx / 2.0,
-            y: (-inner_boundary + lower_waypoint_y) / 2.0,
-            rotation_radians: lower_first_dy.atan2(lower_first_dx),
+            x: -bridge_lateral_offset / 2.0,
+            y: -(inner_boundary + bridge_midpoint) / 2.0,
+            rotation_radians: -upper_first_rotation,
         },
         BlueprintPlacement {
-            x: (lower_waypoint_x + lower_outer_x) / 2.0,
-            y: (lower_waypoint_y + lower_outer_y) / 2.0,
-            rotation_radians: lower_second_dy.atan2(lower_second_dx),
+            x: -bridge_lateral_offset / 2.0,
+            y: -(bridge_midpoint + outer_apothem) / 2.0,
+            rotation_radians: -upper_second_rotation,
         },
     ];
 
@@ -342,10 +316,10 @@ fn realize_initial_boundary_water(
         return Err("Water nominal area is invalid".into());
     }
 
-    // The confirmed seed baseline's outer shell is the eleven units after
+    // The confirmed seed baseline's outer shell is the ten units after
     // the four-unit inner shell. Alternating them leaves rigid structural
     // material between permeable sections instead of making the entire boundary fluid.
-    let outer_shell = 4..15;
+    let outer_shell = 4..14;
     let mut changed = 0usize;
     for index in outer_shell.step_by(2) {
         let Some(unit) = structure.units.get_mut(index) else {
