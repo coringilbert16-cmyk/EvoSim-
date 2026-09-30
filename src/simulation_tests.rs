@@ -173,12 +173,7 @@ mod integration_tests {
                 f64::NEG_INFINITY,
             ),
             |(min_x, max_x, min_y, max_y), &(x, y)| {
-                (
-                    min_x.min(x),
-                    max_x.max(x),
-                    min_y.min(y),
-                    max_y.max(y),
-                )
+                (min_x.min(x), max_x.max(x), min_y.min(y), max_y.max(y))
             },
         );
         let mut anchor = None;
