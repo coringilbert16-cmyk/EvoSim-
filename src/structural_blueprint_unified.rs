@@ -384,10 +384,11 @@ impl StructuralBlueprint {
                 }
             }
 
-            let mut unit =
-                crate::structure::StructuralUnit::new(resource.name.clone(), placement);
+            let mut unit = crate::structure::StructuralUnit::new(resource.name.clone(), placement);
             if !unit.realize_default_geometry(catalog) {
-                return Err(format!("resource {resource_name} has invalid physical geometry"));
+                return Err(format!(
+                    "resource {resource_name} has invalid physical geometry"
+                ));
             }
             structure.add_unit(unit);
         }
