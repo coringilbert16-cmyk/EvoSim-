@@ -628,27 +628,8 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                 catalog,
             )?;
 
-            // The declared blueprint pose is a preference, not a placement
-            // command. Start the orientation search at the rotation that would
-            // put this physical material's center on its declared target while
-            // satisfying the selected joint, then sweep the full circle. This
-            // keeps the forward-only constructor close to the developmental
-            // geometry when several physically valid rotations exist, without
-            // validating any future bond.
-            let target = blueprint.elements[_index].placement;
-            let (s, c) = genome_anchor.rotation_radians.sin_cos();
-            let target_world = (
-                genome_anchor.x + (target.x - anchor_declared.x) * c
-                    - (target.y - anchor_declared.y) * s,
-                genome_anchor.y
-                    + (target.x - anchor_declared.x) * s
-                    + (target.y - anchor_declared.y) * c,
-            );
-            let ideal_angle = (joint.y - target_world.1).atan2(joint.x - target_world.0)
-                - local_b.y.atan2(local_b.x);
             for step in 0..360 {
-                let offset = std::f64::consts::TAU * step as f64 / 360.0;
-                let angle = ideal_angle + offset;
+                let angle = std::f64::consts::TAU * step as f64 / 360.0;
                 let candidate_origin =
                     placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
 
@@ -776,8 +757,24 @@ fn realize_next_bond_driven(
                 catalog,
             )?;
 
+            // The declared blueprint pose is a preference, not a placement
+            // command. Start at the rotation that puts this physical material's
+            // selected endpoint on the joint while aiming its local endpoint
+            // toward the declared target, then sweep the full circle.
+            let target = blueprint.elements[_index].placement;
+            let (s, c) = genome_anchor.rotation_radians.sin_cos();
+            let target_world = (
+                genome_anchor.x + (target.x - anchor_declared.x) * c
+                    - (target.y - anchor_declared.y) * s,
+                genome_anchor.y
+                    + (target.x - anchor_declared.x) * s
+                    + (target.y - anchor_declared.y) * c,
+            );
+            let ideal_angle = (joint.y - target_world.1).atan2(joint.x - target_world.0)
+                - local_b.y.atan2(local_b.x);
             for step in 0..360 {
-                let angle = std::f64::consts::TAU * step as f64 / 360.0;
+                let offset = std::f64::consts::TAU * step as f64 / 360.0;
+                let angle = ideal_angle + offset;
                 let candidate_origin =
                     placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
 
@@ -853,7 +850,7 @@ fn realize_next_bond_driven(
                     continue;
                 };
 
-                let Some(mut attempt) = crate::combine_runtime::form_construction_bond(
+                let Some(attempt) = crate::combine_runtime::form_construction_bond(
                     &mut trial,
                     existing_index,
                     new_unit_index,
