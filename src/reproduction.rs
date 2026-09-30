@@ -337,13 +337,6 @@ fn try_child_construction(
             };
 
             let mut candidate = child.clone();
-            if !candidate.stored_material.store_physical_instance(material) {
-                continue;
-            }
-            // The material is now part of the realized structure, so it must
-            // not remain in the developing inventory.
-            let last = candidate.stored_material.entries.len().checked_sub(1)?;
-            candidate.stored_material.take_physical_at(last)?;
             candidate.structure = trial_structure;
             return Some((candidate, candidate_ledger, Some(parent_index)));
         }
