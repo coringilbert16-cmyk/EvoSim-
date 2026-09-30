@@ -185,7 +185,7 @@ pub(crate) fn confirmed_seed_baseline(
         BlueprintPlacement {
             x: 0.0,
             y: -(inner_boundary + segment_rise * 2.0 + hydrogen_length / 2.0),
-            rotation_radians: -std::f64::consts::FRAC_PI_2,
+            rotation_radians: std::f64::consts::FRAC_PI_2,
         },
     ];
 
