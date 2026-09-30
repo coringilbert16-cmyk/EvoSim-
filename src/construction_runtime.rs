@@ -387,7 +387,12 @@ fn solve_parts(
     for candidate_placement in candidate_placements(structure, resource, anchor, &targets, catalog)
     {
         if let Some(scaffold) = genome_measurement {
-            if placement_penetrates_genome_measurement(resource, candidate_placement, scaffold, catalog) {
+            if placement_penetrates_genome_measurement(
+                resource,
+                candidate_placement,
+                scaffold,
+                catalog,
+            ) {
                 continue;
             }
         }
@@ -491,8 +496,18 @@ pub(crate) fn realize_material_with_context(
 
     let assigned = vec![None; material.parts.len()];
     let Some((trial, trial_ledger, trial_energy, assigned, heat, _score)) = solve_parts(
-        0, structure, ledger, *energy, &assigned, material, anchor, catalog, external,
-        genome_measurement, 0.0, 0.0,
+        0,
+        structure,
+        ledger,
+        *energy,
+        &assigned,
+        material,
+        anchor,
+        catalog,
+        external,
+        genome_measurement,
+        0.0,
+        0.0,
     ) else {
         let resource_name = material
             .parts
