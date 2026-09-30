@@ -98,13 +98,13 @@ pub(crate) fn confirmed_seed_baseline(
     for (offset, &i) in [0usize, 3, 6, 9].iter().enumerate() {
         connections.push(BlueprintConnection {
             element_a: i,
-            element_b: 8 + offset,
+            element_b: 10 + offset,
         });
     }
     for (offset, &i) in [1usize, 7].iter().enumerate() {
         connections.push(BlueprintConnection {
             element_a: i,
-            element_b: 12 + offset,
+            element_b: 14 + offset,
         });
     }
 
