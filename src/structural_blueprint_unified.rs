@@ -258,7 +258,7 @@ impl StructuralBlueprint {
         let mut preview_energy = 1.0e12;
         preview
             .realize_with_context(catalog, &mut ledger, &mut preview_energy)
-            .map(|(structure, _)| structure)
+            .map(|(structure, _, _)| structure)
     }
 
     /// Actual blueprint realization. All elements share one energy holder and
