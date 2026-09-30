@@ -92,110 +92,37 @@ pub(crate) fn confirmed_seed_baseline(
         },
     ];
 
-    // The outer shell uses the same constituent dimensions but is deliberately
-    // farther from the genome cavity. This creates a real acquisition chamber
-    // instead of the old narrow annulus that excluded Carbon and Methane.
+    // The outer shell is a regular decagon made from the same Nitrogen
+    // rectangles. A decagon gives each side enough physical length to form a
+    // genuinely larger enclosed chamber while preserving ordinary pairwise
+    // bonds between neighboring structural units.
+    let outer_side_count = 10usize;
+    let outer_side_length = inner_side;
+    let outer_apothem =
+        outer_side_length / (2.0 * (std::f64::consts::PI / outer_side_count as f64).tan());
+    let outer_center_radius = outer_apothem + inner_thickness / 2.0;
     let outer_start = elements.len();
-    elements.extend([
-        BlueprintElement {
+
+    for side in 0..outer_side_count {
+        let normal_angle = std::f64::consts::FRAC_PI_2
+            + side as f64 * (2.0 * std::f64::consts::PI / outer_side_count as f64);
+        let tangent_angle = normal_angle - std::f64::consts::FRAC_PI_2;
+        elements.push(BlueprintElement {
             material: Material::free_base(nitrogen, 1.0),
             placement: BlueprintPlacement {
-                x: -outer_half_segment,
-                y: outer_offset,
-                rotation_radians: 0.0,
+                x: outer_center_radius * normal_angle.cos(),
+                y: outer_center_radius * normal_angle.sin(),
+                rotation_radians: tangent_angle,
             },
-        },
-        BlueprintElement {
-            material: Material::free_base(nitrogen, 1.0),
-            placement: BlueprintPlacement {
-                x: outer_half_segment,
-                y: outer_offset,
-                rotation_radians: 0.0,
-            },
-        },
-        BlueprintElement {
-            material: Material::free_base(nitrogen, 1.0),
-            placement: BlueprintPlacement {
-                x: -outer_offset,
-                y: -outer_half_segment,
-                rotation_radians: std::f64::consts::FRAC_PI_2,
-            },
-        },
-        BlueprintElement {
-            material: Material::free_base(nitrogen, 1.0),
-            placement: BlueprintPlacement {
-                x: -outer_offset,
-                y: outer_half_segment,
-                rotation_radians: std::f64::consts::FRAC_PI_2,
-            },
-        },
-        BlueprintElement {
-            material: Material::free_base(nitrogen, 1.0),
-            placement: BlueprintPlacement {
-                x: outer_offset,
-                y: -outer_half_segment,
-                rotation_radians: std::f64::consts::FRAC_PI_2,
-            },
-        },
-        BlueprintElement {
-            material: Material::free_base(nitrogen, 1.0),
-            placement: BlueprintPlacement {
-                x: outer_offset,
-                y: outer_half_segment,
-                rotation_radians: std::f64::consts::FRAC_PI_2,
-            },
-        },
-        BlueprintElement {
-            material: Material::free_base(nitrogen, 1.0),
-            placement: BlueprintPlacement {
-                x: -outer_half_segment,
-                y: -outer_offset,
-                rotation_radians: 0.0,
-            },
-        },
-        BlueprintElement {
-            material: Material::free_base(nitrogen, 1.0),
-            placement: BlueprintPlacement {
-                x: outer_half_segment,
-                y: -outer_offset,
-                rotation_radians: 0.0,
-            },
-        },
-    ]);
-    connections.extend([
-        BlueprintConnection {
-            element_a: outer_start,
-            element_b: outer_start + 1,
-        },
-        BlueprintConnection {
-            element_a: outer_start + 1,
-            element_b: outer_start + 5,
-        },
-        BlueprintConnection {
-            element_a: outer_start + 5,
-            element_b: outer_start + 4,
-        },
-        BlueprintConnection {
-            element_a: outer_start + 4,
-            element_b: outer_start + 7,
-        },
-        BlueprintConnection {
-            element_a: outer_start + 7,
-            element_b: outer_start + 6,
-        },
-        BlueprintConnection {
-            element_a: outer_start + 6,
-            element_b: outer_start + 2,
-        },
-        BlueprintConnection {
-            element_a: outer_start + 2,
-            element_b: outer_start + 3,
-        },
-        BlueprintConnection {
-            element_a: outer_start + 3,
-            element_b: outer_start,
-        },
-    ]);
+        });
+    }
+
+    for side in 0..outer_side_count {
+        connections.push(BlueprintConnection {
+            element_a: outer_start + side,
+            element_b: outer_start + (side + 1) % outer_side_count,
+        });
+    }
 
     // Two symmetric two-segment Hydrogen bridges keep the two shells one
     // connected organism without turning the acquisition chamber into a set of
@@ -211,7 +138,7 @@ pub(crate) fn confirmed_seed_baseline(
         .ok_or_else(|| "catalog Hydrogen must retain its line geometry".to_string())?;
 
     let inner_boundary = inner_offset + inner_thickness / 2.0;
-    let outer_boundary = outer_offset - inner_thickness / 2.0;
+    let outer_boundary = outer_apothem;
     let shell_gap = outer_boundary - inner_boundary;
     let half_gap = shell_gap / 2.0;
     if !shell_gap.is_finite() || shell_gap <= 0.0 || hydrogen_length <= half_gap {
@@ -400,7 +327,7 @@ fn realize_initial_boundary_water(
     // The confirmed seed baseline's outer shell is the eight units after the
     // four-unit inner shell. Alternating them leaves rigid structural material
     // between permeable sections instead of making the entire boundary fluid.
-    let outer_shell = 4..12;
+    let outer_shell = 4..14;
     let mut changed = 0usize;
     for index in outer_shell.step_by(2) {
         let Some(unit) = structure.units.get_mut(index) else {
