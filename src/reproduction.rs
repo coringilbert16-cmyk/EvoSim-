@@ -1061,6 +1061,73 @@ mod tests {
     }
 
     #[test]
+    fn waiting_construction_resumes_from_same_graph_when_material_arrives() {
+        let mut simulation = Simulation::new(37, 20.0);
+        let mut parent = simulation.organisms.remove(0);
+        parent.development_stage = DevelopmentStage::Adult;
+        let mut ledger = EnergyLedger::default();
+
+        assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
+        assert!(begin_reproduction(
+            &mut parent,
+            &mut simulation.rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+
+        let mut construction = parent
+            .reproductive_construction
+            .take()
+            .expect("reproduction is active");
+        let body = parent_body_geometry(&parent, &simulation.environment.catalog).unwrap();
+        let environment = simulation.environment.clone();
+
+        let first_status = advance_construction(
+            &parent.structure,
+            &mut parent.stored_material,
+            &mut construction,
+            &environment,
+            &mut ledger,
+            &mut parent.usable_energy,
+            &mut simulation.rng,
+            &body,
+            None,
+        )
+        .0;
+        assert_eq!(first_status, ConstructionStatus::Waiting);
+
+        let before_units = construction.developing_structure.units.len();
+        let before_bonds = construction.developing_structure.bonds.len();
+
+        assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
+
+        let second_status = advance_construction(
+            &parent.structure,
+            &mut parent.stored_material,
+            &mut construction,
+            &environment,
+            &mut ledger,
+            &mut parent.usable_energy,
+            &mut simulation.rng,
+            &body,
+            None,
+        )
+        .0;
+
+        assert!(
+            matches!(
+                second_status,
+                ConstructionStatus::Progress
+                    | ConstructionStatus::Ready
+                    | ConstructionStatus::Detached
+            ),
+            "new physical material must resume construction, got {second_status:?}"
+        );
+        assert!(construction.developing_structure.units.len() > before_units);
+        assert!(construction.developing_structure.bonds.len() > before_bonds);
+    }
+
+    #[test]
     fn anchor_is_not_a_predefined_structural_blueprint() {
         let catalog = default_catalog();
         let genome = initial_genome();
