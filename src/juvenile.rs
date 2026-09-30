@@ -118,7 +118,82 @@ pub(crate) fn confirmed_seed_baseline(
     Ok(baseline)
 }
 
-fn largest_rigid_connection_span(catalog: &[BaseResource]) -> f64 {
+
+
+pub(crate) const JUVENILE_INITIAL_ENERGY_RESERVE: f64 = 16.0;
+const TRIAL_ENERGY: f64 = 1.0e6;
+const EPS: f64 = 1e-8;
+
+/// Compatibility entry point for callers that create the initial organism or
+/// exercise the original-seed calibration. The realization itself is now
+/// performed exclusively by the forward-only bond-driven constructor.
+pub(crate) fn realize_initial(
+    blueprint: &StructuralBlueprint,
+    catalog: &[BaseResource],
+) -> Result<(OrganismStructure, EnergyLedger, f64), String> {
+    realize_initial_with_reserve(blueprint, catalog, JUVENILE_INITIAL_ENERGY_RESERVE)
+}
+
+pub(crate) fn realize_initial_with_reserve(
+    blueprint: &StructuralBlueprint,
+    catalog: &[BaseResource],
+    reserve_energy: f64,
+) -> Result<(OrganismStructure, EnergyLedger, f64), String> {
+    if !blueprint.is_valid() {
+        return Err("juvenile construction target is invalid".into());
+    }
+    if !reserve_energy.is_finite() || reserve_energy <= 0.0 {
+        return Err("juvenile energy reserve must be finite and positive".into());
+    }
+
+    let mut trial_ledger = EnergyLedger::default();
+    let mut trial_energy = TRIAL_ENERGY;
+    let (_, trial_remaining) =
+        crate::construction_runtime::construct_blueprint_bond_driven(
+            blueprint,
+            catalog,
+            &mut trial_ledger,
+            &mut trial_energy,
+        )?;
+    let required_initial_energy = TRIAL_ENERGY - trial_remaining;
+    if !required_initial_energy.is_finite() || required_initial_energy < 0.0 {
+        return Err("juvenile construction produced an invalid energy requirement".into());
+    }
+
+    let mut ledger = EnergyLedger::default();
+    let mut energy = required_initial_energy + reserve_energy;
+    let (mut structure, remaining_energy) =
+        crate::construction_runtime::construct_blueprint_bond_driven(
+            blueprint,
+            catalog,
+            &mut ledger,
+            &mut energy,
+        )?;
+
+    if !remaining_energy.is_finite() || remaining_energy + EPS < reserve_energy {
+        return Err(format!(
+            "juvenile initialization could not preserve its reserve: remaining={remaining_energy}"
+        ));
+    }
+
+    validate_realized_juvenile(
+        &structure,
+        catalog,
+        JuvenileViabilityRequirements::default(),
+    )?;
+
+    let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)?
+        .ok_or_else(|| "juvenile realization has no qualifying physical genome cavity".to_string())?;
+    let genome_ids = cavity
+        .boundary_units
+        .iter()
+        .filter_map(|&index| structure.physical_id(index))
+        .collect::<Vec<_>>();
+    structure.set_genome_constituent_ids(genome_ids);
+
+    Ok((structure, ledger, remaining_energy))
+}
+\nfn largest_rigid_connection_span(catalog: &[BaseResource]) -> f64 {
     let mut points = Vec::<(f64, f64)>::new();
 
     for resource in catalog {
