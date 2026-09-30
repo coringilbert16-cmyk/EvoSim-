@@ -10,6 +10,7 @@
 //! silhouette, or guaranteed topology.
 
 use crate::resources::BaseResource;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 #[path = "developmental_realization.rs"]
@@ -286,6 +287,71 @@ impl DevelopmentalFieldBlueprint {
         self.connectivity.evaluate_scaled(x, y, scale)
     }
 
+    /// Mutate the inherited developmental tendencies. The blueprint is part of
+    /// the genome, so its spatial material, density, and connectivity tendencies
+    /// evolve alongside ordinary behavioral traits. The realized body remains the
+    /// authority: mutation changes future construction pressure, not existing geometry.
+    pub(crate) fn mutate(&mut self, rng: &mut impl Rng) {
+        const PROBABILITY: f64 = 0.001;
+        const SIGMA: f64 = 0.05;
+
+        for field in &mut self.material_preferences {
+            mutate_if_selected(rng, PROBABILITY, || {
+                field.center_preference = (field.center_preference + gaussian_unit(rng) * SIGMA)
+                    .clamp(0.0, 1.0);
+            });
+            mutate_if_selected(rng, PROBABILITY, || {
+                field.radial_falloff = (field.radial_falloff + gaussian_unit(rng) * SIGMA).max(1e-6);
+            });
+            mutate_if_selected(rng, PROBABILITY, || {
+                field.center_x += gaussian_unit(rng) * SIGMA;
+            });
+            mutate_if_selected(rng, PROBABILITY, || {
+                field.center_y += gaussian_unit(rng) * SIGMA;
+            });
+            for influence in &mut field.additional_influences {
+                mutate_influence(influence, rng, PROBABILITY, SIGMA);
+            }
+        }
+
+        mutate_if_selected(rng, PROBABILITY, || {
+            self.structural_density.center_preference =
+                (self.structural_density.center_preference + gaussian_unit(rng) * SIGMA)
+                    .clamp(0.0, 1.0);
+        });
+        mutate_if_selected(rng, PROBABILITY, || {
+            self.structural_density.radial_falloff =
+                (self.structural_density.radial_falloff + gaussian_unit(rng) * SIGMA).max(1e-6);
+        });
+        mutate_if_selected(rng, PROBABILITY, || {
+            self.structural_density.center_x += gaussian_unit(rng) * SIGMA;
+        });
+        mutate_if_selected(rng, PROBABILITY, || {
+            self.structural_density.center_y += gaussian_unit(rng) * SIGMA;
+        });
+        for influence in &mut self.structural_density.additional_influences {
+            mutate_influence(influence, rng, PROBABILITY, SIGMA);
+        }
+
+        mutate_if_selected(rng, PROBABILITY, || {
+            self.connectivity.strength =
+                (self.connectivity.strength + gaussian_unit(rng) * SIGMA).clamp(0.0, 1.0);
+        });
+        mutate_if_selected(rng, PROBABILITY, || {
+            self.connectivity.radial_falloff =
+                (self.connectivity.radial_falloff + gaussian_unit(rng) * SIGMA).max(1e-6);
+        });
+        mutate_if_selected(rng, PROBABILITY, || {
+            self.connectivity.center_x += gaussian_unit(rng) * SIGMA;
+        });
+        mutate_if_selected(rng, PROBABILITY, || {
+            self.connectivity.center_y += gaussian_unit(rng) * SIGMA;
+        });
+        for influence in &mut self.connectivity.additional_influences {
+            mutate_influence(influence, rng, PROBABILITY, SIGMA);
+        }
+    }
+
     pub fn preferred_developmental_length(
         &self,
         preferred_mass: f64,
@@ -317,6 +383,34 @@ pub struct DevelopmentalRealization {
     pub density: Option<f64>,
     pub connectivity: Option<f64>,
     pub overall: f64,
+}
+
+
+fn mutate_if_selected(rng: &mut impl Rng, probability: f64, mut mutation: impl FnMut()) {
+    if rng.gen::<f64>() < probability {
+        mutation();
+    }
+}
+
+fn mutate_influence(influence: &mut RadialInfluence, rng: &mut impl Rng, probability: f64, sigma: f64) {
+    mutate_if_selected(rng, probability, || {
+        influence.center_x += gaussian_unit(rng) * sigma;
+    });
+    mutate_if_selected(rng, probability, || {
+        influence.center_y += gaussian_unit(rng) * sigma;
+    });
+    mutate_if_selected(rng, probability, || {
+        influence.radial_falloff = (influence.radial_falloff + gaussian_unit(rng) * sigma).max(1e-6);
+    });
+    mutate_if_selected(rng, probability, || {
+        influence.strength = (influence.strength + gaussian_unit(rng) * sigma).clamp(0.0, 1.0);
+    });
+}
+
+fn gaussian_unit(rng: &mut impl Rng) -> f64 {
+    let u1 = rng.gen_range(f64::MIN_POSITIVE..1.0);
+    let u2 = rng.gen_range(0.0..1.0);
+    (-2.0 * u1.ln()).sqrt() * (std::f64::consts::TAU * u2).cos()
 }
 
 #[cfg(test)]
