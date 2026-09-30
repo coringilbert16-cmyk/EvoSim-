@@ -1142,6 +1142,7 @@ fn construct_blueprint_bond_driven_internal(
     let mut nodes = 0usize;
     let mut reserved_storage_indices = Vec::<usize>::new();
 
+    let mut anchor_storage_index = None;
     let anchor_instance = if let Some(storage) = available_materials.as_deref_mut() {
         let candidates = rank_available_construction_materials(storage, &anchor_preferred, catalog)
             .map_err(|e| e.to_string())?;
@@ -1158,6 +1159,7 @@ fn construct_blueprint_bond_driven_internal(
             storage.entries.get(storage_index).cloned().ok_or_else(|| {
                 "selected construction anchor material disappeared from storage".to_string()
             })?;
+        anchor_storage_index = Some(storage_index);
         instance
     } else {
         let anchor_resource = resource(catalog, &anchor_preferred)
@@ -1178,16 +1180,14 @@ fn construct_blueprint_bond_driven_internal(
         catalog,
     )
     .ok_or_else(|| "construction anchor has invalid physical realization".to_string())?;
-    if let Some(storage) = available_materials.as_deref_mut() {
-        let storage_index =
-            rank_available_construction_materials(storage, &anchor_preferred, catalog)
-                .map_err(|e| e.to_string())?
-                .into_iter()
-                .find(|(_, _, score)| *score >= MIN_CONSTRUCTION_MATERIAL_MATCH)
-                .map(|candidate| candidate.0)
-                .ok_or_else(|| {
-                    "selected construction anchor material disappeared before commit".to_string()
-                })?;
+    if let Some(storage_index) = anchor_storage_index {
+        if available_materials
+            .as_deref()
+            .and_then(|storage| storage.entries.get(storage_index))
+            .is_none()
+        {
+            return Err("selected construction anchor material disappeared before commit".to_string());
+        }
         reserved_storage_indices.push(storage_index);
     }
     let anchor_unit_index = *anchor_indices
@@ -1418,7 +1418,6 @@ fn construct_blueprint_bond_driven_internal(
         }
     }
 
-    *ledger = EnergyLedger::default();
     *energy = remaining_energy;
     Ok((structure, total_heat))
 }
