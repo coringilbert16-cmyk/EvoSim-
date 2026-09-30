@@ -175,6 +175,19 @@ fn realize_declared_units(
         if !unit.realize_default_geometry(catalog) {
             return Err("confirmed seed contains unrealizable geometry".into());
         }
+        if let Some(scaffold) = blueprint.genome_measurement.as_ref() {
+            if crate::construction_runtime::placement_penetrates_genome_measurement(
+                catalog
+                    .iter()
+                    .find(|resource| resource.name == element.material.parts[0].0)
+                    .ok_or_else(|| "confirmed seed references a missing resource".to_string())?,
+                unit.placement,
+                scaffold,
+                catalog,
+            ) {
+                return Err("confirmed seed penetrates its genome measurement scaffold".into());
+            }
+        }
         structure.add_unit(unit);
     }
     Ok(structure)
@@ -235,31 +248,18 @@ pub(crate) fn realize_initial_with_reserve(
         return Err("juvenile energy reserve must be finite and positive".into());
     }
 
-    let (structure, mut ledger, energy) = if blueprint.genome_measurement.is_some() {
-        let mut trial_ledger = EnergyLedger::default();
-        let mut trial_energy = TRIAL_ENERGY;
-        let (_, trial_remaining) =
-            blueprint.realize_with_context(catalog, &mut trial_ledger, &mut trial_energy)?;
-        let required_initial_energy = TRIAL_ENERGY - trial_remaining;
-        if !required_initial_energy.is_finite() || required_initial_energy < 0.0 {
-            return Err("juvenile construction produced an invalid energy requirement".into());
-        }
-        let mut energy = required_initial_energy + reserve_energy;
-        let mut ledger = EnergyLedger::default();
-        let (structure, _) = blueprint.realize_with_context(catalog, &mut ledger, &mut energy)?;
-        (structure, ledger, energy)
-    } else {
-        let base = realize_declared_units(blueprint, catalog)?;
-        let (_, _, trial_remaining) =
-            form_declared_bonds(base.clone(), blueprint, catalog, TRIAL_ENERGY)?;
-        let required_initial_energy = TRIAL_ENERGY - trial_remaining;
-        if !required_initial_energy.is_finite() || required_initial_energy < 0.0 {
-            return Err("juvenile construction produced an invalid energy requirement".into());
-        }
-        let energy = required_initial_energy + reserve_energy;
-        let (structure, ledger, remaining) = form_declared_bonds(base, blueprint, catalog, energy)?;
-        (structure, ledger, remaining)
-    };
+    let base = realize_declared_units(blueprint, catalog)?;
+
+    let (_, _, trial_remaining) =
+        form_declared_bonds(base.clone(), blueprint, catalog, TRIAL_ENERGY)?;
+    let required_initial_energy = TRIAL_ENERGY - trial_remaining;
+    if !required_initial_energy.is_finite() || required_initial_energy < 0.0 {
+        return Err("juvenile construction produced an invalid energy requirement".into());
+    }
+
+    let energy = required_initial_energy + reserve_energy;
+    let (structure, mut ledger, energy) =
+        form_declared_bonds(base, blueprint, catalog, energy)?;
 
     if !energy.is_finite() || energy + EPS < reserve_energy {
         return Err(format!(
