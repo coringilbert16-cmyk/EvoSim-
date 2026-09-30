@@ -970,9 +970,12 @@ pub(crate) fn construct_blueprint_bond_driven(
                             let (a, b) = if neighbor_position == 0 {
                                 (endpoint_a, endpoint_b)
                             } else {
-                                let Some((a, b)) =
-                                    best_existing_connection(&trial, new_unit_index, existing, catalog)
-                                else {
+                                let Some((a, b)) = best_existing_connection(
+                                    &trial,
+                                    new_unit_index,
+                                    existing,
+                                    catalog,
+                                ) else {
                                     all_bonds_ok = false;
                                     break;
                                 };
