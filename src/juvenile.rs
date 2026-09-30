@@ -36,10 +36,9 @@ pub(crate) fn confirmed_seed_baseline(
         .find(|resource| resource.name == "Sulfur")
         .ok_or_else(|| "catalog is missing seed Sulfur".to_string())?;
 
-    // The seed is a continuous mesh, not nested storage shells. Different rigid
-    // materials are interleaved around one protected genome cavity. Any other
-    // voids are ordinary consequences of the mesh and may contain environmental
-    // material later.
+    // The seed is a continuous physical mesh around one protected genome cavity.
+    // The extra Carbon and Sulfur units are structural extensions of that boundary,
+    // not a storage chamber; any other voids are ordinary consequences of the mesh.
     let _ = (carbon, hydrogen, sulfur);
     let radius = 1.50;
     let side = 1.511_858;
@@ -122,7 +121,7 @@ pub(crate) fn confirmed_seed_baseline(
         },
     ];
     let baseline =
-        StructuralBlueprint::with_anchor_elements(elements, connections, (0..8).collect());
+        StructuralBlueprint::with_anchor_elements(elements, connections, (0..6).collect());
     baseline.validate()?;
     let _ = nitrogen;
     Ok(baseline)
