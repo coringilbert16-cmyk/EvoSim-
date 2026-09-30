@@ -1228,6 +1228,7 @@ fn construct_blueprint_bond_driven_internal(
     let mut closed_connections = vec![false; blueprint.connections.len()];
     while closed_connections.iter().any(|closed| !closed) {
         let mut progressed = false;
+        let mut failed_diagnostic = None;
         for (connection_index, connection) in blueprint.connections.iter().enumerate() {
             if closed_connections[connection_index] {
                 continue;
@@ -1310,16 +1311,29 @@ fn construct_blueprint_bond_driven_internal(
             if progressed {
                 break;
             }
-        }
-        if !progressed {
-            return Err(format!(
-                "bond-driven construction could not close prescribed connection {connection_index}                 (elements {}-{}): candidates={}, contacts={}, evaluated={}, bond_admission_rejections={}",
+
+            failed_diagnostic = Some((
+                connection_index,
                 connection.element_a,
                 connection.element_b,
                 total_candidates,
                 contact_candidates,
                 evaluated_candidates,
                 rejected_by_bond_admission,
+            ));
+        }
+        if !progressed {
+            let (
+                connection_index,
+                element_a,
+                element_b,
+                total_candidates,
+                contact_candidates,
+                evaluated_candidates,
+                rejected_by_bond_admission,
+            ) = failed_diagnostic.expect("failed closure must record diagnostics");
+            return Err(format!(
+                "bond-driven construction could not close prescribed connection {connection_index} (elements {element_a}-{element_b}): candidates={total_candidates}, contacts={contact_candidates}, evaluated={evaluated_candidates}, bond_admission_rejections={rejected_by_bond_admission}"
             ));
         }
     }
