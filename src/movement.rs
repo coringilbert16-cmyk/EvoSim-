@@ -252,6 +252,12 @@ impl Simulation {
             step_interval: organism.genome.movement_step_interval(),
             ticks_until_step: 0,
             decision_distance: distance,
+            before_energy: organism.usable_energy,
+            before_stress: organism.stress,
+            before_developmental_realization: organism
+                .developmental_realization_cached(&environment.catalog)
+                .map(|realization| realization.overall)
+                .unwrap_or(0.0),
         })
     }
 
