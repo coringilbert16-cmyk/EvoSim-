@@ -682,23 +682,15 @@ fn environmental_penetration_allowed(
         };
 
         for candidate_part in &candidate_destination {
-            if !parts_penetrate(
-                std::slice::from_ref(&boundary_part),
-                std::slice::from_ref(candidate_part),
-                environment.height,
+            if !crate::material_geometry::placed_forms_boundary_contact(
+                &boundary_part,
+                candidate_part,
+                0.0,
             ) {
                 continue;
             }
 
-            let Some((name, _)) = unit.material.parts.first() else {
-                continue;
-            };
-            let cohesion = environment
-                .catalog
-                .iter()
-                .find(|resource| resource.name == *name)
-                .map(|resource| resource.properties.cohesion)
-                .unwrap_or(1.0);
+            let cohesion = unit.material.weighted_properties(&environment.catalog).cohesion;
             permeability = permeability.min(crate::resources::permeability_from_cohesion(
                 cohesion,
                 &environment.catalog,
@@ -728,11 +720,17 @@ fn environmental_penetration_allowed(
     for _ in 0..24 {
         let mid = (low + high) * 0.5;
         let destination = organism_parts_at(moving, environment, dx * mid, dy * mid);
-        if parts_penetrate(
-            &destination,
-            &physical_parts_at(physical, environment, 0.0, 0.0),
-            environment.height,
-        ) {
+        if destination.iter().any(|organism_part| {
+            physical_parts_at(physical, environment, 0.0, 0.0)
+                .iter()
+                .any(|physical_part| {
+                    crate::material_geometry::placed_forms_boundary_contact(
+                        organism_part,
+                        physical_part,
+                        0.0,
+                    )
+                })
+        }) {
             high = mid;
         } else {
             low = mid;
@@ -1052,6 +1050,55 @@ mod tests {
             &carbon,
             &destination,
             1.0,
+            0.0
+        ));
+    }
+
+    #[test]
+    fn fluid_boundary_is_contact_geometry_without_becoming_a_wall() {
+        let simulation = Simulation::new(42, 1.0);
+        let environment = simulation.environment.clone();
+        let moving = simulation.organisms.first().expect("default seed organism");
+        let water_unit = moving
+            .structure
+            .units
+            .iter()
+            .find(|unit| {
+                unit.material
+                    .parts
+                    .first()
+                    .map(|(name, _)| name == "Water")
+                    .unwrap_or(false)
+            })
+            .expect("seed boundary should contain Water");
+        let water = water_unit.shape(&environment.catalog).expect("water shape");
+        let carbon = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: water_unit.placement.x + water.form.bounding_radius() * 0.9,
+                y: water_unit.placement.y,
+                rotation_radians: 0.0,
+            }],
+            &environment.catalog,
+        )
+        .expect("valid carbon realization");
+        let carbon_part = physical_parts_at(&carbon, &environment, 0.0, 0.0)
+            .into_iter()
+            .next()
+            .expect("carbon geometry");
+        let water_part = PlacedMaterialPart {
+            part_index: 0,
+            form: water.form,
+            placement: water_unit.placement,
+        };
+        assert!(crate::material_geometry::placed_forms_boundary_contact(
+            &water_part,
+            &carbon_part,
+            0.0
+        ));
+        assert!(!crate::material_geometry::placed_forms_penetrate(
+            &water_part,
+            &carbon_part,
             0.0
         ));
     }
