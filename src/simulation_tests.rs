@@ -132,7 +132,7 @@ mod integration_tests {
             &mut energy,
         )
         .expect("water fill should succeed");
-        assert!(first > 0, "topology regions before fill: {:?}", regions);
+        assert!(first > 0);
         let water_count = structure
             .units
             .iter()
