@@ -962,6 +962,7 @@ fn construct_blueprint_bond_driven_internal(
     let mut total_heat = 0.0;
     let mut nodes = 0usize;
     let mut reserved_storage_indices = Vec::<usize>::new();
+    let mut closed_connections = vec![false; blueprint.connections.len()];
 
     let mut anchor_storage_index = None;
     let anchor_instance = if let Some(storage) = available_materials.as_deref_mut() {
@@ -1208,6 +1209,17 @@ fn construct_blueprint_bond_driven_internal(
                 if storage_index != usize::MAX {
                     reserved_storage_indices.push(storage_index);
                 }
+                // This successful construction step created the physical bond
+                // for the prescribed edge that selected this neighbor. Record
+                // that edge now; later closure work only handles edges that
+                // were not already realized by a forward bond.
+                for (connection_index, connection) in blueprint.connections.iter().enumerate() {
+                    if (connection.element_a == index && connection.element_b == neighbor)
+                        || (connection.element_a == neighbor && connection.element_b == index)
+                    {
+                        closed_connections[connection_index] = true;
+                    }
+                }
                 attached = true;
                 break;
             }
@@ -1225,7 +1237,6 @@ fn construct_blueprint_bond_driven_internal(
     // construction steps. This is not future lookahead: the endpoints and
     // geometry already exist, and a failed closure never moves or undoes a
     // committed bond.
-    let mut closed_connections = vec![false; blueprint.connections.len()];
     while closed_connections.iter().any(|closed| !closed) {
         let mut progressed = false;
         let mut failed_diagnostic = None;
