@@ -955,17 +955,30 @@ pub(crate) fn construct_blueprint_bond_driven(
                         let mut all_bonds_ok = true;
                         let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
 
-                        for &neighbor_index in &neighbors {
+                        for (neighbor_position, &neighbor_index) in neighbors.iter().enumerate() {
                             let Some(existing) = realized_units[neighbor_index] else {
                                 all_bonds_ok = false;
                                 break;
                             };
-                            let Some((a, b)) =
-                                best_existing_connection(&trial, new_unit_index, existing, catalog)
-                            else {
-                                all_bonds_ok = false;
-                                break;
+
+                            // The first bond is the constructor's actual A.x/B.y
+                            // joint. Do not throw that biological choice away and
+                            // ask the generic candidate selector to choose a
+                            // different pair after the rotation. Additional
+                            // already-realized neighbors may select their own
+                            // available connection points on the now-positioned B.
+                            let (a, b) = if neighbor_position == 0 {
+                                (endpoint_a, endpoint_b)
+                            } else {
+                                let Some((a, b)) =
+                                    best_existing_connection(&trial, new_unit_index, existing, catalog)
+                                else {
+                                    all_bonds_ok = false;
+                                    break;
+                                };
+                                (a, b)
                             };
+
                             let Some(attempt) = crate::combine_runtime::form_specific_bond(
                                 &mut trial,
                                 existing,
