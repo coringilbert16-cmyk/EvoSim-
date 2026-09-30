@@ -1343,8 +1343,25 @@ fn construct_blueprint_bond_driven_internal(
                 evaluated_candidates,
                 rejected_by_bond_admission,
             ) = failed_diagnostic.expect("failed closure must record diagnostics");
+            let physical_a = realized_units[element_a];
+            let physical_b = realized_units[element_b];
+            let bond_present = physical_a.zip(physical_b).is_some_and(|(a, b)| {
+                let pa = structure.units[a].physical_id;
+                let pb = structure.units[b].physical_id;
+                structure.bonds.iter().any(|bond| {
+                    (bond.endpoint_a.constituent_id == pa
+                        && bond.endpoint_b.constituent_id == pb)
+                        || (bond.endpoint_a.constituent_id == pb
+                            && bond.endpoint_b.constituent_id == pa)
+                })
+            });
+            let center_distance = physical_a
+                .zip(physical_b)
+                .map(|(a, b)| structure.units[a].placement.distance_to(&structure.units[b].placement))
+                .unwrap_or(f64::NAN);
             return Err(format!(
-                "bond-driven construction could not close prescribed connection {connection_index} (elements {element_a}-{element_b}): candidates={total_candidates}, contacts={contact_candidates}, evaluated={evaluated_candidates}, bond_admission_rejections={rejected_by_bond_admission}"
+                "bond-driven construction could not close prescribed connection {connection_index} (elements {element_a}-{element_b}): candidates={total_candidates}, contacts={contact_candidates}, evaluated={evaluated_candidates}, bond_admission_rejections={rejected_by_bond_admission}, closed_flag={}, bond_present={}, center_distance={center_distance:.6}",
+                closed_connections[connection_index], bond_present
             ));
         }
     }
