@@ -89,43 +89,73 @@ pub(crate) fn confirmed_seed_baseline(
         },
     ];
 
-    // The outer shell is a regular dodecagon made from the same Nitrogen
-    // rectangles. The side length is the same as the inner shell, while the
-    // larger apothem leaves a genuinely accessible chamber for finite rigid
-    // resources such as Methane.
-    let outer_side_count = 10usize;
-    let outer_side_length = 1.53;
-    let outer_apothem =
-        outer_side_length / (2.0 * (std::f64::consts::PI / outer_side_count as f64).tan());
-    let inner_boundary = inner_offset + inner_thickness / 2.0;
-    let outer_center_radius = outer_apothem + inner_thickness / 2.0;
+    // Use the same proven four-rectangle construction for the outer shell,
+    // simply scaled outward. This deliberately favors a formation whose
+    // physical closure is unambiguous over a more elaborate polygon.
+    let outer_side = 4.9;
+    let outer_offset = (outer_side + inner_thickness) / 2.0;
     let outer_start = elements.len();
 
-    for side in 0..outer_side_count {
-        let normal_angle = std::f64::consts::FRAC_PI_2
-            + side as f64 * (2.0 * std::f64::consts::PI / outer_side_count as f64);
-        let tangent_angle = normal_angle - std::f64::consts::FRAC_PI_2;
-        elements.push(BlueprintElement {
+    elements.extend([
+        BlueprintElement {
             material: Material::free_base(nitrogen, 1.0),
             placement: BlueprintPlacement {
-                x: outer_center_radius * normal_angle.cos(),
-                y: outer_center_radius * normal_angle.sin(),
-                rotation_radians: tangent_angle,
+                x: 0.0,
+                y: outer_offset,
+                rotation_radians: 0.0,
             },
-        });
-    }
+        },
+        BlueprintElement {
+            material: Material::free_base(nitrogen, 1.0),
+            placement: BlueprintPlacement {
+                x: -outer_offset,
+                y: 0.0,
+                rotation_radians: std::f64::consts::FRAC_PI_2,
+            },
+        },
+        BlueprintElement {
+            material: Material::free_base(nitrogen, 1.0),
+            placement: BlueprintPlacement {
+                x: outer_offset,
+                y: 0.0,
+                rotation_radians: std::f64::consts::FRAC_PI_2,
+            },
+        },
+        BlueprintElement {
+            material: Material::free_base(nitrogen, 1.0),
+            placement: BlueprintPlacement {
+                x: 0.0,
+                y: -outer_offset,
+                rotation_radians: 0.0,
+            },
+        },
+    ]);
 
-    for side in 0..outer_side_count {
-        connections.push(BlueprintConnection {
-            element_a: outer_start + side,
-            element_b: outer_start + (side + 1) % outer_side_count,
-        });
-    }
+    connections.extend([
+        BlueprintConnection {
+            element_a: outer_start,
+            element_b: outer_start + 1,
+        },
+        BlueprintConnection {
+            element_a: outer_start,
+            element_b: outer_start + 2,
+        },
+        BlueprintConnection {
+            element_a: outer_start + 1,
+            element_b: outer_start + 3,
+        },
+        BlueprintConnection {
+            element_a: outer_start + 2,
+            element_b: outer_start + 3,
+        },
+    ]);
 
-    // Two Hydrogen segments form one ordinary structural bridge from a
-    // real inner-shell corner to a real outer-shell corner. Using actual
-    // boundary vertices makes the bridge part of the same planar topology
-    // without introducing an intake port or resource-specific interface.
+    // Two ordinary Hydrogen constituents bridge the chamber. They are not
+    // ports: they simply connect the inner and outer shells into one structural
+    // component while leaving the rest of the chamber physically open.
+    let inner_boundary = inner_offset + inner_thickness / 2.0;
+    let outer_inner_boundary = outer_offset - inner_thickness / 2.0;
+    let chamber_gap = outer_inner_boundary - inner_boundary;
     let hydrogen_length = catalog
         .iter()
         .find(|resource| resource.name == "Hydrogen")
@@ -134,46 +164,22 @@ pub(crate) fn confirmed_seed_baseline(
             _ => None,
         })
         .ok_or_else(|| "catalog Hydrogen must retain its line geometry".to_string())?;
-
-    let inner_corner = (inner_boundary, inner_boundary);
-    let outer_corner = (outer_side_length / 2.0, outer_apothem);
-    let dx = outer_corner.0 - inner_corner.0;
-    let dy = outer_corner.1 - inner_corner.1;
-    let direct_distance = dx.hypot(dy);
-    if !direct_distance.is_finite()
-        || direct_distance <= 0.0
-        || direct_distance > 2.0 * hydrogen_length
-    {
-        return Err("initial shell corners cannot be bridged by Hydrogen".into());
+    if chamber_gap <= 0.0 || chamber_gap > 2.0 * hydrogen_length {
+        return Err("initial shell spacing cannot be bridged by Hydrogen".into());
     }
 
-    let half_distance = direct_distance / 2.0;
-    let offset = (hydrogen_length.powi(2) - half_distance.powi(2)).sqrt();
-    let midpoint = (
-        (inner_corner.0 + outer_corner.0) / 2.0,
-        (inner_corner.1 + outer_corner.1) / 2.0,
-    );
-    let normal = (-dy / direct_distance, dx / direct_distance);
-    let bridge_midpoint = (
-        midpoint.0 + offset * normal.0,
-        midpoint.1 + offset * normal.1,
-    );
     let bridge_start = elements.len();
-
-    let line_placement = |a: (f64, f64), b: (f64, f64)| BlueprintPlacement {
-        x: (a.0 + b.0) / 2.0,
-        y: (a.1 + b.1) / 2.0,
-        rotation_radians: (b.1 - a.1).atan2(b.0 - a.0),
-    };
-    let upper_bridge = [
-        line_placement(inner_corner, bridge_midpoint),
-        line_placement(bridge_midpoint, outer_corner),
-    ];
-
-    for placement in upper_bridge {
+    let segment_length = chamber_gap / 2.0;
+    let midpoint_one = inner_boundary + segment_length / 2.0;
+    let midpoint_two = outer_inner_boundary - segment_length / 2.0;
+    for y in [midpoint_one, midpoint_two] {
         elements.push(BlueprintElement {
             material: Material::free_base("Hydrogen", 1.0),
-            placement,
+            placement: BlueprintPlacement {
+                x: 0.0,
+                y,
+                rotation_radians: std::f64::consts::FRAC_PI_2,
+            },
         });
     }
 
