@@ -194,6 +194,36 @@ enum NextConstructionResourceStatus {
     Impossible,
 }
 
+pub(crate) fn construction_material_need_pressure(
+    construction: &ReproductiveConstruction,
+    catalog: &[crate::resources::BaseResource],
+) -> f64 {
+    let blueprint = &construction.child_genome.developmental_blueprint;
+    let x = construction.developmental_origin.x;
+    let y = construction.developmental_origin.y;
+    let preferred = blueprint
+        .material_preferences
+        .iter()
+        .max_by(|a, b| {
+            a.evaluate(x, y)
+                .partial_cmp(&b.evaluate(x, y))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|field| field.resource_name.as_str());
+    let Some(preferred) = preferred else {
+        return 1.0;
+    };
+    match crate::construction_material_selection::select_construction_material(
+        &construction.committed_material,
+        preferred,
+        catalog,
+    ) {
+        Ok(crate::construction_material_selection::ConstructionMaterialDecision::Need { .. }) => 1.0,
+        Ok(crate::construction_material_selection::ConstructionMaterialDecision::Selected { .. }) => 0.0,
+        Err(_) => 1.0,
+    }
+}
+
 fn next_construction_resource_status(
     child: &Organism,
     parent_storage: &MaterialStorage,
