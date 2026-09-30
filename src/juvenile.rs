@@ -144,8 +144,7 @@ pub(crate) fn confirmed_seed_baseline(
     {
         return Err("initial shell spacing cannot be bridged by Hydrogen".into());
     }
-    let bridge_lateral_offset =
-        (hydrogen_length.powi(2) - bridge_half_gap.powi(2)).sqrt();
+    let bridge_lateral_offset = (hydrogen_length.powi(2) - bridge_half_gap.powi(2)).sqrt();
     let bridge_midpoint = (inner_boundary + outer_apothem) / 2.0;
     let bridge_start = elements.len();
 
