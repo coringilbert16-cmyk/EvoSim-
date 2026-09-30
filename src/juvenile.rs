@@ -219,34 +219,51 @@ pub(crate) fn confirmed_seed_baseline(
     if !shell_gap.is_finite() || shell_gap <= 0.0 || hydrogen_length <= half_gap {
         return Err("initial shell spacing cannot be bridged by Hydrogen".into());
     }
-    // Two Hydrogen segments are used at each of two symmetric bridge sites.
-    // Their combined length spans the enlarged chamber while keeping each
-    // constituent an ordinary catalog resource.
-    let first_center = inner_boundary + hydrogen_length / 2.0;
-    let second_center = outer_boundary - hydrogen_length / 2.0;
-    if second_center <= first_center {
-        return Err("initial shell spacing cannot accommodate the Hydrogen bridge".into());
-    }
-
+    // Two Hydrogen segments form each symmetric bridge. Their endpoints
+    // meet exactly at a shared interior vertex, so the shell spacing is solved
+    // by ordinary finite line geometry rather than by a special connector.
+    let bridge_half_gap = shell_gap / 2.0;
+    let bridge_height = (hydrogen_length.powi(2) - bridge_half_gap.powi(2)).sqrt();
+    let bridge_midpoint = (inner_boundary + outer_boundary) / 2.0;
     let bridge_start = elements.len();
-    for &y in &[first_center, second_center] {
+
+    let upper_first_dx = bridge_height;
+    let upper_first_dy = bridge_half_gap;
+    let upper_second_dx = -bridge_height;
+    let upper_second_dy = bridge_half_gap;
+    let upper_first_rotation = upper_first_dy.atan2(upper_first_dx);
+    let upper_second_rotation = upper_second_dy.atan2(upper_second_dx);
+
+    let upper_bridge = [
+        BlueprintPlacement {
+            x: bridge_height / 2.0,
+            y: (inner_boundary + bridge_midpoint) / 2.0,
+            rotation_radians: upper_first_rotation,
+        },
+        BlueprintPlacement {
+            x: bridge_height / 2.0,
+            y: (bridge_midpoint + outer_boundary) / 2.0,
+            rotation_radians: upper_second_rotation,
+        },
+    ];
+
+    let lower_bridge = [
+        BlueprintPlacement {
+            x: -bridge_height / 2.0,
+            y: -(inner_boundary + bridge_midpoint) / 2.0,
+            rotation_radians: -upper_first_rotation,
+        },
+        BlueprintPlacement {
+            x: -bridge_height / 2.0,
+            y: -(bridge_midpoint + outer_boundary) / 2.0,
+            rotation_radians: -upper_second_rotation,
+        },
+    ];
+
+    for placement in upper_bridge.into_iter().chain(lower_bridge) {
         elements.push(BlueprintElement {
             material: Material::free_base("Hydrogen", 1.0),
-            placement: BlueprintPlacement {
-                x: 0.0,
-                y,
-                rotation_radians: std::f64::consts::FRAC_PI_2,
-            },
-        });
-    }
-    for &y in &[-second_center, -first_center] {
-        elements.push(BlueprintElement {
-            material: Material::free_base("Hydrogen", 1.0),
-            placement: BlueprintPlacement {
-                x: 0.0,
-                y,
-                rotation_radians: std::f64::consts::FRAC_PI_2,
-            },
+            placement,
         });
     }
 
