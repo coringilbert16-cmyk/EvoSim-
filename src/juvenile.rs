@@ -155,9 +155,12 @@ pub(crate) fn confirmed_seed_baseline(
         y: (a.1 + b.1) / 2.0,
         rotation_radians: (b.1 - a.1).atan2(b.0 - a.0),
     };
-    let midpoint_y = (inner_boundary + outer_inner_boundary) / 2.0;
     let bridge_origin = (0.0, inner_boundary);
-    let directions = [theta, 0.0, -theta];
+    let directions = [
+        std::f64::consts::FRAC_PI_2 + theta,
+        std::f64::consts::FRAC_PI_2,
+        std::f64::consts::FRAC_PI_2 - theta,
+    ];
     let mut cursor = bridge_origin;
     for direction in directions {
         let next = (
@@ -169,12 +172,6 @@ pub(crate) fn confirmed_seed_baseline(
             placement: line_placement(cursor, next),
         });
         cursor = next;
-    }
-
-    // Translate the symmetric three-link chain onto the chamber centerline.
-    let y_offset = midpoint_y - (bridge_origin.1 + cursor.1) / 2.0;
-    for element in &mut elements[bridge_start..bridge_start + 3] {
-        element.placement.y += y_offset;
     }
 
     connections.extend([
