@@ -242,4 +242,45 @@ mod tests {
             } if preferred_resource == "Carbon"
         ));
     }
+    #[test]
+    fn composite_physical_instance_is_selected_as_the_actual_inventory_entry() {
+        let catalog = default_catalog();
+        let mut storage = MaterialStorage::default();
+        let material = Material {
+            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+            internal_bonds: vec![crate::resources::InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
+        };
+        assert!(storage.store_physical(
+            material.clone(),
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.838,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        ));
+
+        let decision = select_construction_material(&storage, "Carbon", &catalog).unwrap();
+        assert!(matches!(
+            decision,
+            ConstructionMaterialDecision::Selected {
+                storage_index: 0,
+                resource_name,
+                score,
+            } if resource_name == "Carbon" && score >= MIN_CONSTRUCTION_MATERIAL_MATCH
+        ));
+        assert_eq!(storage.len(), 1);
+        assert_eq!(storage.materials_snapshot(), vec![material]);
+    }
+
 }
