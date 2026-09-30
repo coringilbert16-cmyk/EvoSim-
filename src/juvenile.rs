@@ -118,8 +118,6 @@ pub(crate) fn confirmed_seed_baseline(
     Ok(baseline)
 }
 
-
-
 pub(crate) const JUVENILE_INITIAL_ENERGY_RESERVE: f64 = 16.0;
 const TRIAL_ENERGY: f64 = 1.0e6;
 const EPS: f64 = 1e-8;
