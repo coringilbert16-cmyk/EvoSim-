@@ -1133,9 +1133,6 @@ fn construct_blueprint_bond_driven_internal(
         }
     }
 
-    *ledger = construction_ledger;
-    *energy = remaining_energy;
-
     if blueprint.genome_measurement.is_some() {
         structure.remove_units_by_physical_ids(&temporary_scaffold_ids);
         let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)
@@ -1150,6 +1147,12 @@ fn construct_blueprint_bond_driven_internal(
 
     if let Some(storage) = available_materials.as_deref_mut() {
         reserved_storage_indices.sort_unstable();
+        if reserved_storage_indices
+            .iter()
+            .any(|&storage_index| storage.entries.get(storage_index).is_none())
+        {
+            return Err("construction reservation became invalid before material consumption".into());
+        }
         for storage_index in reserved_storage_indices.into_iter().rev() {
             storage.take_physical_at(storage_index).ok_or_else(|| {
                 format!("construction could not consume reserved material index {storage_index}")
@@ -1157,6 +1160,7 @@ fn construct_blueprint_bond_driven_internal(
         }
     }
 
+    *ledger = construction_ledger;
     *energy = remaining_energy;
     Ok((structure, total_heat))
 }
