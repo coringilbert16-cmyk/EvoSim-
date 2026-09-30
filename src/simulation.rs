@@ -719,9 +719,6 @@ impl Simulation {
                         match Self::start_movement(
                             organism,
                             environment,
-                            organism.structural_mass(&environment.catalog),
-                            organism.genome.movement_efficiency(),
-                            organism.usable_energy,
                             &mut self.rng,
                             &perceptions,
                         ) {
