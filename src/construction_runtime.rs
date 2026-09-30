@@ -3,6 +3,9 @@
     reason = "Staged construction helper retained for subsystem integration"
 )]
 use crate::combine_runtime::combine_specific_pair;
+use crate::construction_material_selection::{
+    rank_available_construction_materials, MIN_CONSTRUCTION_MATERIAL_MATCH,
+};
 use crate::material_geometry::MaterialGeometry;
 use crate::resources::{BaseResource, Form, Material};
 use crate::state::EnergyLedger;
@@ -831,7 +834,7 @@ fn realize_next_bond_driven(
     index: usize,
     neighbor: usize,
     genome_anchor: Placement,
-    preferred_resource_name: &str,
+    new_resource: &BaseResource,
     nodes: &mut usize,
     ledger: &EnergyLedger,
     available_energy: f64,
@@ -841,7 +844,6 @@ fn realize_next_bond_driven(
     ConnectionEndpoint,
     crate::combine_runtime::CombineAttempt,
 )> {
-    let new_resource = resource(catalog, preferred_resource_name)?;
     let new_endpoints = blueprint_endpoint_options(new_resource);
     let existing_index = realized_units[neighbor]?;
     let existing_resource =
@@ -936,6 +938,36 @@ pub(crate) fn construct_blueprint_bond_driven(
     ledger: &mut EnergyLedger,
     energy: &mut f64,
 ) -> Result<(OrganismStructure, f64), String> {
+    construct_blueprint_bond_driven_internal(blueprint, catalog, ledger, energy, None)
+}
+
+/// Bond-driven construction using actual physical inventory. The structural
+/// blueprint supplies the material preference; storage supplies the material
+/// that can actually be used. No candidate below the structural match
+/// threshold is consumed.
+pub(crate) fn construct_blueprint_bond_driven_with_materials(
+    blueprint: &crate::structural_blueprint::StructuralBlueprint,
+    catalog: &[BaseResource],
+    available_materials: &mut crate::material_storage::MaterialStorage,
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> Result<(OrganismStructure, f64), String> {
+    construct_blueprint_bond_driven_internal(
+        blueprint,
+        catalog,
+        ledger,
+        energy,
+        Some(available_materials),
+    )
+}
+
+fn construct_blueprint_bond_driven_internal(
+    blueprint: &crate::structural_blueprint::StructuralBlueprint,
+    catalog: &[BaseResource],
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+    mut available_materials: Option<&mut crate::material_storage::MaterialStorage>,
+) -> Result<(OrganismStructure, f64), String> {
     if blueprint.elements.is_empty() {
         return Err("blueprint must contain at least one element".into());
     }
@@ -1012,21 +1044,51 @@ pub(crate) fn construct_blueprint_bond_driven(
         // next joint using whatever material is actually available then.
         let preferred = blueprint.elements[index].material.parts[0].0.clone();
         let neighbor = neighbors[0];
-        if let Some((unit, endpoint_a, endpoint_b, trial_attempt)) =
-            realize_next_bond_driven(
-                blueprint,
-                catalog,
-                &structure,
-                &realized_units,
-                index,
-                neighbor,
-                genome_anchor,
+        let mut attached = false;
+        let candidate_resources = if let Some(storage) = available_materials.as_deref() {
+            rank_available_construction_materials(storage, &preferred, catalog)
+                .map_err(|e| e.to_string())?
+                .into_iter()
+                .filter(|(_, _, score)| *score >= MIN_CONSTRUCTION_MATERIAL_MATCH)
+                .collect::<Vec<_>>()
+        } else {
+            vec![(usize::MAX, preferred.clone(), 1.0)]
+        };
+
+        if candidate_resources.is_empty() && available_materials.is_some() {
+            let best = rank_available_construction_materials(
+                available_materials.as_deref().expect("checked above"),
                 &preferred,
-                &mut nodes,
-                ledger,
-                remaining_energy,
+                catalog,
             )
-        {
+            .map_err(|e| e.to_string())?
+            .first()
+            .map(|candidate| candidate.2)
+            .unwrap_or(0.0);
+            return Err(format!(
+                "construction material need: preferred={preferred}, best_available_structural_match={best:.6}, threshold={MIN_CONSTRUCTION_MATERIAL_MATCH:.6}"
+            ));
+        }
+
+        for (storage_index, candidate_name, _score) in candidate_resources {
+            let Some(candidate_resource) = resource(catalog, &candidate_name) else {
+                continue;
+            };
+            if let Some((unit, endpoint_a, endpoint_b, trial_attempt)) =
+                realize_next_bond_driven(
+                    blueprint,
+                    catalog,
+                    &structure,
+                    &realized_units,
+                    index,
+                    neighbor,
+                    genome_anchor,
+                    candidate_resource,
+                    &mut nodes,
+                    ledger,
+                    remaining_energy,
+                )
+            {
             let new_index = structure.units.len();
             structure.units.push(unit);
 
@@ -1061,7 +1123,16 @@ pub(crate) fn construct_blueprint_bond_driven(
             total_heat += commit_attempt.work_cost;
             realized[index] = true;
             realized_units[index] = Some(new_index);
+            if let Some(storage) = available_materials.as_deref_mut() {
+                if storage_index != usize::MAX && storage.take_physical_at(storage_index).is_none() {
+                    return Err(format!(
+                        "construction consumed candidate material index {storage_index} after bond commit"
+                    ));
+                }
+            }
             attached = true;
+            break;
+        }
         }
 
         if !attached {
