@@ -49,6 +49,21 @@ pub(crate) struct MovementAttemptDiagnostic {
     pub(crate) old_position: Option<Position>,
     pub(crate) new_position: Option<Position>,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub(crate) struct ActiveMovement {
+    /// One movement decision is a persistent operation. Physical progress is
+    /// always exactly one world unit per movement step.
+    pub(crate) direction_x: f64,
+    pub(crate) direction_y: f64,
+    pub(crate) remaining_steps: u32,
+    /// Number of ticks between physical one-unit steps.
+    pub(crate) step_interval: u64,
+    #[serde(default)]
+    pub(crate) ticks_until_step: u64,
+    /// Distance selected when the operation began; retained for learning context.
+    pub(crate) decision_distance: f64,
+}
 pub(crate) const MEMORY_DECAY_PER_TICK: f64 = 0.995;
 pub(crate) const COMBINE_PROCESSING_RATE: usize = 1;
 pub(crate) const BREAK_PROCESSING_RATE: usize = 1;
@@ -159,6 +174,9 @@ pub(crate) struct Organism {
     pub(crate) experience_memory: crate::memory::ExperienceMemory,
     #[serde(default)]
     pub(crate) pending_movement_experience: Option<crate::memory::PendingMovementExperience>,
+    /// Persistent multi-tick movement operation, analogous to BREAK/COMBINE.
+    #[serde(default)]
+    pub(crate) active_movement: Option<ActiveMovement>,
     pub(crate) decision_history: DecisionHistory,
     pub(crate) usable_energy: f64,
     pub(crate) stress: f64,
