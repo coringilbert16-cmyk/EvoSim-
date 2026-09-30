@@ -1021,21 +1021,35 @@ mod tests {
         let simulation = Simulation::new(42, 1.0);
         let environment = simulation.environment.clone();
         let moving = simulation.organisms.first().expect("default seed organism");
-        let water = crate::physical_material::PhysicalMaterial::realized(
-            crate::resources::Material::free_base("Water", 1.0),
+
+        let water_unit = moving
+            .structure
+            .units
+            .iter()
+            .find(|unit| {
+                unit.material
+                    .parts
+                    .first()
+                    .map(|(name, _)| name == "Water")
+                    .unwrap_or(false)
+            })
+            .expect("seed boundary should contain Water");
+
+        let carbon = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
             vec![Placement {
-                x: moving.occupied_cells[0].x + 1.0,
-                y: moving.occupied_cells[0].y,
+                x: water_unit.placement.x + 0.5,
+                y: water_unit.placement.y,
                 rotation_radians: 0.0,
             }],
             &environment.catalog,
         )
-        .expect("valid water realization");
+        .expect("valid carbon realization");
         let destination = organism_parts_at(moving, &environment, 1.0, 0.0);
         assert!(environmental_penetration_allowed(
             moving,
             &environment,
-            &water,
+            &carbon,
             &destination,
             1.0,
             0.0
