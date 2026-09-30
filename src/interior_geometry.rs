@@ -216,7 +216,6 @@ pub fn fill_enclosed_regions_with_water(
 fn region_boundary_contains_water(
     structure: &OrganismStructure,
     region: &EnclosedRegion,
-    catalog: &[BaseResource],
 ) -> bool {
     region.boundary_units.iter().any(|&index| {
         structure
