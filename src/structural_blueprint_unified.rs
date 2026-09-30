@@ -117,9 +117,21 @@ impl GenomeMeasurementScaffold {
         let spacing = radius * 3.0_f64.sqrt();
         Ok(Self {
             placements: [
-                BlueprintPlacement { x: -spacing, y: 0.0, rotation_radians: 0.0 },
-                BlueprintPlacement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                BlueprintPlacement { x: spacing, y: 0.0, rotation_radians: 0.0 },
+                BlueprintPlacement {
+                    x: -spacing,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                BlueprintPlacement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                BlueprintPlacement {
+                    x: spacing,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
             ],
         })
     }
@@ -311,7 +323,9 @@ impl StructuralBlueprint {
         if self.genome_measurement.is_some()
             && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_none()
         {
-            return Err("genome measurement scaffold did not produce a qualifying final cavity".into());
+            return Err(
+                "genome measurement scaffold did not produce a qualifying final cavity".into(),
+            );
         }
 
         Ok((structure, total_heat))
