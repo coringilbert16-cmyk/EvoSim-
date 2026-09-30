@@ -23,181 +23,67 @@ pub(crate) fn confirmed_seed_baseline(
         .iter()
         .find(|resource| resource.name == "Nitrogen")
         .ok_or_else(|| "catalog is missing seed Nitrogen".to_string())?;
-    let nitrogen = &nitrogen.name;
-
-    // The juvenile starts as two concentric rigid shells. The inner shell
-    // encloses the genome cavity; the larger outer shell leaves a genuinely
-    // accessible chamber between them. The chamber is deliberately wide enough
-    // for the largest rigid environmental resource rather than relying on a
-    // resource-specific interface.
-    let inner_side = 1.511_858;
-    let inner_thickness = 0.330_719;
-    let inner_offset = (inner_side + inner_thickness) / 2.0;
-
-    let mut elements = Vec::new();
-    elements.extend([
-        BlueprintElement {
-            material: Material::free_base(nitrogen, 1.0),
-            placement: BlueprintPlacement {
-                x: 0.0,
-                y: inner_offset,
-                rotation_radians: 0.0,
-            },
-        },
-        BlueprintElement {
-            material: Material::free_base(nitrogen, 1.0),
-            placement: BlueprintPlacement {
-                x: -inner_offset,
-                y: 0.0,
-                rotation_radians: std::f64::consts::FRAC_PI_2,
-            },
-        },
-        BlueprintElement {
-            material: Material::free_base(nitrogen, 1.0),
-            placement: BlueprintPlacement {
-                x: inner_offset,
-                y: 0.0,
-                rotation_radians: std::f64::consts::FRAC_PI_2,
-            },
-        },
-        BlueprintElement {
-            material: Material::free_base(nitrogen, 1.0),
-            placement: BlueprintPlacement {
-                x: 0.0,
-                y: -inner_offset,
-                rotation_radians: 0.0,
-            },
-        },
-    ]);
-
-    let mut connections = vec![
-        BlueprintConnection {
-            element_a: 0,
-            element_b: 1,
-        },
-        BlueprintConnection {
-            element_a: 0,
-            element_b: 2,
-        },
-        BlueprintConnection {
-            element_a: 1,
-            element_b: 3,
-        },
-        BlueprintConnection {
-            element_a: 2,
-            element_b: 3,
-        },
-    ];
-
-    // The outer shell is sized from the maximum distance between rigid
-    // connection points in the catalog, not from a resource bounding radius.
-    // The chamber therefore grows enough to admit the largest connection
-    // topology without making the cell body a scaled copy of the largest shape.
-    let outer_side_count = 10usize;
-    let largest_connection_span = largest_rigid_connection_span(catalog);
-    let connection_clearance = 0.25;
-    let required_chamber_gap = largest_connection_span + connection_clearance;
-    let outer_apothem = inner_offset + inner_thickness / 2.0 + required_chamber_gap;
-    let outer_side_length =
-        2.0 * outer_apothem * (std::f64::consts::PI / outer_side_count as f64).tan();
-    let outer_center_radius = outer_apothem + inner_thickness / 2.0;
-    let outer_start = elements.len();
-
-    for side in 0..outer_side_count {
-        let normal_angle = std::f64::consts::FRAC_PI_2
-            + side as f64 * (2.0 * std::f64::consts::PI / outer_side_count as f64);
-        let tangent_angle = normal_angle - std::f64::consts::FRAC_PI_2;
-        elements.push(BlueprintElement {
-            material: Material::free_base(nitrogen, 1.0),
-            placement: BlueprintPlacement {
-                x: outer_center_radius * normal_angle.cos(),
-                y: outer_center_radius * normal_angle.sin(),
-                rotation_radians: tangent_angle,
-            },
-        });
-    }
-
-    for side in 0..outer_side_count {
-        connections.push(BlueprintConnection {
-            element_a: outer_start + side,
-            element_b: outer_start + (side + 1) % outer_side_count,
-        });
-    }
-
-    // Two ordinary Hydrogen constituents bridge the chamber at the center of
-    // the top boundary. They are structural material, not an intake port.
-    let inner_boundary = inner_offset + inner_thickness / 2.0;
-    let outer_inner_boundary = outer_apothem;
-    let chamber_gap = outer_inner_boundary - inner_boundary;
-    let hydrogen_length = catalog
+    let carbon = catalog
+        .iter()
+        .find(|resource| resource.name == "Carbon")
+        .ok_or_else(|| "catalog is missing seed Carbon".to_string())?;
+    let hydrogen = catalog
         .iter()
         .find(|resource| resource.name == "Hydrogen")
-        .and_then(|resource| match &resource.shape.form {
-            crate::resources::Form::Line { length } => Some(*length),
-            _ => None,
-        })
-        .ok_or_else(|| "catalog Hydrogen must retain its line geometry".to_string())?;
-    if chamber_gap <= 0.0 || chamber_gap > 3.0 * hydrogen_length {
-        return Err("initial shell spacing cannot be bridged by three Hydrogen links".into());
-    }
+        .ok_or_else(|| "catalog is missing seed Hydrogen".to_string())?;
+    let sulfur = catalog
+        .iter()
+        .find(|resource| resource.name == "Sulfur")
+        .ok_or_else(|| "catalog is missing seed Sulfur".to_string())?;
 
-    // Three ordinary Hydrogen links connect the shells. Their directions are
-    // chosen as +theta, 0, -theta so the chain spans the required gap while
-    // remaining an ordinary physical bonded chain.
-    let bridge_start = elements.len();
-    let theta = if chamber_gap <= hydrogen_length {
-        0.0
-    } else {
-        ((chamber_gap - hydrogen_length) / (2.0 * hydrogen_length)).acos()
-    };
-    let line_placement = |a: (f64, f64), b: (f64, f64)| BlueprintPlacement {
-        x: (a.0 + b.0) / 2.0,
-        y: (a.1 + b.1) / 2.0,
-        rotation_radians: (b.1 - a.1).atan2(b.0 - a.0),
-    };
-    let bridge_origin = (0.0, inner_boundary);
-    let directions = [
-        std::f64::consts::FRAC_PI_2 + theta,
-        std::f64::consts::FRAC_PI_2,
-        std::f64::consts::FRAC_PI_2 - theta,
+    // The seed is a continuous mesh, not nested storage shells. Different rigid
+    // materials are interleaved around one protected genome cavity. Any other
+    // voids are ordinary consequences of the mesh and may contain environmental
+    // material later.
+    let _ = (carbon, hydrogen, sulfur);
+    let radius = 1.65;
+    let positions = [
+        (0.0, radius),
+        (-radius * 0.866_025_403_8, radius * 0.5),
+        (-radius * 0.866_025_403_8, -radius * 0.5),
+        (0.0, -radius),
+        (radius * 0.866_025_403_8, -radius * 0.5),
+        (radius * 0.866_025_403_8, radius * 0.5),
     ];
-    let mut cursor = bridge_origin;
-    for direction in directions {
-        let next = (
-            cursor.0 + hydrogen_length * direction.cos(),
-            cursor.1 + hydrogen_length * direction.sin(),
-        );
+    let materials = [
+        "Carbon", "Nitrogen", "Sulfur", "Carbon", "Nitrogen", "Hydrogen",
+    ];
+    let mut elements = Vec::with_capacity(positions.len());
+    for ((x, y), material) in positions.into_iter().zip(materials) {
+        if !catalog.iter().any(|resource| resource.name == material) {
+            return Err(format!("catalog is missing seed {material}"));
+        }
         elements.push(BlueprintElement {
-            material: Material::free_base("Hydrogen", 1.0),
-            placement: line_placement(cursor, next),
+            material: Material::free_base(material, 1.0),
+            placement: BlueprintPlacement {
+                x,
+                y,
+                rotation_radians: y.atan2(x),
+            },
         });
-        cursor = next;
     }
 
-    connections.extend([
-        BlueprintConnection {
-            element_a: 0,
-            element_b: bridge_start,
-        },
-        BlueprintConnection {
-            element_a: bridge_start,
-            element_b: bridge_start + 1,
-        },
-        BlueprintConnection {
-            element_a: bridge_start + 1,
-            element_b: bridge_start + 2,
-        },
-        BlueprintConnection {
-            element_a: bridge_start + 2,
-            element_b: outer_start,
-        },
-    ]);
+    // The ring is intentionally connected all the way around. The enclosed
+    // center is the genome cavity; it is the only cavity the seed explicitly
+    // creates. There is no separate storage chamber or hollow outer shell.
+    let connections = (0..elements.len())
+        .map(|index| BlueprintConnection {
+            element_a: index,
+            element_b: (index + 1) % elements.len(),
+        })
+        .collect::<Vec<_>>();
 
-    let baseline =
-        StructuralBlueprint::with_anchor_elements(elements, connections, vec![0, 1, 2, 3]);
+    let baseline = StructuralBlueprint::with_anchor_elements(elements, connections, (0..6).collect());
     baseline.validate()?;
+    let _ = nitrogen;
     Ok(baseline)
 }
+
 fn largest_rigid_connection_span(catalog: &[BaseResource]) -> f64 {
     let mut points = Vec::<(f64, f64)>::new();
 
