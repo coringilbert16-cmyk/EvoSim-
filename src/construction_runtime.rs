@@ -581,9 +581,7 @@ fn physical_material_endpoint_options(
             {
                 endpoints.push((
                     part_index,
-                    ConnectionEndpoint::Boundary {
-                        angle_radians: 0.0,
-                    },
+                    ConnectionEndpoint::Boundary { angle_radians: 0.0 },
                 ));
             }
             endpoints
