@@ -788,7 +788,21 @@ fn realize_next_bond_driven(
         return None;
     }
 
-    let target = blueprint.elements[_index].placement;
+    let mut best: Option<(
+        OrganismStructure,
+        Vec<usize>,
+        usize,
+        crate::contact::ConnectionPairCandidate,
+        f64,
+        EnergyLedger,
+        f64,
+        f64,
+    )> = None;
+
+    for endpoint_a in existing_endpoints {
+        let joint = endpoint_a.world_point(&structure.units[existing_index], catalog)?;
+        for (part_index, endpoint_b) in new_endpoints.iter().copied() {
+        let target = blueprint.elements[_index].placement;
     let (s_anchor, c_anchor) = genome_anchor.rotation_radians.sin_cos();
     let target_world = (
         genome_anchor.x + (target.x - anchor_declared.x) * c_anchor
@@ -808,10 +822,7 @@ fn realize_next_bond_driven(
         f64,
     )> = None;
 
-    for endpoint_a in existing_endpoints {
-        let joint = endpoint_a.world_point(&structure.units[existing_index], catalog)?;
-        for (part_index, endpoint_b) in new_endpoints.iter().copied() {
-            let local_b = physical_material_endpoint_local_point(
+        let local_b = physical_material_endpoint_local_point(
                 new_material,
                 part_index,
                 endpoint_b,
