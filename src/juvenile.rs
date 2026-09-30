@@ -89,13 +89,19 @@ pub(crate) fn confirmed_seed_baseline(
         },
     ];
 
-    // The outer shell is a compact regular ring made from the existing
-    // Nitrogen rectangle. Its side length stays close to the calibrated
-    // construction geometry; only the ring radius grows the chamber.
+    // The outer shell is sized from the maximum distance between rigid
+    // connection points in the catalog, not from a resource bounding radius.
+    // The chamber therefore grows enough to admit the largest connection
+    // topology without making the cell body a scaled copy of the largest shape.
     let outer_side_count = 10usize;
-    let outer_side_length = 1.65;
-    let outer_apothem =
-        outer_side_length / (2.0 * (std::f64::consts::PI / outer_side_count as f64).tan());
+    let largest_connection_span = largest_rigid_connection_span(catalog);
+    let connection_clearance = 0.25;
+    let required_chamber_gap = largest_connection_span + connection_clearance;
+    let outer_apothem = inner_offset
+        + inner_thickness / 2.0
+        + required_chamber_gap;
+    let outer_side_length =
+        2.0 * outer_apothem * (std::f64::consts::PI / outer_side_count as f64).tan();
     let outer_center_radius = outer_apothem + inner_thickness / 2.0;
     let outer_start = elements.len();
 
@@ -177,6 +183,43 @@ pub(crate) fn confirmed_seed_baseline(
     baseline.validate()?;
     Ok(baseline)
 }
+fn largest_rigid_connection_span(catalog: &[BaseResource]) -> f64 {
+    let mut points = Vec::<(f64, f64)>::new();
+
+    for resource in catalog {
+        if resource.physical_state == crate::resources::PhysicalState::Fluid {
+            continue;
+        }
+        match &resource.shape.form {
+            crate::resources::Form::Line { length } => {
+                points.push((-length / 2.0, 0.0));
+                points.push((length / 2.0, 0.0));
+            }
+            crate::resources::Form::Rectangle { width, height } => {
+                let hw = width / 2.0;
+                let hh = height / 2.0;
+                points.extend([(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)]);
+            }
+            crate::resources::Form::RegularPolygon { sides, radius } => {
+                for i in 0..*sides as usize {
+                    let angle = i as f64 * std::f64::consts::TAU / *sides as f64;
+                    points.push((radius * angle.cos(), radius * angle.sin()));
+                }
+            }
+            crate::resources::Form::Polygon { vertices } => points.extend(vertices.iter().copied()),
+            crate::resources::Form::Circle { .. } | crate::resources::Form::Fluid { .. } => {}
+        }
+    }
+
+    points
+        .iter()
+        .enumerate()
+        .flat_map(|(i, &(ax, ay))| {
+            points.iter().skip(i + 1).map(move |&(bx, by)| (ax - bx).hypot(ay - by))
+        })
+        .fold(0.0, f64::max)
+}
+
 // This is a deterministic calibration constant for the current resource catalog.
 // Callers on the simulation hot path should compute it once and reuse it.
 pub(crate) fn confirmed_seed_scale_reference(
@@ -278,11 +321,12 @@ fn realize_initial_boundary_water(
     }
 
     // The confirmed seed baseline's outer shell is the ten units after
-    // the four-unit inner shell. Alternating them leaves rigid structural
-    // material between permeable sections instead of making the entire boundary fluid.
-    let outer_shell = 4..14;
+    // the four-unit inner shell. Two Water constituents are followed by two
+    // rigid constituents around the membrane, producing an ordinary
+    // R-R-W-W-R-R-W-W pattern rather than a special intake port.
+    let water_sections = [2usize, 3, 6, 7];
     let mut changed = 0usize;
-    for index in outer_shell.step_by(2) {
+    for index in water_sections.into_iter().map(|offset| 4 + offset) {
         let Some(unit) = structure.units.get_mut(index) else {
             return Err("confirmed seed outer shell is incomplete".into());
         };
