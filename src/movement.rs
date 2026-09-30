@@ -489,6 +489,7 @@ fn resolve_push_chain(
     let moving_destination = organism_parts_at(moving, environment, dx, dy);
     let mut plan = PushPlan::default();
     if push_blockers_for_parts(
+        moving,
         &moving_destination,
         before,
         after,
@@ -508,6 +509,7 @@ fn resolve_push_chain(
 }
 
 fn push_blockers_for_parts(
+    moving: &Organism,
     moving_destination: &[PlacedMaterialPart],
     before: &[Organism],
     after: &[Organism],
@@ -537,6 +539,7 @@ fn push_blockers_for_parts(
         let destination = organism_parts_at(candidate, environment, dx, dy);
         organism_visited[index] = true;
         if !push_blockers_for_parts(
+            candidate,
             &destination,
             before,
             after,
@@ -660,7 +663,7 @@ fn environmental_penetration_allowed(
         return false;
     }
 
-    let mut permeability = 1.0;
+    let mut permeability: f64 = 1.0;
     let mut contacted = false;
 
     for (unit_index, unit) in moving.structure.units.iter().enumerate() {
@@ -1014,7 +1017,7 @@ mod tests {
 
     #[test]
     fn water_boundary_permits_full_environmental_penetration() {
-        let simulation = Simulation::default();
+        let simulation = Simulation::new(42, 1.0);
         let environment = simulation.environment.clone();
         let moving = simulation.organisms.first().expect("default seed organism");
         let water = crate::physical_material::PhysicalMaterial::realized(
