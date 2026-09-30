@@ -1091,13 +1091,17 @@ fn construct_blueprint_bond_driven_internal(
     let mut remaining_energy = *energy;
     let mut total_heat = 0.0;
     let mut nodes = 0usize;
+    let mut reserved_storage_indices = Vec::<usize>::new();
 
     let anchor_instance = if let Some(storage) = available_materials.as_deref_mut() {
         let candidates = rank_available_construction_materials(storage, &anchor_preferred, catalog)
             .map_err(|e| e.to_string())?;
         let (storage_index, _, _) = candidates
             .into_iter()
-            .find(|(_, _, score)| *score >= MIN_CONSTRUCTION_MATERIAL_MATCH)
+            .find(|(storage_index, _, score)| {
+                !reserved_storage_indices.contains(storage_index)
+                    && *score >= MIN_CONSTRUCTION_MATERIAL_MATCH
+            })
             .ok_or_else(|| format!(
                 "construction material need: preferred={anchor_preferred}, threshold={MIN_CONSTRUCTION_MATERIAL_MATCH:.6}"
             ))?;
@@ -1132,9 +1136,7 @@ fn construct_blueprint_bond_driven_internal(
             .find(|(_, _, score)| *score >= MIN_CONSTRUCTION_MATERIAL_MATCH)
             .map(|candidate| candidate.0)
             .ok_or_else(|| "selected construction anchor material disappeared before commit".to_string())?;
-        storage.take_physical_at(storage_index).ok_or_else(|| {
-            "selected construction anchor material could not be consumed after successful restoration".to_string()
-        })?;
+        reserved_storage_indices.push(storage_index);
     }
     let anchor_unit_index = *anchor_indices
         .first()
@@ -1189,7 +1191,10 @@ fn construct_blueprint_bond_driven_internal(
             rank_available_construction_materials(storage, &preferred, catalog)
                 .map_err(|e| e.to_string())?
                 .into_iter()
-                .filter(|(_, _, score)| *score >= MIN_CONSTRUCTION_MATERIAL_MATCH)
+                .filter(|(storage_index, _, score)| {
+                    !reserved_storage_indices.contains(storage_index)
+                        && *score >= MIN_CONSTRUCTION_MATERIAL_MATCH
+                })
                 .collect::<Vec<_>>()
         } else {
             vec![(usize::MAX, preferred.clone(), 1.0)]
@@ -1318,12 +1323,8 @@ fn construct_blueprint_bond_driven_internal(
                 structure = commit_structure;
                 realized[index] = true;
                 realized_units[index] = Some(new_unit_index);
-                if let Some(storage) = available_materials.as_deref_mut() {
-                    if storage_index != usize::MAX {
-                        storage.take_physical_at(storage_index).ok_or_else(|| {
-                            format!("construction consumed candidate material index {storage_index} after bond commit")
-                        })?;
-                    }
+                if storage_index != usize::MAX {
+                    reserved_storage_indices.push(storage_index);
                 }
                 attached = true;
                 break;
@@ -1345,6 +1346,15 @@ fn construct_blueprint_bond_driven_internal(
             })?;
         if !cavity.qualifies() {
             return Err("bond-driven construction did not form a qualifying genome cavity".into());
+        }
+    }
+
+    if let Some(storage) = available_materials.as_deref_mut() {
+        reserved_storage_indices.sort_unstable();
+        for storage_index in reserved_storage_indices.into_iter().rev() {
+            storage.take_physical_at(storage_index).ok_or_else(|| {
+                format!("construction could not consume reserved material index {storage_index}")
+            })?;
         }
     }
 
