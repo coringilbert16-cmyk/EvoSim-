@@ -1038,7 +1038,7 @@ mod tests {
         let carbon = crate::physical_material::PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
             vec![Placement {
-                x: water_unit.placement.x + 0.5,
+                x: water_unit.placement.x + 1.0,
                 y: water_unit.placement.y,
                 rotation_radians: 0.0,
             }],
