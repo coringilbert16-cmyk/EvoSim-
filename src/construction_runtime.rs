@@ -833,8 +833,7 @@ fn realize_next_bond_driven(
                 } else {
                     -(step / 2)
                 };
-                let offset =
-                    std::f64::consts::TAU * signed_step as f64 / 360.0;
+                let offset = std::f64::consts::TAU * signed_step as f64 / 360.0;
                 let angle = ideal_angle + offset;
                 let candidate_origin =
                     placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
@@ -918,8 +917,7 @@ fn realize_next_bond_driven(
                     )
                     .into_iter()
                     .filter(|candidate| {
-                        candidate.distance
-                            <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                        candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
                             && candidate.available_a
                             && candidate.available_b
                             && candidate.endpoint_b != endpoint_b
