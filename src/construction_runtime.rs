@@ -558,21 +558,41 @@ fn blueprint_endpoint_options(resource: &BaseResource) -> Vec<ConnectionEndpoint
             resource.shape.form.polygon_vertices().unwrap_or_default().iter()
                 .enumerate().map(|(point_index, _)| ConnectionEndpoint::Corner { point_index }).collect()
         }
-        Form::Line { .. } => vec![ConnectionEndpoint::LineEndpoint { point_index: 0 }, ConnectionEndpoint::LineEndpoint { point_index: 1 }],
-        Form::Circle { .. } => (0..72).map(|i| ConnectionEndpoint::Boundary {
-            angle_radians: std::f64::consts::TAU * i as f64 / 72.0,
-        }).collect(),
+        Form::Line { .. } => vec![
+            ConnectionEndpoint::LineEndpoint { point_index: 0 },
+            ConnectionEndpoint::LineEndpoint { point_index: 1 },
+        ],
+        Form::Circle { .. } => (0..72)
+            .map(|i| ConnectionEndpoint::Boundary {
+                angle_radians: std::f64::consts::TAU * i as f64 / 72.0,
+            })
+            .collect(),
         Form::Fluid { .. } => Vec::new(),
     }
 }
 
-fn endpoint_local_point(resource: &BaseResource, endpoint: ConnectionEndpoint, catalog: &[BaseResource]) -> Option<(f64, f64)> {
-    let unit = StructuralUnit::new(resource.name.clone(), Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 });
+fn endpoint_local_point(
+    resource: &BaseResource,
+    endpoint: ConnectionEndpoint,
+    catalog: &[BaseResource],
+) -> Option<(f64, f64)> {
+    let unit = StructuralUnit::new(
+        resource.name.clone(),
+        Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        },
+    );
     let point = endpoint.world_point(&unit, catalog)?;
     Some((point.x, point.y))
 }
 
-fn placement_for_joint(local_point: (f64, f64), joint: (f64, f64), rotation_radians: f64) -> Placement {
+fn placement_for_joint(
+    local_point: (f64, f64),
+    joint: (f64, f64),
+    rotation_radians: f64,
+) -> Placement {
     let (s, c) = rotation_radians.sin_cos();
     Placement {
         x: joint.0 - (local_point.0 * c - local_point.1 * s),
@@ -583,7 +603,9 @@ fn placement_for_joint(local_point: (f64, f64), joint: (f64, f64), rotation_radi
 
 fn angle_error(a: f64, b: f64) -> f64 {
     let mut d = (a - b).rem_euclid(std::f64::consts::TAU);
-    if d > std::f64::consts::PI { d -= std::f64::consts::TAU; }
+    if d > std::f64::consts::PI {
+        d -= std::f64::consts::TAU;
+    }
     d.abs()
 }
 
@@ -593,7 +615,9 @@ fn blueprint_pose_score(candidate: Placement, target: BlueprintPlacement) -> f64
 }
 
 fn placed_unit_overlaps(structure: &OrganismStructure, candidate: &StructuralUnit, ignored_units: &[usize], catalog: &[BaseResource]) -> bool {
-    let Some(candidate_shape) = candidate.shape(catalog) else { return true; };
+    let Some(candidate_shape) = candidate.shape(catalog) else {
+        return true;
+    };
     let candidate_part = crate::material_geometry::PlacedMaterialPart {
         part_index: 0, form: candidate_shape.form.clone(), placement: candidate.placement,
     };
@@ -614,15 +638,21 @@ fn point_in_triangle(point: (f64, f64), triangle: &[(f64, f64); 3]) -> bool {
     let a = cross(triangle[0], triangle[1], point);
     let b = cross(triangle[1], triangle[2], point);
     let c = cross(triangle[2], triangle[0], point);
-    (a >= -1e-10 && b >= -1e-10 && c >= -1e-10)
-        || (a <= 1e-10 && b <= 1e-10 && c <= 1e-10)
+    (a >= -1e-10 && b >= -1e-10 && c >= -1e-10) || (a <= 1e-10 && b <= 1e-10 && c <= 1e-10)
 }
 
 fn form_vertices_world(form: &Form, placement: Placement) -> Vec<(f64, f64)> {
-    form.polygon_vertices().unwrap_or_default().into_iter().map(|(x, y)| {
-        let (s, c) = placement.rotation_radians.sin_cos();
-        (placement.x + x * c - y * s, placement.y + x * s + y * c)
-    }).collect()
+    form.polygon_vertices()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(x, y)| {
+            let (s, c) = placement.rotation_radians.sin_cos();
+            (
+                placement.x + x * c - y * s,
+                placement.y + x * s + y * c,
+            )
+        })
+        .collect()
 }
 
 fn candidate_penetrates_measurement(
@@ -631,7 +661,9 @@ fn candidate_penetrates_measurement(
     anchor: Placement,
     catalog: &[BaseResource],
 ) -> bool {
-    let Some(carbon) = resource(catalog, "Carbon") else { return true; };
+    let Some(carbon) = resource(catalog, "Carbon") else {
+        return true;
+    };
     let transform = |placement: BlueprintPlacement| {
         let (s, c) = anchor.rotation_radians.sin_cos();
         Placement {
@@ -642,9 +674,23 @@ fn candidate_penetrates_measurement(
     };
     for placement in scaffold.placements {
         let world = transform(placement);
-        let Some(guide) = MaterialGeometry::new(&Material::free_base(carbon.name.clone(), 1.0), &[world], catalog) else { return true; };
-        let Some(candidate_geometry) = MaterialGeometry::new(&candidate.material, &[candidate.placement], catalog) else { return true; };
-        if candidate_geometry.parts.iter().any(|part| guide.parts.iter().any(|guide_part| crate::material_geometry::placed_forms_penetrate(part, guide_part, 1e-10))) {
+        let Some(guide) = MaterialGeometry::new(
+            &Material::free_base(carbon.name.clone(), 1.0),
+            &[world],
+            catalog,
+        ) else {
+            return true;
+        };
+        let Some(candidate_geometry) =
+            MaterialGeometry::new(&candidate.material, &[candidate.placement], catalog)
+        else {
+            return true;
+        };
+        if candidate_geometry.parts.iter().any(|part| {
+            guide.parts.iter().any(|guide_part| {
+                crate::material_geometry::placed_forms_penetrate(part, guide_part, 1e-10)
+            })
+        }) {
             return true;
         }
     }
@@ -653,15 +699,33 @@ fn candidate_penetrates_measurement(
         transform(scaffold.placements[1]),
         transform(scaffold.placements[2]),
     ];
-    let triangle_points = [(triangle[0].x, triangle[0].y), (triangle[1].x, triangle[1].y), (triangle[2].x, triangle[2].y)];
-    let Some(candidate_shape) = candidate.shape(catalog) else { return true; };
+    let triangle_points = [
+        (triangle[0].x, triangle[0].y),
+        (triangle[1].x, triangle[1].y),
+        (triangle[2].x, triangle[2].y),
+    ];
+    let Some(candidate_shape) = candidate.shape(catalog) else {
+        return true;
+    };
     let vertices = form_vertices_world(&candidate_shape.form, candidate.placement);
-    if vertices.iter().any(|point| point_in_triangle(*point, &triangle_points)) { return true; }
+    if vertices
+        .iter()
+        .any(|point| point_in_triangle(*point, &triangle_points))
+    {
+        return true;
+    }
     let centroid = (
         (triangle_points[0].0 + triangle_points[1].0 + triangle_points[2].0) / 3.0,
         (triangle_points[0].1 + triangle_points[1].1 + triangle_points[2].1) / 3.0,
     );
-    if crate::organism_geometry::point_in_form(&candidate_shape.form, candidate.placement, centroid.0, centroid.1) { return true; }
+    if crate::organism_geometry::point_in_form(
+        &candidate_shape.form,
+        candidate.placement,
+        centroid.0,
+        centroid.1,
+    ) {
+        return true;
+    }
     false
 }
 
@@ -671,11 +735,18 @@ fn best_existing_connection(
     existing_unit: usize,
     catalog: &[BaseResource],
 ) -> Option<(ConnectionEndpoint, ConnectionEndpoint)> {
-    crate::contact::connection_pair_candidates(structure, existing_unit, new_unit, catalog).into_iter()
+    crate::contact::connection_pair_candidates(structure, existing_unit, new_unit, catalog)
+        .into_iter()
         .filter(|candidate| candidate.available_a && candidate.available_b)
         .max_by(|a, b| {
-            a.facing.partial_cmp(&b.facing).unwrap_or(std::cmp::Ordering::Equal)
-                .then_with(|| b.distance.partial_cmp(&a.distance).unwrap_or(std::cmp::Ordering::Equal))
+            a.facing
+                .partial_cmp(&b.facing)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| {
+                    b.distance
+                        .partial_cmp(&a.distance)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
         })
         .map(|candidate| (candidate.endpoint_a, candidate.endpoint_b))
 }
@@ -685,11 +756,24 @@ fn already_realized_neighbors(
     index: usize,
     realized: &[bool],
 ) -> Vec<usize> {
-    blueprint.connections.iter().filter_map(|connection| {
-        let neighbor = if connection.element_a == index { connection.element_b }
-            else if connection.element_b == index { connection.element_a } else { return None; };
-        realized.get(neighbor).copied().filter(|v| *v).map(|_| neighbor)
-    }).collect()
+    blueprint
+        .connections
+        .iter()
+        .filter_map(|connection| {
+            let neighbor = if connection.element_a == index {
+                connection.element_b
+            } else if connection.element_b == index {
+                connection.element_a
+            } else {
+                return None;
+            };
+            realized
+                .get(neighbor)
+                .copied()
+                .filter(|v| *v)
+                .map(|_| neighbor)
+        })
+        .collect()
 }
 
 /// Sequential developmental constructor: choose A.x and B.y, rotate B about
@@ -703,19 +787,38 @@ pub(crate) fn construct_blueprint_bond_driven(
     if blueprint.elements.is_empty() {
         return Err("blueprint must contain at least one element".into());
     }
-    if blueprint.elements.iter().any(|element| element.material.parts.len() != 1) {
-        return Err("bond-driven developmental construction currently requires single-constituent elements".into());
+    if blueprint
+        .elements
+        .iter()
+        .any(|element| element.material.parts.len() != 1)
+    {
+        return Err(
+            "bond-driven developmental construction currently requires single-constituent elements"
+                .into(),
+        );
     }
-    let anchor_index = *blueprint.anchor_elements.first().ok_or_else(|| "blueprint has no construction anchor".to_string())?;
-    let anchor_element = blueprint.elements.get(anchor_index).ok_or_else(|| "construction anchor references a missing element".to_string())?;
-    let anchor_resource = resource(catalog, &anchor_element.material.parts[0].0).ok_or_else(|| "construction anchor references an unknown resource".to_string())?;
+    let anchor_index = *blueprint
+        .anchor_elements
+        .first()
+        .ok_or_else(|| "blueprint has no construction anchor".to_string())?;
+    let anchor_element = blueprint
+        .elements
+        .get(anchor_index)
+        .ok_or_else(|| "construction anchor references a missing element".to_string())?;
+    let anchor_resource = resource(catalog, &anchor_element.material.parts[0].0)
+        .ok_or_else(|| "construction anchor references an unknown resource".to_string())?;
 
     let mut structure = OrganismStructure::new();
     let mut realized = vec![false; blueprint.elements.len()];
     let mut realized_units = vec![None; blueprint.elements.len()];
     let mut total_heat = 0.0;
-    let mut anchor_unit = StructuralUnit::new(anchor_resource.name.clone(), placement(anchor_element.placement));
-    if !anchor_unit.realize_default_geometry(catalog) { return Err("construction anchor has invalid geometry".into()); }
+    let mut anchor_unit = StructuralUnit::new(
+        anchor_resource.name.clone(),
+        placement(anchor_element.placement),
+    );
+    if !anchor_unit.realize_default_geometry(catalog) {
+        return Err("construction anchor has invalid geometry".into());
+    }
     let anchor_unit_index = structure.add_unit(anchor_unit);
     realized[anchor_index] = true;
     realized_units[anchor_index] = Some(anchor_unit_index);
@@ -725,40 +828,86 @@ pub(crate) fn construct_blueprint_bond_driven(
     while progress < blueprint.elements.len() {
         let mut next = None;
         for index in 0..blueprint.elements.len() {
-            if realized[index] { continue; }
+            if realized[index] {
+                continue;
+            }
             let neighbors = already_realized_neighbors(blueprint, index, &realized);
-            if !neighbors.is_empty() { next = Some((index, neighbors)); break; }
+            if !neighbors.is_empty() {
+                next = Some((index, neighbors));
+                break;
+            }
         }
         let Some((index, neighbors)) = next else {
-            return Err("bond-driven construction stalled before all blueprint elements were realized".into());
+            return Err(
+                "bond-driven construction stalled before all blueprint elements were realized"
+                    .into(),
+            );
         };
         let element = &blueprint.elements[index];
-        let new_resource = resource(catalog, &element.material.parts[0].0).ok_or_else(|| format!("blueprint references unknown resource {}", element.material.parts[0].0))?;
+        let new_resource = resource(catalog, &element.material.parts[0].0).ok_or_else(|| {
+            format!(
+                "blueprint references unknown resource {}",
+                element.material.parts[0].0
+            )
+        })?;
         let new_endpoints = blueprint_endpoint_options(new_resource);
-        if new_endpoints.is_empty() { return Err(format!("resource {} has no usable construction connection points", new_resource.name)); }
+        if new_endpoints.is_empty() {
+            return Err(format!(
+                "resource {} has no usable construction connection points",
+                new_resource.name
+            ));
+        }
 
         let mut best_trial: Option<(f64, OrganismStructure, EnergyLedger, f64, usize)> = None;
         for &neighbor in &neighbors {
-            let existing_index = realized_units[neighbor].ok_or_else(|| "realized neighbor is missing".to_string())?;
-            let existing_resource = resource(catalog, &blueprint.elements[neighbor].material.parts[0].0).ok_or_else(|| "blueprint references unknown neighbor resource".to_string())?;
+            let existing_index = realized_units[neighbor]
+                .ok_or_else(|| "realized neighbor is missing".to_string())?;
+            let existing_resource =
+                resource(catalog, &blueprint.elements[neighbor].material.parts[0].0)
+                    .ok_or_else(|| "blueprint references unknown neighbor resource".to_string())?;
             let existing_endpoints = blueprint_endpoint_options(existing_resource);
             for endpoint_a in existing_endpoints {
-                let joint = endpoint_a.world_point(&structure.units[existing_index], catalog).ok_or_else(|| "existing connection point has no world position".to_string())?;
+                let joint = endpoint_a
+                    .world_point(&structure.units[existing_index], catalog)
+                    .ok_or_else(|| "existing connection point has no world position".to_string())?;
                 for endpoint_b in new_endpoints.iter().copied() {
-                    let local_b = match endpoint_local_point(new_resource, endpoint_b, catalog) { Some(v) => v, None => continue };
+                    let local_b = match endpoint_local_point(new_resource, endpoint_b, catalog) {
+                        Some(v) => v,
+                        None => continue,
+                    };
                     let mut angles = Vec::with_capacity(361);
                     angles.push(element.placement.rotation_radians);
-                    for step in 0..360 { angles.push(std::f64::consts::TAU * step as f64 / 360.0); }
+                    for step in 0..360 {
+                        angles.push(std::f64::consts::TAU * step as f64 / 360.0);
+                    }
                     for angle in angles {
-                        let candidate_placement = placement_for_joint(local_b, (joint.x, joint.y), angle);
-                        let mut candidate_unit = StructuralUnit::new(new_resource.name.clone(), candidate_placement);
-                        if !candidate_unit.realize_default_geometry(catalog) { continue; }
+                        let candidate_placement =
+                            placement_for_joint(local_b, (joint.x, joint.y), angle);
+                        let mut candidate_unit =
+                            StructuralUnit::new(new_resource.name.clone(), candidate_placement);
+                        if !candidate_unit.realize_default_geometry(catalog) {
+                            continue;
+                        }
                         if let Some(scaffold) = blueprint.genome_measurement.as_ref() {
-                            if candidate_penetrates_measurement(&candidate_unit, scaffold, genome_anchor, catalog) { continue; }
+                            if candidate_penetrates_measurement(
+                                &candidate_unit,
+                                scaffold,
+                                genome_anchor,
+                                catalog,
+                            ) {
+                                continue;
+                            }
                         }
                         let mut trial = structure.clone();
                         let new_unit_index = trial.add_unit(candidate_unit);
-                        if placed_unit_overlaps(&trial, &trial.units[new_unit_index], &[new_unit_index, existing_index], catalog) { continue; }
+                        if placed_unit_overlaps(
+                            &trial,
+                            &trial.units[new_unit_index],
+                            &[new_unit_index, existing_index],
+                            catalog,
+                        ) {
+                            continue;
+                        }
 
                         let mut trial_ledger = *ledger;
                         let mut trial_energy = *energy;
@@ -767,17 +916,39 @@ pub(crate) fn construct_blueprint_bond_driven(
                         let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
 
                         for &neighbor_index in &neighbors {
-                            let Some(existing) = realized_units[neighbor_index] else { all_bonds_ok = false; break; };
-                            let Some((a, b)) = best_existing_connection(&trial, new_unit_index, existing, catalog) else { all_bonds_ok = false; break; };
+                            let Some(existing) = realized_units[neighbor_index] else {
+                                all_bonds_ok = false;
+                                break;
+                            };
+                            let Some((a, b)) =
+                                best_existing_connection(&trial, new_unit_index, existing, catalog)
+                            else {
+                                all_bonds_ok = false;
+                                break;
+                            };
                             let Some(attempt) = crate::combine_runtime::form_specific_bond(
-                                &mut trial, existing, new_unit_index, a, b, catalog, &mut bond_cache, &mut trial_ledger, &mut trial_energy,
-                            ) else { all_bonds_ok = false; break; };
+                                &mut trial,
+                                existing,
+                                new_unit_index,
+                                a,
+                                b,
+                                catalog,
+                                &mut bond_cache,
+                                &mut trial_ledger,
+                                &mut trial_energy,
+                            ) else {
+                                all_bonds_ok = false;
+                                break;
+                            };
                             trial_heat += attempt.work_cost;
                         }
-                        if !all_bonds_ok { continue; }
+                        if !all_bonds_ok {
+                            continue;
+                        }
                         let score = blueprint_pose_score(candidate_placement, element.placement);
                         if best_trial.as_ref().is_none_or(|best| score < best.0) {
-                            best_trial = Some((score, trial, trial_ledger, trial_energy, new_unit_index));
+                            best_trial =
+                                Some((score, trial, trial_ledger, trial_energy, new_unit_index));
                             // Keep heat with the selected trial, not globally across discarded angles.
                         }
                     }
@@ -785,7 +956,9 @@ pub(crate) fn construct_blueprint_bond_driven(
             }
         }
         let Some((_, trial, trial_ledger, trial_energy, new_unit_index)) = best_trial else {
-            return Err(format!("no valid bond-driven pose found for blueprint element {index}"));
+            return Err(format!(
+                "no valid bond-driven pose found for blueprint element {index}"
+            ));
         };
         let committed_heat =
             trial_ledger.total_heat_dissipated - ledger.total_heat_dissipated;
@@ -798,8 +971,12 @@ pub(crate) fn construct_blueprint_bond_driven(
         progress += 1;
     }
 
-    if blueprint.genome_measurement.is_some() && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_none() {
-        return Err("bond-driven scaffolded construction did not produce a qualifying final cavity".into());
+    if blueprint.genome_measurement.is_some()
+        && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_none()
+    {
+        return Err(
+            "bond-driven scaffolded construction did not produce a qualifying final cavity".into(),
+        );
     }
     Ok((structure, total_heat))
 }
