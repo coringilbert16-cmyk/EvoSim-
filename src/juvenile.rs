@@ -78,7 +78,8 @@ pub(crate) fn confirmed_seed_baseline(
         })
         .collect::<Vec<_>>();
 
-    let baseline = StructuralBlueprint::with_anchor_elements(elements, connections, (0..6).collect());
+    let baseline =
+        StructuralBlueprint::with_anchor_elements(elements, connections, (0..6).collect());
     baseline.validate()?;
     let _ = nitrogen;
     Ok(baseline)
@@ -295,8 +296,11 @@ mod water_initialization_tests {
         assert!(cavity.qualifies());
         assert!(!cavity.boundary_units.is_empty());
 
-        let accessible = crate::interior_geometry::find_accessible_interior_regions(&structure, &catalog)
-            .expect("accessible interior analysis");
-        assert!(accessible.iter().all(|region| region.boundary_units != cavity.boundary_units));
+        let accessible =
+            crate::interior_geometry::find_accessible_interior_regions(&structure, &catalog)
+                .expect("accessible interior analysis");
+        assert!(accessible
+            .iter()
+            .all(|region| region.boundary_units != cavity.boundary_units));
     }
 }
