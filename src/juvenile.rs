@@ -150,6 +150,11 @@ pub(crate) fn confirmed_seed_baseline(
     } else {
         ((chamber_gap - hydrogen_length) / (2.0 * hydrogen_length)).acos()
     };
+    let line_placement = |a: (f64, f64), b: (f64, f64)| BlueprintPlacement {
+        x: (a.0 + b.0) / 2.0,
+        y: (a.1 + b.1) / 2.0,
+        rotation_radians: (b.1 - a.1).atan2(b.0 - a.0),
+    };
     let midpoint_y = (inner_boundary + outer_inner_boundary) / 2.0;
     let bridge_origin = (0.0, inner_boundary);
     let directions = [theta, 0.0, -theta];
