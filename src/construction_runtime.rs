@@ -6,7 +6,7 @@ use crate::construction_material_selection::{
     rank_available_construction_materials, MIN_CONSTRUCTION_MATERIAL_MATCH,
 };
 use crate::material_geometry::MaterialGeometry;
-use crate::resources::{BaseResource, Form, Material};
+use crate::resources::{BaseResource, Form, Material, PhysicalState};
 use crate::state::EnergyLedger;
 use crate::structural_blueprint::BlueprintPlacement;
 use crate::structure::{ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
