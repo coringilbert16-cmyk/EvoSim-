@@ -588,13 +588,9 @@ pub(crate) fn try_attach_physical_material_bond_driven(
     available_energy: f64,
 ) -> Option<(
     OrganismStructure,
-    crate::physical_material::PhysicalMaterial,
     Vec<usize>,
     usize,
-    ConnectionEndpoint,
-    ConnectionEndpoint,
     crate::combine_runtime::CombineAttempt,
-    Placement,
     EnergyLedger,
     f64,
 )> {
@@ -692,13 +688,9 @@ pub(crate) fn try_attach_physical_material_bond_driven(
 
                 return Some((
                     trial,
-                    new_material.clone(),
                     indices,
                     part_index,
-                    endpoint_a,
-                    endpoint_b,
                     attempt,
-                    candidate_origin,
                     trial_ledger,
                     trial_energy,
                 ));
@@ -772,7 +764,6 @@ fn realize_next_bond_driven(
                 };
 
                 let new_unit_index = *indices.get(part_index)?;
-                let candidate_unit = trial.units.get(new_unit_index)?.clone();
 
                 if let Some(scaffold) = blueprint.genome_measurement.as_ref() {
                     if indices.iter().any(|index| {
@@ -1098,13 +1089,9 @@ fn construct_blueprint_bond_driven_internal(
 
             if let Some((
                 trial_structure,
-                material,
                 new_indices,
                 part_index,
-                endpoint_a,
-                endpoint_b,
                 trial_attempt,
-                candidate_origin,
                 trial_ledger,
                 trial_energy,
             )) = realize_next_bond_driven(
@@ -1124,9 +1111,7 @@ fn construct_blueprint_bond_driven_internal(
                     .get(part_index)
                     .ok_or_else(|| "successful material endpoint index disappeared".to_string())?;
 
-                debug_assert_eq!(trial_attempt.endpoint_a, endpoint_a);
-                debug_assert_eq!(trial_attempt.endpoint_b, endpoint_b);
-                *ledger = trial_ledger;
+                 *ledger = trial_ledger;
                 remaining_energy = trial_energy;
                 total_heat += trial_attempt.work_cost;
                 structure = trial_structure;
