@@ -17,9 +17,7 @@ pub(crate) fn confirmed_seed_baseline(
     catalog: &[BaseResource],
 ) -> Result<StructuralBlueprint, String> {
     use crate::resources::Material;
-    use crate::structural_blueprint::{
-        BlueprintConnection, BlueprintElement, BlueprintPlacement,
-    };
+    use crate::structural_blueprint::{BlueprintConnection, BlueprintElement, BlueprintPlacement};
 
     for material in ["Carbon", "Sulfur", "Methane"] {
         if !catalog.iter().any(|resource| resource.name == material) {
@@ -269,11 +267,8 @@ pub(crate) fn realize_initial_with_reserve(
     // qualification on one authoritative path.
     let mut trial_ledger = EnergyLedger::default();
     let mut trial_energy = TRIAL_ENERGY;
-    let (_, _, trial_remaining) = blueprint.realize_with_context(
-        catalog,
-        &mut trial_ledger,
-        &mut trial_energy,
-    )?;
+    let (_, _, trial_remaining) =
+        blueprint.realize_with_context(catalog, &mut trial_ledger, &mut trial_energy)?;
     let required_initial_energy = TRIAL_ENERGY - trial_remaining;
     if !required_initial_energy.is_finite() || required_initial_energy < 0.0 {
         return Err("juvenile construction produced an invalid energy requirement".into());
