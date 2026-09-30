@@ -1010,6 +1010,48 @@ mod tests {
     }
 
     #[test]
+    fn construction_waits_when_all_physical_inventory_is_exhausted() {
+        let mut simulation = Simulation::new(31, 20.0);
+        let mut parent = simulation.organisms.remove(0);
+        parent.development_stage = DevelopmentStage::Adult;
+        let mut ledger = EnergyLedger::default();
+
+        assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
+        assert!(begin_reproduction(
+            &mut parent,
+            &mut simulation.rng,
+            &simulation.environment.catalog,
+            &mut ledger,
+        ));
+        assert!(parent.stored_material.is_empty());
+
+        let mut construction = parent
+            .reproductive_construction
+            .take()
+            .expect("reproduction is active");
+        let before_units = construction.developing_structure.units.len();
+        let body = parent_body_geometry(&parent, &simulation.environment.catalog).unwrap();
+        let environment = simulation.environment.clone();
+
+        let status = advance_construction(
+            &parent.structure,
+            &mut parent.stored_material,
+            &mut construction,
+            &environment,
+            &mut ledger,
+            &mut parent.usable_energy,
+            &mut simulation.rng,
+            &body,
+            None,
+        )
+        .0;
+
+        assert_eq!(status, ConstructionStatus::Waiting);
+        assert_eq!(construction.developing_structure.units.len(), before_units);
+        assert!(parent.stored_material.is_empty());
+    }
+
+    #[test]
     fn anchor_is_not_a_predefined_structural_blueprint() {
         let catalog = default_catalog();
         let genome = initial_genome();
