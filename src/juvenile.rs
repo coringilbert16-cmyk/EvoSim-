@@ -94,9 +94,11 @@ pub(crate) fn confirmed_seed_baseline(
     // larger apothem leaves a genuinely accessible chamber for finite rigid
     // resources such as Methane.
     let outer_side_count = 12usize;
-    let outer_side_length = inner_side;
-    let outer_apothem =
-        outer_side_length / (2.0 * (std::f64::consts::PI / outer_side_count as f64).tan());
+    let chamber_gap = 1.4;
+    let inner_boundary = inner_offset + inner_thickness / 2.0;
+    let outer_apothem = inner_boundary + chamber_gap;
+    let outer_side_length =
+        2.0 * outer_apothem * (std::f64::consts::PI / outer_side_count as f64).tan();
     let outer_center_radius = outer_apothem + inner_thickness / 2.0;
     let outer_start = elements.len();
 
@@ -121,9 +123,9 @@ pub(crate) fn confirmed_seed_baseline(
         });
     }
 
-    // Three Hydrogen segments form each symmetric bridge. The chamber is
-    // deliberately wider than one Hydrogen length, so the bridge uses an
-    // ordinary zig-zag chain rather than a special connector or an intake port.
+    // Two Hydrogen segments form each symmetric bridge. The chamber is
+    // deliberately wide enough for the largest base resource while remaining
+    // bridgeable by ordinary catalog Hydrogen geometry.
     let hydrogen_length = catalog
         .iter()
         .find(|resource| resource.name == "Hydrogen")
@@ -133,59 +135,48 @@ pub(crate) fn confirmed_seed_baseline(
         })
         .ok_or_else(|| "catalog Hydrogen must retain its line geometry".to_string())?;
 
-    let inner_boundary = inner_offset + inner_thickness / 2.0;
-    let outer_boundary = outer_apothem;
-    let shell_gap = outer_boundary - inner_boundary;
-    if !shell_gap.is_finite() || shell_gap <= 0.0 {
-        return Err("initial shell spacing is invalid".into());
-    }
-
-    // The final segment uses its full Hydrogen length vertically. The first
-    // two segments use equal and opposite lateral offsets so the three-link
-    // chain lands exactly on the outer shell without protruding through it.
-    let segment_rise = (shell_gap - hydrogen_length) / 2.0;
-    if !segment_rise.is_finite() || segment_rise <= 0.0 || segment_rise >= hydrogen_length {
+    let shell_gap = outer_apothem - inner_boundary;
+    let bridge_half_gap = shell_gap / 2.0;
+    if !shell_gap.is_finite()
+        || shell_gap <= 0.0
+        || !bridge_half_gap.is_finite()
+        || bridge_half_gap <= 0.0
+        || hydrogen_length <= bridge_half_gap
+    {
         return Err("initial shell spacing cannot be bridged by Hydrogen".into());
     }
-    let lateral_offset = (hydrogen_length.powi(2) - segment_rise.powi(2)).sqrt();
+    let bridge_lateral_offset =
+        (hydrogen_length.powi(2) - bridge_half_gap.powi(2)).sqrt();
+    let bridge_midpoint = (inner_boundary + outer_apothem) / 2.0;
     let bridge_start = elements.len();
 
-    // Upper chain: (0, inner_boundary) -> (offset, inner_boundary+r) ->
-    // (0, inner_boundary+2r) -> (0, outer_boundary).
+    // Upper chain: (0, inner_boundary) -> (offset, midpoint) ->
+    // (0, outer_apothem). The lower chain is its physical mirror.
+    let upper_first_rotation = bridge_half_gap.atan2(bridge_lateral_offset);
+    let upper_second_rotation = bridge_half_gap.atan2(-bridge_lateral_offset);
     let upper_bridge = [
         BlueprintPlacement {
-            x: lateral_offset / 2.0,
-            y: inner_boundary + segment_rise / 2.0,
-            rotation_radians: segment_rise.atan2(lateral_offset),
+            x: bridge_lateral_offset / 2.0,
+            y: (inner_boundary + bridge_midpoint) / 2.0,
+            rotation_radians: upper_first_rotation,
         },
         BlueprintPlacement {
-            x: lateral_offset / 2.0,
-            y: inner_boundary + segment_rise * 1.5,
-            rotation_radians: (-segment_rise).atan2(lateral_offset),
-        },
-        BlueprintPlacement {
-            x: 0.0,
-            y: inner_boundary + segment_rise * 2.0 + hydrogen_length / 2.0,
-            rotation_radians: std::f64::consts::FRAC_PI_2,
+            x: bridge_lateral_offset / 2.0,
+            y: (bridge_midpoint + outer_apothem) / 2.0,
+            rotation_radians: upper_second_rotation,
         },
     ];
 
-    // Mirror the same ordinary chain across the origin for the lower bridge.
     let lower_bridge = [
         BlueprintPlacement {
-            x: -lateral_offset / 2.0,
-            y: -(inner_boundary + segment_rise / 2.0),
-            rotation_radians: -upper_bridge[0].rotation_radians,
+            x: -bridge_lateral_offset / 2.0,
+            y: -(inner_boundary + bridge_midpoint) / 2.0,
+            rotation_radians: -upper_first_rotation,
         },
         BlueprintPlacement {
-            x: -lateral_offset / 2.0,
-            y: -(inner_boundary + segment_rise * 1.5),
-            rotation_radians: -upper_bridge[1].rotation_radians,
-        },
-        BlueprintPlacement {
-            x: 0.0,
-            y: -(inner_boundary + segment_rise * 2.0 + hydrogen_length / 2.0),
-            rotation_radians: std::f64::consts::FRAC_PI_2,
+            x: -bridge_lateral_offset / 2.0,
+            y: -(bridge_midpoint + outer_apothem) / 2.0,
+            rotation_radians: -upper_second_rotation,
         },
     ];
 
@@ -207,10 +198,6 @@ pub(crate) fn confirmed_seed_baseline(
         },
         BlueprintConnection {
             element_a: bridge_start + 1,
-            element_b: bridge_start + 2,
-        },
-        BlueprintConnection {
-            element_a: bridge_start + 2,
             element_b: outer_start,
         },
         BlueprintConnection {
@@ -219,14 +206,10 @@ pub(crate) fn confirmed_seed_baseline(
         },
         BlueprintConnection {
             element_a: bridge_start + 3,
-            element_b: bridge_start + 4,
+            element_b: bridge_start + 2,
         },
         BlueprintConnection {
-            element_a: bridge_start + 4,
-            element_b: bridge_start + 5,
-        },
-        BlueprintConnection {
-            element_a: bridge_start + 5,
+            element_a: bridge_start + 2,
             element_b: outer_start + 6,
         },
     ]);
