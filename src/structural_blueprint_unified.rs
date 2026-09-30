@@ -323,7 +323,13 @@ impl StructuralBlueprint {
         }
 
         let structure = structure;
-
+        if self.genome_measurement.is_some()
+            && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_none()
+        {
+            return Err(
+                "genome measurement scaffold did not produce a qualifying final cavity".into(),
+            );
+        }
 
         Ok((structure, total_heat))
     }
