@@ -114,58 +114,26 @@ mod integration_tests {
         assert_eq!(o.stored_material.count_structured(), 2);
     }
     #[test]
-    fn accessible_interior_is_filled_with_water_once() {
+    fn accessible_interior_starts_without_synthetic_water() {
         let s = Simulation::new(22, 10.0);
         let catalog = s.environment.catalog.clone();
         let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog)
             .expect("confirmed seed baseline should be valid");
-        let mut structure = blueprint
+        let structure = blueprint
             .realize(&catalog)
             .expect("baseline should realize without initial Water");
-        let mut ledger = s.energy_ledger;
-        let mut energy = s.organisms[0].usable_energy;
-        let regions = crate::interior_geometry::find_enclosed_regions(&structure, &catalog);
-        let first = crate::interior_geometry::fill_enclosed_regions_with_water(
-            &mut structure,
+        let regions = crate::interior_geometry::find_accessible_interior_regions(
+            &structure,
             &catalog,
-            &mut ledger,
-            &mut energy,
         )
-        .expect("water fill should succeed");
-        assert!(first > 0);
-        let water_count = structure
-            .units
-            .iter()
-            .filter(|unit| {
-                unit.material
-                    .parts
-                    .first()
-                    .is_some_and(|(name, _)| name == "Water")
-            })
-            .count();
-        assert!(water_count > 0);
-
-        let second = crate::interior_geometry::fill_enclosed_regions_with_water(
-            &mut structure,
-            &catalog,
-            &mut ledger,
-            &mut energy,
-        )
-        .expect("repeated water fill should succeed");
-        assert_eq!(second, 0);
-        assert_eq!(
-            structure
-                .units
-                .iter()
-                .filter(|unit| {
-                    unit.material
-                        .parts
-                        .first()
-                        .is_some_and(|(name, _)| name == "Water")
-                })
-                .count(),
-            water_count
-        );
+        .expect("baseline should expose accessible topology");
+        assert!(!regions.is_empty());
+        assert!(structure.units.iter().all(|unit| {
+            unit.material
+                .parts
+                .first()
+                .is_none_or(|(name, _)| name != "Water")
+        }));
     }
 
     #[test]
