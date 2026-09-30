@@ -206,8 +206,8 @@ pub(crate) fn confirmed_seed_baseline(
     let hydrogen_length = catalog
         .iter()
         .find(|resource| resource.name == "Hydrogen")
-        .and_then(|resource| match resource.shape.form {
-            crate::resources::Form::Line { length } => Some(length),
+        .and_then(|resource| match &resource.shape.form {
+            crate::resources::Form::Line { length } => Some(*length),
             _ => None,
         })
         .ok_or_else(|| "catalog Hydrogen must retain its line geometry".to_string())?;
