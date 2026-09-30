@@ -17,7 +17,7 @@ type ConstructionSolution = (
     f64,
 );
 
-fn placement_penetrates_genome_measurement(
+pub(crate) fn placement_penetrates_genome_measurement(
     candidate_resource: &BaseResource,
     placement: Placement,
     scaffold: &crate::structural_blueprint::GenomeMeasurementScaffold,
