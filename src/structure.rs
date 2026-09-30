@@ -475,6 +475,22 @@ impl PhysicalConstituentGraph {
         self.units.push(u);
         index
     }
+    /// Remove temporary physical constituents and every bond touching them.
+    /// Bonds identify constituents by stable physical ID, so remaining units do
+    /// not need index remapping.
+    pub(crate) fn remove_units_by_physical_ids(&mut self, ids: &[PhysicalConstituentId]) {
+        if ids.is_empty() {
+            return;
+        }
+        let doomed: HashSet<PhysicalConstituentId> = ids.iter().copied().collect();
+        self.units.retain(|unit| !doomed.contains(&unit.physical_id));
+        self.bonds.retain(|bond| {
+            !doomed.contains(&bond.endpoint_a.constituent_id)
+                && !doomed.contains(&bond.endpoint_b.constituent_id)
+        });
+        self.genome_constituent_ids.retain(|id| !doomed.contains(id));
+    }
+
     pub fn physical_id(&self, unit_index: usize) -> Option<PhysicalConstituentId> {
         self.units.get(unit_index).map(|u| u.physical_id)
     }
