@@ -408,17 +408,42 @@ pub fn find_enclosed_regions(
     let mut edge_units = Vec::new();
     for (unit, polygon) in &polygons {
         for i in 0..polygon.len() {
-            let a = intern(polygon[i], &mut points, &mut point_index);
-            let b = intern(
-                polygon[(i + 1) % polygon.len()],
-                &mut points,
-                &mut point_index,
-            );
-            if a != b {
-                edges.push(Edge { from: a, to: b });
-                edge_units.push(*unit);
-                edges.push(Edge { from: b, to: a });
-                edge_units.push(*unit);
+            let a_point = polygon[i];
+            let b_point = polygon[(i + 1) % polygon.len()];
+            let mut split_points = vec![a_point, b_point];
+            for (_, (line_a, line_b)) in &line_segments {
+                if point_on_segment(*line_a, a_point, b_point) {
+                    split_points.push(*line_a);
+                }
+                if point_on_segment(*line_b, a_point, b_point) {
+                    split_points.push(*line_b);
+                }
+            }
+            let ab = b_point.sub(a_point);
+            let length_sq = ab.x * ab.x + ab.y * ab.y;
+            split_points.sort_by(|left, right| {
+                let left_t = if length_sq <= EPS {
+                    0.0
+                } else {
+                    ((left.x - a_point.x) * ab.x + (left.y - a_point.y) * ab.y) / length_sq
+                };
+                let right_t = if length_sq <= EPS {
+                    0.0
+                } else {
+                    ((right.x - a_point.x) * ab.x + (right.y - a_point.y) * ab.y) / length_sq
+                };
+                left_t.total_cmp(&right_t)
+            });
+            split_points.dedup_by(|left, right| left.sub(*right).norm() <= NODE_TOLERANCE);
+            for pair in split_points.windows(2) {
+                let a = intern(pair[0], &mut points, &mut point_index);
+                let b = intern(pair[1], &mut points, &mut point_index);
+                if a != b {
+                    edges.push(Edge { from: a, to: b });
+                    edge_units.push(*unit);
+                    edges.push(Edge { from: b, to: a });
+                    edge_units.push(*unit);
+                }
             }
         }
     }
@@ -583,6 +608,23 @@ fn point_in_polygon(point: Point, polygon: &[Point]) -> bool {
     }
     inside
 }
+fn point_on_segment(point: Point, a: Point, b: Point) -> bool {
+    let ab = b.sub(a);
+    let length_sq = ab.x * ab.x + ab.y * ab.y;
+    if length_sq <= EPS {
+        return point.sub(a).norm() <= NODE_TOLERANCE;
+    }
+    let t = ((point.x - a.x) * ab.x + (point.y - a.y) * ab.y) / length_sq;
+    if !(-NODE_TOLERANCE..=1.0 + NODE_TOLERANCE).contains(&t) {
+        return false;
+    }
+    let projection = Point {
+        x: a.x + t * ab.x,
+        y: a.y + t * ab.y,
+    };
+    projection.sub(point).norm() <= NODE_TOLERANCE
+}
+
 fn point_on_polygon_boundary(point: Point, polygon: &[Point]) -> bool {
     (0..polygon.len()).any(|i| {
         let a = polygon[i];
