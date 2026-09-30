@@ -40,7 +40,11 @@ fn form_family(form: &Form) -> u8 {
     }
 }
 
-fn structural_similarity(preferred: &BaseResource, candidate: &BaseResource, catalog: &[BaseResource]) -> f64 {
+fn structural_similarity(
+    preferred: &BaseResource,
+    candidate: &BaseResource,
+    catalog: &[BaseResource],
+) -> f64 {
     if preferred.name == candidate.name {
         return 1.0;
     }
@@ -58,7 +62,12 @@ fn structural_similarity(preferred: &BaseResource, candidate: &BaseResource, cat
     let (cohesion_min, cohesion_max) = ranges(|p| p.cohesion);
 
     let property_score = [
-        normalized_similarity(preferred.properties.mass, candidate.properties.mass, mass_min, mass_max),
+        normalized_similarity(
+            preferred.properties.mass,
+            candidate.properties.mass,
+            mass_min,
+            mass_max,
+        ),
         normalized_similarity(
             preferred.properties.potential_energy,
             candidate.properties.potential_energy,
@@ -103,7 +112,9 @@ pub(crate) fn rank_available_construction_materials(
     let preferred = catalog
         .iter()
         .find(|resource| resource.name == preferred_resource_name)
-        .ok_or_else(|| format!("unknown preferred construction resource {preferred_resource_name}"))?;
+        .ok_or_else(|| {
+            format!("unknown preferred construction resource {preferred_resource_name}")
+        })?;
 
     let mut candidates = storage
         .entries
