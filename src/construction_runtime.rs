@@ -787,9 +787,8 @@ pub(crate) fn construct_blueprint_bond_driven(
         let Some((_, trial, trial_ledger, trial_energy, new_unit_index)) = best_trial else {
             return Err(format!("no valid bond-driven pose found for blueprint element {index}"));
         };
-        // Recompute heat for the committed trial from its newly-added bonds.
-        let previous_bonds = structure.bonds.len();
-        let committed_heat = trial.bonds.iter().skip(previous_bonds).map(|bond| bond.bond_energy).sum::<f64>();
+        let committed_heat =
+            trial_ledger.total_heat_dissipated - ledger.total_heat_dissipated;
         total_heat += committed_heat;
         structure = trial;
         *ledger = trial_ledger;
