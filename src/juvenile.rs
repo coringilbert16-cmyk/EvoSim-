@@ -138,11 +138,13 @@ pub(crate) fn confirmed_seed_baseline(
     }
 
     let bridge_start = elements.len();
-    let segment_length = chamber_gap / 2.0;
-    for y in [
-        inner_boundary + segment_length / 2.0,
-        outer_inner_boundary - segment_length / 2.0,
-    ] {
+    let half_hydrogen = hydrogen_length / 2.0;
+    let first_center = inner_boundary + half_hydrogen;
+    let second_center = outer_inner_boundary - half_hydrogen;
+    if second_center <= first_center {
+        return Err("initial chamber is too narrow for a two-Hydrogen bridge".into());
+    }
+    for y in [first_center, second_center] {
         elements.push(BlueprintElement {
             material: Material::free_base("Hydrogen", 1.0),
             placement: BlueprintPlacement {
