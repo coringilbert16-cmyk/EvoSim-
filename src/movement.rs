@@ -643,13 +643,7 @@ fn push_blockers_for_parts(
             {
                 continue;
             }
-            if environmental_penetration_allowed(
-                moving,
-                environment,
-                candidate,
-                dx,
-                dy,
-            ) {
+            if environmental_penetration_allowed(moving, environment, candidate, dx, dy) {
                 // Permeable environmental material is not a push blocker. It
                 // remains in place and can become ordinary stored material once
                 // its realized geometry is fully contained.
