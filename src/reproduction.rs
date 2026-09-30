@@ -208,29 +208,28 @@ pub(crate) fn construction_material_need_pressure(
         preferred,
         catalog,
     ) {
-        Ok(crate::construction_material_selection::ConstructionMaterialDecision::Need { .. }) => 1.0,
-        Ok(crate::construction_material_selection::ConstructionMaterialDecision::Selected { .. }) => 0.0,
+        Ok(crate::construction_material_selection::ConstructionMaterialDecision::Need {
+            ..
+        }) => 1.0,
+        Ok(crate::construction_material_selection::ConstructionMaterialDecision::Selected {
+            ..
+        }) => 0.0,
         Err(_) => 1.0,
     }
 }
 
-fn construction_preferred_resource(
-    child: &Organism,
-) -> Option<&str> {
+fn construction_preferred_resource(child: &Organism) -> Option<&str> {
     let blueprint = &child.genome.developmental_blueprint;
     blueprint
         .material_preferences
         .iter()
         .max_by(|a, b| {
-            a.evaluate(
-                child.developmental_origin.x,
-                child.developmental_origin.y,
-            )
-            .partial_cmp(&b.evaluate(
-                child.developmental_origin.x,
-                child.developmental_origin.y,
-            ))
-            .unwrap_or(std::cmp::Ordering::Equal)
+            a.evaluate(child.developmental_origin.x, child.developmental_origin.y)
+                .partial_cmp(&b.evaluate(
+                    child.developmental_origin.x,
+                    child.developmental_origin.y,
+                ))
+                .unwrap_or(std::cmp::Ordering::Equal)
         })
         .map(|field| field.resource_name.as_str())
 }
@@ -285,7 +284,8 @@ fn try_child_construction(
                 &mut nodes,
                 &candidate_ledger,
                 child.usable_energy,
-            ) else {
+            )
+            else {
                 continue;
             };
 
@@ -589,7 +589,13 @@ pub(crate) fn begin_reproduction(
     // actually be instantiated by the physical construction runtime.
     // Structured logical material remains intact; an already-realized
     // structured object may be used directly.
-    for (storage_index, entry) in parent.stored_material.entries.clone().into_iter().enumerate() {
+    for (storage_index, entry) in parent
+        .stored_material
+        .entries
+        .clone()
+        .into_iter()
+        .enumerate()
+    {
         let crate::material_storage::StoredMaterial::Physical(instance) = &entry;
         let anchor = instance.material.clone();
         let Some(placement) = parent_child_position(parent, &anchor, catalog) else {
