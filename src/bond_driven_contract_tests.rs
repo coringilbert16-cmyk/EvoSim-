@@ -247,12 +247,7 @@ mod tests {
         let mut ledger = EnergyLedger::default();
         let mut energy = 1.0e12;
         assert!(blueprint
-            .realize_with_materials(
-                &catalog,
-                &mut storage,
-                &mut ledger,
-                &mut energy,
-            )
+            .realize_with_materials(&catalog, &mut storage, &mut ledger, &mut energy,)
             .is_err());
 
         assert_eq!(storage.materials_snapshot(), before);
