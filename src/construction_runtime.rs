@@ -478,7 +478,13 @@ fn install_genome_measurement_scaffold(
             .ok_or_else(|| {
                 "genome measurement scaffold cannot realize its internal Carbon bond".to_string()
             })?;
-        crate::combine_runtime::form_internal_construction_bond(structure, candidate, catalog)
+        crate::combine_runtime::form_internal_construction_bond(
+            structure,
+            indices[a],
+            indices[b],
+            candidate,
+            catalog,
+        )
             .map_err(|_| "genome measurement scaffold produced an invalid internal bond")?;
     }
 
@@ -819,13 +825,9 @@ fn realize_next_bond_driven(
 
                 return Some((
                     trial,
-                    new_material.clone(),
                     indices,
                     part_index,
-                    endpoint_a,
-                    endpoint_b,
                     attempt,
-                    candidate_origin,
                     trial_ledger,
                     trial_energy,
                 ));
