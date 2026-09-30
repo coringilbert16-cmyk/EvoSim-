@@ -356,13 +356,25 @@ fn next_construction_resource_status(
     ledger: &EnergyLedger,
     context: Option<DevelopmentalContext<'_>>,
 ) -> NextConstructionResourceStatus {
-    let has_physical_material = |storage: &MaterialStorage| {
-        storage
-            .entries
-            .iter()
-            .any(|entry| matches!(entry, crate::material_storage::StoredMaterial::Physical(_)))
-    };
-    if !has_physical_material(&child.stored_material) && !has_physical_material(parent_storage) {
+    let preferred = construction_preferred_resource(child);
+    let has_acceptable_physical_material = preferred.is_some_and(|preferred| {
+        let acceptable = |storage: &MaterialStorage| {
+            crate::construction_material_selection::rank_available_construction_materials(
+                storage,
+                preferred,
+                &environment.catalog,
+            )
+            .map(|candidates| {
+                candidates.iter().any(|(_, _, score)| {
+                    *score
+                        >= crate::construction_material_selection::MIN_CONSTRUCTION_MATERIAL_MATCH
+                })
+            })
+            .unwrap_or(false)
+        };
+        acceptable(&child.stored_material) || acceptable(parent_storage)
+    });
+    if !has_acceptable_physical_material {
         return NextConstructionResourceStatus::Missing;
     }
 
