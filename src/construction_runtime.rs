@@ -431,6 +431,20 @@ fn candidate_penetrates_measurement(
     false
 }
 
+
+pub(crate) fn placement_penetrates_genome_measurement(
+    resource: &BaseResource,
+    placement: Placement,
+    scaffold: &crate::structural_blueprint::GenomeMeasurementScaffold,
+    catalog: &[BaseResource],
+) -> bool {
+    let mut candidate = StructuralUnit::new(resource.name.clone(), placement);
+    if !candidate.realize_default_geometry(catalog) {
+        return true;
+    }
+    candidate_penetrates_measurement(&candidate, scaffold, placement, catalog)
+}
+
 fn install_genome_measurement_scaffold(
     structure: &mut OrganismStructure,
     scaffold: &crate::structural_blueprint::GenomeMeasurementScaffold,
