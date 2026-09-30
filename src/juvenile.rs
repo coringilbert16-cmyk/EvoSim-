@@ -54,14 +54,7 @@ pub(crate) fn confirmed_seed_baseline(
         (diagonal, diagonal),
     ];
     let materials = [
-        "Carbon",
-        "Sulfur",
-        "Methane",
-        "Carbon",
-        "Sulfur",
-        "Methane",
-        "Carbon",
-        "Sulfur",
+        "Carbon", "Sulfur", "Methane", "Carbon", "Sulfur", "Methane", "Carbon", "Sulfur",
     ];
     let mut elements = Vec::with_capacity(positions.len());
     for ((x, y), material) in positions.into_iter().zip(materials) {
