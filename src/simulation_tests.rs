@@ -104,7 +104,11 @@ mod integration_tests {
     fn accessible_interior_is_filled_with_water_once() {
         let s = Simulation::new(22, 10.0);
         let catalog = s.environment.catalog.clone();
-        let mut structure = s.organisms[0].structure.clone();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog)
+            .expect("confirmed seed baseline should be valid");
+        let mut structure = blueprint
+            .realize(&catalog)
+            .expect("baseline should realize without initial Water");
         let mut ledger = s.energy_ledger;
         let mut energy = s.organisms[0].usable_energy;
 
@@ -167,10 +171,9 @@ mod integration_tests {
         let region = regions
             .first()
             .expect("initial organism should have an accessible interior region");
-        // Find a point with enough clearance for Hydrogen's finite geometry.
-        // Being merely inside the topology is insufficient: the entire
-        // physical constituent must fit inside the region.
-        let hydrogen_half_length = match s
+        // Find a placement where the entire finite Hydrogen line lies inside
+        // the region. The annulus is narrow, so fitting depends on orientation.
+        let hydrogen_length = match s
             .environment
             .catalog
             .iter()
@@ -179,9 +182,44 @@ mod integration_tests {
             .shape
             .form
         {
-            crate::resources::Form::Line { length } => length / 2.0,
+            crate::resources::Form::Line { length } => length,
             _ => panic!("Hydrogen test resource must remain a line"),
         };
+        fn segment_intersects(
+            a: (f64, f64),
+            b: (f64, f64),
+            c: (f64, f64),
+            d: (f64, f64),
+        ) -> bool {
+            fn orient(a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> f64 {
+                (b.0 - a.0) * (c.1 - a.1) - (b.1 - a.1) * (c.0 - a.0)
+            }
+            let o1 = orient(a, b, c);
+            let o2 = orient(a, b, d);
+            let o3 = orient(c, d, a);
+            let o4 = orient(c, d, b);
+            (o1 > 1e-9) != (o2 > 1e-9) && (o3 > 1e-9) != (o4 > 1e-9)
+        }
+        fn line_fits(
+            region: &crate::interior_geometry::EnclosedRegion,
+            p: Placement,
+            length: f64,
+        ) -> bool {
+            let (sin, cos) = p.rotation_radians.sin_cos();
+            let half = length * 0.5;
+            let a = (p.x - half * cos, p.y - half * sin);
+            let b = (p.x + half * cos, p.y + half * sin);
+            region.contains_point(a.0, a.1)
+                && region.contains_point(b.0, b.1)
+                && !(0..region.boundary.len()).any(|i| {
+                    segment_intersects(
+                        a,
+                        b,
+                        region.boundary[i],
+                        region.boundary[(i + 1) % region.boundary.len()],
+                    )
+                })
+        }
         let min_x = region
             .boundary
             .iter()
@@ -202,47 +240,24 @@ mod integration_tests {
             .iter()
             .map(|(_, y)| *y)
             .fold(f64::NEG_INFINITY, f64::max);
-
-        fn point_segment_distance(point: (f64, f64), a: (f64, f64), b: (f64, f64)) -> f64 {
-            let (px, py) = point;
-            let (ax, ay) = a;
-            let (bx, by) = b;
-            let dx = bx - ax;
-            let dy = by - ay;
-            let length_sq = dx * dx + dy * dy;
-            if length_sq <= f64::EPSILON {
-                return (px - ax).hypot(py - ay);
-            }
-            let t = ((px - ax) * dx + (py - ay) * dy) / length_sq;
-            let t = t.clamp(0.0, 1.0);
-            let qx = ax + t * dx;
-            let qy = ay + t * dy;
-            (px - qx).hypot(py - qy)
-        }
-
         let mut anchor = None;
         for iy in 0..=80 {
             let y = min_y + (max_y - min_y) * iy as f64 / 80.0;
             for ix in 0..=80 {
                 let x = min_x + (max_x - min_x) * ix as f64 / 80.0;
-                if !region.contains_point(x, y) {
-                    continue;
-                }
-                let clearance = (0..region.boundary.len())
-                    .map(|index| {
-                        point_segment_distance(
-                            (x, y),
-                            region.boundary[index],
-                            region.boundary[(index + 1) % region.boundary.len()],
-                        )
-                    })
-                    .fold(f64::INFINITY, f64::min);
-                if clearance >= hydrogen_half_length + 1e-9 {
-                    anchor = Some(Placement {
+                for step in 0..36 {
+                    let rotation = std::f64::consts::TAU * step as f64 / 36.0;
+                    let candidate = Placement {
                         x,
                         y,
-                        rotation_radians: 0.0,
-                    });
+                        rotation_radians: rotation,
+                    };
+                    if line_fits(region, candidate, hydrogen_length) {
+                        anchor = Some(candidate);
+                        break;
+                    }
+                }
+                if anchor.is_some() {
                     break;
                 }
             }
@@ -250,8 +265,7 @@ mod integration_tests {
                 break;
             }
         }
-        let anchor = anchor.expect("accessible region must contain room for Hydrogen");
-        assert!(region.contains_point(anchor.x, anchor.y));
+        let anchor = anchor.expect("accessible region must contain room for Hydrogen");        assert!(region.contains_point(anchor.x, anchor.y));
         let physical = PhysicalMaterial::realized(
             Material::free_base("Hydrogen", 1.0),
             vec![anchor],
