@@ -171,109 +171,35 @@ mod integration_tests {
         let region = regions
             .first()
             .expect("initial organism should have an accessible interior region");
-        // Find a placement where the entire finite Hydrogen line lies inside
-        // the region. The annulus is narrow, so fitting depends on orientation.
-        let hydrogen_length = match s
-            .environment
-            .catalog
-            .iter()
-            .find(|resource| resource.name == "Hydrogen")
-            .expect("default catalog must contain Hydrogen")
-            .shape
-            .form
-        {
-            crate::resources::Form::Line { length } => length,
-            _ => panic!("Hydrogen test resource must remain a line"),
+        // The redesigned chamber must be large enough for the finite rigid
+        // base resources that previously could not fit through the old annulus.
+        let inner_boundary = (1.511_858 + 0.330_719) / 2.0 + 0.330_719 / 2.0;
+        let outer_boundary = 2.55 - 0.330_719 / 2.0;
+        let anchor = Placement {
+            x: (inner_boundary + outer_boundary) / 2.0,
+            y: 0.0,
+            rotation_radians: 0.0,
         };
-        fn segment_intersects(
-            a: (f64, f64),
-            b: (f64, f64),
-            c: (f64, f64),
-            d: (f64, f64),
-        ) -> bool {
-            fn orient(a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> f64 {
-                (b.0 - a.0) * (c.1 - a.1) - (b.1 - a.1) * (c.0 - a.0)
-            }
-            let o1 = orient(a, b, c);
-            let o2 = orient(a, b, d);
-            let o3 = orient(c, d, a);
-            let o4 = orient(c, d, b);
-            (o1 > 1e-9) != (o2 > 1e-9) && (o3 > 1e-9) != (o4 > 1e-9)
-        }
-        fn line_fits(
-            region: &crate::interior_geometry::EnclosedRegion,
-            p: Placement,
-            length: f64,
-        ) -> bool {
-            let (sin, cos) = p.rotation_radians.sin_cos();
-            let half = length * 0.5;
-            let a = (p.x - half * cos, p.y - half * sin);
-            let b = (p.x + half * cos, p.y + half * sin);
-            region.contains_point(a.0, a.1)
-                && region.contains_point(b.0, b.1)
-                && !(0..region.boundary.len()).any(|i| {
-                    segment_intersects(
-                        a,
-                        b,
-                        region.boundary[i],
-                        region.boundary[(i + 1) % region.boundary.len()],
-                    )
-                })
-        }
-        let min_x = region
-            .boundary
-            .iter()
-            .map(|(x, _)| *x)
-            .fold(f64::INFINITY, f64::min);
-        let max_x = region
-            .boundary
-            .iter()
-            .map(|(x, _)| *x)
-            .fold(f64::NEG_INFINITY, f64::max);
-        let min_y = region
-            .boundary
-            .iter()
-            .map(|(_, y)| *y)
-            .fold(f64::INFINITY, f64::min);
-        let max_y = region
-            .boundary
-            .iter()
-            .map(|(_, y)| *y)
-            .fold(f64::NEG_INFINITY, f64::max);
-        let mut anchor = None;
-        for iy in 0..=80 {
-            let y = min_y + (max_y - min_y) * iy as f64 / 80.0;
-            for ix in 0..=80 {
-                let x = min_x + (max_x - min_x) * ix as f64 / 80.0;
-                for step in 0..36 {
-                    let rotation = std::f64::consts::TAU * step as f64 / 36.0;
-                    let candidate = Placement {
-                        x,
-                        y,
-                        rotation_radians: rotation,
-                    };
-                    if line_fits(region, candidate, hydrogen_length) {
-                        anchor = Some(candidate);
-                        break;
-                    }
-                }
-                if anchor.is_some() {
-                    break;
-                }
-            }
-            if anchor.is_some() {
-                break;
-            }
-        }
-        let anchor = anchor.expect("accessible region must contain room for Hydrogen");
         assert!(region.contains_point(anchor.x, anchor.y));
-        let physical = PhysicalMaterial::realized(
-            Material::free_base("Hydrogen", 1.0),
-            vec![anchor],
-            &s.environment.catalog,
-        )
-        .expect("Hydrogen should have a valid physical realization");
-        let before = s.organisms[0].stored_material.total_amount();
+
+        for resource_name in ["Carbon", "Methane"] {
+            let physical = PhysicalMaterial::realized(
+                Material::free_base(resource_name, 1.0),
+                vec![anchor],
+                &s.environment.catalog,
+            )
+            .expect("base resource should have a valid physical realization");
+            let before = s.organisms[0].stored_material.total_amount();
+            s.environment.field.deposit(anchor.x, anchor.y, physical);
+            Simulation::transfer_contained_environmental_material(
+                &mut s.organisms[0],
+                &mut s.environment,
+            );
+            assert_eq!(
+                s.organisms[0].stored_material.total_amount(),
+                before + 1.0
+            );
+        }
         let field_before = s.environment.field.total_amount();
         s.environment.field.deposit(anchor.x, anchor.y, physical);
         Simulation::transfer_contained_environmental_material(
