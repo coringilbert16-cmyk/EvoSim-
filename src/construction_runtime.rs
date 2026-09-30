@@ -628,6 +628,8 @@ pub(crate) fn try_attach_physical_material_bond_driven(
     ConnectionEndpoint,
     crate::combine_runtime::CombineAttempt,
     Placement,
+    EnergyLedger,
+    f64,
 )> {
     let existing_unit = structure.units.get(existing_index)?;
     let existing_endpoints = structure_unit_endpoint_options(existing_unit, catalog);
@@ -726,6 +728,8 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     endpoint_b,
                     attempt,
                     candidate_origin,
+                    trial_ledger,
+                    trial_energy,
                 ));
             }
         }
