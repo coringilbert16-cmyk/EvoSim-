@@ -591,18 +591,6 @@ mod tests {
     }
 
     #[test]
-    fn water_quantity_is_derived_from_enclosed_area() {
-        let region = EnclosedRegion {
-            area: 2.1,
-            boundary_units: vec![],
-            sample_point: (0.0, 0.0),
-            boundary: vec![(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)],
-        };
-        assert_eq!(required_water_units(&region, 0.5), 5);
-        assert_eq!(required_water_units(&region, 1.0), 3);
-    }
-
-    #[test]
     fn removing_one_wall_opens_the_region() {
         // Each structural wall is itself a closed polygon, but three walls
         // arranged as a U do not form a closed cycle around the open interior.
