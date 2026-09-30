@@ -1101,7 +1101,10 @@ mod tests {
             crate::resources::Form::Fluid {
                 boundary: Some(vertices),
                 ..
-            } => vertices.first().copied().expect("water boundary should have a vertex"),
+            } => vertices
+                .first()
+                .copied()
+                .expect("water boundary should have a vertex"),
             _ => panic!("seed Water must have realized boundary geometry"),
         };
         let carbon = crate::physical_material::PhysicalMaterial::realized(
