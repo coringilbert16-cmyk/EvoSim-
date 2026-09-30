@@ -613,18 +613,31 @@ fn blueprint_pose_score(candidate: Placement, target: BlueprintPlacement) -> f64
         + 0.25 * angle_error(candidate.rotation_radians, target.rotation_radians)
 }
 
-fn placed_unit_overlaps(structure: &OrganismStructure, candidate: &StructuralUnit, ignored_units: &[usize], catalog: &[BaseResource]) -> bool {
+fn placed_unit_overlaps(
+    structure: &OrganismStructure,
+    candidate: &StructuralUnit,
+    ignored_units: &[usize],
+    catalog: &[BaseResource],
+) -> bool {
     let Some(candidate_shape) = candidate.shape(catalog) else {
         return true;
     };
     let candidate_part = crate::material_geometry::PlacedMaterialPart {
-        part_index: 0, form: candidate_shape.form.clone(), placement: candidate.placement,
+        part_index: 0,
+        form: candidate_shape.form.clone(),
+        placement: candidate.placement,
     };
     structure.units.iter().enumerate().any(|(index, unit)| {
-        if ignored_units.contains(&index) { return false; }
-        let Some(shape) = unit.shape(catalog) else { return true; };
+        if ignored_units.contains(&index) {
+            return false;
+        }
+        let Some(shape) = unit.shape(catalog) else {
+            return true;
+        };
         let existing_part = crate::material_geometry::PlacedMaterialPart {
-            part_index: index + 1, form: shape.form.clone(), placement: unit.placement,
+            part_index: index + 1,
+            form: shape.form.clone(),
+            placement: unit.placement,
         };
         crate::material_geometry::placed_forms_overlap(&candidate_part, &existing_part, 0.0)
     })
