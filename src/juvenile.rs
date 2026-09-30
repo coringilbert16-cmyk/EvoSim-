@@ -215,18 +215,18 @@ pub(crate) fn confirmed_seed_baseline(
         },
         BlueprintConnection {
             element_a: 3,
-            element_b: bridge_start + 5,
-        },
-        BlueprintConnection {
-            element_a: bridge_start + 5,
-            element_b: bridge_start + 4,
-        },
-        BlueprintConnection {
-            element_a: bridge_start + 4,
             element_b: bridge_start + 3,
         },
         BlueprintConnection {
             element_a: bridge_start + 3,
+            element_b: bridge_start + 4,
+        },
+        BlueprintConnection {
+            element_a: bridge_start + 4,
+            element_b: bridge_start + 5,
+        },
+        BlueprintConnection {
+            element_a: bridge_start + 5,
             element_b: outer_start + 6,
         },
     ]);
