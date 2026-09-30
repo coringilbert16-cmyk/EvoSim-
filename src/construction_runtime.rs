@@ -773,28 +773,6 @@ fn candidate_penetrates_measurement(
     false
 }
 
-fn best_existing_connection(
-    structure: &OrganismStructure,
-    new_unit: usize,
-    existing_unit: usize,
-    catalog: &[BaseResource],
-) -> Option<(ConnectionEndpoint, ConnectionEndpoint)> {
-    crate::contact::connection_pair_candidates(structure, existing_unit, new_unit, catalog)
-        .into_iter()
-        .filter(|candidate| candidate.available_a && candidate.available_b)
-        .max_by(|a, b| {
-            a.facing
-                .partial_cmp(&b.facing)
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then_with(|| {
-                    b.distance
-                        .partial_cmp(&a.distance)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                })
-        })
-        .map(|candidate| (candidate.endpoint_a, candidate.endpoint_b))
-}
-
 fn already_realized_neighbors(
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     index: usize,
