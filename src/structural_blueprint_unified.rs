@@ -75,7 +75,6 @@ impl<'de> Deserialize<'de> for BlueprintElement {
         })
     }
 }
-
 impl BlueprintElement {
     pub fn validate(&self) -> Result<(), String> {
         if !self.material.is_valid() {
