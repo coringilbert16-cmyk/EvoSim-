@@ -858,6 +858,7 @@ mod tests {
             structure,
             development_stage: crate::state::DevelopmentStage::Juvenile,
             active_transformation_id: None,
+        active_movement: None,
             reproductive_construction: None,
             structure_revision: 0,
             position_revision: 0,
