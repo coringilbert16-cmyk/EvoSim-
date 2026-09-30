@@ -17,9 +17,7 @@ pub(crate) fn confirmed_seed_baseline(
     catalog: &[BaseResource],
 ) -> Result<StructuralBlueprint, String> {
     use crate::resources::Material;
-    use crate::structural_blueprint::{
-        BlueprintConnection, BlueprintElement, BlueprintPlacement,
-    };
+    use crate::structural_blueprint::{BlueprintConnection, BlueprintElement, BlueprintPlacement};
 
     let nitrogen = catalog
         .iter()
@@ -294,11 +292,8 @@ pub(crate) fn confirmed_seed_baseline(
         },
     ]);
 
-    let baseline = StructuralBlueprint::with_anchor_elements(
-        elements,
-        connections,
-        vec![0, 1, 2, 3],
-    );
+    let baseline =
+        StructuralBlueprint::with_anchor_elements(elements, connections, vec![0, 1, 2, 3]);
     baseline.validate()?;
     Ok(baseline)
 }
