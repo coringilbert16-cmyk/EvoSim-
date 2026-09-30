@@ -672,8 +672,7 @@ impl Simulation {
                                     &move_candidate,
                                     consequence,
                                 );
-                                if let Some(pending) =
-                                    organism.pending_movement_experience.as_mut()
+                                if let Some(pending) = organism.pending_movement_experience.as_mut()
                                 {
                                     pending.consequence =
                                         crate::memory::memory_consequence_from_action(consequence);
@@ -746,8 +745,7 @@ impl Simulation {
                                         direction_y: None,
                                         step: None,
                                         usable_energy: organism.usable_energy,
-                                        active_transformation_id:
-                                            organism.active_transformation_id,
+                                        active_transformation_id: organism.active_transformation_id,
                                         result: Err(reason),
                                         old_position: organism.occupied_cells.first().cloned(),
                                         new_position: None,
