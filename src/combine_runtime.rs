@@ -107,15 +107,51 @@ pub(crate) fn form_specific_bond(
     })?;
     let (_, _, _, investment, _) =
         evaluate_candidate(structure, unit_a, unit_b, candidate, catalog)?;
-    form_bond(
+    form_construction_bond(
+        structure,
+        unit_a,
+        unit_b,
+        candidate,
+        investment,
+        catalog,
+        cache,
+        ledger,
+        energy,
+    )
+}
+
+/// Forms exactly the supplied construction contact.
+///
+/// Unlike generic COMBINE, this function does not search for a different contact.
+/// The caller has already selected the physical endpoint pair and pose. This is the
+/// transaction boundary for the bond-driven construction system.
+pub(crate) fn form_construction_bond(
+    structure: &mut crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    candidate: crate::contact::ConnectionPairCandidate,
+    investment: f64,
+    catalog: &[BaseResource],
+    cache: &mut ConnectionCompatibilityCache,
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> Option<CombineAttempt> {
+    if candidate.distance > COMBINE_CONTACT_TOLERANCE
+        || !candidate.available_a
+        || !candidate.available_b
+    {
+        return None;
+    }
+    form_bond_from_candidate(
         structure,
         BondFormationRequest {
             unit_a,
             unit_b,
-            endpoint_a,
-            endpoint_b,
+            endpoint_a: candidate.endpoint_a,
+            endpoint_b: candidate.endpoint_b,
             investment,
         },
+        candidate,
         catalog,
         cache,
         ledger,
@@ -132,6 +168,50 @@ fn form_bond(
     energy: &mut f64,
 ) -> Option<CombineAttempt> {
     let BondFormationRequest {
+        unit_a,
+        unit_b,
+        endpoint_a,
+        endpoint_b,
+        investment,
+    } = request;
+    let candidate = crate::contact::connection_pair_candidates_cached(
+        structure, unit_a, unit_b, catalog, cache,
+    )
+    .into_iter()
+    .find(|candidate| {
+        candidate.endpoint_a == endpoint_a
+            && candidate.endpoint_b == endpoint_b
+            && candidate.distance <= COMBINE_CONTACT_TOLERANCE
+            && candidate.available_a
+            && candidate.available_b
+    })?;
+    form_bond_from_candidate(
+        structure,
+        BondFormationRequest {
+            unit_a,
+            unit_b,
+            endpoint_a,
+            endpoint_b,
+            investment,
+        },
+        candidate,
+        catalog,
+        cache,
+        ledger,
+        energy,
+    )
+}
+
+fn form_bond_from_candidate(
+    structure: &mut crate::structure::OrganismStructure,
+    request: BondFormationRequest,
+    candidate: crate::contact::ConnectionPairCandidate,
+    catalog: &[BaseResource],
+    _cache: &mut ConnectionCompatibilityCache,
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> Option<CombineAttempt> {
+    let BondFormationRequest {
         unit_a: ua,
         unit_b: ub,
         endpoint_a,
@@ -143,16 +223,6 @@ fn form_bond(
     }
     let id_a = structure.physical_id(ua)?;
     let id_b = structure.physical_id(ub)?;
-    let candidate =
-        crate::contact::connection_pair_candidates_cached(structure, ua, ub, catalog, cache)
-            .into_iter()
-            .find(|c| {
-                c.endpoint_a == endpoint_a
-                    && c.endpoint_b == endpoint_b
-                    && c.distance <= COMBINE_CONTACT_TOLERANCE
-                    && c.available_a
-                    && c.available_b
-            })?;
     let a = structure.units[ua].properties(catalog)?;
     let b = structure.units[ub].properties(catalog)?;
     let evaluation = crate::combine::evaluate_formation(candidate, a.cohesion, b.cohesion);
