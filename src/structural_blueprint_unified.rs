@@ -128,7 +128,7 @@ impl GenomeMeasurementScaffold {
                 BlueprintPlacement {
                     x: 0.0,
                     y: circumradius,
-                    rotation_radians: 0.0,
+                    rotation_radians: std::f64::consts::FRAC_PI_6,
                 },
                 BlueprintPlacement {
                     x: -circumradius * (3.0_f64).sqrt() / 2.0,
