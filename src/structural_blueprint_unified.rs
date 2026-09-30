@@ -39,6 +39,10 @@ pub struct StructuralBlueprint {
     /// not a biological genome definition and do not identify the genome.
     #[serde(default = "default_anchor_elements")]
     pub anchor_elements: Vec<usize>,
+    /// Developmental geometry may explicitly require declared placements to be
+    /// realized directly rather than reinterpreted by the generic placement solver.
+    #[serde(default)]
+    pub authoritative_placements: bool,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -102,6 +106,10 @@ pub(crate) struct GenomeMeasurementScaffold {
     /// Three bonded Carbon guide pieces. The guide occupies real construction
     /// volume but has no organism units or bonds of its own.
     pub(crate) placements: [BlueprintPlacement; 3],
+    /// The temporary three-carbon reference is itself a triangle: all three
+    /// Carbon pieces are internally bonded, with each edge contributing to the
+    /// cavity measurement.
+    pub(crate) bonds: [(usize, usize); 3],
 }
 
 impl GenomeMeasurementScaffold {
@@ -114,25 +122,31 @@ impl GenomeMeasurementScaffold {
             crate::resources::Form::RegularPolygon { radius, .. } => radius,
             _ => return Err("Carbon genome measurement requires a polygonal Carbon shape".into()),
         };
+        // The measurement piece is a compact three-carbon reference, not a
+        // diameter laid across the future cavity. An equilateral arrangement
+        // preserves the carbon-derived spacing while keeping the temporary
+        // scaffold inside the smallest intended genome cavity.
         let spacing = radius * 3.0_f64.sqrt();
+        let circumradius = spacing / 3.0_f64.sqrt();
         Ok(Self {
             placements: [
                 BlueprintPlacement {
-                    x: -spacing,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                },
-                BlueprintPlacement {
                     x: 0.0,
-                    y: 0.0,
+                    y: circumradius,
                     rotation_radians: 0.0,
                 },
                 BlueprintPlacement {
-                    x: spacing,
-                    y: 0.0,
+                    x: -circumradius * (3.0_f64).sqrt() / 2.0,
+                    y: -circumradius / 2.0,
+                    rotation_radians: 0.0,
+                },
+                BlueprintPlacement {
+                    x: circumradius * (3.0_f64).sqrt() / 2.0,
+                    y: -circumradius / 2.0,
                     rotation_radians: 0.0,
                 },
             ],
+            bonds: [(0, 1), (1, 2), (2, 0)],
         })
     }
 }
@@ -170,6 +184,7 @@ impl StructuralBlueprint {
             connections: Self::canonical_connections(connections),
             anchor_elements: default_anchor_elements(),
             genome_measurement: None,
+            authoritative_placements: false,
         }
     }
 
@@ -183,6 +198,7 @@ impl StructuralBlueprint {
             connections: Self::canonical_connections(connections),
             anchor_elements,
             genome_measurement: None,
+            authoritative_placements: false,
         }
     }
 
@@ -262,6 +278,9 @@ impl StructuralBlueprint {
         energy: &mut f64,
     ) -> Result<(OrganismStructure, f64), String> {
         self.validate()?;
+        if self.authoritative_placements {
+            return self.realize_authoritative_with_context(catalog, ledger, energy);
+        }
         let mut structure = OrganismStructure::new();
         let mut realized = HashMap::<usize, Vec<usize>>::new();
         let mut order = Vec::with_capacity(self.elements.len());
@@ -334,6 +353,88 @@ impl StructuralBlueprint {
         Ok((structure, total_heat))
     }
 
+    fn realize_authoritative_with_context(
+        &self,
+        catalog: &[BaseResource],
+        ledger: &mut EnergyLedger,
+        energy: &mut f64,
+    ) -> Result<(OrganismStructure, f64), String> {
+        if self
+            .elements
+            .iter()
+            .any(|element| element.material.parts.len() != 1)
+        {
+            return Err(
+                "authoritative developmental placement requires single-constituent blueprint elements"
+                    .into(),
+            );
+        }
+
+        let mut structure = OrganismStructure::new();
+        for element in &self.elements {
+            let resource_name = &element.material.parts[0].0;
+            let resource = catalog
+                .iter()
+                .find(|resource| resource.name == *resource_name)
+                .ok_or_else(|| format!("blueprint references unknown resource {resource_name}"))?;
+
+            let placement = crate::structure::Placement {
+                x: element.placement.x,
+                y: element.placement.y,
+                rotation_radians: element.placement.rotation_radians,
+            };
+
+            if let Some(scaffold) = self.genome_measurement.as_ref() {
+                if crate::construction_runtime::placement_penetrates_genome_measurement(
+                    resource, placement, scaffold, catalog,
+                ) {
+                    return Err(format!(
+                        "authoritative developmental placement penetrates genome measurement: {resource_name}"
+                    ));
+                }
+            }
+
+            let mut unit = crate::structure::StructuralUnit::new(resource.name.clone(), placement);
+            if !unit.realize_default_geometry(catalog) {
+                return Err(format!(
+                    "resource {resource_name} has invalid physical geometry"
+                ));
+            }
+            structure.add_unit(unit);
+        }
+
+        let mut heat = 0.0;
+        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+        for connection in &self.connections {
+            let Some(attempt) = crate::combine_runtime::combine_specific_pair(
+                &mut structure,
+                connection.element_a,
+                connection.element_b,
+                catalog,
+                &mut cache,
+                ledger,
+                energy,
+            ) else {
+                return Err(format!(
+                    "authoritative developmental bond could not be realized: {}-{}",
+                    connection.element_a, connection.element_b
+                ));
+            };
+            heat += attempt.work_cost;
+        }
+
+        if self.genome_measurement.is_some()
+            && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_none()
+        {
+            return Err(
+                "authoritative developmental geometry did not produce a qualifying final cavity"
+                    .into(),
+            );
+        }
+
+        Ok((structure, heat))
+    }
+
     pub fn is_connected(&self) -> bool {
         if self.elements.is_empty() {
             return false;
@@ -403,4 +504,39 @@ fn validate_element_contact(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod developmental_geometry_authority_tests {
+    use super::*;
+    use crate::resources::default_catalog;
+
+    #[test]
+    fn scaffolded_seed_realizes_declared_geometry_without_solver_reinterpretation() {
+        let catalog = default_catalog();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
+        assert!(blueprint.authoritative_placements);
+        assert!(blueprint.genome_measurement.is_some());
+
+        let mut ledger = EnergyLedger::default();
+        let mut energy = 1.0e12;
+        let (structure, _) = blueprint
+            .realize_with_context(&catalog, &mut ledger, &mut energy)
+            .unwrap();
+
+        assert_eq!(structure.units.len(), blueprint.elements.len());
+        for (unit, element) in structure.units.iter().zip(&blueprint.elements) {
+            assert!((unit.placement.x - element.placement.x).abs() < 1e-10);
+            assert!((unit.placement.y - element.placement.y).abs() < 1e-10);
+            assert!(
+                (unit.placement.rotation_radians - element.placement.rotation_radians).abs()
+                    < 1e-10
+            );
+        }
+
+        let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
+            .unwrap()
+            .expect("declared scaffolded geometry must produce a qualifying cavity");
+        assert!(cavity.qualifies());
+    }
 }
