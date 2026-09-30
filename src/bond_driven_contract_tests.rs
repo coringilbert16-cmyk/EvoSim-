@@ -229,6 +229,36 @@ mod tests {
         assert_eq!(energy, 1.0e12);
     }
     #[test]
+    fn failed_material_selection_does_not_consume_inventory() {
+        let catalog = default_catalog();
+        let blueprint = two_carbon_bond_blueprint();
+        let mut storage = crate::material_storage::MaterialStorage::default();
+        assert!(storage.store_physical(
+            Material::free_base("Hydrogen", 1.0),
+            vec![crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        ));
+        let before = storage.materials_snapshot();
+
+        let mut ledger = EnergyLedger::default();
+        let mut energy = 1.0e12;
+        assert!(blueprint
+            .realize_with_materials(
+                &catalog,
+                &mut storage,
+                &mut ledger,
+                &mut energy,
+            )
+            .is_err());
+
+        assert_eq!(storage.materials_snapshot(), before);
+    }
+
+    #[test]
     fn construction_uses_an_intact_composite_physical_material() {
         let catalog = default_catalog();
         let blueprint = two_carbon_bond_blueprint();
