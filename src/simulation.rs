@@ -637,7 +637,7 @@ impl Simulation {
                         let before_energy = active.before_energy;
                         let before_stress = active.before_stress;
                         let before_realization = active.before_developmental_realization;
-                        let progress = crate::movement::Simulation::advance_movement(
+                        let progress = Self::advance_movement(
                             before,
                             organism,
                             after,
@@ -716,7 +716,7 @@ impl Simulation {
                                     .map(|realization| realization.overall)
                                     .unwrap_or(0.0)
                             });
-                        match crate::movement::Simulation::start_movement(
+                        match Self::start_movement(
                             organism,
                             environment,
                             organism.structural_mass(&environment.catalog),
