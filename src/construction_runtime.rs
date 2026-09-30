@@ -360,7 +360,8 @@ fn point_inside_form(form: &Form, placement: Placement, x: f64, y: f64) -> bool 
 fn candidate_penetrates_measurement(
     candidate: &StructuralUnit,
     scaffold: &crate::structural_blueprint::GenomeMeasurementScaffold,
-    anchor: Placement,
+    anchor_world: Placement,
+    anchor_declared: BlueprintPlacement,
     catalog: &[BaseResource],
 ) -> bool {
     let Some(carbon) = resource(catalog, "Carbon") else {
@@ -369,9 +370,13 @@ fn candidate_penetrates_measurement(
     let transform = |placement: BlueprintPlacement| {
         let (s, c) = anchor.rotation_radians.sin_cos();
         Placement {
-            x: anchor.x + placement.x * c - placement.y * s,
-            y: anchor.y + placement.x * s + placement.y * c,
-            rotation_radians: anchor.rotation_radians + placement.rotation_radians,
+            x: anchor_world.x
+                + (placement.x - anchor_declared.x) * c
+                - (placement.y - anchor_declared.y) * s,
+            y: anchor_world.y
+                + (placement.x - anchor_declared.x) * s
+                + (placement.y - anchor_declared.y) * c,
+            rotation_radians: anchor_world.rotation_radians + placement.rotation_radians,
         }
     };
     for placement in scaffold.placements {
@@ -447,7 +452,8 @@ pub(crate) fn placement_penetrates_genome_measurement(
 fn install_genome_measurement_scaffold(
     structure: &mut OrganismStructure,
     scaffold: &crate::structural_blueprint::GenomeMeasurementScaffold,
-    anchor: Placement,
+    anchor_world: Placement,
+    anchor_declared: BlueprintPlacement,
     catalog: &[BaseResource],
 ) -> Result<Vec<crate::structure::PhysicalConstituentId>, String> {
     let carbon = resource(catalog, "Carbon")
@@ -455,9 +461,13 @@ fn install_genome_measurement_scaffold(
     let transform = |p: BlueprintPlacement| {
         let (s, c) = anchor.rotation_radians.sin_cos();
         Placement {
-            x: anchor.x + p.x * c - p.y * s,
-            y: anchor.y + p.x * s + p.y * c,
-            rotation_radians: anchor.rotation_radians + p.rotation_radians,
+            x: anchor_world.x
+                + (p.x - anchor_declared.x) * c
+                - (p.y - anchor_declared.y) * s,
+            y: anchor_world.y
+                + (p.x - anchor_declared.x) * s
+                + (p.y - anchor_declared.y) * c,
+            rotation_radians: anchor_world.rotation_radians + p.rotation_radians,
         }
     };
 
@@ -770,6 +780,7 @@ fn realize_next_bond_driven(
                             &trial.units[*index],
                             scaffold,
                             genome_anchor,
+                            anchor_element.placement,
                             catalog,
                         )
                     }) {
@@ -981,7 +992,13 @@ fn construct_blueprint_bond_driven_internal(
         .genome_measurement
         .as_ref()
         .map(|scaffold| {
-            install_genome_measurement_scaffold(&mut structure, scaffold, genome_anchor, catalog)
+            install_genome_measurement_scaffold(
+                &mut structure,
+                scaffold,
+                genome_anchor,
+                anchor_element.placement,
+                catalog,
+            )
         })
         .transpose()?
         .unwrap_or_default();
@@ -1179,6 +1196,11 @@ mod tests {
             &mut structure,
             &scaffold,
             Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            BlueprintPlacement {
                 x: 0.0,
                 y: 0.0,
                 rotation_radians: 0.0,
