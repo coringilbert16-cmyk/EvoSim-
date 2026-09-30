@@ -892,6 +892,7 @@ fn realize_next_bond_driven(
     ConnectionEndpoint,
     ConnectionEndpoint,
     crate::combine_runtime::CombineAttempt,
+    Placement,
 )> {
     let existing_index = realized_units[neighbor]?;
     let existing_resource = resource(catalog, &blueprint.elements[neighbor].material.parts[0].0)?;
@@ -1009,6 +1010,7 @@ fn realize_next_bond_driven(
                     endpoint_a,
                     endpoint_b,
                     attempt,
+                    candidate_origin,
                 ));
             }
         }
@@ -1215,7 +1217,15 @@ fn construct_blueprint_bond_driven_internal(
                 ).ok_or_else(|| "preferred construction material could not be realized".to_string())?
             };
 
-            if let Some((material, _indices, part_index, endpoint_a, endpoint_b, trial_attempt)) =
+            if let Some((
+                material,
+                _indices,
+                part_index,
+                endpoint_a,
+                endpoint_b,
+                trial_attempt,
+                candidate_origin,
+            )) =
                 realize_next_bond_driven(
                     blueprint, catalog, &structure, &realized_units, index, neighbor,
                     genome_anchor, &candidate_instance, &mut nodes, ledger, remaining_energy,
@@ -1223,36 +1233,7 @@ fn construct_blueprint_bond_driven_internal(
             {
                 let existing_index = realized_units[neighbor]
                     .ok_or_else(|| format!("realized neighbor {neighbor} has no structure unit"))?;
-                let joint = endpoint_a
-                    .world_point(&structure.units[existing_index], catalog)
-                    .ok_or_else(|| "successful construction endpoint disappeared".to_string())?;
-                let local = physical_material_endpoint_local_point(
-                    &material, part_index, endpoint_b, catalog,
-                ).ok_or_else(|| "successful material endpoint disappeared".to_string())?;
-
-                let mut best_origin = None;
-                let mut best_distance = f64::INFINITY;
-                for step in 0..360 {
-                    let angle = std::f64::consts::TAU * step as f64 / 360.0;
-                    let origin = placement_for_joint(
-                        (local.x, local.y), (joint.x, joint.y), angle,
-                    );
-                    let point = endpoint_b
-                        .world_point(
-                            &StructuralUnit::new(
-                                material.material.parts[part_index].0.clone(), origin,
-                            ),
-                            catalog,
-                        )
-                        .ok_or_else(|| "successful endpoint could not be reconstructed".to_string())?;
-                    let distance = (point.x - joint.x).hypot(point.y - joint.y);
-                    if distance < best_distance {
-                        best_distance = distance;
-                        best_origin = Some(origin);
-                    }
-                }
-                let origin = best_origin
-                    .ok_or_else(|| "successful construction had no recoverable pose".to_string())?;
+                let origin = candidate_origin;
 
                 let mut commit_structure = structure.clone();
                 let new_indices = crate::material_restoration::restore_material(
@@ -1308,6 +1289,11 @@ fn construct_blueprint_bond_driven_internal(
             }
         }
 
+        if !attached {
+            return Err(format!(
+                "no forward bond-driven placement found for blueprint element {index} after {nodes} placement attempts"
+            ));
+        }
     }
 
     if blueprint.genome_measurement.is_some() {
