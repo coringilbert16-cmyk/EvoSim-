@@ -41,7 +41,7 @@ pub(crate) fn confirmed_seed_baseline(
     // voids are ordinary consequences of the mesh and may contain environmental
     // material later.
     let _ = (carbon, hydrogen, sulfur);
-    let radius = 1.25;
+    let radius = 1.50;
     let positions = [
         (0.0, radius),
         (-radius * 0.866_025_403_8, radius * 0.5),
@@ -279,18 +279,6 @@ mod water_initialization_tests {
         let catalog = default_catalog();
         let blueprint = confirmed_seed_baseline(&catalog).expect("seed baseline");
         let (structure, _, _) = realize_initial(&blueprint, &catalog).expect("initial realization");
-        for (i, unit) in structure.units.iter().enumerate() {
-            eprintln!(
-                "SEED_UNIT {} {:?} {:?}",
-                i,
-                unit.material.parts.first(),
-                unit.placement
-            );
-        }
-        for (i, bond) in structure.bonds.iter().enumerate() {
-            eprintln!("SEED_BOND {} {:?}", i, bond);
-        }
-
         assert!(structure.units.len() >= 6);
         let names: std::collections::HashSet<_> = structure
             .units
