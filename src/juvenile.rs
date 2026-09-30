@@ -31,14 +31,27 @@ pub(crate) fn confirmed_seed_baseline(
     // these pieces around the temporary three-carbon measurement scaffold until
     // the physical bonds and cavity are simultaneously satisfied.
     //
-    // Eight Carbon pieces make a sufficiently large closed neighborhood around
-    // the scaffold. Sulfur and Methane are ordinary outward branches, providing
-    // a mixed-material mesh without becoming part of the genome definition.
-    let ring_radius = 1.146_355;
-    let mut elements = Vec::with_capacity(14);
+    // Twelve Carbon pieces form the smallest regular Carbon ring that can
+    // physically enclose the three-Carbon measurement scaffold without overlap.
+    // Eight Carbon pieces cannot satisfy both requirements with the catalog's
+    // fixed Carbon geometry: their bonded center spacing fixes the ring radius
+    // too tightly for the scaffold to fit inside. Sulfur and Methane remain
+    // ordinary outward branches and are not part of the genome definition.
+    let ring_sides = 12usize;
+    let carbon_radius = catalog
+        .iter()
+        .find(|resource| resource.name == "Carbon")
+        .and_then(|resource| match resource.shape.form {
+            crate::resources::Form::RegularPolygon { radius, .. } => Some(radius),
+            _ => None,
+        })
+        .ok_or_else(|| "Carbon seed geometry is not a regular polygon".to_string())?;
+    let ring_radius =
+        (2.0 * carbon_radius) / (2.0 * (std::f64::consts::PI / ring_sides as f64).sin());
+    let mut elements = Vec::with_capacity(ring_sides + 6);
 
-    for i in 0..8 {
-        let angle = std::f64::consts::TAU * i as f64 / 8.0;
+    for i in 0..ring_sides {
+        let angle = std::f64::consts::TAU * i as f64 / ring_sides as f64;
         elements.push(BlueprintElement {
             material: Material::free_base("Carbon", 1.0),
             placement: BlueprintPlacement {
@@ -49,7 +62,7 @@ pub(crate) fn confirmed_seed_baseline(
         });
     }
 
-    for &i in &[0usize, 2, 4, 6] {
+    for &i in &[0usize, 3, 6, 9] {
         let angle = std::f64::consts::TAU * i as f64 / 8.0;
         let radius = ring_radius + 0.95;
         elements.push(BlueprintElement {
@@ -62,7 +75,7 @@ pub(crate) fn confirmed_seed_baseline(
         });
     }
 
-    for &i in &[1usize, 5] {
+    for &i in &[1usize, 7] {
         let angle = std::f64::consts::TAU * i as f64 / 8.0;
         let radius = ring_radius + 1.05;
         elements.push(BlueprintElement {
@@ -75,20 +88,20 @@ pub(crate) fn confirmed_seed_baseline(
         });
     }
 
-    let mut connections = Vec::with_capacity(14);
-    for i in 0..8 {
+    let mut connections = Vec::with_capacity(ring_sides + 6);
+    for i in 0..ring_sides {
         connections.push(BlueprintConnection {
             element_a: i,
-            element_b: (i + 1) % 8,
+            element_b: (i + 1) % ring_sides,
         });
     }
-    for (offset, &i) in [0usize, 2, 4, 6].iter().enumerate() {
+    for (offset, &i) in [0usize, 3, 6, 9].iter().enumerate() {
         connections.push(BlueprintConnection {
             element_a: i,
             element_b: 8 + offset,
         });
     }
-    for (offset, &i) in [1usize, 5].iter().enumerate() {
+    for (offset, &i) in [1usize, 7].iter().enumerate() {
         connections.push(BlueprintConnection {
             element_a: i,
             element_b: 12 + offset,
