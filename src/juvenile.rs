@@ -281,22 +281,15 @@ mod water_initialization_tests {
         let (structure, _, _) = realize_initial(&blueprint, &catalog).expect("initial realization");
         for (i, unit) in structure.units.iter().enumerate() {
             eprintln!(
-                "SEED_UNIT {i} {} {:.4} {:.4} {:.4}",
-                unit.material.parts.first().map(|p| p.0.as_str()).unwrap_or("?"),
-                unit.placement.x,
-                unit.placement.y,
-                unit.placement.rotation_radians
+                "SEED_UNIT {} {:?} {:?}",
+                i,
+                unit.material.parts.first(),
+                unit.placement
             );
         }
         for (i, bond) in structure.bonds.iter().enumerate() {
-            eprintln!(
-                "SEED_BOND {i} {} {}",
-                bond.endpoint_a.constituent_id.0,
-                bond.endpoint_b.constituent_id.0
-            );
+            eprintln!("SEED_BOND {} {:?}", i, bond);
         }
-
-
 
         assert!(structure.units.len() >= 6);
         let names: std::collections::HashSet<_> = structure
