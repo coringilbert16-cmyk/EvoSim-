@@ -603,30 +603,23 @@ fn push_blockers_for_parts(
                 continue;
             }
             let candidate_parts = physical_parts_at(candidate, environment, 0.0, 0.0);
-            if candidate_parts.is_empty() {
+            if candidate_parts.is_empty()
+                || !parts_penetrate(moving_destination, &candidate_parts, environment.height)
+            {
                 continue;
             }
-            if candidate_is_fluid(candidate, environment) {
-                // Fluid material has no collision geometry. Leave it stationary
-                // so ordinary containment can acquire it after the organism moves
-                // around/through it.
+            if environmental_penetration_allowed(
+                moving,
+                environment,
+                candidate,
+                moving_destination,
+                dx,
+                dy,
+            ) {
+                // Permeable environmental material is not a push blocker. It
+                // remains in place and can become ordinary stored material once
+                // its realized geometry is fully contained.
                 continue;
-            }
-            if parts_penetrate(moving_destination, &candidate_parts, environment.height) {
-                if environmental_penetration_allowed(
-                    moving,
-                    environment,
-                    candidate,
-                    moving_destination,
-                    dx,
-                    dy,
-                ) {
-                    // Permeable environmental material is not a push blocker.
-                    // It remains in place and can become ordinary stored material
-                    // once its realized geometry is fully contained.
-                    continue;
-                }
-                return false;
             }
             if !can_translate_physical(candidate, environment, dx, dy) {
                 return false;
@@ -652,24 +645,6 @@ fn push_blockers_for_parts(
         }
     }
     true
-}
-
-fn candidate_is_fluid(
-    physical: &crate::physical_material::PhysicalMaterial,
-    environment: &Environment,
-) -> bool {
-    physical
-        .material
-        .parts
-        .iter()
-        .any(|(name, _)| {
-            environment
-                .catalog
-                .iter()
-                .find(|resource| resource.name == *name)
-                .map(|resource| resource.physical_state == crate::resources::PhysicalState::Fluid)
-                .unwrap_or(false)
-        })
 }
 
 fn environmental_penetration_allowed(
