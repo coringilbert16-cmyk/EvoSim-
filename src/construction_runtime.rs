@@ -990,7 +990,8 @@ fn realize_next_bond_driven(
         mut trial_ledger,
         mut trial_energy,
         _score,
-    )) = best else {
+    )) = best
+    else {
         return None;
     };
     let new_unit_index = *indices.get(part_index)?;
