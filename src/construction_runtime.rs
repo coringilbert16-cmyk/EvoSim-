@@ -8,7 +8,7 @@ use crate::construction_material_selection::{
 use crate::material_geometry::MaterialGeometry;
 use crate::resources::{BaseResource, Form, Material};
 use crate::state::EnergyLedger;
-use crate::structural_blueprint::{BlueprintElement, BlueprintPlacement};
+use crate::structural_blueprint::BlueprintPlacement;
 use crate::structure::{ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
 
 fn resource<'a>(catalog: &'a [BaseResource], name: &str) -> Option<&'a BaseResource> {
