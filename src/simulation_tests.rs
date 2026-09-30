@@ -195,10 +195,7 @@ mod integration_tests {
                 &mut s.organisms[0],
                 &mut s.environment,
             );
-            assert_eq!(
-                s.organisms[0].stored_material.total_amount(),
-                before + 1.0
-            );
+            assert_eq!(s.organisms[0].stored_material.total_amount(), before + 1.0);
         }
     }
 
