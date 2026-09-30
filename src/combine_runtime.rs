@@ -540,10 +540,9 @@ pub(crate) fn combine_specific_pair(
     // Bond direction is a biological choice. Try the requested orientation first,
     // then let the same physical pair form in the reverse orientation if the
     // first direction cannot produce a valid interaction.
-    combine_pair_in_direction(
-        structure, unit_a, unit_b, catalog, cache, ledger, energy,
+    combine_pair_in_direction(structure, unit_a, unit_b, catalog, cache, ledger, energy).or_else(
+        || combine_pair_in_direction(structure, unit_b, unit_a, catalog, cache, ledger, energy),
     )
-    .or_else(|| combine_pair_in_direction(structure, unit_b, unit_a, catalog, cache, ledger, energy))
 }
 
 pub(crate) fn can_combine(organism: &Organism, _environment: &Environment) -> bool {
