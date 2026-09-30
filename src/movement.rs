@@ -1070,7 +1070,6 @@ mod tests {
             &environment.catalog,
         )
         .expect("valid carbon realization");
-        let destination = organism_parts_at(moving, &environment, 1.0, 0.0);
         assert!(environmental_penetration_allowed(
             moving,
             &environment,
