@@ -1369,10 +1369,25 @@ fn construct_blueprint_bond_driven_internal(
         let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)
             .map_err(|e| e.to_string())?
             .ok_or_else(|| {
-                "bond-driven construction did not form a qualifying genome cavity".to_string()
+                let carbon_positions = structure
+                    .units
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, unit)| unit.material.parts.first().is_some_and(|(name, _)| name == "Carbon"))
+                    .map(|(index, unit)| format!("{index}:({:.4},{:.4})", unit.placement.x, unit.placement.y))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                format!(
+                    "bond-driven construction did not form a qualifying genome cavity: units={}, bonds={}, carbons={carbon_positions}",
+                    structure.units.len(),
+                    structure.bonds.len()
+                )
             })?;
         if !cavity.qualifies() {
-            return Err("bond-driven construction did not form a qualifying genome cavity".into());
+            return Err(format!(
+                "bond-driven construction formed an undersized genome cavity: area={:.6}, minimum={:.6}, boundary_units={:?}",
+                cavity.area, cavity.minimum_area, cavity.boundary_units
+            ));
         }
     }
 
