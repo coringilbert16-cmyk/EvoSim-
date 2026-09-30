@@ -269,12 +269,12 @@ impl StructuralBlueprint {
         catalog: &[BaseResource],
         ledger: &mut EnergyLedger,
         energy: &mut f64,
-    ) -> Result<(OrganismStructure, f64), String> {
+    ) -> Result<(OrganismStructure, f64, f64), String> {
         self.validate()?;
         let (structure, total_heat) = crate::construction_runtime::construct_blueprint_bond_driven(
             self, catalog, ledger, energy,
         )?;
-        Ok((structure, total_heat))
+        Ok((structure, total_heat, *energy))
     }
 
     /// Realize this developmental blueprint from actual physical inventory.
@@ -287,15 +287,17 @@ impl StructuralBlueprint {
         available_materials: &mut crate::material_storage::MaterialStorage,
         ledger: &mut EnergyLedger,
         energy: &mut f64,
-    ) -> Result<(OrganismStructure, f64), String> {
+    ) -> Result<(OrganismStructure, f64, f64), String> {
         self.validate()?;
-        crate::construction_runtime::construct_blueprint_bond_driven_with_materials(
-            self,
-            catalog,
-            available_materials,
-            ledger,
-            energy,
-        )
+        let (structure, total_heat) =
+            crate::construction_runtime::construct_blueprint_bond_driven_with_materials(
+                self,
+                catalog,
+                available_materials,
+                ledger,
+                energy,
+            )?;
+        Ok((structure, total_heat, *energy))
     }
 
     pub fn is_connected(&self) -> bool {
