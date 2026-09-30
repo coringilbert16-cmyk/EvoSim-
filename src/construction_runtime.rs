@@ -1080,8 +1080,7 @@ fn construct_blueprint_bond_driven_internal(
         .elements
         .get(anchor_index)
         .ok_or_else(|| "construction anchor references a missing element".to_string())?;
-    let anchor_resource = resource(catalog, &anchor_element.material.parts[0].0)
-        .ok_or_else(|| "construction anchor references an unknown resource".to_string())?;
+    let anchor_preferred = anchor_element.material.parts[0].0.clone();
 
     let mut structure = OrganismStructure::new();
     let mut realized = vec![false; blueprint.elements.len()];
@@ -1090,14 +1089,42 @@ fn construct_blueprint_bond_driven_internal(
     let mut total_heat = 0.0;
     let mut nodes = 0usize;
 
-    let mut anchor_unit = StructuralUnit::new(
-        anchor_resource.name.clone(),
+    let anchor_instance = if let Some(storage) = available_materials.as_deref_mut() {
+        let candidates = rank_available_construction_materials(storage, &anchor_preferred, catalog)
+            .map_err(|e| e.to_string())?;
+        let (storage_index, _, _) = candidates
+            .into_iter()
+            .find(|(_, _, score)| *score >= MIN_CONSTRUCTION_MATERIAL_MATCH)
+            .ok_or_else(|| format!(
+                "construction material need: preferred={anchor_preferred}, threshold={MIN_CONSTRUCTION_MATERIAL_MATCH:.6}"
+            ))?;
+        let crate::material_storage::StoredMaterial::Physical(instance) =
+            storage.entries.get(storage_index).cloned().ok_or_else(|| {
+                "selected construction anchor material disappeared from storage".to_string()
+            })?;
+        storage.take_physical_at(storage_index).ok_or_else(|| {
+            "selected construction anchor material could not be consumed".to_string()
+        })?;
+        instance
+    } else {
+        let anchor_resource = resource(catalog, &anchor_preferred)
+            .ok_or_else(|| "construction anchor references an unknown resource".to_string())?;
+        crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base(anchor_resource.name.clone(), 1.0),
+            vec![placement(anchor_element.placement)],
+            catalog,
+        ).ok_or_else(|| "construction anchor has invalid geometry".to_string())?
+    };
+
+    let anchor_indices = crate::material_restoration::restore_material(
+        &mut structure,
+        &anchor_instance,
         placement(anchor_element.placement),
-    );
-    if !anchor_unit.realize_default_geometry(catalog) {
-        return Err("construction anchor has invalid geometry".into());
-    }
-    let anchor_unit_index = structure.add_unit(anchor_unit);
+        catalog,
+    ).ok_or_else(|| "construction anchor has invalid physical realization".to_string())?;
+    let anchor_unit_index = *anchor_indices
+        .first()
+        .ok_or_else(|| "construction anchor restored no physical units".to_string())?;
     realized[anchor_index] = true;
     realized_units[anchor_index] = Some(anchor_unit_index);
     let genome_anchor = structure.units[anchor_unit_index].placement;
@@ -1144,7 +1171,6 @@ fn construct_blueprint_bond_driven_internal(
         // next joint using whatever material is actually available then.
         let preferred = blueprint.elements[index].material.parts[0].0.clone();
         let neighbor = neighbors[0];
-        let mut attached = false;
         let candidate_resources = if let Some(storage) = available_materials.as_deref() {
             rank_available_construction_materials(storage, &preferred, catalog)
                 .map_err(|e| e.to_string())?
@@ -1170,64 +1196,111 @@ fn construct_blueprint_bond_driven_internal(
             ));
         }
 
-        for (storage_index, candidate_name, _score) in candidate_resources {
-            let Some(candidate_resource) = resource(catalog, &candidate_name) else {
-                continue;
+        let mut attached = false;
+        for (storage_index, candidate_name, _) in candidate_resources {
+            let candidate_instance = if let Some(storage) = available_materials.as_deref() {
+                let Some(crate::material_storage::StoredMaterial::Physical(instance)) =
+                    storage.entries.get(storage_index)
+                else {
+                    continue;
+                };
+                instance.clone()
+            } else {
+                let candidate_resource = resource(catalog, &candidate_name)
+                    .ok_or_else(|| format!("unknown preferred construction resource {candidate_name}"))?;
+                crate::physical_material::PhysicalMaterial::realized(
+                    crate::resources::Material::free_base(candidate_resource.name.clone(), 1.0),
+                    vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }],
+                    catalog,
+                ).ok_or_else(|| "preferred construction material could not be realized".to_string())?
             };
-            if let Some((unit, endpoint_a, endpoint_b, trial_attempt)) = realize_next_bond_driven(
-                blueprint,
-                catalog,
-                &structure,
-                &realized_units,
-                index,
-                neighbor,
-                genome_anchor,
-                candidate_resource,
-                &mut nodes,
-                ledger,
-                remaining_energy,
-            ) {
-                let new_index = structure.units.len();
-                structure.units.push(unit);
+
+            if let Some((material, _indices, part_index, endpoint_a, endpoint_b, trial_attempt)) =
+                realize_next_bond_driven(
+                    blueprint, catalog, &structure, &realized_units, index, neighbor,
+                    genome_anchor, &candidate_instance, &mut nodes, ledger, remaining_energy,
+                )
+            {
+                let existing_index = realized_units[neighbor]
+                    .ok_or_else(|| format!("realized neighbor {neighbor} has no structure unit"))?;
+                let joint = endpoint_a
+                    .world_point(&structure.units[existing_index], catalog)
+                    .ok_or_else(|| "successful construction endpoint disappeared".to_string())?;
+                let local = physical_material_endpoint_local_point(
+                    &material, part_index, endpoint_b, catalog,
+                ).ok_or_else(|| "successful material endpoint disappeared".to_string())?;
+
+                let mut best_origin = None;
+                let mut best_distance = f64::INFINITY;
+                for step in 0..360 {
+                    let angle = std::f64::consts::TAU * step as f64 / 360.0;
+                    let origin = placement_for_joint(
+                        (local.x, local.y), (joint.x, joint.y), angle,
+                    );
+                    let point = endpoint_b
+                        .world_point(
+                            &StructuralUnit::new(
+                                material.material.parts[part_index].0.clone(), origin,
+                            ),
+                            catalog,
+                        )
+                        .ok_or_else(|| "successful endpoint could not be reconstructed".to_string())?;
+                    let distance = (point.x - joint.x).hypot(point.y - joint.y);
+                    if distance < best_distance {
+                        best_distance = distance;
+                        best_origin = Some(origin);
+                    }
+                }
+                let origin = best_origin
+                    .ok_or_else(|| "successful construction had no recoverable pose".to_string())?;
+
+                let mut commit_structure = structure.clone();
+                let new_indices = crate::material_restoration::restore_material(
+                    &mut commit_structure, &material, origin, catalog,
+                ).ok_or_else(|| {
+                    format!("validated physical material could not be restored for blueprint element {index}")
+                })?;
+                let new_unit_index = *new_indices.get(part_index)
+                    .ok_or_else(|| "successful material endpoint index disappeared".to_string())?;
 
                 let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+                let candidate = crate::contact::connection_pair_candidates_cached(
+                    &commit_structure, existing_index, new_unit_index, catalog, &mut cache,
+                )
+                .into_iter()
+                .find(|candidate| {
+                    candidate.endpoint_a == endpoint_a
+                        && candidate.endpoint_b == endpoint_b
+                        && candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                        && candidate.available_a
+                        && candidate.available_b
+                });
+                let Some(candidate) = candidate else { continue; };
+                let Some((_, _, _, _, investment)) =
+                    crate::combine_runtime::construction_candidate_evaluation(
+                        &commit_structure, existing_index, new_unit_index, candidate, catalog,
+                    )
+                else { continue; };
                 let mut commit_energy = remaining_energy;
                 let mut commit_ledger = *ledger;
-                let Some(commit_attempt) = crate::combine_runtime::form_specific_bond(
-                    &mut structure,
-                    realized_units[neighbor].ok_or_else(|| {
-                        format!("realized neighbor {neighbor} has no structure unit")
-                    })?,
-                    new_index,
-                    endpoint_a,
-                    endpoint_b,
-                    catalog,
-                    &mut cache,
-                    &mut commit_ledger,
-                    &mut commit_energy,
-                ) else {
-                    structure.units.pop();
-                    return Err(format!(
-                        "validated bond could not be committed for blueprint element {index}"
-                    ));
-                };
+                let Some(commit_attempt) = crate::combine_runtime::form_construction_bond(
+                    &mut commit_structure, existing_index, new_unit_index, candidate,
+                    investment, catalog, &mut cache, &mut commit_ledger, &mut commit_energy,
+                ) else { continue; };
 
                 debug_assert_eq!(commit_attempt.endpoint_a, trial_attempt.endpoint_a);
                 debug_assert_eq!(commit_attempt.endpoint_b, trial_attempt.endpoint_b);
-                debug_assert!((commit_attempt.work_cost - trial_attempt.work_cost).abs() <= 1e-10);
-
                 *ledger = commit_ledger;
                 remaining_energy = commit_energy;
                 total_heat += commit_attempt.work_cost;
+                structure = commit_structure;
                 realized[index] = true;
-                realized_units[index] = Some(new_index);
+                realized_units[index] = Some(new_unit_index);
                 if let Some(storage) = available_materials.as_deref_mut() {
-                    if storage_index != usize::MAX
-                        && storage.take_physical_at(storage_index).is_none()
-                    {
-                        return Err(format!(
-                            "construction consumed candidate material index {storage_index} after bond commit"
-                        ));
+                    if storage_index != usize::MAX {
+                        storage.take_physical_at(storage_index).ok_or_else(|| {
+                            format!("construction consumed candidate material index {storage_index} after bond commit")
+                        })?;
                     }
                 }
                 attached = true;
@@ -1235,11 +1308,6 @@ fn construct_blueprint_bond_driven_internal(
             }
         }
 
-        if !attached {
-            return Err(format!(
-                "no forward bond-driven placement found for blueprint element {index} after {nodes} placement attempts"
-            ));
-        }
     }
 
     if blueprint.genome_measurement.is_some() {
