@@ -82,11 +82,12 @@ pub fn endpoint_in_accessible_interior(
 /// Find finite enclosed regions of a realized organism.
 ///
 /// This deliberately remains separate from genome-cavity qualification. Fluid
-/// forms are not converted into artificial rigid polygons here; connected Water
-/// receives context-fitting realization in the next implementation stage.
+/// forms participate in realized boundary topology only when they actually
+/// contribute to the organism boundary; no synthetic interior material is
+/// created here.
 ///
 /// Find enclosed interior regions that are owned by the organism and are
-/// available for ordinary material or Water. The genome cavity is deliberately
+/// available for ordinary physical material. The genome cavity is deliberately
 /// excluded: it is inside the organism, but remains genuinely empty.
 pub fn find_accessible_interior_regions(
     structure: &OrganismStructure,
