@@ -93,7 +93,7 @@ pub(crate) fn confirmed_seed_baseline(
     // Nitrogen rectangle. Its side length stays close to the calibrated
     // construction geometry; only the ring radius grows the chamber.
     let outer_side_count = 10usize;
-    let outer_side_length = 1.53;
+    let outer_side_length = 1.65;
     let outer_apothem =
         outer_side_length / (2.0 * (std::f64::consts::PI / outer_side_count as f64).tan());
     let outer_center_radius = outer_apothem + inner_thickness / 2.0;
