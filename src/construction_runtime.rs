@@ -571,10 +571,22 @@ fn physical_material_endpoint_options(
             ) else {
                 return Vec::new();
             };
-            crate::contact::endpoint_indices(&unit, catalog)
+            let mut endpoints = crate::contact::endpoint_indices(&unit, catalog)
                 .into_iter()
                 .map(move |endpoint| (part_index, endpoint))
-                .collect()
+                .collect::<Vec<_>>();
+            if endpoints.is_empty()
+                && resource(catalog, name.as_str())
+                    .is_some_and(|resource| resource.physical_state == PhysicalState::Fluid)
+            {
+                endpoints.push((
+                    part_index,
+                    ConnectionEndpoint::Boundary {
+                        angle_radians: 0.0,
+                    },
+                ));
+            }
+            endpoints
         })
         .collect()
 }
@@ -1071,14 +1083,32 @@ fn construct_blueprint_bond_driven_internal(
         let preferred = blueprint.elements[index].material.parts[0].0.clone();
         let neighbor = neighbors[0];
         let candidate_resources = if let Some(storage) = available_materials.as_deref() {
-            rank_available_construction_materials(storage, &preferred, catalog)
-                .map_err(|e| e.to_string())?
-                .into_iter()
+            let ranked = rank_available_construction_materials(storage, &preferred, catalog)
+                .map_err(|e| e.to_string())?;
+            let mut candidates = ranked
+                .iter()
                 .filter(|(storage_index, _, score)| {
                     !reserved_storage_indices.contains(storage_index)
                         && *score >= MIN_CONSTRUCTION_MATERIAL_MATCH
                 })
-                .collect::<Vec<_>>()
+                .cloned()
+                .collect::<Vec<_>>();
+
+            // Water is the final physical construction fallback. It may be
+            // used even when its structural similarity is below the normal
+            // material threshold, but only after every qualifying material
+            // has failed to make this bond.
+            if let Some(water) = ranked.iter().find(|(storage_index, name, _)| {
+                !reserved_storage_indices.contains(storage_index) && name == "Water"
+            }) {
+                if !candidates
+                    .iter()
+                    .any(|(storage_index, _, _)| *storage_index == water.0)
+                {
+                    candidates.push(water.clone());
+                }
+            }
+            candidates
         } else {
             // Developmental construction may substitute material when the
             // preferred material cannot make the requested physical bond.
@@ -1095,6 +1125,11 @@ fn construct_blueprint_bond_driven_internal(
                     continue;
                 }
                 candidates.push((usize::MAX, candidate.name.clone(), 0.0));
+            }
+            // Water is the final developmental construction fallback after
+            // all rigid material alternatives have failed.
+            if resource(catalog, "Water").is_some() {
+                candidates.push((usize::MAX, "Water".to_string(), 0.0));
             }
             candidates
         };
