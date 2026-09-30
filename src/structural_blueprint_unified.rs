@@ -338,7 +338,12 @@ impl StructuralBlueprint {
                 structure
                     .bonds
                     .iter()
-                    .map(|bond| (bond.endpoint_a.constituent_id, bond.endpoint_b.constituent_id))
+                    .map(|bond| {
+                        (
+                            bond.endpoint_a.constituent_id,
+                            bond.endpoint_b.constituent_id,
+                        )
+                    })
                     .collect::<Vec<_>>()
             );
             return Err(
