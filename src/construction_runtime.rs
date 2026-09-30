@@ -22,7 +22,6 @@ fn placement(p: BlueprintPlacement) -> Placement {
         rotation_radians: p.rotation_radians,
     }
 }
-
 pub(crate) fn candidate_placements(
     structure: &OrganismStructure,
     resource: &BaseResource,
@@ -370,8 +369,7 @@ fn candidate_penetrates_measurement(
     let transform = |placement: BlueprintPlacement| {
         let (s, c) = anchor_world.rotation_radians.sin_cos();
         Placement {
-            x: anchor_world.x
-                + (placement.x - anchor_declared.x) * c
+            x: anchor_world.x + (placement.x - anchor_declared.x) * c
                 - (placement.y - anchor_declared.y) * s,
             y: anchor_world.y
                 + (placement.x - anchor_declared.x) * s
@@ -471,12 +469,8 @@ fn install_genome_measurement_scaffold(
     let transform = |p: BlueprintPlacement| {
         let (s, c) = anchor.rotation_radians.sin_cos();
         Placement {
-            x: anchor_world.x
-                + (p.x - anchor_declared.x) * c
-                - (p.y - anchor_declared.y) * s,
-            y: anchor_world.y
-                + (p.x - anchor_declared.x) * s
-                + (p.y - anchor_declared.y) * c,
+            x: anchor_world.x + (p.x - anchor_declared.x) * c - (p.y - anchor_declared.y) * s,
+            y: anchor_world.y + (p.x - anchor_declared.x) * s + (p.y - anchor_declared.y) * c,
             rotation_radians: anchor_world.rotation_radians + p.rotation_radians,
         }
     };
