@@ -83,6 +83,19 @@ fn evaluate_candidate(
     Some((evaluation, interaction, work, investment, required))
 }
 
+/// Construction-only access to the universal candidate evaluation. Construction
+/// supplies the exact candidate; this function does not perform candidate search.
+pub(crate) fn construction_candidate_evaluation(
+    structure: &crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    candidate: crate::contact::ConnectionPairCandidate,
+    catalog: &[BaseResource],
+) -> Option<(FormationEvaluation, ExperimentalInteraction, f64, f64, f64)> {
+    evaluate_candidate(structure, unit_a, unit_b, candidate, catalog)
+}
+
+
 pub(crate) fn form_specific_bond(
     structure: &mut crate::structure::OrganismStructure,
     unit_a: usize,
