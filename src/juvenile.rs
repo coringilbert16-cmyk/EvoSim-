@@ -178,3 +178,5 @@ pub(crate) fn confirmed_seed_scale_reference(
     if !mass.is_finite() || mass <= 0.0 || !length.is_finite() || length <= 0.0 {
         return Err("confirmed seed scale reference is invalid".into());
     }
+    Ok((mass, length))
+}
