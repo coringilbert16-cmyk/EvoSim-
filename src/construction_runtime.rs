@@ -920,6 +920,7 @@ fn construct_blueprint_bond_driven_internal(
     let mut structure = OrganismStructure::new();
     let mut realized = vec![false; blueprint.elements.len()];
     let mut realized_units = vec![None; blueprint.elements.len()];
+    let mut construction_ledger = *ledger;
     let mut remaining_energy = *energy;
     let mut total_heat = 0.0;
     let mut nodes = 0usize;
@@ -1104,14 +1105,14 @@ fn construct_blueprint_bond_driven_internal(
                 genome_anchor,
                 &candidate_instance,
                 &mut nodes,
-                ledger,
+                &construction_ledger,
                 remaining_energy,
             ) {
                 let new_unit_index = *new_indices
                     .get(part_index)
                     .ok_or_else(|| "successful material endpoint index disappeared".to_string())?;
 
-                 *ledger = trial_ledger;
+                 construction_ledger = trial_ledger;
                 remaining_energy = trial_energy;
                 total_heat += trial_attempt.work_cost;
                 structure = trial_structure;
@@ -1131,6 +1132,9 @@ fn construct_blueprint_bond_driven_internal(
             ));
         }
     }
+
+    *ledger = construction_ledger;
+    *energy = remaining_energy;
 
     if blueprint.genome_measurement.is_some() {
         structure.remove_units_by_physical_ids(&temporary_scaffold_ids);
