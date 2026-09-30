@@ -695,12 +695,10 @@ fn environmental_penetration_allowed(
                 .find(|resource| resource.name == *name)
                 .map(|resource| resource.properties.cohesion)
                 .unwrap_or(1.0);
-            permeability = permeability.min(
-                crate::resources::permeability_from_cohesion(
-                    cohesion,
-                    &environment.catalog,
-                ),
-            );
+            permeability = permeability.min(crate::resources::permeability_from_cohesion(
+                cohesion,
+                &environment.catalog,
+            ));
             contacted = true;
         }
     }
@@ -996,7 +994,8 @@ mod tests {
                 rotation_radians: 0.0,
             }],
             &environment.catalog,
-        ).expect("valid carbon realization");
+        )
+        .expect("valid carbon realization");
         let destination = organism_parts_at(moving, &environment, 1.0, 0.0);
         assert!(parts_penetrate(
             &destination,
@@ -1004,7 +1003,12 @@ mod tests {
             environment.height
         ));
         assert!(!environmental_penetration_allowed(
-            moving, &environment, &carbon, &destination, 1.0, 0.0
+            moving,
+            &environment,
+            &carbon,
+            &destination,
+            1.0,
+            0.0
         ));
     }
 
@@ -1015,12 +1019,22 @@ mod tests {
         let moving = simulation.organisms.first().expect("default seed organism");
         let water = crate::physical_material::PhysicalMaterial::realized(
             crate::resources::Material::free_base("Water", 1.0),
-            vec![Placement { x: moving.occupied_cells[0].x + 1.0, y: moving.occupied_cells[0].y, rotation_radians: 0.0 }],
+            vec![Placement {
+                x: moving.occupied_cells[0].x + 1.0,
+                y: moving.occupied_cells[0].y,
+                rotation_radians: 0.0,
+            }],
             &environment.catalog,
-        ).expect("valid water realization");
+        )
+        .expect("valid water realization");
         let destination = organism_parts_at(moving, &environment, 1.0, 0.0);
         assert!(environmental_penetration_allowed(
-            moving, &environment, &water, &destination, 1.0, 0.0
+            moving,
+            &environment,
+            &water,
+            &destination,
+            1.0,
+            0.0
         ));
     }
 
