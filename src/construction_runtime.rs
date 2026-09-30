@@ -551,7 +551,6 @@ pub(crate) fn realize_material(
         .map(|(indices, _)| indices)
 }
 
-
 fn blueprint_endpoint_options(resource: &BaseResource) -> Vec<ConnectionEndpoint> {
     match &resource.shape.form {
         Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
@@ -647,10 +646,7 @@ fn form_vertices_world(form: &Form, placement: Placement) -> Vec<(f64, f64)> {
         .into_iter()
         .map(|(x, y)| {
             let (s, c) = placement.rotation_radians.sin_cos();
-            (
-                placement.x + x * c - y * s,
-                placement.y + x * s + y * c,
-            )
+            (placement.x + x * c - y * s, placement.y + x * s + y * c)
         })
         .collect()
 }
@@ -960,8 +956,7 @@ pub(crate) fn construct_blueprint_bond_driven(
                 "no valid bond-driven pose found for blueprint element {index}"
             ));
         };
-        let committed_heat =
-            trial_ledger.total_heat_dissipated - ledger.total_heat_dissipated;
+        let committed_heat = trial_ledger.total_heat_dissipated - ledger.total_heat_dissipated;
         total_heat += committed_heat;
         structure = trial;
         *ledger = trial_ledger;
