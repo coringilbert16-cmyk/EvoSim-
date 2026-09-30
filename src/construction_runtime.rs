@@ -867,83 +867,6 @@ fn realize_next_bond_driven(
                     continue;
                 };
 
-                // These are current constraints, not future lookahead. The
-                // provisional placement is admitted only after every
-                // connection from this element to an already-realized
-                // neighbor has been formed.
-                let additional_neighbors = blueprint
-                    .connections
-                    .iter()
-                    .filter_map(|connection| {
-                        let other = if connection.element_a == _index {
-                            connection.element_b
-                        } else if connection.element_b == _index {
-                            connection.element_a
-                        } else {
-                            return None;
-                        };
-                        if other == neighbor || realized_units.get(other)?.is_none() {
-                            None
-                        } else {
-                            realized_units[other]
-                        }
-                    })
-                    .collect::<Vec<_>>();
-
-                let mut additional_bond_succeeded = true;
-                for other_index in additional_neighbors {
-                    let mut extra_cache = crate::contact::ConnectionCompatibilityCache::new();
-                    let Some(extra_candidate) = crate::contact::connection_pair_candidates_cached(
-                        &trial,
-                        new_unit_index,
-                        other_index,
-                        catalog,
-                        &mut extra_cache,
-                    )
-                    .into_iter()
-                    .find(|candidate| {
-                        candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                            && candidate.available_a
-                            && candidate.available_b
-                    }) else {
-                        additional_bond_succeeded = false;
-                        break;
-                    };
-
-                    let Some((_, _, _, extra_investment, _)) =
-                        crate::combine_runtime::construction_candidate_evaluation(
-                            &trial,
-                            new_unit_index,
-                            other_index,
-                            extra_candidate,
-                            catalog,
-                        )
-                    else {
-                        additional_bond_succeeded = false;
-                        break;
-                    };
-
-                    let Some(extra_attempt) = crate::combine_runtime::form_construction_bond(
-                        &mut trial,
-                        new_unit_index,
-                        other_index,
-                        extra_candidate,
-                        extra_investment,
-                        catalog,
-                        &mut extra_cache,
-                        &mut trial_ledger,
-                        &mut trial_energy,
-                    ) else {
-                        additional_bond_succeeded = false;
-                        break;
-                    };
-                    attempt.work_cost += extra_attempt.work_cost;
-                }
-
-                if !additional_bond_succeeded {
-                    continue;
-                }
-
                 return Some((
                     trial,
                     indices,
@@ -1264,6 +1187,89 @@ fn construct_blueprint_bond_driven_internal(
             return Err(format!(
                 "no forward bond-driven placement found for blueprint element {index} after {nodes} placement attempts"
             ));
+        }
+    }
+
+    // All elements now have permanent physical poses. Any blueprint bonds
+    // between already-realized elements are completed as ordinary, single-bond
+    // construction steps. This is not future lookahead: the endpoints and
+    // geometry already exist, and a failed closure never moves or undoes a
+    // committed bond.
+    let mut closed_connections = vec![false; blueprint.connections.len()];
+    while closed_connections.iter().any(|closed| !closed) {
+        let mut progressed = false;
+        for (connection_index, connection) in blueprint.connections.iter().enumerate() {
+            if closed_connections[connection_index] {
+                continue;
+            }
+            let Some(unit_a) = realized_units[connection.element_a] else {
+                continue;
+            };
+            let Some(unit_b) = realized_units[connection.element_b] else {
+                continue;
+            };
+            if structure.bonds.iter().any(|bond| {
+                let a = bond.endpoint_a.constituent_id;
+                let b = bond.endpoint_b.constituent_id;
+                let pa = structure.units[unit_a].physical_id;
+                let pb = structure.units[unit_b].physical_id;
+                (a == pa && b == pb) || (a == pb && b == pa)
+            }) {
+                closed_connections[connection_index] = true;
+                progressed = true;
+                continue;
+            }
+
+            let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+            let Some(candidate) = crate::contact::connection_pair_candidates_cached(
+                &structure,
+                unit_a,
+                unit_b,
+                catalog,
+                &mut cache,
+            )
+            .into_iter()
+            .find(|candidate| {
+                candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                    && candidate.available_a
+                    && candidate.available_b
+            }) else {
+                continue;
+            };
+            let Some((_, _, _, investment, _)) =
+                crate::combine_runtime::construction_candidate_evaluation(
+                    &structure,
+                    unit_a,
+                    unit_b,
+                    candidate,
+                    catalog,
+                )
+            else {
+                continue;
+            };
+            let Some(attempt) = crate::combine_runtime::form_construction_bond(
+                &mut structure,
+                unit_a,
+                unit_b,
+                candidate,
+                investment,
+                catalog,
+                &mut cache,
+                &mut construction_ledger,
+                &mut remaining_energy,
+            ) else {
+                continue;
+            };
+            total_heat += attempt.work_cost;
+            closed_connections[connection_index] = true;
+            progressed = true;
+            break;
+        }
+        if !progressed {
+            return Err(
+                "bond-driven construction could not close a prescribed bond between realized elements"
+                    .into(),
+            );
         }
     }
 
