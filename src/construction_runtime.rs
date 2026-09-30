@@ -1245,6 +1245,46 @@ mod tests {
     }
 
     #[test]
+    fn restored_composite_overlap_is_rejected_against_existing_structure() {
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+
+        let existing = StructuralUnit::from_material(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        )
+        .unwrap();
+        let existing_index = structure.add_unit(existing);
+
+        let overlapping = StructuralUnit::from_material(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            Placement {
+                x: 0.5,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        )
+        .unwrap();
+
+        assert!(placed_unit_overlaps(
+            &structure,
+            &overlapping,
+            &[existing_index + 1],
+            &catalog,
+        ));
+        assert!(!placed_unit_overlaps(
+            &structure,
+            &overlapping,
+            &[existing_index],
+            &catalog,
+        ));
+    }
+
+    #[test]
     fn temporary_genome_scaffold_is_real_physical_geometry_and_is_removed() {
         let catalog = crate::resources::default_catalog();
         let scaffold =
