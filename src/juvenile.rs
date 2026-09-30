@@ -123,7 +123,7 @@ pub(crate) fn confirmed_seed_baseline(
     // Two ordinary Hydrogen constituents bridge the chamber at the center of
     // the top boundary. They are structural material, not an intake port.
     let inner_boundary = inner_offset + inner_thickness / 2.0;
-    let outer_inner_boundary = outer_apothem - inner_thickness / 2.0;
+    let outer_inner_boundary = outer_apothem;
     let chamber_gap = outer_inner_boundary - inner_boundary;
     let hydrogen_length = catalog
         .iter()
