@@ -587,11 +587,13 @@ impl Simulation {
             Self::transfer_contained_environmental_material(organism, &mut self.environment);
             let acquired_amount =
                 (organism.stored_material.total_amount() - stored_amount_before_transfer).max(0.0);
-            Self::finalize_pending_movement_experience(
-                organism,
-                &self.environment,
-                acquired_amount,
-            );
+            if organism.active_movement.is_none() {
+                Self::finalize_pending_movement_experience(
+                    organism,
+                    &self.environment,
+                    acquired_amount,
+                );
+            }
         }
         {
             let (organisms, environment) = (&mut self.organisms, &mut self.environment);
@@ -623,68 +625,142 @@ impl Simulation {
                     developmental.as_ref(),
                 );
                 let eligibility = Self::action_eligibility(&organisms[index], environment, needs);
-                // Movement is an independent channel. It is not gated by
-                // survival/reproduction need pressure or by the transformation
-                // selector below.
-                if eligibility.can_move {
+                // Movement is a persistent operation. A decision starts it;
+                // each later progress tick advances exactly one world unit.
+                let mut movement_operation_active = false;
+                {
                     let (before, rest) = organisms.split_at_mut(index);
                     let (organism, after) = rest.split_first_mut().expect("index is in organisms");
-                    let perceptions =
-                        crate::harmonics::organism_resonance_perceptions(organism, environment);
-                    let before_energy = organism.usable_energy;
-                    let before_stress = organism.stress;
-                    let before_realization = developmental
-                        .as_ref()
-                        .map(|context| context.current_growth_fraction)
-                        .unwrap_or_else(|| {
-                            organism
-                                .developmental_realization_cached(&environment.catalog)
-                                .map(|realization| realization.overall)
-                                .unwrap_or(0.0)
-                        });
-                    let moved = Self::update_movement(
-                        before,
-                        organism,
-                        after,
-                        &mut movement_spatial_index,
-                        environment,
-                        &mut self.energy_ledger,
-                        self.tick,
-                        &mut self.rng,
-                        &perceptions,
-                    );
-                    if moved {
-                        let move_candidate = ActionCandidate {
-                            action: ActionKind::Move,
-                            context_key: organism.last_movement_attempt.as_ref().and_then(
-                                |attempt| {
-                                    attempt
-                                        .step
-                                        .map(|distance| format!("distance:{distance:.0}"))
-                                },
-                            ),
-                        };
-                        let consequence = Self::action_consequence(
-                            before_energy,
-                            before_stress,
-                            before_realization,
+
+                    if let Some(mut active) = organism.active_movement.take() {
+                        movement_operation_active = true;
+                        let before_energy = active.before_energy;
+                        let before_stress = active.before_stress;
+                        let before_realization = active.before_developmental_realization;
+                        let progress = crate::movement::Simulation::advance_movement(
+                            before,
+                            organism,
+                            after,
+                            &mut movement_spatial_index,
+                            environment,
+                            &mut self.energy_ledger,
+                            self.tick,
+                            &mut active,
+                        );
+                        match progress {
+                            Ok(crate::movement::MovementProgress::Waiting)
+                            | Ok(crate::movement::MovementProgress::Moved) => {
+                                organism.active_movement = Some(active);
+                            }
+                            Ok(crate::movement::MovementProgress::Complete) => {
+                                let consequence = Self::action_consequence(
+                                    before_energy,
+                                    before_stress,
+                                    before_realization,
+                                    organism,
+                                    environment,
+                                );
+                                let move_candidate = ActionCandidate {
+                                    action: ActionKind::Move,
+                                    context_key: Some(format!(
+                                        "distance:{:.0}",
+                                        active.decision_distance
+                                    )),
+                                };
+                                crate::decision_runtime::record_consequence(
+                                    &mut organism.decision_history,
+                                    &move_candidate,
+                                    consequence,
+                                );
+                                if let Some(pending) =
+                                    organism.pending_movement_experience.as_mut()
+                                {
+                                    pending.consequence =
+                                        crate::memory::memory_consequence_from_action(consequence);
+                                }
+                            }
+                            Err(_) => {
+                                let consequence = Self::action_consequence(
+                                    before_energy,
+                                    before_stress,
+                                    before_realization,
+                                    organism,
+                                    environment,
+                                );
+                                let move_candidate = ActionCandidate {
+                                    action: ActionKind::Move,
+                                    context_key: Some(format!(
+                                        "distance:{:.0}",
+                                        active.decision_distance
+                                    )),
+                                };
+                                crate::decision_runtime::record_consequence(
+                                    &mut organism.decision_history,
+                                    &move_candidate,
+                                    consequence,
+                                );
+                                organism.pending_movement_experience = None;
+                            }
+                        }
+                    } else if eligibility.can_move {
+                        let perceptions =
+                            crate::harmonics::organism_resonance_perceptions(organism, environment);
+                        let before_energy = organism.usable_energy;
+                        let before_stress = organism.stress;
+                        let before_realization = developmental
+                            .as_ref()
+                            .map(|context| context.current_growth_fraction)
+                            .unwrap_or_else(|| {
+                                organism
+                                    .developmental_realization_cached(&environment.catalog)
+                                    .map(|realization| realization.overall)
+                                    .unwrap_or(0.0)
+                            });
+                        match crate::movement::Simulation::start_movement(
                             organism,
                             environment,
-                        );
-                        crate::decision_runtime::record_consequence(
-                            &mut organism.decision_history,
-                            &move_candidate,
-                            consequence,
-                        );
-                        organism.pending_movement_experience =
-                            Some(crate::memory::PendingMovementExperience {
-                                perceptions,
-                                consequence: crate::memory::memory_consequence_from_action(
-                                    consequence,
-                                ),
-                                needs,
-                            });
+                            organism.structural_mass(&environment.catalog),
+                            organism.genome.movement_efficiency(),
+                            organism.usable_energy,
+                            &mut self.rng,
+                            &perceptions,
+                        ) {
+                            Ok(mut active) => {
+                                active.before_energy = before_energy;
+                                active.before_stress = before_stress;
+                                active.before_developmental_realization = before_realization;
+                                let consequence = crate::decision::ActionConsequence::default();
+                                organism.pending_movement_experience =
+                                    Some(crate::memory::PendingMovementExperience {
+                                        perceptions,
+                                        consequence: crate::memory::memory_consequence_from_action(
+                                            consequence,
+                                        ),
+                                        needs,
+                                    });
+                                organism.active_movement = Some(active);
+                                movement_operation_active = true;
+                            }
+                            Err(reason) => {
+                                organism.last_movement_attempt =
+                                    Some(crate::state::MovementAttemptDiagnostic {
+                                        tick: self.tick,
+                                        direction_x: None,
+                                        direction_y: None,
+                                        step: None,
+                                        usable_energy: organism.usable_energy,
+                                        active_transformation_id:
+                                            organism.active_transformation_id,
+                                        result: Err(reason),
+                                        old_position: organism.occupied_cells.first().cloned(),
+                                        new_position: None,
+                                    });
+                            }
+                        }
                     }
+                }
+                if movement_operation_active {
+                    continue;
                 }
                 let context = DecisionContext { needs, eligibility };
                 let candidates =
