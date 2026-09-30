@@ -2771,6 +2771,8 @@ This section is the authoritative reference for the interior/permeability work.
 
 **Status: ACTIVE — authoritative implementation plan for the current construction migration.**
 
+**Implementation status:** Phases 1–3 are in progress/completed at the construction-runtime layer: the exact-bond primitive is isolated, physical inventory selection is wired into developmental construction, composite physical instances are preserved, and the authoritative search no longer uses `candidate_placements()`. The next work is Phase 4 audit/removal of obsolete developmental whole-graph behavior, followed by the scaffold/cavity invariants.
+
 This section establishes the target construction architecture and migration order. It exists specifically to prevent piecemeal fixes from silently creating competing construction authorities.
 
 ## A. Target construction contract
@@ -2885,4 +2887,4 @@ Existing helpers are not deleted merely because they are old. Before removal, au
 
 After each migration phase: format; compile; run focused construction tests; inspect failures by contract layer; only then proceed. Do not modify unrelated geometry, energy, movement, reproduction, or biological behavior to make a construction test pass unless a direct dependency is demonstrated. Long simulation runs happen only after focused construction contract tests are green.
 
-**Current first task:** establish the exact construction-bond primitive and its tests, then integrate actual physical material selection. Do not continue adding geometry heuristics to the existing generic COMBINE path.
+**Current task:** continue the migration at Phase 4. Audit the developmental path for obsolete whole-graph/future-lookahead behavior and retire only code whose callers are exclusively obsolete. Then enforce the triangular scaffold/cavity invariants. Do not add geometry heuristics to the generic COMBINE path.
