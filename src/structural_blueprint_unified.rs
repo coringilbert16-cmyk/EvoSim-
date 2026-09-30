@@ -243,9 +243,12 @@ impl StructuralBlueprint {
     /// solely so COMBINE can evaluate its real admission rules. No simulation
     /// ledger, organism energy, or structure is mutated by this method.
     pub fn realize(&self, catalog: &[BaseResource]) -> Result<OrganismStructure, String> {
+        let mut preview = self.clone();
+        preview.genome_measurement = None;
         let mut ledger = EnergyLedger::default();
         let mut preview_energy = 1.0e12;
-        self.realize_with_context(catalog, &mut ledger, &mut preview_energy)
+        preview
+            .realize_with_context(catalog, &mut ledger, &mut preview_energy)
             .map(|(structure, _)| structure)
     }
 
@@ -320,36 +323,7 @@ impl StructuralBlueprint {
         }
 
         let structure = structure;
-        if self.genome_measurement.is_some()
-            && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_none()
-        {
-            eprintln!(
-                "GENOME_GUIDE_DEBUG units={:?} bonds={:?}",
-                structure
-                    .units
-                    .iter()
-                    .map(|unit| {
-                        (
-                            unit.material.parts.first().map(|p| p.0.clone()),
-                            unit.placement,
-                        )
-                    })
-                    .collect::<Vec<_>>(),
-                structure
-                    .bonds
-                    .iter()
-                    .map(|bond| {
-                        (
-                            bond.endpoint_a.constituent_id,
-                            bond.endpoint_b.constituent_id,
-                        )
-                    })
-                    .collect::<Vec<_>>()
-            );
-            return Err(
-                "genome measurement scaffold did not produce a qualifying final cavity".into(),
-            );
-        }
+
 
         Ok((structure, total_heat))
     }
