@@ -97,6 +97,8 @@ impl Genome {
         {
             self.traits.push(trait_def("size_preference", 0.5, 0.05));
         }
+        self.developmental_blueprint.mutate(rng);
+
         for t in &mut self.traits {
             if rng.gen::<f64>() < t.mutation_probability.clamp(1e-6, 0.25) {
                 let delta = gaussian_unit(rng) * t.mutation_sigma.max(0.0);
