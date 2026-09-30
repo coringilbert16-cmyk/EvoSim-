@@ -275,6 +275,8 @@ fn try_child_construction(
                 _endpoint_b,
                 _attempt,
                 _origin,
+                candidate_ledger,
+                candidate_energy,
             )) = crate::construction_runtime::try_attach_physical_material_bond_driven(
                 &child.structure,
                 existing_index,
@@ -290,6 +292,7 @@ fn try_child_construction(
             let mut candidate = child.clone();
             candidate.stored_material.take_physical_at(storage_index)?;
             candidate.structure = trial_structure;
+            candidate.usable_energy = candidate_energy;
             return Some((candidate, candidate_ledger, None));
         }
     }
@@ -338,6 +341,7 @@ fn try_child_construction(
 
             let mut candidate = child.clone();
             candidate.structure = trial_structure;
+            candidate.usable_energy = candidate_energy;
             return Some((candidate, candidate_ledger, Some(parent_index)));
         }
     }
