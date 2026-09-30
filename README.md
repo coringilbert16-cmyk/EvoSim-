@@ -2771,7 +2771,7 @@ This section is the authoritative reference for the interior/permeability work.
 
 **Status: ACTIVE — authoritative implementation plan for the current construction migration.**
 
-**Implementation status:** Phases 1–3 are in progress/completed at the construction-runtime layer: the exact-bond primitive is isolated, physical inventory selection is wired into developmental construction, composite physical instances are preserved, and the authoritative search no longer uses `candidate_placements()`. The next work is Phase 4 audit/removal of obsolete developmental whole-graph behavior, followed by the scaffold/cavity invariants.
+**Implementation status:** Phases 1–7 are now implemented at the construction/reproduction layers: the exact-bond primitive is isolated, actual physical inventory selection is authoritative, composite physical instances are preserved, the developmental search is forward-only bond-driven, the temporary three-Carbon scaffold is physical and removable, construction-material mismatch feeds existing development need, reproduction now uses the same bond-driven physical attachment authority, and the obsolete recursive whole-graph construction solver has been retired. The remaining work is contract-level verification and any caller audit that identifies additional obsolete construction-only helpers.
 
 This section establishes the target construction architecture and migration order. It exists specifically to prevent piecemeal fixes from silently creating competing construction authorities.
 
