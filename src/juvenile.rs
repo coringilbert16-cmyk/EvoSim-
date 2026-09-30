@@ -262,21 +262,31 @@ pub(crate) fn realize_initial_with_reserve(
         return Err("juvenile energy reserve must be finite and positive".into());
     }
 
-    let base = realize_declared_units(blueprint, catalog)?;
-
-    let (_, _, trial_remaining) =
-        form_declared_bonds(base.clone(), blueprint, catalog, TRIAL_ENERGY)?;
+    // The bond-driven constructor is the sole physical realization path.
+    // Use a private trial budget to discover the actual construction cost, then
+    // rerun the same solver with enough energy to preserve the biological
+    // reserve. This keeps geometry, bond choice, scaffold avoidance, and cavity
+    // qualification on one authoritative path.
+    let mut trial_ledger = EnergyLedger::default();
+    let mut trial_energy = TRIAL_ENERGY;
+    let (_, _, trial_remaining) = blueprint.realize_with_context(
+        catalog,
+        &mut trial_ledger,
+        &mut trial_energy,
+    )?;
     let required_initial_energy = TRIAL_ENERGY - trial_remaining;
     if !required_initial_energy.is_finite() || required_initial_energy < 0.0 {
         return Err("juvenile construction produced an invalid energy requirement".into());
     }
 
-    let energy = required_initial_energy + reserve_energy;
-    let (structure, ledger, energy) = form_declared_bonds(base, blueprint, catalog, energy)?;
+    let mut ledger = EnergyLedger::default();
+    let mut energy = required_initial_energy + reserve_energy;
+    let (mut structure, _, remaining_energy) =
+        blueprint.realize_with_context(catalog, &mut ledger, &mut energy)?;
 
-    if !energy.is_finite() || energy + EPS < reserve_energy {
+    if !remaining_energy.is_finite() || remaining_energy + EPS < reserve_energy {
         return Err(format!(
-            "juvenile initialization could not preserve its reserve: remaining={energy}"
+            "juvenile initialization could not preserve its reserve: remaining={remaining_energy}"
         ));
     }
     validate_realized_juvenile(
@@ -292,17 +302,14 @@ pub(crate) fn realize_initial_with_reserve(
         .iter()
         .filter_map(|&index| structure.physical_id(index))
         .collect::<Vec<_>>();
-    let mut structure = structure;
     structure.set_genome_constituent_ids(genome_ids);
-    // Environmental material enters through the realized mesh according to its
-    // physical geometry and cohesion-derived permeability. Nothing is synthesized
-    // inside the organism during initialization.
-    if !energy.is_finite() || energy + EPS < reserve_energy {
+
+    if !remaining_energy.is_finite() || remaining_energy + EPS < reserve_energy {
         return Err(format!(
-            "juvenile initialization could not preserve its reserve after Water construction: remaining={energy}"
+            "juvenile initialization could not preserve its reserve after Water construction: remaining={remaining_energy}"
         ));
     }
-    Ok((structure, ledger, energy))
+    Ok((structure, ledger, remaining_energy))
 }
 
 #[cfg(test)]
