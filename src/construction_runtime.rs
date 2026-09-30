@@ -846,10 +846,7 @@ fn realize_next_bond_driven(
 )> {
     let new_endpoints = blueprint_endpoint_options(new_resource);
     let existing_index = realized_units[neighbor]?;
-    let existing_resource = resource(
-        catalog,
-        &blueprint.elements[neighbor].material.parts[0].0,
-    )?;
+    let existing_resource = resource(catalog, &blueprint.elements[neighbor].material.parts[0].0)?;
     let existing_endpoints = blueprint_endpoint_options(existing_resource);
 
     if new_endpoints.is_empty() || existing_endpoints.is_empty() {
@@ -871,8 +868,7 @@ fn realize_next_bond_driven(
                 }
 
                 let angle = std::f64::consts::TAU * step as f64 / 360.0;
-                let candidate_placement =
-                    placement_for_joint(local_b, (joint.x, joint.y), angle);
+                let candidate_placement = placement_for_joint(local_b, (joint.x, joint.y), angle);
 
                 let mut candidate_unit =
                     StructuralUnit::new(new_resource.name.clone(), candidate_placement);
@@ -1083,21 +1079,19 @@ fn construct_blueprint_bond_driven_internal(
             let Some(candidate_resource) = resource(catalog, &candidate_name) else {
                 continue;
             };
-            if let Some((unit, endpoint_a, endpoint_b, trial_attempt)) =
-                realize_next_bond_driven(
-                    blueprint,
-                    catalog,
-                    &structure,
-                    &realized_units,
-                    index,
-                    neighbor,
-                    genome_anchor,
-                    candidate_resource,
-                    &mut nodes,
-                    ledger,
-                    remaining_energy,
-                )
-            {
+            if let Some((unit, endpoint_a, endpoint_b, trial_attempt)) = realize_next_bond_driven(
+                blueprint,
+                catalog,
+                &structure,
+                &realized_units,
+                index,
+                neighbor,
+                genome_anchor,
+                candidate_resource,
+                &mut nodes,
+                ledger,
+                remaining_energy,
+            ) {
                 let new_index = structure.units.len();
                 structure.units.push(unit);
 
@@ -1125,9 +1119,7 @@ fn construct_blueprint_bond_driven_internal(
 
                 debug_assert_eq!(commit_attempt.endpoint_a, trial_attempt.endpoint_a);
                 debug_assert_eq!(commit_attempt.endpoint_b, trial_attempt.endpoint_b);
-                debug_assert!(
-                    (commit_attempt.work_cost - trial_attempt.work_cost).abs() <= 1e-10
-                );
+                debug_assert!((commit_attempt.work_cost - trial_attempt.work_cost).abs() <= 1e-10);
 
                 *ledger = commit_ledger;
                 remaining_energy = commit_energy;
