@@ -39,10 +39,6 @@ pub struct StructuralBlueprint {
     /// not a biological genome definition and do not identify the genome.
     #[serde(default = "default_anchor_elements")]
     pub anchor_elements: Vec<usize>,
-    /// Developmental geometry may explicitly require declared placements to be
-    /// realized directly rather than reinterpreted by the generic placement solver.
-    #[serde(default)]
-    pub authoritative_placements: bool,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
