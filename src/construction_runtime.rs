@@ -1012,7 +1012,7 @@ fn construct_blueprint_bond_driven_internal(
     while !realized.iter().all(|value| *value) {
         // Select the next element by the number of already-realized neighbors.
         // We never erase a realized element or bond.
-        let mut next = None;
+        let mut next: Option<(usize, Vec<usize>, usize)> = None;
         for index in 0..blueprint.elements.len() {
             if realized[index] {
                 continue;
@@ -1029,10 +1029,9 @@ fn construct_blueprint_bond_driven_internal(
                     .filter(|c| c.element_a == index || c.element_b == index)
                     .count(),
             );
-            if next
-                .as_ref()
-                .is_none_or(|(_, current, current_degree)| score > (*current, *current_degree))
-            {
+            if next.as_ref().is_none_or(|(_, current_neighbors, current_degree)| {
+                (neighbors.len(), score.1) > (current_neighbors.len(), *current_degree)
+            }) {
                 next = Some((index, neighbors, score.1));
             }
         }
