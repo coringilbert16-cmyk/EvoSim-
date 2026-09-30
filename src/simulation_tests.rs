@@ -159,7 +159,7 @@ mod integration_tests {
         .expect("initial organism should expose an accessible interior region");
         let region = regions
             .iter()
-            .max_by(|a, b| {
+            .min_by(|a, b| {
                 a.area
                     .partial_cmp(&b.area)
                     .unwrap_or(std::cmp::Ordering::Equal)
