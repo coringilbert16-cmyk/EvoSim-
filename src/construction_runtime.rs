@@ -1130,12 +1130,15 @@ fn construct_blueprint_bond_driven_internal(
     )
     .ok_or_else(|| "construction anchor has invalid physical realization".to_string())?;
     if let Some(storage) = available_materials.as_deref_mut() {
-        let storage_index = rank_available_construction_materials(storage, &anchor_preferred, catalog)
-            .map_err(|e| e.to_string())?
-            .into_iter()
-            .find(|(_, _, score)| *score >= MIN_CONSTRUCTION_MATERIAL_MATCH)
-            .map(|candidate| candidate.0)
-            .ok_or_else(|| "selected construction anchor material disappeared before commit".to_string())?;
+        let storage_index =
+            rank_available_construction_materials(storage, &anchor_preferred, catalog)
+                .map_err(|e| e.to_string())?
+                .into_iter()
+                .find(|(_, _, score)| *score >= MIN_CONSTRUCTION_MATERIAL_MATCH)
+                .map(|candidate| candidate.0)
+                .ok_or_else(|| {
+                    "selected construction anchor material disappeared before commit".to_string()
+                })?;
         reserved_storage_indices.push(storage_index);
     }
     let anchor_unit_index = *anchor_indices
@@ -1225,8 +1228,9 @@ fn construct_blueprint_bond_driven_internal(
                 };
                 instance.clone()
             } else {
-                let candidate_resource = resource(catalog, &candidate_name)
-                    .ok_or_else(|| format!("unknown preferred construction resource {candidate_name}"))?;
+                let candidate_resource = resource(catalog, &candidate_name).ok_or_else(|| {
+                    format!("unknown preferred construction resource {candidate_name}")
+                })?;
                 crate::physical_material::PhysicalMaterial::realized(
                     crate::resources::Material::free_base(candidate_resource.name.clone(), 1.0),
                     vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }],
