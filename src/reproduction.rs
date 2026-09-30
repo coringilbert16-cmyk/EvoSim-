@@ -181,6 +181,7 @@ fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
 enum NextConstructionResourceStatus {
     Available,
     Missing,
+    NoFit,
     Impossible,
 }
 
@@ -375,7 +376,7 @@ fn next_construction_resource_status(
     if try_child_construction(child, parent_storage, environment, ledger, context).is_some() {
         NextConstructionResourceStatus::Available
     } else {
-        NextConstructionResourceStatus::Impossible
+        NextConstructionResourceStatus::NoFit
     }
 }
 
@@ -711,6 +712,13 @@ pub(crate) fn advance_construction(
             }
             NextConstructionResourceStatus::Available => {
                 construction.needs_space = true;
+                return (ConstructionStatus::Waiting, None);
+            }
+            NextConstructionResourceStatus::NoFit => {
+                // The inventory is real but none of the current physical
+                // candidates can make this bond. Keep the unfinished bond
+                // pending; new material may make it solvable later.
+                construction.needs_space = false;
                 return (ConstructionStatus::Waiting, None);
             }
             NextConstructionResourceStatus::Impossible => {
