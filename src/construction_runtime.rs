@@ -1029,9 +1029,12 @@ fn construct_blueprint_bond_driven_internal(
                     .filter(|c| c.element_a == index || c.element_b == index)
                     .count(),
             );
-            if next.as_ref().is_none_or(|(_, current_neighbors, current_degree)| {
-                (neighbors.len(), score.1) > (current_neighbors.len(), *current_degree)
-            }) {
+            if next
+                .as_ref()
+                .is_none_or(|(_, current_neighbors, current_degree)| {
+                    (neighbors.len(), score.1) > (current_neighbors.len(), *current_degree)
+                })
+            {
                 next = Some((index, neighbors, score.1));
             }
         }
