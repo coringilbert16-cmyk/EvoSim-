@@ -328,7 +328,12 @@ impl StructuralBlueprint {
                 structure
                     .units
                     .iter()
-                    .map(|unit| (unit.material.parts.first().map(|p| p.0.clone()), unit.placement))
+                    .map(|unit| {
+                        (
+                            unit.material.parts.first().map(|p| p.0.clone()),
+                            unit.placement,
+                        )
+                    })
                     .collect::<Vec<_>>(),
                 structure
                     .bonds
