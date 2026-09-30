@@ -313,6 +313,7 @@ pub fn find_enclosed_regions(
     catalog: &[BaseResource],
 ) -> Vec<EnclosedRegion> {
     let mut polygons = Vec::<(usize, Vec<Point>)>::new();
+    let mut line_segments = Vec::<(usize, (Point, Point))>::new();
     let mut fluid_polygons = Vec::<(usize, Vec<Point>)>::new();
     for index in structure.structural_unit_indices(catalog) {
         let unit = &structure.units[index];
@@ -325,17 +326,35 @@ pub fn find_enclosed_regions(
         let Some(geometry) = unit.geometry.as_ref() else {
             continue;
         };
-        let Some(polygon) = transformed_polygon(&geometry.shape().form, unit.placement) else {
+        if let Some(polygon) = transformed_polygon(&geometry.shape().form, unit.placement) {
+            if polygon.len() < 3 {
+                continue;
+            }
+            if resource.physical_state == crate::resources::PhysicalState::Fluid {
+                fluid_polygons.push((index, polygon));
+            } else {
+                polygons.push((index, polygon));
+            }
+            continue;
+        }
+
+        // Rigid line constituents are zero-area geometry, but they still form
+        // real boundaries when their endpoints stitch two area boundaries.
+        // Keep them in the planar graph without allowing a free-standing line
+        // to create containment by itself.
+        let Form::Line { length } = geometry.shape().form else {
             continue;
         };
-        if polygon.len() < 3 {
+        if !length.is_finite() || length <= 0.0 {
             continue;
         }
-        if resource.physical_state == crate::resources::PhysicalState::Fluid {
-            fluid_polygons.push((index, polygon));
-        } else {
-            polygons.push((index, polygon));
-        }
+        let half = length / 2.0;
+        let (sin, cos) = unit.placement.rotation_radians.sin_cos();
+        let transform = |x: f64, y: f64| Point {
+            x: unit.placement.x + x * cos - y * sin,
+            y: unit.placement.y + x * sin + y * cos,
+        };
+        line_segments.push((index, (transform(-half, 0.0), transform(half, 0.0))));
     }
 
     // A fitted Water constituent can itself be part of the organism's outer
@@ -375,7 +394,8 @@ pub fn find_enclosed_regions(
     let mut points = Vec::new();
     let mut point_index = HashMap::new();
     let mut edges = Vec::new();
-    for (_, polygon) in &polygons {
+    let mut edge_units = Vec::new();
+    for (unit, polygon) in &polygons {
         for i in 0..polygon.len() {
             let a = intern(polygon[i], &mut points, &mut point_index);
             let b = intern(
@@ -385,8 +405,20 @@ pub fn find_enclosed_regions(
             );
             if a != b {
                 edges.push(Edge { from: a, to: b });
+                edge_units.push(*unit);
                 edges.push(Edge { from: b, to: a });
+                edge_units.push(*unit);
             }
+        }
+    }
+    for (unit, (a_point, b_point)) in &line_segments {
+        let a = intern(*a_point, &mut points, &mut point_index);
+        let b = intern(*b_point, &mut points, &mut point_index);
+        if a != b {
+            edges.push(Edge { from: a, to: b });
+            edge_units.push(*unit);
+            edges.push(Edge { from: b, to: a });
+            edge_units.push(*unit);
         }
     }
     if edges.is_empty() {
@@ -473,13 +505,9 @@ pub fn find_enclosed_regions(
         for &edge_index in &face {
             let a = points[edges[edge_index].from];
             let b = points[edges[edge_index].to];
-            if let Some(unit) = polygons
-                .iter()
-                .find_map(|(unit, p)| segment_in_polygon_boundary(a, b, p).then_some(*unit))
-            {
-                if !boundary_units.contains(&unit) {
-                    boundary_units.push(unit);
-                }
+            let unit = edge_units[edge_index];
+            if !boundary_units.contains(&unit) {
+                boundary_units.push(unit);
             }
         }
         if boundary_units.is_empty() {
