@@ -228,4 +228,58 @@ mod tests {
         assert_eq!(structure.units, before.units);
         assert_eq!(energy, 1.0e12);
     }
+    #[test]
+    fn construction_uses_an_intact_composite_physical_material() {
+        let catalog = default_catalog();
+        let blueprint = two_carbon_bond_blueprint();
+        let mut storage = crate::material_storage::MaterialStorage::default();
+
+        assert!(storage.store_physical(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: vec![crate::resources::InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+            vec![
+                crate::structure::Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                crate::structure::Placement {
+                    x: 0.838,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        ));
+        assert!(storage.store_physical(
+            Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        ));
+
+        let mut ledger = EnergyLedger::default();
+        let mut energy = 1.0e12;
+        let (structure, _) = blueprint
+            .realize_with_materials(
+                &catalog,
+                &mut storage,
+                &mut ledger,
+                &mut energy,
+            )
+            .expect("construction should use the stored composite material");
+
+        assert_eq!(structure.units.len(), 3);
+        assert_eq!(structure.bonds.len(), 2);
+        assert!(storage.is_empty());
+    }
+
 }
