@@ -24,7 +24,11 @@ pub(crate) enum ConstructionMaterialDecision {
 fn normalized_similarity(a: f64, b: f64, min: f64, max: f64) -> f64 {
     let range = (max - min).abs();
     if range <= f64::EPSILON {
-        return if (a - b).abs() <= f64::EPSILON { 1.0 } else { 0.0 };
+        return if (a - b).abs() <= f64::EPSILON {
+            1.0
+        } else {
+            0.0
+        };
     }
     (1.0 - (a - b).abs() / range).clamp(0.0, 1.0)
 }
@@ -129,7 +133,9 @@ pub(crate) fn rank_available_construction_materials(
             if (amount - 1.0).abs() > 1e-12 {
                 return None;
             }
-            let candidate = catalog.iter().find(|resource| resource.name == *resource_name)?;
+            let candidate = catalog
+                .iter()
+                .find(|resource| resource.name == *resource_name)?;
             let score = structural_similarity(preferred, candidate, catalog);
             Some((index, resource_name.clone(), score))
         })
