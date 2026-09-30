@@ -18,6 +18,7 @@ mod structure_authority;
 // Active physical geometry authority stack.
 mod cavity;
 mod connection_geometry;
+mod construction_material_selection;
 mod construction_runtime;
 mod contact;
 mod interior_geometry;
