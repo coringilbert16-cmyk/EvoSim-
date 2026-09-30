@@ -259,8 +259,7 @@ pub(crate) fn realize_initial_with_reserve(
     }
 
     let energy = required_initial_energy + reserve_energy;
-    let (structure, mut ledger, energy) =
-        form_declared_bonds(base, blueprint, catalog, energy)?;
+    let (structure, mut ledger, energy) = form_declared_bonds(base, blueprint, catalog, energy)?;
 
     if !energy.is_finite() || energy + EPS < reserve_energy {
         return Err(format!(
