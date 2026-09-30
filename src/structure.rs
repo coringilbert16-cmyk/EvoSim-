@@ -566,22 +566,28 @@ impl PhysicalConstituentGraph {
     /// membership, so the body can reorganize as the realized genome cavity changes.
     pub fn structural_unit_indices(&self, catalog: &[BaseResource]) -> Vec<usize> {
         let mut structural = Vec::new();
-        for index in 0..self.units.len() {
-            let component = self.connected_component_containing(index);
-            if component.len() < 2 || !self.component_contains_nonfluid(index, catalog) {
+        for component in self.connected_components() {
+            if component.len() < 2
+                || !component.iter().any(|&index| {
+                    self.units[index]
+                        .material
+                        .parts
+                        .first()
+                        .and_then(|(name, _)| {
+                            catalog.iter().find(|resource| resource.name == *name)
+                        })
+                        .is_some_and(|resource| {
+                            resource.physical_state != crate::resources::PhysicalState::Fluid
+                        })
+                })
+            {
                 continue;
             }
-            for member in component {
-                if self.is_structurally_qualified(member, catalog) && !structural.contains(&member)
-                {
-                    structural.push(member);
-                }
-            }
+            structural.extend(component);
         }
         structural.sort_unstable();
         structural
     }
-
     pub fn genome_connected(&self, unit_index: usize) -> bool {
         if unit_index >= self.units.len() || self.genome_constituent_ids.is_empty() {
             return false;
