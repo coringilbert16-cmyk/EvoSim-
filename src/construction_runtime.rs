@@ -1147,7 +1147,9 @@ fn construct_blueprint_bond_driven_internal(
             .iter()
             .any(|&storage_index| storage.entries.get(storage_index).is_none())
         {
-            return Err("construction reservation became invalid before material consumption".into());
+            return Err(
+                "construction reservation became invalid before material consumption".into(),
+            );
         }
         for storage_index in reserved_storage_indices.into_iter().rev() {
             storage.take_physical_at(storage_index).ok_or_else(|| {
