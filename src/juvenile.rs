@@ -41,7 +41,10 @@ pub(crate) fn confirmed_seed_baseline(
     // voids are ordinary consequences of the mesh and may contain environmental
     // material later.
     let _ = (carbon, hydrogen, sulfur);
-    let radius = 1.50;
+    // The measurement scaffold is a real construction exclusion volume. The
+    // original 1.50 radius leaves the methane vertices inside that volume, so
+    // the cavity must be physically larger rather than weakening the scaffold.
+    let radius = 2.00;
     let diagonal = radius * 0.707_106_781_2;
     let positions = [
         (0.0, radius),
