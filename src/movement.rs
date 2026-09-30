@@ -979,7 +979,7 @@ mod tests {
 
     #[test]
     fn impermeable_boundary_blocks_environmental_material() {
-        let simulation = Simulation::default();
+        let simulation = Simulation::new(42, 1.0);
         let environment = simulation.environment.clone();
         let moving = simulation.organisms.first().expect("default seed organism");
         let carbon = crate::physical_material::PhysicalMaterial::realized(
