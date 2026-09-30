@@ -267,7 +267,8 @@ fn try_child_construction(
         for existing_index in 0..child.structure.units.len() {
             let mut candidate_ledger = *ledger;
             let Some((
-                material,
+                trial_structure,
+                _material,
                 _indices,
                 _part_index,
                 _endpoint_a,
@@ -288,12 +289,8 @@ fn try_child_construction(
 
             let mut candidate = child.clone();
             candidate.stored_material.take_physical_at(storage_index)?;
-            candidate.structure = candidate.structure.clone();
-            // The exact trial structure is reconstructed by the common
-            // bond-driven helper; this branch is replaced below with its
-            // committed result.
-            let _ = material;
-            return None;
+            candidate.structure = trial_structure;
+            return Some((candidate, candidate_ledger, None));
         }
     }
 
@@ -319,6 +316,7 @@ fn try_child_construction(
         for existing_index in 0..child.structure.units.len() {
             let mut candidate_ledger = *ledger;
             let Some((
+                trial_structure,
                 material,
                 _indices,
                 _part_index,
@@ -339,7 +337,14 @@ fn try_child_construction(
             };
 
             let mut candidate = child.clone();
-            let _ = candidate.stored_material.store_physical_instance(material);
+            if !candidate.stored_material.store_physical_instance(material) {
+                continue;
+            }
+            // The material is now part of the realized structure, so it must
+            // not remain in the developing inventory.
+            let last = candidate.stored_material.entries.len().checked_sub(1)?;
+            candidate.stored_material.take_physical_at(last)?;
+            candidate.structure = trial_structure;
             return Some((candidate, candidate_ledger, Some(parent_index)));
         }
     }
