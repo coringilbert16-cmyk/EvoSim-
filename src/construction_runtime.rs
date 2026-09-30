@@ -838,7 +838,9 @@ fn construct_search(
 
     if realized.iter().all(|value| *value) {
         if blueprint.genome_measurement.is_some() {
-            let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog).ok().flatten()?;
+            let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)
+                .ok()
+                .flatten()?;
             if !cavity.qualifies() {
                 return None;
             }
@@ -858,9 +860,7 @@ fn construct_search(
         let degree = blueprint
             .connections
             .iter()
-            .filter(|connection| {
-                connection.element_a == index || connection.element_b == index
-            })
+            .filter(|connection| connection.element_a == index || connection.element_b == index)
             .count();
         let key = (neighbors.len(), degree);
         if next
@@ -887,10 +887,8 @@ fn construct_search(
     let mut candidates = Vec::new();
     for &neighbor in &neighbors {
         let existing_index = realized_units[neighbor]?;
-        let existing_resource = resource(
-            catalog,
-            &blueprint.elements[neighbor].material.parts[0].0,
-        )?;
+        let existing_resource =
+            resource(catalog, &blueprint.elements[neighbor].material.parts[0].0)?;
         let existing_endpoints = blueprint_endpoint_options(existing_resource);
 
         for endpoint_a in existing_endpoints {
@@ -911,10 +909,7 @@ fn construct_search(
             }
         }
     }
-    candidates.sort_by(|a, b| {
-        a.0.partial_cmp(&b.0)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    candidates.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
     candidates.dedup_by(|a, b| {
         a.1 == b.1
             && a.2 == b.2
@@ -1008,8 +1003,7 @@ fn construct_search(
             continue;
         }
 
-        let committed_heat =
-            trial_ledger.total_heat_dissipated - ledger.total_heat_dissipated;
+        let committed_heat = trial_ledger.total_heat_dissipated - ledger.total_heat_dissipated;
         realized[index] = true;
         realized_units[index] = Some(new_unit_index);
 
