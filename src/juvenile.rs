@@ -138,20 +138,22 @@ pub(crate) fn confirmed_seed_baseline(
     }
 
     let bridge_start = elements.len();
-    let half_hydrogen = hydrogen_length / 2.0;
-    let first_center = inner_boundary + half_hydrogen;
-    let second_center = outer_inner_boundary - half_hydrogen;
-    if second_center <= first_center {
-        return Err("initial chamber is too narrow for a two-Hydrogen bridge".into());
-    }
-    for y in [first_center, second_center] {
+    let half_distance = chamber_gap / 2.0;
+    let lateral_offset = (hydrogen_length.powi(2) - half_distance.powi(2)).sqrt();
+    let midpoint_y = (inner_boundary + outer_inner_boundary) / 2.0;
+    let bridge_midpoint = (lateral_offset, midpoint_y);
+    let line_placement = |a: (f64, f64), b: (f64, f64)| BlueprintPlacement {
+        x: (a.0 + b.0) / 2.0,
+        y: (a.1 + b.1) / 2.0,
+        rotation_radians: (b.1 - a.1).atan2(b.0 - a.0),
+    };
+    for (a, b) in [
+        ((0.0, inner_boundary), bridge_midpoint),
+        (bridge_midpoint, (0.0, outer_inner_boundary)),
+    ] {
         elements.push(BlueprintElement {
             material: Material::free_base("Hydrogen", 1.0),
-            placement: BlueprintPlacement {
-                x: 0.0,
-                y,
-                rotation_radians: std::f64::consts::FRAC_PI_2,
-            },
+            placement: line_placement(a, b),
         });
     }
 
