@@ -145,8 +145,7 @@ pub(crate) fn confirmed_seed_baseline(
     {
         return Err("initial upper shell spacing cannot be bridged by Hydrogen".into());
     }
-    let upper_lateral_offset =
-        (hydrogen_length.powi(2) - upper_half_gap.powi(2)).sqrt();
+    let upper_lateral_offset = (hydrogen_length.powi(2) - upper_half_gap.powi(2)).sqrt();
     let upper_midpoint = (inner_boundary + outer_apothem) / 2.0;
     let upper_first_rotation = upper_half_gap.atan2(upper_lateral_offset);
     let upper_second_rotation = upper_half_gap.atan2(-upper_lateral_offset);
@@ -166,8 +165,8 @@ pub(crate) fn confirmed_seed_baseline(
     // The lower bridge lands on the midpoint of the lower-left outer side.
     // Its endpoint pair is shorter than two Hydrogen lengths, so an ordinary
     // two-link bent chain spans it without becoming an intake port.
-    let lower_outer_angle = std::f64::consts::FRAC_PI_2
-        + 5.0 * (2.0 * std::f64::consts::PI / outer_side_count as f64);
+    let lower_outer_angle =
+        std::f64::consts::FRAC_PI_2 + 5.0 * (2.0 * std::f64::consts::PI / outer_side_count as f64);
     let lower_outer_x = outer_apothem * lower_outer_angle.cos();
     let lower_outer_y = outer_apothem * lower_outer_angle.sin();
     let lower_dx = lower_outer_x;
