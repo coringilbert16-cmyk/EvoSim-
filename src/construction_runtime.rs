@@ -1217,42 +1217,63 @@ fn construct_blueprint_bond_driven_internal(
                 continue;
             }
 
-            let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-            let Some(candidate) = crate::contact::connection_pair_candidates_cached(
-                &structure, unit_a, unit_b, catalog, &mut cache,
-            )
-            .into_iter()
-            .find(|candidate| {
+            let candidates = crate::contact::connection_pair_candidates_cached(
+                &structure,
+                unit_a,
+                unit_b,
+                catalog,
+                &mut crate::contact::ConnectionCompatibilityCache::new(),
+            );
+            for candidate in candidates.into_iter().filter(|candidate| {
                 candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
                     && candidate.available_a
                     && candidate.available_b
-            }) else {
-                continue;
-            };
-            let Some((_, _, _, investment, _)) =
-                crate::combine_runtime::construction_candidate_evaluation(
-                    &structure, unit_a, unit_b, candidate, catalog,
-                )
-            else {
-                continue;
-            };
-            let Some(attempt) = crate::combine_runtime::form_construction_bond(
-                &mut structure,
-                unit_a,
-                unit_b,
-                candidate,
-                investment,
-                catalog,
-                &mut cache,
-                &mut construction_ledger,
-                &mut remaining_energy,
-            ) else {
-                continue;
-            };
-            total_heat += attempt.work_cost;
-            closed_connections[connection_index] = true;
-            progressed = true;
-            break;
+            }) {
+                let Some((_, _, _, investment, _)) =
+                    crate::combine_runtime::construction_candidate_evaluation(
+                        &structure,
+                        unit_a,
+                        unit_b,
+                        candidate,
+                        catalog,
+                    )
+                else {
+                    continue;
+                };
+
+                // A prescribed realized-realized bond is still one ordinary
+                // construction bond. Try every physically admissible endpoint
+                // pair rather than letting the first candidate that reaches
+                // contact veto the entire connection.
+                let mut trial_structure = structure.clone();
+                let mut trial_ledger = construction_ledger;
+                let mut trial_energy = remaining_energy;
+                let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
+                let Some(attempt) = crate::combine_runtime::form_construction_bond(
+                    &mut trial_structure,
+                    unit_a,
+                    unit_b,
+                    candidate,
+                    investment,
+                    catalog,
+                    &mut bond_cache,
+                    &mut trial_ledger,
+                    &mut trial_energy,
+                ) else {
+                    continue;
+                };
+
+                structure = trial_structure;
+                construction_ledger = trial_ledger;
+                remaining_energy = trial_energy;
+                total_heat += attempt.work_cost;
+                closed_connections[connection_index] = true;
+                progressed = true;
+                break;
+            }
+            if progressed {
+                break;
+            }
         }
         if !progressed {
             return Err(
