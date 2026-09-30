@@ -1097,11 +1097,18 @@ mod tests {
             })
             .expect("seed boundary should contain Water");
         let water = water_unit.shape(&environment.catalog).expect("water shape");
+        let boundary_vertex = match &water.form {
+            crate::resources::Form::Fluid {
+                boundary: Some(vertices),
+                ..
+            } => vertices.first().copied().expect("water boundary should have a vertex"),
+            _ => panic!("seed Water must have realized boundary geometry"),
+        };
         let carbon = crate::physical_material::PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
             vec![Placement {
-                x: water_unit.placement.x + water.form.bounding_radius() + 0.9 * 0.438_691,
-                y: water_unit.placement.y,
+                x: water_unit.placement.x + boundary_vertex.0,
+                y: water_unit.placement.y + boundary_vertex.1,
                 rotation_radians: 0.0,
             }],
             &environment.catalog,
