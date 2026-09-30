@@ -17,92 +17,92 @@ pub(crate) fn confirmed_seed_baseline(
     catalog: &[BaseResource],
 ) -> Result<StructuralBlueprint, String> {
     use crate::resources::Material;
-    use crate::structural_blueprint::{BlueprintConnection, BlueprintElement, BlueprintPlacement};
+    use crate::structural_blueprint::{
+        BlueprintConnection, BlueprintElement, BlueprintPlacement,
+    };
 
-    for material in ["Nitrogen", "Sulfur", "Carbon"] {
+    for material in ["Carbon", "Sulfur", "Methane"] {
         if !catalog.iter().any(|resource| resource.name == material) {
             return Err(format!("catalog is missing seed {material}"));
         }
     }
 
-    // Calibration fixture only: four Nitrogen walls form the smallest
-    // physically realized genome boundary. Sulfur and Carbon are attached
-    // outward as ordinary mesh material; they are not a predefined core.
-    let side = 1.511_858;
-    let thickness = 0.330_719;
-    let offset = (side + thickness) / 2.0;
-    let outer = offset + 0.65;
+    // This is only the deterministic starting target used to calibrate a
+    // viable juvenile. It deliberately does not encode a square, a fixed core,
+    // or a sacred body plan. The constructor is expected to rotate and translate
+    // these pieces around the temporary three-carbon measurement scaffold until
+    // the physical bonds and cavity are simultaneously satisfied.
+    //
+    // Eight Carbon pieces make a sufficiently large closed neighborhood around
+    // the scaffold. Sulfur and Methane are ordinary outward branches, providing
+    // a mixed-material mesh without becoming part of the genome definition.
+    let ring_radius = 1.146_355;
+    let mut elements = Vec::with_capacity(14);
 
-    let mut elements = vec![
-        BlueprintElement {
-            material: Material::free_base("Nitrogen", 1.0),
-            placement: BlueprintPlacement { x: 0.0, y: offset, rotation_radians: 0.0 },
-        },
-        BlueprintElement {
-            material: Material::free_base("Nitrogen", 1.0),
-            placement: BlueprintPlacement { x: -offset, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_2 },
-        },
-        BlueprintElement {
-            material: Material::free_base("Nitrogen", 1.0),
-            placement: BlueprintPlacement { x: offset, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_2 },
-        },
-        BlueprintElement {
-            material: Material::free_base("Nitrogen", 1.0),
-            placement: BlueprintPlacement { x: 0.0, y: -offset, rotation_radians: 0.0 },
-        },
-        BlueprintElement {
-            material: Material::free_base("Sulfur", 1.0),
-            placement: BlueprintPlacement { x: 0.0, y: outer, rotation_radians: 0.0 },
-        },
-        BlueprintElement {
-            material: Material::free_base("Sulfur", 1.0),
-            placement: BlueprintPlacement { x: -outer, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_2 },
-        },
-        BlueprintElement {
-            material: Material::free_base("Sulfur", 1.0),
-            placement: BlueprintPlacement { x: outer, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_2 },
-        },
-        BlueprintElement {
-            material: Material::free_base("Sulfur", 1.0),
-            placement: BlueprintPlacement { x: 0.0, y: -outer, rotation_radians: 0.0 },
-        },
-        BlueprintElement {
+    for i in 0..8 {
+        let angle = std::f64::consts::TAU * i as f64 / 8.0;
+        elements.push(BlueprintElement {
             material: Material::free_base("Carbon", 1.0),
-            placement: BlueprintPlacement { x: 0.0, y: outer + 0.65, rotation_radians: 0.0 },
-        },
-        BlueprintElement {
-            material: Material::free_base("Carbon", 1.0),
-            placement: BlueprintPlacement { x: -outer - 0.65, y: 0.0, rotation_radians: 0.0 },
-        },
-        BlueprintElement {
-            material: Material::free_base("Carbon", 1.0),
-            placement: BlueprintPlacement { x: outer + 0.65, y: 0.0, rotation_radians: 0.0 },
-        },
-        BlueprintElement {
-            material: Material::free_base("Carbon", 1.0),
-            placement: BlueprintPlacement { x: 0.0, y: -outer - 0.65, rotation_radians: 0.0 },
-        },
-    ];
-
-    let mut connections = vec![
-        BlueprintConnection { element_a: 0, element_b: 1 },
-        BlueprintConnection { element_a: 0, element_b: 2 },
-        BlueprintConnection { element_a: 1, element_b: 3 },
-        BlueprintConnection { element_a: 2, element_b: 3 },
-    ];
-    for i in 0..4 {
-        connections.push(BlueprintConnection { element_a: i, element_b: 4 + i });
-        connections.push(BlueprintConnection { element_a: 4 + i, element_b: 8 + i });
+            placement: BlueprintPlacement {
+                x: ring_radius * angle.cos(),
+                y: ring_radius * angle.sin(),
+                rotation_radians: angle,
+            },
+        });
     }
 
-    let baseline = StructuralBlueprint::with_anchor_elements(
-        elements,
-        connections,
-        (0..12).collect(),
-    )
-    .with_genome_measurement(
-        crate::structural_blueprint::GenomeMeasurementScaffold::three_carbon_reference(catalog)?,
-    );
+    for &i in &[0usize, 2, 4, 6] {
+        let angle = std::f64::consts::TAU * i as f64 / 8.0;
+        let radius = ring_radius + 0.95;
+        elements.push(BlueprintElement {
+            material: Material::free_base("Sulfur", 1.0),
+            placement: BlueprintPlacement {
+                x: radius * angle.cos(),
+                y: radius * angle.sin(),
+                rotation_radians: angle,
+            },
+        });
+    }
+
+    for &i in &[1usize, 5] {
+        let angle = std::f64::consts::TAU * i as f64 / 8.0;
+        let radius = ring_radius + 1.05;
+        elements.push(BlueprintElement {
+            material: Material::free_base("Methane", 1.0),
+            placement: BlueprintPlacement {
+                x: radius * angle.cos(),
+                y: radius * angle.sin(),
+                rotation_radians: angle,
+            },
+        });
+    }
+
+    let mut connections = Vec::with_capacity(14);
+    for i in 0..8 {
+        connections.push(BlueprintConnection {
+            element_a: i,
+            element_b: (i + 1) % 8,
+        });
+    }
+    for (offset, &i) in [0usize, 2, 4, 6].iter().enumerate() {
+        connections.push(BlueprintConnection {
+            element_a: i,
+            element_b: 8 + offset,
+        });
+    }
+    for (offset, &i) in [1usize, 5].iter().enumerate() {
+        connections.push(BlueprintConnection {
+            element_a: i,
+            element_b: 12 + offset,
+        });
+    }
+
+    let baseline = StructuralBlueprint::with_anchor_elements(elements, connections, vec![0])
+        .with_genome_measurement(
+            crate::structural_blueprint::GenomeMeasurementScaffold::three_carbon_reference(
+                catalog,
+            )?,
+        );
     baseline.validate()?;
     Ok(baseline)
 }
