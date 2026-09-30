@@ -318,10 +318,11 @@ impl Simulation {
         // structural preference instead of accepting a structurally poor
         // substitute merely because one exists.
         if let Some(construction) = organism.reproductive_construction.as_ref() {
-            development = development.max(crate::reproduction::construction_material_need_pressure(
-                construction,
-                &environment.catalog,
-            ));
+            development =
+                development.max(crate::reproduction::construction_material_need_pressure(
+                    construction,
+                    &environment.catalog,
+                ));
         }
         CurrentNeeds {
             survival,
