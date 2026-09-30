@@ -63,6 +63,10 @@ pub(crate) struct ActiveMovement {
     pub(crate) ticks_until_step: u64,
     /// Distance selected when the operation began; retained for learning context.
     pub(crate) decision_distance: f64,
+    /// Baseline state captured when the movement operation begins.
+    pub(crate) before_energy: f64,
+    pub(crate) before_stress: f64,
+    pub(crate) before_developmental_realization: f64,
 }
 pub(crate) const MEMORY_DECAY_PER_TICK: f64 = 0.995;
 pub(crate) const COMBINE_PROCESSING_RATE: usize = 1;
