@@ -1042,7 +1042,11 @@ fn construct_blueprint_bond_driven_internal(
             .ok_or_else(|| "construction anchor references an unknown resource".to_string())?;
         crate::physical_material::PhysicalMaterial::realized(
             crate::resources::Material::free_base(anchor_resource.name.clone(), 1.0),
-            vec![placement(anchor_element.placement)],
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
             catalog,
         )
         .ok_or_else(|| "construction anchor has invalid geometry".to_string())?
