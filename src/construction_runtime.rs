@@ -3,6 +3,7 @@
     reason = "Staged construction helper retained for subsystem integration"
 )]
 use crate::combine_runtime::combine_specific_pair;
+use crate::material_geometry::MaterialGeometry;
 use crate::resources::{BaseResource, Form, Material};
 use crate::state::EnergyLedger;
 use crate::structural_blueprint::{BlueprintElement, BlueprintPlacement};
@@ -23,7 +24,7 @@ pub(crate) fn placement_penetrates_genome_measurement(
     scaffold: &crate::structural_blueprint::GenomeMeasurementScaffold,
     catalog: &[BaseResource],
 ) -> bool {
-    let Some(candidate) = crate::material_geometry::crate::material_geometry::crate::material_geometry::MaterialGeometry::new(
+    let Some(candidate) = MaterialGeometry::new(
         &Material::free_base(candidate_resource.name.clone(), 1.0),
         &[placement],
         catalog,
@@ -951,7 +952,6 @@ pub(crate) fn construct_blueprint_bond_driven(
 
                         let mut trial_ledger = *ledger;
                         let mut trial_energy = *energy;
-                        let mut trial_heat = 0.0;
                         let mut all_bonds_ok = true;
                         let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
 
@@ -980,7 +980,6 @@ pub(crate) fn construct_blueprint_bond_driven(
                                 all_bonds_ok = false;
                                 break;
                             };
-                            trial_heat += attempt.work_cost;
                         }
                         if !all_bonds_ok {
                             continue;
