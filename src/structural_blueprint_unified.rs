@@ -323,6 +323,19 @@ impl StructuralBlueprint {
         if self.genome_measurement.is_some()
             && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_none()
         {
+            eprintln!(
+                "GENOME_GUIDE_DEBUG units={:?} bonds={:?}",
+                structure
+                    .units
+                    .iter()
+                    .map(|unit| (unit.material.parts.first().map(|p| p.0.clone()), unit.placement))
+                    .collect::<Vec<_>>(),
+                structure
+                    .bonds
+                    .iter()
+                    .map(|bond| (bond.endpoint_a.constituent_id, bond.endpoint_b.constituent_id))
+                    .collect::<Vec<_>>()
+            );
             return Err(
                 "genome measurement scaffold did not produce a qualifying final cavity".into(),
             );
