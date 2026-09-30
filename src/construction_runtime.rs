@@ -687,6 +687,49 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     continue;
                 };
 
+                // The selected endpoint is reserved for the forward bond below.
+                // Every other already-realized neighbor must therefore have a
+                // different admissible endpoint on this same physical unit.
+                let mut neighbor_endpoint_options = Vec::with_capacity(realized_neighbors.len());
+                let mut all_realized_neighbors_reachable = true;
+                for other_neighbor in &realized_neighbors {
+                    let Some(other_index) = realized_units[*other_neighbor] else {
+                        all_realized_neighbors_reachable = false;
+                        break;
+                    };
+                    let options = crate::contact::connection_pair_candidates_cached(
+                        &trial,
+                        other_index,
+                        new_unit_index,
+                        catalog,
+                        &mut bond_cache,
+                    )
+                    .into_iter()
+                    .filter(|candidate| {
+                        candidate.distance
+                            <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                            && candidate.available_a
+                            && candidate.available_b
+                            && candidate.endpoint_b != endpoint_b
+                    })
+                    .map(|candidate| candidate.endpoint_b)
+                    .collect::<Vec<_>>();
+                    if options.is_empty() {
+                        all_realized_neighbors_reachable = false;
+                        break;
+                    }
+                    neighbor_endpoint_options.push(options);
+                }
+                if !all_realized_neighbors_reachable
+                    || !has_distinct_connection_endpoints(
+                        &neighbor_endpoint_options,
+                        0,
+                        &mut Vec::new(),
+                    )
+                {
+                    continue;
+                }
+
                 let Some((_, _, _, investment, _required_energy)) =
                     crate::combine_runtime::construction_candidate_evaluation(
                         &trial,
@@ -727,6 +770,27 @@ pub(crate) fn try_attach_physical_material_bond_driven(
     None
 }
 
+fn has_distinct_connection_endpoints(
+    options: &[Vec<ConnectionEndpoint>],
+    depth: usize,
+    used: &mut Vec<ConnectionEndpoint>,
+) -> bool {
+    if depth == options.len() {
+        return true;
+    }
+    for endpoint in &options[depth] {
+        if used.contains(endpoint) {
+            continue;
+        }
+        used.push(*endpoint);
+        if has_distinct_connection_endpoints(options, depth + 1, used) {
+            return true;
+        }
+        used.pop();
+    }
+    false
+}
+
 fn realize_next_bond_driven(
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     catalog: &[BaseResource],
@@ -751,6 +815,24 @@ fn realize_next_bond_driven(
     let existing_index = realized_units[neighbor]?;
     let existing_unit = structure.units.get(existing_index)?;
     let existing_endpoints = structure_unit_endpoint_options(existing_unit, catalog);
+    // A newly placed unit may already have more than one realized blueprint
+    // neighbor. Its pose must leave a physically admissible endpoint for every
+    // such neighbor; otherwise we would knowingly create a dead-end placement
+    // and rely on the later closure pass to repair geometry that cannot move.
+    let realized_neighbors: Vec<usize> = blueprint
+        .connections
+        .iter()
+        .filter_map(|connection| {
+            if connection.element_a == _index {
+                Some(connection.element_b)
+            } else if connection.element_b == _index {
+                Some(connection.element_a)
+            } else {
+                None
+            }
+        })
+        .filter(|other| *other != neighbor && realized_units[*other].is_some())
+        .collect();
     let new_endpoints = physical_material_endpoint_options(new_material, catalog);
 
     if existing_endpoints.is_empty() || new_endpoints.is_empty() {
