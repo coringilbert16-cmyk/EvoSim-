@@ -34,7 +34,7 @@ pub(crate) fn confirmed_seed_baseline(
     let inner_thickness = 0.330_719;
     let inner_offset = (inner_side + inner_thickness) / 2.0;
 
-    let outer_offset = 2.25;
+    let outer_offset = 2.65;
     let outer_half_segment = inner_side / 2.0;
 
     let mut elements = Vec::new();
