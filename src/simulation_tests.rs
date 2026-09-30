@@ -169,7 +169,7 @@ mod integration_tests {
         };
         assert!(region.contains_point(anchor.x, anchor.y));
 
-        for resource_name in ["Carbon", "Methane"] {
+        for resource_name in ["Carbon", "Hydrogen"] {
             let physical = PhysicalMaterial::realized(
                 Material::free_base(resource_name, 1.0),
                 vec![anchor],
