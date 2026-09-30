@@ -225,10 +225,9 @@ fn construction_preferred_resource(child: &Organism) -> Option<&str> {
         .iter()
         .max_by(|a, b| {
             a.evaluate(child.developmental_origin.x, child.developmental_origin.y)
-                .partial_cmp(&b.evaluate(
-                    child.developmental_origin.x,
-                    child.developmental_origin.y,
-                ))
+.partial_cmp(
+                    &b.evaluate(child.developmental_origin.x, child.developmental_origin.y),
+                )
                 .unwrap_or(std::cmp::Ordering::Equal)
         })
         .map(|field| field.resource_name.as_str())
@@ -337,7 +336,8 @@ fn try_child_construction(
                 &mut nodes,
                 &candidate_ledger,
                 child.usable_energy,
-            ) else {
+            )
+            else {
                 continue;
             };
 
