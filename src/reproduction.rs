@@ -266,13 +266,9 @@ fn try_child_construction(
             let mut candidate_ledger = *ledger;
             let Some((
                 trial_structure,
-                _material,
                 _indices,
                 _part_index,
-                _endpoint_a,
-                _endpoint_b,
                 _attempt,
-                _origin,
                 candidate_ledger,
                 candidate_energy,
             )) = crate::construction_runtime::try_attach_physical_material_bond_driven(
