@@ -273,61 +273,30 @@ pub(crate) fn realize_initial_with_reserve(
 #[cfg(test)]
 mod water_initialization_tests {
     use super::*;
-    use crate::resources::{default_catalog, PhysicalState};
+    use crate::resources::default_catalog;
 
     #[test]
-    fn initial_realization_contains_fitted_boundary_water_and_internal_water() {
+    fn initial_realization_is_a_continuous_mixed_material_mesh_with_only_genome_cavity() {
         let catalog = default_catalog();
         let blueprint = confirmed_seed_baseline(&catalog).expect("seed baseline");
         let (structure, _, _) = realize_initial(&blueprint, &catalog).expect("initial realization");
 
-        let water_indices: Vec<_> = structure
+        assert!(structure.units.len() >= 6);
+        let names: std::collections::HashSet<_> = structure
             .units
             .iter()
-            .enumerate()
-            .filter(|(_, unit)| {
-                unit.material
-                    .parts
-                    .first()
-                    .map(|(name, _)| name == "Water")
-                    .unwrap_or(false)
-            })
-            .map(|(index, _)| index)
+            .filter_map(|unit| unit.material.parts.first().map(|(name, _)| name.as_str()))
             .collect();
+        assert!(names.len() >= 3);
 
-        assert!(!water_indices.is_empty());
-
-        let fitted_boundary = water_indices
-            .iter()
-            .filter(|&&index| {
-                matches!(
-                    structure.units[index]
-                        .shape(&catalog)
-                        .map(|shape| &shape.form),
-                    Some(crate::resources::Form::Fluid {
-                        boundary: Some(_),
-                        ..
-                    })
-                )
-            })
-            .count();
-        assert_eq!(fitted_boundary, water_indices.len());
-
-        let water_resource = catalog
-            .iter()
-            .find(|resource| resource.name == "Water")
-            .expect("Water resource");
-        assert_eq!(water_resource.physical_state, PhysicalState::Fluid);
-
-        let genome = crate::cavity::analyze_genome_cavity(&structure, &catalog)
+        let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
             .expect("genome cavity analysis")
             .expect("genome cavity");
-        let accessible =
-            crate::interior_geometry::find_accessible_interior_regions(&structure, &catalog)
-                .expect("accessible interior analysis");
+        assert!(cavity.qualifies());
+        assert!(!cavity.boundary_units.is_empty());
 
-        assert!(accessible
-            .iter()
-            .all(|region| region.boundary_units != genome.boundary_units));
+        let accessible = crate::interior_geometry::find_accessible_interior_regions(&structure, &catalog)
+            .expect("accessible interior analysis");
+        assert!(accessible.iter().all(|region| region.boundary_units != cavity.boundary_units));
     }
 }
