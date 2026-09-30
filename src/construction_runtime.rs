@@ -431,7 +431,6 @@ fn candidate_penetrates_measurement(
     false
 }
 
-
 pub(crate) fn placement_penetrates_genome_measurement(
     resource: &BaseResource,
     placement: Placement,
