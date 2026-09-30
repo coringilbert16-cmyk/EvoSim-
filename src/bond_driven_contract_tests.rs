@@ -119,25 +119,19 @@ mod tests {
             trial.add_unit(crate::structure::StructuralUnit::new("Carbon", placement));
             let mut cache = crate::contact::ConnectionCompatibilityCache::new();
             let candidate = crate::contact::connection_pair_candidates_cached(
-                &trial,
-                0,
-                1,
-                &catalog,
-                &mut cache,
+                &trial, 0, 1, &catalog, &mut cache,
             )
             .into_iter()
-            .find(|candidate| candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE);
+            .find(|candidate| {
+                candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+            });
 
             let Some(candidate) = candidate else {
                 continue;
             };
             let Some((_, _, _, _, investment)) =
                 crate::combine_runtime::construction_candidate_evaluation(
-                    &trial,
-                    0,
-                    1,
-                    candidate,
-                    &catalog,
+                    &trial, 0, 1, candidate, &catalog,
                 )
             else {
                 continue;
@@ -168,7 +162,10 @@ mod tests {
             }
         }
 
-        assert!(found, "no exact carbon construction contact could be formed");
+        assert!(
+            found,
+            "no exact carbon construction contact could be formed"
+        );
     }
 
     #[test]
@@ -203,11 +200,7 @@ mod tests {
         structure.add_unit(crate::structure::StructuralUnit::new("Carbon", placement));
         let mut cache = crate::contact::ConnectionCompatibilityCache::new();
         let candidate = crate::contact::connection_pair_candidates_cached(
-            &structure,
-            0,
-            1,
-            &catalog,
-            &mut cache,
+            &structure, 0, 1, &catalog, &mut cache,
         )
         .into_iter()
         .next()
