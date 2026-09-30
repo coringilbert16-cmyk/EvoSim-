@@ -106,6 +106,10 @@ pub(crate) struct GenomeMeasurementScaffold {
     /// Three bonded Carbon guide pieces. The guide occupies real construction
     /// volume but has no organism units or bonds of its own.
     pub(crate) placements: [BlueprintPlacement; 3],
+    /// The temporary three-carbon reference is itself a triangle: all three
+    /// Carbon pieces are internally bonded, with each edge contributing to the
+    /// cavity measurement.
+    pub(crate) bonds: [(usize, usize); 3],
 }
 
 impl GenomeMeasurementScaffold {
@@ -142,6 +146,7 @@ impl GenomeMeasurementScaffold {
                     rotation_radians: 0.0,
                 },
             ],
+            bonds: [(0, 1), (1, 2), (2, 0)],
         })
     }
 }
