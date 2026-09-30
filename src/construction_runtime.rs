@@ -806,7 +806,7 @@ fn realize_next_bond_driven(
                     continue;
                 };
 
-                let Some((_, _, _, _, required_investment)) =
+                let Some((_, _, _, investment, _required_energy)) =
                     crate::combine_runtime::construction_candidate_evaluation(
                         &trial,
                         existing_index,
@@ -823,7 +823,7 @@ fn realize_next_bond_driven(
                     existing_index,
                     new_unit_index,
                     candidate,
-                    required_investment,
+                    investment,
                     catalog,
                     &mut bond_cache,
                     &mut trial_ledger,
