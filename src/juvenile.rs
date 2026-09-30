@@ -89,72 +89,41 @@ pub(crate) fn confirmed_seed_baseline(
         },
     ];
 
-    // Use the same proven four-rectangle construction for the outer shell,
-    // simply scaled outward. This deliberately favors a formation whose
-    // physical closure is unambiguous over a more elaborate polygon.
-    let outer_side = 4.9;
-    let outer_offset = (outer_side + inner_thickness) / 2.0;
+    // The outer shell is a compact regular ring made from the existing
+    // Nitrogen rectangle. Its side length stays close to the calibrated
+    // construction geometry; only the ring radius grows the chamber.
+    let outer_side_count = 10usize;
+    let outer_side_length = 1.53;
+    let outer_apothem =
+        outer_side_length / (2.0 * (std::f64::consts::PI / outer_side_count as f64).tan());
+    let outer_center_radius = outer_apothem + inner_thickness / 2.0;
     let outer_start = elements.len();
 
-    elements.extend([
-        BlueprintElement {
+    for side in 0..outer_side_count {
+        let normal_angle = std::f64::consts::FRAC_PI_2
+            + side as f64 * (2.0 * std::f64::consts::PI / outer_side_count as f64);
+        let tangent_angle = normal_angle - std::f64::consts::FRAC_PI_2;
+        elements.push(BlueprintElement {
             material: Material::free_base(nitrogen, 1.0),
             placement: BlueprintPlacement {
-                x: 0.0,
-                y: outer_offset,
-                rotation_radians: 0.0,
+                x: outer_center_radius * normal_angle.cos(),
+                y: outer_center_radius * normal_angle.sin(),
+                rotation_radians: tangent_angle,
             },
-        },
-        BlueprintElement {
-            material: Material::free_base(nitrogen, 1.0),
-            placement: BlueprintPlacement {
-                x: -outer_offset,
-                y: 0.0,
-                rotation_radians: std::f64::consts::FRAC_PI_2,
-            },
-        },
-        BlueprintElement {
-            material: Material::free_base(nitrogen, 1.0),
-            placement: BlueprintPlacement {
-                x: outer_offset,
-                y: 0.0,
-                rotation_radians: std::f64::consts::FRAC_PI_2,
-            },
-        },
-        BlueprintElement {
-            material: Material::free_base(nitrogen, 1.0),
-            placement: BlueprintPlacement {
-                x: 0.0,
-                y: -outer_offset,
-                rotation_radians: 0.0,
-            },
-        },
-    ]);
+        });
+    }
 
-    connections.extend([
-        BlueprintConnection {
-            element_a: outer_start,
-            element_b: outer_start + 1,
-        },
-        BlueprintConnection {
-            element_a: outer_start,
-            element_b: outer_start + 2,
-        },
-        BlueprintConnection {
-            element_a: outer_start + 1,
-            element_b: outer_start + 3,
-        },
-        BlueprintConnection {
-            element_a: outer_start + 2,
-            element_b: outer_start + 3,
-        },
-    ]);
+    for side in 0..outer_side_count {
+        connections.push(BlueprintConnection {
+            element_a: outer_start + side,
+            element_b: outer_start + (side + 1) % outer_side_count,
+        });
+    }
 
-    // Two ordinary Hydrogen constituents bridge the chamber. They are not
-    // ports: they simply connect the inner and outer shells into one structural
-    // component while leaving the rest of the chamber physically open.
+    // Two ordinary Hydrogen constituents bridge the chamber at the center of
+    // the top boundary. They are structural material, not an intake port.
     let inner_boundary = inner_offset + inner_thickness / 2.0;
-    let outer_inner_boundary = outer_offset - inner_thickness / 2.0;
+    let outer_inner_boundary = outer_apothem - inner_thickness / 2.0;
     let chamber_gap = outer_inner_boundary - inner_boundary;
     let hydrogen_length = catalog
         .iter()
@@ -170,9 +139,10 @@ pub(crate) fn confirmed_seed_baseline(
 
     let bridge_start = elements.len();
     let segment_length = chamber_gap / 2.0;
-    let midpoint_one = inner_boundary + segment_length / 2.0;
-    let midpoint_two = outer_inner_boundary - segment_length / 2.0;
-    for y in [midpoint_one, midpoint_two] {
+    for y in [
+        inner_boundary + segment_length / 2.0,
+        outer_inner_boundary - segment_length / 2.0,
+    ] {
         elements.push(BlueprintElement {
             material: Material::free_base("Hydrogen", 1.0),
             placement: BlueprintPlacement {
