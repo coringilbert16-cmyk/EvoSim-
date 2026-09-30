@@ -19,32 +19,38 @@ pub(crate) fn confirmed_seed_baseline(
     use crate::resources::Material;
     use crate::structural_blueprint::{BlueprintConnection, BlueprintElement, BlueprintPlacement};
 
-    // Recovered from the last confirmed-good pre-P6 seed realization. This is
-    // a construction/scale calibration artifact only: it is not serialized,
-    // inherited, or used as descendant topology authority.
     let nitrogen = catalog
         .iter()
         .find(|resource| resource.name == "Nitrogen")
-        .ok_or_else(|| "catalog is missing the confirmed seed Nitrogen material".to_string())?;
+        .ok_or_else(|| "catalog is missing seed Nitrogen".to_string())?;
     let nitrogen = &nitrogen.name;
 
-    // Original four-unit inner shell.
-    let side = 1.511_858;
-    let thickness = 0.330_719;
-    let offset = (side + thickness) / 2.0;
-    let mut elements = vec![
+    // The juvenile starts as two concentric rigid shells. The inner shell
+    // encloses the genome cavity; the larger outer shell leaves a genuinely
+    // accessible chamber between them. The chamber is deliberately wide enough
+    // for the largest rigid environmental resource rather than relying on a
+    // resource-specific interface.
+    let inner_side = 1.511_858;
+    let inner_thickness = 0.330_719;
+    let inner_offset = (inner_side + inner_thickness) / 2.0;
+
+    let outer_offset = 2.25;
+    let outer_half_segment = inner_side / 2.0;
+
+    let mut elements = Vec::new();
+    elements.extend([
         BlueprintElement {
             material: Material::free_base(nitrogen, 1.0),
             placement: BlueprintPlacement {
                 x: 0.0,
-                y: offset,
+                y: inner_offset,
                 rotation_radians: 0.0,
             },
         },
         BlueprintElement {
             material: Material::free_base(nitrogen, 1.0),
             placement: BlueprintPlacement {
-                x: -offset,
+                x: -inner_offset,
                 y: 0.0,
                 rotation_radians: std::f64::consts::FRAC_PI_2,
             },
@@ -52,7 +58,7 @@ pub(crate) fn confirmed_seed_baseline(
         BlueprintElement {
             material: Material::free_base(nitrogen, 1.0),
             placement: BlueprintPlacement {
-                x: offset,
+                x: inner_offset,
                 y: 0.0,
                 rotation_radians: std::f64::consts::FRAC_PI_2,
             },
@@ -61,11 +67,12 @@ pub(crate) fn confirmed_seed_baseline(
             material: Material::free_base(nitrogen, 1.0),
             placement: BlueprintPlacement {
                 x: 0.0,
-                y: -offset,
+                y: -inner_offset,
                 rotation_radians: 0.0,
             },
         },
-    ];
+    ]);
+
     let mut connections = vec![
         BlueprintConnection {
             element_a: 0,
@@ -85,15 +92,15 @@ pub(crate) fn confirmed_seed_baseline(
         },
     ];
 
-    // Original eight-unit outer shell.
-    let half_segment = side / 2.0;
-    let outer_offset = 1.677_217_5;
-    let start = elements.len();
+    // The outer shell uses the same constituent dimensions but is deliberately
+    // farther from the genome cavity. This creates a real acquisition chamber
+    // instead of the old narrow annulus that excluded Carbon and Methane.
+    let outer_start = elements.len();
     elements.extend([
         BlueprintElement {
             material: Material::free_base(nitrogen, 1.0),
             placement: BlueprintPlacement {
-                x: -half_segment,
+                x: -outer_half_segment,
                 y: outer_offset,
                 rotation_radians: 0.0,
             },
@@ -101,7 +108,7 @@ pub(crate) fn confirmed_seed_baseline(
         BlueprintElement {
             material: Material::free_base(nitrogen, 1.0),
             placement: BlueprintPlacement {
-                x: half_segment,
+                x: outer_half_segment,
                 y: outer_offset,
                 rotation_radians: 0.0,
             },
@@ -110,7 +117,7 @@ pub(crate) fn confirmed_seed_baseline(
             material: Material::free_base(nitrogen, 1.0),
             placement: BlueprintPlacement {
                 x: -outer_offset,
-                y: -half_segment,
+                y: -outer_half_segment,
                 rotation_radians: std::f64::consts::FRAC_PI_2,
             },
         },
@@ -118,7 +125,7 @@ pub(crate) fn confirmed_seed_baseline(
             material: Material::free_base(nitrogen, 1.0),
             placement: BlueprintPlacement {
                 x: -outer_offset,
-                y: half_segment,
+                y: outer_half_segment,
                 rotation_radians: std::f64::consts::FRAC_PI_2,
             },
         },
@@ -126,7 +133,7 @@ pub(crate) fn confirmed_seed_baseline(
             material: Material::free_base(nitrogen, 1.0),
             placement: BlueprintPlacement {
                 x: outer_offset,
-                y: -half_segment,
+                y: -outer_half_segment,
                 rotation_radians: std::f64::consts::FRAC_PI_2,
             },
         },
@@ -134,14 +141,14 @@ pub(crate) fn confirmed_seed_baseline(
             material: Material::free_base(nitrogen, 1.0),
             placement: BlueprintPlacement {
                 x: outer_offset,
-                y: half_segment,
+                y: outer_half_segment,
                 rotation_radians: std::f64::consts::FRAC_PI_2,
             },
         },
         BlueprintElement {
             material: Material::free_base(nitrogen, 1.0),
             placement: BlueprintPlacement {
-                x: -half_segment,
+                x: -outer_half_segment,
                 y: -outer_offset,
                 rotation_radians: 0.0,
             },
@@ -149,7 +156,7 @@ pub(crate) fn confirmed_seed_baseline(
         BlueprintElement {
             material: Material::free_base(nitrogen, 1.0),
             placement: BlueprintPlacement {
-                x: half_segment,
+                x: outer_half_segment,
                 y: -outer_offset,
                 rotation_radians: 0.0,
             },
@@ -157,122 +164,133 @@ pub(crate) fn confirmed_seed_baseline(
     ]);
     connections.extend([
         BlueprintConnection {
-            element_a: start,
-            element_b: start + 1,
+            element_a: outer_start,
+            element_b: outer_start + 1,
         },
         BlueprintConnection {
-            element_a: start + 1,
-            element_b: start + 5,
+            element_a: outer_start + 1,
+            element_b: outer_start + 5,
         },
         BlueprintConnection {
-            element_a: start + 5,
-            element_b: start + 4,
+            element_a: outer_start + 5,
+            element_b: outer_start + 4,
         },
         BlueprintConnection {
-            element_a: start + 4,
-            element_b: start + 7,
+            element_a: outer_start + 4,
+            element_b: outer_start + 7,
         },
         BlueprintConnection {
-            element_a: start + 7,
-            element_b: start + 6,
+            element_a: outer_start + 7,
+            element_b: outer_start + 6,
         },
         BlueprintConnection {
-            element_a: start + 6,
-            element_b: start + 2,
+            element_a: outer_start + 6,
+            element_b: outer_start + 2,
         },
         BlueprintConnection {
-            element_a: start + 2,
-            element_b: start + 3,
+            element_a: outer_start + 2,
+            element_b: outer_start + 3,
         },
         BlueprintConnection {
-            element_a: start + 3,
-            element_b: start,
+            element_a: outer_start + 3,
+            element_b: outer_start,
         },
     ]);
 
-    // Original four Hydrogen interface connectors.
-    let inner_outer = 1.086_648;
-    let outer_inner = 1.511_858;
-    let length: f64 = 0.797_884;
-    let gap = outer_inner - inner_outer;
-    let tangent = (length * length - gap * gap).sqrt();
-    let center = (inner_outer + outer_inner) / 2.0;
-    let start = elements.len();
-    elements.extend([
-        BlueprintElement {
-            material: Material::free_base("Hydrogen", 1.0),
-            placement: BlueprintPlacement {
-                x: 0.0,
-                y: center,
-                rotation_radians: gap.atan2(-tangent),
-            },
+    // Two symmetric two-segment Hydrogen bridges keep the two shells one
+    // connected organism without turning the acquisition chamber into a set of
+    // narrow radial tunnels. Each bridge spans the shell gap as an ordinary
+    // physical chain; no resource-specific intake port is introduced.
+    let hydrogen_length = catalog
+        .iter()
+        .find(|resource| resource.name == "Hydrogen")
+        .and_then(|resource| match resource.shape.form {
+            crate::resources::Form::Line { length } => Some(length),
+            _ => None,
+        })
+        .ok_or_else(|| "catalog Hydrogen must retain its line geometry".to_string())?;
+
+    let inner_boundary = inner_offset + inner_thickness / 2.0;
+    let outer_boundary = outer_offset - inner_thickness / 2.0;
+    let shell_gap = outer_boundary - inner_boundary;
+    let half_gap = shell_gap / 2.0;
+    if !shell_gap.is_finite() || shell_gap <= 0.0 || hydrogen_length <= half_gap {
+        return Err("initial shell spacing cannot be bridged by Hydrogen".into());
+    }
+    let bridge_height = (hydrogen_length.powi(2) - half_gap.powi(2)).sqrt();
+    let bridge_midpoint = (inner_boundary + outer_boundary) / 2.0;
+    let upper_bridge = [
+        BlueprintPlacement {
+            x: bridge_height / 2.0,
+            y: (inner_boundary + bridge_midpoint) / 2.0,
+            rotation_radians: (bridge_midpoint - inner_boundary)
+                .atan2(bridge_height),
         },
-        BlueprintElement {
-            material: Material::free_base("Hydrogen", 1.0),
-            placement: BlueprintPlacement {
-                x: -center,
-                y: 0.0,
-                rotation_radians: (-tangent).atan2(-gap),
-            },
+        BlueprintPlacement {
+            x: bridge_height / 2.0,
+            y: (bridge_midpoint + outer_boundary) / 2.0,
+            rotation_radians: (outer_boundary - bridge_midpoint)
+                .atan2(-bridge_height),
         },
-        BlueprintElement {
-            material: Material::free_base("Hydrogen", 1.0),
-            placement: BlueprintPlacement {
-                x: center,
-                y: 0.0,
-                rotation_radians: tangent.atan2(gap),
-            },
+    ];
+    let lower_bridge = [
+        BlueprintPlacement {
+            x: -bridge_height / 2.0,
+            y: -(inner_boundary + bridge_midpoint) / 2.0,
+            rotation_radians: (-bridge_midpoint + inner_boundary)
+                .atan2(-bridge_height),
         },
-        BlueprintElement {
-            material: Material::free_base("Hydrogen", 1.0),
-            placement: BlueprintPlacement {
-                x: 0.0,
-                y: -center,
-                rotation_radians: (-gap).atan2(tangent),
-            },
+        BlueprintPlacement {
+            x: -bridge_height / 2.0,
+            y: -(bridge_midpoint + outer_boundary) / 2.0,
+            rotation_radians: (-outer_boundary + bridge_midpoint)
+                .atan2(bridge_height),
         },
-    ]);
+    ];
+
+    let bridge_start = elements.len();
+    for placement in upper_bridge.into_iter().chain(lower_bridge) {
+        elements.push(BlueprintElement {
+            material: Material::free_base("Hydrogen", 1.0),
+            placement,
+        });
+    }
+
     connections.extend([
         BlueprintConnection {
             element_a: 0,
-            element_b: start,
+            element_b: bridge_start,
         },
         BlueprintConnection {
-            element_a: 4,
-            element_b: start,
+            element_a: bridge_start,
+            element_b: bridge_start + 1,
         },
         BlueprintConnection {
-            element_a: 1,
-            element_b: start + 1,
-        },
-        BlueprintConnection {
-            element_a: 6,
-            element_b: start + 1,
-        },
-        BlueprintConnection {
-            element_a: 2,
-            element_b: start + 2,
-        },
-        BlueprintConnection {
-            element_a: 8,
-            element_b: start + 2,
+            element_a: bridge_start + 1,
+            element_b: outer_start,
         },
         BlueprintConnection {
             element_a: 3,
-            element_b: start + 3,
+            element_b: bridge_start + 2,
         },
         BlueprintConnection {
-            element_a: 10,
-            element_b: start + 3,
+            element_a: bridge_start + 2,
+            element_b: bridge_start + 3,
+        },
+        BlueprintConnection {
+            element_a: bridge_start + 3,
+            element_b: outer_start + 6,
         },
     ]);
 
-    let baseline =
-        StructuralBlueprint::with_anchor_elements(elements, connections, vec![0, 1, 2, 3]);
+    let baseline = StructuralBlueprint::with_anchor_elements(
+        elements,
+        connections,
+        vec![0, 1, 2, 3],
+    );
     baseline.validate()?;
     Ok(baseline)
 }
-
 // This is a deterministic calibration constant for the current resource catalog.
 // Callers on the simulation hot path should compute it once and reuse it.
 pub(crate) fn confirmed_seed_scale_reference(
