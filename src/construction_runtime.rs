@@ -1060,7 +1060,23 @@ fn construct_blueprint_bond_driven_internal(
                 })
                 .collect::<Vec<_>>()
         } else {
-            vec![(usize::MAX, preferred.clone(), 1.0)]
+            // Developmental construction may substitute material when the
+            // preferred material cannot make the requested physical bond.
+            // Preference still controls the search order; physical geometry
+            // and the shared bond authority decide what is actually admitted.
+            let mut candidates = Vec::new();
+            if resource(catalog, &preferred)
+                .is_some_and(|candidate| candidate.physical_state == PhysicalState::Rigid)
+            {
+                candidates.push((usize::MAX, preferred.clone(), 1.0));
+            }
+            for candidate in catalog {
+                if candidate.name == preferred || candidate.physical_state != PhysicalState::Rigid {
+                    continue;
+                }
+                candidates.push((usize::MAX, candidate.name.clone(), 0.0));
+            }
+            candidates
         };
 
         if candidate_resources.is_empty() && available_materials.is_some() {
