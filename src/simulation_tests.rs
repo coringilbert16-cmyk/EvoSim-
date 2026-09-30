@@ -171,13 +171,11 @@ mod integration_tests {
         let region = regions
             .first()
             .expect("initial organism should have an accessible interior region");
-        // The redesigned chamber must be large enough for the finite rigid
-        // base resources that previously could not fit through the old annulus.
-        let inner_boundary = (1.511_858 + 0.330_719) / 2.0 + 0.330_719 / 2.0;
-        let outer_boundary = 2.55 - 0.330_719 / 2.0;
+        // Use the topology-derived sample point rather than duplicating the
+        // seed's geometric constants in the acquisition test.
         let anchor = Placement {
-            x: (inner_boundary + outer_boundary) / 2.0,
-            y: 0.0,
+            x: region.sample_point.0,
+            y: region.sample_point.1,
             rotation_radians: 0.0,
         };
         assert!(region.contains_point(anchor.x, anchor.y));
