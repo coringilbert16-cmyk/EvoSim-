@@ -277,6 +277,27 @@ impl StructuralBlueprint {
         Ok((structure, total_heat))
     }
 
+    /// Realize this developmental blueprint from actual physical inventory.
+    /// The blueprint supplies structural preference; the inventory supplies
+    /// what can actually be built with. A material mismatch below the
+    /// construction threshold is returned as a construction-material need.
+    pub fn realize_with_materials(
+        &self,
+        catalog: &[BaseResource],
+        available_materials: &mut crate::material_storage::MaterialStorage,
+        ledger: &mut EnergyLedger,
+        energy: &mut f64,
+    ) -> Result<(OrganismStructure, f64), String> {
+        self.validate()?;
+        crate::construction_runtime::construct_blueprint_bond_driven_with_materials(
+            self,
+            catalog,
+            available_materials,
+            ledger,
+            energy,
+        )
+    }
+
     pub fn is_connected(&self) -> bool {
         if self.elements.is_empty() {
             return false;
