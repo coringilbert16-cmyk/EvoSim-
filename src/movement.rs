@@ -647,7 +647,6 @@ fn push_blockers_for_parts(
                 moving,
                 environment,
                 candidate,
-                moving_destination,
                 dx,
                 dy,
             ) {
@@ -687,7 +686,6 @@ fn environmental_penetration_allowed(
     moving: &Organism,
     environment: &Environment,
     physical: &crate::physical_material::PhysicalMaterial,
-    moving_destination: &[PlacedMaterialPart],
     dx: f64,
     dy: f64,
 ) -> bool {
@@ -1123,7 +1121,7 @@ mod tests {
             .expect("carbon geometry");
         let water_part = PlacedMaterialPart {
             part_index: 0,
-            form: water.form,
+            form: water.form.clone(),
             placement: water_unit.placement,
         };
         assert!(crate::material_geometry::placed_forms_boundary_contact(
