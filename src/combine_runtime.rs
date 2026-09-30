@@ -95,7 +95,6 @@ pub(crate) fn construction_candidate_evaluation(
     evaluate_candidate(structure, unit_a, unit_b, candidate, catalog)
 }
 
-
 pub(crate) fn form_specific_bond(
     structure: &mut crate::structure::OrganismStructure,
     unit_a: usize,
@@ -121,15 +120,7 @@ pub(crate) fn form_specific_bond(
     let (_, _, _, investment, _) =
         evaluate_candidate(structure, unit_a, unit_b, candidate, catalog)?;
     form_construction_bond(
-        structure,
-        unit_a,
-        unit_b,
-        candidate,
-        investment,
-        catalog,
-        cache,
-        ledger,
-        energy,
+        structure, unit_a, unit_b, candidate, investment, catalog, cache, ledger, energy,
     )
 }
 
@@ -164,9 +155,7 @@ pub(crate) fn form_construction_bond(
     let point_b = candidate
         .endpoint_b
         .world_point(&structure.units[unit_b], catalog)?;
-    if (point_a.x - point_b.x).hypot(point_a.y - point_b.y)
-        > COMBINE_CONTACT_TOLERANCE
-    {
+    if (point_a.x - point_b.x).hypot(point_a.y - point_b.y) > COMBINE_CONTACT_TOLERANCE {
         return None;
     }
     form_bond_from_candidate(
