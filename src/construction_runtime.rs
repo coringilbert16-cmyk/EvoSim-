@@ -827,33 +827,42 @@ fn realize_next_bond_driven(
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     catalog: &[BaseResource],
     structure: &OrganismStructure,
-    realized: &[bool],
     realized_units: &[Option<usize>],
     index: usize,
-    neighbor: usize,
+    neighbors: &[usize],
     genome_anchor: Placement,
     preferred_resource_name: &str,
     nodes: &mut usize,
+    ledger: &EnergyLedger,
+    available_energy: f64,
 ) -> Option<(
     StructuralUnit,
-    ConnectionEndpoint,
-    ConnectionEndpoint,
-    crate::combine_runtime::CombineAttempt,
+    Vec<(
+        usize,
+        ConnectionEndpoint,
+        ConnectionEndpoint,
+        crate::combine_runtime::CombineAttempt,
+    )>,
 )> {
-    let element = &blueprint.elements[index];
     let new_resource = resource(catalog, preferred_resource_name)?;
     let new_endpoints = blueprint_endpoint_options(new_resource);
-    if new_endpoints.is_empty() {
+    if new_endpoints.is_empty() || neighbors.is_empty() {
         return None;
     }
 
-    let existing_index = realized_units[neighbor]?;
-    let existing_resource =
-        resource(catalog, &blueprint.elements[neighbor].material.parts[0].0)?;
-    let existing_endpoints = blueprint_endpoint_options(existing_resource);
+    // The first realized neighbor supplies the initial joint. Once that pose is
+    // selected, every other already-realized neighbor must also be satisfiable
+    // at that same pose. This is what makes multi-bond closure forward-only:
+    // we reject an impossible candidate before any live bond exists, then commit
+    // the complete set without ever undoing a formed bond.
+    let first_neighbor = *neighbors.first()?;
+    let first_existing_index = realized_units[first_neighbor]?;
+    let first_resource =
+        resource(catalog, &blueprint.elements[first_neighbor].material.parts[0].0)?;
+    let first_endpoints = blueprint_endpoint_options(first_resource);
 
-    for endpoint_a in existing_endpoints {
-        let joint = endpoint_a.world_point(&structure.units[existing_index], catalog)?;
+    for endpoint_a in first_endpoints {
+        let joint = endpoint_a.world_point(&structure.units[first_existing_index], catalog)?;
         for endpoint_b in new_endpoints.iter().copied() {
             let local_b = endpoint_local_point(new_resource, endpoint_b, catalog)?;
             for step in 0..360 {
@@ -861,6 +870,7 @@ fn realize_next_bond_driven(
                 if *nodes > 500_000 {
                     return None;
                 }
+
                 let angle = std::f64::consts::TAU * step as f64 / 360.0;
                 let candidate_placement =
                     placement_for_joint(local_b, (joint.x, joint.y), angle);
@@ -885,9 +895,8 @@ fn realize_next_bond_driven(
                 let mut trial = structure.clone();
                 let new_unit_index = trial.add_unit(candidate_unit.clone());
 
-                let mut ignored_units = Vec::with_capacity(2);
+                let mut ignored_units = Vec::with_capacity(1);
                 ignored_units.push(new_unit_index);
-                ignored_units.push(existing_index);
                 if placed_unit_overlaps(
                     &trial,
                     &trial.units[new_unit_index],
@@ -897,36 +906,76 @@ fn realize_next_bond_driven(
                     continue;
                 }
 
-                let mut trial_ledger = EnergyLedger::default();
-                let mut trial_energy = 1.0e12;
-                let mut bond_cache =
-                    crate::contact::ConnectionCompatibilityCache::new();
+                // Trial against the actual remaining energy/ledger. A candidate
+                // that cannot pay for all of its required bonds is not selected;
+                // this prevents a partial live commit from ever requiring
+                // backtracking.
+                let mut trial_ledger = *ledger;
+                let mut trial_energy = available_energy;
+                let mut attempts = Vec::with_capacity(neighbors.len());
+                let mut all_bonds_succeeded = true;
 
-                let Some(attempt) = crate::combine_runtime::form_specific_bond(
-                    &mut trial,
-                    existing_index,
-                    new_unit_index,
-                    endpoint_a,
-                    endpoint_b,
-                    catalog,
-                    &mut bond_cache,
-                    &mut trial_ledger,
-                    &mut trial_energy,
-                ) else {
-                    continue;
-                };
+                for &neighbor in neighbors {
+                    let existing_index = realized_units[neighbor]?;
+                    let existing_resource =
+                        resource(catalog, &blueprint.elements[neighbor].material.parts[0].0)?;
+                    let endpoint_options = blueprint_endpoint_options(existing_resource);
 
-                // Preserve the exact successful endpoint pair and the exact
-                // successful physical pose. The live commit consumes these
-                // identities; it never asks COMBINE to rediscover a joint.
-                return Some((candidate_unit, endpoint_a, endpoint_b, attempt));
+                    let endpoint_pairs = if neighbor == first_neighbor {
+                        vec![(endpoint_a, endpoint_b)]
+                    } else {
+                        let mut pairs = Vec::new();
+                        for existing_endpoint in endpoint_options {
+                            for new_endpoint in new_endpoints.iter().copied() {
+                                pairs.push((existing_endpoint, new_endpoint));
+                            }
+                        }
+                        pairs
+                    };
+
+                    let mut bond_found = false;
+                    for (existing_endpoint, new_endpoint) in endpoint_pairs {
+                        let mut bond_cache =
+                            crate::contact::ConnectionCompatibilityCache::new();
+                        let Some(attempt) = crate::combine_runtime::form_specific_bond(
+                            &mut trial,
+                            existing_index,
+                            new_unit_index,
+                            existing_endpoint,
+                            new_endpoint,
+                            catalog,
+                            &mut bond_cache,
+                            &mut trial_ledger,
+                            &mut trial_energy,
+                        ) else {
+                            continue;
+                        };
+
+                        attempts.push((
+                            existing_index,
+                            existing_endpoint,
+                            new_endpoint,
+                            attempt,
+                        ));
+                        bond_found = true;
+                        break;
+                    }
+
+                    if !bond_found {
+                        all_bonds_succeeded = false;
+                        break;
+                    }
+                }
+
+                if all_bonds_succeeded && attempts.len() == neighbors.len() {
+                    return Some((candidate_unit, attempts));
+                }
             }
         }
     }
 
     None
 }
-
 /// Bond-driven construction is forward-only. Once a bond is formed it is
 /// never undone. When a requested joint cannot be realized, the constructor
 /// keeps trying available material variants and orientations until it finds a
@@ -1008,41 +1057,37 @@ pub(crate) fn construct_blueprint_bond_driven(
             return Err("bond-driven constructor reached an unrealized disconnected element".into());
         };
 
-        // The biological element/material choice is fixed by the blueprint for
-        // this realization. Physical construction itself is allowed to search
-        // every connection point and angle until the selected bond can be made.
+        // The biological element/material choice is fixed by the blueprint.
+        // Physical construction searches every endpoint and orientation, but
+        // if this element already touches multiple realized neighbors, all of
+        // those bonds must be physically realizable at one immutable pose.
         let preferred = blueprint.elements[index].material.parts[0].0.clone();
-        let mut attached = false;
+        if let Some((unit, attempts)) = realize_next_bond_driven(
+            blueprint,
+            catalog,
+            &structure,
+            &realized_units,
+            index,
+            &neighbors,
+            genome_anchor,
+            &preferred,
+            &mut nodes,
+            ledger,
+            remaining_energy,
+        ) {
+            let new_index = structure.units.len();
+            structure.units.push(unit);
 
-        // Try every already-realized neighbor as the attachment opportunity.
-        // Once one succeeds, that bond is permanent and we continue forward.
-        for neighbor in neighbors {
-            if let Some((unit, endpoint_a, endpoint_b, trial_attempt)) =
-                realize_next_bond_driven(
-                    blueprint,
-                    catalog,
-                    &structure,
-                    &realized,
-                    &realized_units,
-                    index,
-                    neighbor,
-                    genome_anchor,
-                    &preferred,
-                    &mut nodes,
-                )
-            {
-                let new_index = structure.units.len();
-                structure.units.push(unit);
-                let existing_index = realized_units[neighbor].unwrap();
-
-                // Commit the exact successful joint found by the trial.
-                // Never reconstruct endpoint identities after a successful
-                // placement: doing so can select a different point and violate
-                // the forward-only constructor contract.
+            // The entire multi-bond candidate was validated against the live
+            // energy/ledger state before this point. Commit those exact endpoint
+            // identities in order. No endpoint is rediscovered and no earlier
+            // committed bond is ever removed.
+            let mut commit_energy = remaining_energy;
+            let mut commit_heat = 0.0;
+            let mut commit_ledger = *ledger;
+            for (existing_index, endpoint_a, endpoint_b, trial_attempt) in attempts {
                 let mut cache =
                     crate::contact::ConnectionCompatibilityCache::new();
-                let mut commit_ledger = EnergyLedger::default();
-                let mut commit_energy = remaining_energy;
                 let Some(commit_attempt) = crate::combine_runtime::form_specific_bond(
                     &mut structure,
                     existing_index,
@@ -1054,30 +1099,26 @@ pub(crate) fn construct_blueprint_bond_driven(
                     &mut commit_ledger,
                     &mut commit_energy,
                 ) else {
-                    // The live structure should be identical to the trial
-                    // immediately before this commit. A mismatch is an
-                    // internal invariant failure, not a reason to search for a
-                    // different bond and silently change the successful joint.
                     structure.units.pop();
                     return Err(format!(
-                        "successful trial joint could not be committed for blueprint element {index}"
+                        "validated multi-bond candidate could not be committed for blueprint element {index}"
                     ));
                 };
 
-                // The trial and live transaction must agree on the exact joint
-                // and work. The live transaction is authoritative for the
-                // actual energy ledger; the trial ledger was only exploratory.
                 debug_assert_eq!(commit_attempt.endpoint_a, trial_attempt.endpoint_a);
                 debug_assert_eq!(commit_attempt.endpoint_b, trial_attempt.endpoint_b);
-                debug_assert!((commit_attempt.work_cost - trial_attempt.work_cost).abs() <= 1e-10);
-
-                remaining_energy = commit_energy;
-                total_heat += commit_attempt.work_cost;
-                realized[index] = true;
-                realized_units[index] = Some(new_index);
-                attached = true;
-                break;
+                debug_assert!(
+                    (commit_attempt.work_cost - trial_attempt.work_cost).abs() <= 1e-10
+                );
+                commit_heat += commit_attempt.work_cost;
             }
+
+            *ledger = commit_ledger;
+            remaining_energy = commit_energy;
+            total_heat += commit_heat;
+            realized[index] = true;
+            realized_units[index] = Some(new_index);
+            attached = true;
         }
 
         if !attached {
