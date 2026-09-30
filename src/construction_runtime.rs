@@ -861,14 +861,53 @@ fn realize_next_bond_driven(
         let joint = endpoint_a.world_point(&structure.units[existing_index], catalog)?;
         for endpoint_b in new_endpoints.iter().copied() {
             let local_b = endpoint_local_point(new_resource, endpoint_b, catalog)?;
+
+            // First use geometry-derived orientations. These are still
+            // rotations of B around the selected joint; they simply avoid
+            // wasting the search on angles that cannot place the selected
+            // endpoint on that joint.
+            let mut placements = candidate_placements(
+                structure,
+                new_resource,
+                structure.units[existing_index].placement,
+                &[existing_index],
+                catalog,
+            )
+            .into_iter()
+            .filter(|placement| {
+                endpoint_b
+                    .world_point(
+                        &StructuralUnit::new(new_resource.name.clone(), *placement),
+                        catalog,
+                    )
+                    .is_some_and(|point| {
+                        (point.x - joint.x).hypot(point.y - joint.y) <= 1e-9
+                    })
+            })
+            .collect::<Vec<_>>();
+
+            // Keep a uniform angular fallback. This preserves the biological
+            // degree of freedom even when no geometry-derived orientation is
+            // available for an endpoint type.
             for step in 0..360 {
+                let angle = std::f64::consts::TAU * step as f64 / 360.0;
+                placements.push(placement_for_joint(
+                    local_b,
+                    (joint.x, joint.y),
+                    angle,
+                ));
+            }
+            placements.dedup_by(|a, b| {
+                (a.x - b.x).abs() <= 1e-10
+                    && (a.y - b.y).abs() <= 1e-10
+                    && (a.rotation_radians - b.rotation_radians).abs() <= 1e-10
+            });
+
+            for candidate_placement in placements {
                 *nodes += 1;
                 if *nodes > 500_000 {
                     return None;
                 }
-
-                let angle = std::f64::consts::TAU * step as f64 / 360.0;
-                let candidate_placement = placement_for_joint(local_b, (joint.x, joint.y), angle);
 
                 let mut candidate_unit =
                     StructuralUnit::new(new_resource.name.clone(), candidate_placement);
