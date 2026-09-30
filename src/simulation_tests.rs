@@ -119,18 +119,28 @@ mod integration_tests {
         let catalog = s.environment.catalog.clone();
         let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog)
             .expect("confirmed seed baseline should be valid");
-        let structure = blueprint
-            .realize(&catalog)
-            .expect("baseline should realize without initial Water");
+        let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog)
+            .expect("initial realization should produce the seed boundary");
         let regions =
             crate::interior_geometry::find_accessible_interior_regions(&structure, &catalog)
-                .expect("baseline should expose accessible topology");
+                .expect("initial seed should expose accessible topology");
         assert!(!regions.is_empty());
+        // Boundary Water is ordinary realized structure; no Water is synthesized
+        // into the accessible interior.
         assert!(structure.units.iter().all(|unit| {
-            unit.material
-                .parts
-                .first()
-                .is_none_or(|(name, _)| name != "Water")
+            let Some((name, _)) = unit.material.parts.first() else {
+                return true;
+            };
+            if name != "Water" {
+                return true;
+            }
+            matches!(
+                unit.shape(&catalog).map(|shape| &shape.form),
+                Some(crate::resources::Form::Fluid {
+                    boundary: Some(_),
+                    ..
+                })
+            )
         }));
     }
 
