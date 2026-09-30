@@ -267,13 +267,7 @@ impl StructuralBlueprint {
             total_heat += heat;
         }
 
-        let mut structure = structure;
-        crate::interior_geometry::fill_enclosed_regions_with_water(
-            &mut structure,
-            catalog,
-            ledger,
-            energy,
-        )?;
+        let structure = structure;
 
         Ok((structure, total_heat))
     }
