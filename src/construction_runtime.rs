@@ -1357,7 +1357,7 @@ fn construct_blueprint_bond_driven_internal(
             });
             let center_distance = physical_a
                 .zip(physical_b)
-                .map(|(a, b)| structure.units[a].placement.distance_to(&structure.units[b].placement))
+                .map(|(a, b)| (structure.units[a].placement.x - structure.units[b].placement.x).hypot(structure.units[a].placement.y - structure.units[b].placement.y))
                 .unwrap_or(f64::NAN);
             return Err(format!(
                 "bond-driven construction could not close prescribed connection {connection_index} (elements {element_a}-{element_b}): candidates={total_candidates}, contacts={contact_candidates}, evaluated={evaluated_candidates}, bond_admission_rejections={rejected_by_bond_admission}, closed_flag={}, bond_present={}, center_distance={center_distance:.6}",
