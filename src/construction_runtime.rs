@@ -23,7 +23,7 @@ pub(crate) fn placement_penetrates_genome_measurement(
     scaffold: &crate::structural_blueprint::GenomeMeasurementScaffold,
     catalog: &[BaseResource],
 ) -> bool {
-    let Some(candidate) = crate::material_geometry::MaterialGeometry::new(
+    let Some(candidate) = crate::material_geometry::crate::material_geometry::MaterialGeometry::new(
         &Material::free_base(candidate_resource.name.clone(), 1.0),
         &[placement],
         catalog,
@@ -667,6 +667,32 @@ fn form_vertices_world(form: &Form, placement: Placement) -> Vec<(f64, f64)> {
             (placement.x + x * c - y * s, placement.y + x * s + y * c)
         })
         .collect()
+}
+
+fn point_inside_form(form: &Form, placement: Placement, x: f64, y: f64) -> bool {
+    match form {
+        Form::Circle { radius } => (x - placement.x).hypot(y - placement.y) <= *radius,
+        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
+            let Some(vertices) = form.polygon_vertices() else {
+                return false;
+            };
+            let (s, c) = placement.rotation_radians.sin_cos();
+            let local_x = (x - placement.x) * c + (y - placement.y) * s;
+            let local_y = -(x - placement.x) * s + (y - placement.y) * c;
+            let mut inside = false;
+            for i in 0..vertices.len() {
+                let a = vertices[i];
+                let b = vertices[(i + 1) % vertices.len()];
+                if (a.1 > local_y) != (b.1 > local_y)
+                    && local_x < (b.0 - a.0) * (local_y - a.1) / (b.1 - a.1) + a.0
+                {
+                    inside = !inside;
+                }
+            }
+            inside
+        }
+        Form::Line { .. } | Form::Fluid { .. } => false,
+    }
 }
 
 fn candidate_penetrates_measurement(
