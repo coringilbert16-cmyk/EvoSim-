@@ -699,28 +699,20 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     continue;
                 };
 
-                let Some(attempt) = crate::combine_runtime::form_construction_bond(
-                    &mut trial,
-                    existing_index,
-                    new_unit_index,
-                    candidate,
-                    investment,
-                    catalog,
-                    &mut bond_cache,
-                    &mut trial_ledger,
-                    &mut trial_energy,
-                ) else {
-                    continue;
-                };
-
-                return Some((
-                    trial,
-                    indices,
-                    part_index,
-                    attempt,
-                    trial_ledger,
-                    trial_energy,
-                ));
+                let score = (candidate_origin.x - target_world.0).powi(2)
+                    + (candidate_origin.y - target_world.1).powi(2);
+                if best.as_ref().is_none_or(|current| score < current.7) {
+                    best = Some((
+                        trial,
+                        indices,
+                        part_index,
+                        candidate,
+                        investment,
+                        trial_ledger,
+                        trial_energy,
+                        score,
+                    ));
+                }
             }
         }
     }
@@ -796,6 +788,26 @@ fn realize_next_bond_driven(
         return None;
     }
 
+    let target = blueprint.elements[_index].placement;
+    let (s_anchor, c_anchor) = genome_anchor.rotation_radians.sin_cos();
+    let target_world = (
+        genome_anchor.x + (target.x - anchor_declared.x) * c_anchor
+            - (target.y - anchor_declared.y) * s_anchor,
+        genome_anchor.y
+            + (target.x - anchor_declared.x) * s_anchor
+            + (target.y - anchor_declared.y) * c_anchor,
+    );
+    let mut best: Option<(
+        OrganismStructure,
+        Vec<usize>,
+        usize,
+        crate::contact::ConnectionPairCandidate,
+        f64,
+        EnergyLedger,
+        f64,
+        f64,
+    )> = None;
+
     for endpoint_a in existing_endpoints {
         let joint = endpoint_a.world_point(&structure.units[existing_index], catalog)?;
         for (part_index, endpoint_b) in new_endpoints.iter().copied() {
@@ -810,15 +822,6 @@ fn realize_next_bond_driven(
             // command. Start at the rotation that puts this physical material's
             // selected endpoint on the joint while aiming its local endpoint
             // toward the declared target, then sweep the full circle.
-            let target = blueprint.elements[_index].placement;
-            let (s, c) = genome_anchor.rotation_radians.sin_cos();
-            let target_world = (
-                genome_anchor.x + (target.x - anchor_declared.x) * c
-                    - (target.y - anchor_declared.y) * s,
-                genome_anchor.y
-                    + (target.x - anchor_declared.x) * s
-                    + (target.y - anchor_declared.y) * c,
-            );
             let ideal_angle = (joint.y - target_world.1).atan2(joint.x - target_world.0)
                 - local_b.y.atan2(local_b.x);
             // Search outward from the blueprint-preferred orientation rather than
@@ -978,7 +981,39 @@ fn realize_next_bond_driven(
         }
     }
 
-    None
+    let Some((
+        mut trial,
+        indices,
+        part_index,
+        candidate,
+        investment,
+        mut trial_ledger,
+        mut trial_energy,
+        _score,
+    )) = best else {
+        return None;
+    };
+    let new_unit_index = *indices.get(part_index)?;
+    let attempt = crate::combine_runtime::form_construction_bond(
+        &mut trial,
+        existing_index,
+        new_unit_index,
+        candidate,
+        investment,
+        catalog,
+        &mut crate::contact::ConnectionCompatibilityCache::new(),
+        &mut trial_ledger,
+        &mut trial_energy,
+    )?;
+
+    Some((
+        trial,
+        indices,
+        part_index,
+        attempt,
+        trial_ledger,
+        trial_energy,
+    ))
 }
 
 /// Bond-driven construction is forward-only. Once a bond is formed it is
