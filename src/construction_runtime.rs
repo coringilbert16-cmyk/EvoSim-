@@ -1222,11 +1222,7 @@ fn construct_blueprint_bond_driven_internal(
 
             let mut cache = crate::contact::ConnectionCompatibilityCache::new();
             let Some(candidate) = crate::contact::connection_pair_candidates_cached(
-                &structure,
-                unit_a,
-                unit_b,
-                catalog,
-                &mut cache,
+                &structure, unit_a, unit_b, catalog, &mut cache,
             )
             .into_iter()
             .find(|candidate| {
@@ -1238,11 +1234,7 @@ fn construct_blueprint_bond_driven_internal(
             };
             let Some((_, _, _, investment, _)) =
                 crate::combine_runtime::construction_candidate_evaluation(
-                    &structure,
-                    unit_a,
-                    unit_b,
-                    candidate,
-                    catalog,
+                    &structure, unit_a, unit_b, candidate, catalog,
                 )
             else {
                 continue;
