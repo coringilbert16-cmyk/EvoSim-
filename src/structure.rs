@@ -572,7 +572,8 @@ impl PhysicalConstituentGraph {
                 continue;
             }
             for member in component {
-                if self.is_structurally_qualified(member, catalog) && !structural.contains(&member) {
+                if self.is_structurally_qualified(member, catalog) && !structural.contains(&member)
+                {
                     structural.push(member);
                 }
             }
@@ -632,7 +633,9 @@ impl PhysicalConstituentGraph {
     }
 
     pub fn is_structurally_qualified(&self, unit_index: usize, catalog: &[BaseResource]) -> bool {
-        if unit_index >= self.units.len() || self.connected_component_containing(unit_index).len() < 2 {
+        if unit_index >= self.units.len()
+            || self.connected_component_containing(unit_index).len() < 2
+        {
             return false;
         }
         let Some((name, _)) = self
