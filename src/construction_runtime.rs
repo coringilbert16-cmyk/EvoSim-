@@ -1196,6 +1196,45 @@ mod tests {
     use super::*;
 
     #[test]
+    fn genome_measurement_scaffold_uses_blueprint_frame_not_anchor_as_its_center() {
+        let catalog = crate::resources::default_catalog();
+        let scaffold =
+            crate::structural_blueprint::GenomeMeasurementScaffold::three_carbon_reference(
+                &catalog,
+            )
+            .unwrap();
+        let mut structure = OrganismStructure::new();
+        let ids = install_genome_measurement_scaffold(
+            &mut structure,
+            &scaffold,
+            Placement {
+                x: 10.0,
+                y: 20.0,
+                rotation_radians: 0.0,
+            },
+            BlueprintPlacement {
+                x: 2.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        )
+        .unwrap();
+
+        let scaffold_unit = structure
+            .units
+            .iter()
+            .find(|unit| unit.physical_id == ids[0])
+            .expect("scaffold unit must be installed");
+        let expected = (
+            10.0 + scaffold.placements[0].x - 2.0,
+            20.0 + scaffold.placements[0].y,
+        );
+        assert!((scaffold_unit.placement.x - expected.0).abs() <= 1e-10);
+        assert!((scaffold_unit.placement.y - expected.1).abs() <= 1e-10);
+    }
+
+    #[test]
     fn temporary_genome_scaffold_is_real_physical_geometry_and_is_removed() {
         let catalog = crate::resources::default_catalog();
         let scaffold =
