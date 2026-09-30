@@ -570,7 +570,7 @@ pub(crate) fn begin_reproduction(
     // actually be instantiated by the physical construction runtime.
     // Structured logical material remains intact; an already-realized
     // structured object may be used directly.
-    for entry in parent.stored_material.entries.clone() {
+    for (storage_index, entry) in parent.stored_material.entries.clone().into_iter().enumerate() {
         let crate::material_storage::StoredMaterial::Physical(instance) = &entry;
         let anchor = instance.material.clone();
         let Some(placement) = parent_child_position(parent, &anchor, catalog) else {
@@ -586,10 +586,7 @@ pub(crate) fn begin_reproduction(
         };
 
         let mut parent_trial = parent.stored_material.clone();
-        let removed = parent_trial
-            .take_matching_physical(&instance.material)
-            .is_some();
-        if !removed {
+        if parent_trial.take_physical_at(storage_index).is_none() {
             continue;
         }
 
