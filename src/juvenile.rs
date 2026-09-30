@@ -163,7 +163,6 @@ pub(crate) fn confirmed_seed_baseline(
         },
     ];
 
-
     for placement in upper_bridge {
         elements.push(BlueprintElement {
             material: Material::free_base("Hydrogen", 1.0),
