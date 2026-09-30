@@ -542,7 +542,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
                 mass: 1.00,
                 potential_energy: 0.0,
                 reactivity: 0.0,
-                cohesion: 0.50,
+                cohesion: 0.00,
             },
             physical_state: PhysicalState::Fluid,
             shape: Shape {
