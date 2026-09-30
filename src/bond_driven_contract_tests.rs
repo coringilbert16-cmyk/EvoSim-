@@ -299,17 +299,11 @@ mod tests {
         let mut ledger = EnergyLedger::default();
         let mut energy = 1.0e12;
         let (structure, _) = blueprint
-            .realize_with_materials(
-                &catalog,
-                &mut storage,
-                &mut ledger,
-                &mut energy,
-            )
+            .realize_with_materials(&catalog, &mut storage, &mut ledger, &mut energy)
             .expect("construction should use the stored composite material");
 
         assert_eq!(structure.units.len(), 3);
         assert_eq!(structure.bonds.len(), 2);
         assert!(storage.is_empty());
     }
-
 }
