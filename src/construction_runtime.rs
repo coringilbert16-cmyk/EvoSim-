@@ -932,6 +932,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
     ledger: &EnergyLedger,
     available_energy: f64,
 ) -> Option<(
+    OrganismStructure,
     crate::physical_material::PhysicalMaterial,
     Vec<usize>,
     usize,
@@ -1029,6 +1030,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                 };
 
                 return Some((
+                    trial,
                     new_material.clone(),
                     indices,
                     part_index,
