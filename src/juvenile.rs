@@ -81,7 +81,7 @@ pub(crate) fn confirmed_seed_baseline(
         })
         .collect::<Vec<_>>();
 
-    let baseline =
+    let mut baseline =
         StructuralBlueprint::with_anchor_elements(elements, connections, (0..8).collect())
             .with_genome_measurement(
                 crate::structural_blueprint::GenomeMeasurementScaffold::three_carbon_reference(
