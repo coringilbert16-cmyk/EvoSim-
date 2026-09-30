@@ -71,10 +71,30 @@ pub(crate) fn confirmed_seed_baseline(
     // The ring is intentionally connected all the way around. The enclosed
     // center is the genome cavity; it is the only cavity the seed explicitly
     // creates. There is no separate storage chamber or hollow outer shell.
+    // COMBINE's existing interaction is directional: the higher-potential
+    // constituent must be the receiving side of a positive interaction. Orient
+    // each physical edge accordingly without changing the undirected mesh.
+    let potential_energy = |index: usize| {
+        catalog
+            .iter()
+            .find(|resource| resource.name == materials[index])
+            .map(|resource| resource.properties.potential_energy)
+            .unwrap_or(0.0)
+    };
     let connections = (0..elements.len())
-        .map(|index| BlueprintConnection {
-            element_a: index,
-            element_b: (index + 1) % elements.len(),
+        .map(|index| {
+            let next = (index + 1) % elements.len();
+            if potential_energy(index) <= potential_energy(next) {
+                BlueprintConnection {
+                    element_a: index,
+                    element_b: next,
+                }
+            } else {
+                BlueprintConnection {
+                    element_a: next,
+                    element_b: index,
+                }
+            }
         })
         .collect::<Vec<_>>();
 
