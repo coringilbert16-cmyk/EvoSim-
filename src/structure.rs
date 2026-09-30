@@ -561,20 +561,24 @@ impl PhysicalConstituentGraph {
         self.genome_constituent_ids.clear();
     }
 
-    /// The structural body is the connected component containing the persisted
-    /// physical genome constituents. Disconnected material is not structural
-    /// merely because it remains inside the organism boundary.
+    /// The structural body is every bonded physical component that contains
+    /// non-fluid material. Genome-boundary IDs are never required for structural
+    /// membership, so the body can reorganize as the realized genome cavity changes.
     pub fn structural_unit_indices(&self, catalog: &[BaseResource]) -> Vec<usize> {
-        let Some(&genome_id) = self.genome_constituent_ids.first() else {
-            return Vec::new();
-        };
-        let Some(start) = self.unit_index(genome_id) else {
-            return Vec::new();
-        };
-        self.connected_component_containing(start)
-            .into_iter()
-            .filter(|&index| self.is_structurally_qualified(index, catalog))
-            .collect()
+        let mut structural = Vec::new();
+        for index in 0..self.units.len() {
+            let component = self.connected_component_containing(index);
+            if component.len() < 2 || !self.component_contains_nonfluid(index, catalog) {
+                continue;
+            }
+            for member in component {
+                if self.is_structurally_qualified(member, catalog) && !structural.contains(&member) {
+                    structural.push(member);
+                }
+            }
+        }
+        structural.sort_unstable();
+        structural
     }
 
     pub fn genome_connected(&self, unit_index: usize) -> bool {
@@ -628,7 +632,7 @@ impl PhysicalConstituentGraph {
     }
 
     pub fn is_structurally_qualified(&self, unit_index: usize, catalog: &[BaseResource]) -> bool {
-        if !self.genome_connected(unit_index) {
+        if unit_index >= self.units.len() || self.connected_component_containing(unit_index).len() < 2 {
             return false;
         }
         let Some((name, _)) = self
