@@ -920,19 +920,6 @@ fn realize_next_bond_driven(
                 // successful physical pose. The live commit consumes these
                 // identities; it never asks COMBINE to rediscover a joint.
                 return Some((candidate_unit, endpoint_a, endpoint_b, attempt));
-                // Once this bond is formed it is permanent. Return the
-                // successfully attached unit; the caller never rewinds it.
-                let heat = trial_ledger.total_heat_dissipated;
-                // Preserve the exact successful endpoint pair. The live
-                // commit must consume these identities rather than rediscovering
-                // a different connection point after the trial succeeds.
-                return Some((
-                    candidate_unit,
-                    endpoint_a,
-                    endpoint_b,
-                    trial_ledger,
-                    trial_energy - heat,
-                ));
             }
         }
     }
