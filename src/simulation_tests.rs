@@ -197,21 +197,11 @@ mod integration_tests {
                     &s.environment.catalog,
                 )
                 .expect("base resource should have a valid physical realization");
-                let body = crate::organism_geometry::OrganismBodyGeometry::from_structure(
-                    &organism.structure,
+                if crate::environment::ActiveMaterialField::physical_is_fully_inside_any_region(
+                    &physical,
+                    std::slice::from_ref(region),
                     &s.environment.catalog,
-                )
-                .expect("initial organism should have a realized body");
-                s.environment.field.deposit(candidate.x, candidate.y, physical);
-                let contained = s
-                    .environment
-                    .field
-                    .take_contained_physical_materials_in_regions(
-                        &body,
-                        std::slice::from_ref(region),
-                        &s.environment.catalog,
-                    );
-                if contained.len() == 1 {
+                ) {
                     anchor = Some(candidate);
                     break 'candidate;
                 }
