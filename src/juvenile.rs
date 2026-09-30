@@ -163,20 +163,8 @@ pub(crate) fn confirmed_seed_baseline(
         },
     ];
 
-    let lower_bridge = [
-        BlueprintPlacement {
-            x: -bridge_lateral_offset / 2.0,
-            y: -(inner_boundary + bridge_midpoint) / 2.0,
-            rotation_radians: -upper_first_rotation,
-        },
-        BlueprintPlacement {
-            x: -bridge_lateral_offset / 2.0,
-            y: -(bridge_midpoint + outer_apothem) / 2.0,
-            rotation_radians: -upper_second_rotation,
-        },
-    ];
 
-    for placement in upper_bridge.into_iter().chain(lower_bridge) {
+    for placement in upper_bridge {
         elements.push(BlueprintElement {
             material: Material::free_base("Hydrogen", 1.0),
             placement,
@@ -195,18 +183,6 @@ pub(crate) fn confirmed_seed_baseline(
         BlueprintConnection {
             element_a: bridge_start + 1,
             element_b: outer_start,
-        },
-        BlueprintConnection {
-            element_a: 3,
-            element_b: bridge_start + 3,
-        },
-        BlueprintConnection {
-            element_a: bridge_start + 3,
-            element_b: bridge_start + 2,
-        },
-        BlueprintConnection {
-            element_a: bridge_start + 2,
-            element_b: outer_start + 5,
         },
     ]);
 
