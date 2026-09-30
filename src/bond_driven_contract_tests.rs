@@ -376,10 +376,18 @@ mod tests {
             .is_err());
 
         assert_eq!(storage.materials_snapshot(), before_storage);
-        assert_eq!(ledger.total_potential_energy_released, before_ledger.total_potential_energy_released);
-        assert_eq!(ledger.total_usable_energy_gained, before_ledger.total_usable_energy_gained);
-        assert_eq!(ledger.total_heat_dissipated, before_ledger.total_heat_dissipated);
+        assert_eq!(
+            ledger.total_potential_energy_released,
+            before_ledger.total_potential_energy_released
+        );
+        assert_eq!(
+            ledger.total_usable_energy_gained,
+            before_ledger.total_usable_energy_gained
+        );
+        assert_eq!(
+            ledger.total_heat_dissipated,
+            before_ledger.total_heat_dissipated
+        );
         assert_eq!(energy, before_energy);
     }
-
 }
