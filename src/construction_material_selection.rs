@@ -126,13 +126,18 @@ pub(crate) fn rank_available_construction_materials(
         .enumerate()
         .filter_map(|(index, entry)| {
             let StoredMaterial::Physical(instance) = entry;
-            if !instance.is_realized() || instance.material.parts.len() != 1 {
+            if !instance.is_realized() || instance.material.parts.is_empty() {
                 return None;
             }
-            let (resource_name, amount) = instance.material.parts.first()?;
-            if (amount - 1.0).abs() > 1e-12 {
+            if instance
+                .material
+                .parts
+                .iter()
+                .any(|(_, amount)| (amount - 1.0).abs() > 1e-12)
+            {
                 return None;
             }
+            let (resource_name, _) = instance.material.parts.first()?;
             let candidate = catalog
                 .iter()
                 .find(|resource| resource.name == *resource_name)?;
