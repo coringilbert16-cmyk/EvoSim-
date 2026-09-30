@@ -283,8 +283,7 @@ impl Simulation {
         let usable_energy = organism.usable_energy;
         let realized_mass = organism.structural_mass(&environment.catalog);
         let movement_efficiency = organism.genome.movement_efficiency();
-        let cost =
-            movement_energy_cost_for_distance(realized_mass, movement_efficiency, 1.0);
+        let cost = movement_energy_cost_for_distance(realized_mass, movement_efficiency, 1.0);
         if !cost.is_finite() || usable_energy + f64::EPSILON < cost {
             organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
                 tick,
@@ -724,7 +723,10 @@ fn environmental_penetration_allowed(
                 continue;
             }
 
-            let cohesion = unit.material.weighted_properties(&environment.catalog).cohesion;
+            let cohesion = unit
+                .material
+                .weighted_properties(&environment.catalog)
+                .cohesion;
             permeability = permeability.min(crate::resources::permeability_from_cohesion(
                 cohesion,
                 &environment.catalog,
