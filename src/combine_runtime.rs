@@ -105,13 +105,8 @@ pub(crate) fn form_specific_bond(
             && candidate.available_a
             && candidate.available_b
     })?;
-    let (_, _, _, investment, _) = evaluate_candidate(
-        structure,
-        unit_a,
-        unit_b,
-        candidate,
-        catalog,
-    )?;
+    let (_, _, _, investment, _) =
+        evaluate_candidate(structure, unit_a, unit_b, candidate, catalog)?;
     form_bond(
         structure,
         BondFormationRequest {
