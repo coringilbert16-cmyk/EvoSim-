@@ -942,10 +942,17 @@ fn construct_search(
 
         let mut trial = structure.clone();
         let new_unit_index = trial.add_unit(candidate_unit);
+        let mut ignored_units = Vec::with_capacity(neighbors.len() + 1);
+        ignored_units.push(new_unit_index);
+        ignored_units.extend(
+            neighbors
+                .iter()
+                .filter_map(|neighbor| realized_units[*neighbor]),
+        );
         if placed_unit_overlaps(
             &trial,
             &trial.units[new_unit_index],
-            &[new_unit_index],
+            &ignored_units,
             catalog,
         ) {
             continue;
