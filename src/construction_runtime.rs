@@ -1040,9 +1040,12 @@ fn construct_blueprint_bond_driven_internal(
         .unwrap_or_default();
 
     while !realized.iter().all(|value| *value) {
-        // Select the next element by the number of already-realized neighbors.
-        // We never erase a realized element or bond.
-        let mut next: Option<(usize, Vec<usize>, usize)> = None;
+        // Select the next element only from its currently realized neighbors.
+        // Total blueprint degree is deliberately not a tie-breaker: that would
+        // use knowledge of future connections to choose which bond gets formed
+        // first. If several elements are equally ready, blueprint index provides
+        // a deterministic order.
+        let mut next: Option<(usize, Vec<usize>)> = None;
         for index in 0..blueprint.elements.len() {
             if realized[index] {
                 continue;
@@ -1051,25 +1054,18 @@ fn construct_blueprint_bond_driven_internal(
             if neighbors.is_empty() {
                 continue;
             }
-            let score = (
-                neighbors.len(),
-                blueprint
-                    .connections
-                    .iter()
-                    .filter(|c| c.element_a == index || c.element_b == index)
-                    .count(),
-            );
             if next
                 .as_ref()
-                .is_none_or(|(_, current_neighbors, current_degree)| {
-                    (neighbors.len(), score.1) > (current_neighbors.len(), *current_degree)
+                .is_none_or(|(current_index, current_neighbors)| {
+                    neighbors.len() > current_neighbors.len()
+                        || (neighbors.len() == current_neighbors.len() && index < *current_index)
                 })
             {
-                next = Some((index, neighbors, score.1));
+                next = Some((index, neighbors));
             }
         }
 
-        let Some((index, neighbors, _)) = next else {
+        let Some((index, neighbors)) = next else {
             return Err(
                 "bond-driven constructor reached an unrealized disconnected element".into(),
             );
