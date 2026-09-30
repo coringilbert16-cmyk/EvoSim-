@@ -95,11 +95,7 @@ pub(crate) fn form_specific_bond(
     energy: &mut f64,
 ) -> Option<CombineAttempt> {
     let candidate = crate::contact::connection_pair_candidates_cached(
-        structure,
-        unit_a,
-        unit_b,
-        catalog,
-        cache,
+        structure, unit_a, unit_b, catalog, cache,
     )
     .into_iter()
     .find(|candidate| {
