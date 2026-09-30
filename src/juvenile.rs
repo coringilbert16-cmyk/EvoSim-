@@ -96,7 +96,7 @@ pub(crate) fn confirmed_seed_baseline(
     // rectangles. A decagon gives each side enough physical length to form a
     // genuinely larger enclosed chamber while preserving ordinary pairwise
     // bonds between neighboring structural units.
-    let outer_side_count = 10usize;
+    let outer_side_count = 12usize;
     let outer_side_length = inner_side;
     let outer_apothem =
         outer_side_length / (2.0 * (std::f64::consts::PI / outer_side_count as f64).tan());
