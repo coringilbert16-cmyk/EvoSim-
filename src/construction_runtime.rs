@@ -942,17 +942,49 @@ fn realize_next_bond_driven(
                 let mut trial_energy = available_energy;
                 let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
 
-                let attempt = crate::combine_runtime::form_specific_bond(
+                let Some(candidate) = crate::contact::connection_pair_candidates_cached(
+                    &trial,
+                    existing_index,
+                    new_unit_index,
+                    catalog,
+                    &mut bond_cache,
+                )
+                .into_iter()
+                .find(|candidate| {
+                    candidate.endpoint_a == endpoint_a
+                        && candidate.endpoint_b == endpoint_b
+                        && candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                        && candidate.available_a
+                        && candidate.available_b
+                }) else {
+                    continue;
+                };
+
+                let Some((_, _, _, _, required_investment)) =
+                    crate::combine_runtime::construction_candidate_evaluation(
+                        &trial,
+                        existing_index,
+                        new_unit_index,
+                        candidate,
+                        catalog,
+                    )
+                else {
+                    continue;
+                };
+
+                let Some(attempt) = crate::combine_runtime::form_construction_bond(
                     &mut trial,
                     existing_index,
                     new_unit_index,
-                    endpoint_a,
-                    endpoint_b,
+                    candidate,
+                    required_investment,
                     catalog,
                     &mut bond_cache,
                     &mut trial_ledger,
                     &mut trial_energy,
-                )?;
+                ) else {
+                    continue;
+                };
 
                 // The exact successful endpoint pair and pose are returned.
                 // Nothing about the next bond is prevalidated here.
