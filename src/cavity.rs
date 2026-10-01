@@ -128,7 +128,7 @@ impl GenomeCavity {
     /// Return the physical bond indices that form the qualifying genome-cavity
     /// boundary. This is derived from the realized physical genome criterion;
     /// it is not a second stored genome representation.
-    pub fn boundary_bond_indices(&self, structure: &OrganismStructure) -> Vec<usize> {
+    pub fn boundary_bond_indices(&self, structure: &OrganismStructure, catalog: &[BaseResource]) -> Vec<usize> {
         self.boundary_segments
             .iter()
             .filter_map(|&(segment_a, segment_b, unit_a, unit_b)| {
@@ -148,7 +148,7 @@ impl GenomeCavity {
                                    unit_index: usize|
                      -> Option<Point> {
                         let unit = structure.units.get(unit_index)?;
-                        let world = endpoint.world_point(unit, &[])?;
+                        let world = endpoint.world_point(unit, catalog)?;
                         Some(Point {
                             x: world.x,
                             y: world.y,
