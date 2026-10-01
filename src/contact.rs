@@ -120,12 +120,13 @@ fn rigid_surface_candidates(
     let Some(shape_b) = b.shape(catalog) else {
         return Vec::new();
     };
-    if matches!(shape_a.form, Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. })
-        || matches!(
-            shape_b.form,
-            Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. }
-        )
-    {
+    if matches!(
+        shape_a.form,
+        Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. }
+    ) || matches!(
+        shape_b.form,
+        Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. }
+    ) {
         return Vec::new();
     }
 
