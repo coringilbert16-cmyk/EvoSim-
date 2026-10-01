@@ -126,11 +126,8 @@ pub(crate) fn form_specific_bond(
 
 /// Forms exactly the supplied physical contact.
 ///
-/// This is the shared transaction boundary for generic COMBINE and bond-driven construction.
-///
-/// The caller has already selected the physical endpoint pair and pose.
-/// The caller has already selected the physical endpoint pair and pose. This is the
-/// transaction boundary for the bond-driven construction system.
+/// This is the shared transaction boundary for generic COMBINE and bond-driven
+/// construction. The caller has already selected the physical endpoint pair and pose.
 pub(crate) fn form_selected_bond(
     structure: &mut crate::structure::OrganismStructure,
     unit_a: usize,
