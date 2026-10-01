@@ -31,11 +31,14 @@ pub(crate) fn confirmed_seed_baseline(
     // structure. The declared poses are spatial preferences; the constructor's
     // realized physical graph remains authoritative.
     //
-    // The ten-carbon inner loop supplies a simple enclosed region. From one
-    // point on that loop, twenty additional carbon elements wind outward as a
-    // loose spiral. Sulfur and methane provide a small amount of heterogeneous
-    // peripheral material without defining an organism role or topology.
-    let ring_sides = 10usize;
+    // A regular decagon cannot be made from rigid regular hexagons with every
+    // neighboring pair sharing an edge: the two neighbor directions at each
+    // decagon vertex differ by 144 degrees, while a hexagon's usable edge
+    // directions differ by multiples of 60 degrees. The seed therefore uses
+    // the physically realizable radius-three hexagonal lattice ring instead.
+    // It leaves a seven-hexagon-sized central region, comfortably above the
+    // three-Carbon cavity measurement reference.
+    let ring_radius = 3i32;
     let spiral_steps = 20usize;
     let carbon_radius = catalog
         .iter()
@@ -46,19 +49,40 @@ pub(crate) fn confirmed_seed_baseline(
         })
         .ok_or_else(|| "Carbon seed geometry is not a regular polygon".to_string())?;
     let carbon_edge_center_spacing = (3.0_f64).sqrt() * carbon_radius;
-    let ring_radius =
-        carbon_edge_center_spacing / (2.0 * (std::f64::consts::PI / ring_sides as f64).sin());
+    let ring_basis = [
+        (carbon_edge_center_spacing * 0.5, carbon_edge_center_spacing * 0.8660254037844386),
+        (0.0, carbon_edge_center_spacing),
+    ];
+
+    let mut ring_coordinates = Vec::<(i32, i32)>::new();
+    for q in -ring_radius..=ring_radius {
+        for r in -ring_radius..=ring_radius {
+            if (q.abs()).max(r.abs()).max((q + r).abs()) == ring_radius {
+                ring_coordinates.push((q, r));
+            }
+        }
+    }
+    ring_coordinates.sort_by(|a, b| {
+        let ax = a.0 as f64 * ring_basis[0].0 + a.1 as f64 * ring_basis[1].0;
+        let ay = a.0 as f64 * ring_basis[0].1 + a.1 as f64 * ring_basis[1].1;
+        let bx = b.0 as f64 * ring_basis[0].0 + b.1 as f64 * ring_basis[1].0;
+        let by = b.0 as f64 * ring_basis[0].1 + b.1 as f64 * ring_basis[1].1;
+        ay.atan2(ax)
+            .partial_cmp(&by.atan2(bx))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let ring_sides = ring_coordinates.len();
+    let ring_extent = ring_radius as f64 * carbon_edge_center_spacing;
 
     let mut elements = Vec::with_capacity(ring_sides + spiral_steps + 6);
 
-    for i in 0..ring_sides {
-        let angle = std::f64::consts::TAU * i as f64 / ring_sides as f64;
+    for (q, r) in ring_coordinates.iter().copied() {
         elements.push(BlueprintElement {
             material: Material::free_base("Carbon", 1.0),
             placement: BlueprintPlacement {
-                x: ring_radius * angle.cos(),
-                y: ring_radius * angle.sin(),
-                rotation_radians: angle,
+                x: q as f64 * ring_basis[0].0 + r as f64 * ring_basis[1].0,
+                y: q as f64 * ring_basis[0].1 + r as f64 * ring_basis[1].1,
+                rotation_radians: 0.0,
             },
         });
     }
@@ -81,9 +105,9 @@ pub(crate) fn confirmed_seed_baseline(
         });
     }
 
-    for &i in &[0usize, 3, 6, 9] {
-        let angle = std::f64::consts::TAU * i as f64 / 10.0;
-        let radius = ring_radius + 3.0;
+    for &i in &[0usize, 4, 8, 12] {
+        let angle = std::f64::consts::TAU * i as f64 / ring_sides as f64;
+        let radius = ring_extent + 3.0;
         elements.push(BlueprintElement {
             material: Material::free_base("Sulfur", 1.0),
             placement: BlueprintPlacement {
@@ -94,9 +118,9 @@ pub(crate) fn confirmed_seed_baseline(
         });
     }
 
-    for &i in &[2usize, 7] {
-        let angle = std::f64::consts::TAU * i as f64 / 10.0;
-        let radius = ring_radius + 3.0;
+    for &i in &[2usize, 10] {
+        let angle = std::f64::consts::TAU * i as f64 / ring_sides as f64;
+        let radius = ring_extent + 3.0;
         elements.push(BlueprintElement {
             material: Material::free_base("Methane", 1.0),
             placement: BlueprintPlacement {
@@ -123,14 +147,14 @@ pub(crate) fn confirmed_seed_baseline(
     }
 
     let sulfur_start = ring_sides + spiral_steps;
-    for (offset, &i) in [0usize, 3, 6, 9].iter().enumerate() {
+    for (offset, &i) in [0usize, 4, 8, 12].iter().enumerate() {
         connections.push(BlueprintConnection {
             element_a: i,
             element_b: sulfur_start + offset,
         });
     }
     let methane_start = sulfur_start + 4;
-    for (offset, &i) in [2usize, 7].iter().enumerate() {
+    for (offset, &i) in [2usize, 10].iter().enumerate() {
         connections.push(BlueprintConnection {
             element_a: i,
             element_b: methane_start + offset,
