@@ -215,47 +215,6 @@ fn add_spectrum(target: &mut ToneSpectrum, source: &ToneSpectrum, scale: f64) {
     }
 }
 
-fn realized_unit_spectra(
-    structure: &crate::structure::OrganismStructure,
-    catalog: &[crate::resources::BaseResource],
-) -> Vec<ToneSpectrum> {
-    let baselines = ResourceBaselines::from_catalog(catalog);
-    let mut local = Vec::with_capacity(structure.units.len());
-
-    let structural_indices = structure.structural_unit_indices(catalog);
-    let mut is_structural = vec![false; structure.units.len()];
-    for index in structural_indices {
-        if let Some(flag) = is_structural.get_mut(index) {
-            *flag = true;
-        }
-    }
-    for (index, unit) in structure.units.iter().enumerate() {
-        if !is_structural[index] {
-            local.push(ToneSpectrum::empty());
-            continue;
-        }
-        let Some(properties) = unit.properties(catalog) else {
-            local.push(ToneSpectrum::empty());
-            continue;
-        };
-        local.push(material_response(properties, baselines, 0.0));
-    }
-
-    let mut received = local.clone();
-    for bond in &structure.bonds {
-        let Some(a) = structure.unit_index(bond.endpoint_a.constituent_id) else {
-            continue;
-        };
-        let Some(b) = structure.unit_index(bond.endpoint_b.constituent_id) else {
-            continue;
-        };
-        let coupling = bond.strength.clamp(0.0, 1.0);
-        add_spectrum(&mut received[a], &local[b], coupling);
-        add_spectrum(&mut received[b], &local[a], coupling);
-    }
-    received
-}
-
 /// Environmental quantity scales excitation using absolute material mass.
 /// This is a response scale, not a new material property.
 fn environmental_mass_scale(mass: f64, baseline_mass: f64) -> f64 {
