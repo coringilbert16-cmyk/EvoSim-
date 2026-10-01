@@ -1062,20 +1062,6 @@ fn construct_blueprint_bond_driven_internal(
                 .cloned()
                 .collect::<Vec<_>>();
 
-            // Water is the final physical construction fallback. It may be
-            // used even when its structural similarity is below the normal
-            // material threshold, but only after every qualifying material
-            // has failed to make this bond.
-            if let Some(water) = ranked.iter().find(|(storage_index, name, _)| {
-                !reserved_storage_indices.contains(storage_index) && name == "Water"
-            }) {
-                if !candidates
-                    .iter()
-                    .any(|(storage_index, _, _)| *storage_index == water.0)
-                {
-                    candidates.push(water.clone());
-                }
-            }
             candidates
         } else {
             // Developmental construction may substitute material when the
