@@ -484,7 +484,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                 let candidate_origin =
                     placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
                 *nodes += 1;
-                if *nodes > 500_000 {
+                if *nodes > 5_000 {
                     return None;
                 }
 
@@ -649,7 +649,7 @@ fn realize_next_bond_driven(
                     // pruning here would silently turn preference into authority.
 
                     *nodes += 1;
-                    if *nodes > 500_000 {
+                    if *nodes > 5_000 {
                         return None;
                     }
 
