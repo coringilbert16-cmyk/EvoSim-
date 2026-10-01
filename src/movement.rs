@@ -1236,7 +1236,14 @@ mod tests {
         );
         let mut rng = ChaCha8Rng::seed_from_u64(1);
         assert_eq!(
-            select_movement_distance(&organism, 16.0, 0.8, 1.0, crate::decision::CurrentNeeds::default(), &mut rng),
+            select_movement_distance(
+                &organism,
+                16.0,
+                0.8,
+                1.0,
+                crate::decision::CurrentNeeds::default(),
+                &mut rng,
+            ),
             Some(1.0)
         );
     }
