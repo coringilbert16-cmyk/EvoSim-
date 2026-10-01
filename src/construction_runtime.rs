@@ -727,6 +727,27 @@ pub(crate) fn try_attach_physical_material_bond_driven(
     None
 }
 
+fn has_distinct_connection_endpoints(
+    options: &[Vec<ConnectionEndpoint>],
+    depth: usize,
+    used: &mut Vec<ConnectionEndpoint>,
+) -> bool {
+    if depth == options.len() {
+        return true;
+    }
+    for endpoint in &options[depth] {
+        if used.contains(endpoint) {
+            continue;
+        }
+        used.push(*endpoint);
+        if has_distinct_connection_endpoints(options, depth + 1, used) {
+            return true;
+        }
+        used.pop();
+    }
+    false
+}
+
 fn realize_next_bond_driven(
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     catalog: &[BaseResource],
@@ -751,12 +772,50 @@ fn realize_next_bond_driven(
     let existing_index = realized_units[neighbor]?;
     let existing_unit = structure.units.get(existing_index)?;
     let existing_endpoints = structure_unit_endpoint_options(existing_unit, catalog);
+    // A newly placed unit may already have more than one realized blueprint
+    // neighbor. Its pose must leave a physically admissible endpoint for every
+    // such neighbor; otherwise we would knowingly create a dead-end placement
+    // and rely on the later closure pass to repair geometry that cannot move.
+    let realized_neighbors: Vec<usize> = blueprint
+        .connections
+        .iter()
+        .filter_map(|connection| {
+            if connection.element_a == _index {
+                Some(connection.element_b)
+            } else if connection.element_b == _index {
+                Some(connection.element_a)
+            } else {
+                None
+            }
+        })
+        .filter(|other| *other != neighbor && realized_units[*other].is_some())
+        .collect();
     let new_endpoints = physical_material_endpoint_options(new_material, catalog);
 
     if existing_endpoints.is_empty() || new_endpoints.is_empty() {
         return None;
     }
 
+    let mut best: Option<(
+        OrganismStructure,
+        Vec<usize>,
+        usize,
+        crate::contact::ConnectionPairCandidate,
+        f64,
+        EnergyLedger,
+        f64,
+        f64,
+    )> = None;
+
+    let target = blueprint.elements[_index].placement;
+    let (s_anchor, c_anchor) = genome_anchor.rotation_radians.sin_cos();
+    let target_world = (
+        genome_anchor.x + (target.x - anchor_declared.x) * c_anchor
+            - (target.y - anchor_declared.y) * s_anchor,
+        genome_anchor.y
+            + (target.x - anchor_declared.x) * s_anchor
+            + (target.y - anchor_declared.y) * c_anchor,
+    );
     for endpoint_a in existing_endpoints {
         let joint = endpoint_a.world_point(&structure.units[existing_index], catalog)?;
         for (part_index, endpoint_b) in new_endpoints.iter().copied() {
@@ -771,19 +830,21 @@ fn realize_next_bond_driven(
             // command. Start at the rotation that puts this physical material's
             // selected endpoint on the joint while aiming its local endpoint
             // toward the declared target, then sweep the full circle.
-            let target = blueprint.elements[_index].placement;
-            let (s, c) = genome_anchor.rotation_radians.sin_cos();
-            let target_world = (
-                genome_anchor.x + (target.x - anchor_declared.x) * c
-                    - (target.y - anchor_declared.y) * s,
-                genome_anchor.y
-                    + (target.x - anchor_declared.x) * s
-                    + (target.y - anchor_declared.y) * c,
-            );
             let ideal_angle = (joint.y - target_world.1).atan2(joint.x - target_world.0)
                 - local_b.y.atan2(local_b.x);
+            // Search outward from the blueprint-preferred orientation rather than
+            // accepting an arbitrary first contact. This remains forward-only:
+            // only the winning candidate is committed, and no committed bond is
+            // ever moved or undone.
             for step in 0..360 {
-                let offset = std::f64::consts::TAU * step as f64 / 360.0;
+                let signed_step = if step == 0 {
+                    0
+                } else if step % 2 == 1 {
+                    (step + 1) / 2
+                } else {
+                    -(step / 2)
+                };
+                let offset = std::f64::consts::TAU * signed_step as f64 / 360.0;
                 let angle = ideal_angle + offset;
                 let candidate_origin =
                     placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
@@ -848,6 +909,48 @@ fn realize_next_bond_driven(
                     continue;
                 };
 
+                // The selected endpoint is reserved for the forward bond below.
+                // Every other already-realized neighbor must therefore have a
+                // different admissible endpoint on this same physical unit.
+                let mut neighbor_endpoint_options = Vec::with_capacity(realized_neighbors.len());
+                let mut all_realized_neighbors_reachable = true;
+                for other_neighbor in &realized_neighbors {
+                    let Some(other_index) = realized_units[*other_neighbor] else {
+                        all_realized_neighbors_reachable = false;
+                        break;
+                    };
+                    let options = crate::contact::connection_pair_candidates_cached(
+                        &trial,
+                        other_index,
+                        new_unit_index,
+                        catalog,
+                        &mut bond_cache,
+                    )
+                    .into_iter()
+                    .filter(|candidate| {
+                        candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                            && candidate.available_a
+                            && candidate.available_b
+                            && candidate.endpoint_b != endpoint_b
+                    })
+                    .map(|candidate| candidate.endpoint_b)
+                    .collect::<Vec<_>>();
+                    if options.is_empty() {
+                        all_realized_neighbors_reachable = false;
+                        break;
+                    }
+                    neighbor_endpoint_options.push(options);
+                }
+                if !all_realized_neighbors_reachable
+                    || !has_distinct_connection_endpoints(
+                        &neighbor_endpoint_options,
+                        0,
+                        &mut Vec::new(),
+                    )
+                {
+                    continue;
+                }
+
                 let Some((_, _, _, investment, _required_energy)) =
                     crate::combine_runtime::construction_candidate_evaluation(
                         &trial,
@@ -860,33 +963,80 @@ fn realize_next_bond_driven(
                     continue;
                 };
 
-                let Some(attempt) = crate::combine_runtime::form_construction_bond(
-                    &mut trial,
-                    existing_index,
-                    new_unit_index,
-                    candidate,
-                    investment,
-                    catalog,
-                    &mut bond_cache,
-                    &mut trial_ledger,
-                    &mut trial_energy,
-                ) else {
-                    continue;
-                };
-
-                return Some((
-                    trial,
-                    indices,
-                    part_index,
-                    attempt,
-                    trial_ledger,
-                    trial_energy,
-                ));
+                let position_error = (candidate_origin.x - target_world.0)
+                    .hypot(candidate_origin.y - target_world.1);
+                let target_world_rotation =
+                    genome_anchor.rotation_radians + target.rotation_radians;
+                let rotation_error = (candidate_origin.rotation_radians - target_world_rotation
+                    + std::f64::consts::PI)
+                    .rem_euclid(std::f64::consts::TAU)
+                    - std::f64::consts::PI;
+                // A developmental target is a full physical pose, not merely a
+                // center point. Weight orientation by the candidate's physical
+                // reach so a wrong endpoint/orientation cannot accumulate a
+                // small positional drift around a closed structure.
+                let pose_scale = trial.units[new_unit_index]
+                    .shape(catalog)
+                    .and_then(|shape| shape.form.polygon_vertices())
+                    .map(|vertices| {
+                        vertices
+                            .into_iter()
+                            .map(|(x, y)| x.hypot(y))
+                            .fold(0.0, f64::max)
+                    })
+                    .unwrap_or(1.0)
+                    .max(1e-6);
+                let score = position_error.powi(2) + (rotation_error * pose_scale).powi(2);
+                if best.as_ref().is_none_or(|current| score < current.7) {
+                    best = Some((
+                        trial,
+                        indices,
+                        part_index,
+                        candidate,
+                        investment,
+                        trial_ledger,
+                        trial_energy,
+                        score,
+                    ));
+                }
             }
         }
     }
 
-    None
+    let Some((
+        mut trial,
+        indices,
+        part_index,
+        candidate,
+        investment,
+        mut trial_ledger,
+        mut trial_energy,
+        _score,
+    )) = best
+    else {
+        return None;
+    };
+    let new_unit_index = *indices.get(part_index)?;
+    let attempt = crate::combine_runtime::form_construction_bond(
+        &mut trial,
+        existing_index,
+        new_unit_index,
+        candidate,
+        investment,
+        catalog,
+        &mut crate::contact::ConnectionCompatibilityCache::new(),
+        &mut trial_ledger,
+        &mut trial_energy,
+    )?;
+
+    Some((
+        trial,
+        indices,
+        part_index,
+        attempt,
+        trial_ledger,
+        trial_energy,
+    ))
 }
 
 /// Bond-driven construction is forward-only. Once a bond is formed it is
