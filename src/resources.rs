@@ -534,7 +534,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
             shape: Shape {
                 form: Form::RegularPolygon {
                     sides: 6,
-                    radius: 0.438_691,
+                    radius: 0.577_350_269_189_625_8,
                 },
             },
         },
@@ -550,7 +550,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
             shape: Shape {
                 form: Form::RegularPolygon {
                     sides: 3,
-                    radius: 0.620_403,
+                    radius: 0.577_350_269_189_625_8,
                 },
             },
         },
@@ -564,7 +564,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
             },
             physical_state: PhysicalState::Rigid,
             shape: Shape {
-                form: Form::Line { length: 0.797_884 },
+                form: Form::Line { length: 1.0 },
             },
         },
         BaseResource {
@@ -579,7 +579,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
             shape: Shape {
                 form: Form::RegularPolygon {
                     sides: 5,
-                    radius: 0.458_577,
+                    radius: 0.850_650_808_352_039_9,
                 },
             },
         },
@@ -594,8 +594,8 @@ pub fn default_catalog() -> Vec<BaseResource> {
             physical_state: PhysicalState::Rigid,
             shape: Shape {
                 form: Form::Rectangle {
-                    width: 1.511_858,
-                    height: 0.330_719,
+                    width: 1.0,
+                    height: 1.0,
                 },
             },
         },
@@ -611,12 +611,12 @@ pub fn default_catalog() -> Vec<BaseResource> {
             shape: Shape {
                 form: Form::Polygon {
                     vertices: vec![
-                        (-0.408_248, -0.408_248),
-                        (0.408_248, -0.408_248),
-                        (0.408_248, 0.0),
+                        (-0.5, -0.25),
+                        (0.5, -0.25),
+                        (0.5, 0.0),
                         (0.0, 0.0),
-                        (0.0, 0.408_248),
-                        (-0.408_248, 0.408_248),
+                        (0.0, 0.25),
+                        (-0.5, 0.25),
                     ],
                 },
             },
@@ -776,6 +776,38 @@ mod shape_tests {
         assert!((permeability_from_cohesion(0.95, &catalog) - 0.0).abs() < 1e-12);
         assert!((permeability_from_cohesion(0.475, &catalog) - 0.5).abs() < 1e-12);
         assert_eq!(permeability_from_cohesion(f64::NAN, &catalog), 0.0);
+    }
+
+    #[test]
+    fn resource_edge_lengths_follow_the_shared_connection_scale() {
+        fn distance(a: (f64, f64), b: (f64, f64)) -> f64 {
+            (a.0 - b.0).hypot(a.1 - b.1)
+        }
+
+        let catalog = default_catalog();
+        let find = |name: &str| catalog.iter().find(|r| r.name == name).unwrap();
+
+        for name in ["Carbon", "Methane", "Sulfur"] {
+            let vertices = find(name).shape.form.polygon_vertices().unwrap();
+            for i in 0..vertices.len() {
+                assert!((distance(vertices[i], vertices[(i + 1) % vertices.len()]) - 1.0).abs() < 1e-9);
+            }
+        }
+
+        let hydrogen = find("Hydrogen").shape.form.clone();
+        assert!(matches!(hydrogen, Form::Line { length } if (length - 1.0).abs() < 1e-12));
+
+        let nitrogen = find("Nitrogen").shape.form.polygon_vertices().unwrap();
+        for i in 0..nitrogen.len() {
+            assert!((distance(nitrogen[i], nitrogen[(i + 1) % nitrogen.len()]) - 1.0).abs() < 1e-9);
+        }
+
+        let phosphorus = find("Phosphorus").shape.form.polygon_vertices().unwrap();
+        let lengths = (0..phosphorus.len())
+            .map(|i| distance(phosphorus[i], phosphorus[(i + 1) % phosphorus.len()]))
+            .collect::<Vec<_>>();
+        assert_eq!(lengths.iter().filter(|length| (**length - 1.0).abs() < 1e-9).count(), 2);
+        assert_eq!(lengths.iter().filter(|length| (**length - 0.5).abs() < 1e-9).count(), 4);
     }
 
     #[test]
