@@ -83,7 +83,7 @@ fn evaluate_candidate(
     Some((evaluation, interaction, work, investment, required))
 }
 
-/// Construction-only access to the universal candidate evaluation. Construction
+/// Shared access to the universal candidate evaluation. Construction
 /// supplies the exact candidate; this function does not perform candidate search.
 pub(crate) fn construction_candidate_evaluation(
     structure: &crate::structure::OrganismStructure,
@@ -119,17 +119,19 @@ pub(crate) fn form_specific_bond(
     })?;
     let (_, _, _, investment, _) =
         evaluate_candidate(structure, unit_a, unit_b, candidate, catalog)?;
-    form_construction_bond(
+    form_selected_bond(
         structure, unit_a, unit_b, candidate, investment, catalog, cache, ledger, energy,
     )
 }
 
-/// Forms exactly the supplied construction contact.
+/// Forms exactly the supplied physical contact.
 ///
-/// Unlike generic COMBINE, this function does not search for a different contact.
+/// This is the shared transaction boundary for generic COMBINE and bond-driven construction.
+///
+/// The caller has already selected the physical endpoint pair and pose.
 /// The caller has already selected the physical endpoint pair and pose. This is the
 /// transaction boundary for the bond-driven construction system.
-pub(crate) fn form_construction_bond(
+pub(crate) fn form_selected_bond(
     structure: &mut crate::structure::OrganismStructure,
     unit_a: usize,
     unit_b: usize,
@@ -517,8 +519,7 @@ pub(crate) fn try_combine_stored_unit(
         return None;
     }
 
-    let first_resource = raw.parts.first()?.0.as_str();
-    let geometry_source = raw
+    let first_resource = raw.parts.first()?.0.as_str();    let geometry_source = raw
         .parts
         .first()
         .and_then(|(name, _)| environment.catalog.iter().find(|b| b.name == *name))?;
