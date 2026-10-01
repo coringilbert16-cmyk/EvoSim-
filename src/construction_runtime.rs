@@ -896,14 +896,24 @@ fn realize_next_bond_driven(
                     continue;
                 };
 
-                return Some((
-                    trial,
-                    indices,
-                    part_index,
-                    attempt,
-                    trial_ledger,
-                    trial_energy,
-                ));
+                let target_distance = (candidate_origin.x - target_world.0)
+                    .hypot(candidate_origin.y - target_world.1);
+                if best_candidate
+                    .as_ref()
+                    .is_none_or(|current: &(f64, OrganismStructure, Vec<usize>, usize, crate::combine_runtime::CombineAttempt, EnergyLedger, f64)| {
+                        target_distance < current.0
+                    })
+                {
+                    best_candidate = Some((
+                        target_distance,
+                        trial,
+                        indices,
+                        part_index,
+                        attempt,
+                        trial_ledger,
+                        trial_energy,
+                    ));
+                }
             }
         }
     }
