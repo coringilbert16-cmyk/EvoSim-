@@ -170,28 +170,38 @@ fn select_movement_distance(
                 .map(|consequence| (*distance, consequence))
         })
         .collect();
+    let unknown: Vec<f64> = affordable
+        .iter()
+        .copied()
+        .filter(|distance| {
+            !organism
+                .decision_history
+                .consequence(
+                    crate::decision::ActionKind::Move,
+                    Some(&movement_context_key(*distance)),
+                )
+                .is_some()
+        })
+        .collect();
 
-    let mut scored = Vec::with_capacity(affordable.len());
-    for distance in affordable {
-        let Some(consequence) = organism.decision_history.consequence(
-            crate::decision::ActionKind::Move,
-            Some(&movement_context_key(distance)),
-        ) else {
-            let exploration = curiosity
-                * (distance / MOVEMENT_DISTANCE_OPTIONS[MOVEMENT_DISTANCE_OPTIONS.len() - 1])
-                    .clamp(0.0, 1.0);
-            scored.push((distance, exploration));
-            continue;
-        };
+    if !known.is_empty() && !unknown.is_empty() && rng.gen::<f64>() < curiosity {
+        return unknown.get(rng.gen_range(0..unknown.len())).copied();
+    }
 
+    if known.is_empty() {
+        return unknown.get(rng.gen_range(0..unknown.len())).copied();
+    }
+
+    let mut scored = Vec::with_capacity(known.len());
+    for (distance, consequence) in &known {
         let dominated = known.iter().any(|(other_distance, other)| {
-            *other_distance != distance && other.dominates(consequence)
+            *other_distance != *distance && other.dominates(*consequence)
         });
         let dominates = known.iter().any(|(other_distance, other)| {
-            *other_distance != distance && consequence.dominates(*other)
+            *other_distance != *distance && consequence.dominates(*other)
         });
         scored.push((
-            distance,
+            *distance,
             match (dominates, dominated) {
                 (true, false) => 1,
                 (false, true) => -1,
@@ -203,10 +213,11 @@ fn select_movement_distance(
     let best_score = scored
         .iter()
         .map(|(_, score)| *score)
-        .fold(f64::NEG_INFINITY, f64::max);
+        .max()
+        .unwrap_or(0);
     let tied: Vec<f64> = scored
         .into_iter()
-        .filter(|(_, score)| (*score - best_score).abs() <= f64::EPSILON)
+        .filter(|(_, score)| *score == best_score)
         .map(|(distance, _)| distance)
         .collect();
     tied.get(rng.gen_range(0..tied.len())).copied()
