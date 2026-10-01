@@ -104,6 +104,7 @@ impl Simulation {
             structure,
             development_stage: DevelopmentStage::Juvenile,
             active_transformation_id: None,
+            active_movement: None,
             reproductive_construction: None,
             structure_revision: 0,
             position_revision: 0,
@@ -235,7 +236,20 @@ impl Simulation {
             .first()
             .cloned()
             .unwrap_or(Position { x: 0.0, y: 0.0 });
-        for physical in environment.field.take_contained_physical_materials(&body) {
+        let Ok(interior_regions) = crate::interior_geometry::find_accessible_interior_regions(
+            &organism.structure,
+            &environment.catalog,
+        ) else {
+            return;
+        };
+        for physical in environment
+            .field
+            .take_contained_physical_materials_in_regions(
+                &body,
+                &interior_regions,
+                &environment.catalog,
+            )
+        {
             match organism
                 .stored_material
                 .try_store_physical_instance_at_owner_anchor(
@@ -294,11 +308,22 @@ impl Simulation {
         // than replacing that structural pressure.
         let survival =
             self_maintenance_pressure + (1.0 - self_maintenance_pressure) * energy_survival;
-        let development = if developmental.is_some() {
+        let mut development = if developmental.is_some() {
             (1.0 - current_realization).max(0.0)
         } else {
             0.0
         };
+        // A developmental material mismatch is itself developmental pressure:
+        // the organism should seek material that matches its inherited
+        // structural preference instead of accepting a structurally poor
+        // substitute merely because one exists.
+        if let Some(construction) = organism.reproductive_construction.as_ref() {
+            development =
+                development.max(crate::reproduction::construction_material_need_pressure(
+                    construction,
+                    &environment.catalog,
+                ));
+        }
         CurrentNeeds {
             survival,
             reproduction: if matches!(organism.development_stage, DevelopmentStage::Adult) {
@@ -327,10 +352,12 @@ impl Simulation {
                                 .is_some_and(|connections| !connections.is_empty())
                 )
             });
+        let can_break_environment = organism.active_transformation_id.is_none()
+            && crate::transformation::has_environmental_break_candidate(organism, environment);
         ActionEligibility {
             can_move: true,
             can_combine,
-            can_break: can_break_stored
+            can_break: (can_break_stored || can_break_environment)
                 && (organism.reproductive_construction.is_none()
                     || needs.survival > 0.0
                     || needs.development > 0.0
@@ -364,6 +391,10 @@ impl Simulation {
                     }
                 }
             }
+            candidates.extend(crate::transformation::environmental_break_candidates(
+                organism,
+                _environment,
+            ));
         }
         if relevant(ActionKind::Combine) {
             candidates.push(ActionCandidate {
@@ -467,12 +498,57 @@ impl Simulation {
                     if !Self::prepare_transformation(
                         &mut transformation,
                         organism,
-                        &self.environment,
+                        &mut self.environment,
                         &mut self.energy_ledger,
+                        self.seed_scale_reference,
                     ) {
+                        if let Some((cell_index, source)) =
+                            transformation.combine_environmental_source.as_ref()
+                        {
+                            if let Some(cell) = self.environment.field.cells.get_mut(*cell_index) {
+                                cell.physical_materials.push(source.clone());
+                                self.environment.field.mark_changed_at_index(*cell_index);
+                            }
+                        } else if transformation.environmental_source {
+                            if let Some(source) = transformation.stored_material.as_ref() {
+                                if let Some(placement) = source
+                                    .placements
+                                    .as_ref()
+                                    .and_then(|placements| placements.first())
+                                {
+                                    let _ = self.environment.field.deposit(
+                                        placement.x,
+                                        placement.y,
+                                        source.clone(),
+                                    );
+                                }
+                            }
+                        }
                         continue;
                     }
                 } else {
+                    if let Some((cell_index, source)) =
+                        transformation.combine_environmental_source.as_ref()
+                    {
+                        if let Some(cell) = self.environment.field.cells.get_mut(*cell_index) {
+                            cell.physical_materials.push(source.clone());
+                            self.environment.field.mark_changed_at_index(*cell_index);
+                        }
+                    } else if transformation.environmental_source {
+                        if let Some(source) = transformation.stored_material.as_ref() {
+                            if let Some(placement) = source
+                                .placements
+                                .as_ref()
+                                .and_then(|placements| placements.first())
+                            {
+                                let _ = self.environment.field.deposit(
+                                    placement.x,
+                                    placement.y,
+                                    source.clone(),
+                                );
+                            }
+                        }
+                    }
                     continue;
                 }
             }
@@ -491,7 +567,7 @@ impl Simulation {
                 .iter_mut()
                 .find(|o| o.id == transformation.organism_id)
             {
-                Self::resolve_transformation(
+                crate::transformation::resolve_transformation(
                     transformation,
                     organism,
                     &mut self.environment,
@@ -523,15 +599,16 @@ impl Simulation {
             Self::transfer_contained_environmental_material(organism, &mut self.environment);
             let acquired_amount =
                 (organism.stored_material.total_amount() - stored_amount_before_transfer).max(0.0);
-            Self::finalize_pending_movement_experience(
-                organism,
-                &self.environment,
-                acquired_amount,
-            );
+            if organism.active_movement.is_none() {
+                Self::finalize_pending_movement_experience(
+                    organism,
+                    &self.environment,
+                    acquired_amount,
+                );
+            }
         }
         {
             let (organisms, environment) = (&mut self.organisms, &mut self.environment);
-            let mut compatibility_cache = crate::contact::ConnectionCompatibilityCache::new();
             let mut movement_spatial_index =
                 crate::movement::MovementSpatialIndex::new(organisms, environment);
             for index in 0..organisms.len() {
@@ -560,68 +637,137 @@ impl Simulation {
                     developmental.as_ref(),
                 );
                 let eligibility = Self::action_eligibility(&organisms[index], environment, needs);
-                // Movement is an independent channel. It is not gated by
-                // survival/reproduction need pressure or by the transformation
-                // selector below.
-                if eligibility.can_move {
+                // Movement is a persistent operation. A decision starts it;
+                // each later progress tick advances exactly one world unit.
+                let mut movement_operation_active = false;
+                {
                     let (before, rest) = organisms.split_at_mut(index);
                     let (organism, after) = rest.split_first_mut().expect("index is in organisms");
-                    let perceptions =
-                        crate::harmonics::organism_resonance_perceptions(organism, environment);
-                    let before_energy = organism.usable_energy;
-                    let before_stress = organism.stress;
-                    let before_realization = developmental
-                        .as_ref()
-                        .map(|context| context.current_growth_fraction)
-                        .unwrap_or_else(|| {
-                            organism
-                                .developmental_realization_cached(&environment.catalog)
-                                .map(|realization| realization.overall)
-                                .unwrap_or(0.0)
-                        });
-                    let moved = Self::update_movement(
-                        before,
-                        organism,
-                        after,
-                        &mut movement_spatial_index,
-                        environment,
-                        &mut self.energy_ledger,
-                        self.tick,
-                        &mut self.rng,
-                        &perceptions,
-                    );
-                    if moved {
-                        let move_candidate = ActionCandidate {
-                            action: ActionKind::Move,
-                            context_key: organism.last_movement_attempt.as_ref().and_then(
-                                |attempt| {
-                                    attempt
-                                        .step
-                                        .map(|distance| format!("distance:{distance:.0}"))
-                                },
-                            ),
-                        };
-                        let consequence = Self::action_consequence(
-                            before_energy,
-                            before_stress,
-                            before_realization,
+
+                    if let Some(mut active) = organism.active_movement.take() {
+                        movement_operation_active = true;
+                        let before_energy = active.before_energy;
+                        let before_stress = active.before_stress;
+                        let before_realization = active.before_developmental_realization;
+                        let progress = Self::advance_movement(
+                            before,
+                            organism,
+                            after,
+                            &mut movement_spatial_index,
+                            environment,
+                            &mut self.energy_ledger,
+                            self.tick,
+                            &mut active,
+                        );
+                        match progress {
+                            Ok(crate::movement::MovementProgress::Waiting)
+                            | Ok(crate::movement::MovementProgress::Moved) => {
+                                organism.active_movement = Some(active);
+                            }
+                            Ok(crate::movement::MovementProgress::Complete) => {
+                                let consequence = Self::action_consequence(
+                                    before_energy,
+                                    before_stress,
+                                    before_realization,
+                                    organism,
+                                    environment,
+                                );
+                                let move_candidate = ActionCandidate {
+                                    action: ActionKind::Move,
+                                    context_key: Some(format!(
+                                        "distance:{:.0}",
+                                        active.decision_distance
+                                    )),
+                                };
+                                crate::decision_runtime::record_consequence(
+                                    &mut organism.decision_history,
+                                    &move_candidate,
+                                    consequence,
+                                );
+                                if let Some(pending) = organism.pending_movement_experience.as_mut()
+                                {
+                                    pending.consequence =
+                                        crate::memory::memory_consequence_from_action(consequence);
+                                }
+                            }
+                            Err(_) => {
+                                let consequence = Self::action_consequence(
+                                    before_energy,
+                                    before_stress,
+                                    before_realization,
+                                    organism,
+                                    environment,
+                                );
+                                let move_candidate = ActionCandidate {
+                                    action: ActionKind::Move,
+                                    context_key: Some(format!(
+                                        "distance:{:.0}",
+                                        active.decision_distance
+                                    )),
+                                };
+                                crate::decision_runtime::record_consequence(
+                                    &mut organism.decision_history,
+                                    &move_candidate,
+                                    consequence,
+                                );
+                                organism.pending_movement_experience = None;
+                            }
+                        }
+                    } else if eligibility.can_move {
+                        let perceptions =
+                            crate::harmonics::organism_resonance_perceptions(organism, environment);
+                        let before_energy = organism.usable_energy;
+                        let before_stress = organism.stress;
+                        let before_realization = developmental
+                            .as_ref()
+                            .map(|context| context.current_growth_fraction)
+                            .unwrap_or_else(|| {
+                                organism
+                                    .developmental_realization_cached(&environment.catalog)
+                                    .map(|realization| realization.overall)
+                                    .unwrap_or(0.0)
+                            });
+                        match Self::start_movement(
                             organism,
                             environment,
-                        );
-                        crate::decision_runtime::record_consequence(
-                            &mut organism.decision_history,
-                            &move_candidate,
-                            consequence,
-                        );
-                        organism.pending_movement_experience =
-                            Some(crate::memory::PendingMovementExperience {
-                                perceptions,
-                                consequence: crate::memory::memory_consequence_from_action(
-                                    consequence,
-                                ),
-                                needs,
-                            });
+                            &mut self.rng,
+                            &perceptions,
+                        ) {
+                            Ok(mut active) => {
+                                active.before_energy = before_energy;
+                                active.before_stress = before_stress;
+                                active.before_developmental_realization = before_realization;
+                                let consequence = crate::decision::ActionConsequence::default();
+                                organism.pending_movement_experience =
+                                    Some(crate::memory::PendingMovementExperience {
+                                        perceptions,
+                                        consequence: crate::memory::memory_consequence_from_action(
+                                            consequence,
+                                        ),
+                                        needs,
+                                    });
+                                organism.active_movement = Some(active);
+                                movement_operation_active = true;
+                            }
+                            Err(reason) => {
+                                organism.last_movement_attempt =
+                                    Some(crate::state::MovementAttemptDiagnostic {
+                                        tick: self.tick,
+                                        direction_x: None,
+                                        direction_y: None,
+                                        step: None,
+                                        usable_energy: organism.usable_energy,
+                                        active_transformation_id: organism.active_transformation_id,
+                                        result: Err(reason),
+                                        old_position: organism.occupied_cells.first().cloned(),
+                                        new_position: None,
+                                    });
+                            }
+                        }
                     }
+                }
+                if movement_operation_active {
+                    continue;
                 }
                 let context = DecisionContext { needs, eligibility };
                 let candidates =
@@ -656,8 +802,6 @@ impl Simulation {
                             );
                             let before_energy = organisms[index].usable_energy;
                             let before_stress = organisms[index].stress;
-                            let before_stored_material =
-                                organisms[index].stored_material.total_amount();
                             let before_realization = developmental
                                 .as_ref()
                                 .map(|context| context.current_growth_fraction)
@@ -667,58 +811,22 @@ impl Simulation {
                                         .map(|realization| realization.overall)
                                         .unwrap_or(0.0)
                                 });
-                            let developmental = developmental.as_ref().map(|context| {
-                                (
-                                    &context.blueprint,
-                                    context.origin,
-                                    context.orientation,
-                                    context.preferred_length,
-                                )
-                            });
-                            let combined = crate::combine_runtime::try_combine(
-                                &mut organisms[index],
-                                environment,
-                                &mut compatibility_cache,
-                                &mut self.energy_ledger,
-                                developmental,
-                            )
-                            .is_some();
-                            if combined {
-                                movement_spatial_index.refresh_organism(
-                                    index,
-                                    &organisms[index],
-                                    environment,
-                                );
-                            }
-                            let consequence = if combined {
-                                Self::action_consequence(
-                                    before_energy,
-                                    before_stress,
-                                    before_realization,
+                            if let Some(mut transformation) =
+                                crate::combine_runtime::try_start_combine(
                                     &mut organisms[index],
-                                    environment,
+                                    &mut self.next_transformation_id,
                                 )
-                            } else {
-                                crate::decision::ActionConsequence::default()
-                            };
-                            crate::decision_runtime::record_consequence(
-                                &mut organisms[index].decision_history,
-                                &selected,
-                                consequence,
-                            );
-                            if combined {
-                                let material_consumed = (before_stored_material
-                                    - organisms[index].stored_material.total_amount())
-                                .max(0.0);
-                                Self::record_action_experience(
-                                    &mut organisms[index],
-                                    environment,
-                                    &perceptions,
-                                    ActionKind::Combine,
-                                    consequence,
-                                    needs,
-                                    material_consumed,
-                                );
+                            {
+                                transformation.pending_experience =
+                                    Some(crate::memory::PendingTransformationExperience {
+                                        perceptions,
+                                        needs,
+                                        before_energy,
+                                        before_stress,
+                                        before_developmental_realization: before_realization,
+                                        material_transformed: 0.0,
+                                    });
+                                self.active_transformations.push(transformation);
                             }
                         }
                         ActionKind::Break => {
@@ -737,12 +845,22 @@ impl Simulation {
                                         .map(|realization| realization.overall)
                                         .unwrap_or(0.0)
                                 });
-                            if let Some(mut transformation) = Self::try_start_transformation(
-                                &mut organisms[index],
-                                &environment.catalog,
-                                &mut self.next_transformation_id,
-                                &selected,
-                            ) {
+                            if let Some(mut transformation) =
+                                crate::transformation::try_start_environmental_break(
+                                    &mut organisms[index],
+                                    environment,
+                                    &mut self.next_transformation_id,
+                                    &selected,
+                                )
+                                .or_else(|| {
+                                    Self::try_start_transformation(
+                                        &mut organisms[index],
+                                        &environment.catalog,
+                                        &mut self.next_transformation_id,
+                                        &selected,
+                                    )
+                                })
+                            {
                                 transformation.pending_experience =
                                     Some(crate::memory::PendingTransformationExperience {
                                         perceptions,

@@ -193,6 +193,29 @@ pub fn eligible_candidates(
     catalog: &[BaseResource],
     cache: &mut ConnectionCompatibilityCache,
 ) -> Vec<ConnectionPairCandidate> {
+    let Some(a) = structure.units.get(unit_a) else {
+        return Vec::new();
+    };
+    let Some(b) = structure.units.get(unit_b) else {
+        return Vec::new();
+    };
+    let is_water_only = |material: &Material| {
+        !material.parts.is_empty()
+            && material.parts.iter().all(|(name, amount)| {
+                *amount > EPSILON
+                    && catalog
+                        .iter()
+                        .find(|resource| resource.name == *name)
+                        .is_some_and(|resource| {
+                            resource.name == "Water"
+                                && resource.physical_state == crate::resources::PhysicalState::Fluid
+                        })
+            })
+    };
+    let both_fluid = is_water_only(&a.material) && is_water_only(&b.material);
+    if both_fluid {
+        return Vec::new();
+    }
     crate::contact::connection_pair_candidates_cached(structure, unit_a, unit_b, catalog, cache)
         .into_iter()
         .filter(|candidate| candidate.available_a && candidate.available_b)
@@ -344,6 +367,30 @@ mod tests {
         let decoded: Bond = serde_json::from_str(&encoded).unwrap();
         assert_eq!(decoded, b)
     }
+    #[test]
+    fn water_water_bond_candidates_are_forbidden() {
+        let catalog = default_catalog();
+        let mut s = OrganismStructure::new();
+        s.add_unit(StructuralUnit::new(
+            "Water",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        s.add_unit(StructuralUnit::new(
+            "Water",
+            Placement {
+                x: 0.8,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let mut cache = ConnectionCompatibilityCache::new();
+        assert!(eligible_candidates(&s, 0, 1, &catalog, &mut cache).is_empty());
+    }
+
     #[test]
     fn continuous_candidates_are_supported_by_combine() {
         let catalog = default_catalog();

@@ -70,7 +70,7 @@ fn continuous_endpoint(
     }
 }
 
-fn endpoint_indices(
+pub(crate) fn endpoint_indices(
     unit: &StructuralUnit,
     catalog: &[crate::resources::BaseResource],
 ) -> Vec<ConnectionEndpoint> {

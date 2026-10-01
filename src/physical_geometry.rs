@@ -31,6 +31,19 @@ impl PhysicalGeometry {
         &self.shape
     }
 
+    /// Rigid geometry cannot be replaced. Fluid geometry may be re-realized
+    /// when the surrounding structure requires a context-fitting shape.
+    ///
+    /// The caller is responsible for establishing that this constituent is a
+    /// fluid resource. The method itself only accepts a valid replacement.
+    pub fn replace_fluid_realization(&mut self, shape: Shape) -> bool {
+        if !shape.is_valid() {
+            return false;
+        }
+        self.shape = shape;
+        true
+    }
+
     /// Rigid geometry cannot be replaced. This compatibility method accepts
     /// only an identical shape and never mutates the realized geometry.
     #[allow(dead_code)]
@@ -49,6 +62,37 @@ mod tests {
             form: crate::resources::Form::Circle { radius: 1.0 },
         };
         let geometry = PhysicalGeometry::from_default(&default_shape);
+        assert_eq!(geometry.shape(), &default_shape);
+    }
+
+    #[test]
+    fn fluid_geometry_can_be_re_realized() {
+        let default_shape = Shape {
+            form: crate::resources::Form::Circle { radius: 1.0 },
+        };
+        let mut geometry = PhysicalGeometry::from_default(&default_shape);
+        let fitted = Shape {
+            form: crate::resources::Form::Fluid {
+                nominal_area: 1.0,
+                boundary: Some(vec![(-1.0, 0.0), (0.0, 1.0), (1.0, 0.0), (0.0, -1.0)]),
+            },
+        };
+        assert!(geometry.replace_fluid_realization(fitted.clone()));
+        assert_eq!(geometry.shape(), &fitted);
+    }
+
+    #[test]
+    fn invalid_fluid_realization_is_rejected() {
+        let default_shape = Shape {
+            form: crate::resources::Form::Circle { radius: 1.0 },
+        };
+        let mut geometry = PhysicalGeometry::from_default(&default_shape);
+        assert!(!geometry.replace_fluid_realization(Shape {
+            form: crate::resources::Form::Fluid {
+                nominal_area: 1.0,
+                boundary: Some(vec![(0.0, 0.0), (1.0, 0.0)]),
+            },
+        }));
         assert_eq!(geometry.shape(), &default_shape);
     }
 

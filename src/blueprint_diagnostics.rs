@@ -31,7 +31,14 @@ mod tests {
         StructuralBlueprint::new(
             positions
                 .iter()
-                .map(|&(x, y)| water_element(x, y))
+                .map(|&(x, y)| BlueprintElement {
+                    material: Material::free_base("Carbon", 1.0),
+                    placement: BlueprintPlacement {
+                        x,
+                        y,
+                        rotation_radians: 0.0,
+                    },
+                })
                 .collect(),
             edges
                 .iter()

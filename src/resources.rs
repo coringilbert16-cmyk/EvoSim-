@@ -57,6 +57,8 @@ pub enum Form {
     /// New resource definitions must express fluidity through `PhysicalState`.
     Fluid {
         nominal_area: f64,
+        #[serde(default)]
+        boundary: Option<Vec<(f64, f64)>>,
     },
 }
 
@@ -74,13 +76,25 @@ impl Form {
             Form::Polygon { vertices } => {
                 vertices.len() >= 3 && vertices.iter().all(|(x, y)| x.is_finite() && y.is_finite())
             }
-            Form::Fluid { nominal_area } => nominal_area.is_finite() && *nominal_area > 0.0,
+            Form::Fluid {
+                nominal_area,
+                boundary,
+            } => {
+                if !nominal_area.is_finite() || *nominal_area <= 0.0 {
+                    return false;
+                }
+                boundary.as_ref().map_or(true, |vertices| {
+                    vertices.len() >= 3
+                        && vertices.iter().all(|(x, y)| x.is_finite() && y.is_finite())
+                })
+            }
         }
     }
 
     pub fn polygon_vertices(&self) -> Option<Vec<(f64, f64)>> {
         match self {
-            Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. } => None,
+            Form::Circle { .. } | Form::Line { .. } => None,
+            Form::Fluid { boundary, .. } => boundary.clone(),
             Form::Rectangle { width, height } => {
                 let hw = width / 2.0;
                 let hh = height / 2.0;
@@ -113,7 +127,19 @@ impl Form {
                 .iter()
                 .map(|(x, y)| (x * x + y * y).sqrt())
                 .fold(0.0_f64, f64::max),
-            Form::Fluid { nominal_area } => (nominal_area / std::f64::consts::PI).sqrt(),
+            Form::Fluid {
+                nominal_area,
+                boundary,
+            } => boundary
+                .as_ref()
+                .map(|vertices| {
+                    vertices
+                        .iter()
+                        .map(|(x, y)| x.hypot(*y))
+                        .fold(0.0_f64, f64::max)
+                })
+                .filter(|radius| *radius > 0.0)
+                .unwrap_or_else(|| (nominal_area / std::f64::consts::PI).sqrt()),
         }
     }
 }
@@ -371,6 +397,26 @@ pub fn effective_reactivity(reactivity: f64) -> f64 {
     reactivity.max(0.0)
 }
 
+/// Convert cohesion into boundary permeability using Water and Carbon as the
+/// physical endpoints. Water is fully permeable; Carbon is a hard wall.
+pub fn permeability_from_cohesion(cohesion: f64, catalog: &[BaseResource]) -> f64 {
+    let water = catalog
+        .iter()
+        .find(|resource| resource.name == "Water")
+        .map(|resource| resource.properties.cohesion);
+    let carbon = catalog
+        .iter()
+        .find(|resource| resource.name == "Carbon")
+        .map(|resource| resource.properties.cohesion);
+    let (Some(water), Some(carbon)) = (water, carbon) else {
+        return 0.0;
+    };
+    if !cohesion.is_finite() || !water.is_finite() || !carbon.is_finite() || carbon <= water {
+        return 0.0;
+    }
+    ((carbon - cohesion) / (carbon - water)).clamp(0.0, 1.0)
+}
+
 pub fn property_ranges(catalog: &[BaseResource]) -> ResourceProperties {
     if catalog.is_empty() {
         return ResourceProperties {
@@ -516,7 +562,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
                 mass: 1.00,
                 potential_energy: 0.0,
                 reactivity: 0.0,
-                cohesion: 0.50,
+                cohesion: 0.00,
             },
             physical_state: PhysicalState::Fluid,
             shape: Shape {
@@ -624,6 +670,15 @@ mod shape_tests {
     }
 
     #[test]
+    fn cohesion_permeability_uses_water_and_carbon_as_endpoints() {
+        let catalog = default_catalog();
+        assert!((permeability_from_cohesion(0.0, &catalog) - 1.0).abs() < 1e-12);
+        assert!((permeability_from_cohesion(0.95, &catalog) - 0.0).abs() < 1e-12);
+        assert!((permeability_from_cohesion(0.475, &catalog) - 0.5).abs() < 1e-12);
+        assert_eq!(permeability_from_cohesion(f64::NAN, &catalog), 0.0);
+    }
+
+    #[test]
     fn every_base_resource_unit_has_the_same_nominal_area() {
         fn polygon_area(vertices: &[(f64, f64)]) -> f64 {
             let mut sum = 0.0;
@@ -638,7 +693,7 @@ mod shape_tests {
         for resource in default_catalog() {
             let area = match &resource.shape.form {
                 Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-                Form::Fluid { nominal_area } => nominal_area.to_owned(),
+                Form::Fluid { nominal_area, .. } => nominal_area.to_owned(),
                 Form::Line { .. } => continue,
                 other => polygon_area(&other.polygon_vertices().unwrap()),
             };

@@ -18,8 +18,10 @@ mod structure_authority;
 // Active physical geometry authority stack.
 mod cavity;
 mod connection_geometry;
+mod construction_material_selection;
 mod construction_runtime;
 mod contact;
+mod interior_geometry;
 mod juvenile;
 mod juvenile_requirements;
 mod organism_geometry;
@@ -66,6 +68,8 @@ mod state;
 mod blueprint_diagnostics;
 #[cfg(test)]
 mod blueprint_spatial_target_tests;
+#[cfg(test)]
+mod bond_driven_contract_tests;
 #[cfg(test)]
 mod observation_contract_tests;
 #[cfg(test)]

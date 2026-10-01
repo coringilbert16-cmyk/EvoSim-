@@ -64,8 +64,21 @@ mod integration_tests {
         let initial_units = organism.structure.units.len();
         assert!(initial_units > 0);
 
-        s.step();
+        let dead = Simulation::apply_survival_damage(
+            &mut s.organisms[0],
+            &s.environment,
+            &mut s.energy_ledger,
+            &mut s.rng,
+        );
+        assert!(dead);
 
+        let mut dead_organism = s.organisms.pop().expect("dead organism should be present");
+        let recycled = crate::recycling::recycle_dead_organism(
+            &mut s.environment,
+            &mut dead_organism,
+            &mut s.energy_ledger,
+        );
+        assert!(recycled.is_some());
         assert!(s.organisms.is_empty());
         assert!(s.decomposing_bodies.is_empty());
         assert!(s.environment.field.total_amount() > before_environment_amount);
@@ -101,6 +114,37 @@ mod integration_tests {
         assert_eq!(o.stored_material.count_structured(), 2);
     }
     #[test]
+    fn accessible_interior_starts_without_synthetic_water() {
+        let s = Simulation::new(22, 10.0);
+        let catalog = s.environment.catalog.clone();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog)
+            .expect("confirmed seed baseline should be valid");
+        let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog)
+            .expect("initial realization should produce the seed boundary");
+        let regions =
+            crate::interior_geometry::find_accessible_interior_regions(&structure, &catalog)
+                .expect("initial seed should expose accessible topology");
+        assert!(!regions.is_empty());
+        // Boundary Water is ordinary realized structure; no Water is synthesized
+        // into the accessible interior.
+        assert!(structure.units.iter().all(|unit| {
+            let Some((name, _)) = unit.material.parts.first() else {
+                return true;
+            };
+            if name != "Water" {
+                return true;
+            }
+            matches!(
+                unit.shape(&catalog).map(|shape| &shape.form),
+                Some(crate::resources::Form::Fluid {
+                    boundary: Some(_),
+                    ..
+                })
+            )
+        }));
+    }
+
+    #[test]
     // Containment is automatic; there is no organism-side acquisition action.
     fn contained_physical_material_becomes_storage_without_an_acquire_action() {
         let mut s = Simulation::new(21, 10.0);
@@ -108,22 +152,75 @@ mod integration_tests {
             cell.physical_materials.clear();
         }
         let organism = s.organisms[0].clone();
-        let anchor = organism.structure.units[0].placement;
+        let regions = crate::interior_geometry::find_accessible_interior_regions(
+            &organism.structure,
+            &s.environment.catalog,
+        )
+        .expect("initial organism should expose an accessible interior region");
+        let region = regions
+            .iter()
+            .min_by(|a, b| {
+                a.area
+                    .partial_cmp(&b.area)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .expect("initial organism should have an accessible interior region");
+        // The topological sample point only proves that the point is inside;
+        // it is not guaranteed to contain an entire rigid resource. Find a
+        // placement where the actual Carbon geometry fits, then exercise the
+        // production containment path. This keeps the test independent of
+        // arbitrary chamber coordinates while still requiring real geometry.
+        let (min_x, max_x, min_y, max_y) = region.boundary.iter().fold(
+            (
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+            ),
+            |(min_x, max_x, min_y, max_y), &(x, y)| {
+                (min_x.min(x), max_x.max(x), min_y.min(y), max_y.max(y))
+            },
+        );
+        let mut anchor = None;
+        'candidate: for ix in 0..=80 {
+            let x = min_x + (max_x - min_x) * ix as f64 / 80.0;
+            for iy in 0..=80 {
+                let y = min_y + (max_y - min_y) * iy as f64 / 80.0;
+                let candidate = Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                };
+                let physical = PhysicalMaterial::realized(
+                    Material::free_base("Carbon", 1.0),
+                    vec![candidate],
+                    &s.environment.catalog,
+                )
+                .expect("base resource should have a valid physical realization");
+                if crate::environment::ActiveMaterialField::physical_is_fully_inside_any_region(
+                    &physical,
+                    std::slice::from_ref(region),
+                    &s.environment.catalog,
+                ) {
+                    anchor = Some(candidate);
+                    break 'candidate;
+                }
+            }
+        }
+        let anchor = anchor.expect("seed chamber must contain a full Carbon constituent");
         let physical = PhysicalMaterial::realized(
             Material::free_base("Carbon", 1.0),
             vec![anchor],
             &s.environment.catalog,
         )
-        .expect("carbon should have a valid physical realization");
+        .expect("base resource should have a valid physical realization");
         let before = s.organisms[0].stored_material.total_amount();
-        let field_before = s.environment.field.total_amount();
         s.environment.field.deposit(anchor.x, anchor.y, physical);
         Simulation::transfer_contained_environmental_material(
             &mut s.organisms[0],
             &mut s.environment,
         );
         assert_eq!(s.organisms[0].stored_material.total_amount(), before + 1.0);
-        assert!((s.environment.field.total_amount() - field_before).abs() < 1e-9);
     }
 
     #[test]

@@ -49,12 +49,32 @@ pub(crate) struct MovementAttemptDiagnostic {
     pub(crate) old_position: Option<Position>,
     pub(crate) new_position: Option<Position>,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub(crate) struct ActiveMovement {
+    /// One movement decision is a persistent operation. Physical progress is
+    /// always exactly one world unit per movement step.
+    pub(crate) direction_x: f64,
+    pub(crate) direction_y: f64,
+    pub(crate) remaining_steps: u32,
+    /// Number of ticks between physical one-unit steps.
+    pub(crate) step_interval: u64,
+    #[serde(default)]
+    pub(crate) ticks_until_step: u64,
+    /// Distance selected when the operation began; retained for learning context.
+    pub(crate) decision_distance: f64,
+    /// Baseline state captured when the movement operation begins.
+    pub(crate) before_energy: f64,
+    pub(crate) before_stress: f64,
+    pub(crate) before_developmental_realization: f64,
+}
 pub(crate) const MEMORY_DECAY_PER_TICK: f64 = 0.995;
 pub(crate) const COMBINE_PROCESSING_RATE: usize = 1;
 pub(crate) const BREAK_PROCESSING_RATE: usize = 1;
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone, Copy)]
 pub(crate) enum TransformationKind {
     Break,
+    Combine,
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct ActiveTransformation {
@@ -69,6 +89,10 @@ pub(crate) struct ActiveTransformation {
     pub(crate) stored_material: Option<crate::physical_material::PhysicalMaterial>,
     #[serde(default)]
     pub(crate) stored_bond: Option<crate::physical_material::PhysicalMaterialBond>,
+    /// True when the transformed physical material came directly from the
+    /// environment rather than organism storage.
+    #[serde(default)]
+    pub(crate) environmental_source: bool,
     pub(crate) complexity: f64,
     pub(crate) duration_ticks: u64,
     pub(crate) remaining_ticks: u64,
@@ -79,6 +103,22 @@ pub(crate) struct ActiveTransformation {
     #[serde(default)]
     pub(crate) pending_experience: Option<crate::memory::PendingTransformationExperience>,
     pub(crate) decision_context_key: Option<String>,
+    /// Deferred COMBINE state. Selection occurs on the first tick, energy
+    /// preparation on the second, and physical mutation on the third.
+    #[serde(default)]
+    pub(crate) prepared_structure: Option<OrganismStructure>,
+    #[serde(default)]
+    pub(crate) prepared_stored_material: Option<MaterialStorage>,
+    #[serde(default)]
+    pub(crate) prepared_usable_energy: Option<f64>,
+    #[serde(default)]
+    pub(crate) prepared_stress: Option<f64>,
+    #[serde(default)]
+    pub(crate) prepared_ledger: Option<EnergyLedger>,
+    /// Environmental material removed when COMBINE begins, held until resolve.
+    #[serde(default)]
+    pub(crate) combine_environmental_source:
+        Option<(usize, crate::physical_material::PhysicalMaterial)>,
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct ReproductiveConstruction {
@@ -138,6 +178,9 @@ pub(crate) struct Organism {
     pub(crate) experience_memory: crate::memory::ExperienceMemory,
     #[serde(default)]
     pub(crate) pending_movement_experience: Option<crate::memory::PendingMovementExperience>,
+    /// Persistent multi-tick movement operation, analogous to BREAK/COMBINE.
+    #[serde(default)]
+    pub(crate) active_movement: Option<ActiveMovement>,
     pub(crate) decision_history: DecisionHistory,
     pub(crate) usable_energy: f64,
     pub(crate) stress: f64,
@@ -206,16 +249,19 @@ impl Organism {
                 .ok()
                 .flatten()
                 .filter(|cavity| cavity.qualifies());
-            if self.structure.genome_constituent_ids().is_empty() {
-                if let Some(cavity) = cavity.as_ref() {
-                    let ids = cavity
+            // Keep the stable IDs synchronized with the currently realized
+            // cavity, but never use them to determine which topology is the genome.
+            let ids = cavity
+                .as_ref()
+                .map(|cavity| {
+                    cavity
                         .boundary_units
                         .iter()
                         .filter_map(|&index| self.structure.physical_id(index))
-                        .collect::<Vec<_>>();
-                    self.structure.set_genome_constituent_ids(ids);
-                }
-            }
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            self.structure.set_genome_constituent_ids(ids);
             self.cached_cavity = Some(cavity);
             self.cached_cavity_revision = Some(self.structure_revision);
         }

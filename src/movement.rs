@@ -146,15 +146,13 @@ fn select_movement_distance(
     usable_energy: f64,
     rng: &mut ChaCha8Rng,
 ) -> Option<f64> {
-    let affordable: Vec<f64> = MOVEMENT_DISTANCE_OPTIONS
-        .into_iter()
-        .filter(|distance| {
-            movement_energy_cost_for_distance(realized_mass, movement_efficiency, *distance)
-                .is_finite()
-                && movement_energy_cost_for_distance(realized_mass, movement_efficiency, *distance)
-                    <= usable_energy + f64::EPSILON
-        })
-        .collect();
+    let one_step_cost = movement_energy_cost_for_distance(realized_mass, movement_efficiency, 1.0);
+    let affordable: Vec<f64> =
+        if one_step_cost.is_finite() && one_step_cost <= usable_energy + f64::EPSILON {
+            MOVEMENT_DISTANCE_OPTIONS.to_vec()
+        } else {
+            Vec::new()
+        };
     if affordable.is_empty() {
         return None;
     }
@@ -216,7 +214,47 @@ fn movement_energy_cost(realized_mass: f64, movement_efficiency: f64) -> f64 {
 }
 
 impl Simulation {
-    pub(crate) fn update_movement(
+    pub(crate) fn start_movement(
+        organism: &mut Organism,
+        environment: &Environment,
+        rng: &mut ChaCha8Rng,
+        perceptions: &[crate::harmonics::ResonancePerception],
+    ) -> Result<crate::state::ActiveMovement, crate::state::MovementFailureReason> {
+        let realized_mass = organism.structural_mass(&environment.catalog);
+        let movement_efficiency = organism.genome.movement_efficiency();
+        let usable_energy = organism.usable_energy;
+        let direction = crate::movement_direction::movement_direction_periodic(
+            organism,
+            environment.height,
+            perceptions,
+        )
+        .ok_or(crate::state::MovementFailureReason::NoDirection)?;
+        let (x, y) = direction;
+        let distance = select_movement_distance(
+            organism,
+            realized_mass,
+            movement_efficiency,
+            usable_energy,
+            rng,
+        )
+        .ok_or(crate::state::MovementFailureReason::InsufficientEnergy)?;
+        Ok(crate::state::ActiveMovement {
+            direction_x: x,
+            direction_y: y,
+            remaining_steps: distance.round() as u32,
+            step_interval: organism.genome.movement_step_interval(),
+            ticks_until_step: 0,
+            decision_distance: distance,
+            before_energy: organism.usable_energy,
+            before_stress: organism.stress,
+            before_developmental_realization: organism
+                .developmental_realization_cached(&environment.catalog)
+                .map(|realization| realization.overall)
+                .unwrap_or(0.0),
+        })
+    }
+
+    pub(crate) fn advance_movement(
         before: &mut [Organism],
         organism: &mut Organism,
         after: &mut [Organism],
@@ -224,78 +262,34 @@ impl Simulation {
         environment: &mut Environment,
         ledger: &mut EnergyLedger,
         tick: u64,
-        rng: &mut ChaCha8Rng,
-        perceptions: &[crate::harmonics::ResonancePerception],
-    ) -> bool {
+        active: &mut crate::state::ActiveMovement,
+    ) -> Result<MovementProgress, crate::state::MovementFailureReason> {
+        if active.remaining_steps == 0 {
+            return Ok(MovementProgress::Complete);
+        }
+        if active.ticks_until_step > 0 {
+            active.ticks_until_step -= 1;
+            return Ok(MovementProgress::Waiting);
+        }
+
         let old_position = organism.occupied_cells.first().cloned();
         let usable_energy = organism.usable_energy;
-        let active_transformation_id = organism.active_transformation_id;
-        let movement_efficiency = organism.genome.movement_efficiency();
         let realized_mass = organism.structural_mass(&environment.catalog);
-        let direction = crate::movement_direction::movement_direction_periodic(
-            organism,
-            environment.height,
-            perceptions,
-        );
-        let Some((x, y)) = direction else {
+        let movement_efficiency = organism.genome.movement_efficiency();
+        let cost = movement_energy_cost_for_distance(realized_mass, movement_efficiency, 1.0);
+        if !cost.is_finite() || usable_energy + f64::EPSILON < cost {
             organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
                 tick,
-                direction_x: None,
-                direction_y: None,
-                step: None,
+                direction_x: Some(active.direction_x),
+                direction_y: Some(active.direction_y),
+                step: Some(active.decision_distance),
                 usable_energy,
-                active_transformation_id,
-                result: Err(crate::state::MovementFailureReason::NoDirection),
-                old_position,
-                new_position: None,
-            });
-            return false;
-        };
-
-        let Some(step) = select_movement_distance(
-            organism,
-            realized_mass,
-            movement_efficiency,
-            organism.usable_energy,
-            rng,
-        ) else {
-            organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
-                tick,
-                direction_x: Some(x),
-                direction_y: Some(y),
-                step: None,
-                usable_energy,
-                active_transformation_id,
+                active_transformation_id: organism.active_transformation_id,
                 result: Err(crate::state::MovementFailureReason::InsufficientEnergy),
                 old_position,
                 new_position: None,
             });
-            return false;
-        };
-
-        let requested_dx = x * step;
-        let requested_dy = y * step;
-        let old = organism
-            .occupied_cells
-            .first()
-            .expect("movement direction requires an occupied cell");
-        let actual_dx = (old.x + requested_dx).clamp(0.0, environment.width) - old.x;
-        let actual_distance = actual_dx.hypot(requested_dy);
-        let cost =
-            movement_energy_cost_for_distance(realized_mass, movement_efficiency, actual_distance);
-        if !cost.is_finite() || organism.usable_energy + f64::EPSILON < cost {
-            organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
-                tick,
-                direction_x: Some(x),
-                direction_y: Some(y),
-                step: Some(step),
-                usable_energy,
-                active_transformation_id,
-                result: Err(crate::state::MovementFailureReason::InsufficientEnergy),
-                old_position,
-                new_position: None,
-            });
-            return false;
+            return Err(crate::state::MovementFailureReason::InsufficientEnergy);
         }
 
         let result = Self::try_move_cell_with_reason(
@@ -305,46 +299,70 @@ impl Simulation {
             after,
             before.len(),
             spatial_index,
-            requested_dx,
-            requested_dy,
+            active.direction_x,
+            active.direction_y,
         );
         let diagnostic_result = result.clone();
         let new_position = organism.occupied_cells.first().cloned();
-        if result.is_ok() {
-            let transaction = EnergyTransaction {
-                reason: EnergyReason::Move,
-                potential_released: 0.0,
-                usable_delta: -cost,
-                structural_delta: 0.0,
-                heat_dissipated: cost,
-            };
-            if !ledger.settle_transaction(&mut organism.usable_energy, transaction) {
-                organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
-                    tick,
-                    direction_x: Some(x),
-                    direction_y: Some(y),
-                    step: Some(step),
-                    usable_energy,
-                    active_transformation_id,
-                    result: Err(crate::state::MovementFailureReason::InsufficientEnergy),
-                    old_position,
-                    new_position,
-                });
-                return false;
-            }
+        if let Err(reason) = result {
+            organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
+                tick,
+                direction_x: Some(active.direction_x),
+                direction_y: Some(active.direction_y),
+                step: Some(active.decision_distance),
+                usable_energy,
+                active_transformation_id: organism.active_transformation_id,
+                result: Err(reason.clone()),
+                old_position,
+                new_position,
+            });
+            return Err(reason);
         }
+
+        let transaction = EnergyTransaction {
+            reason: EnergyReason::Move,
+            potential_released: 0.0,
+            usable_delta: -cost,
+            structural_delta: 0.0,
+            heat_dissipated: cost,
+        };
+        if !ledger.settle_transaction(&mut organism.usable_energy, transaction) {
+            organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
+                tick,
+                direction_x: Some(active.direction_x),
+                direction_y: Some(active.direction_y),
+                step: Some(active.decision_distance),
+                usable_energy,
+                active_transformation_id: organism.active_transformation_id,
+                result: Err(crate::state::MovementFailureReason::InsufficientEnergy),
+                old_position,
+                new_position,
+            });
+            return Err(crate::state::MovementFailureReason::InsufficientEnergy);
+        }
+
+        active.remaining_steps = active.remaining_steps.saturating_sub(1);
+        active.ticks_until_step = if active.remaining_steps == 0 {
+            0
+        } else {
+            active.step_interval.saturating_sub(1)
+        };
         organism.last_movement_attempt = Some(crate::state::MovementAttemptDiagnostic {
             tick,
-            direction_x: Some(x),
-            direction_y: Some(y),
-            step: Some(step),
+            direction_x: Some(active.direction_x),
+            direction_y: Some(active.direction_y),
+            step: Some(active.decision_distance),
             usable_energy,
-            active_transformation_id,
+            active_transformation_id: organism.active_transformation_id,
             result: diagnostic_result,
             old_position,
             new_position,
         });
-        result.is_ok()
+        if active.remaining_steps == 0 {
+            Ok(MovementProgress::Complete)
+        } else {
+            Ok(MovementProgress::Moved)
+        }
     }
 
     pub(crate) fn try_move_cell(
@@ -434,6 +452,13 @@ impl Simulation {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MovementProgress {
+    Waiting,
+    Moved,
+    Complete,
+}
+
 fn organism_at<'a>(
     before: &'a [Organism],
     after: &'a [Organism],
@@ -489,6 +514,7 @@ fn resolve_push_chain(
     let moving_destination = organism_parts_at(moving, environment, dx, dy);
     let mut plan = PushPlan::default();
     if push_blockers_for_parts(
+        moving,
         &moving_destination,
         before,
         after,
@@ -508,6 +534,7 @@ fn resolve_push_chain(
 }
 
 fn push_blockers_for_parts(
+    moving: &Organism,
     moving_destination: &[PlacedMaterialPart],
     before: &[Organism],
     after: &[Organism],
@@ -537,6 +564,7 @@ fn push_blockers_for_parts(
         let destination = organism_parts_at(candidate, environment, dx, dy);
         organism_visited[index] = true;
         if !push_blockers_for_parts(
+            candidate,
             &destination,
             before,
             after,
@@ -603,7 +631,23 @@ fn push_blockers_for_parts(
                 continue;
             }
             let candidate_parts = physical_parts_at(candidate, environment, 0.0, 0.0);
-            if !parts_penetrate(moving_destination, &candidate_parts, environment.height) {
+            if candidate_parts.is_empty()
+                || !moving_destination.iter().any(|moving_part| {
+                    candidate_parts.iter().any(|candidate_part| {
+                        crate::material_geometry::placed_forms_boundary_contact(
+                            moving_part,
+                            candidate_part,
+                            0.0,
+                        )
+                    })
+                })
+            {
+                continue;
+            }
+            if environmental_penetration_allowed(moving, environment, candidate, dx, dy) {
+                // Permeable environmental material is not a push blocker. It
+                // remains in place and can become ordinary stored material once
+                // its realized geometry is fully contained.
                 continue;
             }
             if !can_translate_physical(candidate, environment, dx, dy) {
@@ -612,6 +656,7 @@ fn push_blockers_for_parts(
             let destination = physical_parts_at(candidate, environment, dx, dy);
             physical_visited.insert(key);
             if !push_blockers_for_parts(
+                moving,
                 &destination,
                 before,
                 after,
@@ -630,6 +675,99 @@ fn push_blockers_for_parts(
         }
     }
     true
+}
+
+fn environmental_penetration_allowed(
+    moving: &Organism,
+    environment: &Environment,
+    physical: &crate::physical_material::PhysicalMaterial,
+    dx: f64,
+    dy: f64,
+) -> bool {
+    let candidate_destination = physical_parts_at(physical, environment, 0.0, 0.0);
+    if candidate_destination.is_empty() {
+        return false;
+    }
+
+    let mut permeability: f64 = 1.0;
+    let mut contacted = false;
+
+    for (unit_index, unit) in moving.structure.units.iter().enumerate() {
+        let Some(shape) = unit.shape(&environment.catalog) else {
+            continue;
+        };
+        let boundary_part = PlacedMaterialPart {
+            part_index: unit_index,
+            form: shape.form.clone(),
+            placement: Placement {
+                x: unit.placement.x + dx,
+                y: unit.placement.y + dy,
+                rotation_radians: unit.placement.rotation_radians,
+            },
+        };
+
+        for candidate_part in &candidate_destination {
+            if !crate::material_geometry::placed_forms_boundary_contact(
+                &boundary_part,
+                candidate_part,
+                0.0,
+            ) {
+                continue;
+            }
+
+            let cohesion = unit
+                .material
+                .weighted_properties(&environment.catalog)
+                .cohesion;
+            permeability = permeability.min(crate::resources::permeability_from_cohesion(
+                cohesion,
+                &environment.catalog,
+            ));
+            contacted = true;
+        }
+    }
+
+    if !contacted {
+        return false;
+    }
+
+    // Permeability is the fraction of the requested movement that may occur
+    // after first boundary contact. This makes the response continuous:
+    // Carbon (0) stops at contact, Water (1) permits the full displacement,
+    // and intermediate cohesion permits partial penetration without a
+    // random acquisition roll.
+    if permeability >= 1.0 - 1e-12 {
+        return true;
+    }
+    if permeability <= 1e-12 {
+        return false;
+    }
+
+    let mut low = 0.0;
+    let mut high = 1.0;
+    for _ in 0..24 {
+        let mid = (low + high) * 0.5;
+        let destination = organism_parts_at(moving, environment, dx * mid, dy * mid);
+        if destination.iter().any(|organism_part| {
+            physical_parts_at(physical, environment, 0.0, 0.0)
+                .iter()
+                .any(|physical_part| {
+                    crate::material_geometry::placed_forms_boundary_contact(
+                        organism_part,
+                        physical_part,
+                        0.0,
+                    )
+                })
+        }) {
+            high = mid;
+        } else {
+            low = mid;
+        }
+    }
+
+    let first_contact = high;
+    let penetration_fraction = 1.0 - first_contact;
+    penetration_fraction <= permeability + 1e-9
 }
 
 fn apply_push_plan(
@@ -871,6 +1009,133 @@ mod tests {
             cell.physical_materials.clear();
         }
         environment
+    }
+
+    #[test]
+    fn impermeable_boundary_blocks_environmental_material() {
+        let simulation = Simulation::new(42, 1.0);
+        let environment = simulation.environment.clone();
+        let moving = simulation.organisms.first().expect("default seed organism");
+        let carbon = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: moving.structure.units[0].placement.x + 1.0,
+                y: moving.structure.units[0].placement.y,
+                rotation_radians: 0.0,
+            }],
+            &environment.catalog,
+        )
+        .expect("valid carbon realization");
+        let destination = organism_parts_at(moving, &environment, 1.0, 0.0);
+        assert!(parts_penetrate(
+            &destination,
+            &physical_parts_at(&carbon, &environment, 0.0, 0.0),
+            environment.height
+        ));
+        assert!(!environmental_penetration_allowed(
+            moving,
+            &environment,
+            &carbon,
+            1.0,
+            0.0
+        ));
+    }
+
+    #[test]
+    fn water_boundary_permits_full_environmental_penetration() {
+        let simulation = Simulation::new(42, 1.0);
+        let environment = simulation.environment.clone();
+        let moving = simulation.organisms.first().expect("default seed organism");
+
+        let water_unit = moving
+            .structure
+            .units
+            .iter()
+            .find(|unit| {
+                unit.material
+                    .parts
+                    .first()
+                    .map(|(name, _)| name == "Water")
+                    .unwrap_or(false)
+            })
+            .expect("seed boundary should contain Water");
+
+        let carbon = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: water_unit.placement.x + 1.0,
+                y: water_unit.placement.y,
+                rotation_radians: 0.0,
+            }],
+            &environment.catalog,
+        )
+        .expect("valid carbon realization");
+        assert!(environmental_penetration_allowed(
+            moving,
+            &environment,
+            &carbon,
+            1.0,
+            0.0
+        ));
+    }
+
+    #[test]
+    fn fluid_boundary_is_contact_geometry_without_becoming_a_wall() {
+        let simulation = Simulation::new(42, 1.0);
+        let environment = simulation.environment.clone();
+        let moving = simulation.organisms.first().expect("default seed organism");
+        let water_unit = moving
+            .structure
+            .units
+            .iter()
+            .find(|unit| {
+                unit.material
+                    .parts
+                    .first()
+                    .map(|(name, _)| name == "Water")
+                    .unwrap_or(false)
+            })
+            .expect("seed boundary should contain Water");
+        let water = water_unit.shape(&environment.catalog).expect("water shape");
+        let boundary_vertex = match &water.form {
+            crate::resources::Form::Fluid {
+                boundary: Some(vertices),
+                ..
+            } => vertices
+                .first()
+                .copied()
+                .expect("water boundary should have a vertex"),
+            _ => panic!("seed Water must have realized boundary geometry"),
+        };
+        let carbon = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: water_unit.placement.x + boundary_vertex.0,
+                y: water_unit.placement.y + boundary_vertex.1,
+                rotation_radians: 0.0,
+            }],
+            &environment.catalog,
+        )
+        .expect("valid carbon realization");
+        let carbon_part = physical_parts_at(&carbon, &environment, 0.0, 0.0)
+            .into_iter()
+            .next()
+            .expect("carbon geometry");
+        let water_part = PlacedMaterialPart {
+            part_index: 0,
+            form: water.form.clone(),
+            placement: water_unit.placement,
+        };
+        assert!(crate::material_geometry::placed_forms_boundary_contact(
+            &water_part,
+            &carbon_part,
+            0.0
+        ));
+        assert!(!crate::material_geometry::placed_forms_penetrate(
+            &water_part,
+            &carbon_part,
+            0.0
+        ));
     }
 
     #[test]
