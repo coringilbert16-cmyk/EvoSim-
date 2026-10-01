@@ -13,7 +13,7 @@ use crate::resources::{BaseResource, Material};
 use crate::state::EnergyLedger;
 use crate::structure::OrganismStructure;
 use serde::{Deserialize, Deserializer, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 fn default_anchor_elements() -> Vec<usize> {
     vec![0]
@@ -31,6 +31,10 @@ pub struct BlueprintPlacement {
 pub struct StructuralBlueprint {
     pub elements: Vec<BlueprintElement>,
     pub connections: Vec<BlueprintConnection>,
+    /// Transient construction-only genome measurement piece. It is never
+    /// serialized, bonded, acquired, or retained in the organism structure.
+    #[serde(skip)]
+    pub(crate) genome_measurement: Option<GenomeMeasurementScaffold>,
     /// Construction anchors identify where realization may begin. They are
     /// not a biological genome definition and do not identify the genome.
     #[serde(default = "default_anchor_elements")]
@@ -71,7 +75,6 @@ impl<'de> Deserialize<'de> for BlueprintElement {
         })
     }
 }
-
 impl BlueprintElement {
     pub fn validate(&self) -> Result<(), String> {
         if !self.material.is_valid() {
@@ -91,6 +94,56 @@ impl BlueprintElement {
 pub struct BlueprintConnection {
     pub element_a: usize,
     pub element_b: usize,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct GenomeMeasurementScaffold {
+    /// Three bonded Carbon guide pieces. The guide occupies real construction
+    /// volume but has no organism units or bonds of its own.
+    pub(crate) placements: [BlueprintPlacement; 3],
+    /// The temporary three-carbon reference is itself a triangle: all three
+    /// Carbon pieces are internally bonded, with each edge contributing to the
+    /// cavity measurement.
+    pub(crate) bonds: [(usize, usize); 3],
+}
+
+impl GenomeMeasurementScaffold {
+    pub(crate) fn three_carbon_reference(catalog: &[BaseResource]) -> Result<Self, String> {
+        let carbon = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .ok_or_else(|| "catalog has no Carbon resource".to_string())?;
+        let radius = match carbon.shape.form {
+            crate::resources::Form::RegularPolygon { radius, .. } => radius,
+            _ => return Err("Carbon genome measurement requires a polygonal Carbon shape".into()),
+        };
+        // Carbon is a rigid regular hexagon. The scaffold must be physical:
+        // neighboring Carbon pieces are placed exactly far enough apart that
+        // their boundaries can touch without their interiors overlapping.
+        // An equilateral triangle with side 2 * radius provides that spacing.
+        let side = radius * 2.0;
+        let circumradius = side / 3.0_f64.sqrt();
+        Ok(Self {
+            placements: [
+                BlueprintPlacement {
+                    x: 0.0,
+                    y: circumradius,
+                    rotation_radians: 0.0,
+                },
+                BlueprintPlacement {
+                    x: -circumradius * (3.0_f64).sqrt() / 2.0,
+                    y: -circumradius / 2.0,
+                    rotation_radians: 0.0,
+                },
+                BlueprintPlacement {
+                    x: circumradius * (3.0_f64).sqrt() / 2.0,
+                    y: -circumradius / 2.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            bonds: [(0, 1), (1, 2), (2, 0)],
+        })
+    }
 }
 
 impl BlueprintConnection {
@@ -125,6 +178,7 @@ impl StructuralBlueprint {
             elements,
             connections: Self::canonical_connections(connections),
             anchor_elements: default_anchor_elements(),
+            genome_measurement: None,
         }
     }
 
@@ -137,6 +191,7 @@ impl StructuralBlueprint {
             elements,
             connections: Self::canonical_connections(connections),
             anchor_elements,
+            genome_measurement: None,
         }
     }
 
@@ -147,6 +202,11 @@ impl StructuralBlueprint {
             .map(BlueprintConnection::canonical)
             .filter(|c| seen.insert((c.element_a, c.element_b)))
             .collect()
+    }
+
+    pub(crate) fn with_genome_measurement(mut self, scaffold: GenomeMeasurementScaffold) -> Self {
+        self.genome_measurement = Some(scaffold);
+        self
     }
 
     pub fn is_valid(&self) -> bool {
@@ -192,10 +252,13 @@ impl StructuralBlueprint {
     /// solely so COMBINE can evaluate its real admission rules. No simulation
     /// ledger, organism energy, or structure is mutated by this method.
     pub fn realize(&self, catalog: &[BaseResource]) -> Result<OrganismStructure, String> {
+        let mut preview = self.clone();
+        preview.genome_measurement = None;
         let mut ledger = EnergyLedger::default();
         let mut preview_energy = 1.0e12;
-        self.realize_with_context(catalog, &mut ledger, &mut preview_energy)
-            .map(|(structure, _)| structure)
+        preview
+            .realize_with_context(catalog, &mut ledger, &mut preview_energy)
+            .map(|(structure, _, _)| structure)
     }
 
     /// Actual blueprint realization. All elements share one energy holder and
@@ -206,68 +269,35 @@ impl StructuralBlueprint {
         catalog: &[BaseResource],
         ledger: &mut EnergyLedger,
         energy: &mut f64,
-    ) -> Result<(OrganismStructure, f64), String> {
+    ) -> Result<(OrganismStructure, f64, f64), String> {
         self.validate()?;
-        let mut structure = OrganismStructure::new();
-        let mut realized = HashMap::<usize, Vec<usize>>::new();
-        let mut order = Vec::with_capacity(self.elements.len());
-        let mut visited = vec![false; self.elements.len()];
-        let mut queue = vec![self.anchor_elements[0]];
-        visited[self.anchor_elements[0]] = true;
-        while let Some(current) = queue.pop() {
-            order.push(current);
-            for connection in &self.connections {
-                let neighbor = if connection.element_a == current {
-                    connection.element_b
-                } else if connection.element_b == current {
-                    connection.element_a
-                } else {
-                    continue;
-                };
-                if !visited[neighbor] {
-                    visited[neighbor] = true;
-                    queue.push(neighbor);
-                }
-            }
-        }
-        if order.len() != self.elements.len() {
-            return Err(
-                "blueprint realization stalled before all elements were constructed".into(),
-            );
-        }
+        let (structure, total_heat) = crate::construction_runtime::construct_blueprint_bond_driven(
+            self, catalog, ledger, energy,
+        )?;
+        Ok((structure, total_heat, *energy))
+    }
 
-        let mut total_heat = 0.0;
-        for index in order {
-            let external = self
-                .connections
-                .iter()
-                .filter_map(|connection| {
-                    let neighbor = if connection.element_a == index {
-                        connection.element_b
-                    } else if connection.element_b == index {
-                        connection.element_a
-                    } else {
-                        return None;
-                    };
-                    realized.get(&neighbor).cloned()
-                })
-                .collect::<Vec<_>>();
-            let (ids, heat) = crate::construction_runtime::realize_material_with_context(
-                &mut structure,
-                &self.elements[index],
+    /// Realize this developmental blueprint from actual physical inventory.
+    /// The blueprint supplies structural preference; the inventory supplies
+    /// what can actually be built with. A material mismatch below the
+    /// construction threshold is returned as a construction-material need.
+    pub fn realize_with_materials(
+        &self,
+        catalog: &[BaseResource],
+        available_materials: &mut crate::material_storage::MaterialStorage,
+        ledger: &mut EnergyLedger,
+        energy: &mut f64,
+    ) -> Result<(OrganismStructure, f64, f64), String> {
+        self.validate()?;
+        let (structure, total_heat) =
+            crate::construction_runtime::construct_blueprint_bond_driven_with_materials(
+                self,
                 catalog,
+                available_materials,
                 ledger,
                 energy,
-                &external,
-            )
-            .map_err(|error| format!("element {index} construction failed: {error}"))?;
-            validate_element_contact(&structure, &ids, &external, catalog)
-                .map_err(|error| format!("element {index} contact validation failed: {error}"))?;
-            realized.insert(index, ids);
-            total_heat += heat;
-        }
-
-        Ok((structure, total_heat))
+            )?;
+        Ok((structure, total_heat, *energy))
     }
 
     pub fn is_connected(&self) -> bool {
@@ -310,33 +340,24 @@ impl StructuralBlueprint {
     }
 }
 
-fn validate_element_contact(
-    structure: &OrganismStructure,
-    ids: &[usize],
-    neighbors: &[Vec<usize>],
-    catalog: &[BaseResource],
-) -> Result<(), String> {
-    for &id in ids {
-        if structure.units.get(id).is_none() {
-            return Err("realized material references a missing constituent".to_string());
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn genome_measurement_scaffold_is_an_equilateral_three_bond_triangle() {
+        let catalog = crate::resources::default_catalog();
+        let scaffold = GenomeMeasurementScaffold::three_carbon_reference(&catalog).unwrap();
+
+        assert_eq!(scaffold.bonds, [(0, 1), (1, 2), (2, 0)]);
+
+        let points = scaffold.placements;
+        let d01 = (points[0].x - points[1].x).hypot(points[0].y - points[1].y);
+        let d12 = (points[1].x - points[2].x).hypot(points[1].y - points[2].y);
+        let d20 = (points[2].x - points[0].x).hypot(points[2].y - points[0].y);
+
+        assert!((d01 - d12).abs() <= 1e-10);
+        assert!((d12 - d20).abs() <= 1e-10);
+        assert!(d01 > 0.0);
     }
-    for group in neighbors {
-        let min_distance = ids
-            .iter()
-            .flat_map(|&a| {
-                group.iter().flat_map(move |&b| {
-                    crate::contact::connection_pair_candidates(structure, a, b, catalog)
-                        .into_iter()
-                        .map(|candidate| candidate.distance)
-                })
-            })
-            .fold(f64::INFINITY, f64::min);
-        if min_distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE {
-            return Err(format!(
-                "realized material has no physical contact with a prescribed neighbor (minimum endpoint distance: {min_distance})"
-            ));
-        }
-    }
-    Ok(())
 }

@@ -3,7 +3,7 @@
 
 use crate::resources::{BaseResource, Form};
 use crate::structure::{OrganismStructure, Placement};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::f64::consts::TAU;
 
 const EPS: f64 = 1e-8;
@@ -115,21 +115,9 @@ pub fn analyze_genome_cavity(
     structure: &OrganismStructure,
     catalog: &[BaseResource],
 ) -> Result<Option<GenomeCavity>, String> {
-    if let Some(&genome_id) = structure.genome_constituent_ids().first() {
-        let Some(start) = structure.unit_index(genome_id) else {
-            return Ok(None);
-        };
-        return analyze_genome_cavity_in_indices(
-            structure,
-            catalog,
-            &structure.connected_component_containing(start),
-        );
-    }
-
-    // Legacy/uninitialized structures have no persisted genome IDs yet.
-    // Qualification is therefore established from the realized physical graph
-    // across connected components; once a cavity qualifies, its actual
-    // boundary IDs are persisted by the caller.
+    // The genome cavity is always re-derived from the current realized graph.
+    // Persisted physical IDs are only a cache/identity aid and must never freeze
+    // the cavity boundary against later structural evolution.
     let mut best = None;
     for component in structure.connected_components() {
         let candidate = analyze_genome_cavity_in_indices(structure, catalog, &component)?;
@@ -149,13 +137,22 @@ fn analyze_genome_cavity_in_indices(
     candidate_indices: &[usize],
 ) -> Result<Option<GenomeCavity>, String> {
     let minimum_area = minimum_genome_cavity_area(catalog)?;
-    let structural_indices = candidate_indices.iter().copied().filter(|&index| {
-        structure.genome_constituent_ids().is_empty()
-            || structure.is_structurally_qualified(index, catalog)
-    });
+    let structural_indices = candidate_indices
+        .iter()
+        .copied()
+        .filter(|&index| structure.is_structurally_qualified(index, catalog));
     let mut polygons = Vec::<(usize, Vec<Point>)>::new();
     for index in structural_indices {
         let unit = &structure.units[index];
+        let Some((name, _)) = unit.material.parts.first() else {
+            continue;
+        };
+        let Some(resource) = catalog.iter().find(|resource| resource.name == *name) else {
+            continue;
+        };
+        if resource.physical_state == crate::resources::PhysicalState::Fluid {
+            continue;
+        }
         let Some(geometry) = unit.geometry.as_ref() else {
             continue;
         };
@@ -312,6 +309,42 @@ fn analyze_genome_cavity_in_indices(
             best = Some(candidate);
         }
     }
+    if best.is_none() {
+        // The general interior-region tracer already handles the same realized
+        // geometry, including contacts whose epsilon sample lies inside a wall.
+        // Reuse that geometric face only as a fallback; the genome still must
+        // have a sufficiently large area and a bonded closed boundary.
+        let component_set: HashSet<usize> = candidate_indices.iter().copied().collect();
+        for region in crate::interior_geometry::find_enclosed_regions(structure, catalog) {
+            if region.area + EPS < minimum_area
+                || region.boundary_units.len() < 3
+                || !region
+                    .boundary_units
+                    .iter()
+                    .all(|index| component_set.contains(index))
+            {
+                continue;
+            }
+            let boundary: HashSet<usize> = region.boundary_units.iter().copied().collect();
+            let closed = region.boundary_units.iter().all(|&unit| {
+                structure
+                    .direct_neighbor_indices(unit)
+                    .into_iter()
+                    .filter(|neighbor| boundary.contains(neighbor))
+                    .count()
+                    >= 2
+            });
+            if closed {
+                best = Some(GenomeCavity {
+                    area: region.area,
+                    boundary_units: region.boundary_units,
+                    minimum_area,
+                });
+                break;
+            }
+        }
+    }
+
     Ok(best)
 }
 

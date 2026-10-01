@@ -101,6 +101,47 @@ impl StructuralUnit {
         self.geometry = Some(PhysicalGeometry::from_default(&shape));
         true
     }
+
+    /// Re-realize a connected fluid constituent into geometry supplied by the
+    /// surrounding structural context. Rigid resources cannot use this path.
+    pub fn realize_fluid_geometry(
+        &mut self,
+        shape: crate::resources::Shape,
+        catalog: &[BaseResource],
+    ) -> bool {
+        let Some((name, amount)) = self.material.parts.first() else {
+            return false;
+        };
+        if self.material.parts.len() != 1
+            || self.material.has_internal_structure()
+            || !amount.is_finite()
+            || *amount <= 0.0
+        {
+            return false;
+        }
+        let Some(resource) = catalog.iter().find(|resource| resource.name == *name) else {
+            return false;
+        };
+        if resource.physical_state != crate::resources::PhysicalState::Fluid {
+            return false;
+        }
+        if !matches!(
+            shape.form,
+            crate::resources::Form::Fluid {
+                boundary: Some(_),
+                ..
+            }
+        ) {
+            return false;
+        }
+        if self.geometry.is_none() {
+            self.geometry = Some(PhysicalGeometry::from_default(&resource.shape));
+        }
+        let Some(geometry) = self.geometry.as_mut() else {
+            return false;
+        };
+        geometry.replace_fluid_realization(shape)
+    }
 }
 impl<'de> Deserialize<'de> for StructuralUnit {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -325,34 +366,9 @@ fn units_strictly_overlap(
         form: form_b.form.clone(),
         placement: b.placement,
     };
-    if !crate::material_geometry::placed_forms_overlap(&pa, &pb, 0.0) {
-        return false;
-    }
-    let dx = b.placement.x - a.placement.x;
-    let dy = b.placement.y - a.placement.y;
-    let distance = dx.hypot(dy);
-    let (sx, sy) = if distance > 1e-12 {
-        (dx / distance, dy / distance)
-    } else {
-        (1.0, 0.0)
-    };
-    let scale = pa
-        .form
-        .bounding_radius()
-        .max(pb.form.bounding_radius())
-        .max(1.0);
-    let epsilon = 1e-8 * scale;
-    let shifted = crate::material_geometry::PlacedMaterialPart {
-        part_index: 0,
-        form: pa.form.clone(),
-        placement: Placement {
-            x: a.placement.x - sx * epsilon,
-            y: a.placement.y - sy * epsilon,
-            rotation_radians: a.placement.rotation_radians,
-        },
-    };
-    crate::material_geometry::placed_forms_overlap(&shifted, &pb, 0.0)
+    crate::material_geometry::placed_forms_penetrate(&pa, &pb, 0.0)
 }
+
 #[derive(Serialize, Clone, Debug)]
 pub struct PhysicalConstituentGraph {
     pub units: Vec<StructuralUnit>,
@@ -459,6 +475,24 @@ impl PhysicalConstituentGraph {
         self.units.push(u);
         index
     }
+    /// Remove temporary physical constituents and every bond touching them.
+    /// Bonds identify constituents by stable physical ID, so remaining units do
+    /// not need index remapping.
+    pub(crate) fn remove_units_by_physical_ids(&mut self, ids: &[PhysicalConstituentId]) {
+        if ids.is_empty() {
+            return;
+        }
+        let doomed: HashSet<PhysicalConstituentId> = ids.iter().copied().collect();
+        self.units
+            .retain(|unit| !doomed.contains(&unit.physical_id));
+        self.bonds.retain(|bond| {
+            !doomed.contains(&bond.endpoint_a.constituent_id)
+                && !doomed.contains(&bond.endpoint_b.constituent_id)
+        });
+        self.genome_constituent_ids
+            .retain(|id| !doomed.contains(id));
+    }
+
     pub fn physical_id(&self, unit_index: usize) -> Option<PhysicalConstituentId> {
         self.units.get(unit_index).map(|u| u.physical_id)
     }
@@ -520,22 +554,33 @@ impl PhysicalConstituentGraph {
         self.genome_constituent_ids.clear();
     }
 
-    /// The structural body is the connected component containing the persisted
-    /// physical genome constituents. Disconnected material is not structural
-    /// merely because it remains inside the organism boundary.
+    /// The structural body is every bonded physical component that contains
+    /// non-fluid material. Genome-boundary IDs are never required for structural
+    /// membership, so the body can reorganize as the realized genome cavity changes.
     pub fn structural_unit_indices(&self, catalog: &[BaseResource]) -> Vec<usize> {
-        let Some(&genome_id) = self.genome_constituent_ids.first() else {
-            return Vec::new();
-        };
-        let Some(start) = self.unit_index(genome_id) else {
-            return Vec::new();
-        };
-        self.connected_component_containing(start)
-            .into_iter()
-            .filter(|&index| self.is_structurally_qualified(index, catalog))
-            .collect()
+        let mut structural = Vec::new();
+        for component in self.connected_components() {
+            if component.len() < 2
+                || !component.iter().any(|&index| {
+                    self.units[index]
+                        .material
+                        .parts
+                        .first()
+                        .and_then(|(name, _)| {
+                            catalog.iter().find(|resource| resource.name == *name)
+                        })
+                        .is_some_and(|resource| {
+                            resource.physical_state != crate::resources::PhysicalState::Fluid
+                        })
+                })
+            {
+                continue;
+            }
+            structural.extend(component);
+        }
+        structural.sort_unstable();
+        structural
     }
-
     pub fn genome_connected(&self, unit_index: usize) -> bool {
         if unit_index >= self.units.len() || self.genome_constituent_ids.is_empty() {
             return false;
@@ -571,33 +616,25 @@ impl PhysicalConstituentGraph {
         neighbors
     }
 
-    pub fn has_direct_nonfluid_neighbor(
-        &self,
-        unit_index: usize,
-        catalog: &[BaseResource],
-    ) -> bool {
-        self.direct_neighbor_indices(unit_index)
+    pub fn component_contains_nonfluid(&self, unit_index: usize, catalog: &[BaseResource]) -> bool {
+        self.connected_component_containing(unit_index)
             .into_iter()
-            .any(|neighbor| {
-                let is_genome = self
-                    .genome_constituent_ids
-                    .contains(&self.units[neighbor].physical_id);
-                is_genome
-                    || self.units[neighbor]
-                        .material
-                        .parts
-                        .first()
-                        .and_then(|(name, _)| {
-                            catalog.iter().find(|resource| resource.name == *name)
-                        })
-                        .is_some_and(|resource| {
-                            resource.physical_state != crate::resources::PhysicalState::Fluid
-                        })
+            .any(|index| {
+                self.units[index]
+                    .material
+                    .parts
+                    .first()
+                    .and_then(|(name, _)| catalog.iter().find(|resource| resource.name == *name))
+                    .is_some_and(|resource| {
+                        resource.physical_state != crate::resources::PhysicalState::Fluid
+                    })
             })
     }
 
     pub fn is_structurally_qualified(&self, unit_index: usize, catalog: &[BaseResource]) -> bool {
-        if !self.genome_connected(unit_index) {
+        if unit_index >= self.units.len()
+            || self.connected_component_containing(unit_index).len() < 2
+        {
             return false;
         }
         let Some((name, _)) = self
@@ -613,7 +650,7 @@ impl PhysicalConstituentGraph {
         if resource.physical_state != crate::resources::PhysicalState::Fluid {
             return true;
         }
-        self.has_direct_nonfluid_neighbor(unit_index, catalog)
+        self.component_contains_nonfluid(unit_index, catalog)
     }
 
     pub fn connected_component_containing(&self, start: usize) -> Vec<usize> {
@@ -720,7 +757,53 @@ pub fn formation_threshold(a: f64, b: f64, la: f64, lb: f64) -> f64 {
 mod tests {
     use super::*;
     #[test]
-    fn structural_membership_uses_persisted_physical_genome_ids() {
+    fn only_fluid_resources_can_take_context_fitting_geometry() {
+        let catalog = crate::resources::default_catalog();
+        let mut water = StructuralUnit::new(
+            "Water",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        assert!(water.realize_default_geometry(&catalog));
+        let fitted = crate::resources::Shape {
+            form: crate::resources::Form::Fluid {
+                nominal_area: 2.0,
+                boundary: Some(vec![(-1.0, 0.0), (0.0, 1.0), (1.0, 0.0), (0.0, -1.0)]),
+            },
+        };
+        assert!(water.realize_fluid_geometry(fitted.clone(), &catalog));
+        assert_eq!(water.geometry.as_ref().unwrap().shape(), &fitted);
+
+        let mut bulk_water = StructuralUnit::from_material(
+            Material::free_base("Water", 4.0),
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        )
+        .unwrap();
+        assert!(bulk_water.realize_fluid_geometry(fitted.clone(), &catalog));
+        assert_eq!(bulk_water.geometry.as_ref().unwrap().shape(), &fitted);
+
+        let mut carbon = StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        assert!(carbon.realize_default_geometry(&catalog));
+        assert!(!carbon.realize_fluid_geometry(fitted, &catalog));
+    }
+
+    #[test]
+    fn structural_membership_follows_realized_bonded_components() {
+        let catalog = crate::resources::default_catalog();
         let mut s = OrganismStructure::new();
         let a = s.add_unit(StructuralUnit::new(
             "Carbon",
@@ -740,13 +823,7 @@ mod tests {
         ));
         let ida = s.physical_id(a).unwrap();
         let idb = s.physical_id(b).unwrap();
-        s.set_genome_constituent_ids([ida]);
-        assert_eq!(
-            s.structural_unit_indices(&crate::resources::default_catalog()),
-            vec![a]
-        );
-        assert!(s.genome_connected(a));
-        assert!(!s.genome_connected(b));
+        assert!(s.structural_unit_indices(&catalog).is_empty());
         s.push_bond_unchecked(Bond {
             endpoint_a: BondEndpoint::new(ida, ConnectionEndpoint::Boundary { angle_radians: 0.0 }),
             endpoint_b: BondEndpoint::new(
@@ -758,11 +835,9 @@ mod tests {
             strength: 0.5,
             bond_energy: 1.0,
         });
-        assert_eq!(
-            s.structural_unit_indices(&crate::resources::default_catalog()),
-            vec![a, b]
-        );
-        assert!(s.genome_connected(b));
+        assert_eq!(s.structural_unit_indices(&catalog), vec![a, b]);
+        s.set_genome_constituent_ids([idb]);
+        assert_eq!(s.structural_unit_indices(&catalog), vec![a, b]);
     }
 
     fn connect(s: &mut OrganismStructure, a: usize, b: usize) {
@@ -803,7 +878,7 @@ mod tests {
     }
 
     #[test]
-    fn water_structural_matrix_follows_direct_nonfluid_neighbor_rule() {
+    fn water_structural_matrix_follows_component_nonfluid_rule() {
         let catalog = crate::resources::default_catalog();
 
         let (s, u) = water_chain_structure(&["Carbon", "Water"]);
@@ -811,11 +886,11 @@ mod tests {
 
         let (s, u) = water_chain_structure(&["Carbon", "Water", "Water"]);
         assert!(s.is_structurally_qualified(u[1], &catalog));
-        assert!(!s.is_structurally_qualified(u[2], &catalog));
+        assert!(s.is_structurally_qualified(u[2], &catalog));
 
         let (s, u) = water_chain_structure(&["Carbon", "Water", "Water", "Water", "Carbon"]);
         assert!(s.is_structurally_qualified(u[1], &catalog));
-        assert!(!s.is_structurally_qualified(u[2], &catalog));
+        assert!(s.is_structurally_qualified(u[2], &catalog));
         assert!(s.is_structurally_qualified(u[3], &catalog));
         assert!(s.is_structurally_qualified(u[4], &catalog));
 
@@ -825,7 +900,7 @@ mod tests {
     }
 
     #[test]
-    fn direct_nonfluid_neighbor_qualifies_fluid_water() {
+    fn component_nonfluid_member_qualifies_fluid_water() {
         let catalog = crate::resources::default_catalog();
         let mut s = OrganismStructure::new();
         let genome = s.add_unit(StructuralUnit::new(
@@ -857,7 +932,7 @@ mod tests {
     }
 
     #[test]
-    fn water_water_bond_does_not_qualify_second_water() {
+    fn water_water_chain_qualifies_when_component_contains_nonfluid() {
         let catalog = crate::resources::default_catalog();
         let mut s = OrganismStructure::new();
         let genome = s.add_unit(StructuralUnit::new(
@@ -901,7 +976,7 @@ mod tests {
             bond_energy: 1.0,
         });
         assert!(s.is_structurally_qualified(w1, &catalog));
-        assert!(!s.is_structurally_qualified(w2, &catalog));
+        assert!(s.is_structurally_qualified(w2, &catalog));
     }
 
     #[test]

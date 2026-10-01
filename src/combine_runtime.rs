@@ -10,6 +10,7 @@ use crate::combine::{
 use crate::contact::ConnectionCompatibilityCache;
 use crate::developmental_blueprint::DevelopmentalFieldBlueprint;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
+use crate::physical_material::PhysicalMaterial;
 use crate::resources::BaseResource;
 use crate::state::{EnergyLedger, Environment, Organism};
 use crate::structure::{BondEndpoint, ConnectionEndpoint, Placement};
@@ -21,7 +22,7 @@ pub(crate) const COMBINE_CONTACT_TOLERANCE: f64 = 1.0;
 /// established by the normal COMBINE candidate and formation checks.
 pub(crate) type DevelopmentalContext<'a> = (&'a DevelopmentalFieldBlueprint, (f64, f64), f64, f64);
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct CombineAttempt {
     pub unit_a: usize,
     pub unit_b: usize,
@@ -36,6 +37,7 @@ pub(crate) struct CombineAttempt {
     pub net_energy_change: f64,
     pub bond_strength: f64,
     pub bond_energy: f64,
+    pub environmental_source: Option<(usize, PhysicalMaterial)>,
 }
 
 #[derive(Clone, Copy)]
@@ -81,11 +83,147 @@ fn evaluate_candidate(
     Some((evaluation, interaction, work, investment, required))
 }
 
+/// Construction-only access to the universal candidate evaluation. Construction
+/// supplies the exact candidate; this function does not perform candidate search.
+pub(crate) fn construction_candidate_evaluation(
+    structure: &crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    candidate: crate::contact::ConnectionPairCandidate,
+    catalog: &[BaseResource],
+) -> Option<(FormationEvaluation, ExperimentalInteraction, f64, f64, f64)> {
+    evaluate_candidate(structure, unit_a, unit_b, candidate, catalog)
+}
+
+pub(crate) fn form_specific_bond(
+    structure: &mut crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    endpoint_a: ConnectionEndpoint,
+    endpoint_b: ConnectionEndpoint,
+    catalog: &[BaseResource],
+    cache: &mut ConnectionCompatibilityCache,
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> Option<CombineAttempt> {
+    let candidate = crate::contact::connection_pair_candidates_cached(
+        structure, unit_a, unit_b, catalog, cache,
+    )
+    .into_iter()
+    .find(|candidate| {
+        candidate.endpoint_a == endpoint_a
+            && candidate.endpoint_b == endpoint_b
+            && candidate.distance <= COMBINE_CONTACT_TOLERANCE
+            && candidate.available_a
+            && candidate.available_b
+    })?;
+    let (_, _, _, investment, _) =
+        evaluate_candidate(structure, unit_a, unit_b, candidate, catalog)?;
+    form_construction_bond(
+        structure, unit_a, unit_b, candidate, investment, catalog, cache, ledger, energy,
+    )
+}
+
+/// Forms exactly the supplied construction contact.
+///
+/// Unlike generic COMBINE, this function does not search for a different contact.
+/// The caller has already selected the physical endpoint pair and pose. This is the
+/// transaction boundary for the bond-driven construction system.
+pub(crate) fn form_construction_bond(
+    structure: &mut crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    candidate: crate::contact::ConnectionPairCandidate,
+    investment: f64,
+    catalog: &[BaseResource],
+    cache: &mut ConnectionCompatibilityCache,
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> Option<CombineAttempt> {
+    if unit_a >= structure.units.len()
+        || unit_b >= structure.units.len()
+        || unit_a == unit_b
+        || candidate.distance > COMBINE_CONTACT_TOLERANCE
+        || !candidate.available_a
+        || !candidate.available_b
+    {
+        return None;
+    }
+    let point_a = candidate
+        .endpoint_a
+        .world_point(&structure.units[unit_a], catalog)?;
+    let point_b = candidate
+        .endpoint_b
+        .world_point(&structure.units[unit_b], catalog)?;
+    if (point_a.x - point_b.x).hypot(point_a.y - point_b.y) > COMBINE_CONTACT_TOLERANCE {
+        return None;
+    }
+    form_bond_from_candidate(
+        structure,
+        BondFormationRequest {
+            unit_a,
+            unit_b,
+            endpoint_a: candidate.endpoint_a,
+            endpoint_b: candidate.endpoint_b,
+            investment,
+        },
+        candidate,
+        catalog,
+        cache,
+        ledger,
+        energy,
+    )
+}
+
 fn form_bond(
     structure: &mut crate::structure::OrganismStructure,
     request: BondFormationRequest,
     catalog: &[BaseResource],
     cache: &mut ConnectionCompatibilityCache,
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> Option<CombineAttempt> {
+    let BondFormationRequest {
+        unit_a,
+        unit_b,
+        endpoint_a,
+        endpoint_b,
+        investment,
+    } = request;
+    let candidate = crate::contact::connection_pair_candidates_cached(
+        structure, unit_a, unit_b, catalog, cache,
+    )
+    .into_iter()
+    .find(|candidate| {
+        candidate.endpoint_a == endpoint_a
+            && candidate.endpoint_b == endpoint_b
+            && candidate.distance <= COMBINE_CONTACT_TOLERANCE
+            && candidate.available_a
+            && candidate.available_b
+    })?;
+    form_bond_from_candidate(
+        structure,
+        BondFormationRequest {
+            unit_a,
+            unit_b,
+            endpoint_a,
+            endpoint_b,
+            investment,
+        },
+        candidate,
+        catalog,
+        cache,
+        ledger,
+        energy,
+    )
+}
+
+fn form_bond_from_candidate(
+    structure: &mut crate::structure::OrganismStructure,
+    request: BondFormationRequest,
+    candidate: crate::contact::ConnectionPairCandidate,
+    catalog: &[BaseResource],
+    _cache: &mut ConnectionCompatibilityCache,
     ledger: &mut EnergyLedger,
     energy: &mut f64,
 ) -> Option<CombineAttempt> {
@@ -101,16 +239,6 @@ fn form_bond(
     }
     let id_a = structure.physical_id(ua)?;
     let id_b = structure.physical_id(ub)?;
-    let candidate =
-        crate::contact::connection_pair_candidates_cached(structure, ua, ub, catalog, cache)
-            .into_iter()
-            .find(|c| {
-                c.endpoint_a == endpoint_a
-                    && c.endpoint_b == endpoint_b
-                    && c.distance <= COMBINE_CONTACT_TOLERANCE
-                    && c.available_a
-                    && c.available_b
-            })?;
     let a = structure.units[ua].properties(catalog)?;
     let b = structure.units[ub].properties(catalog)?;
     let evaluation = crate::combine::evaluate_formation(candidate, a.cohesion, b.cohesion);
@@ -161,7 +289,42 @@ fn form_bond(
         net_energy_change: net,
         bond_strength: strength,
         bond_energy: investment,
+        environmental_source: None,
     })
+}
+
+pub(crate) fn form_internal_construction_bond(
+    structure: &mut crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    candidate: crate::contact::ConnectionPairCandidate,
+    catalog: &[BaseResource],
+) -> Result<(), String> {
+    if unit_a >= structure.units.len() || unit_b >= structure.units.len() {
+        return Err("construction bond references a missing unit".into());
+    }
+    if unit_a == unit_b
+        || candidate.distance > COMBINE_CONTACT_TOLERANCE
+        || !candidate.available_a
+        || !candidate.available_b
+    {
+        return Err("construction bond candidate is not an admissible contact".into());
+    }
+    let id_a = structure
+        .physical_id(unit_a)
+        .ok_or_else(|| "construction bond is missing endpoint A".to_string())?;
+    let id_b = structure
+        .physical_id(unit_b)
+        .ok_or_else(|| "construction bond is missing endpoint B".to_string())?;
+    let bond = crate::structure::Bond {
+        endpoint_a: BondEndpoint::new(id_a, candidate.endpoint_a),
+        endpoint_b: BondEndpoint::new(id_b, candidate.endpoint_b),
+        strength: 1.0,
+        bond_energy: 0.0,
+    };
+    crate::contact::try_add_bond(structure, bond, catalog)
+        .map(|_| ())
+        .map_err(|_| "construction bond admission was rejected".into())
 }
 
 pub(crate) fn instantiate_one_unit(
@@ -236,6 +399,16 @@ pub(crate) fn try_combine_stored_unit(
                     origin,
                     &environment.catalog,
                 )?;
+                if indices.iter().any(|index| {
+                    crate::construction_runtime::placed_unit_overlaps(
+                        &hypothetical,
+                        &hypothetical.units[*index],
+                        &indices,
+                        &environment.catalog,
+                    )
+                }) {
+                    continue;
+                }
                 for (part_index, &ub) in indices.iter().enumerate() {
                     for candidate in crate::contact::connection_pair_candidates_cached(
                         &hypothetical,
@@ -370,6 +543,16 @@ pub(crate) fn try_combine_stored_unit(
                 placement,
                 &environment.catalog,
             )?;
+            if indices.iter().any(|index| {
+                crate::construction_runtime::placed_unit_overlaps(
+                    &hypothetical,
+                    &hypothetical.units[*index],
+                    &indices,
+                    &environment.catalog,
+                )
+            }) {
+                continue;
+            }
             let ub = *indices.first()?;
             for candidate in crate::contact::connection_pair_candidates_cached(
                 &hypothetical,
@@ -473,7 +656,7 @@ pub(crate) fn try_combine_stored_unit(
     None
 }
 
-pub(crate) fn combine_specific_pair(
+fn combine_pair_in_direction(
     structure: &mut crate::structure::OrganismStructure,
     unit_a: usize,
     unit_b: usize,
@@ -482,9 +665,6 @@ pub(crate) fn combine_specific_pair(
     ledger: &mut EnergyLedger,
     energy: &mut f64,
 ) -> Option<CombineAttempt> {
-    if unit_a >= structure.units.len() || unit_b >= structure.units.len() || unit_a == unit_b {
-        return None;
-    }
     let mut candidates = eligible_candidates(structure, unit_a, unit_b, catalog, cache)
         .into_iter()
         .filter_map(|candidate| {
@@ -524,23 +704,292 @@ pub(crate) fn combine_specific_pair(
     None
 }
 
+pub(crate) fn combine_specific_pair(
+    structure: &mut crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    catalog: &[BaseResource],
+    cache: &mut ConnectionCompatibilityCache,
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> Option<CombineAttempt> {
+    if unit_a >= structure.units.len() || unit_b >= structure.units.len() || unit_a == unit_b {
+        return None;
+    }
+
+    // Bond direction is a biological choice. Try the requested orientation first,
+    // then let the same physical pair form in the reverse orientation if the
+    // first direction cannot produce a valid interaction.
+    combine_pair_in_direction(structure, unit_a, unit_b, catalog, cache, ledger, energy).or_else(
+        || combine_pair_in_direction(structure, unit_b, unit_a, catalog, cache, ledger, energy),
+    )
+}
+
 pub(crate) fn can_combine(organism: &Organism, _environment: &Environment) -> bool {
     if organism.active_transformation_id.is_some() {
         return false;
     }
 
-    // Eligibility only answers whether COMBINE is mechanically worth considering.
-    // Candidate search belongs to the action's resolution phase; running
-    // try_combine here would duplicate the full physical search every tick.
-    if !organism.stored_material.is_empty() && !organism.structure.units.is_empty() {
+    // Environmental physical material can participate directly in COMBINE when
+    // a relevant connection point is inside an accessible interior region.
+    // Candidate search remains deferred to action resolution.
+    if !organism.structure.units.is_empty() {
         return true;
     }
-    organism.structure.units.len() >= 2
+    !organism.stored_material.is_empty()
+}
+
+fn try_combine_environmental(
+    organism: &mut Organism,
+    environment: &mut Environment,
+    cache: &mut ConnectionCompatibilityCache,
+    ledger: &mut EnergyLedger,
+    developmental: Option<DevelopmentalContext<'_>>,
+) -> Option<CombineAttempt> {
+    let regions = crate::interior_geometry::find_accessible_interior_regions(
+        &organism.structure,
+        &environment.catalog,
+    )
+    .ok()?;
+    if regions.is_empty() {
+        return None;
+    }
+    let body = crate::organism_geometry::OrganismBodyGeometry::from_structure(
+        &organism.structure,
+        &environment.catalog,
+    )?;
+
+    let candidate_cells = environment
+        .field
+        .cells_intersecting_bounds(body.min_x, body.max_x, body.min_y, body.max_y);
+    let mut candidates = Vec::new();
+
+    for cell_index in candidate_cells {
+        let physicals = environment
+            .field
+            .cells
+            .get(cell_index)
+            .map(|cell| cell.physical_materials.clone())
+            .unwrap_or_default();
+        for (material_index, instance) in physicals.into_iter().enumerate() {
+            if !instance.is_realized() || instance.material.is_empty() {
+                continue;
+            }
+            let mut hypothetical = organism.structure.clone();
+            let Some(indices) = crate::material_restoration::restore_material(
+                &mut hypothetical,
+                &instance,
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                &environment.catalog,
+            ) else {
+                continue;
+            };
+            if indices.iter().any(|index| {
+                crate::construction_runtime::placed_unit_overlaps(
+                    &hypothetical,
+                    &hypothetical.units[*index],
+                    &indices,
+                    &environment.catalog,
+                )
+            }) {
+                continue;
+            }
+            for ua in 0..organism.structure.units.len() {
+                for &ub in &indices {
+                    for candidate in crate::contact::connection_pair_candidates_cached(
+                        &hypothetical,
+                        ua,
+                        ub,
+                        &environment.catalog,
+                        cache,
+                    ) {
+                        let Some(a) = candidate
+                            .endpoint_a
+                            .world_point(&hypothetical.units[ua], &environment.catalog)
+                        else {
+                            continue;
+                        };
+                        // The organism-side connection point is the relevant
+                        // access point. A contact midpoint is not sufficient: it
+                        // could be inside while the actual organism connection
+                        // point is outside the accessible interior.
+                        if !regions.iter().any(|region| region.contains_point(a.x, a.y)) {
+                            continue;
+                        }
+                        if let Some((evaluation, _, _, _, required)) = evaluate_candidate(
+                            &hypothetical,
+                            ua,
+                            ub,
+                            candidate,
+                            &environment.catalog,
+                        ) {
+                            let developmental_score = developmental
+                                .map(|(blueprint, origin, orientation, preferred_length)| {
+                                    let Some(a) = candidate
+                                        .endpoint_a
+                                        .world_point(&hypothetical.units[ua], &environment.catalog)
+                                    else {
+                                        return 0.0;
+                                    };
+                                    let local = crate::developmental_blueprint::developmental_point(
+                                        a.x,
+                                        a.y,
+                                        origin,
+                                        orientation,
+                                    );
+                                    crate::developmental_blueprint::CANDIDATE_CONNECTIVITY_WEIGHT
+                                        * blueprint.connectivity_preference_scaled(
+                                            local.0,
+                                            local.1,
+                                            preferred_length,
+                                        )
+                                })
+                                .unwrap_or(0.0);
+                            candidates.push((
+                                cell_index,
+                                material_index,
+                                ua,
+                                ub,
+                                evaluation,
+                                candidate.distance,
+                                required,
+                                developmental_score,
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    candidates.sort_by(|a, b| {
+        b.7.partial_cmp(&a.7)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.5.partial_cmp(&b.5).unwrap_or(std::cmp::Ordering::Equal))
+    });
+
+    for (cell_index, material_index, ua, ub, evaluation, _distance, required, _score) in candidates
+    {
+        if organism.usable_energy + EPSILON < required {
+            continue;
+        }
+        let instance = environment
+            .field
+            .cells
+            .get(cell_index)
+            .and_then(|cell| cell.physical_materials.get(material_index))
+            .cloned();
+        let Some(instance) = instance else {
+            continue;
+        };
+        let mut trial_structure = organism.structure.clone();
+        let Some(indices) = crate::material_restoration::restore_material(
+            &mut trial_structure,
+            &instance,
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            &environment.catalog,
+        ) else {
+            continue;
+        };
+        let Some(restored_ub) = indices
+            .get(ub.saturating_sub(organism.structure.units.len()))
+            .copied()
+        else {
+            continue;
+        };
+        let mut trial_ledger = *ledger;
+        let mut trial_energy = organism.usable_energy;
+        let Some(attempt) = form_bond(
+            &mut trial_structure,
+            BondFormationRequest {
+                unit_a: ua,
+                unit_b: restored_ub,
+                endpoint_a: evaluation.candidate.endpoint_a,
+                endpoint_b: evaluation.candidate.endpoint_b,
+                investment: evaluation.threshold,
+            },
+            &environment.catalog,
+            cache,
+            &mut trial_ledger,
+            &mut trial_energy,
+        ) else {
+            continue;
+        };
+
+        let Some(cell) = environment.field.cells.get_mut(cell_index) else {
+            continue;
+        };
+        let Some(removed) = cell.physical_materials.get(material_index).cloned() else {
+            continue;
+        };
+        if removed != instance {
+            continue;
+        }
+        environment.field.cells[cell_index]
+            .physical_materials
+            .remove(material_index);
+        environment.field.mark_changed_at_index(cell_index);
+        let mut attempt = attempt;
+        attempt.environmental_source = Some((cell_index, removed));
+        organism.structure = trial_structure;
+        organism.usable_energy = trial_energy;
+        *ledger = trial_ledger;
+        organism.add_transaction_stress(attempt.work_cost);
+        return Some(attempt);
+    }
+    None
+}
+
+pub(crate) fn try_start_combine(
+    organism: &mut Organism,
+    next_id: &mut u64,
+) -> Option<crate::state::ActiveTransformation> {
+    if organism.active_transformation_id.is_some() || organism.structure.units.is_empty() {
+        return None;
+    }
+
+    // Tick 1 is selection only. Candidate search, environmental reservation,
+    // energy settlement, and structure mutation all wait for Tick 2/3.
+    let complexity = crate::math::complexity(2.0);
+    let duration = 1_u64.max(complexity.ceil() as u64);
+    let transformation = crate::state::ActiveTransformation {
+        id: *next_id,
+        organism_id: organism.id.clone(),
+        kind: crate::state::TransformationKind::Combine,
+        material: crate::resources::Material::free_base("", 0.0),
+        bond: None,
+        stored_material: None,
+        stored_bond: None,
+        environmental_source: false,
+        complexity,
+        duration_ticks: duration,
+        remaining_ticks: duration,
+        prepared_energy: None,
+        pending_experience: None,
+        decision_context_key: None,
+        prepared_structure: None,
+        prepared_stored_material: None,
+        prepared_usable_energy: None,
+        prepared_stress: None,
+        prepared_ledger: None,
+        combine_environmental_source: None,
+    };
+    *next_id += 1;
+    organism.active_transformation_id = Some(transformation.id);
+    Some(transformation)
 }
 
 pub(crate) fn try_combine(
     organism: &mut Organism,
-    environment: &Environment,
+    environment: &mut Environment,
     cache: &mut ConnectionCompatibilityCache,
     ledger: &mut EnergyLedger,
     developmental: Option<DevelopmentalContext<'_>>,
@@ -551,6 +1000,11 @@ pub(crate) fn try_combine(
         {
             return Some(attempt);
         }
+    }
+    if let Some(attempt) =
+        try_combine_environmental(organism, environment, cache, ledger, developmental)
+    {
+        return Some(attempt);
     }
     if organism.structure.units.len() < 2 {
         return None;

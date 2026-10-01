@@ -141,23 +141,37 @@ pub(crate) fn harvestable_decomposition_energy(
 mod tests {
     use super::*;
     use crate::resources::default_catalog;
+    use crate::structure::{OrganismStructure, Placement, StructuralUnit};
+
+    fn minimal_realized_structure() -> OrganismStructure {
+        let catalog = default_catalog();
+        let mut structure = OrganismStructure::new();
+        let mut unit = StructuralUnit::new(
+            "Carbon".to_string(),
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        assert!(unit.realize_default_geometry(&catalog));
+        structure.add_unit(unit);
+        structure
+    }
 
     #[test]
     fn retains_structure_budget_and_position() {
-        let blueprint = crate::juvenile::confirmed_seed_baseline(&default_catalog()).unwrap();
-        let structure = blueprint.realize(&default_catalog()).unwrap();
+        let structure = minimal_realized_structure();
         let body = DecomposingBody::new(structure, 4.0, Position { x: 2.0, y: 3.0 }).unwrap();
-        assert!(!body.structure.units.is_empty());
+        assert_eq!(body.structure.units.len(), 1);
         assert_eq!(body.energy_budget, 4.0);
-        assert_eq!(body.position, Position { x: 2.0, y: 3.0 })
+        assert_eq!(body.position, Position { x: 2.0, y: 3.0 });
     }
 
     #[test]
     fn zero_bond_structure_is_finished() {
-        let blueprint = crate::juvenile::confirmed_seed_baseline(&default_catalog()).unwrap();
-        let mut structure = blueprint.realize(&default_catalog()).unwrap();
-        structure.bonds.clear();
+        let structure = minimal_realized_structure();
         let body = DecomposingBody::new(structure, 0.0, Position { x: 0.0, y: 0.0 }).unwrap();
-        assert!(body.is_finished())
+        assert!(body.is_finished());
     }
 }

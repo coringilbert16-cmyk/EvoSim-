@@ -76,6 +76,14 @@ impl Genome {
             .clamp(0.05, 1.0)
     }
 
+    /// Movement cadence is the number of ticks between one-unit movement steps.
+    /// The inherited value is a continuous speed preference; the physical operation
+    /// resolves it to the discrete cadence the simulator can execute.
+    pub fn movement_step_interval(&self) -> u64 {
+        let speed = self.trait_value("movement_speed", 1.0).clamp(0.25, 1.0);
+        (1.0 / speed).round().clamp(1.0, 4.0) as u64
+    }
+
     pub fn reproductive_investment(&self) -> f64 {
         self.trait_value("reproductive_investment", 0.5)
             .clamp(0.15, 1.0)
@@ -89,6 +97,8 @@ impl Genome {
         {
             self.traits.push(trait_def("size_preference", 0.5, 0.05));
         }
+        self.developmental_blueprint.mutate(rng);
+
         for t in &mut self.traits {
             if rng.gen::<f64>() < t.mutation_probability.clamp(1e-6, 0.25) {
                 let delta = gaussian_unit(rng) * t.mutation_sigma.max(0.0);
@@ -158,6 +168,7 @@ pub fn initial_genome() -> Genome {
             trait_def("size_preference", 0.5, 0.05),
             trait_def("processing_efficiency", 0.8, 0.05),
             trait_def("movement_efficiency", 0.8, 0.05),
+            trait_def("movement_speed", 1.0, 0.05),
             trait_def("reproductive_investment", 0.5, 0.05),
         ],
         juvenile_reserve: default_juvenile_reserve(),
