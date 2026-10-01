@@ -204,6 +204,15 @@ These must be fixed immediately and isolated from the architectural migration.
 - composite material retains its internal geometry and bonds.
 
 ### Harmonics
+- Environmental atomic, composite, and future organic material emits one resonance spectrum as a whole realized material.
+- Organisms are deaf to their own emitted tone; organism material is the receiver, not an environmental self-source.
+- Each physical resource forming the realized genome-cavity boundary receives environmental resonance independently.
+- Receiver geometry is the antenna: actual realized cavity-boundary segments provide directional coupling.
+- Environmental source position is preserved in each received channel; channels remain separate through perception so directional information is not averaged away.
+- Distance attenuates the resonance aura continuously; there is no hard perception radius.
+- The genome-cavity aggregate is derived only from those physical directional receptions. Logical environmental material is never injected as a sensory substitute.
+- Current implementation uses the existing realized physical material inventory and realized cavity geometry; no separate sensory organs, sensor radius, or second perception grid is introduced.
+
 - reception depends on a qualifying realized cavity;
 - environmental material is received from the realized physical boundary;
 - logical material is not injected into the organism to satisfy perception.
