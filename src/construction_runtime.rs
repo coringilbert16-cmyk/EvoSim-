@@ -702,7 +702,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     continue;
                 };
 
-                let Some(attempt) = crate::combine_runtime::form_construction_bond(
+                let Some(attempt) = crate::combine_runtime::form_selected_bond(
                     &mut trial,
                     existing_index,
                     new_unit_index,
@@ -866,7 +866,7 @@ fn realize_next_bond_driven(
                     continue;
                 };
 
-                let Some(attempt) = crate::combine_runtime::form_construction_bond(
+                let Some(attempt) = crate::combine_runtime::form_selected_bond(
                     &mut trial,
                     existing_index,
                     new_unit_index,
@@ -1297,7 +1297,7 @@ fn construct_blueprint_bond_driven_internal(
                 let mut trial_ledger = construction_ledger;
                 let mut trial_energy = remaining_energy;
                 let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
-                let Some(attempt) = crate::combine_runtime::form_construction_bond(
+                let Some(attempt) = crate::combine_runtime::form_selected_bond(
                     &mut trial_structure,
                     unit_a,
                     unit_b,
