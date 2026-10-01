@@ -724,9 +724,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     .hypot(candidate_origin.y - target_world.1);
                 if best_candidate
                     .as_ref()
-                    .is_none_or(|current: &(f64, _, _, _, _, _, _)| {
-                        target_distance < current.0
-                    })
+                    .is_none_or(|current: &(f64, _, _, _, _, _, _)| target_distance < current.0)
                 {
                     best_candidate = Some((
                         target_distance,
