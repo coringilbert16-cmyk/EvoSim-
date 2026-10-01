@@ -117,11 +117,7 @@ pub(crate) fn confirmed_seed_baseline(
     // The first spiral element is the existing ring anchor (element 0).
     for step in 1..=spiral_steps {
         connections.push(BlueprintConnection {
-            element_a: if step == 1 {
-                0
-            } else {
-                ring_sides + step - 2
-            },
+            element_a: if step == 1 { 0 } else { ring_sides + step - 2 },
             element_b: ring_sides + step - 1,
         });
     }
