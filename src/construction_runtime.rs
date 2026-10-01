@@ -544,6 +544,7 @@ fn construction_angle_candidates(
                 );
             }
         }
+        _ => {}
     }
 
     // Exact boundary alignments cover common packing: like-shape stacking and
