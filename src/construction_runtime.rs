@@ -468,62 +468,6 @@ fn candidate_penetrates_measurement(
     )
 }
 
-fn install_genome_measurement_scaffold(
-    structure: &mut OrganismStructure,
-    scaffold: &crate::structural_blueprint::GenomeMeasurementScaffold,
-    scaffold_origin: Placement,
-    catalog: &[BaseResource],
-) -> Result<Vec<crate::structure::PhysicalConstituentId>, String> {
-    let carbon = resource(catalog, "Carbon")
-        .ok_or_else(|| "genome measurement scaffold requires Carbon".to_string())?;
-    let transform = |p: BlueprintPlacement| {
-        let (s, c) = scaffold_origin.rotation_radians.sin_cos();
-        Placement {
-            x: scaffold_origin.x + p.x * c - p.y * s,
-            y: scaffold_origin.y + p.x * s + p.y * c,
-            rotation_radians: scaffold_origin.rotation_radians + p.rotation_radians,
-        }
-    };
-
-    let mut indices = [0usize; 3];
-    for (slot, placement) in scaffold.placements.into_iter().enumerate() {
-        let mut unit = StructuralUnit::new(carbon.name.clone(), transform(placement));
-        if !unit.realize_default_geometry(catalog) {
-            return Err("genome measurement scaffold has invalid Carbon geometry".into());
-        }
-        indices[slot] = structure.add_unit(unit);
-    }
-
-    for (a, b) in scaffold.bonds {
-        let candidates =
-            crate::contact::connection_pair_candidates(structure, indices[a], indices[b], catalog);
-        let candidate = candidates
-            .into_iter()
-            .filter(|candidate| {
-                candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                    && candidate.available_a
-                    && candidate.available_b
-            })
-            .min_by(|left, right| {
-                left.distance
-                    .partial_cmp(&right.distance)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .ok_or_else(|| {
-                "genome measurement scaffold cannot realize its internal Carbon bond".to_string()
-            })?;
-        crate::combine_runtime::form_internal_construction_bond(
-            structure, indices[a], indices[b], candidate, catalog,
-        )
-        .map_err(|_| "genome measurement scaffold produced an invalid internal bond")?;
-    }
-
-    Ok(indices
-        .into_iter()
-        .map(|index| structure.units[index].physical_id)
-        .collect())
-}
-
 fn already_realized_neighbors(
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     index: usize,
@@ -1068,24 +1012,6 @@ fn construct_blueprint_bond_driven_internal(
     realized[anchor_index] = true;
     realized_units[anchor_index] = Some(anchor_unit_index);
     let genome_anchor = structure.units[anchor_unit_index].placement;
-    let temporary_scaffold_ids = blueprint
-        .genome_measurement
-        .as_ref()
-        .map(|scaffold| {
-            install_genome_measurement_scaffold(
-                &mut structure,
-                scaffold,
-                blueprint_cavity_reference_world(
-                    blueprint,
-                    genome_anchor,
-                    anchor_element.placement,
-                ),
-                catalog,
-            )
-        })
-        .transpose()?
-        .unwrap_or_default();
-
     while !realized.iter().all(|value| *value) {
         // Select the next element only from its currently realized neighbors.
         // Total blueprint degree is deliberately not a tie-breaker: that would
