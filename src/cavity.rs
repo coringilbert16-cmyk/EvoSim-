@@ -171,16 +171,15 @@ impl GenomeCavity {
                             return None;
                         }
 
-                        let resolve = |endpoint: ConnectionEndpoint,
-                                       unit_index: usize|
-                         -> Option<Point> {
-                            let unit = structure.units.get(unit_index)?;
-                            let world = endpoint.world_point(unit, catalog)?;
-                            Some(Point {
-                                x: world.x,
-                                y: world.y,
-                            })
-                        };
+                        let resolve =
+                            |endpoint: ConnectionEndpoint, unit_index: usize| -> Option<Point> {
+                                let unit = structure.units.get(unit_index)?;
+                                let world = endpoint.world_point(unit, catalog)?;
+                                Some(Point {
+                                    x: world.x,
+                                    y: world.y,
+                                })
+                            };
                         let (world_a, world_b) = if bond.endpoint_a.constituent_id == id_a {
                             (
                                 resolve(bond.endpoint_a.location, unit_a)?,
