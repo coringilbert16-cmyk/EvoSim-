@@ -249,7 +249,6 @@ fn environmental_material_resonance(
     source_y /= count;
 
     let baselines = ResourceBaselines::from_catalog(catalog);
-    let mass = physical.material.mass(catalog);
     let spectrum = material_response(
         physical.material.weighted_properties(catalog),
         baselines,
