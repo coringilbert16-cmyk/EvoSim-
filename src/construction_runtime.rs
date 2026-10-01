@@ -1276,21 +1276,15 @@ fn construct_blueprint_bond_driven_internal(
                         break 'unit_pairs;
                     }
 
-                    if total_candidates > 0
-                        || contact_candidates > 0
-                        || evaluated_candidates > 0
-                        || rejected_by_bond_admission > 0
-                    {
-                        failed_diagnostic = Some((
-                            connection_index,
-                            connection.element_a,
-                            connection.element_b,
-                            total_candidates,
-                            contact_candidates,
-                            evaluated_candidates,
-                            rejected_by_bond_admission,
-                        ));
-                    }
+                    failed_diagnostic = Some((
+                        connection_index,
+                        connection.element_a,
+                        connection.element_b,
+                        total_candidates,
+                        contact_candidates,
+                        evaluated_candidates,
+                        rejected_by_bond_admission,
+                    ));
                 }
             }
             if progressed {
