@@ -447,8 +447,7 @@ fn physical_material_endpoint_local_point(
 }
 
 pub(crate) fn try_attach_physical_material_bond_driven(
-    structure: &OrganismStructure,
-    existing_index: usize,
+    structure: &OrganismStructure,    existing_index: usize,
     new_material: &crate::physical_material::PhysicalMaterial,
     catalog: &[BaseResource],
     nodes: &mut usize,
@@ -484,11 +483,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                 let candidate_origin =
                     placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
                 *nodes += 1;
-                if *nodes > 5_000 {
-                    return None;
-                }
-
-                let mut trial = structure.clone();
+                            let mut trial = structure.clone();
                 let Some(indices) = crate::material_restoration::restore_material(
                     &mut trial,
                     new_material,
@@ -678,7 +673,7 @@ fn local_blueprint_candidate_score(
     // candidates; blueprint fit remains the dominant preference.
     score += contact.distance * 0.1;
     score += (1.0 - contact.facing.clamp(-1.0, 1.0)) * 0.1;
-    Some(score)
+    Some(1.0 / (1.0 + score))
 }
 
 fn realize_next_bond_driven(
@@ -897,8 +892,7 @@ pub(crate) fn construct_blueprint_bond_driven_with_materials(
         blueprint,
         catalog,
         ledger,
-        energy,
-        Some(available_materials),
+        energy,        Some(available_materials),
     )
 }
 
@@ -1297,8 +1291,7 @@ fn construct_blueprint_bond_driven_internal(
                 ));
             }
             return Err("construction closure made no progress".to_string());
-        }
-    }
+        }    }
 
     Ok((structure, total_heat))
 }
