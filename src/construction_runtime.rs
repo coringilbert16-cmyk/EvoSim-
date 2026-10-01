@@ -649,15 +649,6 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                 let angle = std::f64::consts::TAU * step as f64 / 360.0;
                 let candidate_origin =
                     placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
-                let target_distance = (candidate_origin.x - target_world.0)
-                    .hypot(candidate_origin.y - target_world.1);
-                if best_candidate
-                    .as_ref()
-                    .is_some_and(|current| target_distance >= current.0)
-                {
-                    continue;
-                }
-
                 *nodes += 1;
                 if *nodes > 500_000 {
                     return None;
@@ -812,6 +803,14 @@ fn realize_next_bond_driven(
                 let angle = ideal_angle + offset;
                 let candidate_origin =
                     placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
+                let target_distance = (candidate_origin.x - target_world.0)
+                    .hypot(candidate_origin.y - target_world.1);
+                if best_candidate
+                    .as_ref()
+                    .is_some_and(|current| target_distance >= current.0)
+                {
+                    continue;
+                }
 
                 *nodes += 1;
                 if *nodes > 500_000 {
