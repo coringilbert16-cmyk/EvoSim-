@@ -716,7 +716,7 @@ fn realize_next_bond_driven(
         f64,
     )> = None;
 
-    'search: for existing_index in existing_indices {
+    for existing_index in existing_indices {
         let existing_unit = structure.units.get(existing_index)?;
         let existing_endpoints = structure_unit_endpoint_options(existing_unit, catalog);
         for endpoint_a in existing_endpoints {
@@ -1138,6 +1138,7 @@ fn construct_blueprint_bond_driven_internal(
                     similarity,
                     trial_structure,
                     new_indices,
+                    _part_index,
                     trial_attempt,
                     trial_ledger,
                     trial_energy,
