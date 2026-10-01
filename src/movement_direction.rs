@@ -64,10 +64,8 @@ pub(crate) fn movement_direction_periodic(
             .map(|memory| memory.strength.max(0.0) / (1.0 + memory.strength.max(0.0)))
             .unwrap_or(0.0);
         let spatial_utility = spatial
-            .map(|memory| {
-                spatial_confidence * memory.association + (1.0 - spatial_confidence) * curiosity
-            })
-            .unwrap_or(curiosity);
+            .map(|memory| spatial_confidence * memory.association)
+            .unwrap_or(0.0);
 
         let spectral_confidence = spectral
             .map(|(memory, similarity)| {
@@ -75,10 +73,8 @@ pub(crate) fn movement_direction_periodic(
             })
             .unwrap_or(0.0);
         let spectral_utility = spectral
-            .map(|(memory, _)| {
-                spectral_confidence * memory.association + (1.0 - spectral_confidence) * curiosity
-            })
-            .unwrap_or(curiosity);
+            .map(|(memory, _)| spectral_confidence * memory.association)
+            .unwrap_or(0.0);
 
         let desirability = spatial_utility + spectral_utility;
         let score = perception.magnitude.max(0.0) * desirability;
@@ -95,16 +91,12 @@ pub(crate) fn movement_direction_periodic(
         return Some((direction_x, direction_y));
     }
 
-    let magnitude = direction_x.hypot(direction_y);
-    if magnitude <= f64::EPSILON {
-        let mut hash = 0xcbf29ce484222325_u64;
-        for byte in organism.id.as_bytes() {
-            hash ^= u64::from(*byte);
-            hash = hash.wrapping_mul(0x100000001b3);
-        }
-        let angle = (hash as f64 / u64::MAX as f64) * std::f64::consts::TAU;
-        return Some((angle.cos(), angle.sin()));
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in organism.id.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
     }
-
-    Some((direction_x / magnitude, direction_y / magnitude))
+    let angle = (hash as f64 / u64::MAX as f64) * std::f64::consts::TAU;
+    let _ = curiosity;
+    Some((angle.cos(), angle.sin()))
 }
