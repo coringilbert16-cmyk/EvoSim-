@@ -265,6 +265,45 @@ fn structure_unit_endpoint_options(
     }
 }
 
+fn preferred_contact_rotations(
+    existing_unit: &StructuralUnit, endpoint_a: ConnectionEndpoint,
+    new_material: &crate::physical_material::PhysicalMaterial, part_index: usize,
+    endpoint_b: ConnectionEndpoint, catalog: &[BaseResource],
+) -> Vec<f64> {
+    let Some(existing_shape) = existing_unit.shape(catalog) else { return Vec::new(); };
+    let Some(placements) = new_material.placements.as_ref() else { return Vec::new(); };
+    let Some((name, amount)) = new_material.material.parts.get(part_index) else { return Vec::new(); };
+    let Some(placement) = placements.get(part_index).copied() else { return Vec::new(); };
+    let Some(candidate_unit) = StructuralUnit::from_material(
+        crate::resources::Material::free_base(name.clone(), *amount), placement
+    ) else { return Vec::new(); };
+    let Some(candidate_shape) = candidate_unit.shape(catalog) else { return Vec::new(); };
+    let mut out = Vec::new();
+    let mut push = |angle: f64| {
+        let angle = (angle + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI;
+        if !out.iter().any(|x: &f64| (*x - angle).abs() <= 1e-10) { out.push(angle); }
+    };
+    match (endpoint_a, endpoint_b) {
+        (ConnectionEndpoint::Corner { point_index: a }, ConnectionEndpoint::Corner { point_index: b }) => {
+            for angle in crate::rigid_boundary::corner_alignment_rotations(candidate_shape, b, existing_shape, a, existing_unit.placement.rotation_radians) { push(angle); }
+        }
+        (ConnectionEndpoint::LineEndpoint { point_index: a }, ConnectionEndpoint::LineEndpoint { point_index: b }) => {
+            for angle in crate::rigid_boundary::line_endpoint_alignment_rotations(b, a, existing_unit.placement.rotation_radians) { push(angle); }
+        }
+        (ConnectionEndpoint::LineEndpoint { point_index: a }, ConnectionEndpoint::Corner { point_index: b }) => {
+            if let (Some(cn), Some(en)) = (crate::rigid_boundary::corner_normal(candidate_shape, b), crate::rigid_boundary::line_endpoint_normal(existing_shape, a)) {
+                push(existing_unit.placement.rotation_radians + en.1.atan2(en.0) + std::f64::consts::PI - cn.1.atan2(cn.0));
+            }
+        }
+        (ConnectionEndpoint::Corner { point_index: a }, ConnectionEndpoint::LineEndpoint { point_index: b }) => {
+            if let (Some(cn), Some(en)) = (crate::rigid_boundary::line_endpoint_normal(candidate_shape, b), crate::rigid_boundary::corner_normal(existing_shape, a)) {
+                push(existing_unit.placement.rotation_radians + en.1.atan2(en.0) + std::f64::consts::PI - cn.1.atan2(cn.0));
+            }
+        }
+        _ => {}
+    }
+    out
+}
 fn placement_for_joint(
     local_point: (f64, f64),
     joint: (f64, f64),
