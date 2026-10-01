@@ -1236,7 +1236,8 @@ mod tests {
             spectrum: crate::harmonics::ToneSpectrum::empty(),
             magnitude: 1.0,
         }];
-        let (x, y) = movement_direction(&organism, &perceptions).expect("direction should exist");
+        let (x, y) =
+            movement_direction(&organism, &perceptions).expect("direction should exist");
         assert!(x.abs() < f64::EPSILON);
         assert!(y < 0.0);
     }
@@ -1246,22 +1247,28 @@ mod tests {
         let simulation = Simulation::new(7, 20.0);
         let mut organism = simulation.organisms[0].clone();
         let origin = organism.occupied_cells[0].clone();
-        organism.experience_memory.spatial.push(crate::memory::SpatialMemory {
-            x: origin.x,
-            y: origin.y - 20.0,
-            extent: 10.0,
-            association: 0.5,
-            association_weight: 1.0,
-            strength: 1.0,
-        });
-        organism.experience_memory.spatial.push(crate::memory::SpatialMemory {
-            x: origin.x + 20.0,
-            y: origin.y,
-            extent: 10.0,
-            association: 1.0,
-            association_weight: 1.0,
-            strength: 1.0,
-        });
+        organism
+            .experience_memory
+            .spatial
+            .push(crate::memory::SpatialMemory {
+                x: origin.x,
+                y: origin.y - 20.0,
+                extent: 10.0,
+                association: 0.5,
+                association_weight: 1.0,
+                strength: 1.0,
+            });
+        organism
+            .experience_memory
+            .spatial
+            .push(crate::memory::SpatialMemory {
+                x: origin.x + 20.0,
+                y: origin.y,
+                extent: 10.0,
+                association: 1.0,
+                association_weight: 1.0,
+                strength: 1.0,
+            });
         let perceptions = vec![
             crate::harmonics::ResonancePerception {
                 source_x: origin.x,
@@ -1288,14 +1295,17 @@ mod tests {
         let simulation = Simulation::new(7, 20.0);
         let mut organism = simulation.organisms[0].clone();
         let origin = organism.occupied_cells[0].clone();
-        organism.experience_memory.spatial.push(crate::memory::SpatialMemory {
-            x: origin.x + 20.0,
-            y: origin.y,
-            extent: 10.0,
-            association: -1.0,
-            association_weight: 1.0,
-            strength: 1.0,
-        });
+        organism
+            .experience_memory
+            .spatial
+            .push(crate::memory::SpatialMemory {
+                x: origin.x + 20.0,
+                y: origin.y,
+                extent: 10.0,
+                association: -1.0,
+                association_weight: 1.0,
+                strength: 1.0,
+            });
         let perception = crate::harmonics::ResonancePerception {
             source_x: origin.x + 20.0,
             source_y: origin.y,
@@ -1303,7 +1313,8 @@ mod tests {
             spectrum: crate::harmonics::ToneSpectrum::empty(),
             magnitude: 1.0,
         };
-        let (x, y) = movement_direction(&organism, &[perception]).expect("direction should exist");
+        let (x, y) =
+            movement_direction(&organism, &[perception]).expect("direction should exist");
         assert!(x < 0.0);
         assert!(y.abs() < f64::EPSILON);
     }
