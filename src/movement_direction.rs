@@ -16,8 +16,9 @@ pub(crate) fn movement_direction_periodic(
     let (px, py) = organism.occupied_cells.first().map(|p| (p.x, p.y))?;
     let curiosity = organism.genome.curiosity();
 
-    let mut direction_x = 0.0;
-    let mut direction_y = 0.0;
+    let mut selected_score = f64::NEG_INFINITY;
+    let mut selected_direction = None;
+
     for perception in perceptions {
         if !perception.magnitude.is_finite() || perception.magnitude <= f64::EPSILON {
             continue;
@@ -79,9 +80,19 @@ pub(crate) fn movement_direction_periodic(
             })
             .unwrap_or(curiosity);
 
-        let stimulus = perception.magnitude.max(0.0) * (spatial_utility + spectral_utility);
-        direction_x += dx / distance * stimulus;
-        direction_y += dy / distance * stimulus;
+        let desirability = spatial_utility + spectral_utility;
+        let score = perception.magnitude.max(0.0) * desirability;
+        if !score.is_finite() || score <= selected_score {
+            continue;
+        }
+
+        selected_score = score;
+        let sign = if desirability < 0.0 { -1.0 } else { 1.0 };
+        selected_direction = Some((sign * dx / distance, sign * dy / distance));
+    }
+
+    if let Some((direction_x, direction_y)) = selected_direction {
+        return Some((direction_x, direction_y));
     }
 
     let magnitude = direction_x.hypot(direction_y);
