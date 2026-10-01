@@ -228,11 +228,7 @@ fn select_movement_distance(
         ));
     }
 
-    let best_score = scored
-        .iter()
-        .map(|(_, score)| *score)
-        .max()
-        .unwrap_or(0);
+    let best_score = scored.iter().map(|(_, score)| *score).max().unwrap_or(0);
     let tied: Vec<f64> = scored
         .into_iter()
         .filter(|(_, score)| *score == best_score)
@@ -1267,8 +1263,7 @@ mod tests {
             spectrum: crate::harmonics::ToneSpectrum::empty(),
             magnitude: 1.0,
         }];
-        let (x, y) =
-            movement_direction(&organism, &perceptions).expect("direction should exist");
+        let (x, y) = movement_direction(&organism, &perceptions).expect("direction should exist");
         assert!(x.abs() < f64::EPSILON);
         assert!(y < 0.0);
     }
@@ -1365,21 +1360,17 @@ mod tests {
         );
 
         let minor_value = crate::memory::consequence_value(
-            &crate::memory::memory_consequence_from_action(
-                crate::decision::ActionConsequence {
-                    energy_delta: 0.1,
-                    ..Default::default()
-                },
-            ),
+            &crate::memory::memory_consequence_from_action(crate::decision::ActionConsequence {
+                energy_delta: 0.1,
+                ..Default::default()
+            }),
             crate::decision::CurrentNeeds::default(),
         );
         let strong_value = crate::memory::consequence_value(
-            &crate::memory::memory_consequence_from_action(
-                crate::decision::ActionConsequence {
-                    energy_delta: 0.9,
-                    ..Default::default()
-                },
-            ),
+            &crate::memory::memory_consequence_from_action(crate::decision::ActionConsequence {
+                energy_delta: 0.9,
+                ..Default::default()
+            }),
             crate::decision::CurrentNeeds::default(),
         );
 
