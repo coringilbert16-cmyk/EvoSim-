@@ -589,24 +589,24 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                 catalog,
             )?;
 
-            for step in 0..360 {
+                for step in 0..360 {
                 let angle = std::f64::consts::TAU * step as f64 / 360.0;
-                let candidate_origin =
+                    let candidate_origin =
                     placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
-                *nodes += 1;
-                if *nodes > 500_000 {
-                    return None;
-                }
+                    *nodes += 1;
+                    if *nodes > 500_000 {
+                        return None;
+                    }
 
-                let mut trial = structure.clone();
-                let Some(indices) = crate::material_restoration::restore_material(
+                    let mut trial = structure.clone();
+                    let Some(indices) = crate::material_restoration::restore_material(
                     &mut trial,
                     new_material,
                     candidate_origin,
                     catalog,
                 ) else {
-                    continue;
-                };
+                        continue;
+                    };
                 let new_unit_index = *indices.get(part_index)?;
 
                 let ignored_units = indices.clone();
@@ -721,42 +721,42 @@ fn realize_next_bond_driven(
         for endpoint_a in existing_endpoints {
             let joint = endpoint_a.world_point(&structure.units[existing_index], catalog)?;
             for (part_index, endpoint_b) in new_endpoints.iter().copied() {
-            let local_b = physical_material_endpoint_local_point(
+                let local_b = physical_material_endpoint_local_point(
                 new_material,
                 part_index,
                 endpoint_b,
                 catalog,
-            )?;
+                )?;
 
-            // The declared blueprint pose is a preference, not a placement
-            // command. Start at the rotation that puts this physical material's
-            // selected endpoint on the joint while aiming its local endpoint
-            // toward the declared target, then sweep the full circle.
+                // The declared blueprint pose is a preference, not a placement
+                // command. Start at the rotation that puts this physical material's
+                // selected endpoint on the joint while aiming its local endpoint
+                // toward the declared target, then sweep the full circle.
             let target = blueprint.elements[_index].placement;
-            let (s, c) = genome_anchor.rotation_radians.sin_cos();
-            let target_world = (
+                let (s, c) = genome_anchor.rotation_radians.sin_cos();
+                let target_world = (
                 genome_anchor.x + (target.x - anchor_declared.x) * c
                     - (target.y - anchor_declared.y) * s,
                 genome_anchor.y
                     + (target.x - anchor_declared.x) * s
                     + (target.y - anchor_declared.y) * c,
             );
-            let ideal_angle = (joint.y - target_world.1).atan2(joint.x - target_world.0)
+                let ideal_angle = (joint.y - target_world.1).atan2(joint.x - target_world.0)
                 - local_b.y.atan2(local_b.x);
             for step in 0..360 {
-                let offset = std::f64::consts::TAU * step as f64 / 360.0;
-                let angle = ideal_angle + offset;
+                    let offset = std::f64::consts::TAU * step as f64 / 360.0;
+                    let angle = ideal_angle + offset;
                 let candidate_origin =
                     placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
-                let target_distance = (candidate_origin.x - target_world.0)
+                    let target_distance = (candidate_origin.x - target_world.0)
                     .hypot(candidate_origin.y - target_world.1);
 
-                // Do not prune solely because this pose is farther from the
-                // declared preference than the best candidate found so far.
-                // Physical validity is evaluated only after restoration,
+                    // Do not prune solely because this pose is farther from the
+                    // declared preference than the best candidate found so far.
+                    // Physical validity is evaluated only after restoration,
                 // penetration checks, and the shared bond admission. A farther
-                // pose may be the first (or only) physically valid one, so
-                // pruning here would silently turn preference into authority.
+                    // pose may be the first (or only) physically valid one, so
+                    // pruning here would silently turn preference into authority.
 
                 *nodes += 1;
                 if *nodes > 500_000 {
@@ -1163,10 +1163,6 @@ fn construct_blueprint_bond_driven_internal(
                     &construction_ledger,
                     remaining_energy,
                 ) {
-                    let new_unit_index = *new_indices
-                        .get(part_index)
-                        .ok_or_else(|| "successful material endpoint index disappeared".to_string())?;
-
                     construction_ledger = trial_ledger;
                     remaining_energy = trial_energy;
                     total_heat += trial_attempt.work_cost;
