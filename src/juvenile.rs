@@ -50,7 +50,10 @@ pub(crate) fn confirmed_seed_baseline(
         .ok_or_else(|| "Carbon seed geometry is not a regular polygon".to_string())?;
     let carbon_edge_center_spacing = (3.0_f64).sqrt() * carbon_radius;
     let ring_basis = [
-        (carbon_edge_center_spacing * 0.5, carbon_edge_center_spacing * 0.8660254037844386),
+        (
+            carbon_edge_center_spacing * 0.5,
+            carbon_edge_center_spacing * 0.8660254037844386,
+        ),
         (0.0, carbon_edge_center_spacing),
     ];
 
