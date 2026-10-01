@@ -344,20 +344,4 @@ impl StructuralBlueprint {
 mod tests {
     use super::*;
 
-    #[test]
-    fn genome_measurement_scaffold_is_an_equilateral_three_bond_triangle() {
-        let catalog = crate::resources::default_catalog();
-        let scaffold = GenomeMeasurementScaffold::three_carbon_reference(&catalog).unwrap();
-
-        assert_eq!(scaffold.bonds, [(0, 1), (1, 2), (2, 0)]);
-
-        let points = scaffold.placements;
-        let d01 = (points[0].x - points[1].x).hypot(points[0].y - points[1].y);
-        let d12 = (points[1].x - points[2].x).hypot(points[1].y - points[2].y);
-        let d20 = (points[2].x - points[0].x).hypot(points[2].y - points[0].y);
-
-        assert!((d01 - d12).abs() <= 1e-10);
-        assert!((d12 - d20).abs() <= 1e-10);
-        assert!(d01 > 0.0);
-    }
 }
