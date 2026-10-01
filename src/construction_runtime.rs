@@ -1205,6 +1205,7 @@ fn construct_blueprint_bond_driven_internal(
                 break;
             }
         }
+    }
 
     // All elements now have permanent physical poses. Any blueprint bonds
     // between already-realized elements are completed as ordinary, single-bond
