@@ -32,7 +32,9 @@ pub struct ConnectionPairCandidate {
     pub available_b: bool,
 }
 
-pub(crate) fn world_center(unit: &StructuralUnit) -> crate::connection_geometry::WorldConnectionPoint {
+pub(crate) fn world_center(
+    unit: &StructuralUnit,
+) -> crate::connection_geometry::WorldConnectionPoint {
     crate::connection_geometry::WorldConnectionPoint {
         x: unit.placement.x,
         y: unit.placement.y,
