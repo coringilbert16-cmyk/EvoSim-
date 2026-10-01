@@ -748,7 +748,6 @@ fn has_distinct_connection_endpoints(
     false
 }
 
-
 fn realize_next_bond_driven(
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     catalog: &[BaseResource],
