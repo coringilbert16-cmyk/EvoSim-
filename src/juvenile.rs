@@ -32,10 +32,9 @@ pub(crate) fn confirmed_seed_baseline(
     // the physical bonds and cavity are simultaneously satisfied.
     //
     // Ten Carbon pieces form the smallest regular Carbon ring that can
-    // physically enclose the three-Carbon measurement scaffold without overlap.
-    // Eight Carbon pieces cannot satisfy both requirements with the catalog's
-    // fixed Carbon geometry: their bonded center spacing fixes the ring radius
-    // too tightly for the scaffold to fit inside. Sulfur and Methane remain
+    // physically enclose the three-Carbon measurement scaffold while adjacent
+    // hexagons share an edge. The center spacing is the hexagon-to-hexagon
+    // edge-sharing distance, not the corner-to-corner diameter. Sulfur and Methane remain
     // ordinary outward branches and are not part of the genome definition.
     let ring_sides = 10usize;
     let carbon_radius = catalog
@@ -46,8 +45,9 @@ pub(crate) fn confirmed_seed_baseline(
             _ => None,
         })
         .ok_or_else(|| "Carbon seed geometry is not a regular polygon".to_string())?;
-    let ring_radius =
-        (2.0 * carbon_radius) / (2.0 * (std::f64::consts::PI / ring_sides as f64).sin());
+    let carbon_edge_center_spacing = (3.0_f64).sqrt() * carbon_radius;
+    let ring_radius = carbon_edge_center_spacing
+        / (2.0 * (std::f64::consts::PI / ring_sides as f64).sin());
     let mut elements = Vec::with_capacity(ring_sides + 6);
 
     for i in 0..ring_sides {
