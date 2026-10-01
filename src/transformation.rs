@@ -67,7 +67,7 @@ fn stress_break_candidate_indices(organism: &Organism, environment: &Environment
         crate::cavity::analyze_genome_cavity(&organism.structure, &environment.catalog)
             .ok()
             .flatten()
-            .map(|cavity| cavity.boundary_bond_indices(&organism.structure))
+            .map(|cavity| cavity.boundary_bond_indices(&organism.structure, &environment.catalog))
             .unwrap_or_default();
 
     // Genome bonds are protected while ordinary structural bonds remain.
