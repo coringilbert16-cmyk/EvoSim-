@@ -681,7 +681,7 @@ fn realize_next_bond_driven(
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     catalog: &[BaseResource],
     structure: &OrganismStructure,
-    realized_units: &[Option<usize>],
+    realized_units: &[Option<Vec<usize>>],
     _index: usize,
     neighbor: usize,
     genome_anchor: Placement,
@@ -698,12 +698,10 @@ fn realize_next_bond_driven(
     EnergyLedger,
     f64,
 )> {
-    let existing_index = realized_units[neighbor]?;
-    let existing_unit = structure.units.get(existing_index)?;
-    let existing_endpoints = structure_unit_endpoint_options(existing_unit, catalog);
+    let existing_indices = realized_units[neighbor].as_ref()?.clone();
     let new_endpoints = physical_material_endpoint_options(new_material, catalog);
 
-    if existing_endpoints.is_empty() || new_endpoints.is_empty() {
+    if existing_indices.is_empty() || new_endpoints.is_empty() {
         return None;
     }
 
@@ -717,9 +715,12 @@ fn realize_next_bond_driven(
         f64,
     )> = None;
 
-    for endpoint_a in existing_endpoints {
-        let joint = endpoint_a.world_point(&structure.units[existing_index], catalog)?;
-        for (part_index, endpoint_b) in new_endpoints.iter().copied() {
+    for existing_index in existing_indices {
+        let existing_unit = structure.units.get(existing_index)?;
+        let existing_endpoints = structure_unit_endpoint_options(existing_unit, catalog);
+        for endpoint_a in existing_endpoints {
+            let joint = endpoint_a.world_point(&structure.units[existing_index], catalog)?;
+            for (part_index, endpoint_b) in new_endpoints.iter().copied() {
             let local_b = physical_material_endpoint_local_point(
                 new_material,
                 part_index,
@@ -846,19 +847,20 @@ fn realize_next_bond_driven(
                     continue;
                 };
 
-                if best_candidate
-                    .as_ref()
-                    .is_none_or(|current| target_distance < current.0)
-                {
-                    best_candidate = Some((
-                        target_distance,
-                        trial,
-                        indices,
-                        part_index,
-                        attempt,
-                        trial_ledger,
-                        trial_energy,
-                    ));
+                    if best_candidate
+                        .as_ref()
+                        .is_none_or(|current| target_distance < current.0)
+                    {
+                        best_candidate = Some((
+                            target_distance,
+                            trial,
+                            indices,
+                            part_index,
+                            attempt,
+                            trial_ledger,
+                            trial_energy,
+                        ));
+                    }
                 }
             }
         }
@@ -945,7 +947,11 @@ fn construct_blueprint_bond_driven_internal(
 
     let mut structure = OrganismStructure::new();
     let mut realized = vec![false; blueprint.elements.len()];
-    let mut realized_units = vec![None; blueprint.elements.len()];
+    // Each blueprint element maps to every physical unit restored for that
+    // element. A stored composite remains one developmental element, but any
+    // of its physical constituents may legitimately provide a later bond
+    // endpoint.
+    let mut realized_units = vec![None::<Vec<usize>>; blueprint.elements.len()];
     let mut construction_ledger = *ledger;
     let mut remaining_energy = *energy;
     let mut total_heat = 0.0;
@@ -1011,7 +1017,7 @@ fn construct_blueprint_bond_driven_internal(
         .first()
         .ok_or_else(|| "construction anchor restored no physical units".to_string())?;
     realized[anchor_index] = true;
-    realized_units[anchor_index] = Some(anchor_unit_index);
+    realized_units[anchor_index] = Some(anchor_indices.clone());
     let genome_anchor = structure.units[anchor_unit_index].placement;
     while !realized.iter().all(|value| *value) {
         // Select the next element only from its currently realized neighbors.
@@ -1166,7 +1172,7 @@ fn construct_blueprint_bond_driven_internal(
                     total_heat += trial_attempt.work_cost;
                     structure = trial_structure;
                     realized[index] = true;
-                    realized_units[index] = Some(new_unit_index);
+                    realized_units[index] = Some(new_indices.clone());
                     if storage_index != usize::MAX {
                         reserved_storage_indices.push(storage_index);
                     }
