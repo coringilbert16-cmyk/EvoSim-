@@ -1318,7 +1318,8 @@ fn construct_blueprint_bond_driven_internal(
                 ));
             }
             return Err("construction closure made no progress".to_string());
-        }    }
+        }
+    }
 
     Ok((structure, total_heat))
 }
