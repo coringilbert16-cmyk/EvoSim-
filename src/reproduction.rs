@@ -307,7 +307,7 @@ fn try_child_construction(
             parent_storage.entries.get(parent_index)?;
 
         for existing_index in 0..child.structure.units.len() {
-            let mut candidate_ledger = *ledger;
+            let candidate_ledger = *ledger;
             let Some((
                 trial_structure,
                 _indices,
