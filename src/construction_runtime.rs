@@ -567,6 +567,106 @@ pub(crate) fn try_attach_physical_material_bond_driven(
     None
 }
 
+
+fn normalized_angle_difference(a: f64, b: f64) -> f64 {
+    let mut delta = (a - b).rem_euclid(std::f64::consts::TAU);
+    if delta > std::f64::consts::PI {
+        delta -= std::f64::consts::TAU;
+    }
+    delta.abs()
+}
+
+fn blueprint_world_position(
+    placement: BlueprintPlacement,
+    genome_anchor: Placement,
+    anchor_declared: BlueprintPlacement,
+) -> (f64, f64) {
+    let (s, c) = genome_anchor.rotation_radians.sin_cos();
+    (
+        genome_anchor.x + (placement.x - anchor_declared.x) * c
+            - (placement.y - anchor_declared.y) * s,
+        genome_anchor.y
+            + (placement.x - anchor_declared.x) * s
+            + (placement.y - anchor_declared.y) * c,
+    )
+}
+
+fn local_blueprint_candidate_score(
+    blueprint: &crate::structural_blueprint::StructuralBlueprint,
+    index: usize,
+    candidate_structure: &OrganismStructure,
+    candidate_indices: &[usize],
+    realized_units: &[Option<Vec<usize>>],
+    genome_anchor: Placement,
+    anchor_declared: BlueprintPlacement,
+    contact: crate::contact::ConnectionPairCandidate,
+) -> Option<f64> {
+    let target = blueprint.elements.get(index)?.placement;
+    let (target_x, target_y) = blueprint_world_position(target, genome_anchor, anchor_declared);
+
+    let mut new_center = (0.0, 0.0);
+    let mut count = 0.0;
+    for &unit_index in candidate_indices {
+        let unit = candidate_structure.units.get(unit_index)?;
+        new_center.0 += unit.placement.x;
+        new_center.1 += unit.placement.y;
+        count += 1.0;
+    }
+    if count <= 0.0 {
+        return None;
+    }
+    new_center.0 /= count;
+    new_center.1 /= count;
+
+    // Absolute placement is a preference, not a hard target.
+    let mut score = (new_center.0 - target_x).hypot(new_center.1 - target_y);
+    let representative = candidate_structure.units.get(*candidate_indices.first()?)?;
+    score += 0.25
+        * normalized_angle_difference(
+            representative.placement.rotation_radians,
+            target.rotation_radians + genome_anchor.rotation_radians
+                - anchor_declared.rotation_radians,
+        );
+
+    // When several intended neighbors are already realized, fit the new
+    // element to all of them simultaneously. This is deliberately local:
+    // unrealized elements never participate in the score.
+    for neighbor_index in already_realized_neighbors(blueprint, index, &vec![true; blueprint.elements.len()]) {
+        let Some(Some(neighbor_units)) = realized_units.get(neighbor_index) else {
+            continue;
+        };
+        if neighbor_units.is_empty() {
+            continue;
+        }
+        let mut neighbor_center = (0.0, 0.0);
+        let mut neighbor_count = 0.0;
+        for &unit_index in neighbor_units {
+            let unit = candidate_structure.units.get(unit_index)?;
+            neighbor_center.0 += unit.placement.x;
+            neighbor_center.1 += unit.placement.y;
+            neighbor_count += 1.0;
+        }
+        neighbor_center.0 /= neighbor_count;
+        neighbor_center.1 /= neighbor_count;
+
+        let neighbor_target = blueprint.elements.get(neighbor_index)?.placement;
+        let (neighbor_x, neighbor_y) =
+            blueprint_world_position(neighbor_target, genome_anchor, anchor_declared);
+        let desired_dx = target_x - neighbor_x;
+        let desired_dy = target_y - neighbor_y;
+        let actual_dx = new_center.0 - neighbor_center.0;
+        let actual_dy = new_center.1 - neighbor_center.1;
+        let desired_length = desired_dx.hypot(desired_dy).max(1.0);
+        score += (actual_dx - desired_dx).hypot(actual_dy - desired_dy) / desired_length;
+    }
+
+    // Contact quality is a small tie-breaker among already physically valid
+    // candidates; blueprint fit remains the dominant preference.
+    score += contact.distance * 0.1;
+    score += (1.0 - contact.facing.clamp(-1.0, 1.0)) * 0.1;
+    Some(score)
+}
+
 fn realize_next_bond_driven(
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     catalog: &[BaseResource],
@@ -618,35 +718,17 @@ fn realize_next_bond_driven(
                     catalog,
                 )?;
 
-                // The declared blueprint pose is a preference, not a placement
-                // command. Start at the rotation that puts this physical material's
-                // selected endpoint on the joint while aiming its local endpoint
-                // toward the declared target, then sweep the full circle.
                 let target = blueprint.elements[_index].placement;
-                let (s, c) = genome_anchor.rotation_radians.sin_cos();
-                let target_world = (
-                    genome_anchor.x + (target.x - anchor_declared.x) * c
-                        - (target.y - anchor_declared.y) * s,
-                    genome_anchor.y
-                        + (target.x - anchor_declared.x) * s
-                        + (target.y - anchor_declared.y) * c,
-                );
-                let ideal_angle = (joint.y - target_world.1).atan2(joint.x - target_world.0)
+                let (target_x, target_y) =
+                    blueprint_world_position(target, genome_anchor, anchor_declared);
+                let ideal_angle = (joint.y - target_y).atan2(joint.x - target_x)
                     - local_b.y.atan2(local_b.x);
+
                 for step in 0..360 {
                     let offset = std::f64::consts::TAU * step as f64 / 360.0;
                     let angle = ideal_angle + offset;
                     let candidate_origin =
                         placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
-                    let target_distance = (candidate_origin.x - target_world.0)
-                        .hypot(candidate_origin.y - target_world.1);
-
-                    // Do not prune solely because this pose is farther from the
-                    // declared preference than the best candidate found so far.
-                    // Physical validity is evaluated only after restoration,
-                    // penetration checks, and the shared bond admission. A farther
-                    // pose may be the first (or only) physically valid one, so
-                    // pruning here would silently turn preference into authority.
 
                     *nodes += 1;
                     if *nodes > 5_000 {
@@ -663,7 +745,6 @@ fn realize_next_bond_driven(
                         continue;
                     };
 
-                    let new_unit_index = *indices.get(part_index)?;
                     let ignored_units = indices.clone();
                     if indices.iter().any(|index| {
                         placed_unit_overlaps(&trial, &trial.units[*index], &ignored_units, catalog)
@@ -675,14 +756,10 @@ fn realize_next_bond_driven(
                     let mut trial_energy = available_energy;
                     let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
 
-                    // The official connection points determine where the
-                    // constructor works from and how the new material is placed.
-                    // Once the material is physically placed, the actual bond may
-                    // land anywhere on the touching boundaries.
                     let Some(candidate) = crate::contact::connection_pair_candidates_cached(
                         &trial,
                         existing_index,
-                        new_unit_index,
+                        *indices.get(part_index)?,
                         catalog,
                         &mut bond_cache,
                     )
@@ -692,13 +769,13 @@ fn realize_next_bond_driven(
                             && candidate.available_a
                             && candidate.available_b
                     })
-                    .min_by(|a, b| {
-                        a.distance
-                            .partial_cmp(&b.distance)
+                    .max_by(|a, b| {
+                        a.facing
+                            .partial_cmp(&b.facing)
                             .unwrap_or(std::cmp::Ordering::Equal)
                             .then_with(|| {
-                                b.facing
-                                    .partial_cmp(&a.facing)
+                                b.distance
+                                    .partial_cmp(&a.distance)
                                     .unwrap_or(std::cmp::Ordering::Equal)
                             })
                     }) else {
@@ -709,7 +786,7 @@ fn realize_next_bond_driven(
                         crate::combine_runtime::selected_candidate_evaluation(
                             &trial,
                             existing_index,
-                            new_unit_index,
+                            *indices.get(part_index)?,
                             candidate,
                             catalog,
                         )
@@ -720,7 +797,7 @@ fn realize_next_bond_driven(
                     let Some(attempt) = crate::combine_runtime::form_selected_bond(
                         &mut trial,
                         existing_index,
-                        new_unit_index,
+                        *indices.get(part_index)?,
                         candidate,
                         investment,
                         catalog,
@@ -731,12 +808,25 @@ fn realize_next_bond_driven(
                         continue;
                     };
 
+                    let Some(score) = local_blueprint_candidate_score(
+                        blueprint,
+                        _index,
+                        &trial,
+                        &indices,
+                        realized_units,
+                        genome_anchor,
+                        anchor_declared,
+                        candidate,
+                    ) else {
+                        continue;
+                    };
+
                     if best_candidate
                         .as_ref()
-                        .is_none_or(|current| target_distance < current.0)
+                        .is_none_or(|current| score < current.0)
                     {
                         best_candidate = Some((
-                            target_distance,
+                            score,
                             trial,
                             indices,
                             part_index,
@@ -762,6 +852,7 @@ fn realize_next_bond_driven(
             )
         },
     )
+
 }
 
 /// Bond-driven construction is forward-only. Once a bond is formed it is
