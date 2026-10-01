@@ -97,7 +97,7 @@ pub(crate) fn confirmed_seed_baseline(
     let spiral_radius_step = 0.10_f64;
     for step in 1..=spiral_steps {
         let angle = spiral_angle_step * step as f64;
-        let radius = ring_radius + spiral_radius_step * step as f64;
+        let radius = ring_extent + spiral_radius_step * step as f64;
         elements.push(BlueprintElement {
             material: Material::free_base("Carbon", 1.0),
             placement: BlueprintPlacement {
