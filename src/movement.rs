@@ -1254,6 +1254,66 @@ mod tests {
     }
 
     #[test]
+    fn curiosity_controls_probability_of_unknown_movement_exploration() {
+        let simulation = Simulation::new(7, 20.0);
+        let mut low_curiosity = simulation.organisms[0].clone();
+        let mut high_curiosity = low_curiosity.clone();
+        low_curiosity
+            .genome
+            .traits
+            .iter_mut()
+            .find(|trait_def| trait_def.name == "curiosity")
+            .unwrap()
+            .value = 0.0;
+        high_curiosity
+            .genome
+            .traits
+            .iter_mut()
+            .find(|trait_def| trait_def.name == "curiosity")
+            .unwrap()
+            .value = 1.0;
+
+        let known_distance = MOVEMENT_DISTANCE_OPTIONS[0];
+        let consequence = crate::decision::ActionConsequence {
+            energy_delta: 1.0,
+            stress_delta: -1.0,
+            developmental_delta: 0.0,
+        };
+        low_curiosity.decision_history.record(
+            crate::decision::ActionKind::Move,
+            Some(movement_context_key(known_distance)),
+            consequence,
+        );
+        high_curiosity.decision_history.record(
+            crate::decision::ActionKind::Move,
+            Some(movement_context_key(known_distance)),
+            consequence,
+        );
+
+        let mut low_rng = ChaCha8Rng::seed_from_u64(11);
+        let mut high_rng = ChaCha8Rng::seed_from_u64(11);
+        let low_distance = select_movement_distance(
+            &low_curiosity,
+            16.0,
+            0.8,
+            10.0,
+            &mut low_rng,
+        )
+        .unwrap();
+        let high_distance = select_movement_distance(
+            &high_curiosity,
+            16.0,
+            0.8,
+            10.0,
+            &mut high_rng,
+        )
+        .unwrap();
+
+        assert_eq!(low_distance, known_distance);
+        assert_ne!(high_distance, known_distance);
+    }
+
+    #[test]
     fn movement_direction_selects_most_desirable_signal_instead_of_averaging() {
         let simulation = Simulation::new(7, 20.0);
         let mut organism = simulation.organisms[0].clone();
