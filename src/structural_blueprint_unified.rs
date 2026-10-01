@@ -339,9 +339,3 @@ impl StructuralBlueprint {
             .sum()
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-}
