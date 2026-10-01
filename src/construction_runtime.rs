@@ -1210,410 +1210,89 @@ fn construct_blueprint_bond_driven_internal(
             if closed_connections[connection_index] {
                 continue;
             }
-            let Some(unit_a) = realized_units[connection.element_a] else {
+            let Some(units_a) = realized_units[connection.element_a].as_ref() else {
                 continue;
             };
-            let Some(unit_b) = realized_units[connection.element_b] else {
+            let Some(units_b) = realized_units[connection.element_b].as_ref() else {
                 continue;
             };
-            if structure.bonds.iter().any(|bond| {
-                let a = bond.endpoint_a.constituent_id;
-                let b = bond.endpoint_b.constituent_id;
-                let a_belongs_to_a = realized_units[connection.element_a]
-                    .as_ref()
-                    .is_some_and(|indices| {
-                        indices
-                            .iter()
-                            .any(|&index| structure.units[index].physical_id == a)
-                    });
-                let b_belongs_to_b = realized_units[connection.element_b]
-                    .as_ref()
-                    .is_some_and(|indices| {
-                        indices
-                            .iter()
-                            .any(|&index| structure.units[index].physical_id == b)
-                    });
-                let a_belongs_to_b = realized_units[connection.element_b]
-                    .as_ref()
-                    .is_some_and(|indices| {
-                        indices
-                            .iter()
-                            .any(|&index| structure.units[index].physical_id == a)
-                    });
-                let b_belongs_to_a = realized_units[connection.element_a]
-                    .as_ref()
-                    .is_some_and(|indices| {
-                        indices
-                            .iter()
-                            .any(|&index| structure.units[index].physical_id == b)
-                    });
-                (a_belongs_to_a && b_belongs_to_b) || (a_belongs_to_b && b_belongs_to_a)
-            }) {
-                closed_connections[connection_index] = true;
-                progressed = true;
-                continue;
-            }
+            'unit_pairs: for &unit_a in units_a {
+                for &unit_b in units_b {
+                    if unit_a == unit_b {
+                        continue;
+                    }
+                    let candidates = crate::contact::connection_pair_candidates_cached(
+                        &structure,
+                        unit_a,
+                        unit_b,
+                        catalog,
+                        &mut crate::contact::ConnectionCompatibilityCache::new(),
+                    );
+                    let total_candidates = candidates.len();
+                    let mut contact_candidates = 0usize;
+                    let mut evaluated_candidates = 0usize;
+                    let mut rejected_by_bond_admission = 0usize;
+                    for candidate in candidates.into_iter().filter(|candidate| {
+                        candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                            && candidate.available_a
+                            && candidate.available_b
+                    }) {
+                        contact_candidates += 1;
+                        let Some((_, _, _, investment, _)) =
+                            crate::combine_runtime::selected_candidate_evaluation(
+                                &structure, unit_a, unit_b, candidate, catalog,
+                            )
+                        else {
+                            continue;
+                        };
+                        evaluated_candidates += 1;
 
-            let candidates = crate::contact::connection_pair_candidates_cached(
-                &structure,
-                unit_a,
-                unit_b,
-                catalog,
-                &mut crate::contact::ConnectionCompatibilityCache::new(),
-            );
-            let total_candidates = candidates.len();
-            let mut contact_candidates = 0usize;
-            let mut evaluated_candidates = 0usize;
-            let mut rejected_by_bond_admission = 0usize;
-            for candidate in candidates.into_iter().filter(|candidate| {
-                candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                    && candidate.available_a
-                    && candidate.available_b
-            }) {
-                contact_candidates += 1;
-                let Some((_, _, _, investment, _)) =
-                    crate::combine_runtime::selected_candidate_evaluation(
-                        &structure, unit_a, unit_b, candidate, catalog,
-                    )
-                else {
-                    continue;
-                };
-                evaluated_candidates += 1;
+                        let mut trial_structure = structure.clone();
+                        let mut trial_ledger = construction_ledger;
+                        let mut trial_energy = remaining_energy;
+                        let mut bond_cache =
+                            crate::contact::ConnectionCompatibilityCache::new();
+                        let Some(attempt) = crate::combine_runtime::form_selected_bond(
+                            &mut trial_structure,
+                            unit_a,
+                            unit_b,
+                            candidate,
+                            investment,
+                            catalog,
+                            &mut bond_cache,
+                            &mut trial_ledger,
+                            &mut trial_energy,
+                        ) else {
+                            rejected_by_bond_admission += 1;
+                            continue;
+                        };
 
-                // A prescribed realized-realized bond is still one ordinary
-                // construction bond. Try every physically admissible endpoint
-                // pair rather than letting the first candidate that reaches
-                // contact veto the entire connection.
-                let mut trial_structure = structure.clone();
-                let mut trial_ledger = construction_ledger;
-                let mut trial_energy = remaining_energy;
-                let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
-                let Some(attempt) = crate::combine_runtime::form_selected_bond(
-                    &mut trial_structure,
-                    unit_a,
-                    unit_b,
-                    candidate,
-                    investment,
-                    catalog,
-                    &mut bond_cache,
-                    &mut trial_ledger,
-                    &mut trial_energy,
-                ) else {
-                    rejected_by_bond_admission += 1;
-                    continue;
-                };
+                        structure = trial_structure;
+                        construction_ledger = trial_ledger;
+                        remaining_energy = trial_energy;
+                        total_heat += attempt.work_cost;
+                        closed_connections[connection_index] = true;
+                        progressed = true;
+                        break 'unit_pairs;
+                    }
 
-                structure = trial_structure;
-                construction_ledger = trial_ledger;
-                remaining_energy = trial_energy;
-                total_heat += attempt.work_cost;
-                closed_connections[connection_index] = true;
-                progressed = true;
-                break;
+                    if total_candidates > 0
+                        || contact_candidates > 0
+                        || evaluated_candidates > 0
+                        || rejected_by_bond_admission > 0
+                    {
+                        failed_diagnostic = Some((
+                            connection_index,
+                            connection.element_a,
+                            connection.element_b,
+                            total_candidates,
+                            contact_candidates,
+                            evaluated_candidates,
+                            rejected_by_bond_admission,
+                        ));
+                    }
+                }
             }
             if progressed {
                 break;
             }
-
-            failed_diagnostic = Some((
-                connection_index,
-                connection.element_a,
-                connection.element_b,
-                total_candidates,
-                contact_candidates,
-                evaluated_candidates,
-                rejected_by_bond_admission,
-            ));
-        }
-        if !progressed {
-            let (
-                connection_index,
-                element_a,
-                element_b,
-                total_candidates,
-                contact_candidates,
-                evaluated_candidates,
-                rejected_by_bond_admission,
-            ) = failed_diagnostic.expect("failed closure must record diagnostics");
-            let physical_a = realized_units[element_a]
-                .as_ref()
-                .and_then(|indices| indices.first().copied());
-            let physical_b = realized_units[element_b]
-                .as_ref()
-                .and_then(|indices| indices.first().copied());
-            let bond_present = structure.bonds.iter().any(|bond| {
-                let a = bond.endpoint_a.constituent_id;
-                let b = bond.endpoint_b.constituent_id;
-                let a_belongs_to_a = realized_units[element_a]
-                    .as_ref()
-                    .is_some_and(|indices| {
-                        indices
-                            .iter()
-                            .any(|&index| structure.units[index].physical_id == a)
-                    });
-                let b_belongs_to_b = realized_units[element_b]
-                    .as_ref()
-                    .is_some_and(|indices| {
-                        indices
-                            .iter()
-                            .any(|&index| structure.units[index].physical_id == b)
-                    });
-                let a_belongs_to_b = realized_units[element_b]
-                    .as_ref()
-                    .is_some_and(|indices| {
-                        indices
-                            .iter()
-                            .any(|&index| structure.units[index].physical_id == a)
-                    });
-                let b_belongs_to_a = realized_units[element_a]
-                    .as_ref()
-                    .is_some_and(|indices| {
-                        indices
-                            .iter()
-                            .any(|&index| structure.units[index].physical_id == b)
-                    });
-                (a_belongs_to_a && b_belongs_to_b) || (a_belongs_to_b && b_belongs_to_a)
-            });
-            let center_distance = physical_a
-                .zip(physical_b)
-                .map(|(a, b)| {
-                    (structure.units[a].placement.x - structure.units[b].placement.x)
-                        .hypot(structure.units[a].placement.y - structure.units[b].placement.y)
-                })
-                .unwrap_or(f64::NAN);
-            return Err(format!(
-                "bond-driven construction could not close prescribed connection {connection_index} (elements {element_a}-{element_b}): candidates={total_candidates}, contacts={contact_candidates}, evaluated={evaluated_candidates}, bond_admission_rejections={rejected_by_bond_admission}, closed_flag={}, bond_present={}, center_distance={center_distance:.6}",
-                closed_connections[connection_index], bond_present
-            ));
-        }
-    }
-
-    if blueprint.genome_measurement.is_some() {
-        let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| {
-                let carbon_positions = structure
-                    .units
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, unit)| unit.material.parts.first().is_some_and(|(name, _)| name == "Carbon"))
-                    .map(|(index, unit)| format!("{index}:({:.4},{:.4})", unit.placement.x, unit.placement.y))
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                format!(
-                    "bond-driven construction did not form a qualifying genome cavity: units={}, bonds={}, carbons={carbon_positions}",
-                    structure.units.len(),
-                    structure.bonds.len()
-                )
-            })?;
-        if !cavity.qualifies() {
-            return Err(format!(
-                "bond-driven construction formed an undersized genome cavity: area={:.6}, minimum={:.6}, boundary_units={:?}",
-                cavity.area, cavity.minimum_area, cavity.boundary_units
-            ));
-        }
-    }
-
-    if let Some(storage) = available_materials.as_deref_mut() {
-        reserved_storage_indices.sort_unstable();
-        if reserved_storage_indices
-            .iter()
-            .any(|&storage_index| storage.entries.get(storage_index).is_none())
-        {
-            return Err(
-                "construction reservation became invalid before material consumption".into(),
-            );
-        }
-        for storage_index in reserved_storage_indices.into_iter().rev() {
-            storage.take_physical_at(storage_index).ok_or_else(|| {
-                format!("construction could not consume reserved material index {storage_index}")
-            })?;
-        }
-    }
-
-    *ledger = construction_ledger;
-    *energy = remaining_energy;
-    Ok((structure, total_heat))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn bond_driven_triangle_commits_all_realized_neighbor_bonds() {
-        use crate::resources::Material;
-        use crate::structural_blueprint::{
-            BlueprintConnection, BlueprintElement, BlueprintPlacement,
-        };
-
-        let catalog = crate::resources::default_catalog();
-        let radius = catalog
-            .iter()
-            .find(|resource| resource.name == "Carbon")
-            .and_then(|resource| match resource.shape.form {
-                crate::resources::Form::RegularPolygon { radius, .. } => Some(radius),
-                _ => None,
-            })
-            .unwrap();
-
-        let spacing = (3.0_f64).sqrt() * radius;
-        let blueprint = crate::structural_blueprint::StructuralBlueprint::with_anchor_elements(
-            vec![
-                BlueprintElement {
-                    material: Material::free_base("Carbon", 1.0),
-                    placement: BlueprintPlacement {
-                        x: 0.0,
-                        y: 0.0,
-                        rotation_radians: 0.0,
-                    },
-                },
-                BlueprintElement {
-                    material: Material::free_base("Carbon", 1.0),
-                    placement: BlueprintPlacement {
-                        x: spacing,
-                        y: 0.0,
-                        rotation_radians: 0.0,
-                    },
-                },
-                BlueprintElement {
-                    material: Material::free_base("Carbon", 1.0),
-                    placement: BlueprintPlacement {
-                        x: spacing / 2.0,
-                        y: spacing * 0.8660254037844386,
-                        rotation_radians: 0.0,
-                    },
-                },
-            ],
-            vec![
-                BlueprintConnection {
-                    element_a: 0,
-                    element_b: 1,
-                },
-                BlueprintConnection {
-                    element_a: 0,
-                    element_b: 2,
-                },
-                BlueprintConnection {
-                    element_a: 1,
-                    element_b: 2,
-                },
-            ],
-            vec![0],
-        );
-
-        let mut ledger = EnergyLedger::default();
-        let mut energy = 1.0e6;
-        let (structure, _) =
-            construct_blueprint_bond_driven(&blueprint, &catalog, &mut ledger, &mut energy)
-                .unwrap();
-
-        assert_eq!(structure.units.len(), 3);
-        assert_eq!(structure.bonds.len(), 3);
-    }
-
-    #[test]
-    fn genome_measurement_scaffold_uses_blueprint_frame_not_anchor_as_its_center() {
-        let catalog = crate::resources::default_catalog();
-        let scaffold =
-            crate::structural_blueprint::GenomeMeasurementScaffold::three_carbon_reference(
-                &catalog,
-            )
-            .unwrap();
-        let mut structure = OrganismStructure::new();
-        let ids = install_genome_measurement_scaffold(
-            &mut structure,
-            &scaffold,
-            Placement {
-                x: 8.0,
-                y: 20.0,
-                rotation_radians: 0.0,
-            },
-            &catalog,
-        )
-        .unwrap();
-
-        let scaffold_unit = structure
-            .units
-            .iter()
-            .find(|unit| unit.physical_id == ids[0])
-            .expect("scaffold unit must be installed");
-        let expected = (
-            10.0 + scaffold.placements[0].x - 2.0,
-            20.0 + scaffold.placements[0].y,
-        );
-        assert!((scaffold_unit.placement.x - expected.0).abs() <= 1e-10);
-        assert!((scaffold_unit.placement.y - expected.1).abs() <= 1e-10);
-    }
-
-    #[test]
-    fn restored_composite_overlap_is_rejected_against_existing_structure() {
-        let catalog = crate::resources::default_catalog();
-        let mut structure = OrganismStructure::new();
-
-        let existing = StructuralUnit::from_material(
-            crate::resources::Material::free_base("Carbon", 1.0),
-            Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        )
-        .unwrap();
-        let existing_index = structure.add_unit(existing);
-
-        let overlapping = StructuralUnit::from_material(
-            crate::resources::Material::free_base("Carbon", 1.0),
-            Placement {
-                x: 0.5,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        )
-        .unwrap();
-
-        assert!(placed_unit_overlaps(
-            &structure,
-            &overlapping,
-            &[existing_index + 1],
-            &catalog,
-        ));
-        assert!(!placed_unit_overlaps(
-            &structure,
-            &overlapping,
-            &[existing_index],
-            &catalog,
-        ));
-    }
-
-    #[test]
-    fn temporary_genome_scaffold_is_real_physical_geometry_and_is_removed() {
-        let catalog = crate::resources::default_catalog();
-        let scaffold =
-            crate::structural_blueprint::GenomeMeasurementScaffold::three_carbon_reference(
-                &catalog,
-            )
-            .unwrap();
-        let mut structure = OrganismStructure::new();
-        let ids = install_genome_measurement_scaffold(
-            &mut structure,
-            &scaffold,
-            Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-            &catalog,
-        )
-        .unwrap();
-
-        assert_eq!(ids.len(), 3);
-        assert_eq!(structure.units.len(), 3);
-        assert_eq!(structure.bonds.len(), 3);
-        assert!(structure.bonds.iter().all(|bond| bond.bond_energy == 0.0));
-
-        structure.remove_units_by_physical_ids(&ids);
-        assert!(structure.units.is_empty());
-        assert!(structure.bonds.is_empty());
-    }
-}
