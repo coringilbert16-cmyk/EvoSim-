@@ -446,6 +446,80 @@ fn physical_material_endpoint_local_point(
     endpoint.world_point(&unit, catalog)
 }
 
+
+fn normalize_construction_angle(angle: f64) -> f64 {
+    (angle + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI
+}
+
+fn construction_angle_candidates(
+    existing_shape: &crate::resources::Shape,
+    existing_endpoint: ConnectionEndpoint,
+    existing_rotation: f64,
+    candidate_shape: &crate::resources::Shape,
+    candidate_endpoint: ConnectionEndpoint,
+    ideal_angle: f64,
+) -> Vec<f64> {
+    let mut angles = Vec::new();
+    let mut push_unique = |angle: f64| {
+        let normalized = normalize_construction_angle(angle);
+        if !angles.iter().any(|current: &f64| {
+            (normalize_construction_angle(*current - normalized)).abs() <= 1e-10
+        }) {
+            angles.push(normalized);
+        }
+    };
+
+    push_unique(ideal_angle);
+
+    match (existing_endpoint, candidate_endpoint) {
+        (ConnectionEndpoint::Corner { point_index: existing_index },
+         ConnectionEndpoint::Corner { point_index: candidate_index }) => {
+            for angle in crate::rigid_boundary::corner_alignment_rotations(
+                candidate_shape, candidate_index, existing_shape, existing_index, existing_rotation,
+            ) {
+                push_unique(angle);
+            }
+        }
+        (ConnectionEndpoint::LineEndpoint { point_index: existing_index },
+         ConnectionEndpoint::LineEndpoint { point_index: candidate_index }) => {
+            for angle in crate::rigid_boundary::line_endpoint_alignment_rotations(
+                candidate_index, existing_index, existing_rotation,
+            ) {
+                push_unique(angle);
+            }
+        }
+        (ConnectionEndpoint::Corner { point_index: existing_index },
+         ConnectionEndpoint::LineEndpoint { point_index: candidate_index }) => {
+            if let (Some(a), Some(b)) = (
+                crate::rigid_boundary::corner_normal(existing_shape, existing_index),
+                crate::rigid_boundary::line_endpoint_normal(candidate_shape, candidate_index),
+            ) {
+                push_unique(a.1.atan2(a.0) + std::f64::consts::PI - b.1.atan2(b.0));
+            }
+        }
+        (ConnectionEndpoint::LineEndpoint { point_index: existing_index },
+         ConnectionEndpoint::Corner { point_index: candidate_index }) => {
+            if let (Some(a), Some(b)) = (
+                crate::rigid_boundary::line_endpoint_normal(existing_shape, existing_index),
+                crate::rigid_boundary::corner_normal(candidate_shape, candidate_index),
+            ) {
+                push_unique(a.1.atan2(a.0) + std::f64::consts::PI - b.1.atan2(b.0));
+            }
+        }
+    }
+
+    // Exact boundary alignments cover common packing: like-shape stacking and
+    // fitting rigid pieces against convex or concave corners. Keep a coarse
+    // fallback for irregular cases without returning to a 360-step sweep.
+    const COARSE_SAMPLES: usize = 24;
+    for step in 0..COARSE_SAMPLES {
+        push_unique(
+            ideal_angle + std::f64::consts::TAU * step as f64 / COARSE_SAMPLES as f64,
+        );
+    }
+    angles
+}
+
 pub(crate) fn try_attach_physical_material_bond_driven(
     structure: &OrganismStructure,
     existing_index: usize,
@@ -479,14 +553,30 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                 catalog,
             )?;
 
-            for step in 0..360 {
-                let angle = std::f64::consts::TAU * step as f64 / 360.0;
+            let Some(existing_shape) = existing_unit.shape(catalog) else {
+                continue;
+            };
+            let Some(candidate_shape) = new_material
+                .material
+                .parts
+                .get(part_index)
+                .and_then(|(name, _)| resource(catalog, name))
+                .map(|resource| &resource.shape)
+            else {
+                continue;
+            };
+            let angles = construction_angle_candidates(
+                existing_shape,
+                endpoint_a,
+                existing_unit.placement.rotation_radians,
+                candidate_shape,
+                endpoint_b,
+                0.0,
+            );
+            for angle in angles {
                 let candidate_origin =
                     placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
                 *nodes += 1;
-                if *nodes > 5_000 {
-                    return None;
-                }
 
                 let mut trial = structure.clone();
                 let Some(indices) = crate::material_restoration::restore_material(
@@ -618,10 +708,9 @@ fn realize_next_bond_driven(
                     catalog,
                 )?;
 
-                // The declared blueprint pose is a preference, not a placement
-                // command. Start at the rotation that puts this physical material's
-                // selected endpoint on the joint while aiming its local endpoint
-                // toward the declared target, then sweep the full circle.
+                // The blueprint pose is a preference, not a placement command.
+                // The analytic target angle is followed by exact boundary alignments
+                // and a small coarse fallback rather than a blind 360-degree sweep.
                 let target = blueprint.elements[_index].placement;
                 let (s, c) = genome_anchor.rotation_radians.sin_cos();
                 let target_world = (
@@ -633,9 +722,28 @@ fn realize_next_bond_driven(
                 );
                 let ideal_angle = (joint.y - target_world.1).atan2(joint.x - target_world.0)
                     - local_b.y.atan2(local_b.x);
-                for step in 0..360 {
-                    let offset = std::f64::consts::TAU * step as f64 / 360.0;
-                    let angle = ideal_angle + offset;
+
+                let Some(existing_shape) = existing_unit.shape(catalog) else {
+                    continue;
+                };
+                let Some(candidate_shape) = new_material
+                    .material
+                    .parts
+                    .get(part_index)
+                    .and_then(|(name, _)| resource(catalog, name))
+                    .map(|resource| &resource.shape)
+                else {
+                    continue;
+                };
+                let angles = construction_angle_candidates(
+                    existing_shape,
+                    endpoint_a,
+                    existing_unit.placement.rotation_radians,
+                    candidate_shape,
+                    endpoint_b,
+                    ideal_angle,
+                );
+                for angle in angles {
                     let candidate_origin =
                         placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
                     let target_distance = (candidate_origin.x - target_world.0)
@@ -649,9 +757,6 @@ fn realize_next_bond_driven(
                     // pruning here would silently turn preference into authority.
 
                     *nodes += 1;
-                    if *nodes > 5_000 {
-                        return None;
-                    }
 
                     let mut trial = structure.clone();
                     let Some(indices) = crate::material_restoration::restore_material(
