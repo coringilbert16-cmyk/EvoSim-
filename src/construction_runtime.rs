@@ -537,8 +537,7 @@ fn construction_angle_candidates(
                 crate::rigid_boundary::corner_normal(candidate_shape, candidate_index),
             ) {
                 push_unique(
-                    a.1.atan2(a.0)
-                        + std::f64::consts::PI
+                    a.1.atan2(a.0) + std::f64::consts::PI
                         - b.1.atan2(b.0)
                         - candidate_relative_rotation,
                 );
