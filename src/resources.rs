@@ -92,12 +92,7 @@ fn polygon_geometry_is_valid(vertices: &[(f64, f64)]) -> bool {
             && p.1 <= a.1.max(b.1) + EPS
     }
 
-    fn segments_intersect(
-        a: (f64, f64),
-        b: (f64, f64),
-        c: (f64, f64),
-        d: (f64, f64),
-    ) -> bool {
+    fn segments_intersect(a: (f64, f64), b: (f64, f64), c: (f64, f64), d: (f64, f64)) -> bool {
         const EPS: f64 = 1e-12;
         let o1 = orientation(a, b, c);
         let o2 = orientation(a, b, d);
