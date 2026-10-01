@@ -1296,3 +1296,188 @@ fn construct_blueprint_bond_driven_internal(
             if progressed {
                 break;
             }
+
+    Ok((structure, total_heat))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bond_driven_triangle_commits_all_realized_neighbor_bonds() {
+        use crate::resources::Material;
+        use crate::structural_blueprint::{
+            BlueprintConnection, BlueprintElement, BlueprintPlacement,
+        };
+
+        let catalog = crate::resources::default_catalog();
+        let radius = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .and_then(|resource| match resource.shape.form {
+                crate::resources::Form::RegularPolygon { radius, .. } => Some(radius),
+                _ => None,
+            })
+            .unwrap();
+
+        let spacing = (3.0_f64).sqrt() * radius;
+        let blueprint = crate::structural_blueprint::StructuralBlueprint::with_anchor_elements(
+            vec![
+                BlueprintElement {
+                    material: Material::free_base("Carbon", 1.0),
+                    placement: BlueprintPlacement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                },
+                BlueprintElement {
+                    material: Material::free_base("Carbon", 1.0),
+                    placement: BlueprintPlacement {
+                        x: spacing,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                },
+                BlueprintElement {
+                    material: Material::free_base("Carbon", 1.0),
+                    placement: BlueprintPlacement {
+                        x: spacing / 2.0,
+                        y: spacing * 0.8660254037844386,
+                        rotation_radians: 0.0,
+                    },
+                },
+            ],
+            vec![
+                BlueprintConnection {
+                    element_a: 0,
+                    element_b: 1,
+                },
+                BlueprintConnection {
+                    element_a: 0,
+                    element_b: 2,
+                },
+                BlueprintConnection {
+                    element_a: 1,
+                    element_b: 2,
+                },
+            ],
+            vec![0],
+        );
+
+        let mut ledger = EnergyLedger::default();
+        let mut energy = 1.0e6;
+        let (structure, _) =
+            construct_blueprint_bond_driven(&blueprint, &catalog, &mut ledger, &mut energy)
+                .unwrap();
+
+        assert_eq!(structure.units.len(), 3);
+        assert_eq!(structure.bonds.len(), 3);
+    }
+
+    #[test]
+    fn genome_measurement_scaffold_uses_blueprint_frame_not_anchor_as_its_center() {
+        let catalog = crate::resources::default_catalog();
+        let scaffold =
+            crate::structural_blueprint::GenomeMeasurementScaffold::three_carbon_reference(
+                &catalog,
+            )
+            .unwrap();
+        let mut structure = OrganismStructure::new();
+        let ids = install_genome_measurement_scaffold(
+            &mut structure,
+            &scaffold,
+            Placement {
+                x: 8.0,
+                y: 20.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        )
+        .unwrap();
+
+        let scaffold_unit = structure
+            .units
+            .iter()
+            .find(|unit| unit.physical_id == ids[0])
+            .expect("scaffold unit must be installed");
+        let expected = (
+            10.0 + scaffold.placements[0].x - 2.0,
+            20.0 + scaffold.placements[0].y,
+        );
+        assert!((scaffold_unit.placement.x - expected.0).abs() <= 1e-10);
+        assert!((scaffold_unit.placement.y - expected.1).abs() <= 1e-10);
+    }
+
+    #[test]
+    fn restored_composite_overlap_is_rejected_against_existing_structure() {
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+
+        let existing = StructuralUnit::from_material(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        )
+        .unwrap();
+        let existing_index = structure.add_unit(existing);
+
+        let overlapping = StructuralUnit::from_material(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            Placement {
+                x: 0.5,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        )
+        .unwrap();
+
+        assert!(placed_unit_overlaps(
+            &structure,
+            &overlapping,
+            &[existing_index + 1],
+            &catalog,
+        ));
+        assert!(!placed_unit_overlaps(
+            &structure,
+            &overlapping,
+            &[existing_index],
+            &catalog,
+        ));
+    }
+
+    #[test]
+    fn temporary_genome_scaffold_is_real_physical_geometry_and_is_removed() {
+        let catalog = crate::resources::default_catalog();
+        let scaffold =
+            crate::structural_blueprint::GenomeMeasurementScaffold::three_carbon_reference(
+                &catalog,
+            )
+            .unwrap();
+        let mut structure = OrganismStructure::new();
+        let ids = install_genome_measurement_scaffold(
+            &mut structure,
+            &scaffold,
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        )
+        .unwrap();
+
+        assert_eq!(ids.len(), 3);
+        assert_eq!(structure.units.len(), 3);
+        assert_eq!(structure.bonds.len(), 3);
+        assert!(structure.bonds.iter().all(|bond| bond.bond_energy == 0.0));
+
+        structure.remove_units_by_physical_ids(&ids);
+        assert!(structure.units.is_empty());
+        assert!(structure.bonds.is_empty());
+    }
+}
