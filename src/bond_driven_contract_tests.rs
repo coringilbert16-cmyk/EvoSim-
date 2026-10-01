@@ -254,6 +254,35 @@ mod tests {
     }
 
     #[test]
+    fn below_threshold_material_is_not_used_as_a_water_fallback() {
+        let catalog = default_catalog();
+        let blueprint = two_carbon_bond_blueprint();
+        let mut storage = crate::material_storage::MaterialStorage::default();
+
+        for name in ["Carbon", "Water"] {
+            assert!(storage.store_physical(
+                Material::free_base(name, 1.0),
+                vec![crate::structure::Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            ));
+        }
+
+        let before_storage = storage.materials_snapshot();
+        let mut ledger = EnergyLedger::default();
+        let mut energy = 1.0e12;
+
+        assert!(blueprint
+            .realize_with_materials(&catalog, &mut storage, &mut ledger, &mut energy)
+            .is_err());
+
+        assert_eq!(storage.materials_snapshot(), before_storage);
+    }
+
+    #[test]
     fn construction_uses_an_intact_composite_physical_material() {
         let catalog = default_catalog();
         let blueprint = two_carbon_bond_blueprint();
