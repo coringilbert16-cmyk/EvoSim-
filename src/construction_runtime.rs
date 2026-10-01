@@ -1338,7 +1338,6 @@ fn construct_blueprint_bond_driven_internal(
     }
 
     if blueprint.genome_measurement.is_some() {
-        structure.remove_units_by_physical_ids(&temporary_scaffold_ids);
         let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)
             .map_err(|e| e.to_string())?
             .ok_or_else(|| {
