@@ -720,22 +720,14 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     continue;
                 };
 
-                let target_distance = (candidate_origin.x - target_world.0)
-                    .hypot(candidate_origin.y - target_world.1);
-                if best_candidate
-                    .as_ref()
-                    .is_none_or(|current: &(f64, _, _, _, _, _, _)| target_distance < current.0)
-                {
-                    best_candidate = Some((
-                        target_distance,
-                        trial,
-                        indices,
-                        part_index,
-                        attempt,
-                        trial_ledger,
-                        trial_energy,
-                    ));
-                }
+                return Some((
+                    trial,
+                    indices,
+                    part_index,
+                    attempt,
+                    trial_ledger,
+                    trial_energy,
+                ));
             }
         }
     }
