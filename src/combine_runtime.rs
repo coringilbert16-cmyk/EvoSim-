@@ -85,7 +85,7 @@ fn evaluate_candidate(
 
 /// Shared access to the universal candidate evaluation. Construction
 /// supplies the exact candidate; this function does not perform candidate search.
-pub(crate) fn construction_candidate_evaluation(
+pub(crate) fn selected_candidate_evaluation(
     structure: &crate::structure::OrganismStructure,
     unit_a: usize,
     unit_b: usize,
