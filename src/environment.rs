@@ -437,8 +437,14 @@ impl ActiveMaterialField {
         }
         positions
             .filter_map(|(x, y)| self.index_for_position(x, y))
-            .map(|index| self.cell_revisions[index])
-            .sum()
+            .fold(0xcbf29ce484222325_u64, |hash, index| {
+                let revision = self.cell_revisions[index];
+                let mixed = (index as u64)
+                    .wrapping_add(0x9e3779b97f4a7c15)
+                    .rotate_left(17)
+                    ^ revision.rotate_left(31);
+                hash.wrapping_mul(0x100000001b3).wrapping_add(mixed)
+            })
     }
 
     fn mark_cell_changed(&mut self, index: usize) {
