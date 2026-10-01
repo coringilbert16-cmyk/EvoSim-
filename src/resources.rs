@@ -62,6 +62,79 @@ pub enum Form {
     },
 }
 
+fn polygon_geometry_is_valid(vertices: &[(f64, f64)]) -> bool {
+    const EPS: f64 = 1e-12;
+
+    if vertices.len() < 3 || !vertices.iter().all(|(x, y)| x.is_finite() && y.is_finite()) {
+        return false;
+    }
+
+    let mut area2 = 0.0;
+    for i in 0..vertices.len() {
+        let (x1, y1) = vertices[i];
+        let (x2, y2) = vertices[(i + 1) % vertices.len()];
+        area2 += x1 * y2 - x2 * y1;
+    }
+    if !area2.is_finite() || area2.abs() <= EPS {
+        return false;
+    }
+
+    fn orientation(a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> f64 {
+        (b.0 - a.0) * (c.1 - a.1) - (b.1 - a.1) * (c.0 - a.0)
+    }
+
+    fn on_segment(a: (f64, f64), b: (f64, f64), p: (f64, f64)) -> bool {
+        const EPS: f64 = 1e-12;
+        orientation(a, b, p).abs() <= EPS
+            && p.0 >= a.0.min(b.0) - EPS
+            && p.0 <= a.0.max(b.0) + EPS
+            && p.1 >= a.1.min(b.1) - EPS
+            && p.1 <= a.1.max(b.1) + EPS
+    }
+
+    fn segments_intersect(
+        a: (f64, f64),
+        b: (f64, f64),
+        c: (f64, f64),
+        d: (f64, f64),
+    ) -> bool {
+        const EPS: f64 = 1e-12;
+        let o1 = orientation(a, b, c);
+        let o2 = orientation(a, b, d);
+        let o3 = orientation(c, d, a);
+        let o4 = orientation(c, d, b);
+
+        if ((o1 > EPS && o2 < -EPS) || (o1 < -EPS && o2 > EPS))
+            && ((o3 > EPS && o4 < -EPS) || (o3 < -EPS && o4 > EPS))
+        {
+            return true;
+        }
+
+        (o1.abs() <= EPS && on_segment(a, b, c))
+            || (o2.abs() <= EPS && on_segment(a, b, d))
+            || (o3.abs() <= EPS && on_segment(c, d, a))
+            || (o4.abs() <= EPS && on_segment(c, d, b))
+    }
+
+    let edge_count = vertices.len();
+    for i in 0..edge_count {
+        let a = vertices[i];
+        let b = vertices[(i + 1) % edge_count];
+        for j in (i + 1)..edge_count {
+            if j == i + 1 || (i == 0 && j == edge_count - 1) {
+                continue;
+            }
+            let c = vertices[j];
+            let d = vertices[(j + 1) % edge_count];
+            if segments_intersect(a, b, c, d) {
+                return false;
+            }
+        }
+    }
+
+    true
+}
+
 impl Form {
     pub fn is_valid(&self) -> bool {
         match self {
@@ -73,9 +146,7 @@ impl Form {
             Form::RegularPolygon { sides, radius } => {
                 *sides >= 3 && radius.is_finite() && *radius > 0.0
             }
-            Form::Polygon { vertices } => {
-                vertices.len() >= 3 && vertices.iter().all(|(x, y)| x.is_finite() && y.is_finite())
-            }
+            Form::Polygon { vertices } => polygon_geometry_is_valid(vertices)
             Form::Fluid {
                 nominal_area,
                 boundary,
@@ -83,10 +154,9 @@ impl Form {
                 if !nominal_area.is_finite() || *nominal_area <= 0.0 {
                     return false;
                 }
-                boundary.as_ref().map_or(true, |vertices| {
-                    vertices.len() >= 3
-                        && vertices.iter().all(|(x, y)| x.is_finite() && y.is_finite())
-                })
+                boundary
+                    .as_ref()
+                    .map_or(true, |vertices| polygon_geometry_is_valid(vertices))
             }
         }
     }
@@ -585,6 +655,41 @@ pub fn fresh_energy(catalog: &[BaseResource], name: &str, amount: f64) -> f64 {
 #[cfg(test)]
 mod shape_tests {
     use super::*;
+
+    #[test]
+    fn polygon_validation_rejects_degenerate_geometry() {
+        assert!(!Form::Polygon {
+            vertices: vec![(0.0, 0.0), (1.0, 0.0), (2.0, 0.0)],
+        }
+        .is_valid());
+        assert!(!Form::Polygon {
+            vertices: vec![(0.0, 0.0), (1.0, 0.0), (0.0, 0.0)],
+        }
+        .is_valid());
+    }
+
+    #[test]
+    fn polygon_validation_rejects_self_intersection() {
+        assert!(!Form::Polygon {
+            vertices: vec![(0.0, 0.0), (1.0, 1.0), (0.0, 1.0), (1.0, 0.0)],
+        }
+        .is_valid());
+    }
+
+    #[test]
+    fn polygon_validation_accepts_concave_simple_geometry() {
+        assert!(Form::Polygon {
+            vertices: vec![
+                (-1.0, -1.0),
+                (1.0, -1.0),
+                (1.0, 0.0),
+                (0.0, 0.0),
+                (0.0, 1.0),
+                (-1.0, 1.0),
+            ],
+        }
+        .is_valid());
+    }
 
     #[test]
     fn catalog_still_constructs_with_seven_resources() {
