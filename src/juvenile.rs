@@ -25,18 +25,18 @@ pub(crate) fn confirmed_seed_baseline(
         }
     }
 
-    // This is only the deterministic starting target used to calibrate a
-    // viable juvenile. It deliberately does not encode a square, a fixed core,
-    // or a sacred body plan. The constructor is expected to rotate and translate
-    // these pieces around the temporary three-carbon measurement scaffold until
-    // the physical bonds and cavity are simultaneously satisfied.
+    // This is the initial construction request, not a prescribed final body
+    // plan. The constructor is given a substantially larger target so that it
+    // has enough physical room to realize a useful cavity and surrounding
+    // structure. The declared poses are spatial preferences; the constructor's
+    // realized physical graph remains authoritative.
     //
-    // Ten Carbon pieces form the smallest regular Carbon ring that can
-    // physically enclose the three-Carbon measurement scaffold while adjacent
-    // hexagons share an edge. The center spacing is the hexagon-to-hexagon
-    // edge-sharing distance, not the corner-to-corner diameter. Sulfur and Methane remain
-    // ordinary outward branches and are not part of the genome definition.
+    // The ten-carbon inner loop supplies a simple enclosed region. From one
+    // point on that loop, twenty additional carbon elements wind outward as a
+    // loose spiral. Sulfur and methane provide a small amount of heterogeneous
+    // peripheral material without defining an organism role or topology.
     let ring_sides = 10usize;
+    let spiral_steps = 20usize;
     let carbon_radius = catalog
         .iter()
         .find(|resource| resource.name == "Carbon")
@@ -48,7 +48,8 @@ pub(crate) fn confirmed_seed_baseline(
     let carbon_edge_center_spacing = (3.0_f64).sqrt() * carbon_radius;
     let ring_radius =
         carbon_edge_center_spacing / (2.0 * (std::f64::consts::PI / ring_sides as f64).sin());
-    let mut elements = Vec::with_capacity(ring_sides + 6);
+
+    let mut elements = Vec::with_capacity(ring_sides + spiral_steps + 6);
 
     for i in 0..ring_sides {
         let angle = std::f64::consts::TAU * i as f64 / ring_sides as f64;
@@ -62,8 +63,26 @@ pub(crate) fn confirmed_seed_baseline(
         });
     }
 
-    for &i in &[0usize, 2, 5, 7] {
-        let angle = std::f64::consts::TAU * i as f64 / 8.0;
+    // Continue from the first ring element into an outward spiral. The
+    // constructor may rotate/translate each piece as needed to obtain a valid
+    // physical bond; these coordinates express the requested spatial tendency.
+    let spiral_angle_step = 0.35_f64;
+    let spiral_radius_step = 0.10_f64;
+    for step in 1..=spiral_steps {
+        let angle = spiral_angle_step * step as f64;
+        let radius = ring_radius + spiral_radius_step * step as f64;
+        elements.push(BlueprintElement {
+            material: Material::free_base("Carbon", 1.0),
+            placement: BlueprintPlacement {
+                x: radius * angle.cos(),
+                y: radius * angle.sin(),
+                rotation_radians: angle,
+            },
+        });
+    }
+
+    for &i in &[0usize, 3, 6, 9] {
+        let angle = std::f64::consts::TAU * i as f64 / 10.0;
         let radius = ring_radius + 0.95;
         elements.push(BlueprintElement {
             material: Material::free_base("Sulfur", 1.0),
@@ -75,8 +94,8 @@ pub(crate) fn confirmed_seed_baseline(
         });
     }
 
-    for &i in &[1usize, 6] {
-        let angle = std::f64::consts::TAU * i as f64 / 8.0;
+    for &i in &[2usize, 7] {
+        let angle = std::f64::consts::TAU * i as f64 / 10.0;
         let radius = ring_radius + 1.05;
         elements.push(BlueprintElement {
             material: Material::free_base("Methane", 1.0),
@@ -88,23 +107,37 @@ pub(crate) fn confirmed_seed_baseline(
         });
     }
 
-    let mut connections = Vec::with_capacity(ring_sides + 6);
+    let mut connections = Vec::with_capacity(ring_sides + spiral_steps + 6);
     for i in 0..ring_sides {
         connections.push(BlueprintConnection {
             element_a: i,
             element_b: (i + 1) % ring_sides,
         });
     }
+    // The first spiral element is the existing ring anchor (element 0).
+    for step in 1..=spiral_steps {
+        connections.push(BlueprintConnection {
+            element_a: if step == 1 {
+                0
+            } else {
+                ring_sides + step - 2
+            },
+            element_b: ring_sides + step - 1,
+        });
+    }
+
+    let sulfur_start = ring_sides + spiral_steps;
     for (offset, &i) in [0usize, 3, 6, 9].iter().enumerate() {
         connections.push(BlueprintConnection {
             element_a: i,
-            element_b: 10 + offset,
+            element_b: sulfur_start + offset,
         });
     }
-    for (offset, &i) in [1usize, 7].iter().enumerate() {
+    let methane_start = sulfur_start + 4;
+    for (offset, &i) in [2usize, 7].iter().enumerate() {
         connections.push(BlueprintConnection {
             element_a: i,
-            element_b: 14 + offset,
+            element_b: methane_start + offset,
         });
     }
 
