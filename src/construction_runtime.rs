@@ -484,7 +484,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                 let candidate_origin =
                     placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
                 *nodes += 1;
-                        let mut trial = structure.clone();
+                let mut trial = structure.clone();
                 let Some(indices) = crate::material_restoration::restore_material(
                     &mut trial,
                     new_material,
