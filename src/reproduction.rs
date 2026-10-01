@@ -258,13 +258,10 @@ fn try_child_construction(
 
     for (storage_index, _, _) in child_candidates {
         let crate::material_storage::StoredMaterial::Physical(instance) =
-            child.stored_material.entries.get(storage_index)?
-        else {
-            continue;
-        };
+            child.stored_material.entries.get(storage_index)?;
 
         for existing_index in 0..child.structure.units.len() {
-            let mut candidate_ledger = *ledger;
+            let candidate_ledger = *ledger;
             let Some((
                 trial_structure,
                 _indices,
@@ -307,10 +304,7 @@ fn try_child_construction(
 
     for (parent_index, _, _) in parent_candidates {
         let crate::material_storage::StoredMaterial::Physical(instance) =
-            parent_storage.entries.get(parent_index)?
-        else {
-            continue;
-        };
+            parent_storage.entries.get(parent_index)?;
 
         for existing_index in 0..child.structure.units.len() {
             let mut candidate_ledger = *ledger;
