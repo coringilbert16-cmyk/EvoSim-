@@ -279,5 +279,74 @@ pub fn try_add_bond(
     if !s.is_valid_bond(&b, c) {
         return Err("invalid bond");
     }
+    if s.bonds.iter().any(|existing| existing.has_same_identity(&b)) {
+        return Err("duplicate bond");
+    }
     Ok(s.push_bond_unchecked(b))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::structure::{BondEndpoint, Placement, StructuralUnit};
+
+    fn test_structure() -> (OrganismStructure, [PhysicalConstituentId; 2]) {
+        let mut structure = OrganismStructure::new();
+        let a = structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let b = structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 10.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        (structure, [structure.units[a].physical_id, structure.units[b].physical_id])
+    }
+
+    #[test]
+    fn try_add_bond_rejects_repeated_connection_points_in_either_endpoint_order() {
+        let catalog = crate::resources::default_catalog();
+        let (mut structure, [id_a, id_b]) = test_structure();
+        let first = Bond {
+            endpoint_a: BondEndpoint::new(
+                id_a,
+                ConnectionEndpoint::Corner { point_index: 0 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                id_b,
+                ConnectionEndpoint::Corner { point_index: 0 },
+            ),
+            strength: 0.5,
+            bond_energy: 1.0,
+        };
+
+        assert_eq!(try_add_bond(&mut structure, first, &catalog), Ok(0));
+        assert_eq!(structure.bonds.len(), 1);
+
+        let same_order = first;
+        assert_eq!(
+            try_add_bond(&mut structure, same_order, &catalog),
+            Err("duplicate bond")
+        );
+        assert_eq!(structure.bonds.len(), 1);
+
+        let reversed = Bond {
+            endpoint_a: first.endpoint_b,
+            endpoint_b: first.endpoint_a,
+            ..first
+        };
+        assert_eq!(
+            try_add_bond(&mut structure, reversed, &catalog),
+            Err("duplicate bond")
+        );
+        assert_eq!(structure.bonds.len(), 1);
+    }
 }
