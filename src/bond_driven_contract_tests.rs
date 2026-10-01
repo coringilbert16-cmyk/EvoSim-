@@ -130,7 +130,7 @@ mod tests {
                 continue;
             };
             let Some((_, _, _, investment, _required_energy)) =
-                crate::combine_runtime::construction_candidate_evaluation(
+                crate::combine_runtime::selected_candidate_evaluation(
                     &trial, 0, 1, candidate, &catalog,
                 )
             else {
