@@ -15,6 +15,62 @@ struct Point {
     y: f64,
 }
 
+fn bond_seals_segment(
+    structure: &OrganismStructure,
+    catalog: &[BaseResource],
+    unit_a: usize,
+    unit_b: usize,
+    segment_a: Point,
+    segment_b: Point,
+) -> bool {
+    let Some(expected_a) = structure.units.get(unit_a) else {
+        return false;
+    };
+    let Some(expected_b) = structure.units.get(unit_b) else {
+        return false;
+    };
+    let id_a = expected_a.physical_id;
+    let id_b = expected_b.physical_id;
+
+    let same_point = |x: crate::connection_geometry::WorldConnectionPoint, y: Point| {
+        (x.x - y.x).hypot(x.y - y.y) <= NODE_TOLERANCE * 10.0
+    };
+
+    structure.bonds.iter().any(|bond| {
+        let endpoint_a_is_unit_a = bond.endpoint_a.constituent_id == id_a;
+        let endpoint_b_is_unit_b = bond.endpoint_b.constituent_id == id_b;
+        let endpoint_a_is_unit_b = bond.endpoint_a.constituent_id == id_b;
+        let endpoint_b_is_unit_a = bond.endpoint_b.constituent_id == id_a;
+
+        if !(endpoint_a_is_unit_a && endpoint_b_is_unit_b
+            || endpoint_a_is_unit_b && endpoint_b_is_unit_a)
+        {
+            return false;
+        }
+
+        let (unit_for_a, endpoint_a) = if endpoint_a_is_unit_a {
+            (expected_a, bond.endpoint_a.location)
+        } else {
+            (expected_b, bond.endpoint_a.location)
+        };
+        let (unit_for_b, endpoint_b) = if endpoint_b_is_unit_b {
+            (expected_b, bond.endpoint_b.location)
+        } else {
+            (expected_a, bond.endpoint_b.location)
+        };
+
+        let Some(world_a) = endpoint_a.world_point(unit_for_a, catalog) else {
+            return false;
+        };
+        let Some(world_b) = endpoint_b.world_point(unit_for_b, catalog) else {
+            return false;
+        };
+
+        (same_point(world_a, segment_a) && same_point(world_b, segment_b))
+            || (same_point(world_a, segment_b) && same_point(world_b, segment_a))
+    })
+}
+
 impl Point {
     fn add(self, other: Self) -> Self {
         Self {
@@ -267,32 +323,39 @@ fn analyze_genome_cavity_in_indices(
             continue;
         }
         let mut boundary_units = Vec::new();
+        let mut boundary_segments = Vec::new();
         for &i in &face {
             let a = points[edges[i].from];
             let b = points[edges[i].to];
-            if let Some(unit) = polygons.iter().find_map(|(unit, polygon)| {
-                segment_in_polygon_boundary(a, b, polygon).then_some(*unit)
-            }) {
-                if !boundary_units.contains(&unit) {
-                    boundary_units.push(unit);
-                }
+            let mut segment_units = polygons
+                .iter()
+                .filter_map(|(unit, polygon)| {
+                    segment_in_polygon_boundary(a, b, polygon).then_some(*unit)
+                })
+                .collect::<Vec<_>>();
+            segment_units.sort_unstable();
+            segment_units.dedup();
+            if segment_units.len() != 2 {
+                continue;
+            }
+            let unit_a = segment_units[0];
+            let unit_b = segment_units[1];
+            boundary_segments.push((a, b, unit_a, unit_b));
+            if !boundary_units.contains(&unit_a) {
+                boundary_units.push(unit_a);
+            }
+            if !boundary_units.contains(&unit_b) {
+                boundary_units.push(unit_b);
             }
         }
-        if boundary_units.len() < 2 {
+        if boundary_units.len() < 2 || boundary_segments.len() < 3 {
             continue;
         }
-        let sealed = boundary_units.iter().enumerate().all(|(index, &unit_a)| {
-            let unit_b = boundary_units[(index + 1) % boundary_units.len()];
-            if unit_a == unit_b {
-                return true;
-            }
-            let id_a = structure.units[unit_a].physical_id;
-            let id_b = structure.units[unit_b].physical_id;
-            structure.bonds.iter().any(|bond| {
-                let x = bond.endpoint_a.constituent_id;
-                let y = bond.endpoint_b.constituent_id;
-                (x == id_a && y == id_b) || (x == id_b && y == id_a)
-            })
+        // A cavity wall is sealed only when the actual bond endpoints occupy
+        // the physical segment that forms that wall. A bond elsewhere between
+        // the same two units is legal, but it does not seal this cavity edge.
+        let sealed = boundary_segments.iter().all(|&(a, b, unit_a, unit_b)| {
+            bond_seals_segment(structure, catalog, unit_a, unit_b, a, b)
         });
         if !sealed {
             continue;
