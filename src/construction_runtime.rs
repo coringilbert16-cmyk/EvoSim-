@@ -963,8 +963,30 @@ fn realize_next_bond_driven(
                     continue;
                 };
 
-                let score = (candidate_origin.x - target_world.0).powi(2)
-                    + (candidate_origin.y - target_world.1).powi(2);
+                let position_error = (candidate_origin.x - target_world.0).hypot(
+                    candidate_origin.y - target_world.1,
+                );
+                let rotation_error = (candidate_origin.rotation_radians
+                    - target.rotation_radians
+                    + std::f64::consts::PI)
+                    .rem_euclid(std::f64::consts::TAU)
+                    - std::f64::consts::PI;
+                // A developmental target is a full physical pose, not merely a
+                // center point. Weight orientation by the candidate's physical
+                // reach so a wrong endpoint/orientation cannot accumulate a
+                // small positional drift around a closed structure.
+                let pose_scale = trial.units[new_unit_index]
+                    .shape(catalog)
+                    .and_then(|shape| shape.form.polygon_vertices())
+                    .map(|vertices| {
+                        vertices
+                            .into_iter()
+                            .map(|(x, y)| x.hypot(y))
+                            .fold(0.0, f64::max)
+                    })
+                    .unwrap_or(1.0)
+                    .max(1e-6);
+                let score = position_error.powi(2) + (rotation_error * pose_scale).powi(2);
                 if best.as_ref().is_none_or(|current| score < current.7) {
                     best = Some((
                         trial,
