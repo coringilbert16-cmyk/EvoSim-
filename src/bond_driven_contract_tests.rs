@@ -140,7 +140,7 @@ mod tests {
             let mut ledger = EnergyLedger::default();
             let mut energy = 1.0e12;
             let before_units = trial.units.len();
-            let attempt = crate::combine_runtime::form_construction_bond(
+            let attempt = crate::combine_runtime::form_selected_bond(
                 &mut trial,
                 0,
                 1,
@@ -211,7 +211,7 @@ mod tests {
         let mut ledger = EnergyLedger::default();
         let mut energy = 1.0e12;
 
-        let result = crate::combine_runtime::form_construction_bond(
+        let result = crate::combine_runtime::form_selected_bond(
             &mut structure,
             0,
             1,
