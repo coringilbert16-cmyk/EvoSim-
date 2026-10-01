@@ -356,7 +356,6 @@ fn point_inside_form(form: &Form, placement: Placement, x: f64, y: f64) -> bool 
     }
 }
 
-
 fn already_realized_neighbors(
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     index: usize,
@@ -481,24 +480,24 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                 catalog,
             )?;
 
-                for step in 0..360 {
+            for step in 0..360 {
                 let angle = std::f64::consts::TAU * step as f64 / 360.0;
-                    let candidate_origin =
+                let candidate_origin =
                     placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
-                    *nodes += 1;
-                    if *nodes > 500_000 {
-                        return None;
-                    }
+                *nodes += 1;
+                if *nodes > 500_000 {
+                    return None;
+                }
 
-                    let mut trial = structure.clone();
-                    let Some(indices) = crate::material_restoration::restore_material(
+                let mut trial = structure.clone();
+                let Some(indices) = crate::material_restoration::restore_material(
                     &mut trial,
                     new_material,
                     candidate_origin,
                     catalog,
                 ) else {
-                        continue;
-                    };
+                    continue;
+                };
                 let new_unit_index = *indices.get(part_index)?;
 
                 let ignored_units = indices.clone();
@@ -931,7 +930,6 @@ fn construct_blueprint_bond_driven_internal(
         // might be difficult. The next construction step gets to solve that
         // next joint using whatever material is actually available then.
         let preferred = blueprint.elements[index].material.parts[0].0.clone();
-        let neighbor = neighbors[0];
         let candidate_resources = if let Some(storage) = available_materials.as_deref() {
             let ranked = rank_available_construction_materials(storage, &preferred, catalog)
                 .map_err(|e| e.to_string())?;
