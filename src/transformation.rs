@@ -883,7 +883,7 @@ mod tests {
         let genome_bonds = crate::cavity::analyze_genome_cavity(&organism.structure, &catalog)
             .unwrap()
             .unwrap()
-            .boundary_bond_indices(&organism.structure);
+            .boundary_bond_indices(&organism.structure, &catalog);
         (organism, environment, genome_bonds)
     }
 
