@@ -313,10 +313,7 @@ mod tests {
         ));
         (
             structure,
-            [
-                structure.units[a].physical_id,
-                structure.units[b].physical_id,
-            ],
+            [structure.units[a].physical_id, structure.units[b].physical_id],
         )
     }
 
