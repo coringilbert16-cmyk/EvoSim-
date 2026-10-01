@@ -2,7 +2,7 @@
 //! Physical genome-cavity qualification from realized rigid geometry.
 
 use crate::resources::{BaseResource, Form};
-use crate::structure::{OrganismStructure, Placement};
+use crate::structure::{ConnectionEndpoint, OrganismStructure, Placement};
 use std::collections::{HashMap, HashSet};
 use std::f64::consts::TAU;
 
@@ -161,7 +161,7 @@ impl GenomeCavity {
                             return None;
                         }
 
-                        let resolve = |endpoint: crate::connection_geometry::ConnectionEndpoint,
+                        let resolve = |endpoint: ConnectionEndpoint,
                                        unit_index: usize|
                          -> Option<Point> {
                             let unit = structure.units.get(unit_index)?;
@@ -435,7 +435,6 @@ fn analyze_genome_cavity_in_indices(
             {
                 continue;
             }
-            let boundary_units: HashSet<usize> = region.boundary_units.iter().copied().collect();
             let closed = region.boundary.iter().enumerate().all(|(i, &(ax, ay))| {
                 let (bx, by) = region.boundary[(i + 1) % region.boundary.len()];
                 let segment_a = Point { x: ax, y: ay };
@@ -469,7 +468,7 @@ fn analyze_genome_cavity_in_indices(
             if closed {
                 best = Some(GenomeCavity {
                     area: region.area,
-                    boundary_units: region.boundary_units,
+                    boundary_units: region.boundary_units.clone(),
                     minimum_area,
                     boundary_segments: region
                         .boundary
