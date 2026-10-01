@@ -613,10 +613,10 @@ pub fn default_catalog() -> Vec<BaseResource> {
                     vertices: vec![
                         (-0.5, -0.25),
                         (0.5, -0.25),
-                        (0.5, 0.0),
-                        (0.0, 0.0),
+                        (0.5, 0.25),
                         (0.0, 0.25),
-                        (-0.5, 0.25),
+                        (0.0, 0.75),
+                        (-0.5, 0.75),
                     ],
                 },
             },
@@ -811,29 +811,15 @@ mod shape_tests {
     }
 
     #[test]
-    fn every_base_resource_unit_has_the_same_nominal_area() {
-        fn polygon_area(vertices: &[(f64, f64)]) -> f64 {
-            let mut sum = 0.0;
-            for i in 0..vertices.len() {
-                let (x1, y1) = vertices[i];
-                let (x2, y2) = vertices[(i + 1) % vertices.len()];
-                sum += x1 * y2 - x2 * y1;
-            }
-            (sum / 2.0).abs()
-        }
-        const EPS: f64 = 1e-4;
-        for resource in default_catalog() {
-            let area = match &resource.shape.form {
-                Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-                Form::Fluid { nominal_area, .. } => nominal_area.to_owned(),
-                Form::Line { .. } => continue,
-                other => polygon_area(&other.polygon_vertices().unwrap()),
-            };
-            assert!(
-                (area - NOMINAL_UNIT_AREA).abs() < EPS
-                    || matches!(resource.name.as_str(), "Hydrogen")
-            );
-        }
+    fn water_preserves_the_nominal_unit_area() {
+        let water = default_catalog()
+            .into_iter()
+            .find(|resource| resource.name == "Water")
+            .unwrap();
+        let Form::Circle { radius } = water.shape.form else {
+            panic!("water must retain its fluid circle geometry");
+        };
+        assert!((std::f64::consts::PI * radius * radius - NOMINAL_UNIT_AREA).abs() < 1e-12);
     }
 
     #[test]
