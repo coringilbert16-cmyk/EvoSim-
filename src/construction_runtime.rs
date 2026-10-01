@@ -457,6 +457,7 @@ fn construction_angle_candidates(
     existing_rotation: f64,
     candidate_shape: &crate::resources::Shape,
     candidate_endpoint: ConnectionEndpoint,
+    candidate_relative_rotation: f64,
     ideal_angle: f64,
 ) -> Vec<f64> {
     let mut angles = Vec::new();
@@ -477,7 +478,7 @@ fn construction_angle_candidates(
             for angle in crate::rigid_boundary::corner_alignment_rotations(
                 candidate_shape, candidate_index, existing_shape, existing_index, existing_rotation,
             ) {
-                push_unique(angle);
+                push_unique(angle - candidate_relative_rotation);
             }
         }
         (ConnectionEndpoint::LineEndpoint { point_index: existing_index },
@@ -485,7 +486,7 @@ fn construction_angle_candidates(
             for angle in crate::rigid_boundary::line_endpoint_alignment_rotations(
                 candidate_index, existing_index, existing_rotation,
             ) {
-                push_unique(angle);
+                push_unique(angle - candidate_relative_rotation);
             }
         }
         (ConnectionEndpoint::Corner { point_index: existing_index },
@@ -494,7 +495,12 @@ fn construction_angle_candidates(
                 crate::rigid_boundary::corner_normal(existing_shape, existing_index),
                 crate::rigid_boundary::line_endpoint_normal(candidate_shape, candidate_index),
             ) {
-                push_unique(a.1.atan2(a.0) + std::f64::consts::PI - b.1.atan2(b.0));
+                push_unique(
+                    a.1.atan2(a.0)
+                        + std::f64::consts::PI
+                        - b.1.atan2(b.0)
+                        - candidate_relative_rotation,
+                );
             }
         }
         (ConnectionEndpoint::LineEndpoint { point_index: existing_index },
@@ -503,7 +509,12 @@ fn construction_angle_candidates(
                 crate::rigid_boundary::line_endpoint_normal(existing_shape, existing_index),
                 crate::rigid_boundary::corner_normal(candidate_shape, candidate_index),
             ) {
-                push_unique(a.1.atan2(a.0) + std::f64::consts::PI - b.1.atan2(b.0));
+                push_unique(
+                    a.1.atan2(a.0)
+                        + std::f64::consts::PI
+                        - b.1.atan2(b.0)
+                        - candidate_relative_rotation,
+                );
             }
         }
     }
@@ -571,6 +582,12 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                 existing_unit.placement.rotation_radians,
                 candidate_shape,
                 endpoint_b,
+                new_material
+                    .placements
+                    .as_ref()
+                    .and_then(|placements| placements.get(part_index))
+                    .map(|placement| placement.rotation_radians)
+                    .unwrap_or(0.0),
                 0.0,
             );
             for angle in angles {
@@ -741,6 +758,12 @@ fn realize_next_bond_driven(
                     existing_unit.placement.rotation_radians,
                     candidate_shape,
                     endpoint_b,
+                    new_material
+                        .placements
+                        .as_ref()
+                        .and_then(|placements| placements.get(part_index))
+                        .map(|placement| placement.rotation_radians)
+                        .unwrap_or(0.0),
                     ideal_angle,
                 );
                 for angle in angles {
