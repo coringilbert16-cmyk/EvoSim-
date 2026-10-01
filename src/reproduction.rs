@@ -602,7 +602,9 @@ pub(crate) fn begin_reproduction(
         let mut trial_storage = MaterialStorage::default();
         trial_storage
             .entries
-            .push(crate::material_storage::StoredMaterial::Physical(instance.clone()));
+            .push(crate::material_storage::StoredMaterial::Physical(
+                instance.clone(),
+            ));
         let Some((structure, child_storage, anchor_unit_index)) =
             anchor_structure(&child_genome, trial_storage, placement, catalog)
         else {
