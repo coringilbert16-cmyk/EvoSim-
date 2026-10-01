@@ -764,7 +764,15 @@ fn realize_next_bond_driven(
         return None;
     }
 
-    let mut best_candidate = None;
+    let mut best_candidate: Option<(
+        f64,
+        OrganismStructure,
+        Vec<usize>,
+        usize,
+        crate::combine_runtime::CombineAttempt,
+        EnergyLedger,
+        f64,
+    )> = None;
 
     for endpoint_a in existing_endpoints {
         let joint = endpoint_a.world_point(&structure.units[existing_index], catalog)?;
