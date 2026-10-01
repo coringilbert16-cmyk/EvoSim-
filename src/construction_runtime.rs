@@ -1426,6 +1426,13 @@ fn construct_blueprint_bond_driven_internal(
         }
     }
 
+    if let Some(storage) = available_materials.as_deref_mut() {
+        reserved_storage_indices.sort_unstable_by(|a, b| b.cmp(a));
+        for storage_index in reserved_storage_indices {
+            storage.take_physical_at(storage_index);
+        }
+    }
+
     Ok((structure, total_heat))
 }
 
