@@ -675,6 +675,10 @@ fn realize_next_bond_driven(
                     let mut trial_energy = available_energy;
                     let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
 
+                    // The official connection points determine where the
+                    // constructor works from and how the new material is placed.
+                    // Once the material is physically placed, the actual bond may
+                    // land anywhere on the touching boundaries.
                     let Some(candidate) = crate::contact::connection_pair_candidates_cached(
                         &trial,
                         existing_index,
@@ -683,13 +687,21 @@ fn realize_next_bond_driven(
                         &mut bond_cache,
                     )
                     .into_iter()
-                    .find(|candidate| {
-                        candidate.endpoint_a == endpoint_a
-                            && candidate.endpoint_b == endpoint_b
-                            && candidate.distance
-                                <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                    .filter(|candidate| {
+                        candidate.distance
+                            <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
                             && candidate.available_a
                             && candidate.available_b
+                    })
+                    .min_by(|a, b| {
+                        a.distance
+                            .partial_cmp(&b.distance)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                            .then_with(|| {
+                                b.facing
+                                    .partial_cmp(&a.facing)
+                                    .unwrap_or(std::cmp::Ordering::Equal)
+                            })
                     }) else {
                         continue;
                     };
