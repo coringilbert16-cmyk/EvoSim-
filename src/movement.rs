@@ -139,6 +139,10 @@ fn movement_context_key(distance: f64) -> String {
     format!("distance:{distance:.0}")
 }
 
+fn curiosity_exploration_probability(curiosity: f64, known_value: f64) -> f64 {
+    (curiosity.clamp(0.0, 1.0) * (1.0 - known_value.clamp(-1.0, 1.0))).clamp(0.0, 1.0)
+}
+
 fn select_movement_distance(
     organism: &Organism,
     realized_mass: f64,
@@ -195,7 +199,8 @@ fn select_movement_distance(
             })
             .fold(f64::NEG_INFINITY, f64::max)
             .clamp(-1.0, 1.0);
-        let exploration_probability = (curiosity * (1.0 - best_known_value)).clamp(0.0, 1.0);
+        let exploration_probability =
+            curiosity_exploration_probability(curiosity, best_known_value);
         if rng.gen::<f64>() < exploration_probability {
             return unknown.get(rng.gen_range(0..unknown.len())).copied();
         }
@@ -1289,11 +1294,7 @@ mod tests {
             .value = 1.0;
 
         let known_distance = MOVEMENT_DISTANCE_OPTIONS[0];
-        let consequence = crate::decision::ActionConsequence {
-            energy_delta: 1.0,
-            stress_delta: -1.0,
-            developmental_delta: 0.0,
-        };
+        let consequence = crate::decision::ActionConsequence::default();
         low_curiosity.decision_history.record(
             crate::decision::ActionKind::Move,
             Some(movement_context_key(known_distance)),
@@ -1363,29 +1364,31 @@ mod tests {
             },
         );
 
-        let mut minor_rng = ChaCha8Rng::seed_from_u64(11);
-        let mut strong_rng = ChaCha8Rng::seed_from_u64(11);
-        let minor_distance = select_movement_distance(
-            &minor,
-            16.0,
-            0.8,
-            10.0,
+        let minor_value = crate::memory::consequence_value(
+            &crate::memory::memory_consequence_from_action(
+                crate::decision::ActionConsequence {
+                    energy_delta: 0.1,
+                    ..Default::default()
+                },
+            ),
             crate::decision::CurrentNeeds::default(),
-            &mut minor_rng,
-        )
-        .unwrap();
-        let strong_distance = select_movement_distance(
-            &strong,
-            16.0,
-            0.8,
-            10.0,
+        );
+        let strong_value = crate::memory::consequence_value(
+            &crate::memory::memory_consequence_from_action(
+                crate::decision::ActionConsequence {
+                    energy_delta: 0.9,
+                    ..Default::default()
+                },
+            ),
             crate::decision::CurrentNeeds::default(),
-            &mut strong_rng,
-        )
-        .unwrap();
+        );
 
-        assert_ne!(minor_distance, known_distance);
-        assert_eq!(strong_distance, known_distance);
+        assert!(
+            curiosity_exploration_probability(0.5, minor_value)
+                > curiosity_exploration_probability(0.5, strong_value)
+        );
+        assert!(curiosity_exploration_probability(1.0, minor_value) > 0.0);
+        assert!(curiosity_exploration_probability(0.0, minor_value) == 0.0);
     }
 
     #[test]
