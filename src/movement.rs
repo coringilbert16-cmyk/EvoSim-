@@ -144,6 +144,7 @@ fn select_movement_distance(
     realized_mass: f64,
     movement_efficiency: f64,
     usable_energy: f64,
+    needs: crate::decision::CurrentNeeds,
     rng: &mut ChaCha8Rng,
 ) -> Option<f64> {
     let curiosity = organism.genome.curiosity();
@@ -184,8 +185,20 @@ fn select_movement_distance(
         })
         .collect();
 
-    if !known.is_empty() && !unknown.is_empty() && rng.gen::<f64>() < curiosity {
-        return unknown.get(rng.gen_range(0..unknown.len())).copied();
+    if !known.is_empty() && !unknown.is_empty() {
+        let best_known_value = known
+            .iter()
+            .map(|(_, consequence)| {
+                let memory_consequence =
+                    crate::memory::memory_consequence_from_action(*consequence);
+                crate::memory::consequence_value(&memory_consequence, needs)
+            })
+            .fold(f64::NEG_INFINITY, f64::max)
+            .clamp(-1.0, 1.0);
+        let exploration_probability = (curiosity * (1.0 - best_known_value)).clamp(0.0, 1.0);
+        if rng.gen::<f64>() < exploration_probability {
+            return unknown.get(rng.gen_range(0..unknown.len())).copied();
+        }
     }
 
     if known.is_empty() {
@@ -237,6 +250,7 @@ impl Simulation {
         environment: &Environment,
         rng: &mut ChaCha8Rng,
         perceptions: &[crate::harmonics::ResonancePerception],
+        needs: crate::decision::CurrentNeeds,
     ) -> Result<crate::state::ActiveMovement, crate::state::MovementFailureReason> {
         let realized_mass = organism.structural_mass(&environment.catalog);
         let movement_efficiency = organism.genome.movement_efficiency();
@@ -253,6 +267,7 @@ impl Simulation {
             realized_mass,
             movement_efficiency,
             usable_energy,
+            needs,
             rng,
         )
         .ok_or(crate::state::MovementFailureReason::InsufficientEnergy)?;
@@ -1297,6 +1312,7 @@ mod tests {
             16.0,
             0.8,
             10.0,
+            crate::decision::CurrentNeeds::default(),
             &mut low_rng,
         )
         .unwrap();
@@ -1305,12 +1321,71 @@ mod tests {
             16.0,
             0.8,
             10.0,
+            crate::decision::CurrentNeeds::default(),
             &mut high_rng,
         )
         .unwrap();
 
         assert_eq!(low_distance, known_distance);
         assert_ne!(high_distance, known_distance);
+    }
+
+    #[test]
+    fn strong_known_experience_resists_curiosity_better_than_minor_experience() {
+        let simulation = Simulation::new(7, 20.0);
+        let mut minor = simulation.organisms[0].clone();
+        let mut strong = minor.clone();
+        for organism in [&mut minor, &mut strong] {
+            organism
+                .genome
+                .traits
+                .iter_mut()
+                .find(|trait_def| trait_def.name == "curiosity")
+                .unwrap()
+                .value = 0.5;
+        }
+
+        let known_distance = MOVEMENT_DISTANCE_OPTIONS[0];
+        minor.decision_history.record(
+            crate::decision::ActionKind::Move,
+            Some(movement_context_key(known_distance)),
+            crate::decision::ActionConsequence {
+                energy_delta: 0.1,
+                ..Default::default()
+            },
+        );
+        strong.decision_history.record(
+            crate::decision::ActionKind::Move,
+            Some(movement_context_key(known_distance)),
+            crate::decision::ActionConsequence {
+                energy_delta: 0.9,
+                ..Default::default()
+            },
+        );
+
+        let mut minor_rng = ChaCha8Rng::seed_from_u64(11);
+        let mut strong_rng = ChaCha8Rng::seed_from_u64(11);
+        let minor_distance = select_movement_distance(
+            &minor,
+            16.0,
+            0.8,
+            10.0,
+            crate::decision::CurrentNeeds::default(),
+            &mut minor_rng,
+        )
+        .unwrap();
+        let strong_distance = select_movement_distance(
+            &strong,
+            16.0,
+            0.8,
+            10.0,
+            crate::decision::CurrentNeeds::default(),
+            &mut strong_rng,
+        )
+        .unwrap();
+
+        assert_ne!(minor_distance, known_distance);
+        assert_eq!(strong_distance, known_distance);
     }
 
     #[test]
