@@ -998,9 +998,10 @@ fn construct_blueprint_bond_driven_internal(
                     };
                     instance.clone()
                 } else {
-                    let candidate_resource = resource(catalog, &candidate_name).ok_or_else(|| {
-                        format!("unknown preferred construction resource {candidate_name}")
-                    })?;
+                    let candidate_resource =
+                        resource(catalog, &candidate_name).ok_or_else(|| {
+                            format!("unknown preferred construction resource {candidate_name}")
+                        })?;
                     crate::physical_material::PhysicalMaterial::realized(
                         crate::resources::Material::free_base(candidate_resource.name.clone(), 1.0),
                         vec![Placement {
@@ -1122,8 +1123,7 @@ fn construct_blueprint_bond_driven_internal(
                         let mut trial_structure = structure.clone();
                         let mut trial_ledger = construction_ledger;
                         let mut trial_energy = remaining_energy;
-                        let mut bond_cache =
-                            crate::contact::ConnectionCompatibilityCache::new();
+                        let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
                         let Some(attempt) = crate::combine_runtime::form_selected_bond(
                             &mut trial_structure,
                             unit_a,
@@ -1168,7 +1168,16 @@ fn construct_blueprint_bond_driven_internal(
             if progressed {
                 break;
             }
-            if let Some((connection_index, element_a, element_b, total_candidates, contact_candidates, evaluated_candidates, rejected_by_bond_admission)) = failed_diagnostic {
+            if let Some((
+                connection_index,
+                element_a,
+                element_b,
+                total_candidates,
+                contact_candidates,
+                evaluated_candidates,
+                rejected_by_bond_admission,
+            )) = failed_diagnostic
+            {
                 return Err(format!(
                     "construction closure failed: connection={connection_index} elements=({element_a},{element_b}) candidates={total_candidates} contacts={contact_candidates} evaluated={evaluated_candidates} rejected={rejected_by_bond_admission}"
                 ));
