@@ -783,13 +783,13 @@ fn realize_next_bond_driven(
                             && candidate.available_a
                             && candidate.available_b
                     })
-                    .max_by(|a, b| {
-                        a.facing
-                            .partial_cmp(&b.facing)
+                    .min_by(|a, b| {
+                        a.distance
+                            .partial_cmp(&b.distance)
                             .unwrap_or(std::cmp::Ordering::Equal)
                             .then_with(|| {
-                                b.distance
-                                    .partial_cmp(&a.distance)
+                                b.facing
+                                    .partial_cmp(&a.facing)
                                     .unwrap_or(std::cmp::Ordering::Equal)
                             })
                     }) else {
