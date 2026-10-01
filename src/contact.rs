@@ -279,7 +279,10 @@ pub fn try_add_bond(
     if !s.is_valid_bond(&b, c) {
         return Err("invalid bond");
     }
-    if s.bonds.iter().any(|existing| existing.has_same_identity(&b)) {
+    if s.bonds
+        .iter()
+        .any(|existing| existing.has_same_identity(&b))
+    {
         return Err("duplicate bond");
     }
     Ok(s.push_bond_unchecked(b))
@@ -308,7 +311,13 @@ mod tests {
                 rotation_radians: 0.0,
             },
         ));
-        (structure, [structure.units[a].physical_id, structure.units[b].physical_id])
+        (
+            structure,
+            [
+                structure.units[a].physical_id,
+                structure.units[b].physical_id,
+            ],
+        )
     }
 
     #[test]
@@ -316,14 +325,8 @@ mod tests {
         let catalog = crate::resources::default_catalog();
         let (mut structure, [id_a, id_b]) = test_structure();
         let first = Bond {
-            endpoint_a: BondEndpoint::new(
-                id_a,
-                ConnectionEndpoint::Corner { point_index: 0 },
-            ),
-            endpoint_b: BondEndpoint::new(
-                id_b,
-                ConnectionEndpoint::Corner { point_index: 0 },
-            ),
+            endpoint_a: BondEndpoint::new(id_a, ConnectionEndpoint::Corner { point_index: 0 }),
+            endpoint_b: BondEndpoint::new(id_b, ConnectionEndpoint::Corner { point_index: 0 }),
             strength: 0.5,
             bond_energy: 1.0,
         };
