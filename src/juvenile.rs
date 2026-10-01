@@ -146,26 +146,26 @@ pub(crate) fn realize_initial_with_reserve(
 
     let mut trial_ledger = EnergyLedger::default();
     let mut trial_energy = TRIAL_ENERGY;
-    let (_, trial_remaining) = crate::construction_runtime::construct_blueprint_bond_driven(
+    crate::construction_runtime::construct_blueprint_bond_driven(
         blueprint,
         catalog,
         &mut trial_ledger,
         &mut trial_energy,
     )?;
-    let required_initial_energy = TRIAL_ENERGY - trial_remaining;
+    let required_initial_energy = TRIAL_ENERGY - trial_energy;
     if !required_initial_energy.is_finite() || required_initial_energy < 0.0 {
         return Err("juvenile construction produced an invalid energy requirement".into());
     }
 
     let mut ledger = EnergyLedger::default();
     let mut energy = required_initial_energy + reserve_energy;
-    let (mut structure, remaining_energy) =
-        crate::construction_runtime::construct_blueprint_bond_driven(
-            blueprint,
-            catalog,
-            &mut ledger,
-            &mut energy,
-        )?;
+    let (mut structure, _) = crate::construction_runtime::construct_blueprint_bond_driven(
+        blueprint,
+        catalog,
+        &mut ledger,
+        &mut energy,
+    )?;
+    let remaining_energy = energy;
 
     if !remaining_energy.is_finite() || remaining_energy + EPS < reserve_energy {
         return Err(format!(
