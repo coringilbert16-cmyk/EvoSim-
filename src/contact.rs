@@ -313,13 +313,8 @@ mod tests {
                 rotation_radians: 0.0,
             },
         ));
-        (
-            structure,
-            [
-                structure.units[a].physical_id,
-                structure.units[b].physical_id,
-            ],
-        )
+        let physical_ids = [structure.units[a].physical_id, structure.units[b].physical_id];
+        (structure, physical_ids)
     }
 
     #[test]
