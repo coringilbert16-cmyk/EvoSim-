@@ -100,7 +100,6 @@ fn cells_within_radius_handles_grid_edges_and_invalid_input() {
     assert!(field.cells_within_radius(0.0, 0.0, -1.0).is_empty());
 }
 
-
 #[test]
 fn local_environment_revision_distinguishes_same_revision_totals_in_different_cells() {
     let mut first = ActiveMaterialField::new(100.0, 100.0, 25.0);
@@ -108,20 +107,22 @@ fn local_environment_revision_distinguishes_same_revision_totals_in_different_ce
     let first_position = (12.5, 12.5);
     let second_position = (37.5, 12.5);
 
-    let first_index = first.index_for_position(first_position.0, first_position.1).unwrap();
-    let second_index = second.index_for_position(second_position.0, second_position.1).unwrap();
+    let first_index = first
+        .index_for_position(first_position.0, first_position.1)
+        .unwrap();
+    let second_index = second
+        .index_for_position(second_position.0, second_position.1)
+        .unwrap();
 
     first.mark_changed_at_index(first_index);
     first.mark_changed_at_index(first_index);
     second.mark_changed_at_index(second_index);
     second.mark_changed_at_index(second_index);
 
-    let first_key = first.local_revision_for_positions(
-        [first_position, second_position].into_iter(),
-    );
-    let second_key = second.local_revision_for_positions(
-        [first_position, second_position].into_iter(),
-    );
+    let first_key =
+        first.local_revision_for_positions([first_position, second_position].into_iter());
+    let second_key =
+        second.local_revision_for_positions([first_position, second_position].into_iter());
 
     assert_ne!(first_key, second_key);
 }
