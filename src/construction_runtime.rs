@@ -567,7 +567,6 @@ pub(crate) fn try_attach_physical_material_bond_driven(
     None
 }
 
-
 fn normalized_angle_difference(a: f64, b: f64) -> f64 {
     let mut delta = (a - b).rem_euclid(std::f64::consts::TAU);
     if delta > std::f64::consts::PI {
@@ -736,8 +735,8 @@ fn realize_next_bond_driven(
                 let target = blueprint.elements[_index].placement;
                 let (target_x, target_y) =
                     blueprint_world_position(target, genome_anchor, anchor_declared);
-                let ideal_angle = (joint.y - target_y).atan2(joint.x - target_x)
-                    - local_b.y.atan2(local_b.x);
+                let ideal_angle =
+                    (joint.y - target_y).atan2(joint.x - target_x) - local_b.y.atan2(local_b.x);
 
                 for step in 0..360 {
                     let offset = std::f64::consts::TAU * step as f64 / 360.0;
@@ -867,7 +866,6 @@ fn realize_next_bond_driven(
             )
         },
     )
-
 }
 
 /// Bond-driven construction is forward-only. Once a bond is formed it is
