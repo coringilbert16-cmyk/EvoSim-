@@ -125,6 +125,18 @@ impl GenomeCavity {
         self.area + EPS >= self.minimum_area
     }
 
+    /// Expose the realized cavity boundary geometry to harmonic reception.
+    /// These segments are derived from the same qualifying cavity, so harmonic
+    /// sensing cannot invent a separate sensor boundary.
+    pub(crate) fn boundary_segments(&self) -> Vec<((f64, f64), (f64, f64), usize, usize)> {
+        self.boundary_segments
+            .iter()
+            .map(|&(a, b, unit_a, unit_b)| {
+                ((a.x, a.y), (b.x, b.y), unit_a, unit_b)
+            })
+            .collect()
+    }
+
     /// Return the physical bond indices that form the qualifying genome-cavity
     /// boundary. This is derived from the realized physical genome criterion;
     /// it is not a second stored genome representation.
