@@ -32,7 +32,7 @@ pub struct ConnectionPairCandidate {
     pub available_b: bool,
 }
 
-fn world_center(unit: &StructuralUnit) -> crate::connection_geometry::WorldConnectionPoint {
+pub(crate) fn world_center(unit: &StructuralUnit) -> crate::connection_geometry::WorldConnectionPoint {
     crate::connection_geometry::WorldConnectionPoint {
         x: unit.placement.x,
         y: unit.placement.y,
@@ -41,7 +41,7 @@ fn world_center(unit: &StructuralUnit) -> crate::connection_geometry::WorldConne
     }
 }
 
-fn continuous_endpoint(
+pub(crate) fn continuous_endpoint(
     unit: &StructuralUnit,
     target: crate::connection_geometry::WorldConnectionPoint,
     catalog: &[crate::resources::BaseResource],
@@ -291,7 +291,7 @@ pub fn try_add_bond(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::structure::{BondEndpoint, Placement, StructuralUnit};
+    use crate::structure::{BondEndpoint, PhysicalConstituentId, Placement, StructuralUnit};
 
     fn test_structure() -> (OrganismStructure, [PhysicalConstituentId; 2]) {
         let mut structure = OrganismStructure::new();
