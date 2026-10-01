@@ -1219,9 +1219,35 @@ fn construct_blueprint_bond_driven_internal(
             if structure.bonds.iter().any(|bond| {
                 let a = bond.endpoint_a.constituent_id;
                 let b = bond.endpoint_b.constituent_id;
-                let pa = structure.units[unit_a].physical_id;
-                let pb = structure.units[unit_b].physical_id;
-                (a == pa && b == pb) || (a == pb && b == pa)
+                let a_belongs_to_a = realized_units[connection.element_a]
+                    .as_ref()
+                    .is_some_and(|indices| {
+                        indices
+                            .iter()
+                            .any(|&index| structure.units[index].physical_id == a)
+                    });
+                let b_belongs_to_b = realized_units[connection.element_b]
+                    .as_ref()
+                    .is_some_and(|indices| {
+                        indices
+                            .iter()
+                            .any(|&index| structure.units[index].physical_id == b)
+                    });
+                let a_belongs_to_b = realized_units[connection.element_b]
+                    .as_ref()
+                    .is_some_and(|indices| {
+                        indices
+                            .iter()
+                            .any(|&index| structure.units[index].physical_id == a)
+                    });
+                let b_belongs_to_a = realized_units[connection.element_a]
+                    .as_ref()
+                    .is_some_and(|indices| {
+                        indices
+                            .iter()
+                            .any(|&index| structure.units[index].physical_id == b)
+                    });
+                (a_belongs_to_a && b_belongs_to_b) || (a_belongs_to_b && b_belongs_to_a)
             }) {
                 closed_connections[connection_index] = true;
                 progressed = true;
@@ -1309,16 +1335,44 @@ fn construct_blueprint_bond_driven_internal(
                 evaluated_candidates,
                 rejected_by_bond_admission,
             ) = failed_diagnostic.expect("failed closure must record diagnostics");
-            let physical_a = realized_units[element_a];
-            let physical_b = realized_units[element_b];
-            let bond_present = physical_a.zip(physical_b).is_some_and(|(a, b)| {
-                let pa = structure.units[a].physical_id;
-                let pb = structure.units[b].physical_id;
-                structure.bonds.iter().any(|bond| {
-                    (bond.endpoint_a.constituent_id == pa && bond.endpoint_b.constituent_id == pb)
-                        || (bond.endpoint_a.constituent_id == pb
-                            && bond.endpoint_b.constituent_id == pa)
-                })
+            let physical_a = realized_units[element_a]
+                .as_ref()
+                .and_then(|indices| indices.first().copied());
+            let physical_b = realized_units[element_b]
+                .as_ref()
+                .and_then(|indices| indices.first().copied());
+            let bond_present = structure.bonds.iter().any(|bond| {
+                let a = bond.endpoint_a.constituent_id;
+                let b = bond.endpoint_b.constituent_id;
+                let a_belongs_to_a = realized_units[element_a]
+                    .as_ref()
+                    .is_some_and(|indices| {
+                        indices
+                            .iter()
+                            .any(|&index| structure.units[index].physical_id == a)
+                    });
+                let b_belongs_to_b = realized_units[element_b]
+                    .as_ref()
+                    .is_some_and(|indices| {
+                        indices
+                            .iter()
+                            .any(|&index| structure.units[index].physical_id == b)
+                    });
+                let a_belongs_to_b = realized_units[element_b]
+                    .as_ref()
+                    .is_some_and(|indices| {
+                        indices
+                            .iter()
+                            .any(|&index| structure.units[index].physical_id == a)
+                    });
+                let b_belongs_to_a = realized_units[element_a]
+                    .as_ref()
+                    .is_some_and(|indices| {
+                        indices
+                            .iter()
+                            .any(|&index| structure.units[index].physical_id == b)
+                    });
+                (a_belongs_to_a && b_belongs_to_b) || (a_belongs_to_b && b_belongs_to_a)
             });
             let center_distance = physical_a
                 .zip(physical_b)
