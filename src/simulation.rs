@@ -732,6 +732,7 @@ impl Simulation {
                             environment,
                             &mut self.rng,
                             &perceptions,
+                            needs,
                         ) {
                             Ok(mut active) => {
                                 active.before_energy = before_energy;
