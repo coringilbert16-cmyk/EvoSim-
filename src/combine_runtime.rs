@@ -516,7 +516,8 @@ pub(crate) fn try_combine_stored_unit(
         return None;
     }
 
-    let first_resource = raw.parts.first()?.0.as_str();    let geometry_source = raw
+    let first_resource = raw.parts.first()?.0.as_str();
+    let geometry_source = raw
         .parts
         .first()
         .and_then(|(name, _)| environment.catalog.iter().find(|b| b.name == *name))?;
