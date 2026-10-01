@@ -631,7 +631,22 @@ fn local_blueprint_candidate_score(
     // When several intended neighbors are already realized, fit the new
     // element to all of them simultaneously. This is deliberately local:
     // unrealized elements never participate in the score.
-    for neighbor_index in already_realized_neighbors(blueprint, index, &vec![true; blueprint.elements.len()]) {
+    for neighbor_index in 0..blueprint.elements.len() {
+        if neighbor_index == index {
+            continue;
+        }
+        let is_realized = realized_units
+            .get(neighbor_index)
+            .and_then(|units| units.as_ref())
+            .is_some_and(|units| !units.is_empty());
+        if !is_realized
+            || !blueprint.connections.iter().any(|connection| {
+                (connection.element_a == index && connection.element_b == neighbor_index)
+                    || (connection.element_a == neighbor_index && connection.element_b == index)
+            })
+        {
+            continue;
+        }
         let Some(Some(neighbor_units)) = realized_units.get(neighbor_index) else {
             continue;
         };
