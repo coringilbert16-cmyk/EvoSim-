@@ -29,9 +29,25 @@ mod integration_tests {
         assert!(!o.structure.units.is_empty());
         assert!(!o.stored_material.is_empty());
         assert!(matches!(o.development_stage, DevelopmentStage::Juvenile));
+        let stored = o.stored_material.materials_snapshot();
+        assert_eq!(stored.len(), 4);
+        assert!(stored.iter().any(|material| {
+            material
+                .parts
+                .iter()
+                .any(|(name, _)| name == "Water")
+        }));
         assert_eq!(
-            o.stored_material.materials_snapshot(),
-            vec![o.genome.juvenile_reserve.clone()]
+            stored
+                .iter()
+                .filter(|material| {
+                    material
+                        .parts
+                        .iter()
+                        .all(|(name, _)| name != "Water")
+                })
+                .count(),
+            3
         );
         assert!(o.usable_energy >= o.genome.juvenile_energy_reserve);
         assert!(o.decision_history.entries.is_empty());
