@@ -652,6 +652,7 @@ pub(crate) fn try_combine_stored_unit(
             return Some(attempt);
         }
     }
+
     None
 }
 
