@@ -1018,7 +1018,7 @@ fn construct_blueprint_bond_driven_internal(
                 if let Some((
                     trial_structure,
                     new_indices,
-                    part_index,
+                    _part_index,
                     trial_attempt,
                     trial_ledger,
                     trial_energy,
