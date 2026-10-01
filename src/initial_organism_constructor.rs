@@ -4,7 +4,7 @@
 //! are transient search state; none becomes inherited developmental intent.
 
 use crate::resources::{BaseResource, Form, Material, PhysicalState};
-use crate::state::{EnergyLedger, Organism};
+use crate::state::EnergyLedger;
 use crate::structural_blueprint::{
     BlueprintConnection, BlueprintElement, BlueprintPlacement, StructuralBlueprint,
 };
@@ -190,7 +190,6 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
                 .iter()
                 .find_map(|region| placement_fits_resource(water, region, catalog));
             let Some(water_placement) = water_placement else {
-                acquisition_failed = true;
                 continue;
             };
             acquired_resource_placements.push((water.name.clone(), water_placement));
