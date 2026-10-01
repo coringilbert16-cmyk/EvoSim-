@@ -121,6 +121,16 @@ pub struct GenomeCavity {
 }
 
 impl GenomeCavity {
+    #[cfg(test)]
+    pub(crate) fn test_fixture(area: f64, minimum_area: f64) -> Self {
+        Self {
+            area,
+            boundary_units: Vec::new(),
+            minimum_area,
+            boundary_segments: Vec::new(),
+        }
+    }
+
     pub fn qualifies(&self) -> bool {
         self.area + EPS >= self.minimum_area
     }
