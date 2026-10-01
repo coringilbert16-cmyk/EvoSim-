@@ -83,11 +83,147 @@ fn evaluate_candidate(
     Some((evaluation, interaction, work, investment, required))
 }
 
+/// Construction-only access to the universal candidate evaluation. Construction
+/// supplies the exact candidate; this function does not perform candidate search.
+pub(crate) fn construction_candidate_evaluation(
+    structure: &crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    candidate: crate::contact::ConnectionPairCandidate,
+    catalog: &[BaseResource],
+) -> Option<(FormationEvaluation, ExperimentalInteraction, f64, f64, f64)> {
+    evaluate_candidate(structure, unit_a, unit_b, candidate, catalog)
+}
+
+pub(crate) fn form_specific_bond(
+    structure: &mut crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    endpoint_a: ConnectionEndpoint,
+    endpoint_b: ConnectionEndpoint,
+    catalog: &[BaseResource],
+    cache: &mut ConnectionCompatibilityCache,
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> Option<CombineAttempt> {
+    let candidate = crate::contact::connection_pair_candidates_cached(
+        structure, unit_a, unit_b, catalog, cache,
+    )
+    .into_iter()
+    .find(|candidate| {
+        candidate.endpoint_a == endpoint_a
+            && candidate.endpoint_b == endpoint_b
+            && candidate.distance <= COMBINE_CONTACT_TOLERANCE
+            && candidate.available_a
+            && candidate.available_b
+    })?;
+    let (_, _, _, investment, _) =
+        evaluate_candidate(structure, unit_a, unit_b, candidate, catalog)?;
+    form_construction_bond(
+        structure, unit_a, unit_b, candidate, investment, catalog, cache, ledger, energy,
+    )
+}
+
+/// Forms exactly the supplied construction contact.
+///
+/// Unlike generic COMBINE, this function does not search for a different contact.
+/// The caller has already selected the physical endpoint pair and pose. This is the
+/// transaction boundary for the bond-driven construction system.
+pub(crate) fn form_construction_bond(
+    structure: &mut crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    candidate: crate::contact::ConnectionPairCandidate,
+    investment: f64,
+    catalog: &[BaseResource],
+    cache: &mut ConnectionCompatibilityCache,
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> Option<CombineAttempt> {
+    if unit_a >= structure.units.len()
+        || unit_b >= structure.units.len()
+        || unit_a == unit_b
+        || candidate.distance > COMBINE_CONTACT_TOLERANCE
+        || !candidate.available_a
+        || !candidate.available_b
+    {
+        return None;
+    }
+    let point_a = candidate
+        .endpoint_a
+        .world_point(&structure.units[unit_a], catalog)?;
+    let point_b = candidate
+        .endpoint_b
+        .world_point(&structure.units[unit_b], catalog)?;
+    if (point_a.x - point_b.x).hypot(point_a.y - point_b.y) > COMBINE_CONTACT_TOLERANCE {
+        return None;
+    }
+    form_bond_from_candidate(
+        structure,
+        BondFormationRequest {
+            unit_a,
+            unit_b,
+            endpoint_a: candidate.endpoint_a,
+            endpoint_b: candidate.endpoint_b,
+            investment,
+        },
+        candidate,
+        catalog,
+        cache,
+        ledger,
+        energy,
+    )
+}
+
 fn form_bond(
     structure: &mut crate::structure::OrganismStructure,
     request: BondFormationRequest,
     catalog: &[BaseResource],
     cache: &mut ConnectionCompatibilityCache,
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> Option<CombineAttempt> {
+    let BondFormationRequest {
+        unit_a,
+        unit_b,
+        endpoint_a,
+        endpoint_b,
+        investment,
+    } = request;
+    let candidate = crate::contact::connection_pair_candidates_cached(
+        structure, unit_a, unit_b, catalog, cache,
+    )
+    .into_iter()
+    .find(|candidate| {
+        candidate.endpoint_a == endpoint_a
+            && candidate.endpoint_b == endpoint_b
+            && candidate.distance <= COMBINE_CONTACT_TOLERANCE
+            && candidate.available_a
+            && candidate.available_b
+    })?;
+    form_bond_from_candidate(
+        structure,
+        BondFormationRequest {
+            unit_a,
+            unit_b,
+            endpoint_a,
+            endpoint_b,
+            investment,
+        },
+        candidate,
+        catalog,
+        cache,
+        ledger,
+        energy,
+    )
+}
+
+fn form_bond_from_candidate(
+    structure: &mut crate::structure::OrganismStructure,
+    request: BondFormationRequest,
+    candidate: crate::contact::ConnectionPairCandidate,
+    catalog: &[BaseResource],
+    _cache: &mut ConnectionCompatibilityCache,
     ledger: &mut EnergyLedger,
     energy: &mut f64,
 ) -> Option<CombineAttempt> {
@@ -103,16 +239,6 @@ fn form_bond(
     }
     let id_a = structure.physical_id(ua)?;
     let id_b = structure.physical_id(ub)?;
-    let candidate =
-        crate::contact::connection_pair_candidates_cached(structure, ua, ub, catalog, cache)
-            .into_iter()
-            .find(|c| {
-                c.endpoint_a == endpoint_a
-                    && c.endpoint_b == endpoint_b
-                    && c.distance <= COMBINE_CONTACT_TOLERANCE
-                    && c.available_a
-                    && c.available_b
-            })?;
     let a = structure.units[ua].properties(catalog)?;
     let b = structure.units[ub].properties(catalog)?;
     let evaluation = crate::combine::evaluate_formation(candidate, a.cohesion, b.cohesion);
@@ -165,6 +291,40 @@ fn form_bond(
         bond_energy: investment,
         environmental_source: None,
     })
+}
+
+pub(crate) fn form_internal_construction_bond(
+    structure: &mut crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    candidate: crate::contact::ConnectionPairCandidate,
+    catalog: &[BaseResource],
+) -> Result<(), String> {
+    if unit_a >= structure.units.len() || unit_b >= structure.units.len() {
+        return Err("construction bond references a missing unit".into());
+    }
+    if unit_a == unit_b
+        || candidate.distance > COMBINE_CONTACT_TOLERANCE
+        || !candidate.available_a
+        || !candidate.available_b
+    {
+        return Err("construction bond candidate is not an admissible contact".into());
+    }
+    let id_a = structure
+        .physical_id(unit_a)
+        .ok_or_else(|| "construction bond is missing endpoint A".to_string())?;
+    let id_b = structure
+        .physical_id(unit_b)
+        .ok_or_else(|| "construction bond is missing endpoint B".to_string())?;
+    let bond = crate::structure::Bond {
+        endpoint_a: BondEndpoint::new(id_a, candidate.endpoint_a),
+        endpoint_b: BondEndpoint::new(id_b, candidate.endpoint_b),
+        strength: 1.0,
+        bond_energy: 0.0,
+    };
+    crate::contact::try_add_bond(structure, bond, catalog)
+        .map(|_| ())
+        .map_err(|_| "construction bond admission was rejected".into())
 }
 
 pub(crate) fn instantiate_one_unit(
@@ -239,6 +399,16 @@ pub(crate) fn try_combine_stored_unit(
                     origin,
                     &environment.catalog,
                 )?;
+                if indices.iter().any(|index| {
+                    crate::construction_runtime::placed_unit_overlaps(
+                        &hypothetical,
+                        &hypothetical.units[*index],
+                        &indices,
+                        &environment.catalog,
+                    )
+                }) {
+                    continue;
+                }
                 for (part_index, &ub) in indices.iter().enumerate() {
                     for candidate in crate::contact::connection_pair_candidates_cached(
                         &hypothetical,
@@ -373,6 +543,16 @@ pub(crate) fn try_combine_stored_unit(
                 placement,
                 &environment.catalog,
             )?;
+            if indices.iter().any(|index| {
+                crate::construction_runtime::placed_unit_overlaps(
+                    &hypothetical,
+                    &hypothetical.units[*index],
+                    &indices,
+                    &environment.catalog,
+                )
+            }) {
+                continue;
+            }
             let ub = *indices.first()?;
             for candidate in crate::contact::connection_pair_candidates_cached(
                 &hypothetical,
@@ -608,6 +788,16 @@ fn try_combine_environmental(
             ) else {
                 continue;
             };
+            if indices.iter().any(|index| {
+                crate::construction_runtime::placed_unit_overlaps(
+                    &hypothetical,
+                    &hypothetical.units[*index],
+                    &indices,
+                    &environment.catalog,
+                )
+            }) {
+                continue;
+            }
             for ua in 0..organism.structure.units.len() {
                 for &ub in &indices {
                     for candidate in crate::contact::connection_pair_candidates_cached(

@@ -339,8 +339,6 @@ pub fn find_enclosed_regions(
         // using the complete boundary topology.
         let mut boundary_units = Vec::new();
         for &edge_index in &face {
-            let a = points[edges[edge_index].from];
-            let b = points[edges[edge_index].to];
             let unit = edge_units[edge_index];
             if !boundary_units.contains(&unit) {
                 boundary_units.push(unit);

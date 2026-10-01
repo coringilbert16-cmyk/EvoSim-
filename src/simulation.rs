@@ -308,11 +308,22 @@ impl Simulation {
         // than replacing that structural pressure.
         let survival =
             self_maintenance_pressure + (1.0 - self_maintenance_pressure) * energy_survival;
-        let development = if developmental.is_some() {
+        let mut development = if developmental.is_some() {
             (1.0 - current_realization).max(0.0)
         } else {
             0.0
         };
+        // A developmental material mismatch is itself developmental pressure:
+        // the organism should seek material that matches its inherited
+        // structural preference instead of accepting a structurally poor
+        // substitute merely because one exists.
+        if let Some(construction) = organism.reproductive_construction.as_ref() {
+            development =
+                development.max(crate::reproduction::construction_material_need_pressure(
+                    construction,
+                    &environment.catalog,
+                ));
+        }
         CurrentNeeds {
             survival,
             reproduction: if matches!(organism.development_stage, DevelopmentStage::Adult) {

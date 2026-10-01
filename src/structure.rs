@@ -366,34 +366,9 @@ fn units_strictly_overlap(
         form: form_b.form.clone(),
         placement: b.placement,
     };
-    if !crate::material_geometry::placed_forms_overlap(&pa, &pb, 0.0) {
-        return false;
-    }
-    let dx = b.placement.x - a.placement.x;
-    let dy = b.placement.y - a.placement.y;
-    let distance = dx.hypot(dy);
-    let (sx, sy) = if distance > 1e-12 {
-        (dx / distance, dy / distance)
-    } else {
-        (1.0, 0.0)
-    };
-    let scale = pa
-        .form
-        .bounding_radius()
-        .max(pb.form.bounding_radius())
-        .max(1.0);
-    let epsilon = 1e-8 * scale;
-    let shifted = crate::material_geometry::PlacedMaterialPart {
-        part_index: 0,
-        form: pa.form.clone(),
-        placement: Placement {
-            x: a.placement.x - sx * epsilon,
-            y: a.placement.y - sy * epsilon,
-            rotation_radians: a.placement.rotation_radians,
-        },
-    };
-    crate::material_geometry::placed_forms_overlap(&shifted, &pb, 0.0)
+    crate::material_geometry::placed_forms_penetrate(&pa, &pb, 0.0)
 }
+
 #[derive(Serialize, Clone, Debug)]
 pub struct PhysicalConstituentGraph {
     pub units: Vec<StructuralUnit>,
@@ -500,6 +475,24 @@ impl PhysicalConstituentGraph {
         self.units.push(u);
         index
     }
+    /// Remove temporary physical constituents and every bond touching them.
+    /// Bonds identify constituents by stable physical ID, so remaining units do
+    /// not need index remapping.
+    pub(crate) fn remove_units_by_physical_ids(&mut self, ids: &[PhysicalConstituentId]) {
+        if ids.is_empty() {
+            return;
+        }
+        let doomed: HashSet<PhysicalConstituentId> = ids.iter().copied().collect();
+        self.units
+            .retain(|unit| !doomed.contains(&unit.physical_id));
+        self.bonds.retain(|bond| {
+            !doomed.contains(&bond.endpoint_a.constituent_id)
+                && !doomed.contains(&bond.endpoint_b.constituent_id)
+        });
+        self.genome_constituent_ids
+            .retain(|id| !doomed.contains(id));
+    }
+
     pub fn physical_id(&self, unit_index: usize) -> Option<PhysicalConstituentId> {
         self.units.get(unit_index).map(|u| u.physical_id)
     }
