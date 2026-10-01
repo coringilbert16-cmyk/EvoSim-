@@ -258,12 +258,7 @@ fn environmental_material_resonance(
         .iter()
         .map(|placement| (placement.x - source_x).hypot(placement.y - source_y))
         .fold(0.0_f64, f64::max);
-    Some((
-        source_x,
-        source_y,
-        extent,
-        spectrum,
-    ))
+    Some((source_x, source_y, extent, spectrum))
 }
 
 /// Calculate one directional environmental contribution at one realized
@@ -573,11 +568,7 @@ mod tests {
             &catalog,
         )
         .unwrap();
-        assert!(field.deposit_physical(
-            boundary.x + 40.0,
-            boundary.y,
-            source,
-        ));
+        assert!(field.deposit_physical(boundary.x + 40.0, boundary.y, source,));
         let coupled = genome_cavity_spectrum(&catalog, &field, &cavity);
 
         let baseline_fundamental = baseline
