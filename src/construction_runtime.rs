@@ -981,7 +981,7 @@ fn construct_blueprint_bond_driven_internal(
             .map(|candidate| candidate.2)
             .unwrap_or(0.0);
             return Err(format!(
-                "construction material need: preferred={preferred}, best_available_structural_match={best:.6}, threshold={MIN_CONSTRUCTION_MATERIAL_MATCH:.6}"
+                "construction material need: preferred={preferred}, best_available_structural_match={best:.6},\n                 threshold={MIN_CONSTRUCTION_MATERIAL_MATCH:.6}"
             ));
         }
 
