@@ -388,15 +388,41 @@ fn analyze_genome_cavity_in_indices(
             {
                 continue;
             }
-            let boundary: HashSet<usize> = region.boundary_units.iter().copied().collect();
-            let closed = region.boundary_units.iter().all(|&unit| {
-                structure
-                    .direct_neighbor_indices(unit)
-                    .into_iter()
-                    .filter(|neighbor| boundary.contains(neighbor))
-                    .count()
-                    >= 2
-            });
+            let boundary_units: HashSet<usize> = region.boundary_units.iter().copied().collect();
+            let closed = region
+                .boundary
+                .iter()
+                .enumerate()
+                .all(|(i, &(ax, ay))| {
+                    let (bx, by) = region.boundary[(i + 1) % region.boundary.len()];
+                    let segment_a = Point { x: ax, y: ay };
+                    let segment_b = Point { x: bx, y: by };
+                    let segment_units = region
+                        .boundary_units
+                        .iter()
+                        .copied()
+                        .filter(|unit_index| {
+                            unit_boundary_matches_segment(
+                                structure,
+                                catalog,
+                                *unit_index,
+                                segment_a,
+                                segment_b,
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    if segment_units.len() != 2 {
+                        return false;
+                    }
+                    bond_seals_segment(
+                        structure,
+                        catalog,
+                        segment_units[0],
+                        segment_units[1],
+                        segment_a,
+                        segment_b,
+                    )
+                });
             if closed {
                 best = Some(GenomeCavity {
                     area: region.area,
@@ -425,6 +451,51 @@ fn intern(point: Point, points: &mut Vec<Point>, index: &mut HashMap<(i64, i64),
     points.push(point);
     index.insert(key, i);
     i
+}
+
+fn unit_boundary_matches_segment(
+    structure: &OrganismStructure,
+    catalog: &[BaseResource],
+    unit_index: usize,
+    segment_a: Point,
+    segment_b: Point,
+) -> bool {
+    let Some(unit) = structure.units.get(unit_index) else {
+        return false;
+    };
+    let Some(shape) = unit.shape(catalog) else {
+        return false;
+    };
+
+    match &shape.form {
+        Form::Line { length } => {
+            if !length.is_finite() || *length <= 0.0 {
+                return false;
+            }
+            let half = length / 2.0;
+            let (s, c) = unit.placement.rotation_radians.sin_cos();
+            let endpoints = [
+                Point {
+                    x: unit.placement.x - half * c,
+                    y: unit.placement.y - half * s,
+                },
+                Point {
+                    x: unit.placement.x + half * c,
+                    y: unit.placement.y + half * s,
+                },
+            ];
+            (endpoints[0].sub(segment_a).norm() <= NODE_TOLERANCE
+                && endpoints[1].sub(segment_b).norm() <= NODE_TOLERANCE)
+                || (endpoints[0].sub(segment_b).norm() <= NODE_TOLERANCE
+                    && endpoints[1].sub(segment_a).norm() <= NODE_TOLERANCE)
+        }
+        _ => {
+            let Some(polygon) = transformed_polygon(&shape.form, unit.placement) else {
+                return false;
+            };
+            segment_in_polygon_boundary(segment_a, segment_b, &polygon)
+        }
+    }
 }
 
 fn transformed_polygon(form: &Form, placement: Placement) -> Option<Vec<Point>> {
