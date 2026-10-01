@@ -720,14 +720,24 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     continue;
                 };
 
-                return Some((
-                    trial,
-                    indices,
-                    part_index,
-                    attempt,
-                    trial_ledger,
-                    trial_energy,
-                ));
+                let target_distance = (candidate_origin.x - target_world.0)
+                    .hypot(candidate_origin.y - target_world.1);
+                if best_candidate
+                    .as_ref()
+                    .is_none_or(|current: &(f64, _, _, _, _, _, _)| {
+                        target_distance < current.0
+                    })
+                {
+                    best_candidate = Some((
+                        target_distance,
+                        trial,
+                        indices,
+                        part_index,
+                        attempt,
+                        trial_ledger,
+                        trial_energy,
+                    ));
+                }
             }
         }
     }
@@ -763,6 +773,8 @@ fn realize_next_bond_driven(
     if existing_endpoints.is_empty() || new_endpoints.is_empty() {
         return None;
     }
+
+    let mut best_candidate = None;
 
     for endpoint_a in existing_endpoints {
         let joint = endpoint_a.world_point(&structure.units[existing_index], catalog)?;
@@ -896,7 +908,18 @@ fn realize_next_bond_driven(
         }
     }
 
-    None
+    best_candidate.map(
+        |(_, trial, indices, part_index, attempt, trial_ledger, trial_energy)| {
+            (
+                trial,
+                indices,
+                part_index,
+                attempt,
+                trial_ledger,
+                trial_energy,
+            )
+        },
+    )
 }
 
 /// Bond-driven construction is forward-only. Once a bond is formed it is
