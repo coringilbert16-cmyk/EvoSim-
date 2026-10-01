@@ -1105,79 +1105,86 @@ fn construct_blueprint_bond_driven_internal(
         }
 
         let mut attached = false;
-        for (storage_index, candidate_name, _) in candidate_resources {
-            let candidate_instance = if let Some(storage) = available_materials.as_deref() {
-                let Some(crate::material_storage::StoredMaterial::Physical(instance)) =
-                    storage.entries.get(storage_index)
-                else {
-                    continue;
+        // A not-yet-realized element may have more than one realized blueprint
+        // neighbor. Each neighbor is an independently valid forward anchor;
+        // failure against one must not strand the element when another neighbor
+        // can admit the same physical material through the shared bond authority.
+        'neighbors: for neighbor in neighbors.iter().copied() {
+            for (storage_index, candidate_name, _) in candidate_resources.iter().cloned() {
+                let candidate_instance = if let Some(storage) = available_materials.as_deref() {
+                    let Some(crate::material_storage::StoredMaterial::Physical(instance)) =
+                        storage.entries.get(storage_index)
+                    else {
+                        continue;
+                    };
+                    instance.clone()
+                } else {
+                    let candidate_resource = resource(catalog, &candidate_name).ok_or_else(|| {
+                        format!("unknown preferred construction resource {candidate_name}")
+                    })?;
+                    crate::physical_material::PhysicalMaterial::realized(
+                        crate::resources::Material::free_base(candidate_resource.name.clone(), 1.0),
+                        vec![Placement {
+                            x: 0.0,
+                            y: 0.0,
+                            rotation_radians: 0.0,
+                        }],
+                        catalog,
+                    )
+                    .ok_or_else(|| {
+                        "preferred construction material could not be realized".to_string()
+                    })?
                 };
-                instance.clone()
-            } else {
-                let candidate_resource = resource(catalog, &candidate_name).ok_or_else(|| {
-                    format!("unknown preferred construction resource {candidate_name}")
-                })?;
-                crate::physical_material::PhysicalMaterial::realized(
-                    crate::resources::Material::free_base(candidate_resource.name.clone(), 1.0),
-                    vec![Placement {
-                        x: 0.0,
-                        y: 0.0,
-                        rotation_radians: 0.0,
-                    }],
+
+                if let Some((
+                    trial_structure,
+                    new_indices,
+                    part_index,
+                    trial_attempt,
+                    trial_ledger,
+                    trial_energy,
+                )) = realize_next_bond_driven(
+                    blueprint,
                     catalog,
-                )
-                .ok_or_else(|| {
-                    "preferred construction material could not be realized".to_string()
-                })?
-            };
+                    &structure,
+                    &realized_units,
+                    index,
+                    neighbor,
+                    genome_anchor,
+                    anchor_element.placement,
+                    &candidate_instance,
+                    &mut nodes,
+                    &construction_ledger,
+                    remaining_energy,
+                ) {
+                    let new_unit_index = *new_indices
+                        .get(part_index)
+                        .ok_or_else(|| "successful material endpoint index disappeared".to_string())?;
 
-            if let Some((
-                trial_structure,
-                new_indices,
-                part_index,
-                trial_attempt,
-                trial_ledger,
-                trial_energy,
-            )) = realize_next_bond_driven(
-                blueprint,
-                catalog,
-                &structure,
-                &realized_units,
-                index,
-                neighbor,
-                genome_anchor,
-                anchor_element.placement,
-                &candidate_instance,
-                &mut nodes,
-                &construction_ledger,
-                remaining_energy,
-            ) {
-                let new_unit_index = *new_indices
-                    .get(part_index)
-                    .ok_or_else(|| "successful material endpoint index disappeared".to_string())?;
-
-                construction_ledger = trial_ledger;
-                remaining_energy = trial_energy;
-                total_heat += trial_attempt.work_cost;
-                structure = trial_structure;
-                realized[index] = true;
-                realized_units[index] = Some(new_unit_index);
-                if storage_index != usize::MAX {
-                    reserved_storage_indices.push(storage_index);
-                }
-                // This successful construction step created the physical bond
-                // for the prescribed edge that selected this neighbor. Record
-                // that edge now; later closure work only handles edges that
-                // were not already realized by a forward bond.
-                for (connection_index, connection) in blueprint.connections.iter().enumerate() {
-                    if (connection.element_a == index && connection.element_b == neighbor)
-                        || (connection.element_a == neighbor && connection.element_b == index)
-                    {
-                        closed_connections[connection_index] = true;
+                    construction_ledger = trial_ledger;
+                    remaining_energy = trial_energy;
+                    total_heat += trial_attempt.work_cost;
+                    structure = trial_structure;
+                    realized[index] = true;
+                    realized_units[index] = Some(new_unit_index);
+                    if storage_index != usize::MAX {
+                        reserved_storage_indices.push(storage_index);
                     }
+                    // This successful construction step created the physical
+                    // bond for the prescribed edge that selected this neighbor.
+                    // Record that edge now; later closure work only handles
+                    // edges that were not already realized by a forward bond.
+                    for (connection_index, connection) in blueprint.connections.iter().enumerate() {
+                        if (connection.element_a == index && connection.element_b == neighbor)
+                            || (connection.element_a == neighbor && connection.element_b == index)
+                        {
+                            closed_connections[connection_index] = true;
+                            break;
+                        }
+                    }
+                    attached = true;
+                    break 'neighbors;
                 }
-                attached = true;
-                break;
             }
         }
 
