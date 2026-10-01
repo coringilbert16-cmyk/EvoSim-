@@ -963,11 +963,9 @@ fn realize_next_bond_driven(
                     continue;
                 };
 
-                let position_error = (candidate_origin.x - target_world.0).hypot(
-                    candidate_origin.y - target_world.1,
-                );
-                let rotation_error = (candidate_origin.rotation_radians
-                    - target.rotation_radians
+                let position_error = (candidate_origin.x - target_world.0)
+                    .hypot(candidate_origin.y - target_world.1);
+                let rotation_error = (candidate_origin.rotation_radians - target.rotation_radians
                     + std::f64::consts::PI)
                     .rem_euclid(std::f64::consts::TAU)
                     - std::f64::consts::PI;
