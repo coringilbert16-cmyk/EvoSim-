@@ -534,7 +534,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
             shape: Shape {
                 form: Form::RegularPolygon {
                     sides: 6,
-                    radius: 0.577_350_269_189_625_8,
+                    radius: 1.0,
                 },
             },
         },
@@ -611,12 +611,12 @@ pub fn default_catalog() -> Vec<BaseResource> {
             shape: Shape {
                 form: Form::Polygon {
                     vertices: vec![
-                        (-0.5, -0.25),
-                        (0.5, -0.25),
-                        (0.5, 0.25),
-                        (0.0, 0.25),
-                        (0.0, 0.75),
-                        (-0.5, 0.75),
+                        (-0.5, -0.5),
+                        (0.5, -0.5),
+                        (0.5, 0.0),
+                        (0.0, 0.0),
+                        (0.0, 0.5),
+                        (-0.5, 0.5),
                     ],
                 },
             },
