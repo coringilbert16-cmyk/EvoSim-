@@ -12,7 +12,7 @@ This section is the authoritative reference for the interior/permeability work.
 
 **Status: ACTIVE — authoritative implementation plan for the current construction migration.**
 
-**Implementation status:** The Phase 1–7 architecture is implemented at the construction/reproduction layers. Phase 4's developmental caller audit is complete: the obsolete recursive whole-graph constructor is retired, `candidate_placements()` remains only for generic COMBINE/reproduction callers, and the developmental path is forward-only bond-driven. The current blocker is Phase 5 contract verification: the temporary three-Carbon scaffold must be physically framed around the blueprint cavity rather than around the boundary anchor, and the confirmed seed must provide enough physical room for that scaffold. Full contract verification remains pending.
+**Implementation status:** The constructor migration is now forward-only and bond-driven; actual physical material selection is integrated; generic COMBINE and construction share one physical bond-formation transaction; realized cavity qualification is physical-graph-derived; and harmonic environmental sensing is physical-material-only. The former Phase 5 blocker—framing the temporary three-Carbon scaffold around the boundary anchor—has been corrected to use a structural blueprint-space cavity reference. Focused contract validation remains pending, so the next work is verification and then systematic cleanup of the accumulated downstream test failures.
 
 This section establishes the target construction architecture and migration order. It exists specifically to prevent piecemeal fixes from silently creating competing construction authorities.
 
@@ -28,9 +28,9 @@ The blueprint is a **developmental preference**, not a command to reproduce an e
 
 Construction must select from the organism's existing **physical material inventory**. The selector compares actual physical candidates against the blueprint's structural preference. It must return an actual physical material instance or storage entry, never manufacture a replacement from a catalog description, never consume a candidate while evaluating it, reject candidates below the approved structural-match threshold, permit acceptable substitutes when the preferred resource is unavailable, and return a construction/material need when no candidate is sufficiently close. Existing material preference, density, and connectivity fields should be reused.
 
-## C. Exact construction-bond primitive
+## C. Shared physical bond-formation primitive
 
-Construction requires a construction-specific low-level transaction taking the existing structure, actual materials A/B, exact endpoints A/B, exact pose for B, catalog/physical properties, and energy ledger/energy. It only verifies endpoints, exact contact, unintended penetration, universal bond-formation rules, energy/ledger settlement, and atomic addition of the supplied bond. It must not discover another endpoint/orientation, validate future bonds, or perform material selection. Generic COMBINE candidate discovery remains separate.
+Generic COMBINE and developmental construction use the same physical bond-formation transaction. The caller supplies the already-selected endpoint pair, pose, and evaluated investment; the shared transaction verifies exact contact, unintended penetration through the common physical admission path, universal bond-formation rules, energy/ledger settlement, and atomic bond addition. Candidate discovery and developmental material/orientation search remain caller responsibilities. Construction never gets a second physical bond authority.
 
 ## D. Orientation and candidate search
 
@@ -128,4 +128,4 @@ Existing helpers are not deleted merely because they are old. Before removal, au
 
 After each migration phase: format; compile; run focused construction tests; inspect failures by contract layer; only then proceed. Do not modify unrelated geometry, energy, movement, reproduction, or biological behavior to make a construction test pass unless a direct dependency is demonstrated. Long simulation runs happen only after focused construction contract tests are green.
 
-**Current task:** Phase 4 caller audit is complete. Continue at Phase 5: enforce the triangular scaffold/cavity invariants, verify that the scaffold is framed in blueprint space rather than centered on a boundary anchor, and prove the confirmed seed can be physically realized without backtracking. Do not add geometry heuristics to the generic COMBINE path.
+**Current task:** Constructor, shared COMBINE formation, realized cavity, and physical-only harmonic integration are implemented. Continue with focused construction/cavity contract validation, then attack the accumulated test failures by contract layer. Do not introduce parallel construction authorities or unrelated geometry heuristics merely to satisfy downstream tests.
