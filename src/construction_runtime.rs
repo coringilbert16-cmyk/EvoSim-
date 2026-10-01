@@ -898,9 +898,7 @@ fn realize_next_bond_driven(
                     .hypot(candidate_origin.y - target_world.1);
                 if best_candidate
                     .as_ref()
-                    .is_none_or(|current: &(f64, OrganismStructure, Vec<usize>, usize, crate::combine_runtime::CombineAttempt, EnergyLedger, f64)| {
-                        target_distance < current.0
-                    })
+                    .is_none_or(|current| target_distance < current.0)
                 {
                     best_candidate = Some((
                         target_distance,
