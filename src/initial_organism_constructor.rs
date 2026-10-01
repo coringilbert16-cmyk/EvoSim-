@@ -22,10 +22,7 @@ pub(crate) struct ValidConstruction {
     pub acquired_resource_placements: Vec<(String, Placement)>,
 }
 
-fn candidate_ring(
-    resource: &BaseResource,
-    sides: usize,
-) -> StructuralBlueprint {
+fn candidate_ring(resource: &BaseResource, sides: usize) -> StructuralBlueprint {
     let radius = resource.shape.form.bounding_radius();
     let ring_radius = radius / (std::f64::consts::PI / sides as f64).sin();
     let elements = (0..sides)
@@ -63,12 +60,7 @@ fn placement_fits_resource(
             f64::NEG_INFINITY,
         ),
         |(min_x, max_x, min_y, max_y), &(x, y)| {
-            (
-                min_x.min(x),
-                max_x.max(x),
-                min_y.min(y),
-                max_y.max(y),
-            )
+            (min_x.min(x), max_x.max(x), min_y.min(y), max_y.max(y))
         },
     );
 
@@ -85,8 +77,7 @@ fn placement_fits_resource(
                 let placement = Placement {
                     x,
                     y,
-                    rotation_radians: rotation_index as f64
-                        * std::f64::consts::FRAC_PI_2,
+                    rotation_radians: rotation_index as f64 * std::f64::consts::FRAC_PI_2,
                 };
                 let Ok_or_none = crate::physical_material::PhysicalMaterial::realized(
                     Material::free_base(resource.name.clone(), 1.0),
@@ -109,9 +100,7 @@ fn placement_fits_resource(
     None
 }
 
-fn required_acquisition_resources<'a>(
-    catalog: &'a [BaseResource],
-) -> Vec<&'a BaseResource> {
+fn required_acquisition_resources<'a>(catalog: &'a [BaseResource]) -> Vec<&'a BaseResource> {
     catalog
         .iter()
         .filter(|resource| resource.name != "Water")
@@ -120,9 +109,7 @@ fn required_acquisition_resources<'a>(
         .collect()
 }
 
-pub(crate) fn construct_valid(
-    catalog: &[BaseResource],
-) -> Result<ValidConstruction, String> {
+pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruction, String> {
     let structural_candidates = catalog
         .iter()
         .filter(|resource| resource.physical_state == PhysicalState::Rigid)
@@ -141,9 +128,7 @@ pub(crate) fn construct_valid(
     for resource in structural_candidates {
         if !matches!(
             resource.shape.form,
-            Form::Rectangle { .. }
-                | Form::RegularPolygon { .. }
-                | Form::Polygon { .. }
+            Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. }
         ) {
             continue;
         }
@@ -167,8 +152,9 @@ pub(crate) fn construct_valid(
                 continue;
             };
 
-            let Some(cavity) =
-                crate::cavity::analyze_genome_cavity(&structure, catalog).ok().flatten()
+            let Some(cavity) = crate::cavity::analyze_genome_cavity(&structure, catalog)
+                .ok()
+                .flatten()
             else {
                 continue;
             };
@@ -176,12 +162,10 @@ pub(crate) fn construct_valid(
                 continue;
             }
 
-            let regions = crate::interior_geometry::find_accessible_interior_regions(
-                &structure,
-                catalog,
-            )
-            .ok()
-            .unwrap_or_default();
+            let regions =
+                crate::interior_geometry::find_accessible_interior_regions(&structure, catalog)
+                    .ok()
+                    .unwrap_or_default();
             if regions.is_empty() {
                 continue;
             }
@@ -236,9 +220,8 @@ mod tests {
         let result = construct_valid(&catalog).expect("constructor should find a valid organism");
         assert!(!result.structure.units.is_empty());
         assert!(!result.structure.bonds.is_empty());
-        let cavity =
-            crate::cavity::analyze_genome_cavity(&result.structure, &catalog)
-                .expect("genome analysis should succeed");
+        let cavity = crate::cavity::analyze_genome_cavity(&result.structure, &catalog)
+            .expect("genome analysis should succeed");
         assert!(cavity.is_some_and(|cavity| cavity.qualifies()));
         assert_eq!(result.acquired_resource_placements.len(), 4);
     }
