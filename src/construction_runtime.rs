@@ -446,7 +446,6 @@ fn physical_material_endpoint_local_point(
     endpoint.world_point(&unit, catalog)
 }
 
-
 fn normalize_construction_angle(angle: f64) -> f64 {
     (angle + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI
 }
@@ -473,38 +472,67 @@ fn construction_angle_candidates(
     push_unique(ideal_angle);
 
     match (existing_endpoint, candidate_endpoint) {
-        (ConnectionEndpoint::Corner { point_index: existing_index },
-         ConnectionEndpoint::Corner { point_index: candidate_index }) => {
+        (
+            ConnectionEndpoint::Corner {
+                point_index: existing_index,
+            },
+            ConnectionEndpoint::Corner {
+                point_index: candidate_index,
+            },
+        ) => {
             for angle in crate::rigid_boundary::corner_alignment_rotations(
-                candidate_shape, candidate_index, existing_shape, existing_index, existing_rotation,
+                candidate_shape,
+                candidate_index,
+                existing_shape,
+                existing_index,
+                existing_rotation,
             ) {
                 push_unique(angle - candidate_relative_rotation);
             }
         }
-        (ConnectionEndpoint::LineEndpoint { point_index: existing_index },
-         ConnectionEndpoint::LineEndpoint { point_index: candidate_index }) => {
+        (
+            ConnectionEndpoint::LineEndpoint {
+                point_index: existing_index,
+            },
+            ConnectionEndpoint::LineEndpoint {
+                point_index: candidate_index,
+            },
+        ) => {
             for angle in crate::rigid_boundary::line_endpoint_alignment_rotations(
-                candidate_index, existing_index, existing_rotation,
+                candidate_index,
+                existing_index,
+                existing_rotation,
             ) {
                 push_unique(angle - candidate_relative_rotation);
             }
         }
-        (ConnectionEndpoint::Corner { point_index: existing_index },
-         ConnectionEndpoint::LineEndpoint { point_index: candidate_index }) => {
+        (
+            ConnectionEndpoint::Corner {
+                point_index: existing_index,
+            },
+            ConnectionEndpoint::LineEndpoint {
+                point_index: candidate_index,
+            },
+        ) => {
             if let (Some(a), Some(b)) = (
                 crate::rigid_boundary::corner_normal(existing_shape, existing_index),
                 crate::rigid_boundary::line_endpoint_normal(candidate_shape, candidate_index),
             ) {
                 push_unique(
-                    a.1.atan2(a.0)
-                        + std::f64::consts::PI
+                    a.1.atan2(a.0) + std::f64::consts::PI
                         - b.1.atan2(b.0)
                         - candidate_relative_rotation,
                 );
             }
         }
-        (ConnectionEndpoint::LineEndpoint { point_index: existing_index },
-         ConnectionEndpoint::Corner { point_index: candidate_index }) => {
+        (
+            ConnectionEndpoint::LineEndpoint {
+                point_index: existing_index,
+            },
+            ConnectionEndpoint::Corner {
+                point_index: candidate_index,
+            },
+        ) => {
             if let (Some(a), Some(b)) = (
                 crate::rigid_boundary::line_endpoint_normal(existing_shape, existing_index),
                 crate::rigid_boundary::corner_normal(candidate_shape, candidate_index),
@@ -524,9 +552,7 @@ fn construction_angle_candidates(
     // fallback for irregular cases without returning to a 360-step sweep.
     const COARSE_SAMPLES: usize = 24;
     for step in 0..COARSE_SAMPLES {
-        push_unique(
-            ideal_angle + std::f64::consts::TAU * step as f64 / COARSE_SAMPLES as f64,
-        );
+        push_unique(ideal_angle + std::f64::consts::TAU * step as f64 / COARSE_SAMPLES as f64);
     }
     angles
 }
