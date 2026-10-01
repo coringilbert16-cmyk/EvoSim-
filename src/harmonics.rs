@@ -215,47 +215,6 @@ fn add_spectrum(target: &mut ToneSpectrum, source: &ToneSpectrum, scale: f64) {
     }
 }
 
-fn realized_unit_spectra(
-    structure: &crate::structure::OrganismStructure,
-    catalog: &[crate::resources::BaseResource],
-) -> Vec<ToneSpectrum> {
-    let baselines = ResourceBaselines::from_catalog(catalog);
-    let mut local = Vec::with_capacity(structure.units.len());
-
-    let structural_indices = structure.structural_unit_indices(catalog);
-    let mut is_structural = vec![false; structure.units.len()];
-    for index in structural_indices {
-        if let Some(flag) = is_structural.get_mut(index) {
-            *flag = true;
-        }
-    }
-    for (index, unit) in structure.units.iter().enumerate() {
-        if !is_structural[index] {
-            local.push(ToneSpectrum::empty());
-            continue;
-        }
-        let Some(properties) = unit.properties(catalog) else {
-            local.push(ToneSpectrum::empty());
-            continue;
-        };
-        local.push(material_response(properties, baselines, 0.0));
-    }
-
-    let mut received = local.clone();
-    for bond in &structure.bonds {
-        let Some(a) = structure.unit_index(bond.endpoint_a.constituent_id) else {
-            continue;
-        };
-        let Some(b) = structure.unit_index(bond.endpoint_b.constituent_id) else {
-            continue;
-        };
-        let coupling = bond.strength.clamp(0.0, 1.0);
-        add_spectrum(&mut received[a], &local[b], coupling);
-        add_spectrum(&mut received[b], &local[a], coupling);
-    }
-    received
-}
-
 /// Environmental quantity scales excitation using absolute material mass.
 /// This is a response scale, not a new material property.
 fn environmental_mass_scale(mass: f64, baseline_mass: f64) -> f64 {
@@ -264,116 +223,195 @@ fn environmental_mass_scale(mass: f64, baseline_mass: f64) -> f64 {
     mass / (mass + baseline)
 }
 
-/// The physical genome cavity receives the spectrum present at its realized
-/// boundary. Boundary membership comes only from the actual cavity analysis;
-/// it is never inferred from a blueprint or a hard-coded genome core.
-fn environmental_spectrum_at_position(
-    field: &crate::environment::ActiveMaterialField,
+/// A realized environmental material emits one spectrum as a whole material.
+/// Composition is evaluated through the material's aggregate properties; the
+/// material is never split into independent environmental sensory sources.
+fn environmental_material_resonance(
+    physical: &crate::physical_material::PhysicalMaterial,
     catalog: &[crate::resources::BaseResource],
-    x: f64,
-    y: f64,
-) -> ToneSpectrum {
-    let Some(index) = field.index_for_position(x, y) else {
-        return ToneSpectrum::empty();
-    };
-    let cell = &field.cells[index];
-    let baselines = ResourceBaselines::from_catalog(catalog);
-    let mut spectrum = ToneSpectrum::empty();
+) -> Option<(f64, f64, f64, ToneSpectrum)> {
+    if !physical.material.is_valid() || physical.material.is_empty() {
+        return None;
+    }
+    let placements = physical.placements.as_ref()?;
+    if placements.len() != physical.material.parts.len() || placements.is_empty() {
+        return None;
+    }
 
-    // Organisms only interact with physically realized environmental material.
-    // The legacy logical aggregate remains an environmental bookkeeping layer,
-    // not a physical sensory input.
-    for physical in &cell.physical_materials {
-        if physical.material.is_valid() && !physical.material.is_empty() {
-            let mass = physical.material.mass(catalog);
-            let response = material_response(
-                physical.material.weighted_properties(catalog),
-                baselines,
-                0.0,
-            );
-            add_spectrum(
-                &mut spectrum,
-                &response,
-                environmental_mass_scale(mass, baselines.mass),
-            );
+    let mut source_x = 0.0;
+    let mut source_y = 0.0;
+    for placement in placements {
+        source_x += placement.x;
+        source_y += placement.y;
+    }
+    let count = placements.len() as f64;
+    source_x /= count;
+    source_y /= count;
+
+    let baselines = ResourceBaselines::from_catalog(catalog);
+    let mass = physical.material.mass(catalog);
+    let spectrum = material_response(
+        physical.material.weighted_properties(catalog),
+        baselines,
+        0.0,
+    );
+    let extent = placements
+        .iter()
+        .map(|placement| (placement.x - source_x).hypot(placement.y - source_y))
+        .fold(0.0_f64, f64::max);
+    Some((
+        source_x,
+        source_y,
+        extent,
+        spectrum,
+    ))
+}
+
+/// Calculate one directional environmental contribution at one realized
+/// genome-cavity boundary segment. The segment itself is the receiver: its
+/// physical orientation is the antenna geometry, while the source remains the
+/// complete environmental material.
+fn environmental_contribution(
+    physical: &crate::physical_material::PhysicalMaterial,
+    catalog: &[crate::resources::BaseResource],
+    receiver_a: (f64, f64),
+    receiver_b: (f64, f64),
+    cavity_center: (f64, f64),
+) -> Option<(ResonancePerception, ToneSpectrum)> {
+    let (source_x, source_y, extent, emitted) =
+        environmental_material_resonance(physical, catalog)?;
+    let baselines = ResourceBaselines::from_catalog(catalog);
+    let mass_scale = environmental_mass_scale(physical.material.mass(catalog), baselines.mass);
+
+    let rx = (receiver_a.0 + receiver_b.0) * 0.5;
+    let ry = (receiver_a.1 + receiver_b.1) * 0.5;
+    let dx = source_x - rx;
+    let dy = source_y - ry;
+    let distance = dx.hypot(dy);
+    if !distance.is_finite() || distance <= f64::EPSILON {
+        return None;
+    }
+
+    let edge_x = receiver_b.0 - receiver_a.0;
+    let edge_y = receiver_b.1 - receiver_a.1;
+    let edge_length = edge_x.hypot(edge_y);
+    if edge_length <= f64::EPSILON {
+        return None;
+    }
+
+    let mut normal_x = -edge_y / edge_length;
+    let mut normal_y = edge_x / edge_length;
+    let away_x = rx - cavity_center.0;
+    let away_y = ry - cavity_center.1;
+    if normal_x * away_x + normal_y * away_y < 0.0 {
+        normal_x = -normal_x;
+        normal_y = -normal_y;
+    }
+
+    let incoming_x = dx / distance;
+    let incoming_y = dy / distance;
+    let directional_gain = (normal_x * incoming_x + normal_y * incoming_y).max(0.0);
+    if directional_gain <= f64::EPSILON {
+        return None;
+    }
+
+    // No hard perception radius is introduced. Distance attenuates the aura
+    // continuously, while the receiver's realized boundary geometry controls
+    // directional coupling.
+    let distance_scale = 1.0 / (1.0 + distance);
+    let scale = mass_scale * directional_gain * distance_scale;
+    if scale <= f64::EPSILON {
+        return None;
+    }
+
+    let mut received = ToneSpectrum::empty();
+    add_spectrum(&mut received, &emitted, scale);
+    let magnitude = received
+        .components
+        .iter()
+        .map(|component| component.amplitude.max(0.0))
+        .sum::<f64>();
+    if magnitude <= f64::EPSILON {
+        return None;
+    }
+
+    Some((
+        ResonancePerception {
+            source_x,
+            source_y,
+            extent,
+            spectrum: received.clone(),
+            magnitude,
+        },
+        received,
+    ))
+}
+
+fn cavity_center(cavity: &crate::cavity::GenomeCavity) -> (f64, f64) {
+    let segments = cavity.boundary_segments();
+    if segments.is_empty() {
+        return (0.0, 0.0);
+    }
+    let mut x = 0.0;
+    let mut y = 0.0;
+    let mut count = 0.0;
+    for (a, b, _, _) in segments {
+        x += a.0 + b.0;
+        y += a.1 + b.1;
+        count += 2.0;
+    }
+    (x / count, y / count)
+}
+
+fn environmental_contributions(
+    catalog: &[crate::resources::BaseResource],
+    field: &crate::environment::ActiveMaterialField,
+    cavity: &crate::cavity::GenomeCavity,
+) -> (ToneSpectrum, Vec<ResonancePerception>) {
+    let segments = cavity.boundary_segments();
+    if segments.is_empty() {
+        return (ToneSpectrum::empty(), Vec::new());
+    }
+    let center = cavity_center(cavity);
+    let mut spectrum = ToneSpectrum::empty();
+    let mut perceptions = Vec::new();
+
+    for cell in &field.cells {
+        if cell.physical_materials.is_empty() {
+            continue;
+        }
+        for physical in &cell.physical_materials {
+            for (a, b, _, _) in &segments {
+                if let Some((perception, contribution)) =
+                    environmental_contribution(physical, catalog, *a, *b, center)
+                {
+                    add_spectrum(&mut spectrum, &contribution, 1.0);
+                    perceptions.push(perception);
+                }
+            }
         }
     }
     spectrum.retain_strongest();
-    spectrum
+    (spectrum, perceptions)
 }
 
 pub(crate) fn genome_cavity_spectrum(
-    structure: &crate::structure::OrganismStructure,
     catalog: &[crate::resources::BaseResource],
     field: &crate::environment::ActiveMaterialField,
-    boundary_units: &[usize],
+    cavity: &crate::cavity::GenomeCavity,
 ) -> ToneSpectrum {
-    if boundary_units.is_empty() {
-        return ToneSpectrum::empty();
-    }
-    let received = realized_unit_spectra(structure, catalog);
-    let mut spectrum = ToneSpectrum::empty();
-    let mut count = 0usize;
-
-    for &unit_index in boundary_units {
-        let Some(unit) = structure.units.get(unit_index) else {
-            continue;
-        };
-        let Some(unit_spectrum) = received.get(unit_index) else {
-            continue;
-        };
-        let environmental =
-            environmental_spectrum_at_position(field, catalog, unit.placement.x, unit.placement.y);
-        let mut coupled = unit_spectrum.clone();
-        coupled.merge_from(&environmental, 1.0);
-        add_spectrum(&mut spectrum, &coupled, 1.0 / boundary_units.len() as f64);
-        count += 1;
-    }
-
-    if count == 0 {
-        return ToneSpectrum::empty();
-    }
-    spectrum.retain_strongest();
-    spectrum
+    environmental_contributions(catalog, field, cavity).0
 }
 
-/// Preserve the spatial environmental signals that reached each realized
-/// genome-cavity boundary location before the organism-level spectrum is
-/// aggregated. The source region uses the boundary unit's existing physical
-/// geometry rather than an authored sensor radius.
+/// Preserve one spatially attributed signal for each source/receiver pair.
+/// Keeping these channels separate is what gives downstream interpretation
+/// directional information without creating a separate sensor system.
 pub(crate) fn genome_cavity_resonance_perceptions(
-    structure: &crate::structure::OrganismStructure,
     catalog: &[crate::resources::BaseResource],
     field: &crate::environment::ActiveMaterialField,
-    boundary_units: &[usize],
+    cavity: &crate::cavity::GenomeCavity,
 ) -> Vec<ResonancePerception> {
-    let mut perceptions = Vec::new();
-    for &unit_index in boundary_units {
-        let Some(unit) = structure.units.get(unit_index) else {
-            continue;
-        };
-        let Some(shape) = unit.shape(catalog) else {
-            continue;
-        };
-        let spectrum =
-            environmental_spectrum_at_position(field, catalog, unit.placement.x, unit.placement.y);
-        let magnitude = spectrum
-            .components
-            .iter()
-            .map(|component| component.amplitude.max(0.0))
-            .sum::<f64>();
-        if magnitude <= f64::EPSILON {
-            continue;
-        }
-        perceptions.push(ResonancePerception {
-            source_x: unit.placement.x,
-            source_y: unit.placement.y,
-            extent: shape.form.bounding_radius().max(0.0),
-            spectrum,
-            magnitude,
-        });
-    }
-    perceptions
+    environmental_contributions(catalog, field, cavity).1
 }
 
 /// Return the spatially attributed resonance signals currently reaching the
@@ -390,12 +428,7 @@ pub(crate) fn organism_resonance_perceptions(
     else {
         return Vec::new();
     };
-    genome_cavity_resonance_perceptions(
-        &organism.structure,
-        &environment.catalog,
-        &environment.field,
-        &cavity.boundary_units,
-    )
+    genome_cavity_resonance_perceptions(&environment.catalog, &environment.field, &cavity)
 }
 
 /// Refresh the harmonic state from the organism's actual realized genome
@@ -405,43 +438,20 @@ pub(crate) fn update_organism_harmonics(
     organism: &mut crate::state::Organism,
     environment: &crate::state::Environment,
 ) {
-    let boundary_units = organism
-        .genome_cavity_cached(&environment.catalog)
-        .map(|cavity| cavity.boundary_units);
-    let local_environment_revision = boundary_units
-        .as_ref()
-        .map(|indices| {
-            environment
-                .field
-                .local_revision_for_positions(indices.iter().filter_map(|&index| {
-                    organism
-                        .structure
-                        .units
-                        .get(index)
-                        .map(|unit| (unit.placement.x, unit.placement.y))
-                }))
-        })
-        .unwrap_or(0);
+    let cavity = organism.genome_cavity_cached(&environment.catalog);
     let key = (
         organism.structure_revision,
         organism.position_revision,
-        local_environment_revision,
+        environment.field.revision,
     );
     if organism.cached_harmonic_key == Some(key) {
         return;
     }
 
-    let spectrum = {
-        match boundary_units {
-            Some(boundary_units) => genome_cavity_spectrum(
-                &organism.structure,
-                &environment.catalog,
-                &environment.field,
-                boundary_units.as_slice(),
-            ),
-            None => ToneSpectrum::empty(),
-        }
-    };
+    let spectrum = cavity
+        .as_ref()
+        .map(|cavity| genome_cavity_spectrum(&environment.catalog, &environment.field, cavity))
+        .unwrap_or_default();
 
     organism.harmonic_spectrum = spectrum;
     organism.cached_harmonic_key = Some(key);
@@ -552,14 +562,24 @@ mod tests {
             crate::environment::DEFAULT_CELL_SIZE,
         );
 
-        let baseline = genome_cavity_spectrum(&structure, &catalog, &field, &cavity.boundary_units);
+        let baseline = genome_cavity_spectrum(&catalog, &field, &cavity);
         let boundary = &structure.units[cavity.boundary_units[0]].placement;
-        assert!(field.deposit(
-            boundary.x,
-            boundary.y,
+        let source = crate::physical_material::PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: boundary.x + 40.0,
+                y: boundary.y,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .unwrap();
+        assert!(field.deposit_physical(
+            boundary.x + 40.0,
+            boundary.y,
+            source,
         ));
-        let coupled = genome_cavity_spectrum(&structure, &catalog, &field, &cavity.boundary_units);
+        let coupled = genome_cavity_spectrum(&catalog, &field, &cavity);
 
         let baseline_fundamental = baseline
             .components
@@ -590,55 +610,68 @@ mod tests {
             crate::environment::DEFAULT_CELL_SIZE,
         );
 
-        let received = genome_cavity_spectrum(&structure, &catalog, &field, &cavity.boundary_units);
+        let received = genome_cavity_spectrum(&catalog, &field, &cavity);
+        assert!(received.components.is_empty());
+
+        let boundary = &structure.units[cavity.boundary_units[0]].placement;
+        let source = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: boundary.x + 40.0,
+                y: boundary.y,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .unwrap();
+        let mut field = field;
+        assert!(field.deposit_physical(boundary.x + 40.0, boundary.y, source));
+        let received = genome_cavity_spectrum(&catalog, &field, &cavity);
         assert!(!received.components.is_empty());
 
         structure.bonds.clear();
         assert!(crate::cavity::analyze_genome_cavity(&structure, &catalog)
             .unwrap()
             .is_none());
-        let absent = genome_cavity_spectrum(&structure, &catalog, &field, &[]);
+        let absent = ToneSpectrum::empty();
         assert!(absent.components.is_empty());
     }
 
     #[test]
-    fn resonance_perception_preserves_boundary_location() {
+    fn resonance_perception_preserves_environmental_source_location() {
         let catalog = crate::resources::default_catalog();
         let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
         let (mut structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
-        let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
-            .unwrap()
-            .expect("confirmed seed must contain a genome cavity");
-        // The initial realized structure is centered near the origin, while
-        // the field uses non-negative world coordinates. Translate only this
-        // isolated test fixture into the field's valid coordinate range.
         for unit in &mut structure.units {
             unit.placement.x += 500.0;
             unit.placement.y += 500.0;
         }
+        let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
+            .unwrap()
+            .expect("confirmed seed must contain a genome cavity");
         let mut field = crate::environment::ActiveMaterialField::new(
             1000.0,
             1000.0,
             crate::environment::DEFAULT_CELL_SIZE,
         );
         let boundary = &structure.units[cavity.boundary_units[0]].placement;
-        assert!(field.deposit(
-            boundary.x,
-            boundary.y,
+        let source = crate::physical_material::PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
-        ));
-
-        let perceptions = genome_cavity_resonance_perceptions(
-            &structure,
+            vec![crate::structure::Placement {
+                x: boundary.x + 40.0,
+                y: boundary.y,
+                rotation_radians: 0.0,
+            }],
             &catalog,
-            &field,
-            &cavity.boundary_units,
-        );
+        )
+        .unwrap();
+        assert!(field.deposit_physical(boundary.x + 40.0, boundary.y, source));
+
+        let perceptions = genome_cavity_resonance_perceptions(&catalog, &field, &cavity);
         assert!(!perceptions.is_empty());
         assert!(perceptions.iter().any(|perception| {
-            (perception.source_x - boundary.x).abs() < f64::EPSILON
+            (perception.source_x - (boundary.x + 40.0)).abs() < f64::EPSILON
                 && (perception.source_y - boundary.y).abs() < f64::EPSILON
-                && perception.extent > 0.0
                 && perception.magnitude > 0.0
         }));
     }
