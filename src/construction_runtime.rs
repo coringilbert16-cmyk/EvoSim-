@@ -727,6 +727,28 @@ pub(crate) fn try_attach_physical_material_bond_driven(
     None
 }
 
+fn has_distinct_connection_endpoints(
+    options: &[Vec<ConnectionEndpoint>],
+    depth: usize,
+    used: &mut Vec<ConnectionEndpoint>,
+) -> bool {
+    if depth == options.len() {
+        return true;
+    }
+    for endpoint in &options[depth] {
+        if used.contains(endpoint) {
+            continue;
+        }
+        used.push(*endpoint);
+        if has_distinct_connection_endpoints(options, depth + 1, used) {
+            return true;
+        }
+        used.pop();
+    }
+    false
+}
+
+
 fn realize_next_bond_driven(
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     catalog: &[BaseResource],
