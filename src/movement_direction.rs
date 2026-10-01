@@ -76,6 +76,9 @@ pub(crate) fn movement_direction_periodic(
             .unwrap_or(0.0);
 
         let desirability = spatial_utility + spectral_utility;
+        if !desirability.is_finite() || desirability.abs() <= f64::EPSILON {
+            continue;
+        }
         let score = perception.magnitude.max(0.0) * desirability;
         if !score.is_finite() || score <= selected_score {
             continue;
