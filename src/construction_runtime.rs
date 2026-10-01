@@ -390,7 +390,8 @@ fn blueprint_cavity_reference_world(
     Placement {
         x: anchor_world.x + (reference_x - anchor_declared.x) * c
             - (reference_y - anchor_declared.y) * s,
-        y: anchor_world.y + (reference_x - anchor_declared.x) * s
+        y: anchor_world.y
+            + (reference_x - anchor_declared.x) * s
             + (reference_y - anchor_declared.y) * c,
         rotation_radians: anchor_world.rotation_radians,
     }
@@ -449,7 +450,10 @@ fn candidate_penetrates_measurement(
         return true;
     };
     let vertices = form_vertices_world(&candidate_shape.form, candidate.placement);
-    if vertices.iter().any(|point| point_in_triangle(*point, &triangle_points)) {
+    if vertices
+        .iter()
+        .any(|point| point_in_triangle(*point, &triangle_points))
+    {
         return true;
     }
     let centroid = (
@@ -1037,7 +1041,11 @@ fn construct_blueprint_bond_driven_internal(
             install_genome_measurement_scaffold(
                 &mut structure,
                 scaffold,
-                blueprint_cavity_reference_world(blueprint, genome_anchor, anchor_element.placement),
+                blueprint_cavity_reference_world(
+                    blueprint,
+                    genome_anchor,
+                    anchor_element.placement,
+                ),
                 catalog,
             )
         })
