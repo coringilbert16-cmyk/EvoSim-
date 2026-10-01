@@ -12,7 +12,7 @@ This section is the authoritative reference for the interior/permeability work.
 
 **Status: ACTIVE — current authoritative implementation plan.**
 
-**Current position (2026-10-01):** The constructor architecture has been migrated to the approved forward-only, bond-driven model. Actual physical material selection is integrated. Developmental construction and ordinary COMBINE share the same physical bond-formation authority. Realized structure is authoritative for cavity qualification, and harmonic environmental sensing uses realized physical material rather than logical material. The current work is **focused validation and correction of the constructor/realized-structure layer**, not a redesign of the constructor.
+**Current position (2026-10-01):** The constructor architecture has been migrated to the approved forward-only, bond-driven model. Actual physical material selection is integrated. Developmental construction and ordinary COMBINE share the same physical bond-formation authority. Realized structure is authoritative for cavity qualification, and harmonic environmental sensing uses realized physical material rather than logical material. The current work is **focused validation of the realized cavity → harmonic reception boundary and cleanup of retired constructor/harmonic paths**, not a redesign.
 
 Recent implementation work has included:
 - repairing stale constructor/scaffold call sites after the API migration;
@@ -245,6 +245,6 @@ For every implementation change:
 
 Long simulation runs are appropriate after the focused physical contracts are stable. They are not substitutes for unit/contract validation.
 
-**Current task:** Continue from the constructor/realized-structure validation boundary. The constructor architecture is established. The goal now is to prove it, correct genuine defects without introducing unrelated behavior changes, then move systematically through realized cavity and harmonics before cleaning up downstream test fallout.
+**Current task:** Continue from the realized cavity → harmonic reception validation boundary. The constructor architecture is established and the retired constructor scaffolding has been removed. The goal now is to prove directional harmonic reception, correct genuine defects without introducing unrelated behavior changes, then classify downstream test fallout and remove remaining obsolete paths.
 
 **Non-negotiable:** Do not introduce parallel construction authorities, restore placement-authoritative construction, or add unrelated geometry heuristics merely to satisfy downstream tests.
