@@ -774,116 +774,52 @@ fn realize_next_bond_driven(
                 let ideal_angle =
                     (joint.y - target_y).atan2(joint.x - target_x) - local_b.y.atan2(local_b.x);
 
-                for step in 0..360 {
-                    let offset = std::f64::consts::TAU * step as f64 / 360.0;
-                    let angle = ideal_angle + offset;
+                let mut angles = vec![ideal_angle];
+                angles.extend(preferred_contact_rotations(
+                    existing_unit, endpoint_a, new_material, part_index, endpoint_b, catalog,
+                ));
+                angles.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                angles.dedup_by(|a, b| (*a - *b).abs() <= 1e-10);
+
+                for angle in angles {
                     let candidate_origin =
                         placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
-
                     *nodes += 1;
-
                     let mut trial = structure.clone();
                     let Some(indices) = crate::material_restoration::restore_material(
-                        &mut trial,
-                        new_material,
-                        candidate_origin,
-                        catalog,
-                    ) else {
-                        continue;
-                    };
-
+                        &mut trial, new_material, candidate_origin, catalog,
+                    ) else { continue; };
                     let ignored_units = indices.clone();
                     if indices.iter().any(|index| {
                         placed_unit_overlaps(&trial, &trial.units[*index], &ignored_units, catalog)
-                    }) {
-                        continue;
-                    }
-
+                    }) { continue; }
                     let mut trial_ledger = *ledger;
                     let mut trial_energy = available_energy;
                     let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
-
                     let Some(candidate) = crate::contact::connection_pair_candidates_cached(
-                        &trial,
-                        existing_index,
-                        *indices.get(part_index)?,
-                        catalog,
-                        &mut bond_cache,
-                    )
-                    .into_iter()
-                    .filter(|candidate| {
+                        &trial, existing_index, *indices.get(part_index)?, catalog, &mut bond_cache,
+                    ).into_iter().filter(|candidate| {
                         candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                            && candidate.available_a
-                            && candidate.available_b
-                    })
-                    .min_by(|a, b| {
-                        a.distance
-                            .partial_cmp(&b.distance)
-                            .unwrap_or(std::cmp::Ordering::Equal)
-                            .then_with(|| {
-                                b.facing
-                                    .partial_cmp(&a.facing)
-                                    .unwrap_or(std::cmp::Ordering::Equal)
-                            })
-                    }) else {
-                        continue;
-                    };
-
+                            && candidate.available_a && candidate.available_b
+                    }).min_by(|a, b| a.distance.partial_cmp(&b.distance)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                        .then_with(|| b.facing.partial_cmp(&a.facing).unwrap_or(std::cmp::Ordering::Equal))) else { continue; };
                     let Some((_, _, _, investment, _required_energy)) =
                         crate::combine_runtime::selected_candidate_evaluation(
-                            &trial,
-                            existing_index,
-                            *indices.get(part_index)?,
-                            candidate,
-                            catalog,
-                        )
-                    else {
-                        continue;
-                    };
-
+                            &trial, existing_index, *indices.get(part_index)?, candidate, catalog,
+                        ) else { continue; };
                     let Some(attempt) = crate::combine_runtime::form_selected_bond(
-                        &mut trial,
-                        existing_index,
-                        *indices.get(part_index)?,
-                        candidate,
-                        investment,
-                        catalog,
-                        &mut bond_cache,
-                        &mut trial_ledger,
-                        &mut trial_energy,
-                    ) else {
-                        continue;
-                    };
-
+                        &mut trial, existing_index, *indices.get(part_index)?, candidate,
+                        investment, catalog, &mut bond_cache, &mut trial_ledger, &mut trial_energy,
+                    ) else { continue; };
                     let Some(similarity) = local_blueprint_candidate_score(
-                        blueprint,
-                        _index,
-                        &trial,
-                        &indices,
-                        realized_units,
-                        genome_anchor,
-                        anchor_declared,
-                        candidate,
-                    ) else {
-                        continue;
-                    };
-
-                    if best_candidate
-                        .as_ref()
-                        .is_none_or(|current| similarity > current.0)
-                    {
-                        best_candidate = Some((
-                            similarity,
-                            trial,
-                            indices,
-                            part_index,
-                            attempt,
-                            trial_ledger,
-                            trial_energy,
-                        ));
+                        blueprint, _index, &trial, &indices, realized_units, genome_anchor,
+                        anchor_declared, candidate,
+                    ) else { continue; };
+                    if best_candidate.as_ref().is_none_or(|current| similarity > current.0) {
+                        best_candidate = Some((similarity, trial, indices, part_index, attempt, trial_ledger, trial_energy));
                     }
-                }
-            }
+                }            }
         }
     }
 
