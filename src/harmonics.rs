@@ -377,6 +377,9 @@ fn environmental_contributions(
     let mut perceptions = Vec::new();
 
     for cell in &field.cells {
+        if cell.physical_materials.is_empty() {
+            continue;
+        }
         for physical in &cell.physical_materials {
             for (a, b, _, _) in &segments {
                 if let Some((perception, contribution)) =
