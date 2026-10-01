@@ -790,7 +790,9 @@ mod shape_tests {
         for name in ["Carbon", "Methane", "Sulfur"] {
             let vertices = find(name).shape.form.polygon_vertices().unwrap();
             for i in 0..vertices.len() {
-                assert!((distance(vertices[i], vertices[(i + 1) % vertices.len()]) - 1.0).abs() < 1e-9);
+                assert!(
+                    (distance(vertices[i], vertices[(i + 1) % vertices.len()]) - 1.0).abs() < 1e-9
+                );
             }
         }
 
@@ -806,8 +808,20 @@ mod shape_tests {
         let lengths = (0..phosphorus.len())
             .map(|i| distance(phosphorus[i], phosphorus[(i + 1) % phosphorus.len()]))
             .collect::<Vec<_>>();
-        assert_eq!(lengths.iter().filter(|length| (**length - 1.0).abs() < 1e-9).count(), 2);
-        assert_eq!(lengths.iter().filter(|length| (**length - 0.5).abs() < 1e-9).count(), 4);
+        assert_eq!(
+            lengths
+                .iter()
+                .filter(|length| (**length - 1.0).abs() < 1e-9)
+                .count(),
+            2
+        );
+        assert_eq!(
+            lengths
+                .iter()
+                .filter(|length| (**length - 0.5).abs() < 1e-9)
+                .count(),
+            4
+        );
     }
 
     #[test]
