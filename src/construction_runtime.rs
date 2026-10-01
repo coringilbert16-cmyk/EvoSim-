@@ -691,7 +691,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                 };
 
                 let Some((_, _, _, investment, _required_energy)) =
-                    crate::combine_runtime::construction_candidate_evaluation(
+                    crate::combine_runtime::selected_candidate_evaluation(
                         &trial,
                         existing_index,
                         new_unit_index,
@@ -855,7 +855,7 @@ fn realize_next_bond_driven(
                 };
 
                 let Some((_, _, _, investment, _required_energy)) =
-                    crate::combine_runtime::construction_candidate_evaluation(
+                    crate::combine_runtime::selected_candidate_evaluation(
                         &trial,
                         existing_index,
                         new_unit_index,
@@ -1281,7 +1281,7 @@ fn construct_blueprint_bond_driven_internal(
             }) {
                 contact_candidates += 1;
                 let Some((_, _, _, investment, _)) =
-                    crate::combine_runtime::construction_candidate_evaluation(
+                    crate::combine_runtime::selected_candidate_evaluation(
                         &structure, unit_a, unit_b, candidate, catalog,
                     )
                 else {
