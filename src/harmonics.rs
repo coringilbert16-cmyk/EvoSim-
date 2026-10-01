@@ -602,12 +602,22 @@ mod tests {
 
         let baseline = genome_cavity_spectrum(&catalog, &field, &cavity);
         let boundary = &structure.units[cavity.boundary_units[0]].placement;
-        assert!(field.deposit(
-            boundary.x,
-            boundary.y,
+        let source = crate::physical_material::PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: boundary.x + 40.0,
+                y: boundary.y,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .unwrap();
+        assert!(field.deposit_physical(
+            boundary.x + 40.0,
+            boundary.y,
+            source,
         ));
-        let coupled = genome_cavity_spectrum(&structure, &catalog, &field, &cavity.boundary_units);
+        let coupled = genome_cavity_spectrum(&catalog, &field, &cavity);
 
         let baseline_fundamental = baseline
             .components
@@ -638,7 +648,23 @@ mod tests {
             crate::environment::DEFAULT_CELL_SIZE,
         );
 
-        let received = genome_cavity_spectrum(&structure, &catalog, &field, &cavity.boundary_units);
+        let received = genome_cavity_spectrum(&catalog, &field, &cavity);
+        assert!(received.components.is_empty());
+
+        let boundary = &structure.units[cavity.boundary_units[0]].placement;
+        let source = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: boundary.x + 40.0,
+                y: boundary.y,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .unwrap();
+        let mut field = field;
+        assert!(field.deposit_physical(boundary.x + 40.0, boundary.y, source));
+        let received = genome_cavity_spectrum(&catalog, &field, &cavity);
         assert!(!received.components.is_empty());
 
         structure.bonds.clear();
@@ -667,11 +693,17 @@ mod tests {
             crate::environment::DEFAULT_CELL_SIZE,
         );
         let boundary = &structure.units[cavity.boundary_units[0]].placement;
-        assert!(field.deposit(
-            boundary.x + 40.0,
-            boundary.y,
+        let source = crate::physical_material::PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
-        ));
+            vec![crate::structure::Placement {
+                x: boundary.x + 40.0,
+                y: boundary.y,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .unwrap();
+        assert!(field.deposit_physical(boundary.x + 40.0, boundary.y, source));
 
         let perceptions = genome_cavity_resonance_perceptions(&catalog, &field, &cavity);
         assert!(!perceptions.is_empty());
