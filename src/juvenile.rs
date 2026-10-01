@@ -38,7 +38,7 @@ pub(crate) fn confirmed_seed_baseline(
     // the physically realizable radius-three hexagonal lattice ring instead.
     // It leaves a seven-hexagon-sized central region, comfortably above the
     // three-Carbon cavity measurement reference.
-    let ring_radius = 3i32;
+    let ring_radius_cells = 3i32;
     let spiral_steps = 20usize;
     let carbon_radius = catalog
         .iter()
@@ -58,9 +58,9 @@ pub(crate) fn confirmed_seed_baseline(
     ];
 
     let mut ring_coordinates = Vec::<(i32, i32)>::new();
-    for q in -ring_radius..=ring_radius {
-        for r in -ring_radius..=ring_radius {
-            if (q.abs()).max(r.abs()).max((q + r).abs()) == ring_radius {
+    for q in -ring_radius_cells..=ring_radius_cells {
+        for r in -ring_radius_cells..=ring_radius_cells {
+            if (q.abs()).max(r.abs()).max((q + r).abs()) == ring_radius_cells {
                 ring_coordinates.push((q, r));
             }
         }
@@ -75,7 +75,7 @@ pub(crate) fn confirmed_seed_baseline(
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     let ring_sides = ring_coordinates.len();
-    let ring_extent = ring_radius as f64 * carbon_edge_center_spacing;
+    let ring_extent = ring_radius_cells as f64 * carbon_edge_center_spacing;
 
     let mut elements = Vec::with_capacity(ring_sides + spiral_steps + 6);
 
