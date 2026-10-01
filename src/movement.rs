@@ -1453,8 +1453,7 @@ mod tests {
             spectrum: crate::harmonics::ToneSpectrum::empty(),
             magnitude: 1.0,
         };
-        let (x, y) =
-            movement_direction(&organism, &[perception]).expect("direction should exist");
+        let (x, y) = movement_direction(&organism, &[perception]).expect("direction should exist");
         assert!(x < 0.0);
         assert!(y.abs() < f64::EPSILON);
     }
