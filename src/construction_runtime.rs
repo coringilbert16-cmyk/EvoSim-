@@ -1304,5 +1304,3 @@ mod tests {
             &catalog,
         ));
     }
-
-}
