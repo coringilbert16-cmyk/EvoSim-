@@ -14,7 +14,6 @@ pub(crate) fn movement_direction_periodic(
     perceptions: &[crate::harmonics::ResonancePerception],
 ) -> Option<(f64, f64)> {
     let (px, py) = organism.occupied_cells.first().map(|p| (p.x, p.y))?;
-    let curiosity = organism.genome.curiosity();
 
     let mut selected_score = f64::NEG_INFINITY;
     let mut selected_direction = None;
@@ -97,6 +96,5 @@ pub(crate) fn movement_direction_periodic(
         hash = hash.wrapping_mul(0x100000001b3);
     }
     let angle = (hash as f64 / u64::MAX as f64) * std::f64::consts::TAU;
-    let _ = curiosity;
     Some((angle.cos(), angle.sin()))
 }
