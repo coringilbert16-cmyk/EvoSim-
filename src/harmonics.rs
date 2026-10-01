@@ -280,17 +280,9 @@ fn environmental_spectrum_at_position(
     let baselines = ResourceBaselines::from_catalog(catalog);
     let mut spectrum = ToneSpectrum::empty();
 
-    for material in &cell.materials {
-        if material.is_valid() && !material.is_empty() {
-            let mass = material.mass(catalog);
-            let response = material_response(material.weighted_properties(catalog), baselines, 0.0);
-            add_spectrum(
-                &mut spectrum,
-                &response,
-                environmental_mass_scale(mass, baselines.mass),
-            );
-        }
-    }
+    // Organisms only interact with physically realized environmental material.
+    // The legacy logical aggregate remains an environmental bookkeeping layer,
+    // not a physical sensory input.
     for physical in &cell.physical_materials {
         if physical.material.is_valid() && !physical.material.is_empty() {
             let mass = physical.material.mass(catalog);
