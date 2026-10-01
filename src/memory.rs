@@ -780,24 +780,9 @@ mod tests {
 
     #[test]
     fn memory_capacity_uses_diminishing_area_returns() {
-        let minimum = crate::cavity::GenomeCavity {
-            area: 10.0,
-            boundary_units: Vec::new(),
-            minimum_area: 10.0,
-            boundary_segments: Vec::new(),
-        };
-        let four_times = crate::cavity::GenomeCavity {
-            area: 40.0,
-            boundary_units: Vec::new(),
-            minimum_area: 10.0,
-            boundary_segments: Vec::new(),
-        };
-        let sixteen_times = crate::cavity::GenomeCavity {
-            area: 160.0,
-            boundary_units: Vec::new(),
-            minimum_area: 10.0,
-            boundary_segments: Vec::new(),
-        };
+        let minimum = crate::cavity::GenomeCavity::test_fixture(10.0, 10.0);
+        let four_times = crate::cavity::GenomeCavity::test_fixture(40.0, 10.0);
+        let sixteen_times = crate::cavity::GenomeCavity::test_fixture(160.0, 10.0);
         assert_eq!(memory_capacity(&minimum), 1);
         assert_eq!(memory_capacity(&four_times), 2);
         assert_eq!(memory_capacity(&sixteen_times), 4);
@@ -846,24 +831,9 @@ mod tests {
 
     #[test]
     fn larger_cavity_has_longer_but_diminishing_memory_persistence() {
-        let minimum = crate::cavity::GenomeCavity {
-            area: 10.0,
-            boundary_units: Vec::new(),
-            minimum_area: 10.0,
-            boundary_segments: Vec::new(),
-        };
-        let four_times = crate::cavity::GenomeCavity {
-            area: 40.0,
-            boundary_units: Vec::new(),
-            minimum_area: 10.0,
-            boundary_segments: Vec::new(),
-        };
-        let sixteen_times = crate::cavity::GenomeCavity {
-            area: 160.0,
-            boundary_units: Vec::new(),
-            minimum_area: 10.0,
-            boundary_segments: Vec::new(),
-        };
+        let minimum = crate::cavity::GenomeCavity::test_fixture(10.0, 10.0);
+        let four_times = crate::cavity::GenomeCavity::test_fixture(40.0, 10.0);
+        let sixteen_times = crate::cavity::GenomeCavity::test_fixture(160.0, 10.0);
         let base = memory_decay_for_cavity(&minimum);
         let medium = memory_decay_for_cavity(&four_times);
         let large = memory_decay_for_cavity(&sixteen_times);
