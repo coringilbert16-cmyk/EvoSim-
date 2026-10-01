@@ -530,10 +530,13 @@ fn physical_material_endpoint_options(
                 && resource(catalog, name.as_str())
                     .is_some_and(|resource| resource.physical_state == PhysicalState::Fluid)
             {
-                endpoints.push((
-                    part_index,
-                    ConnectionEndpoint::Boundary { angle_radians: 0.0 },
-                ));
+                if let Some(endpoint) = crate::contact::continuous_endpoint(
+                    &unit,
+                    crate::contact::world_center(&unit),
+                    catalog,
+                ) {
+                    endpoints.push((part_index, endpoint));
+                }
             }
             endpoints
         })
