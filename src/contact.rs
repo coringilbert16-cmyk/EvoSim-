@@ -93,6 +93,89 @@ pub(crate) fn endpoint_indices(
     }
 }
 
+fn rigid_boundary_endpoint(
+    unit: &StructuralUnit,
+    world_dx: f64,
+    world_dy: f64,
+) -> Option<ConnectionEndpoint> {
+    let len = world_dx.hypot(world_dy);
+    if len <= 1e-12 {
+        return None;
+    }
+    let (ux, uy) = (world_dx / len, world_dy / len);
+    let (s, c) = unit.placement.rotation_radians.sin_cos();
+    Some(ConnectionEndpoint::Boundary {
+        angle_radians: (uy * c - ux * s).atan2(ux * c + uy * s),
+    })
+}
+
+fn rigid_surface_candidates(
+    a: &StructuralUnit,
+    b: &StructuralUnit,
+    catalog: &[crate::resources::BaseResource],
+) -> Vec<(ConnectionEndpoint, ConnectionEndpoint)> {
+    let Some(shape_a) = a.shape(catalog) else {
+        return Vec::new();
+    };
+    let Some(shape_b) = b.shape(catalog) else {
+        return Vec::new();
+    };
+    if matches!(shape_a.form, Form::Circle { .. } | Form::Fluid { .. })
+        || matches!(shape_b.form, Form::Circle { .. } | Form::Fluid { .. })
+    {
+        return Vec::new();
+    }
+
+    let dx = b.placement.x - a.placement.x;
+    let dy = b.placement.y - a.placement.y;
+    let distance = dx.hypot(dy);
+    if distance <= 1e-12 {
+        return Vec::new();
+    }
+
+    // The constructor still selects official connection points for placement.
+    // These additional endpoints are only the physical bond locations: a bond
+    // may land anywhere the two rigid boundaries actually touch.
+    let mut out = Vec::new();
+    let center_angle = dy.atan2(dx);
+    for step in -16..=16 {
+        let angle = center_angle + step as f64 * std::f64::consts::PI / 32.0;
+        let (s, c) = angle.sin_cos();
+        if let (Some(ea), Some(eb)) = (
+            rigid_boundary_endpoint(a, c, s),
+            rigid_boundary_endpoint(b, -c, -s),
+        ) {
+            out.push((ea, eb));
+        }
+    }
+
+    // Also aim at every vertex direction. This catches asymmetric contacts
+    // where the closest point on a flat surface is offset from the centerline.
+    for vertex in shape_b.form.polygon_vertices().unwrap_or_default() {
+        let (s, c) = b.placement.rotation_radians.sin_cos();
+        let world_x = b.placement.x + vertex.0 * c - vertex.1 * s;
+        let world_y = b.placement.y + vertex.0 * s + vertex.1 * c;
+        if let (Some(ea), Some(eb)) = (
+            rigid_boundary_endpoint(a, world_x - a.placement.x, world_y - a.placement.y),
+            rigid_boundary_endpoint(b, a.placement.x - world_x, a.placement.y - world_y),
+        ) {
+            out.push((ea, eb));
+        }
+    }
+    for vertex in shape_a.form.polygon_vertices().unwrap_or_default() {
+        let (s, c) = a.placement.rotation_radians.sin_cos();
+        let world_x = a.placement.x + vertex.0 * c - vertex.1 * s;
+        let world_y = a.placement.y + vertex.0 * s + vertex.1 * c;
+        if let (Some(ea), Some(eb)) = (
+            rigid_boundary_endpoint(a, world_x - a.placement.x, world_y - a.placement.y),
+            rigid_boundary_endpoint(b, world_x - b.placement.x, world_y - b.placement.y),
+        ) {
+            out.push((ea, eb));
+        }
+    }
+    out
+}
+
 fn candidate_endpoints(
     a: &StructuralUnit,
     b: &StructuralUnit,
@@ -100,37 +183,36 @@ fn candidate_endpoints(
 ) -> Vec<(ConnectionEndpoint, ConnectionEndpoint)> {
     let ea = endpoint_indices(a, catalog);
     let eb = endpoint_indices(b, catalog);
-    if !ea.is_empty() && !eb.is_empty() {
-        return ea
-            .into_iter()
+    let mut candidates = if !ea.is_empty() && !eb.is_empty() {
+        ea.into_iter()
             .flat_map(|x| eb.iter().copied().map(move |y| (x, y)))
-            .collect();
-    }
-    if !ea.is_empty() {
-        return ea
-            .into_iter()
+            .collect()
+    } else if !ea.is_empty() {
+        ea.into_iter()
             .filter_map(|x| {
                 let wp = endpoint_world_point(x, a, catalog)?;
                 continuous_endpoint(b, wp, catalog).map(|y| (x, y))
             })
-            .collect();
-    }
-    if !eb.is_empty() {
-        return eb
-            .into_iter()
+            .collect()
+    } else if !eb.is_empty() {
+        eb.into_iter()
             .filter_map(|y| {
                 let wp = endpoint_world_point(y, b, catalog)?;
                 continuous_endpoint(a, wp, catalog).map(|x| (x, y))
             })
-            .collect();
-    }
-    match (
-        continuous_endpoint(a, world_center(b), catalog),
-        continuous_endpoint(b, world_center(a), catalog),
-    ) {
-        (Some(a), Some(b)) => vec![(a, b)],
-        _ => Vec::new(),
-    }
+            .collect()
+    } else {
+        match (
+            continuous_endpoint(a, world_center(b), catalog),
+            continuous_endpoint(b, world_center(a), catalog),
+        ) {
+            (Some(a), Some(b)) => vec![(a, b)],
+            _ => Vec::new(),
+        }
+    };
+
+    candidates.extend(rigid_surface_candidates(a, b, catalog));
+    candidates
 }
 
 fn endpoint_world_point(
