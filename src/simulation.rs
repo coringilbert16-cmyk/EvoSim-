@@ -9,7 +9,6 @@ use crate::decision_runtime::{
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
 use crate::genome::initial_genome;
-use crate::juvenile::realize_initial;
 use crate::state::{DevelopmentStage, EnergyLedger, Environment, Organism, Position, Simulation};
 use crate::structure::Placement;
 
@@ -55,11 +54,10 @@ impl Simulation {
     pub(crate) fn create_initial_organism() -> Organism {
         let genome = initial_genome();
         let catalog = crate::resources::default_catalog();
-        let seed_baseline = crate::juvenile::confirmed_seed_baseline(&catalog)
-            .expect("confirmed original seed baseline must be valid");
-        let (mut structure, _construction_ledger, initial_energy) =
-            realize_initial(&seed_baseline, &catalog)
-                .expect("confirmed original seed must be physically realizable");
+        let construction =
+            crate::initial_organism_constructor::construct_valid(&catalog)
+                .expect("blueprint-free constructor must find a valid initial organism");
+        let mut structure = construction.structure;
 
         let anchor = Position { x: 500.0, y: 500.0 };
         for unit in &mut structure.units {
@@ -68,24 +66,29 @@ impl Simulation {
         }
 
         let mut stored_material = crate::material_storage::MaterialStorage::default();
-        let reserve_placements = genome
-            .juvenile_reserve
-            .parts
-            .iter()
-            .enumerate()
-            .map(|(index, _)| Placement {
-                x: anchor.x + (index as f64 - 1.0) * 0.4,
-                y: anchor.y,
-                rotation_radians: 0.0,
-            })
-            .collect();
-        let reserve = crate::physical_material::PhysicalMaterial::realized(
-            genome.juvenile_reserve.clone(),
-            reserve_placements,
-            &catalog,
-        )
-        .expect("juvenile reserve must have a physical realization");
-        assert!(stored_material.store_physical_instance(reserve));
+        for (name, mut placement) in construction.acquired_resource_placements {
+            placement.x += anchor.x;
+            placement.y += anchor.y;
+            let physical = crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base(name, 1.0),
+                vec![placement],
+                &catalog,
+            )
+            .expect("constructor-validated resource must have a physical realization");
+            assert!(stored_material.store_physical_instance_at_owner_anchor(
+                physical,
+                Placement {
+                    x: anchor.x,
+                    y: anchor.y,
+                    rotation_radians: 0.0,
+                },
+            ));
+        }
+
+        let construction_cost = (1.0e12 - construction.energy).max(0.0);
+        let initial_energy =
+            construction_cost + genome.juvenile_energy_reserve;
+
         Organism {
             id: "1".into(),
             developmental_origin: anchor.clone(),
