@@ -1242,6 +1242,73 @@ mod tests {
     }
 
     #[test]
+    fn movement_direction_selects_most_desirable_signal_instead_of_averaging() {
+        let simulation = Simulation::new(7, 20.0);
+        let mut organism = simulation.organisms[0].clone();
+        let origin = organism.occupied_cells[0].clone();
+        organism.experience_memory.spatial.push(crate::memory::SpatialMemory {
+            x: origin.x,
+            y: origin.y - 20.0,
+            extent: 10.0,
+            association: 0.5,
+            association_weight: 1.0,
+            strength: 1.0,
+        });
+        organism.experience_memory.spatial.push(crate::memory::SpatialMemory {
+            x: origin.x + 20.0,
+            y: origin.y,
+            extent: 10.0,
+            association: 1.0,
+            association_weight: 1.0,
+            strength: 1.0,
+        });
+        let perceptions = vec![
+            crate::harmonics::ResonancePerception {
+                source_x: origin.x,
+                source_y: origin.y - 20.0,
+                extent: 10.0,
+                spectrum: crate::harmonics::ToneSpectrum::empty(),
+                magnitude: 1.0,
+            },
+            crate::harmonics::ResonancePerception {
+                source_x: origin.x + 20.0,
+                source_y: origin.y,
+                extent: 10.0,
+                spectrum: crate::harmonics::ToneSpectrum::empty(),
+                magnitude: 1.0,
+            },
+        ];
+        let (x, y) = movement_direction(&organism, &perceptions).expect("direction should exist");
+        assert!(x > 0.0);
+        assert!(y.abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn undesirable_resonance_promotes_movement_away_from_source() {
+        let simulation = Simulation::new(7, 20.0);
+        let mut organism = simulation.organisms[0].clone();
+        let origin = organism.occupied_cells[0].clone();
+        organism.experience_memory.spatial.push(crate::memory::SpatialMemory {
+            x: origin.x + 20.0,
+            y: origin.y,
+            extent: 10.0,
+            association: -1.0,
+            association_weight: 1.0,
+            strength: 1.0,
+        });
+        let perception = crate::harmonics::ResonancePerception {
+            source_x: origin.x + 20.0,
+            source_y: origin.y,
+            extent: 10.0,
+            spectrum: crate::harmonics::ToneSpectrum::empty(),
+            magnitude: 1.0,
+        };
+        let (x, y) = movement_direction(&organism, &[perception]).expect("direction should exist");
+        assert!(x < 0.0);
+        assert!(y.abs() < f64::EPSILON);
+    }
+
+    #[test]
     fn movement_direction_without_inputs_gets_soft_random_push() {
         let simulation = Simulation::new(7, 20.0);
         let organism = simulation.organisms[0].clone();
