@@ -722,130 +722,131 @@ fn realize_next_bond_driven(
             let joint = endpoint_a.world_point(&structure.units[existing_index], catalog)?;
             for (part_index, endpoint_b) in new_endpoints.iter().copied() {
                 let local_b = physical_material_endpoint_local_point(
-                new_material,
-                part_index,
-                endpoint_b,
-                catalog,
+                    new_material,
+                    part_index,
+                    endpoint_b,
+                    catalog,
                 )?;
 
                 // The declared blueprint pose is a preference, not a placement
                 // command. Start at the rotation that puts this physical material's
                 // selected endpoint on the joint while aiming its local endpoint
                 // toward the declared target, then sweep the full circle.
-            let target = blueprint.elements[_index].placement;
+                let target = blueprint.elements[_index].placement;
                 let (s, c) = genome_anchor.rotation_radians.sin_cos();
                 let target_world = (
-                genome_anchor.x + (target.x - anchor_declared.x) * c
-                    - (target.y - anchor_declared.y) * s,
-                genome_anchor.y
-                    + (target.x - anchor_declared.x) * s
-                    + (target.y - anchor_declared.y) * c,
-            );
+                    genome_anchor.x + (target.x - anchor_declared.x) * c
+                        - (target.y - anchor_declared.y) * s,
+                    genome_anchor.y
+                        + (target.x - anchor_declared.x) * s
+                        + (target.y - anchor_declared.y) * c,
+                );
                 let ideal_angle = (joint.y - target_world.1).atan2(joint.x - target_world.0)
-                - local_b.y.atan2(local_b.x);
-            for step in 0..360 {
+                    - local_b.y.atan2(local_b.x);
+                for step in 0..360 {
                     let offset = std::f64::consts::TAU * step as f64 / 360.0;
                     let angle = ideal_angle + offset;
-                let candidate_origin =
-                    placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
+                    let candidate_origin =
+                        placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
                     let target_distance = (candidate_origin.x - target_world.0)
-                    .hypot(candidate_origin.y - target_world.1);
+                        .hypot(candidate_origin.y - target_world.1);
 
                     // Do not prune solely because this pose is farther from the
                     // declared preference than the best candidate found so far.
                     // Physical validity is evaluated only after restoration,
-                // penetration checks, and the shared bond admission. A farther
+                    // penetration checks, and the shared bond admission. A farther
                     // pose may be the first (or only) physically valid one, so
                     // pruning here would silently turn preference into authority.
 
-                *nodes += 1;
-                if *nodes > 500_000 {
-                    return None;
-                }
+                    *nodes += 1;
+                    if *nodes > 500_000 {
+                        return None;
+                    }
 
-                let mut trial = structure.clone();
-                let Some(indices) = crate::material_restoration::restore_material(
-                    &mut trial,
-                    new_material,
-                    candidate_origin,
-                    catalog,
-                ) else {
-                    continue;
-                };
+                    let mut trial = structure.clone();
+                    let Some(indices) = crate::material_restoration::restore_material(
+                        &mut trial,
+                        new_material,
+                        candidate_origin,
+                        catalog,
+                    ) else {
+                        continue;
+                    };
 
-                let new_unit_index = *indices.get(part_index)?;
+                    let new_unit_index = *indices.get(part_index)?;
 
-                if let Some(scaffold) = blueprint.genome_measurement.as_ref() {
+                    if let Some(scaffold) = blueprint.genome_measurement.as_ref() {
+                        if indices.iter().any(|index| {
+                            candidate_penetrates_measurement(
+                                &trial.units[*index],
+                                scaffold,
+                                blueprint_cavity_reference_world(
+                                    blueprint,
+                                    genome_anchor,
+                                    anchor_declared,
+                                ),
+                                catalog,
+                            )
+                        }) {
+                            continue;
+                        }
+                    }
+
+                    let ignored_units = indices.clone();
                     if indices.iter().any(|index| {
-                        candidate_penetrates_measurement(
-                            &trial.units[*index],
-                            scaffold,
-                            blueprint_cavity_reference_world(
-                                blueprint,
-                                genome_anchor,
-                                anchor_declared,
-                            ),
-                            catalog,
-                        )
+                        placed_unit_overlaps(&trial, &trial.units[*index], &ignored_units, catalog)
                     }) {
                         continue;
                     }
-                }
 
-                let ignored_units = indices.clone();
-                if indices.iter().any(|index| {
-                    placed_unit_overlaps(&trial, &trial.units[*index], &ignored_units, catalog)
-                }) {
-                    continue;
-                }
+                    let mut trial_ledger = *ledger;
+                    let mut trial_energy = available_energy;
+                    let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
 
-                let mut trial_ledger = *ledger;
-                let mut trial_energy = available_energy;
-                let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
-
-                let Some(candidate) = crate::contact::connection_pair_candidates_cached(
-                    &trial,
-                    existing_index,
-                    new_unit_index,
-                    catalog,
-                    &mut bond_cache,
-                )
-                .into_iter()
-                .find(|candidate| {
-                    candidate.endpoint_a == endpoint_a
-                        && candidate.endpoint_b == endpoint_b
-                        && candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                        && candidate.available_a
-                        && candidate.available_b
-                }) else {
-                    continue;
-                };
-
-                let Some((_, _, _, investment, _required_energy)) =
-                    crate::combine_runtime::selected_candidate_evaluation(
+                    let Some(candidate) = crate::contact::connection_pair_candidates_cached(
                         &trial,
                         existing_index,
                         new_unit_index,
-                        candidate,
                         catalog,
+                        &mut bond_cache,
                     )
-                else {
-                    continue;
-                };
+                    .into_iter()
+                    .find(|candidate| {
+                        candidate.endpoint_a == endpoint_a
+                            && candidate.endpoint_b == endpoint_b
+                            && candidate.distance
+                                <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                            && candidate.available_a
+                            && candidate.available_b
+                    }) else {
+                        continue;
+                    };
 
-                let Some(attempt) = crate::combine_runtime::form_selected_bond(
-                    &mut trial,
-                    existing_index,
-                    new_unit_index,
-                    candidate,
-                    investment,
-                    catalog,
-                    &mut bond_cache,
-                    &mut trial_ledger,
-                    &mut trial_energy,
-                ) else {
-                    continue;
-                };
+                    let Some((_, _, _, investment, _required_energy)) =
+                        crate::combine_runtime::selected_candidate_evaluation(
+                            &trial,
+                            existing_index,
+                            new_unit_index,
+                            candidate,
+                            catalog,
+                        )
+                    else {
+                        continue;
+                    };
+
+                    let Some(attempt) = crate::combine_runtime::form_selected_bond(
+                        &mut trial,
+                        existing_index,
+                        new_unit_index,
+                        candidate,
+                        investment,
+                        catalog,
+                        &mut bond_cache,
+                        &mut trial_ledger,
+                        &mut trial_energy,
+                    ) else {
+                        continue;
+                    };
 
                     if best_candidate
                         .as_ref()
