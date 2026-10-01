@@ -303,7 +303,7 @@ mod tests {
                     rotation_radians: 0.0,
                 },
                 crate::structure::Placement {
-                    x: 0.838,
+                    x: 1.5,
                     y: 0.0,
                     rotation_radians: 0.0,
                 },
