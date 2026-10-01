@@ -31,21 +31,13 @@ mod integration_tests {
         assert!(matches!(o.development_stage, DevelopmentStage::Juvenile));
         let stored = o.stored_material.materials_snapshot();
         assert_eq!(stored.len(), 4);
-        assert!(stored.iter().any(|material| {
-            material
-                .parts
-                .iter()
-                .any(|(name, _)| name == "Water")
-        }));
+        assert!(stored
+            .iter()
+            .any(|material| { material.parts.iter().any(|(name, _)| name == "Water") }));
         assert_eq!(
             stored
                 .iter()
-                .filter(|material| {
-                    material
-                        .parts
-                        .iter()
-                        .all(|(name, _)| name != "Water")
-                })
+                .filter(|material| { material.parts.iter().all(|(name, _)| name != "Water") })
                 .count(),
             3
         );
