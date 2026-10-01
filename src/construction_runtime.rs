@@ -932,7 +932,7 @@ fn construct_blueprint_bond_driven_internal(
         let candidate_resources = if let Some(storage) = available_materials.as_deref() {
             let ranked = rank_available_construction_materials(storage, &preferred, catalog)
                 .map_err(|e| e.to_string())?;
-            let mut candidates = ranked
+            let candidates = ranked
                 .iter()
                 .filter(|(storage_index, _, score)| {
                     !reserved_storage_indices.contains(storage_index)
