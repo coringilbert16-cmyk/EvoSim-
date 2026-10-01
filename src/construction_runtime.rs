@@ -719,7 +719,7 @@ fn realize_next_bond_driven(
         f64,
     )> = None;
 
-    for existing_index in existing_indices {
+    'search: for existing_index in existing_indices {
         let existing_unit = structure.units.get(existing_index)?;
         let existing_endpoints = structure_unit_endpoint_options(existing_unit, catalog);
         for endpoint_a in existing_endpoints {
@@ -746,7 +746,7 @@ fn realize_next_bond_driven(
 
                     *nodes += 1;
                     if *nodes > 5_000 {
-                        return None;
+                        break 'search;
                     }
 
                     let mut trial = structure.clone();
