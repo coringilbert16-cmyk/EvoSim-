@@ -266,38 +266,99 @@ fn structure_unit_endpoint_options(
 }
 
 fn preferred_contact_rotations(
-    existing_unit: &StructuralUnit, endpoint_a: ConnectionEndpoint,
-    new_material: &crate::physical_material::PhysicalMaterial, part_index: usize,
-    endpoint_b: ConnectionEndpoint, catalog: &[BaseResource],
+    existing_unit: &StructuralUnit,
+    endpoint_a: ConnectionEndpoint,
+    new_material: &crate::physical_material::PhysicalMaterial,
+    part_index: usize,
+    endpoint_b: ConnectionEndpoint,
+    catalog: &[BaseResource],
 ) -> Vec<f64> {
-    let Some(existing_shape) = existing_unit.shape(catalog) else { return Vec::new(); };
-    let Some(placements) = new_material.placements.as_ref() else { return Vec::new(); };
-    let Some((name, amount)) = new_material.material.parts.get(part_index) else { return Vec::new(); };
-    let Some(placement) = placements.get(part_index).copied() else { return Vec::new(); };
+    let Some(existing_shape) = existing_unit.shape(catalog) else {
+        return Vec::new();
+    };
+    let Some(placements) = new_material.placements.as_ref() else {
+        return Vec::new();
+    };
+    let Some((name, amount)) = new_material.material.parts.get(part_index) else {
+        return Vec::new();
+    };
+    let Some(placement) = placements.get(part_index).copied() else {
+        return Vec::new();
+    };
     let Some(candidate_unit) = StructuralUnit::from_material(
-        crate::resources::Material::free_base(name.clone(), *amount), placement
-    ) else { return Vec::new(); };
-    let Some(candidate_shape) = candidate_unit.shape(catalog) else { return Vec::new(); };
+        crate::resources::Material::free_base(name.clone(), *amount),
+        placement,
+    ) else {
+        return Vec::new();
+    };
+    let Some(candidate_shape) = candidate_unit.shape(catalog) else {
+        return Vec::new();
+    };
     let mut out = Vec::new();
     let mut push = |angle: f64| {
-        let angle = (angle + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI;
-        if !out.iter().any(|x: &f64| (*x - angle).abs() <= 1e-10) { out.push(angle); }
+        let angle =
+            (angle + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI;
+        if !out.iter().any(|x: &f64| (*x - angle).abs() <= 1e-10) {
+            out.push(angle);
+        }
     };
     match (endpoint_a, endpoint_b) {
-        (ConnectionEndpoint::Corner { point_index: a }, ConnectionEndpoint::Corner { point_index: b }) => {
-            for angle in crate::rigid_boundary::corner_alignment_rotations(candidate_shape, b, existing_shape, a, existing_unit.placement.rotation_radians) { push(angle); }
-        }
-        (ConnectionEndpoint::LineEndpoint { point_index: a }, ConnectionEndpoint::LineEndpoint { point_index: b }) => {
-            for angle in crate::rigid_boundary::line_endpoint_alignment_rotations(b, a, existing_unit.placement.rotation_radians) { push(angle); }
-        }
-        (ConnectionEndpoint::LineEndpoint { point_index: a }, ConnectionEndpoint::Corner { point_index: b }) => {
-            if let (Some(cn), Some(en)) = (crate::rigid_boundary::corner_normal(candidate_shape, b), crate::rigid_boundary::line_endpoint_normal(existing_shape, a)) {
-                push(existing_unit.placement.rotation_radians + en.1.atan2(en.0) + std::f64::consts::PI - cn.1.atan2(cn.0));
+        (
+            ConnectionEndpoint::Corner { point_index: a },
+            ConnectionEndpoint::Corner { point_index: b },
+        ) => {
+            for angle in crate::rigid_boundary::corner_alignment_rotations(
+                candidate_shape,
+                b,
+                existing_shape,
+                a,
+                existing_unit.placement.rotation_radians,
+            ) {
+                push(angle);
             }
         }
-        (ConnectionEndpoint::Corner { point_index: a }, ConnectionEndpoint::LineEndpoint { point_index: b }) => {
-            if let (Some(cn), Some(en)) = (crate::rigid_boundary::line_endpoint_normal(candidate_shape, b), crate::rigid_boundary::corner_normal(existing_shape, a)) {
-                push(existing_unit.placement.rotation_radians + en.1.atan2(en.0) + std::f64::consts::PI - cn.1.atan2(cn.0));
+        (
+            ConnectionEndpoint::LineEndpoint { point_index: a },
+            ConnectionEndpoint::LineEndpoint { point_index: b },
+        ) => {
+            for angle in crate::rigid_boundary::line_endpoint_alignment_rotations(
+                b,
+                a,
+                existing_unit.placement.rotation_radians,
+            ) {
+                push(angle);
+            }
+        }
+        (
+            ConnectionEndpoint::LineEndpoint { point_index: a },
+            ConnectionEndpoint::Corner { point_index: b },
+        ) => {
+            if let (Some(cn), Some(en)) = (
+                crate::rigid_boundary::corner_normal(candidate_shape, b),
+                crate::rigid_boundary::line_endpoint_normal(existing_shape, a),
+            ) {
+                push(
+                    existing_unit.placement.rotation_radians
+                        + en.1.atan2(en.0)
+                        + std::f64::consts::PI
+                        - cn.1.atan2(cn.0),
+                );
+            }
+        }
+        (
+            ConnectionEndpoint::Corner { point_index: a },
+            ConnectionEndpoint::LineEndpoint { point_index: b },
+        ) => {
+            if let (Some(cn), Some(en)) = (
+                crate::rigid_boundary::line_endpoint_normal(candidate_shape, b),
+                crate::rigid_boundary::corner_normal(existing_shape, a),
+            ) {
+                push(
+                    existing_unit.placement.rotation_radians
+                        + en.1.atan2(en.0)
+                        + std::f64::consts::PI
+                        - cn.1.atan2(cn.0),
+                );
             }
         }
         _ => {}
@@ -776,7 +837,12 @@ fn realize_next_bond_driven(
 
                 let mut angles = vec![ideal_angle];
                 angles.extend(preferred_contact_rotations(
-                    existing_unit, endpoint_a, new_material, part_index, endpoint_b, catalog,
+                    existing_unit,
+                    endpoint_a,
+                    new_material,
+                    part_index,
+                    endpoint_b,
+                    catalog,
                 ));
                 angles.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                 angles.dedup_by(|a, b| (*a - *b).abs() <= 1e-10);
@@ -787,39 +853,99 @@ fn realize_next_bond_driven(
                     *nodes += 1;
                     let mut trial = structure.clone();
                     let Some(indices) = crate::material_restoration::restore_material(
-                        &mut trial, new_material, candidate_origin, catalog,
-                    ) else { continue; };
+                        &mut trial,
+                        new_material,
+                        candidate_origin,
+                        catalog,
+                    ) else {
+                        continue;
+                    };
                     let ignored_units = indices.clone();
                     if indices.iter().any(|index| {
                         placed_unit_overlaps(&trial, &trial.units[*index], &ignored_units, catalog)
-                    }) { continue; }
+                    }) {
+                        continue;
+                    }
                     let mut trial_ledger = *ledger;
                     let mut trial_energy = available_energy;
                     let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
                     let Some(candidate) = crate::contact::connection_pair_candidates_cached(
-                        &trial, existing_index, *indices.get(part_index)?, catalog, &mut bond_cache,
-                    ).into_iter().filter(|candidate| {
+                        &trial,
+                        existing_index,
+                        *indices.get(part_index)?,
+                        catalog,
+                        &mut bond_cache,
+                    )
+                    .into_iter()
+                    .filter(|candidate| {
                         candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                            && candidate.available_a && candidate.available_b
-                    }).min_by(|a, b| a.distance.partial_cmp(&b.distance)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                        .then_with(|| b.facing.partial_cmp(&a.facing).unwrap_or(std::cmp::Ordering::Equal))) else { continue; };
+                            && candidate.available_a
+                            && candidate.available_b
+                    })
+                    .min_by(|a, b| {
+                        a.distance
+                            .partial_cmp(&b.distance)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                            .then_with(|| {
+                                b.facing
+                                    .partial_cmp(&a.facing)
+                                    .unwrap_or(std::cmp::Ordering::Equal)
+                            })
+                    }) else {
+                        continue;
+                    };
                     let Some((_, _, _, investment, _required_energy)) =
                         crate::combine_runtime::selected_candidate_evaluation(
-                            &trial, existing_index, *indices.get(part_index)?, candidate, catalog,
-                        ) else { continue; };
+                            &trial,
+                            existing_index,
+                            *indices.get(part_index)?,
+                            candidate,
+                            catalog,
+                        )
+                    else {
+                        continue;
+                    };
                     let Some(attempt) = crate::combine_runtime::form_selected_bond(
-                        &mut trial, existing_index, *indices.get(part_index)?, candidate,
-                        investment, catalog, &mut bond_cache, &mut trial_ledger, &mut trial_energy,
-                    ) else { continue; };
+                        &mut trial,
+                        existing_index,
+                        *indices.get(part_index)?,
+                        candidate,
+                        investment,
+                        catalog,
+                        &mut bond_cache,
+                        &mut trial_ledger,
+                        &mut trial_energy,
+                    ) else {
+                        continue;
+                    };
                     let Some(similarity) = local_blueprint_candidate_score(
-                        blueprint, _index, &trial, &indices, realized_units, genome_anchor,
-                        anchor_declared, candidate,
-                    ) else { continue; };
-                    if best_candidate.as_ref().is_none_or(|current| similarity > current.0) {
-                        best_candidate = Some((similarity, trial, indices, part_index, attempt, trial_ledger, trial_energy));
+                        blueprint,
+                        _index,
+                        &trial,
+                        &indices,
+                        realized_units,
+                        genome_anchor,
+                        anchor_declared,
+                        candidate,
+                    ) else {
+                        continue;
+                    };
+                    if best_candidate
+                        .as_ref()
+                        .is_none_or(|current| similarity > current.0)
+                    {
+                        best_candidate = Some((
+                            similarity,
+                            trial,
+                            indices,
+                            part_index,
+                            attempt,
+                            trial_ledger,
+                            trial_energy,
+                        ));
                     }
-                }            }
+                }
+            }
         }
     }
 
