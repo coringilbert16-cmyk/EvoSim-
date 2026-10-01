@@ -163,7 +163,7 @@ impl GenomeCavity {
 
                         let resolve = |endpoint: crate::connection_geometry::ConnectionEndpoint,
                                        unit_index: usize|
-                        -> Option<Point> {
+                         -> Option<Point> {
                             let unit = structure.units.get(unit_index)?;
                             let world = endpoint.world_point(unit, catalog)?;
                             Some(Point {
