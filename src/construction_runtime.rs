@@ -690,6 +690,7 @@ fn realize_next_bond_driven(
     ledger: &EnergyLedger,
     available_energy: f64,
 ) -> Option<(
+    f64,
     OrganismStructure,
     Vec<usize>,
     usize,
@@ -740,9 +741,6 @@ fn realize_next_bond_driven(
                         placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
 
                     *nodes += 1;
-                    if *nodes > 5_000 {
-                        break 'search;
-                    }
 
                     let mut trial = structure.clone();
                     let Some(indices) = crate::material_restoration::restore_material(
@@ -817,7 +815,7 @@ fn realize_next_bond_driven(
                         continue;
                     };
 
-                    let Some(score) = local_blueprint_candidate_score(
+                    let Some(similarity) = local_blueprint_candidate_score(
                         blueprint,
                         _index,
                         &trial,
@@ -832,10 +830,10 @@ fn realize_next_bond_driven(
 
                     if best_candidate
                         .as_ref()
-                        .is_none_or(|current| score < current.0)
+                        .is_none_or(|current| similarity > current.0)
                     {
                         best_candidate = Some((
-                            score,
+                            similarity,
                             trial,
                             indices,
                             part_index,
@@ -850,8 +848,9 @@ fn realize_next_bond_driven(
     }
 
     best_candidate.map(
-        |(_, trial, indices, part_index, attempt, trial_ledger, trial_energy)| {
+        |(similarity, trial, indices, part_index, attempt, trial_ledger, trial_energy)| {
             (
+                similarity,
                 trial,
                 indices,
                 part_index,
@@ -1091,12 +1090,21 @@ fn construct_blueprint_bond_driven_internal(
             ));
         }
 
-        let mut attached = false;
-        // A not-yet-realized element may have more than one realized blueprint
-        // neighbor. Each neighbor is an independently valid forward anchor;
-        // failure against one must not strand the element when another neighbor
-        // can admit the same physical material through the shared bond authority.
-        'neighbors: for neighbor in neighbors.iter().copied() {
+        // Search every available material and every realized neighbor completely
+        // before committing. Each material contact point gets its own 360-degree
+        // angular sweep. Only physically valid candidates reach similarity scoring.
+        let mut best_attachment: Option<(
+            f64,
+            OrganismStructure,
+            Vec<usize>,
+            crate::combine_runtime::CombineAttempt,
+            EnergyLedger,
+            f64,
+            usize,
+            usize,
+        )> = None;
+
+        for neighbor in neighbors.iter().copied() {
             for (storage_index, candidate_name, _) in candidate_resources.iter().cloned() {
                 let candidate_instance = if let Some(storage) = available_materials.as_deref() {
                     let Some(crate::material_storage::StoredMaterial::Physical(instance)) =
@@ -1125,9 +1133,9 @@ fn construct_blueprint_bond_driven_internal(
                 };
 
                 if let Some((
+                    similarity,
                     trial_structure,
                     new_indices,
-                    _part_index,
                     trial_attempt,
                     trial_ledger,
                     trial_energy,
@@ -1145,39 +1153,58 @@ fn construct_blueprint_bond_driven_internal(
                     &construction_ledger,
                     remaining_energy,
                 ) {
-                    construction_ledger = trial_ledger;
-                    remaining_energy = trial_energy;
-                    total_heat += trial_attempt.work_cost;
-                    structure = trial_structure;
-                    realized[index] = true;
-                    realized_units[index] = Some(new_indices.clone());
-                    if storage_index != usize::MAX {
-                        reserved_storage_indices.push(storage_index);
+                    if best_attachment
+                        .as_ref()
+                        .is_none_or(|current| similarity > current.0)
+                    {
+                        best_attachment = Some((
+                            similarity,
+                            trial_structure,
+                            new_indices,
+                            trial_attempt,
+                            trial_ledger,
+                            trial_energy,
+                            storage_index,
+                            neighbor,
+                        ));
                     }
-                    // This successful construction step created the physical
-                    // bond for the prescribed edge that selected this neighbor.
-                    // Record that edge now; later closure work only handles
-                    // edges that were not already realized by a forward bond.
-                    for (connection_index, connection) in blueprint.connections.iter().enumerate() {
-                        if (connection.element_a == index && connection.element_b == neighbor)
-                            || (connection.element_a == neighbor && connection.element_b == index)
-                        {
-                            closed_connections[connection_index] = true;
-                            break;
-                        }
-                    }
-                    attached = true;
-                    break 'neighbors;
                 }
             }
         }
 
-        if !attached {
+        let Some((
+            _similarity,
+            trial_structure,
+            new_indices,
+            trial_attempt,
+            trial_ledger,
+            trial_energy,
+            storage_index,
+            neighbor,
+        )) = best_attachment
+        else {
             return Err(format!(
                 "no forward bond-driven placement found for blueprint element {index} after {nodes} placement attempts"
             ));
+        };
+
+        construction_ledger = trial_ledger;
+        remaining_energy = trial_energy;
+        total_heat += trial_attempt.work_cost;
+        structure = trial_structure;
+        realized[index] = true;
+        realized_units[index] = Some(new_indices.clone());
+        if storage_index != usize::MAX {
+            reserved_storage_indices.push(storage_index);
         }
-    }
+        for (connection_index, connection) in blueprint.connections.iter().enumerate() {
+            if (connection.element_a == index && connection.element_b == neighbor)
+                || (connection.element_a == neighbor && connection.element_b == index)
+            {
+                closed_connections[connection_index] = true;
+                break;
+            }
+        }
 
     // All elements now have permanent physical poses. Any blueprint bonds
     // between already-realized elements are completed as ordinary, single-bond
