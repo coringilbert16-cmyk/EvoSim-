@@ -83,7 +83,7 @@ pub(crate) fn confirmed_seed_baseline(
 
     for &i in &[0usize, 3, 6, 9] {
         let angle = std::f64::consts::TAU * i as f64 / 10.0;
-        let radius = ring_radius + 0.95;
+        let radius = ring_radius + 3.0;
         elements.push(BlueprintElement {
             material: Material::free_base("Sulfur", 1.0),
             placement: BlueprintPlacement {
@@ -96,7 +96,7 @@ pub(crate) fn confirmed_seed_baseline(
 
     for &i in &[2usize, 7] {
         let angle = std::f64::consts::TAU * i as f64 / 10.0;
-        let radius = ring_radius + 1.05;
+        let radius = ring_radius + 3.0;
         elements.push(BlueprintElement {
             material: Material::free_base("Methane", 1.0),
             placement: BlueprintPlacement {
