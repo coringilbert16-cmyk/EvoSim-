@@ -146,7 +146,7 @@ impl Form {
             Form::RegularPolygon { sides, radius } => {
                 *sides >= 3 && radius.is_finite() && *radius > 0.0
             }
-            Form::Polygon { vertices } => polygon_geometry_is_valid(vertices)
+            Form::Polygon { vertices } => polygon_geometry_is_valid(vertices),
             Form::Fluid {
                 nominal_area,
                 boundary,
