@@ -820,7 +820,7 @@ fn realize_next_bond_driven(
                             blueprint_cavity_reference_world(
                                 blueprint,
                                 genome_anchor,
-                                anchor_element.placement,
+                                anchor_declared,
                             ),
                             catalog,
                         )
@@ -1515,13 +1515,8 @@ mod tests {
             &mut structure,
             &scaffold,
             Placement {
-                x: 10.0,
+                x: 8.0,
                 y: 20.0,
-                rotation_radians: 0.0,
-            },
-            BlueprintPlacement {
-                x: 2.0,
-                y: 0.0,
                 rotation_radians: 0.0,
             },
             &catalog,
@@ -1594,11 +1589,6 @@ mod tests {
             &mut structure,
             &scaffold,
             Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-            BlueprintPlacement {
                 x: 0.0,
                 y: 0.0,
                 rotation_radians: 0.0,
