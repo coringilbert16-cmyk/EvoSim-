@@ -146,6 +146,7 @@ fn select_movement_distance(
     usable_energy: f64,
     rng: &mut ChaCha8Rng,
 ) -> Option<f64> {
+    let curiosity = organism.genome.curiosity();
     let one_step_cost = movement_energy_cost_for_distance(realized_mass, movement_efficiency, 1.0);
     let affordable: Vec<f64> =
         if one_step_cost.is_finite() && one_step_cost <= usable_energy + f64::EPSILON {
@@ -176,7 +177,10 @@ fn select_movement_distance(
             crate::decision::ActionKind::Move,
             Some(&movement_context_key(distance)),
         ) else {
-            scored.push((distance, 0_i8));
+            let exploration = curiosity
+                * (distance / MOVEMENT_DISTANCE_OPTIONS[MOVEMENT_DISTANCE_OPTIONS.len() - 1])
+                    .clamp(0.0, 1.0);
+            scored.push((distance, exploration));
             continue;
         };
 
@@ -196,10 +200,13 @@ fn select_movement_distance(
         ));
     }
 
-    let best_score = scored.iter().map(|(_, score)| *score).max()?;
+    let best_score = scored
+        .iter()
+        .map(|(_, score)| *score)
+        .fold(f64::NEG_INFINITY, f64::max);
     let tied: Vec<f64> = scored
         .into_iter()
-        .filter(|(_, score)| *score == best_score)
+        .filter(|(_, score)| (*score - best_score).abs() <= f64::EPSILON)
         .map(|(distance, _)| distance)
         .collect();
     tied.get(rng.gen_range(0..tied.len())).copied()
