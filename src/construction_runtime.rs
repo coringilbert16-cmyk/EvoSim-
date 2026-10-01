@@ -1168,6 +1168,14 @@ fn construct_blueprint_bond_driven_internal(
             if progressed {
                 break;
             }
+            if let Some((connection_index, element_a, element_b, total_candidates, contact_candidates, evaluated_candidates, rejected_by_bond_admission)) = failed_diagnostic {
+                return Err(format!(
+                    "construction closure failed: connection={connection_index} elements=({element_a},{element_b}) candidates={total_candidates} contacts={contact_candidates} evaluated={evaluated_candidates} rejected={rejected_by_bond_admission}"
+                ));
+            }
+            return Err("construction closure made no progress".to_string());
+        }
+    }
 
     Ok((structure, total_heat))
 }
