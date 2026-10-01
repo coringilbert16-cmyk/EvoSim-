@@ -784,16 +784,19 @@ mod tests {
             area: 10.0,
             boundary_units: Vec::new(),
             minimum_area: 10.0,
+            boundary_segments: Vec::new(),
         };
         let four_times = crate::cavity::GenomeCavity {
             area: 40.0,
             boundary_units: Vec::new(),
             minimum_area: 10.0,
+            boundary_segments: Vec::new(),
         };
         let sixteen_times = crate::cavity::GenomeCavity {
             area: 160.0,
             boundary_units: Vec::new(),
             minimum_area: 10.0,
+            boundary_segments: Vec::new(),
         };
         assert_eq!(memory_capacity(&minimum), 1);
         assert_eq!(memory_capacity(&four_times), 2);
