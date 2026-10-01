@@ -356,25 +356,61 @@ fn point_inside_form(form: &Form, placement: Placement, x: f64, y: f64) -> bool 
     }
 }
 
+fn blueprint_cavity_reference_world(
+    blueprint: &crate::structural_blueprint::StructuralBlueprint,
+    anchor_world: Placement,
+    anchor_declared: BlueprintPlacement,
+) -> Placement {
+    let mut degrees = vec![0usize; blueprint.elements.len()];
+    for connection in &blueprint.connections {
+        degrees[connection.element_a] += 1;
+        degrees[connection.element_b] += 1;
+    }
+    let mut count = 0usize;
+    let mut x = 0.0;
+    let mut y = 0.0;
+    for (index, element) in blueprint.elements.iter().enumerate() {
+        if degrees[index] < 2 {
+            continue;
+        }
+        count += 1;
+        x += element.placement.x;
+        y += element.placement.y;
+    }
+    if count == 0 {
+        for element in &blueprint.elements {
+            count += 1;
+            x += element.placement.x;
+            y += element.placement.y;
+        }
+    }
+    let reference_x = x / count.max(1) as f64;
+    let reference_y = y / count.max(1) as f64;
+    let (s, c) = anchor_world.rotation_radians.sin_cos();
+    Placement {
+        x: anchor_world.x + (reference_x - anchor_declared.x) * c
+            - (reference_y - anchor_declared.y) * s,
+        y: anchor_world.y + (reference_x - anchor_declared.x) * s
+            + (reference_y - anchor_declared.y) * c,
+        rotation_radians: anchor_world.rotation_radians,
+    }
+}
+
 fn candidate_penetrates_measurement(
     candidate: &StructuralUnit,
     scaffold: &crate::structural_blueprint::GenomeMeasurementScaffold,
-    anchor_world: Placement,
-    anchor_declared: BlueprintPlacement,
+    scaffold_origin: Placement,
     catalog: &[BaseResource],
 ) -> bool {
     let Some(carbon) = resource(catalog, "Carbon") else {
         return true;
     };
     let transform = |placement: BlueprintPlacement| {
-        let (s, c) = anchor_world.rotation_radians.sin_cos();
+        let (s, c) = scaffold_origin.rotation_radians.sin_cos();
         Placement {
-            x: anchor_world.x + (placement.x - anchor_declared.x) * c
-                - (placement.y - anchor_declared.y) * s,
-            y: anchor_world.y
-                + (placement.x - anchor_declared.x) * s
-                + (placement.y - anchor_declared.y) * c,
-            rotation_radians: anchor_world.rotation_radians + placement.rotation_radians,
+            x: scaffold_origin.x + placement.x * c - placement.y * s,
+            y: scaffold_origin.y + placement.x * s + placement.y * c,
+            rotation_radians: scaffold_origin.rotation_radians + placement.rotation_radians,
         }
     };
     for placement in scaffold.placements {
@@ -413,25 +449,19 @@ fn candidate_penetrates_measurement(
         return true;
     };
     let vertices = form_vertices_world(&candidate_shape.form, candidate.placement);
-    if vertices
-        .iter()
-        .any(|point| point_in_triangle(*point, &triangle_points))
-    {
+    if vertices.iter().any(|point| point_in_triangle(*point, &triangle_points)) {
         return true;
     }
     let centroid = (
         (triangle_points[0].0 + triangle_points[1].0 + triangle_points[2].0) / 3.0,
         (triangle_points[0].1 + triangle_points[1].1 + triangle_points[2].1) / 3.0,
     );
-    if point_inside_form(
+    point_inside_form(
         &candidate_shape.form,
         candidate.placement,
         centroid.0,
         centroid.1,
-    ) {
-        return true;
-    }
-    false
+    )
 }
 
 pub(crate) fn placement_penetrates_genome_measurement(
@@ -444,40 +474,26 @@ pub(crate) fn placement_penetrates_genome_measurement(
     if !candidate.realize_default_geometry(catalog) {
         return true;
     }
-    candidate_penetrates_measurement(
-        &candidate,
-        scaffold,
-        placement,
-        BlueprintPlacement {
-            x: 0.0,
-            y: 0.0,
-            rotation_radians: 0.0,
-        },
-        catalog,
-    )
+    candidate_penetrates_measurement(&candidate, scaffold, placement, catalog)
 }
 
 fn install_genome_measurement_scaffold(
     structure: &mut OrganismStructure,
     scaffold: &crate::structural_blueprint::GenomeMeasurementScaffold,
-    anchor_world: Placement,
-    anchor_declared: BlueprintPlacement,
+    scaffold_origin: Placement,
     catalog: &[BaseResource],
 ) -> Result<Vec<crate::structure::PhysicalConstituentId>, String> {
     let carbon = resource(catalog, "Carbon")
         .ok_or_else(|| "genome measurement scaffold requires Carbon".to_string())?;
     let transform = |p: BlueprintPlacement| {
-        let (s, c) = anchor_world.rotation_radians.sin_cos();
+        let (s, c) = scaffold_origin.rotation_radians.sin_cos();
         Placement {
-            x: anchor_world.x + (p.x - anchor_declared.x) * c - (p.y - anchor_declared.y) * s,
-            y: anchor_world.y + (p.x - anchor_declared.x) * s + (p.y - anchor_declared.y) * c,
-            rotation_radians: anchor_world.rotation_radians + p.rotation_radians,
+            x: scaffold_origin.x + p.x * c - p.y * s,
+            y: scaffold_origin.y + p.x * s + p.y * c,
+            rotation_radians: scaffold_origin.rotation_radians + p.rotation_radians,
         }
     };
 
-    // These are real temporary physical constituents, deliberately outside the
-    // organism's material inventory. Their only job is to occupy the measured
-    // genome volume while construction proceeds around them.
     let mut indices = [0usize; 3];
     for (slot, placement) in scaffold.placements.into_iter().enumerate() {
         let mut unit = StructuralUnit::new(carbon.name.clone(), transform(placement));
@@ -810,8 +826,11 @@ fn realize_next_bond_driven(
                         candidate_penetrates_measurement(
                             &trial.units[*index],
                             scaffold,
-                            genome_anchor,
-                            anchor_declared,
+                            blueprint_cavity_reference_world(
+                                blueprint,
+                                genome_anchor,
+                                anchor_element.placement,
+                            ),
                             catalog,
                         )
                     }) {
@@ -1031,8 +1050,7 @@ fn construct_blueprint_bond_driven_internal(
             install_genome_measurement_scaffold(
                 &mut structure,
                 scaffold,
-                genome_anchor,
-                anchor_element.placement,
+                blueprint_cavity_reference_world(blueprint, genome_anchor, anchor_element.placement),
                 catalog,
             )
         })
