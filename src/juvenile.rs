@@ -46,8 +46,8 @@ pub(crate) fn confirmed_seed_baseline(
         })
         .ok_or_else(|| "Carbon seed geometry is not a regular polygon".to_string())?;
     let carbon_edge_center_spacing = (3.0_f64).sqrt() * carbon_radius;
-    let ring_radius = carbon_edge_center_spacing
-        / (2.0 * (std::f64::consts::PI / ring_sides as f64).sin());
+    let ring_radius =
+        carbon_edge_center_spacing / (2.0 * (std::f64::consts::PI / ring_sides as f64).sin());
     let mut elements = Vec::with_capacity(ring_sides + 6);
 
     for i in 0..ring_sides {
