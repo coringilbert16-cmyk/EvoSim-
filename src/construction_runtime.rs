@@ -558,13 +558,7 @@ fn realize_next_bond_driven(
                 )
                 .into_iter()
                 .filter(|candidate| {
-                    matches!(
-                        (candidate.endpoint_a, candidate.endpoint_b),
-                        (
-                            crate::structure::ConnectionEndpoint::Boundary { .. },
-                            crate::structure::ConnectionEndpoint::Boundary { .. }
-                        )
-                    ) && candidate.distance <= SURFACE_CONTACT_TOLERANCE
+                    candidate.distance <= SURFACE_CONTACT_TOLERANCE
                         && candidate.available_a
                         && candidate.available_b
                 })
