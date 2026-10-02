@@ -194,13 +194,25 @@ impl<'de> Deserialize<'de> for StructuralUnit {
 }
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 pub enum ConnectionEndpoint {
-    Corner { point_index: usize },
-    LineEndpoint { point_index: usize },
-    Boundary { angle_radians: f64 },
+    Corner {
+        point_index: usize,
+    },
+    LineEndpoint {
+        point_index: usize,
+    },
+    Boundary {
+        angle_radians: f64,
+    },
     /// A persistent point on a rigid surface edge. The edge index identifies
     /// the physical face and fraction identifies the point along that face.
-    Surface { edge_index: usize, fraction: f64 },
-    Fluid { x: f64, y: f64 },
+    Surface {
+        edge_index: usize,
+        fraction: f64,
+    },
+    Fluid {
+        x: f64,
+        y: f64,
+    },
 }
 #[derive(Serialize, Clone, Copy, Debug, PartialEq)]
 pub struct BondEndpoint {
@@ -286,9 +298,13 @@ impl ConnectionEndpoint {
                     unit.placement.rotation_radians,
                 ))
             }
-            Self::Surface { edge_index, fraction } => {
+            Self::Surface {
+                edge_index,
+                fraction,
+            } => {
                 let shape = unit.shape(catalog)?;
-                let surface = crate::surface_geometry::surface_point(shape, edge_index, fraction)?;
+                let surface =
+                    crate::surface_geometry::surface_point(shape, edge_index, fraction)?;
                 Some(crate::connection_geometry::transform_derived_point(
                     surface.x,
                     surface.y,
