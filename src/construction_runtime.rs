@@ -41,7 +41,6 @@ fn commit_reserved_storage(
     Ok(())
 }
 
-
 fn placement(p: BlueprintPlacement) -> Placement {
     Placement {
         x: p.x,
@@ -209,7 +208,11 @@ pub(crate) fn candidate_placements(
                 &target_shape,
                 unit.placement,
                 &resource.shape,
-                Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
             )
         } else {
             crate::rigid_boundary::surface_alignment_placements(
@@ -446,8 +449,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     new_unit_index,
                     candidate,
                     catalog,
-                )
-            else {
+                ) else {
                 continue;
             };
 
@@ -623,8 +625,7 @@ fn realize_next_bond_driven(
                     new_material,
                     candidate_origin,
                     catalog,
-                )
-                else {
+                ) else {
                     continue;
                 };
 
@@ -927,8 +928,7 @@ fn close_one_realized_blueprint_connection(
                         .as_ref()
                         .is_none_or(|current| score > current.0);
                     if replace {
-                        best_connection =
-                            Some((score, trial, attempt, trial_ledger, trial_energy));
+                        best_connection = Some((score, trial, attempt, trial_ledger, trial_energy));
                     }
                 }
             }
@@ -988,7 +988,6 @@ pub(crate) fn construct_blueprint_bond_driven_with_materials(
         Some(available_materials),
     )
 }
-
 
 const CONSTRUCTOR_LOOKAHEAD_DEPTH: usize = 10;
 const CONSTRUCTOR_LOOKAHEAD_NODE_BUDGET: usize = 512;
@@ -1209,7 +1208,7 @@ fn construct_blueprint_bond_driven_internal(
                 *score >= crate::construction_material_selection::MIN_CONSTRUCTION_MATERIAL_MATCH
                     && !reserved_storage_indices.contains(storage_index)
             })
-.map(|(storage_index, _, _)| storage_index)
+            .map(|(storage_index, _, _)| storage_index)
             .ok_or_else(|| {
                 "construction has no usable physical material for its initial structure".to_string()
             })?;
@@ -1293,8 +1292,9 @@ fn construct_blueprint_bond_driven_internal(
                 .map_err(|e| e.to_string())?;
             let candidates = ranked
                 .iter()
-                .filter(|(storage_index, _, score)| {
-                    *score >= crate::construction_material_selection::MIN_CONSTRUCTION_MATERIAL_MATCH
+                 .filter(|(storage_index, _, score)| {
+                    *score
+                        >= crate::construction_material_selection::MIN_CONSTRUCTION_MATERIAL_MATCH
                         && !reserved_storage_indices.contains(storage_index)
                 })
                 .cloned()
