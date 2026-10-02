@@ -459,14 +459,11 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     if index == existing_index {
                         continue;
                     }
-                    let distance = (placement.x - unit.placement.x)
-                        .hypot(placement.y - unit.placement.y);
+                    let distance =
+                        (placement.x - unit.placement.x).hypot(placement.y - unit.placement.y);
                     nearest = nearest.min(distance);
                     if let Some(shape) = unit.shape(catalog) {
-                        if distance
-                            <= radius
-                                + shape.form.bounding_radius()
-                                + SURFACE_CONTACT_TOLERANCE
+                        if distance <= radius + shape.form.bounding_radius() + SURFACE_CONTACT_TOLERANCE
                         {
                             nearby = nearby.saturating_add(1).min(2);
                         }
