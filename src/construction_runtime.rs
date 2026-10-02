@@ -884,13 +884,31 @@ fn construct_blueprint_bond_driven_internal(
             break;
         }
 
-        let mut attached = false;
-        // Any already-realized developmental element may contribute a physical
-        // frontier unit. Blueprint connectivity is therefore a ranking signal
-        // inside candidate scoring, not a prerequisite for attachment.
-        'frontier: for neighbor in
-            (0..blueprint.elements.len()).filter(|candidate| realized[*candidate])
-        {
+        // Search the whole realized frontier before committing this
+        // developmental addition. Blueprint order and frontier order are
+        // preferences; the first physically valid attachment must not become
+        // an accidental hard constraint.
+        let mut best_developmental: Option<(
+            f64,
+            usize,
+            OrganismStructure,
+            Vec<usize>,
+            usize,
+            crate::combine_runtime::CombineAttempt,
+            EnergyLedger,
+            f64,
+        )> = None;
+
+        let target = blueprint.elements[index].placement;
+        let (s, c) = genome_anchor.rotation_radians.sin_cos();
+        let target_world = (
+            genome_anchor.x + (target.x - anchor_element.placement.x) * c
+                - (target.y - anchor_element.placement.y) * s,
+            genome_anchor.y + (target.x - anchor_element.placement.x) * s
+                + (target.y - anchor_element.placement.y) * c,
+        );
+
+        for neighbor in (0..blueprint.elements.len()).filter(|candidate| realized[*candidate]) {
             for (storage_index, candidate_name, _) in candidate_resources.iter().cloned() {
                 let candidate_instance = if let Some(storage) = available_materials.as_deref() {
                     let Some(crate::material_storage::StoredMaterial::Physical(instance)) =
@@ -918,10 +936,10 @@ fn construct_blueprint_bond_driven_internal(
                     })?
                 };
 
-                if let Some((
+                let Some((
                     trial_structure,
                     new_indices,
-                    _part_index,
+                    part_index,
                     trial_attempt,
                     trial_ledger,
                     trial_energy,
@@ -938,33 +956,62 @@ fn construct_blueprint_bond_driven_internal(
                     &mut nodes,
                     &construction_ledger,
                     remaining_energy,
-                ) {
-                    construction_ledger = trial_ledger;
-                    remaining_energy = trial_energy;
-                    total_heat += trial_attempt.work_cost;
-                    structure = trial_structure;
-                    realized[index] = true;
-                    realized_units[index] = Some(new_indices.clone());
-                    if storage_index != usize::MAX {
-                        reserved_storage_indices.push(storage_index);
-                    }
-                    attached = true;
+                ) else {
+                    continue;
+                };
 
-                    // Viability is a physical milestone, not a blueprint
-                    // milestone. Stop as soon as the realized structure itself
-                    // satisfies the existing cavity contract.
-                    if crate::cavity::analyze_genome_cavity(&structure, catalog)
-                        .is_some_and(|cavity| cavity.qualifies())
-                    {
-                        *ledger = construction_ledger;
-                        *energy = remaining_energy;
-                        return Ok((structure, total_heat));
-                    }
+                let Some(new_index) = new_indices.get(part_index).copied() else {
+                    continue;
+                };
+                let Some(new_unit) = trial_structure.units.get(new_index) else {
+                    continue;
+                };
+                let target_distance =
+                    (new_unit.placement.x - target_world.0).hypot(new_unit.placement.y - target_world.1);
 
-                    break 'frontier;
+                let better = best_developmental.as_ref().is_none_or(|current| {
+                    target_distance < current.0
+                        || (target_distance == current.0 && storage_index < current.1)
+                });
+                if better {
+                    best_developmental = Some((
+                        target_distance,
+                        storage_index,
+                        trial_structure,
+                        new_indices,
+                        part_index,
+                        trial_attempt,
+                        trial_ledger,
+                        trial_energy,
+                    ));
                 }
             }
         }
+
+        let attached = if let Some((
+            _target_distance,
+            storage_index,
+            trial_structure,
+            new_indices,
+            _part_index,
+            trial_attempt,
+            trial_ledger,
+            trial_energy,
+        )) = best_developmental
+        {
+            construction_ledger = trial_ledger;
+            remaining_energy = trial_energy;
+            total_heat += trial_attempt.work_cost;
+            structure = trial_structure;
+            realized[index] = true;
+            realized_units[index] = Some(new_indices);
+            if storage_index != usize::MAX {
+                reserved_storage_indices.push(storage_index);
+            }
+            true
+        } else {
+            false
+        };
 
         if !attached {
             // The developmental request could not be realized from the current
