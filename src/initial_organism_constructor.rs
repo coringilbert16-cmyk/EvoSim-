@@ -254,17 +254,6 @@ fn try_close_with_new_unit(
         )?;
         let new_index = *indices.first()?;
 
-        if crate::material_geometry::placed_forms_penetrate(
-            &trial.units[new_index].shape(catalog)?.form,
-            trial.units[new_index].placement,
-            &trial.units[..new_index]
-                .iter()
-                .filter_map(|unit| unit.shape(catalog).map(|shape| (shape.form, unit.placement)))
-                .collect::<Vec<_>>(),
-        ) {
-            continue;
-        }
-
         let mut trial_ledger = *ledger;
         let mut trial_energy = energy;
 
