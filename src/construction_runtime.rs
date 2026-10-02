@@ -339,8 +339,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
         if (*amount - 1.0).abs() > 1e-9 {
             continue;
         }
-        let Some(candidate_shape) = resource(catalog, name).map(|resource| &resource.shape)
-            else {
+        let Some(candidate_shape) = resource(catalog, name).map(|resource| &resource.shape) else {
             continue;
         };
 
@@ -715,8 +714,7 @@ fn realize_next_bond_driven(
                     topology_score > current.0
                         || (topology_score == current.0
                             && (target_distance < current.1
-                                || (target_distance == current.1
-                                    && rotation_error < current.2)))
+                                || (target_distance == current.1 && rotation_error < current.2)))
                 });
                 if better {
                     best_candidate = Some((
