@@ -141,6 +141,13 @@ fn valid_construction(
     catalog: &[BaseResource],
     acquisition_candidates: &[&BaseResource],
 ) -> Option<Vec<(String, Placement)>> {
+    // A qualifying genome cavity requires a closed physical loop. Avoid the
+    // expensive cavity/interior analysis while the realized structure is still
+    // necessarily acyclic.
+    if structure.bonds.len() < structure.units.len() {
+        return None;
+    }
+
     let cavity = crate::cavity::analyze_genome_cavity(structure, catalog)
         .ok()
         .flatten()?;
@@ -275,7 +282,6 @@ fn free_form_search(
     acquisition_candidates: &[&BaseResource],
     mut ledger: EnergyLedger,
     mut energy: f64,
-    _depth: usize,
     nodes: &mut usize,
 ) -> Option<ValidConstruction> {
     // Blueprint-free construction is a forward local-growth process. At each
@@ -345,9 +351,7 @@ fn free_form_search(
                     );
 
                 let score = (future_bonds, indices.len(), facing, -distance);
-                let replace = best
-                    .as_ref()
-                    .is_none_or(|current| score > current.0);
+                let replace = best.as_ref().is_none_or(|current| score > current.0);
                 if replace {
                     best = Some((score, trial, indices, trial_ledger, trial_energy));
                 }
@@ -423,7 +427,6 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
             &acquisition_candidates,
             EnergyLedger::default(),
             SEARCH_ENERGY,
-            1,
             &mut nodes,
         ) {
             return Ok(result);
