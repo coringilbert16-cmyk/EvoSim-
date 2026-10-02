@@ -21,6 +21,113 @@ fn placement(p: BlueprintPlacement) -> Placement {
         rotation_radians: p.rotation_radians,
     }
 }
+
+/// Construction uses a stricter geometric contact check than COMBINE's
+/// generic admission tolerance. Face-length compatibility and physical
+/// contact are separate concepts: the former may differ by 0.5, while a
+/// face-driven construction placement must actually put its selected
+/// boundaries at the same physical location.
+const SURFACE_CONTACT_TOLERANCE: f64 = 1.0e-8;
+
+fn normalize_angle(angle: f64) -> f64 {
+    (angle + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU)
+        - std::f64::consts::PI
+}
+
+/// Explicit non-polygon construction path for curved boundaries. A circle has
+/// no face to enumerate, so it is placed boundary-to-boundary against sampled
+/// target boundary directions rather than being silently treated as a polygon.
+fn circle_boundary_placements(
+    target_shape: &crate::resources::Shape,
+    target_placement: Placement,
+    candidate_shape: &crate::resources::Shape,
+) -> Vec<Placement> {
+    let crate::resources::Form::Circle {
+        radius: candidate_radius,
+    } = candidate_shape.form
+    else {
+        return Vec::new();
+    };
+
+    let mut out = Vec::new();
+    for step in 0..32 {
+        let angle = step as f64 * std::f64::consts::TAU / 32.0;
+        let (s, c) = angle.sin_cos();
+        let Some(target_boundary) =
+            crate::surface_geometry::boundary_point_toward(target_shape, c, s)
+        else {
+            continue;
+        };
+        let (rs, rc) = target_placement.rotation_radians.sin_cos();
+        let point = (
+            target_placement.x + target_boundary.x * rc - target_boundary.y * rs,
+            target_placement.y + target_boundary.x * rs + target_boundary.y * rc,
+        );
+        let normal = (
+            target_boundary.normal_x * rc - target_boundary.normal_y * rs,
+            target_boundary.normal_x * rs + target_boundary.normal_y * rc,
+        );
+        out.push(Placement {
+            x: point.0 + normal.0 * candidate_radius,
+            y: point.1 + normal.1 * candidate_radius,
+            rotation_radians: 0.0,
+        });
+    }
+    out
+}
+
+/// Compatibility wrapper retained for the existing runtime callers. The
+/// placement generator is now surface-driven; it no longer enumerates
+/// corner-to-corner angles.
+pub(crate) fn candidate_placements(
+    structure: &OrganismStructure,
+    resource: &BaseResource,
+    anchor: Placement,
+    targets: &[usize],
+    catalog: &[BaseResource],
+) -> Vec<Placement> {
+    let mut out = vec![anchor];
+
+    for &target in targets {
+        let Some(unit) = structure.units.get(target) else {
+            continue;
+        };
+        let Some(target_shape) = unit.shape(catalog) else {
+            continue;
+        };
+
+        let placements = if matches!(resource.shape.form, Form::Circle { .. }) {
+            circle_boundary_placements(&target_shape, unit.placement, &resource.shape)
+        } else if matches!(target_shape.form, Form::Circle { .. }) {
+            Vec::new()
+        } else {
+            crate::rigid_boundary::surface_alignment_placements(
+                &target_shape,
+                unit.placement,
+                &resource.shape,
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            )
+        };
+        out.extend(placements);
+    }
+
+    out.sort_by(|a, b| {
+        (a.x - anchor.x)
+            .hypot(a.y - anchor.y)
+            .partial_cmp(&(b.x - anchor.x).hypot(b.y - anchor.y))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    out.dedup_by(|a, b| {
+        (a.x - b.x).abs() <= 1.0e-10
+            && (a.y - b.y).abs() <= 1.0e-10
+            && normalize_angle(a.rotation_radians - b.rotation_radians).abs() <= 1.0e-10
+    });
+    out
+}
 pub(crate) fn placed_unit_overlaps(
     structure: &OrganismStructure,
     candidate: &StructuralUnit,
@@ -300,8 +407,20 @@ fn realize_next_bond_driven(
             + (target.x - anchor_declared.x) * s
             + (target.y - anchor_declared.y) * c,
     );
+    let target_rotation = normalize_angle(
+        genome_anchor.rotation_radians
+            + target.rotation_radians
+            - anchor_declared.rotation_radians,
+    );
 
+    // Candidate score is a preference only. Physical validity is established
+    // first; among valid placements, prefer candidates that already satisfy
+    // more of the element's required realized-neighbor topology, then match
+    // the declared position and orientation.
     let mut best_candidate: Option<(
+        usize,
+        f64,
+        f64,
         f64,
         OrganismStructure,
         Vec<usize>,
@@ -426,13 +545,60 @@ fn realize_next_bond_driven(
                 let actual_candidate = trial.units[new_unit_index].placement;
                 let target_distance = (actual_candidate.x - target_world.0)
                     .hypot(actual_candidate.y - target_world.1);
+                let rotation_error =
+                    normalize_angle(actual_candidate.rotation_radians - target_rotation).abs();
 
-                if best_candidate
-                    .as_ref()
-                    .is_none_or(|current| target_distance < current.0)
-                {
+                let mut topology_score = 1usize;
+                for required_neighbor in already_realized_neighbors(blueprint, index, &realized) {
+                    if required_neighbor == neighbor {
+                        continue;
+                    }
+                    let Some(neighbor_units) = realized_units[required_neighbor].as_ref() else {
+                        continue;
+                    };
+                    let closes_neighbor = neighbor_units.iter().any(|&neighbor_unit| {
+                        crate::contact::connection_pair_candidates_cached(
+                            &trial,
+                            new_unit_index,
+                            neighbor_unit,
+                            catalog,
+                            &mut crate::contact::ConnectionCompatibilityCache::new(),
+                        )
+                        .into_iter()
+                        .filter(|candidate| {
+                            candidate.distance <= SURFACE_CONTACT_TOLERANCE
+                                && candidate.available_a
+                                && candidate.available_b
+                        })
+                        .any(|candidate| {
+                            crate::combine_runtime::selected_candidate_evaluation(
+                                &trial,
+                                new_unit_index,
+                                neighbor_unit,
+                                candidate,
+                                catalog,
+                            )
+                            .is_some()
+                        })
+                    });
+                    if closes_neighbor {
+                        topology_score += 1;
+                    }
+                }
+
+                let better = best_candidate.as_ref().is_none_or(|current| {
+                    topology_score > current.0
+                        || (topology_score == current.0
+                            && (target_distance < current.1
+                                || (target_distance == current.1
+                                    && rotation_error < current.2)))
+                });
+                if better {
                     best_candidate = Some((
+                        topology_score,
                         target_distance,
+                        rotation_error,
+                        candidate.distance,
                         trial,
                         indices,
                         part_index,
@@ -446,7 +612,18 @@ fn realize_next_bond_driven(
     }
 
     best_candidate.map(
-        |(_, trial, indices, part_index, attempt, trial_ledger, trial_energy)| {
+        |(
+            _topology_score,
+            _target_distance,
+            _rotation_error,
+            _contact_distance,
+            trial,
+            indices,
+            part_index,
+            attempt,
+            trial_ledger,
+            trial_energy,
+        )| {
             (
                 trial,
                 indices,
