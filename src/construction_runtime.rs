@@ -1374,6 +1374,7 @@ fn construct_blueprint_bond_driven_internal(
         if crate::cavity::analyze_genome_cavity(&structure, catalog)
             .is_some_and(|cavity| cavity.qualifies())
         {
+            commit_reserved_storage(&mut available_materials, &reserved_storage_indices)?;
             *ledger = construction_ledger;
             *energy = remaining_energy;
             return Ok((structure, total_heat));
