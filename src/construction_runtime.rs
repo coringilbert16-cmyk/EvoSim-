@@ -1292,7 +1292,7 @@ fn construct_blueprint_bond_driven_internal(
                 .map_err(|e| e.to_string())?;
             let candidates = ranked
                 .iter()
-                 .filter(|(storage_index, _, score)| {
+                .filter(|(storage_index, _, score)| {
                     *score
                         >= crate::construction_material_selection::MIN_CONSTRUCTION_MATERIAL_MATCH
                         && !reserved_storage_indices.contains(storage_index)
