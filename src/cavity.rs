@@ -2,7 +2,7 @@
 //! Physical genome-cavity qualification from realized rigid geometry.
 
 use crate::resources::{BaseResource, Form};
-use crate::structure::{ConnectionEndpoint, OrganismStructure, Placement};
+use crate::structure::{OrganismStructure, Placement};
 use std::collections::{HashMap, HashSet};
 use std::f64::consts::TAU;
 
