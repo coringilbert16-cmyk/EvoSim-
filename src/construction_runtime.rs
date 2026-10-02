@@ -1216,4 +1216,340 @@ fn construct_blueprint_bond_driven_internal(
                 };
                 let Some(new_unit) = trial_structure.units.get(new_index) else {
                     continue;
-                };
+                };                let target_distance = (new_unit.placement.x - target_world.0)
+                    .hypot(new_unit.placement.y - target_world.1);
+
+                let mut lookahead_realized = realized.clone();
+                let mut lookahead_units = realized_units.clone();
+                lookahead_realized[index] = true;
+                lookahead_units[index] = Some(new_indices.clone());
+                let mut lookahead_used_storage = reserved_storage_indices.clone();
+                if storage_index != usize::MAX {
+                    lookahead_used_storage.push(storage_index);
+                }
+                let lookahead_depth = developmental_lookahead_depth(
+                    blueprint,
+                    catalog,
+                    &trial_structure,
+                    &lookahead_units,
+                    &lookahead_realized,
+                    genome_anchor,
+                    anchor_element.placement,
+                    available_materials.as_deref(),
+                    &reserved_storage_indices,
+                    &lookahead_used_storage,
+                    1,
+                    &mut nodes,
+                    &trial_ledger,
+                    trial_energy,
+                );
+
+                let better = best_developmental.as_ref().is_none_or(|current| {
+                    lookahead_depth > current.0
+                        || (lookahead_depth == current.0
+                            && (topology_score > current.1
+                                || (topology_score == current.1
+                                    && (target_distance < current.2
+                                        || (target_distance == current.2
+                                            && storage_index < current.3)))))
+                });
+                if better {
+                    best_developmental = Some((
+                        lookahead_depth,
+                        topology_score,
+                        target_distance,
+                        storage_index,
+                        trial_structure,
+                        new_indices,
+                        part_index,
+                        trial_attempt,
+                        trial_ledger,
+                        trial_energy,
+                    ));
+                }
+            }
+        }
+
+        let attached = if let Some((
+            _lookahead_depth,
+            _topology_score,
+            _target_distance,
+            storage_index,
+            trial_structure,
+            new_indices,
+            _part_index,
+            trial_attempt,
+            trial_ledger,
+            trial_energy,
+        )) = best_developmental
+        {
+            construction_ledger = trial_ledger;
+            remaining_energy = trial_energy;
+            total_heat += trial_attempt.work_cost;
+            structure = trial_structure;
+            realized[index] = true;
+            realized_units[index] = Some(new_indices);
+            if storage_index != usize::MAX {
+                reserved_storage_indices.push(storage_index);
+            }
+            deferred_elements.fill(false);
+            true
+        } else {
+            false
+        };
+
+        if !attached {
+            // One blocked developmental request does not block the rest of the
+            // blueprint. Defer it, try another unrealized developmental goal,
+            // and revisit this one after any successful physical growth.
+            deferred_elements[index] = true;
+        }
+
+        // Placement and bond closure are separate forward-only steps. A new
+        // unit may already be physically touching another realized unit, but
+        // that contact does not become a bond merely because the placement
+        // happened to touch it. Close one still-open blueprint edge at a time,
+        // without moving or undoing any committed structure.
+        while let Some((closed_structure, attempt, closed_ledger, closed_energy)) =
+            close_one_realized_blueprint_connection(
+                blueprint,
+                catalog,
+                &structure,
+                &realized_units,
+                &construction_ledger,
+                remaining_energy,
+            )
+        {
+            structure = closed_structure;
+            construction_ledger = closed_ledger;
+            remaining_energy = closed_energy;
+            total_heat += attempt.work_cost;
+        }
+    }
+
+    // All developmental elements may be realized before the last prescribed
+    // physical edges become bondable. Run the same bond-only closure pass once
+    // more before abandoning the developmental phase.
+    while let Some((closed_structure, attempt, closed_ledger, closed_energy)) =
+        close_one_realized_blueprint_connection(
+            blueprint,
+            catalog,
+            &structure,
+            &realized_units,
+            &construction_ledger,
+            remaining_energy,
+        )
+    {
+        structure = closed_structure;
+        construction_ledger = closed_ledger;
+        remaining_energy = closed_energy;
+        total_heat += attempt.work_cost;
+    }
+
+    if crate::cavity::analyze_genome_cavity(&structure, catalog)?
+        .is_some_and(|cavity| cavity.qualifies())
+    {
+        commit_reserved_storage(&mut available_materials, &reserved_storage_indices)?;
+        *ledger = construction_ledger;
+        *energy = remaining_energy;
+        return Ok((structure, total_heat));
+    }
+
+    // The blueprint is guidance, not a material ceiling. If its requested    // developmental elements are exhausted and the realized structure is still
+    // not viable, continue from the actual physical frontier. This phase has no
+    // blueprint topology requirement; it searches real material and real contact
+    // opportunities until viability is reached or no physical continuation exists.
+    // With real storage, every successful supplemental step consumes and
+    // reserves one finite inventory entry, so the search has an exact physical
+    // inventory bound. The no-storage API synthesizes catalog material, so it
+    // cannot prove physical exhaustion; its limit is explicitly a computational
+    // search guard, not a biological organism-size rule.
+    const SYNTHETIC_SUPPLEMENTAL_SEARCH_LIMIT: usize = 64;
+    let supplemental_budget = available_materials
+        .as_ref()
+        .map_or(SYNTHETIC_SUPPLEMENTAL_SEARCH_LIMIT, |storage| {
+            storage.entries.len()
+        });
+
+    for _ in 0..supplemental_budget {
+        if crate::cavity::analyze_genome_cavity(&structure, catalog)?
+            .is_some_and(|cavity| cavity.qualifies())
+        {
+            commit_reserved_storage(&mut available_materials, &reserved_storage_indices)?;
+            *ledger = construction_ledger;
+            *energy = remaining_energy;
+            return Ok((structure, total_heat));
+        }
+
+        let frontier = (0..structure.units.len()).collect::<Vec<_>>();
+        let mut best_supplemental: Option<(
+            usize,
+            f64,
+            f64,
+            usize,
+            OrganismStructure,
+            crate::combine_runtime::CombineAttempt,
+            EnergyLedger,
+            f64,
+        )> = None;
+
+        // Evaluate every currently available physical continuation before
+        // committing. Search order is never allowed to become constructor
+        // behavior. The score is entirely derived from the realized trial:
+        // future exposed bond opportunities first, then bond facing, then
+        // contact distance. Blueprint order is not involved in this phase.
+        for existing_index in frontier {
+            if let Some(storage) = available_materials.as_deref() {
+                let candidates = (0..storage.entries.len())
+                    .filter(|storage_index| !reserved_storage_indices.contains(storage_index))
+                    .filter_map(|storage_index| match storage.entries.get(storage_index) {
+                        Some(crate::material_storage::StoredMaterial::Physical(instance)) => {
+                            Some((storage_index, instance.clone()))
+                        }
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+
+                for (storage_index, candidate_instance) in candidates {
+                    let Some((
+                        trial_structure,
+                        _indices,
+                        _part_index,
+                        attempt,
+                        trial_ledger,
+                        trial_energy,
+                    )) = try_attach_physical_material_bond_driven(
+                        &structure,
+                        existing_index,
+                        &candidate_instance,
+                        catalog,
+                        &mut nodes,
+                        &construction_ledger,
+                        remaining_energy,
+                    )
+                    else {
+                        continue;
+                    };
+
+                    let (future_bonds, best_facing, contact_distance) =
+                        score_supplemental_trial(&structure, &trial_structure, catalog);
+
+                    let replace = best_supplemental.as_ref().is_none_or(|current| {
+                        future_bonds > current.0
+                            || (future_bonds == current.0
+                                && (best_facing > current.1
+                                    || (best_facing == current.1
+                                        && (contact_distance < current.2
+                                            || (contact_distance == current.2
+                                                && storage_index < current.3)))))
+                    });
+
+                    if replace {
+                        best_supplemental = Some((
+                            future_bonds,
+                            best_facing,
+                            contact_distance,
+                            storage_index,
+                            trial_structure,
+                            attempt,
+                            trial_ledger,
+                            trial_energy,
+                        ));
+                    }
+                }
+            } else {
+                for (resource_index, candidate_resource) in catalog.iter().enumerate() {
+                    let Some(candidate_instance) =
+                        crate::physical_material::PhysicalMaterial::realized(
+                            crate::resources::Material::free_base(
+                                candidate_resource.name.clone(),
+                                1.0,
+                            ),
+                            vec![Placement {
+                                x: 0.0,
+                                y: 0.0,
+                                rotation_radians: 0.0,
+                            }],
+                            catalog,
+                        )
+                    else {
+                        continue;
+                    };
+
+                    let Some((
+                        trial_structure,
+                        _indices,
+                        _part_index,
+                        attempt,
+                        trial_ledger,
+                        trial_energy,
+                    )) = try_attach_physical_material_bond_driven(
+                        &structure,
+                        existing_index,
+                        &candidate_instance,
+                        catalog,
+                        &mut nodes,
+                        &construction_ledger,
+                        remaining_energy,
+                    )
+                    else {
+                        continue;
+                    };
+
+                    let (future_bonds, best_facing, contact_distance) =
+                        score_supplemental_trial(&structure, &trial_structure, catalog);
+
+                    let replace = best_supplemental.as_ref().is_none_or(|current| {
+                        future_bonds > current.0
+                            || (future_bonds == current.0
+                                && (best_facing > current.1
+                                    || (best_facing == current.1
+                                        && (contact_distance < current.2
+                                            || (contact_distance == current.2
+                                                && resource_index < current.3)))))
+                    });
+
+                    if replace {
+                        best_supplemental = Some((
+                            future_bonds,
+                            best_facing,
+                            contact_distance,
+                            resource_index,
+                            trial_structure,
+                            attempt,
+                            trial_ledger,
+                            trial_energy,
+                        ));
+                    }
+                }
+            }
+        }
+
+        let Some((
+            _future_bonds,
+            _best_facing,
+            _contact_distance,
+            candidate_order,
+            trial_structure,
+            attempt,
+            trial_ledger,
+            trial_energy,
+        )) = best_supplemental
+        else {
+            break;
+        };
+
+        structure = trial_structure;
+        construction_ledger = trial_ledger;
+        remaining_energy = trial_energy;
+        total_heat += attempt.work_cost;
+        if candidate_order != usize::MAX {
+            reserved_storage_indices.push(candidate_order);
+        }
+    }
+
+    Err(
+        "construction exhausted all currently available physical continuation attempts without realizing a viable physical organism"
+            .to_string(),
+    )
+}
