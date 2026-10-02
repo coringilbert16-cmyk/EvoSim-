@@ -10,206 +10,285 @@ This section is the authoritative reference for the interior/permeability work.
 
 # Constructor Architecture — Authoritative Plan and Intention
 
-**Status: ACTIVE — this section is the authoritative plan for the constructor work.**
+**Status: ACTIVE — revised 2026-10-02. This section supersedes the earlier constructor-search experiments.**
 
-**Current intention (2026-10-02):** Establish one coherent physical construction process that can produce a viable organism without requiring exact reproduction of a developmental blueprint. Construction is an irreversible physical growth process. The blueprint provides developmental guidance and preference; the realized physical organism is authoritative.
+The constructor's true job is:
 
-The immediate objective is not to make the existing test suite green by weakening contracts or adding special cases. The objective is to establish the physical, material, viability, and developmental rules in a coherent order, prove each layer with focused tests, and then implement the constructor around those rules.
+> **Given a developmental blueprint and available physical material, rapidly grow one physically viable organism that is reasonably close to the blueprint without requiring exact reproduction.**
 
-## A. Core construction intention
+The constructor is **not** a CAD solver, global optimizer, proof engine, or exhaustive search procedure. This distinction is an architectural requirement because construction may eventually occur hundreds, thousands, or millions of times.
 
-The constructor must be able to:
+## A. Locked physical authorities
 
-- begin from physically available material;
-- select acceptable physical material using developmental preference;
-- place material using actual physical geometry;
-- bond whenever legitimate physical surfaces touch;
-- prefer broad, well-aligned face-to-face contact without requiring it;
-- tolerate imperfect mating surfaces, unequal face lengths, partial contact, and awkward but valid orientations;
-- reject unintended physical penetration;
-- commit successful construction permanently;
-- continue after an unsuccessful intended attachment;
-- adapt through another material, surface, orientation, route, or additional structural unit;
-- use additional material when the intended blueprint topology cannot be realized;
-- stop only when a viable organism has been physically realized or when no physically viable continuation remains.
+The following remain authoritative and are not being redesigned by this constructor realignment:
 
-**Making a physically valid mistake and continuing successfully is a required behavior, not a failure mode.**
+- actual physical material and inventory identity;
+- actual geometry, contact, collision, and bond validity;
+- ordinary COMBINE/bond admission rules;
+- intact composite material geometry and internal bonds;
+- cavity-derived genome qualification;
+- realized-structure juvenile viability;
+- Water and resource requirements;
+- physical energy/ledger accounting;
+- blueprint as developmental preference rather than rigid topology.
 
-## B. Blueprint is developmental guidance, not rigid topology
+The constructor must not create a second physical bonding authority or a constructor-only biological rule.
 
-The blueprint describes developmental intent, including material tendencies, spatial tendencies, density/estimated mass, preferred connectivity, and anchor information.
+## B. Constructor control model
 
-It does **not** require:
+The normal constructor loop is intentionally local:
+
+```
+current realized structure
+        ↓
+construction frontier
+        ↓
+small set of physically meaningful candidates
+        ↓
+physical filtering
+        ↓
+cheap developmental/viability filtering
+        ↓
+local blueprint preference
+        ↓
+commit one physical change
+        ↓
+update construction state
+        ↓
+repeat
+```
+
+Construction is therefore **growth**, not global planning.
+
+A valid imperfect structure is preferable to an expensive attempt to prove the exact blueprint can be reproduced.
+
+## C. Blueprint authority
+
+The blueprint supplies developmental preference:
+
+- preferred material;
+- preferred relative location;
+- preferred orientation;
+- preferred connectivity;
+- preferred developmental scale/density;
+- anchor/developmental intent.
+
+The blueprint does **not** require:
 
 - exact element count;
 - exact topology;
 - exact closure;
+- exact coordinates;
 - exact bond angles;
 - exact face matching;
-- exact spatial coordinates;
-- exact reproduction of the blueprint graph.
+- exact piece-by-piece realization.
 
-A blueprint connection that cannot be physically realized is a preference that may be abandoned. A structurally different but physically valid and viable result is acceptable.
+If the preferred continuation is physically unavailable, the constructor may diverge while remaining viable.
 
-Construction must therefore never define failure as “an intended blueprint connection could not be made.”
+## D. Candidate generation
 
-## C. Physical contact authority
+Candidate generation must be geometry-first and bounded.
 
-The physical rule is:
+For each construction frontier, generate only physically meaningful possibilities derived from:
 
-> **If exposed physical surfaces actually touch without unintended penetration, the contact may form a bond.**
+1. preferred blueprint direction/orientation;
+2. nearby useful orientations;
+3. valid shape-specific contact orientations;
+4. exposed physical connection/contact opportunities.
 
-Perfect face-to-face contact is preferred, not mandatory.
+Do not sweep arbitrary positions or orientations and do not enumerate every theoretically possible future.
 
-Valid construction may include:
+Candidate generation stops once enough useful valid candidates exist for local choice.
 
-- broad face-to-face contact;
-- partial face contact;
-- unequal mating surfaces;
-- edge or corner contact when represented by legitimate physical contact;
-- irregularly shaped mating surfaces;
-- non-opposing surface normals.
+The exact candidate count and orientation sampling are implementation parameters, not biological rules.
 
-Invalid construction includes unintended penetration/overlap.
+## E. Candidate choice
 
-There must be one physical rule for bond validity. Candidate generation may rank contacts by quality, but it must not silently turn preferred geometry into a mandatory validity condition.
+Candidates are evaluated in this order:
 
-## D. Construction process
+1. **Physical validity** — impossible contacts are rejected.
+2. **Viability preservation** — reject candidates that obviously destroy the ability to reach a viable organism.
+3. **Developmental progress** — prefer candidates that advance genome formation, required resource acquisition, useful frontier growth, or completion.
+4. **Blueprint similarity** — among safe candidates, prefer the closest developmental realization.
+5. **Geometric quality** — prefer candidates that leave useful future attachment opportunities.
+6. **Controlled variation** — near-equivalent valid choices may vary so repeated construction does not deterministically produce one identical body.
 
-The intended control flow is:
+These priorities are intentionally hierarchical. The constructor must not spend global search effort calculating an exact optimum.
 
-`realized physical structure
-→ construction frontier
-→ physically reachable candidate continuations
-→ physical validity
-→ preservation of viability potential
-→ developmental preference
-→ commit one irreversible physical change
-→ recompute frontier
-→ repeat`
+## F. Developmental state
 
-The construction frontier is physical, not merely a list of unrealized blueprint nodes.
+The constructor maintains lightweight incremental state rather than repeatedly rediscovering the same facts through full-structure analysis.
 
-A candidate may be preferred because it advances the blueprint, but a physically valid alternative may be selected when the preferred continuation is unavailable.
+The state tracks at minimum:
 
-The constructor must not backtrack committed physical construction merely because later development differs from the blueprint.
+- whether a qualifying genome cavity has formed;
+- acquired required-resource categories;
+- current physical construction frontier;
+- useful remaining connection opportunities;
+- blueprint/developmental progress;
+- remaining construction material;
+- small local recovery history.
 
-## E. Adaptive continuation
+Full authoritative validation remains available at milestones and at completion, but it is not the normal inner-loop operation.
 
-When the preferred continuation fails, the constructor must continue searching rather than terminate prematurely.
+## G. Genome-first developmental progression
 
-The intended adaptation order is conceptually:
+Construction should reach a qualifying physical genome cavity early, without introducing a predefined core.
 
-1. preferred physical material;
-2. acceptable physical substitute;
-3. another exposed surface;
-4. another valid orientation/placement;
-5. another structural route;
-6. additional structural material;
-7. continued construction from the resulting physical frontier.
+The progression is:
 
-These are preferences, not a rigid retry script. The actual implementation should search the available physical continuation space rather than encode a hard-coded organism shape.
+```
+physical anchor
+    ↓
+genome-forming structure
+    ↓
+qualifying physical genome cavity
+    ↓
+outward developmental growth
+    ↓
+required resource diversity
+    ↓
+viable completion
+```
 
-## F. Construction success and failure
+The cavity remains defined entirely by realized physical geometry and graph structure.
 
-**Success** is determined by the realized physical organism satisfying the authoritative viability contract.
+## H. Resource progress
 
-**Failure** means that no physically valid continuation capable of reaching viability remains under the available material and construction rules.
+Resource requirements are tracked incrementally.
 
-The following are not construction failure by themselves:
+When a required physical resource becomes part of the developing organism, its resource category is recorded in the construction state. Missing requirements may influence candidate preference, but this does not create a hard-coded biological attraction rule.
 
-- a preferred face does not mate perfectly;
-- a blueprint connection cannot close;
-- the realized topology differs from the blueprint;
-- an additional structural unit was required;
-- an acceptable substitute material was used;
-- a less-preferred physical contact was necessary.
+Material substitution continues to use the established physical-material matching contract. A preferred material may be replaced only by an acceptable physical inventory candidate; below-threshold material remains unavailable rather than being silently forced.
 
-## G. Material authority
+## I. Feasibility probe — not lookahead search
 
-Construction operates on actual physical material.
+The earlier 10-step lookahead experiment is **SUPERSEDED**.
 
-The implementation must preserve:
+The replacement is a small transactional **feasibility probe**.
 
-- physical material identity;
-- internal composite structure;
-- existing constituent relationships;
-- inventory ownership;
-- exact consumption semantics.
+A candidate may be temporarily simulated only to answer:
 
-Composite physical material must not be flattened merely to satisfy a blueprint preference. If a composite is restored into physical constituents and bonds, that restoration must remain physically authoritative.
+> Can this local choice still plausibly continue toward viability?
 
-No construction step may manufacture a catalog replacement when an actual physical inventory instance is required.
+The probe returns a small feasibility result such as `safe`, `unsafe`, or `unknown`. It does not construct or rank an entire future organism, and it must never become an unbounded search tree.
 
-## H. Viability authority
+The normal path commits one candidate immediately.
 
-Construction completion must use the existing realized-structure viability system rather than inventing a second constructor-specific definition.
+## J. Local recovery
 
-The viability audit must establish exactly:
+The constructor remains forward-oriented.
 
-- how the realized cavity qualifies;
-- what additional structure/material is required;
-- how juvenile viability is determined;
-- which conditions are physical invariants;
-- which conditions are developmental preferences only.
+If the current frontier reaches a genuine dead end, recovery is local:
 
-A predefined core, fixed piece count, exact blueprint closure, or universal lattice topology must not become a hidden viability requirement.
+```
+dead end
+   ↓
+rollback only a small recent construction window
+   ↓
+try the next locally valid candidate
+   ↓
+resume forward growth
+```
 
-## I. Focused audit and implementation order
+This is not global backtracking. The recovery window is a computational robustness mechanism and must remain bounded independently of organism complexity.
 
-Work proceeds in this order:
+Committed construction should otherwise remain irreversible.
 
-1. **Physical contact and candidate-generation audit**
-   - verify that legitimate touching contacts can actually be discovered;
-   - separate contact validity from preferred face mating;
-   - identify and remove only genuinely conflicting geometric gates.
+## K. Validation layers
 
-2. **Material restoration audit**
-   - verify atomic and composite physical-material paths;
-   - establish exactly how intact physical composites enter construction;
-   - preserve physical identity and internal structure.
+Validation is deliberately separated by cost:
 
-3. **Viability audit**
-   - trace realized structure → cavity → genome realization → supporting structure → juvenile viability;
-   - establish one authoritative construction-completion contract.
+### Per candidate
+Cheap physical and local-development checks.
 
-4. **Blueprint/developmental guidance audit**
-   - identify every remaining place where blueprint intent is incorrectly treated as mandatory topology;
-   - retain preference while removing rigid closure requirements.
+### At developmental milestones
+More substantial checks after events such as genome formation, resource completion, or major structural closure.
 
-5. **Constructor control-flow implementation**
-   - replace blueprint-sized progression with a physical construction frontier;
-   - allow adaptive divergence and additional material;
-   - preserve forward-only irreversible construction.
+### At completion
+The existing authoritative realized-structure viability contract.
 
-6. **Focused adaptive-construction tests**
-   - perfect construction;
-   - imperfect contact;
-   - unequal surfaces;
-   - failed preferred connection followed by successful alternative;
-   - additional structural unit;
-   - substitute material;
-   - valid divergent topology;
-   - genuinely impossible construction.
+No constructor-specific viability definition may replace the authoritative contract.
 
-7. **Downstream migration**
-   - classify remaining failures as genuine defects, obsolete tests, or collateral regressions;
-   - migrate stale tests only after the underlying contract is proven;
-   - then proceed to lifecycle and full simulation validation.
+## L. Performance authority
 
-## J. Verification discipline
+The constructor is expected to run at evolutionary scale.
 
-For every implementation change:
+Therefore:
 
-1. inspect the exact contract being changed;
-2. make the smallest isolated change;
+- normal construction cost should scale approximately with realized construction size, not with the number of possible organisms;
+- candidate enumeration must remain bounded per step;
+- expensive cavity/interior/whole-structure analysis must not run for every rejected candidate;
+- speculative branches must remain small and transactional;
+- no arbitrary large node-search budget may be used as a substitute for a good control strategy;
+- profiling must target the actual hot path after correctness is established.
+
+The desired computational shape is approximately:
+
+```
+O(realized construction steps × small local candidate set)
+```
+
+rather than combinatorial branch exploration.
+
+## M. Implementation order
+
+1. **Audit and isolate the old search architecture.**
+   Identify exhaustive branching, recursive future search, repeated whole-structure validation, and candidate enumeration that exists only to support global search.
+
+2. **Introduce lightweight construction state.**
+   Make genome/resource/frontier progress incrementally available.
+
+3. **Refactor candidate generation.**
+   Generate a small geometry-driven candidate set rather than broad arbitrary search.
+
+4. **Refactor candidate selection.**
+   Apply physical validity → viability preservation → developmental progress → blueprint preference → geometry → controlled variation.
+
+5. **Replace 10-step lookahead with bounded feasibility probing.**
+   Preserve only the useful dead-end detection behavior.
+
+6. **Add bounded local recovery.**
+   Recover from genuine local dead ends without global search.
+
+7. **Move expensive validation to milestones/finalization.**
+
+8. **Delete or retire obsolete search machinery.**
+   Do not leave the old solver underneath the new constructor as a hidden fallback.
+
+9. **Build scale tests.**
+   Measure 1, 100, 1,000, 10,000, and eventually 100,000+ constructions for success rate, worst-case time, candidate count, recovery count, and expensive-validation count.
+
+10. **Only then optimize hot spots.**
+
+## N. Explicitly superseded constructor experiments
+
+The following are retained only as historical implementation context and must **not** be treated as current design authority:
+
+- **Global/recursive free-form search** through many future construction branches.
+- **Large node budgets** used to make exhaustive search eventually terminate.
+- **10-placement lookahead as a branch-ranking/search mechanism.**
+- **Blueprint-neighbor ordering as a substitute for a physical construction frontier.**
+- **Most-constrained blueprint-closure ordering as a primary construction strategy.**
+- **Any approach that repeatedly enumerates many candidates and commits only one while discarding all alternatives through global search.**
+- **Any constructor strategy whose practical correctness depends on running for tens of minutes or an hour on a single test.**
+
+These experiments may remain in git history for diagnosis, but they are **OLD / SUPERSEDED** and must not be extended.
+
+## O. Verification discipline
+
+For each realignment change:
+
+1. audit the existing physical/viability contract;
+2. make the smallest architectural step consistent with this plan;
 3. format;
 4. compile/check;
-5. run focused tests;
-6. inspect failures by dependency layer;
-7. broaden validation only after the focused contract is stable.
+5. run focused constructor tests;
+6. measure runtime;
+7. inspect failures by dependency layer;
+8. only then broaden validation.
 
-No speculative geometry heuristic, parallel construction authority, or unrelated biological change should be introduced merely to make tests pass.
+A passing test obtained by adding a special-case geometry rule, weakening viability, or restoring an obsolete search strategy is not considered a valid fix.
 
-**Non-negotiable intention:** The constructor's job is to successfully build life from physical reality, not to solve a blueprint as if it were CAD. The blueprint guides development; physics determines what exists; viability determines when construction has succeeded.
+**Non-negotiable intention:** The constructor grows viable organisms from physical reality. The blueprint guides development. Physics determines what can exist. Viability determines when construction has succeeded. Local decisions and bounded recovery provide reliability; global search is not the constructor.**
 
