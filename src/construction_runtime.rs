@@ -76,6 +76,62 @@ fn circle_boundary_placements(
     out
 }
 
+/// Explicit reverse path for a curved target boundary. A polygonal/linear
+/// candidate is oriented so its sampled boundary normal opposes the circle's
+/// radial normal, then translated to exact boundary contact.
+fn boundary_to_circle_placements(
+    target_shape: &crate::resources::Shape,
+    target_placement: Placement,
+    candidate_shape: &crate::resources::Shape,
+) -> Vec<Placement> {
+    let crate::resources::Form::Circle {
+        radius: target_radius,
+    } = &target_shape.form
+    else {
+        return Vec::new();
+    };
+
+    let mut out = Vec::new();
+    for target_step in 0..16 {
+        let target_angle =
+            target_step as f64 * std::f64::consts::TAU / 16.0;
+        let (ts, tc) = target_angle.sin_cos();
+        let target_contact = (
+            target_placement.x + *target_radius * tc,
+            target_placement.y + *target_radius * ts,
+        );
+        let target_normal_angle = target_angle + target_placement.rotation_radians;
+
+        for candidate_step in 0..16 {
+            let candidate_angle =
+                candidate_step as f64 * std::f64::consts::TAU / 16.0;
+            let (cs, cc) = candidate_angle.sin_cos();
+            let Some(candidate_boundary) =
+                crate::surface_geometry::boundary_point_toward(candidate_shape, cc, cs)
+            else {
+                continue;
+            };
+            let candidate_normal_angle =
+                candidate_boundary.normal_y.atan2(candidate_boundary.normal_x);
+            let rotation = normalize_angle(
+                target_normal_angle + std::f64::consts::PI
+                    - candidate_normal_angle,
+            );
+            let (rs, rc) = rotation.sin_cos();
+            let rotated_point = (
+                candidate_boundary.x * rc - candidate_boundary.y * rs,
+                candidate_boundary.x * rs + candidate_boundary.y * rc,
+            );
+            out.push(Placement {
+                x: target_contact.0 - rotated_point.0,
+                y: target_contact.1 - rotated_point.1,
+                rotation_radians: rotation,
+            });
+        }
+    }
+    out
+}
+
 /// Compatibility wrapper retained for the existing runtime callers. The
 /// placement generator is now surface-driven; it no longer enumerates
 /// corner-to-corner angles.
@@ -99,7 +155,11 @@ pub(crate) fn candidate_placements(
         let placements = if matches!(&resource.shape.form, Form::Circle { .. }) {
             circle_boundary_placements(&target_shape, unit.placement, &resource.shape)
         } else if matches!(&target_shape.form, Form::Circle { .. }) {
-            Vec::new()
+            boundary_to_circle_placements(
+                &target_shape,
+                unit.placement,
+                &resource.shape,
+            )
         } else {
             crate::rigid_boundary::surface_alignment_placements(
                 &target_shape,
