@@ -175,7 +175,7 @@ pub fn placed_forms_penetrate(
     {
         return false;
     }
-    let tolerance = tolerance.max(0.0);
+    let tolerance = penetration_margin(tolerance);
     let center_distance = (a.placement.x - b.placement.x).hypot(a.placement.y - b.placement.y);
     if center_distance >= a.form.bounding_radius() + b.form.bounding_radius() + tolerance {
         return false;
