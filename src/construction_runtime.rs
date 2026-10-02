@@ -496,7 +496,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
             }
 
             let mut trial = structure.clone();
-            let Some(indices) = crate::material_restoration::restore_material(
+            let Some(indices) = crate::material_restoration::restore_material_in_place(
                 &mut trial,
                 new_material,
                 candidate_origin,
