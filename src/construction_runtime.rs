@@ -401,7 +401,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                 new_material,
                 candidate_origin,
                 catalog,
-            ) else {
+            else {
                 continue;
             };
 
@@ -449,7 +449,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     new_unit_index,
                     candidate,
                     catalog,
-                ) else {
+            else {
                 continue;
             };
 
@@ -463,7 +463,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                 &mut bond_cache,
                 &mut trial_ledger,
                 &mut trial_energy,
-            ) else {
+            else {
                 continue;
             };
 
@@ -625,7 +625,7 @@ fn realize_next_bond_driven(
                     new_material,
                     candidate_origin,
                     catalog,
-                ) else {
+                else {
                     continue;
                 };
 
@@ -673,7 +673,7 @@ fn realize_next_bond_driven(
                         new_unit_index,
                         candidate,
                         catalog,
-                    ) else {
+                else {
                     continue;
                 };
 
@@ -687,7 +687,7 @@ fn realize_next_bond_driven(
                     &mut bond_cache,
                     &mut trial_ledger,
                     &mut trial_energy,
-                ) else {
+                else {
                     continue;
                 };
 
@@ -917,7 +917,7 @@ fn close_one_realized_blueprint_connection(
                         &mut cache,
                         &mut trial_ledger,
                         &mut trial_energy,
-                    ) else {
+                    else {
                         continue;
                     };
 
@@ -1094,7 +1094,7 @@ fn developmental_lookahead_depth(
                         rotation_radians: 0.0,
                     }],
                     catalog,
-                ) else {
+                else {
                     continue;
                 };
                 instance
@@ -1121,7 +1121,7 @@ fn developmental_lookahead_depth(
                 nodes,
                 ledger,
                 available_energy,
-            ) else {
+            else {
                 continue;
             };
 
@@ -1408,7 +1408,7 @@ fn construct_blueprint_bond_driven_internal(
                     &mut nodes,
                     &construction_ledger,
                     remaining_energy,
-                ) else {
+                else {
                     continue;
                 };
 
@@ -1754,7 +1754,7 @@ fn construct_blueprint_bond_driven_internal(
                         &mut nodes,
                         &construction_ledger,
                         remaining_energy,
-                    ) else {
+                    else {
                         continue;
                     };
 
