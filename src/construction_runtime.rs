@@ -272,6 +272,35 @@ fn material_part_candidate_placements(
     }
 }
 
+fn candidate_placement_overlaps_structure(
+    structure: &OrganismStructure,
+    candidate_shape: &crate::resources::Shape,
+    candidate_placement: Placement,
+    catalog: &[BaseResource],
+) -> bool {
+    let candidate_part = crate::material_geometry::PlacedMaterialPart {
+        part_index: 0,
+        form: candidate_shape.form.clone(),
+        placement: candidate_placement,
+    };
+
+    structure.units.iter().enumerate().any(|(index, unit)| {
+        let Some(shape) = unit.shape(catalog) else {
+            return true;
+        };
+        let existing_part = crate::material_geometry::PlacedMaterialPart {
+            part_index: index + 1,
+            form: shape.form.clone(),
+            placement: unit.placement,
+        };
+        crate::material_geometry::placed_forms_penetrate(
+            &candidate_part,
+            &existing_part,
+            0.0,
+        )
+    })
+}
+
 pub(crate) fn placed_unit_overlaps(
     structure: &OrganismStructure,
     candidate: &StructuralUnit,
@@ -419,6 +448,19 @@ pub(crate) fn try_attach_physical_material_bond_driven(
             *relative,
         ) {
             *nodes += 1;
+
+            // Reject geometric penetration before cloning/restoring the whole
+            // structure. Most generated surface alignments are eliminated here,
+            // so only genuinely non-overlapping candidates pay the transactional
+            // COMBINE cost.
+            if candidate_placement_overlaps_structure(
+                structure,
+                candidate_shape,
+                candidate_origin,
+                catalog,
+            ) {
+                continue;
+            }
 
             let mut trial = structure.clone();
             let Some(indices) = crate::material_restoration::restore_material(
