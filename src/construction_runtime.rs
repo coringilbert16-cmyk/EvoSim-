@@ -1390,7 +1390,7 @@ fn construct_blueprint_bond_driven_internal(
             _future_bonds,
             _best_facing,
             _contact_distance,
-            _candidate_order,
+            candidate_order,
             trial_structure,
             attempt,
             trial_ledger,
@@ -1404,8 +1404,8 @@ fn construct_blueprint_bond_driven_internal(
         construction_ledger = trial_ledger;
         remaining_energy = trial_energy;
         total_heat += attempt.work_cost;
-        if storage_index != usize::MAX {
-            reserved_storage_indices.push(storage_index);
+        if candidate_order != usize::MAX {
+            reserved_storage_indices.push(candidate_order);
         }
     }
 
