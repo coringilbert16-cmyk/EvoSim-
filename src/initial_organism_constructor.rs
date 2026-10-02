@@ -98,6 +98,7 @@ fn attach_local_piece(
     anchor: usize,
     local_neighbors: &[usize],
     material: &crate::physical_material::PhysicalMaterial,
+    cache: &mut crate::contact::ConnectionCompatibilityCache,
     catalog: &[BaseResource],
     ledger: &mut EnergyLedger,
     energy: &mut f64,
@@ -157,7 +158,6 @@ fn attach_local_piece(
             continue;
         };
 
-        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
         let candidates = crate::contact::connection_pair_candidates_cached(
             structure, anchor, new_index, catalog, &mut cache,
         );
@@ -177,12 +177,18 @@ fn attach_local_piece(
             else {
                 continue;
             };
-            if crate::combine_runtime::form_selected_bond_in_place(
-                structure, anchor, new_index, candidate, investment, catalog, &mut cache, ledger,
-                energy,
-            )
-            .is_some()
-            {
+            if let Some(attempt) = crate::combine_runtime::form_selected_bond_in_place(
+                structure, anchor, new_index, candidate, investment, catalog, cache, ledger, energy,
+            ) {
+                let id_a = structure.units[anchor].physical_id;
+                let id_b = structure.units[new_index].physical_id;
+                cache.record_bond(
+                    id_a,
+                    attempt.endpoint_a,
+                    id_b,
+                    attempt.endpoint_b,
+                    attempt.bond_energy,
+                );
                 bonded = true;
                 break;
             }
@@ -220,12 +226,19 @@ fn attach_local_piece(
                 else {
                     continue;
                 };
-                if crate::combine_runtime::form_selected_bond_in_place(
-                    structure, target, new_index, candidate, investment, catalog, &mut cache,
-                    ledger, energy,
-                )
-                .is_some()
-                {
+                if let Some(attempt) = crate::combine_runtime::form_selected_bond_in_place(
+                    structure, target, new_index, candidate, investment, catalog, cache, ledger,
+                    energy,
+                ) {
+                    let id_a = structure.units[target].physical_id;
+                    let id_b = structure.units[new_index].physical_id;
+                    cache.record_bond(
+                        id_a,
+                        attempt.endpoint_a,
+                        id_b,
+                        attempt.endpoint_b,
+                        attempt.bond_energy,
+                    );
                     closed = true;
                     closed_target = Some(target);
                     break;
@@ -236,21 +249,6 @@ fn attach_local_piece(
             }
         }
 
-        let closed_target
-            .iter()
-            .copied()
-            .find(|&target| {
-                structure
-                    .bonds
-                    .iter()
-                    .any(|bond| {
-                        let a = bond.endpoint_a.constituent_id;
-                        let b = bond.endpoint_b.constituent_id;
-                        let target_id = structure.units[target].physical_id;
-                        let new_id = structure.units[new_index].physical_id;
-                        (a == target_id && b == new_id) || (a == new_id && b == target_id)
-                    })
-            });
         return Some((new_index, closed_target));
     }
 
@@ -276,6 +274,7 @@ fn assemble_local(
 
     let mut ledger = EnergyLedger::default();
     let mut energy = ASSEMBLY_ENERGY;
+    let mut cache = crate::contact::ConnectionCompatibilityCache::new();
 
     while structure.units.len() < ASSEMBLY_TARGET {
         let frontier_len = frontier.len();
@@ -295,6 +294,7 @@ fn assemble_local(
                     anchor,
                     &adjacency[anchor],
                     material,
+                    &mut cache,
                     catalog,
                     &mut ledger,
                     &mut energy,
