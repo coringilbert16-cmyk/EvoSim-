@@ -48,6 +48,32 @@ fn placement_fits_resource(
         return None;
     }
 
+    // Try the region's derived interior sample first. This is an exact
+    // physical containment test, so it is only a fast path; the complete
+    // bounded search below remains available when the sample point is not a
+    // valid placement for the resource.
+    for rotation_index in 0..4 {
+        let placement = Placement {
+            x: region.sample_point.0,
+            y: region.sample_point.1,
+            rotation_radians: rotation_index as f64 * std::f64::consts::FRAC_PI_2,
+        };
+        let Some(physical) = crate::physical_material::PhysicalMaterial::realized(
+            Material::free_base(resource.name.clone(), 1.0),
+            vec![placement],
+            catalog,
+        ) else {
+            continue;
+        };
+        if crate::environment::ActiveMaterialField::physical_is_fully_inside_any_region(
+            &physical,
+            std::slice::from_ref(region),
+            catalog,
+        ) {
+            return Some(placement);
+        }
+    }
+
     for ix in 0..=ACQUISITION_SAMPLES {
         let x = min_x + (max_x - min_x) * ix as f64 / ACQUISITION_SAMPLES as f64;
         for iy in 0..=ACQUISITION_SAMPLES {
