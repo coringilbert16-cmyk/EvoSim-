@@ -534,7 +534,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
             shape: Shape {
                 form: Form::RegularPolygon {
                     sides: 6,
-                    radius: 1.0 / 3.0_f64.sqrt(),
+                    radius: 1.0,
                 },
             },
         },
