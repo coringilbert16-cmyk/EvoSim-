@@ -1091,11 +1091,17 @@ fn construct_blueprint_bond_driven_internal(
     // not viable, continue from the actual physical frontier. This phase has no
     // blueprint topology requirement; it searches real material and real contact
     // opportunities until viability is reached or no physical continuation exists.
-    let supplemental_budget = blueprint
-        .elements
-        .len()
-        .saturating_mul(16)
-        .max(32);
+    // With real storage, every successful supplemental step consumes and
+    // reserves one finite inventory entry, so the search can terminate on an
+    // exact physical inventory bound rather than an arbitrary step count.
+    // The no-storage constructor still has synthetic unlimited catalog
+    // material and retains its bounded developmental safeguard.
+    let supplemental_budget = available_materials
+        .as_ref()
+        .map_or_else(
+            || blueprint.elements.len().saturating_mul(16).max(32),
+            |storage| storage.entries.len(),
+        );
 
     for _ in 0..supplemental_budget {
         if crate::cavity::analyze_genome_cavity(&structure, catalog)
