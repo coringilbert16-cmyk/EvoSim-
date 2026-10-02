@@ -345,14 +345,35 @@ fn find_acquisition_set(
     regions: &[crate::interior_geometry::EnclosedRegion],
     catalog: &[BaseResource],
 ) -> Option<Vec<(String, Placement)>> {
-    let mut result = Vec::new();
-    for resource in candidates.iter().take(3) {
-        let placement = regions
-            .iter()
-            .find_map(|region| placement_fits_resource(resource, region, catalog))?;
-        result.push((resource.name.clone(), placement));
+    // Viability is allowed to choose any three distinct non-Water resource
+    // categories. The catalog is tiny, so enumerate only the combinations of
+    // three here, after assembly; this is not construction search.
+    for first in 0..candidates.len() {
+        for second in (first + 1)..candidates.len() {
+            for third in (second + 1)..candidates.len() {
+                let selected = [candidates[first], candidates[second], candidates[third]];
+                let mut result = Vec::with_capacity(3);
+                let mut viable = true;
+
+                for resource in selected {
+                    let Some(placement) = regions
+                        .iter()
+                        .find_map(|region| placement_fits_resource(resource, region, catalog))
+                    else {
+                        viable = false;
+                        break;
+                    };
+                    result.push((resource.name.clone(), placement));
+                }
+
+                if viable {
+                    return Some(result);
+                }
+            }
+        }
     }
-    Some(result)
+
+    None
 }
 
 fn validate_completed_structure(
