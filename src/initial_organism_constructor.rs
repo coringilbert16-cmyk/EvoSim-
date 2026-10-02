@@ -24,6 +24,7 @@ pub(crate) struct ValidConstruction {
 
 fn candidate_annulus(
     resource: &BaseResource,
+    spoke_resource: &BaseResource,
     inner_sides: usize,
     outer_sides: usize,
 ) -> Option<StructuralBlueprint> {
@@ -34,7 +35,7 @@ fn candidate_annulus(
 
     let inner_radius = radius / (std::f64::consts::PI / inner_sides as f64).sin();
     // Leave a real accessible band between the genome wall and the outer wall.
-    // Two one-unit Hydrogen segments bridge that band when Hydrogen exists.
+    // Two one-unit line segments bridge that band.
     let outer_radius = inner_radius + 2.0 * radius + 2.0;
 
     let mut elements = Vec::with_capacity(inner_sides + outer_sides + 6);
@@ -63,7 +64,7 @@ fn candidate_annulus(
         });
     }
 
-    let spoke_material = Material::free_base("Hydrogen", 1.0);
+    let spoke_material = Material::free_base(spoke_resource.name.clone(), 1.0);
     let spoke_start = elements.len();
     for spoke in 0..3 {
         let angle = std::f64::consts::TAU * spoke as f64 / 3.0;
@@ -172,7 +173,7 @@ fn placement_fits_resource(
     None
 }
 
-fn acquisition_candidates<'a>(catalog: &'a [BaseResource]) -> Vec<&'a BaseResource> {
+fn available_acquisition_resources<'a>(catalog: &'a [BaseResource]) -> Vec<&'a BaseResource> {
     catalog
         .iter()
         .filter(|resource| resource.name != "Water")
@@ -307,10 +308,17 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
         }
     }
 
-    let acquisition_candidates = acquisition_candidates(catalog);
+    let acquisition_candidates = available_acquisition_resources(catalog);
     if acquisition_candidates.len() < 3 {
         return Err("catalog does not contain three non-water acquisition resources".into());
     }
+    let Some(spoke_resource) = catalog.iter().find(|resource| {
+        resource.physical_state == PhysicalState::Rigid
+            && matches!(resource.shape.form, Form::Line { .. })
+            && resource.shape.is_valid()
+    }) else {
+        return Err("catalog does not contain a rigid line resource for structural bridging".into());
+    };
 
     for resource in structural_candidates {
         if !matches!(
@@ -320,7 +328,12 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
             continue;
         }
 
-        let Some(candidate) = candidate_annulus(resource, INNER_RING_SIDES, OUTER_RING_SIDES)
+        let Some(candidate) = candidate_annulus(
+            resource,
+            spoke_resource,
+            INNER_RING_SIDES,
+            OUTER_RING_SIDES,
+        )
         else {
             continue;
         };
