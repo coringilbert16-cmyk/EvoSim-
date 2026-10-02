@@ -427,8 +427,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
 
             let score = (candidate.facing, -candidate.distance);
             let replace = best.as_ref().is_none_or(|current| {
-                score.0 > current.0
-                    || (score.0 == current.0 && score.1 > current.1)
+                score.0 > current.0 || (score.0 == current.0 && score.1 > current.1)
             });
             if replace {
                 best = Some((
@@ -446,16 +445,9 @@ pub(crate) fn try_attach_physical_material_bond_driven(
     }
 
     best.map(
-        |(
-            _facing,
-            _negative_distance,
-            structure,
-            indices,
-            part_index,
-            attempt,
-            ledger,
-            energy,
-        )| (structure, indices, part_index, attempt, ledger, energy),
+        |(_facing, _negative_distance, structure, indices, part_index, attempt, ledger, energy)| {
+            (structure, indices, part_index, attempt, ledger, energy)
+        },
     )
 }
 
