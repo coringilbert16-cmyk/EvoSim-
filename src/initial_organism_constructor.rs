@@ -81,7 +81,12 @@ fn add_unit(
     indices
         .first()
         .copied()
-        .ok_or_else(|| format!("construction unit {} restored no physical constituent", resource.name))
+        .ok_or_else(|| {
+            format!(
+                "construction unit {} restored no physical constituent",
+                resource.name
+            )
+        })
 }
 
 fn bond_units(
@@ -115,7 +120,11 @@ fn bond_units(
             .partial_cmp(&b.distance)
             .unwrap_or(std::cmp::Ordering::Equal)
     })
-    .ok_or_else(|| format!("no physical contact between construction units {unit_a} and {unit_b}"))?;
+    .ok_or_else(|| {
+        format!(
+            "no physical contact between construction units {unit_a} and {unit_b}"
+        )
+    })?;
 
     let (_, _, _, investment, _) =
         crate::combine_runtime::selected_candidate_evaluation(
@@ -388,7 +397,9 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
     let (structure, ledger, energy) = construct_scaffold(catalog)?;
     let acquired_resource_placements =
         valid_construction(&structure, catalog, &acquisition_candidates)
-            .ok_or_else(|| "deterministic construction scaffold did not satisfy viability".to_string())?;
+            .ok_or_else(|| {
+                "deterministic construction scaffold did not satisfy viability".to_string()
+            })?;
 
     Ok(ValidConstruction {
         structure,
