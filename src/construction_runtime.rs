@@ -600,7 +600,7 @@ fn realize_next_bond_driven(
                 let new_unit_index = *indices.get(part_index)?;
                 let ignored_units = indices.clone();
                 if indices.iter().any(|unit_index| {
-                    placed_unit_overlaps(&trial, &trial.units[unit_index], &ignored_units, catalog)
+                    placed_unit_overlaps(&trial, &trial.units[*unit_index], &ignored_units, catalog)
                 }) {
                     continue;
                 }
@@ -673,7 +673,7 @@ fn realize_next_bond_driven(
                     normalize_angle(actual_candidate.rotation_radians - target_rotation).abs();
 
                 let mut topology_score = 1usize;
-                for required_neighbor in already_realized_neighbors(blueprint, index, &realized) {
+                for required_neighbor in already_realized_neighbors(blueprint, index, &realized_units.iter().map(Option::is_some).collect::<Vec<_>>()) {
                     if required_neighbor == neighbor {
                         continue;
                     }
