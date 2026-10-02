@@ -8,243 +8,208 @@ This section is the authoritative reference for the interior/permeability work.
 
 
 
-# Bond-Driven Construction Migration Plan
+# Constructor Architecture — Authoritative Plan and Intention
 
-**Status: ACTIVE — current authoritative implementation plan.**
+**Status: ACTIVE — this section is the authoritative plan for the constructor work.**
 
-**Current position (2026-10-01):** The constructor architecture has been migrated to the approved forward-only, bond-driven model. Actual physical material selection is integrated. Developmental construction and ordinary COMBINE share the same physical bond-formation authority. Realized structure is authoritative for cavity qualification, and harmonic environmental sensing uses realized physical material rather than logical material. The current work is **focused validation of the realized cavity → harmonic reception boundary and cleanup of retired constructor/harmonic paths**, not a redesign.
+**Current intention (2026-10-02):** Establish one coherent physical construction process that can produce a viable organism without requiring exact reproduction of a developmental blueprint. Construction is an irreversible physical growth process. The blueprint provides developmental guidance and preference; the realized physical organism is authoritative.
 
-Recent implementation work has included:
-- repairing stale constructor/scaffold call sites after the API migration;
-- completing shared COMBINE/bond-formation integration;
-- implementing deterministic forward candidate selection;
-- retaining the globally nearest valid construction pose before committing;
-- typing and simplifying forward-constructor candidate-selection state;
-- pruning physically expensive candidates without changing the nearest-pose rule;
-- scoping that pruning to the forward constructor so unrelated physical attachment behavior is not changed;
-- calibrating the seed ring so its Carbon edges are physically sealed under the actual geometry rules;
-- formatting and validating each of these changes incrementally.
+The immediate objective is not to make the existing test suite green by weakening contracts or adding special cases. The objective is to establish the physical, material, viability, and developmental rules in a coherent order, prove each layer with focused tests, and then implement the constructor around those rules.
 
-## A. Authoritative construction contract
+## A. Core construction intention
 
-The developmental construction pipeline is:
+The constructor must be able to:
 
-`developmental blueprint preference → actual physical material selection → existing physical endpoint A → actual physical endpoint B → rotation of B around the selected joint → immediate geometry validation → exact one-bond transaction → permanent commit → next bond`
+- begin from physically available material;
+- select acceptable physical material using developmental preference;
+- place material using actual physical geometry;
+- bond whenever legitimate physical surfaces touch;
+- prefer broad, well-aligned face-to-face contact without requiring it;
+- tolerate imperfect mating surfaces, unequal face lengths, partial contact, and awkward but valid orientations;
+- reject unintended physical penetration;
+- commit successful construction permanently;
+- continue after an unsuccessful intended attachment;
+- adapt through another material, surface, orientation, route, or additional structural unit;
+- use additional material when the intended blueprint topology cannot be realized;
+- stop only when a viable organism has been physically realized or when no physically viable continuation remains.
 
-The blueprint is a **developmental preference**, not a command to reproduce an exact future physical graph. The realized physical structure is authoritative.
+**Making a physically valid mistake and continuing successfully is a required behavior, not a failure mode.**
 
-A construction step may evaluate acceptable physical materials, endpoints, and orientations. A failed candidate does not undo an already committed bond. Construction does not prevalidate future bonds and does not backtrack previously committed construction. If no usable physical material is currently available, construction enters a pending/waiting action state and resumes when material becomes available; it never blocks the simulation thread.
+## B. Blueprint is developmental guidance, not rigid topology
 
-## B. Physical-material authority
+The blueprint describes developmental intent, including material tendencies, spatial tendencies, density/estimated mass, preferred connectivity, and anchor information.
 
-Construction selects from the organism's existing **physical material inventory**.
+It does **not** require:
 
-The selector must:
-- evaluate actual physical candidates against the developmental structural preference;
-- preserve the identity and internal geometry of the selected physical material;
-- never manufacture a replacement from a catalog description;
-- never consume candidates during evaluation;
-- reject candidates below the approved structural-match threshold;
-- permit acceptable physical substitutes when the preferred resource is unavailable;
-- report a material/construction need when no candidate is acceptable.
+- exact element count;
+- exact topology;
+- exact closure;
+- exact bond angles;
+- exact face matching;
+- exact spatial coordinates;
+- exact reproduction of the blueprint graph.
 
-Composite physical material remains composite. Its internal structure is not flattened merely to satisfy a blueprint preference.
+A blueprint connection that cannot be physically realized is a preference that may be abandoned. A structurally different but physically valid and viable result is acceptable.
 
-## C. Shared physical bond authority
+Construction must therefore never define failure as “an intended blueprint connection could not be made.”
 
-Generic COMBINE and developmental construction use the same physical bond-formation transaction.
+## C. Physical contact authority
 
-The shared transaction is responsible for:
-- exact endpoint/contact validation;
-- unintended-penetration rejection;
-- universal physical bond rules;
-- energy and ledger settlement;
-- atomic bond addition.
+The physical rule is:
 
-Candidate discovery, developmental material preference, and orientation search remain caller responsibilities.
+> **If exposed physical surfaces actually touch without unintended penetration, the contact may form a bond.**
 
-**There must be only one physical rule for whether a bond can be formed.** Construction must not acquire a special geometry/bonding path that ordinary COMBINE does not use.
+Perfect face-to-face contact is preferred, not mandatory.
 
-## D. Forward candidate search
+Valid construction may include:
 
-For each acceptable physical material, endpoint pair, and orientation, construction:
-1. places the selected physical material at the exact joint;
-2. keeps the selected endpoint coincident with the existing endpoint;
-3. validates unintended penetration;
-4. evaluates the candidate;
-5. retains the best valid candidate according to the approved deterministic selection rule;
-6. commits exactly one bond through the shared physical transaction.
+- broad face-to-face contact;
+- partial face contact;
+- unequal mating surfaces;
+- edge or corner contact when represented by legitimate physical contact;
+- irregularly shaped mating surfaces;
+- non-opposing surface normals.
 
-Candidate failures continue the search. An unsuccessful candidate must not escape the search loop as an early return.
+Invalid construction includes unintended penetration/overlap.
 
-Performance pruning is allowed only when it is provably safe with respect to the approved candidate-selection rule. It must remain scoped to the constructor unless a separate contract authorizes a broader physical change.
+There must be one physical rule for bond validity. Candidate generation may rank contacts by quality, but it must not silently turn preferred geometry into a mandatory validity condition.
 
-## E. Geometry authority
+## D. Construction process
 
-Intended bond contact is not unintended overlap.
+The intended control flow is:
 
-The geometry system must distinguish:
-- the two endpoints intentionally meeting at a bond;
-- unrelated material being penetrated.
+`realized physical structure
+→ construction frontier
+→ physically reachable candidate continuations
+→ physical validity
+→ preservation of viability potential
+→ developmental preference
+→ commit one irreversible physical change
+→ recompute frontier
+→ repeat`
 
-Irregular structures and irregular cavities are valid. There is no universal 4N square/lattice requirement. Declared blueprint poses are preferences rather than commands.
+The construction frontier is physical, not merely a list of unrealized blueprint nodes.
 
-Water and composite materials must obey the same physical admission rules as other material; they do not receive a special logical-material shortcut.
+A candidate may be preferred because it advances the blueprint, but a physically valid alternative may be selected when the preferred continuation is unavailable.
 
-## F. Genome measurement scaffold and seed ring
+The constructor must not backtrack committed physical construction merely because later development differs from the blueprint.
 
-The temporary genome measurement scaffold is a construction/measurement aid, not organism material. It must not become a hidden second construction authority.
+## E. Adaptive continuation
 
-The seed geometry must be physically realizable under the actual bond and penetration rules. The current seed-ring calibration specifically ensures that the Carbon boundary edges are physically sealed rather than merely appearing enclosed in blueprint space.
+When the preferred continuation fails, the constructor must continue searching rather than terminate prematurely.
 
-Cavity qualification is based on the **realized physical graph and realized geometry**, not on a predefined core, named cavity, or blueprint declaration.
+The intended adaptation order is conceptually:
 
-## G. Realized cavity and harmonics
+1. preferred physical material;
+2. acceptable physical substitute;
+3. another exposed surface;
+4. another valid orientation/placement;
+5. another structural route;
+6. additional structural material;
+7. continued construction from the resulting physical frontier.
 
-The dependency is:
+These are preferences, not a rigid retry script. The actual implementation should search the available physical continuation space rather than encode a hard-coded organism shape.
 
-`construction → realized physical graph → realized cavity qualification → harmonic environmental reception`
+## F. Construction success and failure
 
-A cavity exists for these purposes only when the realized physical structure satisfies the cavity contract.
+**Success** is determined by the realized physical organism satisfying the authoritative viability contract.
 
-Harmonics must operate on realized physical material at the qualifying realized boundary. Logical material must not be introduced into the cell merely to make harmonic tests or perception succeed.
+**Failure** means that no physically valid continuation capable of reaching viability remains under the available material and construction rules.
 
-This dependency is why cavity and harmonics failures can legitimately appear while the constructor migration is still being validated.
+The following are not construction failure by themselves:
 
-## H. What is complete vs. what is currently active
+- a preferred face does not mate perfectly;
+- a blueprint connection cannot close;
+- the realized topology differs from the blueprint;
+- an additional structural unit was required;
+- an acceptable substitute material was used;
+- a less-preferred physical contact was necessary.
 
-### Implemented architecture
-- forward-only developmental construction;
-- actual physical-material selection;
-- shared construction/COMBINE physical bond transaction;
-- deterministic candidate evaluation/selection;
-- physical overlap/penetration validation;
-- realized-structure authority;
-- realized cavity qualification;
-- physical-only harmonic environmental material;
-- seed-ring physical calibration.
+## G. Material authority
 
-### Current active work
-- focused constructor and realized-structure contract validation;
-- correcting genuine implementation defects exposed by those tests;
-- preserving constructor performance without changing its selection semantics;
-- separating expected downstream test fallout from unrelated regressions;
-- migrating dependent tests only after the underlying contract is confirmed.
+Construction operates on actual physical material.
 
-### Not currently the task
-- redesigning the constructor from scratch;
-- restoring placement-authoritative construction;
-- adding a second construction-specific bond/geometry authority;
-- changing unrelated movement, energy, reproduction, or biological behavior merely to make downstream tests green;
-- performing long whole-simulation runs before the focused construction contracts are stable.
+The implementation must preserve:
 
-## I. Failure classification
+- physical material identity;
+- internal composite structure;
+- existing constituent relationships;
+- inventory ownership;
+- exact consumption semantics.
 
-Current red tests must be classified before changing code.
+Composite physical material must not be flattened merely to satisfy a blueprint preference. If a composite is restored into physical constituents and bonds, that restoration must remain physically authoritative.
 
-### Expected migration fallout
-A test may still encode an obsolete placement-authoritative, predefined-cavity, logical-material, or other retired assumption.
+No construction step may manufacture a catalog replacement when an actual physical inventory instance is required.
 
-These failures should be migrated to the new contract **after the implementation contract they depend on is proven**.
+## H. Viability authority
 
-### Genuine implementation defect
-The current code violates an approved physical or architectural rule.
+Construction completion must use the existing realized-structure viability system rather than inventing a second constructor-specific definition.
 
-These must be fixed in the implementation.
+The viability audit must establish exactly:
 
-### Accidental collateral change
-A recent patch changes behavior outside its intended contract, such as an unrelated physical attachment path or an unrelated helper.
+- how the realized cavity qualifies;
+- what additional structure/material is required;
+- how juvenile viability is determined;
+- which conditions are physical invariants;
+- which conditions are developmental preferences only.
 
-These must be fixed immediately and isolated from the architectural migration.
+A predefined core, fixed piece count, exact blueprint closure, or universal lattice topology must not become a hidden viability requirement.
 
-**Do not treat all cascading failures as one category.**
+## I. Focused audit and implementation order
 
-## J. Required focused test matrix
+Work proceeds in this order:
 
-### Exact bond
-- exact endpoints succeed;
-- separated endpoints fail;
-- intended boundary contact succeeds;
-- unintended penetration fails;
-- successful transaction changes energy exactly once;
-- failed transaction leaves structure, inventory, energy, and ledger unchanged.
+1. **Physical contact and candidate-generation audit**
+   - verify that legitimate touching contacts can actually be discovered;
+   - separate contact validity from preferred face mating;
+   - identify and remove only genuinely conflicting geometric gates.
 
-### Candidate search
-- later orientation succeeds after earlier failures;
-- later endpoint succeeds after earlier endpoint failures;
-- later acceptable material succeeds after earlier geometry failure;
-- no candidate failure aborts the search prematurely;
-- best-candidate selection remains deterministic;
-- safe pruning does not change the selected valid candidate.
+2. **Material restoration audit**
+   - verify atomic and composite physical-material paths;
+   - establish exactly how intact physical composites enter construction;
+   - preserve physical identity and internal structure.
 
-### Material preference
-- preferred physical material is selected when valid;
-- acceptable structural substitutes are selected when appropriate;
-- below-threshold material is rejected;
-- no acceptable candidate produces a construction/material need;
-- the actual physical inventory instance is used.
+3. **Viability audit**
+   - trace realized structure → cavity → genome realization → supporting structure → juvenile viability;
+   - establish one authoritative construction-completion contract.
 
-### Forward-only construction
-- committed bonds are never undone;
-- future closure failure does not invalidate earlier committed bonds;
-- later construction can use another valid endpoint/material;
-- future bonds are never prevalidated.
+4. **Blueprint/developmental guidance audit**
+   - identify every remaining place where blueprint intent is incorrectly treated as mandatory topology;
+   - retain preference while removing rigid closure requirements.
 
-### Geometry/cavity
-- seed-ring geometry is physically sealed;
-- irregular cavities can qualify;
-- no predefined core is required;
-- no 4N/lattice assumption is required;
-- scaffold/measurement geometry cannot become an unintended bond target.
+5. **Constructor control-flow implementation**
+   - replace blueprint-sized progression with a physical construction frontier;
+   - allow adaptive divergence and additional material;
+   - preserve forward-only irreversible construction.
 
-### Inventory
-- failed construction consumes nothing;
-- successful construction consumes exactly the selected physical instance;
-- alternate-candidate consumption is correct;
-- composite material retains its internal geometry and bonds.
+6. **Focused adaptive-construction tests**
+   - perfect construction;
+   - imperfect contact;
+   - unequal surfaces;
+   - failed preferred connection followed by successful alternative;
+   - additional structural unit;
+   - substitute material;
+   - valid divergent topology;
+   - genuinely impossible construction.
 
-### Harmonics
-- Environmental atomic, composite, and future organic material emits one resonance spectrum as a whole realized material.
-- Organisms are deaf to their own emitted tone; organism material is the receiver, not an environmental self-source.
-- Each physical resource forming the realized genome-cavity boundary receives environmental resonance independently.
-- Receiver geometry is the antenna: actual realized cavity-boundary segments provide directional coupling.
-- Environmental source position is preserved in each received channel; channels remain separate through perception so directional information is not averaged away.
-- Distance attenuates the resonance aura continuously; there is no hard perception radius.
-- The genome-cavity aggregate is derived only from those physical directional receptions. Logical environmental material is never injected as a sensory substitute.
-- Current implementation uses the existing realized physical material inventory and realized cavity geometry; no separate sensory organs, sensor radius, or second perception grid is introduced.
+7. **Downstream migration**
+   - classify remaining failures as genuine defects, obsolete tests, or collateral regressions;
+   - migrate stale tests only after the underlying contract is proven;
+   - then proceed to lifecycle and full simulation validation.
 
-- reception depends on a qualifying realized cavity;
-- environmental material is received from the realized physical boundary;
-- logical material is not injected into the organism to satisfy perception.
-
-## K. Migration order from this point
-
-The remaining work proceeds in this order:
-
-1. **Finish focused constructor contract validation.**
-2. **Fix any genuine constructor/physical-bond defects found by those tests.**
-3. **Verify the seed-ring/realized-cavity contract end-to-end.**
-4. **Verify harmonics against the realized cavity and physical material.**
-5. **Classify the remaining suite failures by contract layer.**
-6. **Migrate stale downstream tests without weakening the new architecture.**
-7. **Only after those layers are stable, proceed through reproduction/lifecycle tests and broader simulation validation.**
-
-This order is intentional. Downstream failures may cascade from an unfinished upstream contract, but they must not be allowed to dictate a return to the obsolete architecture.
-
-## L. Verification gate
+## J. Verification discipline
 
 For every implementation change:
 
 1. inspect the exact contract being changed;
 2. make the smallest isolated change;
-3. run `cargo fmt --all`;
+3. format;
 4. compile/check;
-5. run the focused tests for that contract;
-6. inspect the failures by dependency layer;
-7. only then broaden validation.
+5. run focused tests;
+6. inspect failures by dependency layer;
+7. broaden validation only after the focused contract is stable.
 
-Long simulation runs are appropriate after the focused physical contracts are stable. They are not substitutes for unit/contract validation.
+No speculative geometry heuristic, parallel construction authority, or unrelated biological change should be introduced merely to make tests pass.
 
-**Current task:** Continue from the realized cavity → harmonic reception validation boundary. The constructor architecture is established and the retired constructor scaffolding has been removed. The goal now is to prove directional harmonic reception, correct genuine defects without introducing unrelated behavior changes, then classify downstream test fallout and remove remaining obsolete paths.
+**Non-negotiable intention:** The constructor's job is to successfully build life from physical reality, not to solve a blueprint as if it were CAD. The blueprint guides development; physics determines what exists; viability determines when construction has succeeded.
 
-**Non-negotiable:** Do not introduce parallel construction authorities, restore placement-authoritative construction, or add unrelated geometry heuristics merely to satisfy downstream tests.
