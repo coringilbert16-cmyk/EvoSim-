@@ -989,6 +989,27 @@ mod tests {
     }
 
     #[test]
+    fn boundary_endpoint_persists_for_polygonal_geometry() {
+        let catalog = crate::resources::default_catalog();
+        let unit = StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 10.0,
+                y: -3.0,
+                rotation_radians: 0.0,
+            },
+        );
+        let endpoint = ConnectionEndpoint::Boundary {
+            angle_radians: 0.0,
+        };
+        let point = endpoint
+            .world_point(&unit, &catalog)
+            .expect("polygon boundary endpoints must resolve persistently");
+        assert!((point.x - 11.0).abs() < 1.0e-10);
+        assert!((point.y + 3.0).abs() < 1.0e-10);
+    }
+
+    #[test]
     fn physical_constituents_receive_stable_ids() {
         let mut s = OrganismStructure::new();
         let a = s.add_unit(StructuralUnit::new(
