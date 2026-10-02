@@ -156,10 +156,7 @@ fn rigid_surface_candidates(
     // Sample every rigid face midpoint as well as the old directional
     // candidates. This makes exact face-to-face placement observable to the
     // shared contact system instead of relying on an angular sweep to hit it.
-    for (unit, shape, other) in [
-        (a, shape_a, b),
-        (b, shape_b, a),
-    ] {
+    for (unit, shape, other) in [(a, shape_a, b), (b, shape_b, a)] {
         for (v) in shape.form.polygon_vertices().unwrap_or_default() {
             let _ = v;
         }
