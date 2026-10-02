@@ -152,9 +152,7 @@ pub const FACE_LENGTH_TOLERANCE: f64 = 0.5;
 /// Return the rigid polygon edges as local endpoint pairs.
 pub fn polygon_edges(shape: &Shape) -> Vec<((f64, f64), (f64, f64))> {
     match &shape.form {
-        Form::Line { length } => vec![
-            ((-*length * 0.5, 0.0), (*length * 0.5, 0.0)),
-        ],
+        Form::Line { length } => vec![((-*length * 0.5, 0.0), (*length * 0.5, 0.0))],
         _ => {
             let Some(vertices) = vertices(shape) else {
                 return Vec::new();
@@ -194,11 +192,9 @@ pub fn surface_alignment_placement(
         return None;
     }
 
-    let existing_angle =
-        (eb.1 - ea.1).atan2(eb.0 - ea.0) + existing_placement.rotation_radians;
+    let existing_angle = (eb.1 - ea.1).atan2(eb.0 - ea.0) + existing_placement.rotation_radians;
     let candidate_local_angle = (cb.1 - ca.1).atan2(cb.0 - ca.0);
-    let candidate_unit_angle =
-        existing_angle + std::f64::consts::PI - candidate_local_angle;
+    let candidate_unit_angle = existing_angle + std::f64::consts::PI - candidate_local_angle;
     let origin_rotation = candidate_unit_angle - candidate_relative_placement.rotation_radians;
 
     let existing_mid = ((ea.0 + eb.0) * 0.5, (ea.1 + eb.1) * 0.5);
@@ -250,8 +246,7 @@ pub fn surface_alignment_placements(
             let (ca, cb) = candidate_edges[candidate_index];
             let candidate_length = (cb.0 - ca.0).hypot(cb.1 - ca.1);
             if candidate_length <= f64::EPSILON
-                || (existing_length - candidate_length).abs()
-                    > FACE_LENGTH_TOLERANCE + 1e-12
+                || (existing_length - candidate_length).abs() > FACE_LENGTH_TOLERANCE + 1e-12
             {
                 continue;
             }
@@ -378,14 +373,10 @@ mod tests {
             rotation_radians: 0.0,
         };
 
-        assert!(surface_alignment_placement(
-            &long, origin, 0, &short, origin, 0, 0.0
-        )
-        .is_some());
-        assert!(surface_alignment_placement(
-            &long, origin, 0, &too_short, origin, 0, 0.0
-        )
-        .is_none());
+        assert!(surface_alignment_placement(&long, origin, 0, &short, origin, 0, 0.0).is_some());
+        assert!(
+            surface_alignment_placement(&long, origin, 0, &too_short, origin, 0, 0.0).is_none()
+        );
     }
 
     #[test]
@@ -409,8 +400,10 @@ mod tests {
         let (a, b) = (vertices[0], vertices[1]);
         let edge_angle = (b.1 - a.1).atan2(b.0 - a.0);
         let candidate_edge_angle = edge_angle + p.rotation_radians;
-        assert!((normalize_angle(candidate_edge_angle - edge_angle) - PI).abs() < 1e-10
-            || (normalize_angle(candidate_edge_angle - edge_angle) + PI).abs() < 1e-10);
+        assert!(
+            (normalize_angle(candidate_edge_angle - edge_angle) - PI).abs() < 1e-10
+                || (normalize_angle(candidate_edge_angle - edge_angle) + PI).abs() < 1e-10
+        );
     }
 
     #[test]
