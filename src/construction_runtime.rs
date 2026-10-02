@@ -38,6 +38,7 @@ fn circle_boundary_placements(
     target_shape: &crate::resources::Shape,
     target_placement: Placement,
     candidate_shape: &crate::resources::Shape,
+    candidate_relative_placement: Placement,
 ) -> Vec<Placement> {
     let crate::resources::Form::Circle {
         radius: candidate_radius,
@@ -64,10 +65,15 @@ fn circle_boundary_placements(
             target_boundary.normal_x * rc - target_boundary.normal_y * rs,
             target_boundary.normal_x * rs + target_boundary.normal_y * rc,
         );
+        let (rs, rc) = candidate_relative_placement.rotation_radians.sin_cos();
+        let rotated_relative = (
+            candidate_relative_placement.x * rc - candidate_relative_placement.y * rs,
+            candidate_relative_placement.x * rs + candidate_relative_placement.y * rc,
+        );
         out.push(Placement {
-            x: point.0 + normal.0 * *candidate_radius,
-            y: point.1 + normal.1 * *candidate_radius,
-            rotation_radians: 0.0,
+            x: point.0 + normal.0 * *candidate_radius - rotated_relative.0,
+            y: point.1 + normal.1 * *candidate_radius - rotated_relative.1,
+            rotation_radians: normalize_angle(-candidate_relative_placement.rotation_radians),
         });
     }
     out
@@ -117,10 +123,19 @@ fn boundary_to_circle_placements(
                 candidate_boundary.x * rc - candidate_boundary.y * rs,
                 candidate_boundary.x * rs + candidate_boundary.y * rc,
             );
+            let (relative_s, relative_c) = candidate_relative_placement.rotation_radians.sin_cos();
+            let rotated_relative = (
+                candidate_relative_placement.x * relative_c
+                    - candidate_relative_placement.y * relative_s,
+                candidate_relative_placement.x * relative_s
+                    + candidate_relative_placement.y * relative_c,
+            );
             out.push(Placement {
-                x: target_contact.0 - rotated_point.0,
-                y: target_contact.1 - rotated_point.1,
-                rotation_radians: rotation,
+                x: target_contact.0 - rotated_point.0 - rotated_relative.0,
+                y: target_contact.1 - rotated_point.1 - rotated_relative.1,
+                rotation_radians: normalize_angle(
+                    rotation - candidate_relative_placement.rotation_radians,
+                ),
             });
         }
     }
@@ -148,9 +163,19 @@ pub(crate) fn candidate_placements(
         };
 
         let placements = if matches!(&resource.shape.form, Form::Circle { .. }) {
-            circle_boundary_placements(&target_shape, unit.placement, &resource.shape)
+            circle_boundary_placements(
+                &target_shape,
+                unit.placement,
+                &resource.shape,
+                Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+            )
         } else if matches!(&target_shape.form, Form::Circle { .. }) {
-            boundary_to_circle_placements(&target_shape, unit.placement, &resource.shape)
+            boundary_to_circle_placements(
+                &target_shape,
+                unit.placement,
+                &resource.shape,
+                Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+            )
         } else {
             crate::rigid_boundary::surface_alignment_placements(
                 &target_shape,
@@ -179,6 +204,36 @@ pub(crate) fn candidate_placements(
     });
     out
 }
+fn material_part_candidate_placements(
+    existing_shape: &crate::resources::Shape,
+    existing_placement: Placement,
+    candidate_shape: &crate::resources::Shape,
+    candidate_relative_placement: Placement,
+) -> Vec<Placement> {
+    if matches!(&candidate_shape.form, Form::Circle { .. }) {
+        circle_boundary_placements(
+            existing_shape,
+            existing_placement,
+            candidate_shape,
+            candidate_relative_placement,
+        )
+    } else if matches!(&existing_shape.form, Form::Circle { .. }) {
+        boundary_to_circle_placements(
+            existing_shape,
+            existing_placement,
+            candidate_shape,
+            candidate_relative_placement,
+        )
+    } else {
+        crate::rigid_boundary::surface_alignment_placements(
+            existing_shape,
+            existing_placement,
+            candidate_shape,
+            candidate_relative_placement,
+        )
+    }
+}
+
 pub(crate) fn placed_unit_overlaps(
     structure: &OrganismStructure,
     candidate: &StructuralUnit,
@@ -294,7 +349,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
             continue;
         };
 
-        for candidate_origin in crate::rigid_boundary::surface_alignment_placements(
+        for candidate_origin in material_part_candidate_placements(
             existing_shape,
             existing_unit.placement,
             candidate_shape,
@@ -518,7 +573,7 @@ fn realize_next_bond_driven(
                 continue;
             };
 
-            for candidate_origin in crate::rigid_boundary::surface_alignment_placements(
+            for candidate_origin in material_part_candidate_placements(
                 existing_shape,
                 existing_unit.placement,
                 candidate_shape,
