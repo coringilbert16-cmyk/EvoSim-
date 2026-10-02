@@ -358,13 +358,15 @@ fn endpoint_facing(
     ))
 }
 
-fn candidate_for_endpoints(
+fn candidate_for_endpoints_with_loads(
     s: &OrganismStructure,
     ua: usize,
     ub: usize,
     a: ConnectionEndpoint,
     b: ConnectionEndpoint,
     c: &[crate::resources::BaseResource],
+    load_a: f64,
+    load_b: f64,
 ) -> Option<ConnectionPairCandidate> {
     let au = s.units.get(ua)?;
     let bu = s.units.get(ub)?;
@@ -375,8 +377,8 @@ fn candidate_for_endpoints(
         endpoint_b: b,
         distance: distance(wa, wb),
         facing: endpoint_facing(a, b, au, bu, c)?,
-        load_a: s.connection_load(ua, a, c),
-        load_b: s.connection_load(ub, b, c),
+        load_a,
+        load_b,
         available_a: true,
         available_b: true,
     })
@@ -393,7 +395,18 @@ pub fn connection_pair_candidates(
     };
     candidate_endpoints(a, b, c)
         .into_iter()
-        .filter_map(|(a, b)| candidate_for_endpoints(s, ua, ub, a, b, c))
+.filter_map(|(a, b)| {
+            candidate_for_endpoints_with_loads(
+                s,
+                ua,
+                ub,
+                a,
+                b,
+                c,
+                s.connection_load(ua, a, c),
+                s.connection_load(ub, b, c),
+            )
+        })
         .collect()
 }
 
@@ -413,11 +426,40 @@ pub fn contacting_connection_pair_candidates(
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct ConnectionCompatibilityCache;
+pub struct ConnectionCompatibilityCache {
+    loads: Vec<(crate::structure::PhysicalConstituentId, ConnectionEndpoint, f64)>,
+}
 
 impl ConnectionCompatibilityCache {
     pub fn new() -> Self {
-        Self
+        Self::default()
+    }
+
+    pub fn record_bond(
+        &mut self,
+        id_a: crate::structure::PhysicalConstituentId,
+        endpoint_a: ConnectionEndpoint,
+        id_b: crate::structure::PhysicalConstituentId,
+        endpoint_b: ConnectionEndpoint,
+        bond_energy: f64,
+    ) {
+        let load = crate::combine::experimental_bond_strength(bond_energy);
+        self.loads.push((id_a, endpoint_a, load));
+        self.loads.push((id_b, endpoint_b, load));
+    }
+
+    fn load(
+        &self,
+        id: crate::structure::PhysicalConstituentId,
+        location: ConnectionEndpoint,
+    ) -> f64 {
+        self.loads
+            .iter()
+            .filter(|(stored_id, stored_location, _)| {
+                *stored_id == id && stored_location.same_location(location)
+            })
+            .map(|(_, _, load)| *load)
+            .sum()
     }
 }
 
@@ -426,9 +468,28 @@ pub fn connection_pair_candidates_cached(
     ua: usize,
     ub: usize,
     c: &[crate::resources::BaseResource],
-    _cache: &mut ConnectionCompatibilityCache,
+    cache: &mut ConnectionCompatibilityCache,
 ) -> Vec<ConnectionPairCandidate> {
-    connection_pair_candidates(s, ua, ub, c)
+    let (Some(a), Some(b)) = (s.units.get(ua), s.units.get(ub)) else {
+        return Vec::new();
+    };
+    candidate_endpoints(a, b, c)
+        .into_iter()
+        .filter_map(|(a, b)| {
+            let id_a = s.physical_id(ua)?;
+            let id_b = s.physical_id(ub)?;
+            candidate_for_endpoints_with_loads(
+                s,
+                ua,
+                ub,
+                a,
+                b,
+                c,
+                cache.load(id_a, a),
+                cache.load(id_b, b),
+            )
+        })
+        .collect()
 }
 
 pub fn try_add_bond(
