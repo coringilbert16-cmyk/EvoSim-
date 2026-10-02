@@ -336,13 +336,32 @@ fn free_form_search(
     // bond closes a loop: adding a unit with one bond cannot create a new
     // enclosed region. This keeps the expensive cavity and acquisition
     // analysis off the ordinary acyclic growth path.
-    loop {
-        let rigid_resources = catalog
-            .iter()
-            .filter(|resource| resource.physical_state == PhysicalState::Rigid)
-            .filter(|resource| resource.shape.is_valid())
-            .collect::<Vec<_>>();
+    //
+    // These catalog-derived candidates never change during construction, so
+    // build them once. Recreating and re-validating every one-unit
+    // PhysicalMaterial on every growth iteration was pure search overhead.
+    let rigid_resources = catalog
+        .iter()
+        .filter(|resource| resource.physical_state == PhysicalState::Rigid)
+        .filter(|resource| resource.shape.is_valid())
+        .collect::<Vec<_>>();
+    let rigid_materials = rigid_resources
+        .iter()
+        .filter_map(|resource| {
+            crate::physical_material::PhysicalMaterial::realized(
+                Material::free_base(resource.name.clone(), 1.0),
+                vec![Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                catalog,
+            )
+            .map(|material| (*resource, material))
+        })
+        .collect::<Vec<_>>();
 
+    loop {
         let mut best: Option<(
             (usize, usize, f64, f64),
             crate::structure::OrganismStructure,
@@ -385,26 +404,6 @@ fn free_form_search(
                 anchor_indices.push(candidate_index);
             }
         }
-
-        // Candidate materials are immutable catalog descriptions. Build their
-        // one-unit physical representations once for this growth step rather
-        // than reconstructing and validating the same material for every
-        // anchor/material pair.
-        let rigid_materials = rigid_resources
-            .iter()
-            .filter_map(|resource| {
-                crate::physical_material::PhysicalMaterial::realized(
-                    Material::free_base(resource.name.clone(), 1.0),
-                    vec![Placement {
-                        x: 0.0,
-                        y: 0.0,
-                        rotation_radians: 0.0,
-                    }],
-                    catalog,
-                )
-                .map(|material| (*resource, material))
-            })
-            .collect::<Vec<_>>();
 
         // Candidate generation is deliberately local: an attachment is tried
         // only against an existing frontier or nearby closure-capable unit.
