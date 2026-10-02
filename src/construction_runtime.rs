@@ -8,7 +8,7 @@ use crate::construction_material_selection::{
 use crate::resources::{BaseResource, Form, PhysicalState};
 use crate::state::EnergyLedger;
 use crate::structural_blueprint::BlueprintPlacement;
-use crate::structure::{ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
+use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 
 fn resource<'a>(catalog: &'a [BaseResource], name: &str) -> Option<&'a BaseResource> {
     catalog.iter().find(|r| r.name == name)
