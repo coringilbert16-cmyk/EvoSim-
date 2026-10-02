@@ -787,6 +787,29 @@ fn close_one_realized_blueprint_connection(
             continue;
         };
 
+        // One physical bond closes this developmental edge. Do not create a
+        // second bond for the same blueprint connection merely because a
+        // composite element exposes another pair of touching constituents.
+        let already_closed = a_units.iter().any(|&unit_a| {
+            let Some(id_a) = structure.physical_id(unit_a) else {
+                return false;
+            };
+            b_units.iter().any(|&unit_b| {
+                let Some(id_b) = structure.physical_id(unit_b) else {
+                    return false;
+                };
+                structure.bonds.iter().any(|bond| {
+                    (bond.endpoint_a.constituent_id == id_a
+                        && bond.endpoint_b.constituent_id == id_b)
+                        || (bond.endpoint_a.constituent_id == id_b
+                            && bond.endpoint_b.constituent_id == id_a)
+                })
+            })
+        });
+        if already_closed {
+            continue;
+        }
+
         for &unit_a in a_units {
             for &unit_b in b_units {
                 if unit_a == unit_b {
