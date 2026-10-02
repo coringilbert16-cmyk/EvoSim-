@@ -1552,7 +1552,7 @@ fn construct_blueprint_bond_driven_internal(
         total_heat += attempt.work_cost;
     }
 
-    if crate::cavity::analyze_genome_cavity(&structure, catalog)
+    if crate::cavity::analyze_genome_cavity(&structure, catalog)?
         .is_some_and(|cavity| cavity.qualifies())
     {
         commit_reserved_storage(&mut available_materials, &reserved_storage_indices)?;
@@ -1579,7 +1579,7 @@ fn construct_blueprint_bond_driven_internal(
         });
 
     for _ in 0..supplemental_budget {
-        if crate::cavity::analyze_genome_cavity(&structure, catalog)
+        if crate::cavity::analyze_genome_cavity(&structure, catalog)?
             .is_some_and(|cavity| cavity.qualifies())
         {
             commit_reserved_storage(&mut available_materials, &reserved_storage_indices)?;
