@@ -231,7 +231,9 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
             && matches!(resource.shape.form, Form::Line { .. })
             && resource.shape.is_valid()
     }) else {
-        return Err("catalog does not contain a rigid line resource for structural bridging".into());
+        return Err(
+            "catalog does not contain a rigid line resource for structural bridging".into(),
+        );
     };
 
     for resource in structural_candidates {
@@ -242,12 +244,8 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
             continue;
         }
 
-        let Some(candidate) = candidate_annulus(
-            resource,
-            spoke_resource,
-            INNER_RING_SIDES,
-            OUTER_RING_SIDES,
-        )
+        let Some(candidate) =
+            candidate_annulus(resource, spoke_resource, INNER_RING_SIDES, OUTER_RING_SIDES)
         else {
             continue;
         };
@@ -257,14 +255,12 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
 
         let mut ledger = EnergyLedger::default();
         let mut energy = SEARCH_ENERGY;
-        let Ok((structure, _heat)) =
-            crate::construction_runtime::construct_blueprint_bond_driven(
-                &candidate,
-                catalog,
-                &mut ledger,
-                &mut energy,
-            )
-        else {
+        let Ok((structure, _heat)) = crate::construction_runtime::construct_blueprint_bond_driven(
+            &candidate,
+            catalog,
+            &mut ledger,
+            &mut energy,
+        ) else {
             continue;
         };
 
