@@ -225,6 +225,8 @@ fn close_new_physical_contacts(
     mut ledger: EnergyLedger,
     mut energy: f64,
 ) -> (crate::structure::OrganismStructure, EnergyLedger, f64) {
+    let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+
     loop {
         let mut best: Option<(
             f64,
@@ -258,7 +260,6 @@ fn close_new_physical_contacts(
                     continue;
                 }
 
-                let mut cache = crate::contact::ConnectionCompatibilityCache::new();
                 for candidate in crate::contact::connection_pair_candidates_cached(
                     &structure,
                     new_index,
@@ -300,7 +301,6 @@ fn close_new_physical_contacts(
         let mut next = structure.clone();
         let mut next_ledger = ledger;
         let mut next_energy = energy;
-        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
         let Some(_) = crate::combine_runtime::form_selected_bond(
             &mut next,
             unit_a,
