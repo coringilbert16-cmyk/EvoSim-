@@ -194,8 +194,12 @@ pub(crate) fn form_selected_bond_in_place(
     {
         return None;
     }
-    let point_a = candidate.endpoint_a.world_point(&structure.units[unit_a], catalog)?;
-    let point_b = candidate.endpoint_b.world_point(&structure.units[unit_b], catalog)?;
+    let point_a = candidate
+        .endpoint_a
+        .world_point(&structure.units[unit_a], catalog)?;
+    let point_b = candidate
+        .endpoint_b
+        .world_point(&structure.units[unit_b], catalog)?;
     if (point_a.x - point_b.x).hypot(point_a.y - point_b.y) > COMBINE_CONTACT_TOLERANCE {
         return None;
     }
