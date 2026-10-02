@@ -437,12 +437,49 @@ pub(crate) fn try_attach_physical_material_bond_driven(
             continue;
         };
 
-        for candidate_origin in material_part_candidate_placements(
+        let mut candidate_origins = material_part_candidate_placements(
             existing_shape,
             existing_unit.placement,
             candidate_shape,
             *relative,
-        ) {
+        );
+
+        // The physical primitive must not commit the first geometrically valid
+        // placement it happens to enumerate. Surface-alignment order is a
+        // geometry implementation detail, not a developmental decision, and a
+        // later placement may create the second contact needed to close a
+        // cavity. Rank only by cheap local geometry here; the actual COMBINE
+        // transaction remains authoritative below.
+        candidate_origins.sort_by(|a, b| {
+            let score = |placement: &Placement| {
+                let radius = candidate_shape.form.bounding_radius();
+                let mut nearby = 0usize;
+                let mut nearest = f64::INFINITY;
+                for (index, unit) in structure.units.iter().enumerate() {
+                    if index == existing_index {
+                        continue;
+                    }
+                    let distance = (placement.x - unit.placement.x)
+                        .hypot(placement.y - unit.placement.y);
+                    nearest = nearest.min(distance);
+                    if let Some(shape) = unit.shape(catalog) {
+                        if distance
+                            <= radius
+                                + shape.form.bounding_radius()
+                                + SURFACE_CONTACT_TOLERANCE
+                        {
+                            nearby = nearby.saturating_add(1).min(2);
+                        }
+                    }
+                }
+                (nearby, -nearest)
+            };
+            score(b)
+                .partial_cmp(&score(a))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        for candidate_origin in candidate_origins {
             *nodes += 1;
 
             // Reject geometric penetration before cloning/restoring the whole
