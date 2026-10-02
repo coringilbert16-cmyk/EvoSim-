@@ -107,12 +107,23 @@ fn attach_local_piece(
         .find(|candidate| candidate.name == resource_name)?;
     let anchor_placement = structure.units.get(anchor)?.placement;
 
-    let origins = crate::construction_runtime::candidate_placements(
-        structure,
-        resource,
+    // Initial construction uses only the local rigid-to-rigid geometry authority.
+    // No developmental construction-runtime search is involved here.
+    let Some(anchor_unit) = structure.units.get(anchor) else {
+        return None;
+    };
+    let Some(anchor_shape) = anchor_unit.shape(catalog) else {
+        return None;
+    };
+    let origins = crate::rigid_boundary::surface_alignment_placements(
+        &anchor_shape,
         anchor_placement,
-        &[anchor],
-        catalog,
+        &resource.shape,
+        Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        },
     );
 
     for origin in origins {
