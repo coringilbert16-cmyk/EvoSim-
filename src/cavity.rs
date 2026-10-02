@@ -32,8 +32,22 @@ fn bond_seals_segment(
     let id_a = expected_a.physical_id;
     let id_b = expected_b.physical_id;
 
-    let same_point = |x: crate::connection_geometry::WorldConnectionPoint, y: Point| {
-        (x.x - y.x).hypot(x.y - y.y) <= NODE_TOLERANCE * 10.0
+    // Bonds are physical connections between surfaces, not prescribed
+    // corner-to-corner edges. A face-to-face bond may therefore land anywhere
+    // along the shared boundary segment. Cavity sealing must recognize that
+    // physical contact instead of requiring the bond endpoints to coincide
+    // with both segment corners.
+    let point_on_segment = |point: Point, a: Point, b: Point| {
+        let ab = b.sub(a);
+        let length_sq = ab.dot(ab);
+        if length_sq <= EPS {
+            return point.sub(a).norm() <= NODE_TOLERANCE * 10.0;
+        }
+        let t = point.sub(a).dot(ab) / length_sq;
+        if !(-NODE_TOLERANCE..=1.0 + NODE_TOLERANCE).contains(&t) {
+            return false;
+        }
+        point.sub(a.add(ab.scale(t))).norm() <= NODE_TOLERANCE * 10.0
     };
 
     structure.bonds.iter().any(|bond| {
@@ -66,8 +80,15 @@ fn bond_seals_segment(
             return false;
         };
 
-        (same_point(world_a, segment_a) && same_point(world_b, segment_b))
-            || (same_point(world_a, segment_b) && same_point(world_b, segment_a))
+        point_on_segment(
+            Point { x: world_a.x, y: world_a.y },
+            segment_a,
+            segment_b,
+        ) && point_on_segment(
+            Point { x: world_b.x, y: world_b.y },
+            segment_a,
+            segment_b,
+        )
     })
 }
 
