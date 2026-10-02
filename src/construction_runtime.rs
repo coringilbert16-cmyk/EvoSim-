@@ -8,7 +8,7 @@ use crate::construction_material_selection::{
 use crate::resources::{BaseResource, Form, PhysicalState};
 use crate::state::EnergyLedger;
 use crate::structural_blueprint::BlueprintPlacement;
-use crate::structure::{ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
+use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 
 fn resource<'a>(catalog: &'a [BaseResource], name: &str) -> Option<&'a BaseResource> {
     catalog.iter().find(|r| r.name == name)
@@ -21,6 +21,117 @@ fn placement(p: BlueprintPlacement) -> Placement {
         rotation_radians: p.rotation_radians,
     }
 }
+
+/// Construction uses a stricter geometric contact check than COMBINE's
+/// generic admission tolerance. Face-length compatibility and physical
+/// contact are separate concepts: the former may differ by 0.5, while a
+/// face-driven construction placement must actually put its selected
+/// boundaries at the same physical location.
+const SURFACE_CONTACT_TOLERANCE: f64 = 1.0e-8;
+
+fn normalize_angle(angle: f64) -> f64 {
+    (angle + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI
+}
+
+/// Explicit non-polygon construction path for curved boundaries. A circle has
+/// no face to enumerate, so it is placed boundary-to-boundary against sampled
+/// target boundary directions rather than being silently treated as a polygon.
+fn circle_boundary_placements(
+    target_shape: &crate::resources::Shape,
+    target_placement: Placement,
+    candidate_shape: &crate::resources::Shape,
+) -> Vec<Placement> {
+    let crate::resources::Form::Circle {
+        radius: candidate_radius,
+    } = &candidate_shape.form
+    else {
+        return Vec::new();
+    };
+
+    let mut out = Vec::new();
+    for step in 0..32 {
+        let angle = step as f64 * std::f64::consts::TAU / 32.0;
+        let (s, c) = angle.sin_cos();
+        let Some(target_boundary) =
+            crate::surface_geometry::boundary_point_toward(target_shape, c, s)
+        else {
+            continue;
+        };
+        let (rs, rc) = target_placement.rotation_radians.sin_cos();
+        let point = (
+            target_placement.x + target_boundary.x * rc - target_boundary.y * rs,
+            target_placement.y + target_boundary.x * rs + target_boundary.y * rc,
+        );
+        let normal = (
+            target_boundary.normal_x * rc - target_boundary.normal_y * rs,
+            target_boundary.normal_x * rs + target_boundary.normal_y * rc,
+        );
+        out.push(Placement {
+            x: point.0 + normal.0 * *candidate_radius,
+            y: point.1 + normal.1 * *candidate_radius,
+            rotation_radians: 0.0,
+        });
+    }
+    out
+}
+
+/// Explicit reverse path for a curved target boundary. A polygonal/linear
+/// candidate is oriented so its sampled boundary normal opposes the circle's
+/// radial normal, then translated to exact boundary contact.
+fn boundary_to_circle_placements(
+    target_shape: &crate::resources::Shape,
+    target_placement: Placement,
+    candidate_shape: &crate::resources::Shape,
+) -> Vec<Placement> {
+    let crate::resources::Form::Circle {
+        radius: target_radius,
+    } = &target_shape.form
+    else {
+        return Vec::new();
+    };
+
+    let mut out = Vec::new();
+    for target_step in 0..16 {
+        let target_angle = target_step as f64 * std::f64::consts::TAU / 16.0;
+        let (ts, tc) = target_angle.sin_cos();
+        let target_contact = (
+            target_placement.x + *target_radius * tc,
+            target_placement.y + *target_radius * ts,
+        );
+        let target_normal_angle = target_angle + target_placement.rotation_radians;
+
+        for candidate_step in 0..16 {
+            let candidate_angle = candidate_step as f64 * std::f64::consts::TAU / 16.0;
+            let (cs, cc) = candidate_angle.sin_cos();
+            let Some(candidate_boundary) =
+                crate::surface_geometry::boundary_point_toward(candidate_shape, cc, cs)
+            else {
+                continue;
+            };
+            let candidate_normal_angle = candidate_boundary
+                .normal_y
+                .atan2(candidate_boundary.normal_x);
+            let rotation = normalize_angle(
+                target_normal_angle + std::f64::consts::PI - candidate_normal_angle,
+            );
+            let (rs, rc) = rotation.sin_cos();
+            let rotated_point = (
+                candidate_boundary.x * rc - candidate_boundary.y * rs,
+                candidate_boundary.x * rs + candidate_boundary.y * rc,
+            );
+            out.push(Placement {
+                x: target_contact.0 - rotated_point.0,
+                y: target_contact.1 - rotated_point.1,
+                rotation_radians: rotation,
+            });
+        }
+    }
+    out
+}
+
+/// Compatibility wrapper retained for the existing runtime callers. The
+/// placement generator is now surface-driven; it no longer enumerates
+/// corner-to-corner angles.
 pub(crate) fn candidate_placements(
     structure: &OrganismStructure,
     resource: &BaseResource,
@@ -29,6 +140,7 @@ pub(crate) fn candidate_placements(
     catalog: &[BaseResource],
 ) -> Vec<Placement> {
     let mut out = vec![anchor];
+
     for &target in targets {
         let Some(unit) = structure.units.get(target) else {
             continue;
@@ -36,197 +148,26 @@ pub(crate) fn candidate_placements(
         let Some(target_shape) = unit.shape(catalog) else {
             continue;
         };
-        let target_endpoints: Vec<ConnectionEndpoint> = match &target_shape.form {
-            Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
-                let count = target_shape.form.polygon_vertices().map_or(0, |v| v.len());
-                (0..count)
-                    .map(|i| ConnectionEndpoint::Corner { point_index: i })
-                    .collect()
-            }
-            Form::Line { .. } => (0..2)
-                .map(|i| ConnectionEndpoint::LineEndpoint { point_index: i })
-                .collect(),
-            Form::Circle { .. } | Form::Fluid { .. } => Vec::new(),
+
+        let placements = if matches!(&resource.shape.form, Form::Circle { .. }) {
+            circle_boundary_placements(&target_shape, unit.placement, &resource.shape)
+        } else if matches!(&target_shape.form, Form::Circle { .. }) {
+            boundary_to_circle_placements(&target_shape, unit.placement, &resource.shape)
+        } else {
+            crate::rigid_boundary::surface_alignment_placements(
+                &target_shape,
+                unit.placement,
+                &resource.shape,
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            )
         };
-        for te in target_endpoints {
-            let Some(tp) = te.world_point(unit, catalog) else {
-                continue;
-            };
-            match (&resource.shape.form, te) {
-                (
-                    Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
-                    ConnectionEndpoint::Corner {
-                        point_index: target_index,
-                    },
-                ) => {
-                    let Some(candidate_count) =
-                        resource.shape.form.polygon_vertices().map(|v| v.len())
-                    else {
-                        continue;
-                    };
-                    for candidate_index in 0..candidate_count {
-                        if let (Some(candidate_normal), Some(target_normal)) = (
-                            crate::rigid_boundary::corner_normal(&resource.shape, candidate_index),
-                            crate::rigid_boundary::corner_normal(target_shape, target_index),
-                        ) {
-                            let candidate_angle = candidate_normal.1.atan2(candidate_normal.0);
-                            let target_angle = target_normal.1.atan2(target_normal.0);
-                            let rotation = target_angle + std::f64::consts::PI - candidate_angle;
-                            if let Some(local) = crate::rigid_boundary::world_vertex(
-                                &resource.shape,
-                                candidate_index,
-                                Placement {
-                                    x: 0.0,
-                                    y: 0.0,
-                                    rotation_radians: rotation,
-                                },
-                            ) {
-                                out.push(Placement {
-                                    x: tp.x - local.0,
-                                    y: tp.y - local.1,
-                                    rotation_radians: rotation,
-                                });
-                            }
-                        }
-                        for rotation in crate::rigid_boundary::corner_alignment_rotations(
-                            &resource.shape,
-                            candidate_index,
-                            target_shape,
-                            target_index,
-                            unit.placement.rotation_radians,
-                        ) {
-                            let Some(local) = crate::rigid_boundary::world_vertex(
-                                &resource.shape,
-                                candidate_index,
-                                Placement {
-                                    x: 0.0,
-                                    y: 0.0,
-                                    rotation_radians: rotation,
-                                },
-                            ) else {
-                                continue;
-                            };
-                            out.push(Placement {
-                                x: tp.x - local.0,
-                                y: tp.y - local.1,
-                                rotation_radians: rotation,
-                            });
-                        }
-                    }
-                }
-                (
-                    Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
-                    ConnectionEndpoint::LineEndpoint {
-                        point_index: target_index,
-                    },
-                ) => {
-                    let Some(candidate_count) =
-                        resource.shape.form.polygon_vertices().map(|v| v.len())
-                    else {
-                        continue;
-                    };
-                    let Some(target_normal) =
-                        crate::rigid_boundary::line_endpoint_normal(target_shape, target_index)
-                    else {
-                        continue;
-                    };
-                    let target_normal_angle = target_normal.1.atan2(target_normal.0);
-                    for candidate_index in 0..candidate_count {
-                        let Some(candidate_normal) =
-                            crate::rigid_boundary::corner_normal(&resource.shape, candidate_index)
-                        else {
-                            continue;
-                        };
-                        let candidate_normal_angle = candidate_normal.1.atan2(candidate_normal.0);
-                        let rotation =
-                            target_normal_angle + std::f64::consts::PI - candidate_normal_angle;
-                        let Some(local) = crate::rigid_boundary::world_vertex(
-                            &resource.shape,
-                            candidate_index,
-                            Placement {
-                                x: 0.0,
-                                y: 0.0,
-                                rotation_radians: rotation,
-                            },
-                        ) else {
-                            continue;
-                        };
-                        out.push(Placement {
-                            x: tp.x - local.0,
-                            y: tp.y - local.1,
-                            rotation_radians: rotation,
-                        });
-                    }
-                }
-                (
-                    Form::Line {
-                        length: candidate_length,
-                    },
-                    ConnectionEndpoint::Corner {
-                        point_index: target_index,
-                    },
-                ) => {
-                    let Some(target_normal) =
-                        crate::rigid_boundary::corner_normal(target_shape, target_index)
-                    else {
-                        continue;
-                    };
-                    let target_normal_angle = target_normal.1.atan2(target_normal.0);
-                    let half = *candidate_length / 2.0;
-                    for candidate_index in 0..2 {
-                        let candidate_normal = crate::rigid_boundary::line_endpoint_normal(
-                            &resource.shape,
-                            candidate_index,
-                        )
-                        .unwrap();
-                        let candidate_normal_angle = candidate_normal.1.atan2(candidate_normal.0);
-                        let rotation =
-                            target_normal_angle + std::f64::consts::PI - candidate_normal_angle;
-                        let local_x = if candidate_index == 0 { -half } else { half };
-                        let (s, c) = rotation.sin_cos();
-                        let lx = local_x * c;
-                        let ly = local_x * s;
-                        out.push(Placement {
-                            x: tp.x - lx,
-                            y: tp.y - ly,
-                            rotation_radians: rotation,
-                        });
-                    }
-                }
-                (
-                    Form::Line {
-                        length: candidate_length,
-                    },
-                    ConnectionEndpoint::LineEndpoint {
-                        point_index: target_index,
-                    },
-                ) => {
-                    if !matches!(target_shape.form, Form::Line { .. }) {
-                        continue;
-                    }
-                    let half = *candidate_length / 2.0;
-                    for candidate_index in 0..2 {
-                        let candidate_endpoint_x = if candidate_index == 0 { -half } else { half };
-                        for rotation in crate::rigid_boundary::line_endpoint_alignment_rotations(
-                            candidate_index,
-                            target_index,
-                            unit.placement.rotation_radians,
-                        ) {
-                            let (s, c) = rotation.sin_cos();
-                            let lx = candidate_endpoint_x * c;
-                            let ly = candidate_endpoint_x * s;
-                            out.push(Placement {
-                                x: tp.x - lx,
-                                y: tp.y - ly,
-                                rotation_radians: rotation,
-                            });
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
+        out.extend(placements);
     }
+
     out.sort_by(|a, b| {
         (a.x - anchor.x)
             .hypot(a.y - anchor.y)
@@ -234,50 +175,12 @@ pub(crate) fn candidate_placements(
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     out.dedup_by(|a, b| {
-        (a.x - b.x).abs() <= 1e-10
-            && (a.y - b.y).abs() <= 1e-10
-            && (a.rotation_radians - b.rotation_radians).abs() <= 1e-10
+        (a.x - b.x).abs() <= 1.0e-10
+            && (a.y - b.y).abs() <= 1.0e-10
+            && normalize_angle(a.rotation_radians - b.rotation_radians).abs() <= 1.0e-10
     });
     out
 }
-
-fn structure_unit_endpoint_options(
-    unit: &StructuralUnit,
-    catalog: &[BaseResource],
-) -> Vec<ConnectionEndpoint> {
-    let Some(shape) = unit.shape(catalog) else {
-        return Vec::new();
-    };
-    match &shape.form {
-        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => shape
-            .form
-            .polygon_vertices()
-            .map(|vertices| {
-                (0..vertices.len())
-                    .map(|point_index| ConnectionEndpoint::Corner { point_index })
-                    .collect()
-            })
-            .unwrap_or_default(),
-        Form::Line { .. } => (0..2)
-            .map(|point_index| ConnectionEndpoint::LineEndpoint { point_index })
-            .collect(),
-        Form::Circle { .. } | Form::Fluid { .. } => Vec::new(),
-    }
-}
-
-fn placement_for_joint(
-    local_point: (f64, f64),
-    joint: (f64, f64),
-    rotation_radians: f64,
-) -> Placement {
-    let (s, c) = rotation_radians.sin_cos();
-    Placement {
-        x: joint.0 - (local_point.0 * c - local_point.1 * s),
-        y: joint.1 - (local_point.0 * s + local_point.1 * c),
-        rotation_radians,
-    }
-}
-
 pub(crate) fn placed_unit_overlaps(
     structure: &OrganismStructure,
     candidate: &StructuralUnit,
@@ -386,177 +289,6 @@ fn already_realized_neighbors(
 /// a later connection would overshoot a previously established anchor, the
 /// constructor tries the other connection points on that anchor rather than
 /// abandoning the cavity.
-fn physical_material_endpoint_options(
-    instance: &crate::physical_material::PhysicalMaterial,
-    catalog: &[BaseResource],
-) -> Vec<(usize, ConnectionEndpoint)> {
-    let Some(placements) = instance.placements.as_ref() else {
-        return Vec::new();
-    };
-    instance
-        .material
-        .parts
-        .iter()
-        .zip(placements.iter())
-        .enumerate()
-        .flat_map(|(part_index, ((name, amount), placement))| {
-            if (*amount - 1.0).abs() > 1e-9 {
-                return Vec::new();
-            }
-            let Some(unit) = StructuralUnit::from_material(
-                crate::resources::Material::free_base(name.clone(), *amount),
-                *placement,
-            ) else {
-                return Vec::new();
-            };
-            let mut endpoints = crate::contact::endpoint_indices(&unit, catalog)
-                .into_iter()
-                .map(move |endpoint| (part_index, endpoint))
-                .collect::<Vec<_>>();
-            if endpoints.is_empty()
-                && resource(catalog, name.as_str())
-                    .is_some_and(|resource| resource.physical_state == PhysicalState::Fluid)
-            {
-                if let Some(endpoint) = crate::contact::continuous_endpoint(
-                    &unit,
-                    crate::contact::world_center(&unit),
-                    catalog,
-                ) {
-                    endpoints.push((part_index, endpoint));
-                }
-            }
-            endpoints
-        })
-        .collect()
-}
-
-fn physical_material_endpoint_local_point(
-    instance: &crate::physical_material::PhysicalMaterial,
-    part_index: usize,
-    endpoint: ConnectionEndpoint,
-    catalog: &[BaseResource],
-) -> Option<crate::connection_geometry::WorldConnectionPoint> {
-    let placements = instance.placements.as_ref()?;
-    let (name, amount) = instance.material.parts.get(part_index)?;
-    let placement = *placements.get(part_index)?;
-    let unit = StructuralUnit::from_material(
-        crate::resources::Material::free_base(name.clone(), *amount),
-        placement,
-    )?;
-    endpoint.world_point(&unit, catalog)
-}
-
-fn normalize_construction_angle(angle: f64) -> f64 {
-    (angle + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI
-}
-
-fn construction_angle_candidates(
-    existing_shape: &crate::resources::Shape,
-    existing_endpoint: ConnectionEndpoint,
-    existing_rotation: f64,
-    candidate_shape: &crate::resources::Shape,
-    candidate_endpoint: ConnectionEndpoint,
-    candidate_relative_rotation: f64,
-    ideal_angle: f64,
-) -> Vec<f64> {
-    let mut angles = Vec::new();
-    let mut push_unique = |angle: f64| {
-        let normalized = normalize_construction_angle(angle);
-        if !angles.iter().any(|current: &f64| {
-            (normalize_construction_angle(*current - normalized)).abs() <= 1e-10
-        }) {
-            angles.push(normalized);
-        }
-    };
-
-    push_unique(ideal_angle);
-
-    match (existing_endpoint, candidate_endpoint) {
-        (
-            ConnectionEndpoint::Corner {
-                point_index: existing_index,
-            },
-            ConnectionEndpoint::Corner {
-                point_index: candidate_index,
-            },
-        ) => {
-            for angle in crate::rigid_boundary::corner_alignment_rotations(
-                candidate_shape,
-                candidate_index,
-                existing_shape,
-                existing_index,
-                existing_rotation,
-            ) {
-                push_unique(angle - candidate_relative_rotation);
-            }
-        }
-        (
-            ConnectionEndpoint::LineEndpoint {
-                point_index: existing_index,
-            },
-            ConnectionEndpoint::LineEndpoint {
-                point_index: candidate_index,
-            },
-        ) => {
-            for angle in crate::rigid_boundary::line_endpoint_alignment_rotations(
-                candidate_index,
-                existing_index,
-                existing_rotation,
-            ) {
-                push_unique(angle - candidate_relative_rotation);
-            }
-        }
-        (
-            ConnectionEndpoint::Corner {
-                point_index: existing_index,
-            },
-            ConnectionEndpoint::LineEndpoint {
-                point_index: candidate_index,
-            },
-        ) => {
-            if let (Some(a), Some(b)) = (
-                crate::rigid_boundary::corner_normal(existing_shape, existing_index),
-                crate::rigid_boundary::line_endpoint_normal(candidate_shape, candidate_index),
-            ) {
-                push_unique(
-                    a.1.atan2(a.0) + std::f64::consts::PI
-                        - b.1.atan2(b.0)
-                        - candidate_relative_rotation,
-                );
-            }
-        }
-        (
-            ConnectionEndpoint::LineEndpoint {
-                point_index: existing_index,
-            },
-            ConnectionEndpoint::Corner {
-                point_index: candidate_index,
-            },
-        ) => {
-            if let (Some(a), Some(b)) = (
-                crate::rigid_boundary::line_endpoint_normal(existing_shape, existing_index),
-                crate::rigid_boundary::corner_normal(candidate_shape, candidate_index),
-            ) {
-                push_unique(
-                    a.1.atan2(a.0) + std::f64::consts::PI
-                        - b.1.atan2(b.0)
-                        - candidate_relative_rotation,
-                );
-            }
-        }
-        _ => {}
-    }
-
-    // Exact boundary alignments cover common packing: like-shape stacking and
-    // fitting rigid pieces against convex or concave corners. Keep a coarse
-    // fallback for irregular cases without returning to a 360-step sweep.
-    const COARSE_SAMPLES: usize = 24;
-    for step in 0..COARSE_SAMPLES {
-        push_unique(ideal_angle + std::f64::consts::TAU * step as f64 / COARSE_SAMPLES as f64);
-    }
-    angles
-}
-
 pub(crate) fn try_attach_physical_material_bond_driven(
     structure: &OrganismStructure,
     existing_index: usize,
@@ -574,51 +306,232 @@ pub(crate) fn try_attach_physical_material_bond_driven(
     f64,
 )> {
     let existing_unit = structure.units.get(existing_index)?;
-    let existing_endpoints = structure_unit_endpoint_options(existing_unit, catalog);
-    let new_endpoints = physical_material_endpoint_options(new_material, catalog);
-    if existing_endpoints.is_empty() || new_endpoints.is_empty() {
-        return None;
-    }
+    let existing_shape = existing_unit.shape(catalog)?;
+    let placements = new_material.placements.as_ref()?;
 
-    for endpoint_a in existing_endpoints {
-        let joint = endpoint_a.world_point(existing_unit, catalog)?;
-        for (part_index, endpoint_b) in new_endpoints.iter().copied() {
-            let local_b = physical_material_endpoint_local_point(
+    // Evaluate all physically valid current-state attachments and prefer
+    // stronger present contact. The constructor does not inspect or score
+    // future bonds; every decision is based only on geometry and state that
+    // already exists at this step.
+    let mut best: Option<(
+        f64,
+        f64,
+        OrganismStructure,
+        Vec<usize>,
+        usize,
+        crate::combine_runtime::CombineAttempt,
+        EnergyLedger,
+        f64,
+    )> = None;
+
+    for (part_index, ((name, amount), relative)) in new_material
+        .material
+        .parts
+        .iter()
+        .zip(placements.iter())
+        .enumerate()
+    {
+        if (*amount - 1.0).abs() > 1e-9 {
+            continue;
+        }
+        let Some(candidate_shape) = resource(catalog, name).map(|resource| &resource.shape) else {
+            continue;
+        };
+
+        for candidate_origin in crate::rigid_boundary::surface_alignment_placements(
+            existing_shape,
+            existing_unit.placement,
+            candidate_shape,
+            *relative,
+        ) {
+            *nodes += 1;
+
+            let mut trial = structure.clone();
+            let Some(indices) = crate::material_restoration::restore_material(
+                &mut trial,
                 new_material,
-                part_index,
-                endpoint_b,
+                candidate_origin,
                 catalog,
-            )?;
-
-            let Some(existing_shape) = existing_unit.shape(catalog) else {
+            ) else {
                 continue;
             };
-            let Some(candidate_shape) = new_material
-                .material
-                .parts
-                .get(part_index)
-                .and_then(|(name, _)| resource(catalog, name))
-                .map(|resource| &resource.shape)
+
+            let new_unit_index = *indices.get(part_index)?;
+            let ignored_units = indices.clone();
+            if indices.iter().any(|index| {
+                placed_unit_overlaps(&trial, &trial.units[*index], &ignored_units, catalog)
+            }) {
+                continue;
+            }
+
+            let mut trial_ledger = *ledger;
+            let mut trial_energy = available_energy;
+            let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
+            let Some(candidate) = crate::contact::connection_pair_candidates_cached(
+                &trial,
+                existing_index,
+                new_unit_index,
+                catalog,
+                &mut bond_cache,
+            )
+            .into_iter()
+            .filter(|candidate| {
+                matches!(
+                    (candidate.endpoint_a, candidate.endpoint_b),
+                    (
+                        crate::structure::ConnectionEndpoint::Boundary { .. },
+                        crate::structure::ConnectionEndpoint::Boundary { .. }
+                    )
+                ) && candidate.distance <= SURFACE_CONTACT_TOLERANCE
+                    && candidate.available_a
+                    && candidate.available_b
+            })
+            .max_by(|a, b| {
+                a.facing
+                    .partial_cmp(&b.facing)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| {
+                        b.distance
+                            .partial_cmp(&a.distance)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    })
+            }) else {
+                continue;
+            };
+
+            let Some((_, _, _, investment, _required_energy)) =
+                crate::combine_runtime::selected_candidate_evaluation(
+                    &trial,
+                    existing_index,
+                    new_unit_index,
+                    candidate,
+                    catalog,
+                )
             else {
                 continue;
             };
-            let angles = construction_angle_candidates(
+
+            let Some(attempt) = crate::combine_runtime::form_selected_bond(
+                &mut trial,
+                existing_index,
+                new_unit_index,
+                candidate,
+                investment,
+                catalog,
+                &mut bond_cache,
+                &mut trial_ledger,
+                &mut trial_energy,
+            ) else {
+                continue;
+            };
+
+            let score = (candidate.facing, -candidate.distance);
+            let replace = best.as_ref().is_none_or(|current| {
+                score.0 > current.0 || (score.0 == current.0 && score.1 > current.1)
+            });
+            if replace {
+                best = Some((
+                    score.0,
+                    score.1,
+                    trial,
+                    indices,
+                    part_index,
+                    attempt,
+                    trial_ledger,
+                    trial_energy,
+                ));
+            }
+        }
+    }
+
+    best.map(
+        |(_facing, _negative_distance, structure, indices, part_index, attempt, ledger, energy)| {
+            (structure, indices, part_index, attempt, ledger, energy)
+        },
+    )
+}
+
+fn realize_next_bond_driven(
+    blueprint: &crate::structural_blueprint::StructuralBlueprint,
+    catalog: &[BaseResource],
+    structure: &OrganismStructure,
+    realized_units: &[Option<Vec<usize>>],
+    index: usize,
+    neighbor: usize,
+    genome_anchor: Placement,
+    anchor_declared: BlueprintPlacement,
+    new_material: &crate::physical_material::PhysicalMaterial,
+    nodes: &mut usize,
+    ledger: &EnergyLedger,
+    available_energy: f64,
+) -> Option<(
+    OrganismStructure,
+    Vec<usize>,
+    usize,
+    crate::combine_runtime::CombineAttempt,
+    EnergyLedger,
+    f64,
+)> {
+    let existing_indices = realized_units[neighbor].as_ref()?.clone();
+    let placements = new_material.placements.as_ref()?;
+    if existing_indices.is_empty() {
+        return None;
+    }
+
+    let target = blueprint.elements[index].placement;
+    let (s, c) = genome_anchor.rotation_radians.sin_cos();
+    let target_world = (
+        genome_anchor.x + (target.x - anchor_declared.x) * c - (target.y - anchor_declared.y) * s,
+        genome_anchor.y + (target.x - anchor_declared.x) * s + (target.y - anchor_declared.y) * c,
+    );
+    let target_rotation = normalize_angle(
+        genome_anchor.rotation_radians + target.rotation_radians - anchor_declared.rotation_radians,
+    );
+
+    // Candidate score is a preference only. Physical validity is established
+    // first; among valid placements, prefer candidates that already satisfy
+    // more of the element's required realized-neighbor topology, then match
+    // the declared position and orientation.
+    let mut best_candidate: Option<(
+        usize,
+        f64,
+        f64,
+        f64,
+        OrganismStructure,
+        Vec<usize>,
+        usize,
+        crate::combine_runtime::CombineAttempt,
+        EnergyLedger,
+        f64,
+    )> = None;
+
+    for existing_index in existing_indices {
+        let existing_unit = structure.units.get(existing_index)?;
+        let Some(existing_shape) = existing_unit.shape(catalog) else {
+            continue;
+        };
+
+        for (part_index, ((name, amount), relative)) in new_material
+            .material
+            .parts
+            .iter()
+            .zip(placements.iter())
+            .enumerate()
+        {
+            if (*amount - 1.0).abs() > 1e-9 {
+                continue;
+            }
+            let Some(candidate_shape) = resource(catalog, name).map(|resource| &resource.shape)
+            else {
+                continue;
+            };
+
+            for candidate_origin in crate::rigid_boundary::surface_alignment_placements(
                 existing_shape,
-                endpoint_a,
-                existing_unit.placement.rotation_radians,
+                existing_unit.placement,
                 candidate_shape,
-                endpoint_b,
-                new_material
-                    .placements
-                    .as_ref()
-                    .and_then(|placements| placements.get(part_index))
-                    .map(|placement| placement.rotation_radians)
-                    .unwrap_or(0.0),
-                0.0,
-            );
-            for angle in angles {
-                let candidate_origin =
-                    placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
+                *relative,
+            ) {
                 *nodes += 1;
 
                 let mut trial = structure.clone();
@@ -630,11 +543,11 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                 ) else {
                     continue;
                 };
-                let new_unit_index = *indices.get(part_index)?;
 
+                let new_unit_index = *indices.get(part_index)?;
                 let ignored_units = indices.clone();
-                if indices.iter().any(|index| {
-                    placed_unit_overlaps(&trial, &trial.units[*index], &ignored_units, catalog)
+                if indices.iter().any(|unit_index| {
+                    placed_unit_overlaps(&trial, &trial.units[*unit_index], &ignored_units, catalog)
                 }) {
                     continue;
                 }
@@ -650,12 +563,26 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     &mut bond_cache,
                 )
                 .into_iter()
-                .find(|candidate| {
-                    candidate.endpoint_a == endpoint_a
-                        && candidate.endpoint_b == endpoint_b
-                        && candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                .filter(|candidate| {
+                    matches!(
+                        (candidate.endpoint_a, candidate.endpoint_b),
+                        (
+                            crate::structure::ConnectionEndpoint::Boundary { .. },
+                            crate::structure::ConnectionEndpoint::Boundary { .. }
+                        )
+                    ) && candidate.distance <= SURFACE_CONTACT_TOLERANCE
                         && candidate.available_a
                         && candidate.available_b
+                })
+                .min_by(|a, b| {
+                    a.distance
+                        .partial_cmp(&b.distance)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                        .then_with(|| {
+                            b.facing
+                                .partial_cmp(&a.facing)
+                                .unwrap_or(std::cmp::Ordering::Equal)
+                        })
                 }) else {
                     continue;
                 };
@@ -686,226 +613,94 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     continue;
                 };
 
-                return Some((
-                    trial,
-                    indices,
-                    part_index,
-                    attempt,
-                    trial_ledger,
-                    trial_energy,
-                ));
-            }
-        }
-    }
-    None
-}
+                let actual_candidate = trial.units[new_unit_index].placement;
+                let target_distance = (actual_candidate.x - target_world.0)
+                    .hypot(actual_candidate.y - target_world.1);
+                let rotation_error =
+                    normalize_angle(actual_candidate.rotation_radians - target_rotation).abs();
 
-fn realize_next_bond_driven(
-    blueprint: &crate::structural_blueprint::StructuralBlueprint,
-    catalog: &[BaseResource],
-    structure: &OrganismStructure,
-    realized_units: &[Option<Vec<usize>>],
-    _index: usize,
-    neighbor: usize,
-    genome_anchor: Placement,
-    anchor_declared: BlueprintPlacement,
-    new_material: &crate::physical_material::PhysicalMaterial,
-    nodes: &mut usize,
-    ledger: &EnergyLedger,
-    available_energy: f64,
-) -> Option<(
-    OrganismStructure,
-    Vec<usize>,
-    usize,
-    crate::combine_runtime::CombineAttempt,
-    EnergyLedger,
-    f64,
-)> {
-    let existing_indices = realized_units[neighbor].as_ref()?.clone();
-    let new_endpoints = physical_material_endpoint_options(new_material, catalog);
-
-    if existing_indices.is_empty() || new_endpoints.is_empty() {
-        return None;
-    }
-
-    let mut best_candidate: Option<(
-        f64,
-        OrganismStructure,
-        Vec<usize>,
-        usize,
-        crate::combine_runtime::CombineAttempt,
-        EnergyLedger,
-        f64,
-    )> = None;
-
-    for existing_index in existing_indices {
-        let existing_unit = structure.units.get(existing_index)?;
-        let existing_endpoints = structure_unit_endpoint_options(existing_unit, catalog);
-        for endpoint_a in existing_endpoints {
-            let joint = endpoint_a.world_point(&structure.units[existing_index], catalog)?;
-            for (part_index, endpoint_b) in new_endpoints.iter().copied() {
-                let local_b = physical_material_endpoint_local_point(
-                    new_material,
-                    part_index,
-                    endpoint_b,
-                    catalog,
-                )?;
-
-                // The blueprint pose is a preference, not a placement command.
-                // The analytic target angle is followed by exact boundary alignments
-                // and a small coarse fallback rather than a blind 360-degree sweep.
-                let target = blueprint.elements[_index].placement;
-                let (s, c) = genome_anchor.rotation_radians.sin_cos();
-                let target_world = (
-                    genome_anchor.x + (target.x - anchor_declared.x) * c
-                        - (target.y - anchor_declared.y) * s,
-                    genome_anchor.y
-                        + (target.x - anchor_declared.x) * s
-                        + (target.y - anchor_declared.y) * c,
-                );
-                let ideal_angle = (joint.y - target_world.1).atan2(joint.x - target_world.0)
-                    - local_b.y.atan2(local_b.x);
-
-                let Some(existing_shape) = existing_unit.shape(catalog) else {
-                    continue;
-                };
-                let Some(candidate_shape) = new_material
-                    .material
-                    .parts
-                    .get(part_index)
-                    .and_then(|(name, _)| resource(catalog, name))
-                    .map(|resource| &resource.shape)
-                else {
-                    continue;
-                };
-                let angles = construction_angle_candidates(
-                    existing_shape,
-                    endpoint_a,
-                    existing_unit.placement.rotation_radians,
-                    candidate_shape,
-                    endpoint_b,
-                    new_material
-                        .placements
-                        .as_ref()
-                        .and_then(|placements| placements.get(part_index))
-                        .map(|placement| placement.rotation_radians)
-                        .unwrap_or(0.0),
-                    ideal_angle,
-                );
-                for angle in angles {
-                    let candidate_origin =
-                        placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
-                    let target_distance = (candidate_origin.x - target_world.0)
-                        .hypot(candidate_origin.y - target_world.1);
-
-                    // Do not prune solely because this pose is farther from the
-                    // declared preference than the best candidate found so far.
-                    // Physical validity is evaluated only after restoration,
-                    // penetration checks, and the shared bond admission. A farther
-                    // pose may be the first (or only) physically valid one, so
-                    // pruning here would silently turn preference into authority.
-
-                    *nodes += 1;
-
-                    let mut trial = structure.clone();
-                    let Some(indices) = crate::material_restoration::restore_material(
-                        &mut trial,
-                        new_material,
-                        candidate_origin,
-                        catalog,
-                    ) else {
-                        continue;
-                    };
-
-                    let new_unit_index = *indices.get(part_index)?;
-                    let ignored_units = indices.clone();
-                    if indices.iter().any(|index| {
-                        placed_unit_overlaps(&trial, &trial.units[*index], &ignored_units, catalog)
-                    }) {
+                let mut topology_score = 1usize;
+                for required_neighbor in already_realized_neighbors(
+                    blueprint,
+                    index,
+                    &realized_units
+                        .iter()
+                        .map(Option::is_some)
+                        .collect::<Vec<_>>(),
+                ) {
+                    if required_neighbor == neighbor {
                         continue;
                     }
-
-                    let mut trial_ledger = *ledger;
-                    let mut trial_energy = available_energy;
-                    let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
-
-                    // The official connection points determine where the
-                    // constructor works from and how the new material is placed.
-                    // Once the material is physically placed, the actual bond may
-                    // land anywhere on the touching boundaries.
-                    let Some(candidate) = crate::contact::connection_pair_candidates_cached(
-                        &trial,
-                        existing_index,
-                        new_unit_index,
-                        catalog,
-                        &mut bond_cache,
-                    )
-                    .into_iter()
-                    .filter(|candidate| {
-                        candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                            && candidate.available_a
-                            && candidate.available_b
-                    })
-                    .min_by(|a, b| {
-                        a.distance
-                            .partial_cmp(&b.distance)
-                            .unwrap_or(std::cmp::Ordering::Equal)
-                            .then_with(|| {
-                                b.facing
-                                    .partial_cmp(&a.facing)
-                                    .unwrap_or(std::cmp::Ordering::Equal)
-                            })
-                    }) else {
+                    let Some(neighbor_units) = realized_units[required_neighbor].as_ref() else {
                         continue;
                     };
-
-                    let Some((_, _, _, investment, _required_energy)) =
-                        crate::combine_runtime::selected_candidate_evaluation(
+                    let closes_neighbor = neighbor_units.iter().any(|&neighbor_unit| {
+                        crate::contact::connection_pair_candidates_cached(
                             &trial,
-                            existing_index,
                             new_unit_index,
-                            candidate,
+                            neighbor_unit,
                             catalog,
+                            &mut crate::contact::ConnectionCompatibilityCache::new(),
                         )
-                    else {
-                        continue;
-                    };
-
-                    let Some(attempt) = crate::combine_runtime::form_selected_bond(
-                        &mut trial,
-                        existing_index,
-                        new_unit_index,
-                        candidate,
-                        investment,
-                        catalog,
-                        &mut bond_cache,
-                        &mut trial_ledger,
-                        &mut trial_energy,
-                    ) else {
-                        continue;
-                    };
-
-                    if best_candidate
-                        .as_ref()
-                        .is_none_or(|current| target_distance < current.0)
-                    {
-                        best_candidate = Some((
-                            target_distance,
-                            trial,
-                            indices,
-                            part_index,
-                            attempt,
-                            trial_ledger,
-                            trial_energy,
-                        ));
+                        .into_iter()
+                        .filter(|candidate| {
+                            candidate.distance <= SURFACE_CONTACT_TOLERANCE
+                                && candidate.available_a
+                                && candidate.available_b
+                        })
+                        .any(|candidate| {
+                            crate::combine_runtime::selected_candidate_evaluation(
+                                &trial,
+                                new_unit_index,
+                                neighbor_unit,
+                                candidate,
+                                catalog,
+                            )
+                            .is_some()
+                        })
+                    });
+                    if closes_neighbor {
+                        topology_score += 1;
                     }
+                }
+
+                let better = best_candidate.as_ref().is_none_or(|current| {
+                    topology_score > current.0
+                        || (topology_score == current.0
+                            && (target_distance < current.1
+                                || (target_distance == current.1 && rotation_error < current.2)))
+                });
+                if better {
+                    best_candidate = Some((
+                        topology_score,
+                        target_distance,
+                        rotation_error,
+                        candidate.distance,
+                        trial,
+                        indices,
+                        part_index,
+                        attempt,
+                        trial_ledger,
+                        trial_energy,
+                    ));
                 }
             }
         }
     }
 
     best_candidate.map(
-        |(_, trial, indices, part_index, attempt, trial_ledger, trial_energy)| {
+        |(
+            _topology_score,
+            _target_distance,
+            _rotation_error,
+            _contact_distance,
+            trial,
+            indices,
+            part_index,
+            attempt,
+            trial_ledger,
+            trial_energy,
+        )| {
             (
                 trial,
                 indices,
@@ -1124,11 +919,6 @@ fn construct_blueprint_bond_driven_internal(
                 }
                 candidates.push((usize::MAX, candidate.name.clone(), 0.0));
             }
-            // Water is the final developmental construction fallback after
-            // all rigid material alternatives have failed.
-            if resource(catalog, "Water").is_some() {
-                candidates.push((usize::MAX, "Water".to_string(), 0.0));
-            }
             candidates
         };
 
@@ -1270,7 +1060,7 @@ fn construct_blueprint_bond_driven_internal(
                     let mut evaluated_candidates = 0usize;
                     let mut rejected_by_bond_admission = 0usize;
                     for candidate in candidates.into_iter().filter(|candidate| {
-                        candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                        candidate.distance <= SURFACE_CONTACT_TOLERANCE
                             && candidate.available_a
                             && candidate.available_b
                     }) {

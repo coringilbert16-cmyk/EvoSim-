@@ -261,15 +261,23 @@ impl ConnectionEndpoint {
                 )
             }
             Self::Boundary { angle_radians } => {
-                let crate::resources::Form::Circle { radius } = unit.shape(catalog)?.form else {
-                    return None;
-                };
+                let shape = unit.shape(catalog)?;
                 let (nx, ny) = (angle_radians.cos(), angle_radians.sin());
+                let boundary = crate::surface_geometry::boundary_point_toward(shape, nx, ny)?;
+                let normal_length = boundary.normal_x.hypot(boundary.normal_y);
+                let (normal_x, normal_y) = if normal_length > 1.0e-12 {
+                    (
+                        boundary.normal_x / normal_length,
+                        boundary.normal_y / normal_length,
+                    )
+                } else {
+                    (nx, ny)
+                };
                 Some(crate::connection_geometry::transform_derived_point(
-                    radius * nx,
-                    radius * ny,
-                    nx,
-                    ny,
+                    boundary.x,
+                    boundary.y,
+                    normal_x,
+                    normal_y,
                     unit.placement.x,
                     unit.placement.y,
                     unit.placement.rotation_radians,
@@ -977,6 +985,25 @@ mod tests {
         });
         assert!(s.is_structurally_qualified(w1, &catalog));
         assert!(s.is_structurally_qualified(w2, &catalog));
+    }
+
+    #[test]
+    fn boundary_endpoint_persists_for_polygonal_geometry() {
+        let catalog = crate::resources::default_catalog();
+        let unit = StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 10.0,
+                y: -3.0,
+                rotation_radians: 0.0,
+            },
+        );
+        let endpoint = ConnectionEndpoint::Boundary { angle_radians: 0.0 };
+        let point = endpoint
+            .world_point(&unit, &catalog)
+            .expect("polygon boundary endpoints must resolve persistently");
+        assert!((point.x - 11.0).abs() < 1.0e-10);
+        assert!((point.y + 3.0).abs() < 1.0e-10);
     }
 
     #[test]

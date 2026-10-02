@@ -611,12 +611,12 @@ pub fn default_catalog() -> Vec<BaseResource> {
             shape: Shape {
                 form: Form::Polygon {
                     vertices: vec![
-                        (-0.5, -0.5),
-                        (0.5, -0.5),
-                        (0.5, 0.0),
-                        (0.0, 0.0),
-                        (0.0, 0.5),
-                        (-0.5, 0.5),
+                        (-0.5, -0.25),
+                        (0.5, -0.25),
+                        (0.5, 0.25),
+                        (0.25, 0.25),
+                        (0.25, 0.0),
+                        (-0.5, 0.0),
                     ],
                 },
             },
@@ -808,20 +808,10 @@ mod shape_tests {
         let lengths = (0..phosphorus.len())
             .map(|i| distance(phosphorus[i], phosphorus[(i + 1) % phosphorus.len()]))
             .collect::<Vec<_>>();
-        assert_eq!(
-            lengths
-                .iter()
-                .filter(|length| (**length - 1.0).abs() < 1e-9)
-                .count(),
-            2
-        );
-        assert_eq!(
-            lengths
-                .iter()
-                .filter(|length| (**length - 0.5).abs() < 1e-9)
-                .count(),
-            4
-        );
+        let expected = [1.0, 0.5, 0.25, 0.25, 0.75, 0.25];
+        for (actual, expected) in lengths.iter().zip(expected) {
+            assert!((actual - expected).abs() < 1e-9);
+        }
     }
 
     #[test]

@@ -84,7 +84,7 @@ pub fn placed_forms_overlap(
     {
         return false;
     }
-    let tolerance = tolerance.max(0.0);
+    let tolerance = penetration_margin(tolerance);
     let center_distance = (a.placement.x - b.placement.x).hypot(a.placement.y - b.placement.y);
     if center_distance > a.form.bounding_radius() + b.form.bounding_radius() + tolerance {
         return false;
@@ -175,14 +175,14 @@ pub fn placed_forms_penetrate(
     {
         return false;
     }
-    let tolerance = tolerance.max(0.0);
+    let tolerance = penetration_margin(tolerance);
     let center_distance = (a.placement.x - b.placement.x).hypot(a.placement.y - b.placement.y);
     if center_distance >= a.form.bounding_radius() + b.form.bounding_radius() + tolerance {
         return false;
     }
     match (&a.form, &b.form) {
         (Form::Circle { radius: ar }, Form::Circle { radius: br }) => {
-            center_distance < ar + br - tolerance
+            center_distance + tolerance < ar + br
         }
         (Form::Circle { radius }, Form::Line { .. }) => {
             circle_line_penetration(a, *radius, b, tolerance)
@@ -202,6 +202,12 @@ pub fn placed_forms_penetrate(
         _ => polygons_penetrate(a, b, tolerance),
     }
 }
+const NUMERICAL_GEOMETRY_EPSILON: f64 = 1.0e-12;
+
+fn penetration_margin(tolerance: f64) -> f64 {
+    tolerance.max(0.0) + NUMERICAL_GEOMETRY_EPSILON
+}
+
 fn line_segment(form: &Form, placement: Placement) -> Option<((f64, f64), (f64, f64))> {
     let Form::Line { length } = form else {
         return None;
@@ -233,8 +239,7 @@ fn circle_line_penetration(
     let Some((a, b)) = line_segment(&line.form, line.placement) else {
         return false;
     };
-    point_segment_distance((circle.placement.x, circle.placement.y), a, b)
-        < (radius - tolerance).max(0.0)
+    point_segment_distance((circle.placement.x, circle.placement.y), a, b) + tolerance < radius
 }
 fn line_line_overlap(a: &PlacedMaterialPart, b: &PlacedMaterialPart, tolerance: f64) -> bool {
     let Some((a0, a1)) = line_segment(&a.form, a.placement) else {
@@ -367,7 +372,7 @@ fn polygons_penetrate(a: &PlacedMaterialPart, b: &PlacedMaterialPart, tolerance:
     for (axis_x, axis_y) in axes {
         let (a_min, a_max) = project_polygon(&a_vertices, axis_x, axis_y);
         let (b_min, b_max) = project_polygon(&b_vertices, axis_x, axis_y);
-        if a_max - tolerance <= b_min || b_max - tolerance <= a_min {
+        if a_max <= b_min + tolerance || b_max <= a_min + tolerance {
             return false;
         }
     }
@@ -575,6 +580,103 @@ mod tests {
         assert!(placed_forms_overlap(&circle, &square, 0.0));
         assert!(!placed_forms_penetrate(&circle, &square, 0.0));
     }
+    #[test]
+    fn touching_polygon_faces_are_contact_but_not_penetration() {
+        let a = part(
+            Form::Rectangle {
+                width: 2.0,
+                height: 2.0,
+            },
+            0.0,
+            0.0,
+            0.0,
+        );
+        let b = part(
+            Form::Rectangle {
+                width: 2.0,
+                height: 2.0,
+            },
+            2.0,
+            0.0,
+            0.0,
+        );
+
+        assert!(placed_forms_overlap(&a, &b, 0.0));
+        assert!(!placed_forms_penetrate(&a, &b, 0.0));
+    }
+
+    #[test]
+    fn tiny_rounding_residue_at_touch_is_not_penetration() {
+        let a = part(
+            Form::Rectangle {
+                width: 2.0,
+                height: 2.0,
+            },
+            0.0,
+            0.0,
+            0.0,
+        );
+        let b = part(
+            Form::Rectangle {
+                width: 2.0,
+                height: 2.0,
+            },
+            2.0 + 4.0e-13,
+            0.0,
+            0.0,
+        );
+
+        assert!(!placed_forms_penetrate(&a, &b, 0.0));
+    }
+
+    #[test]
+    fn genuine_polygon_penetration_remains_penetration() {
+        let a = part(
+            Form::Rectangle {
+                width: 2.0,
+                height: 2.0,
+            },
+            0.0,
+            0.0,
+            0.0,
+        );
+        let b = part(
+            Form::Rectangle {
+                width: 2.0,
+                height: 2.0,
+            },
+            1.0,
+            0.0,
+            0.0,
+        );
+
+        assert!(placed_forms_penetrate(&a, &b, 0.0));
+    }
+
+    #[test]
+    fn separated_polygon_faces_are_not_penetration() {
+        let a = part(
+            Form::Rectangle {
+                width: 2.0,
+                height: 2.0,
+            },
+            0.0,
+            0.0,
+            0.0,
+        );
+        let b = part(
+            Form::Rectangle {
+                width: 2.0,
+                height: 2.0,
+            },
+            2.0 + 1.0e-6,
+            0.0,
+            0.0,
+        );
+
+        assert!(!placed_forms_penetrate(&a, &b, 0.0));
+    }
+
     #[test]
     fn line_has_physical_endpoints() {
         let line = part(Form::Line { length: 4.0 }, 0.0, 0.0, 0.0);
