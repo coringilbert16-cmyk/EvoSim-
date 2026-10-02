@@ -284,21 +284,12 @@ fn free_form_search(
     mut energy: f64,
     nodes: &mut usize,
 ) -> Option<ValidConstruction> {
-    // Blueprint-free construction is a forward local-growth process. At each
-    // step we enumerate only physically adjacent attachment opportunities,
-    // score the resulting local state, commit one, then close newly created
-    // contacts through the normal COMBINE bond transaction.
+    // Blueprint-free construction is a forward local-growth process. A
+    // complete cavity/acquisition validation is only meaningful after a new
+    // bond closes a loop: adding a unit with one bond cannot create a new
+    // enclosed region. This keeps the expensive cavity and acquisition
+    // analysis off the ordinary acyclic growth path.
     loop {
-        if let Some(acquired_resource_placements) =
-            valid_construction(&structure, catalog, acquisition_candidates)
-        {
-            return Some(ValidConstruction {
-                structure,
-                energy,
-                acquired_resource_placements,
-            });
-        }
-
         let rigid_resources = catalog
             .iter()
             .filter(|resource| resource.physical_state == PhysicalState::Rigid)
@@ -411,11 +402,26 @@ fn free_form_search(
             return None;
         };
 
+        let bonds_before_closure = trial.bonds.len();
         let (closed_structure, closed_ledger, closed_energy) =
             close_new_physical_contacts(trial, &indices, catalog, trial_ledger, trial_energy);
+        let loop_was_closed = closed_structure.bonds.len() > bonds_before_closure;
+
         structure = closed_structure;
         ledger = closed_ledger;
         energy = closed_energy;
+
+        if loop_was_closed {
+            if let Some(acquired_resource_placements) =
+                valid_construction(&structure, catalog, acquisition_candidates)
+            {
+                return Some(ValidConstruction {
+                    structure,
+                    energy,
+                    acquired_resource_placements,
+                });
+            }
+        }
     }
 }
 
