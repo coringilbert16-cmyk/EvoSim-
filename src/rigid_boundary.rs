@@ -147,6 +147,135 @@ fn normalize_angle(angle: f64) -> f64 {
     normalized
 }
 
+pub const FACE_LENGTH_TOLERANCE: f64 = 0.5;
+
+/// Return the rigid polygon edges as local endpoint pairs.
+pub fn polygon_edges(shape: &Shape) -> Vec<((f64, f64), (f64, f64))> {
+    let Some(vertices) = vertices(shape) else {
+        return Vec::new();
+    };
+    if vertices.len() < 2 {
+        return Vec::new();
+    }
+    (0..vertices.len())
+        .map(|i| (vertices[i], vertices[(i + 1) % vertices.len()]))
+        .collect()
+}
+
+/// Build a whole-material placement that puts one candidate face against one
+/// existing face. The candidate's stored relative placement is included.
+pub fn surface_alignment_placement(
+    existing_shape: &Shape,
+    existing_placement: Placement,
+    existing_edge_index: usize,
+    candidate_shape: &Shape,
+    candidate_relative_placement: Placement,
+    candidate_edge_index: usize,
+    tangent_offset: f64,
+) -> Option<Placement> {
+    let existing_edges = polygon_edges(existing_shape);
+    let candidate_edges = polygon_edges(candidate_shape);
+    let (ea, eb) = *existing_edges.get(existing_edge_index)?;
+    let (ca, cb) = *candidate_edges.get(candidate_edge_index)?;
+
+    let existing_length = (eb.0 - ea.0).hypot(eb.1 - ea.1);
+    let candidate_length = (cb.0 - ca.0).hypot(cb.1 - ca.1);
+    if existing_length <= f64::EPSILON
+        || candidate_length <= f64::EPSILON
+        || (existing_length - candidate_length).abs() > FACE_LENGTH_TOLERANCE + 1e-12
+    {
+        return None;
+    }
+
+    let existing_angle =
+        (eb.1 - ea.1).atan2(eb.0 - ea.0) + existing_placement.rotation_radians;
+    let candidate_local_angle = (cb.1 - ca.1).atan2(cb.0 - ca.0);
+    let candidate_unit_angle =
+        existing_angle + std::f64::consts::PI - candidate_local_angle;
+    let origin_rotation = candidate_unit_angle - candidate_relative_placement.rotation_radians;
+
+    let existing_mid = ((ea.0 + eb.0) * 0.5, (ea.1 + eb.1) * 0.5);
+    let candidate_mid = ((ca.0 + cb.0) * 0.5, (ca.1 + cb.1) * 0.5);
+    let (rs, rc) = candidate_relative_placement.rotation_radians.sin_cos();
+    let relative_mid = (
+        candidate_relative_placement.x + candidate_mid.0 * rc - candidate_mid.1 * rs,
+        candidate_relative_placement.y + candidate_mid.0 * rs + candidate_mid.1 * rc,
+    );
+
+    let (os, oc) = origin_rotation.sin_cos();
+    let rotated_relative_mid = (
+        relative_mid.0 * oc - relative_mid.1 * os,
+        relative_mid.0 * os + relative_mid.1 * oc,
+    );
+
+    let (ts, tc) = existing_angle.sin_cos();
+    let target_mid = (
+        existing_mid.0 + tc * tangent_offset,
+        existing_mid.1 + ts * tangent_offset,
+    );
+
+    Some(Placement {
+        x: target_mid.0 - rotated_relative_mid.0,
+        y: target_mid.1 - rotated_relative_mid.1,
+        rotation_radians: normalize_angle(origin_rotation),
+    })
+}
+
+/// Enumerate physically meaningful face-to-face placements. A face pair is
+/// admissible when its lengths differ by no more than the shared tolerance.
+pub fn surface_alignment_placements(
+    existing_shape: &Shape,
+    existing_placement: Placement,
+    candidate_shape: &Shape,
+    candidate_relative_placement: Placement,
+) -> Vec<Placement> {
+    let existing_edges = polygon_edges(existing_shape);
+    let candidate_edges = polygon_edges(candidate_shape);
+    let mut out = Vec::new();
+
+    for existing_index in 0..existing_edges.len() {
+        let (ea, eb) = existing_edges[existing_index];
+        let existing_length = (eb.0 - ea.0).hypot(eb.1 - ea.1);
+        if existing_length <= f64::EPSILON {
+            continue;
+        }
+        for candidate_index in 0..candidate_edges.len() {
+            let (ca, cb) = candidate_edges[candidate_index];
+            let candidate_length = (cb.0 - ca.0).hypot(cb.1 - ca.1);
+            if candidate_length <= f64::EPSILON
+                || (existing_length - candidate_length).abs()
+                    > FACE_LENGTH_TOLERANCE + 1e-12
+            {
+                continue;
+            }
+
+            let delta = (existing_length - candidate_length) * 0.5;
+            for offset in [0.0, delta, -delta] {
+                if let Some(placement) = surface_alignment_placement(
+                    existing_shape,
+                    existing_placement,
+                    existing_index,
+                    candidate_shape,
+                    candidate_relative_placement,
+                    candidate_index,
+                    offset,
+                ) {
+                    if !out.iter().any(|p: &Placement| {
+                        (p.x - placement.x).abs() <= 1e-10
+                            && (p.y - placement.y).abs() <= 1e-10
+                            && normalize_angle(p.rotation_radians - placement.rotation_radians)
+                                .abs()
+                                <= 1e-10
+                    }) {
+                        out.push(placement);
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
 pub fn world_vertex(shape: &Shape, vertex: usize, placement: Placement) -> Option<(f64, f64)> {
     let vertices = vertices(shape)?;
     let (x, y) = *vertices.get(vertex)?;
