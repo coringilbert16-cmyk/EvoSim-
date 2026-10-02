@@ -168,7 +168,11 @@ pub(crate) fn candidate_placements(
                 &target_shape,
                 unit.placement,
                 &resource.shape,
-                Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
             )
         } else if matches!(&target_shape.form, Form::Circle { .. }) {
             boundary_to_circle_placements(
@@ -588,7 +592,8 @@ fn realize_next_bond_driven(
                     new_material,
                     candidate_origin,
                     catalog,
-                ) else {
+                )
+                else {
                     continue;
                 };
 
@@ -778,11 +783,15 @@ fn close_one_realized_blueprint_connection(
     )> = None;
 
     for connection in &blueprint.connections {
-        let Some(a_units) = realized_units.get(connection.element_a).and_then(Option::as_ref)
+        let Some(a_units) = realized_units
+            .get(connection.element_a)
+            .and_then(Option::as_ref)
         else {
             continue;
         };
-        let Some(b_units) = realized_units.get(connection.element_b).and_then(Option::as_ref)
+        let Some(b_units) = realized_units
+            .get(connection.element_b)
+            .and_then(Option::as_ref)
         else {
             continue;
         };
@@ -837,11 +846,7 @@ fn close_one_realized_blueprint_connection(
 
                 let mut cache = crate::contact::ConnectionCompatibilityCache::new();
                 for candidate in crate::contact::connection_pair_candidates_cached(
-                    structure,
-                    unit_a,
-                    unit_b,
-                    catalog,
-                    &mut cache,
+                    structure, unit_a, unit_b, catalog, &mut cache,
                 )
                 .into_iter()
                 .filter(|candidate| {
@@ -851,11 +856,7 @@ fn close_one_realized_blueprint_connection(
                 }) {
                     let Some((_, _, _, investment, _required_energy)) =
                         crate::combine_runtime::selected_candidate_evaluation(
-                            structure,
-                            unit_a,
-                            unit_b,
-                            candidate,
-                            catalog,
+                            structure, unit_a, unit_b, candidate, catalog,
                         )
                     else {
                         continue;
@@ -881,22 +882,14 @@ fn close_one_realized_blueprint_connection(
                     let score = candidate.facing;
                     let replace = best.as_ref().is_none_or(|current| score > current.0);
                     if replace {
-                        best = Some((
-                            score,
-                            trial,
-                            attempt,
-                            trial_ledger,
-                            trial_energy,
-                        ));
+                        best = Some((score, trial, attempt, trial_ledger, trial_energy));
                     }
                 }
             }
         }
     }
 
-    best.map(|(_, structure, attempt, ledger, energy)| {
-        (structure, attempt, ledger, energy)
-    })
+    best.map(|(_, structure, attempt, ledger, energy)| (structure, attempt, ledger, energy))
 }
 
 /// Bond-driven construction is forward-only. Once a bond is formed it is
@@ -975,18 +968,20 @@ fn construct_blueprint_bond_driven_internal(
             .map_err(|e| e.to_string())?;
         let storage_index = candidates
             .into_iter()
-            .find(|(storage_index, _, _score)| {
-                !reserved_storage_indices.contains(storage_index)
-            })
+            .find(|(storage_index, _, _score)| !reserved_storage_indices.contains(storage_index))
             .map(|(storage_index, _, _)| storage_index)
             .or_else(|| {
-                storage.entries.iter().enumerate().find_map(|(storage_index, entry)| {
-                    if reserved_storage_indices.contains(&storage_index) {
-                        return None;
-                    }
-                    matches!(entry, crate::material_storage::StoredMaterial::Physical(_))
-                        .then_some(storage_index)
-                })
+                storage
+                    .entries
+                    .iter()
+                    .enumerate()
+                    .find_map(|(storage_index, entry)| {
+                        if reserved_storage_indices.contains(&storage_index) {
+                            return None;
+                        }
+                        matches!(entry, crate::material_storage::StoredMaterial::Physical(_))
+                            .then_some(storage_index)
+                    })
             })
             .ok_or_else(|| {
                 "construction has no usable physical material for its initial structure".to_string()
@@ -1117,7 +1112,8 @@ fn construct_blueprint_bond_driven_internal(
         let target_world = (
             genome_anchor.x + (target.x - anchor_element.placement.x) * c
                 - (target.y - anchor_element.placement.y) * s,
-            genome_anchor.y + (target.x - anchor_element.placement.x) * s
+            genome_anchor.y
+                + (target.x - anchor_element.placement.x) * s
                 + (target.y - anchor_element.placement.y) * c,
         );
 
@@ -1179,8 +1175,8 @@ fn construct_blueprint_bond_driven_internal(
                 let Some(new_unit) = trial_structure.units.get(new_index) else {
                     continue;
                 };
-                let target_distance =
-                    (new_unit.placement.x - target_world.0).hypot(new_unit.placement.y - target_world.1);
+                let target_distance = (new_unit.placement.x - target_world.0)
+                    .hypot(new_unit.placement.y - target_world.1);
 
                 let better = best_developmental.as_ref().is_none_or(|current| {
                     target_distance < current.0
@@ -1296,7 +1292,9 @@ fn construct_blueprint_bond_driven_internal(
     const SYNTHETIC_SUPPLEMENTAL_SEARCH_LIMIT: usize = 64;
     let supplemental_budget = available_materials
         .as_ref()
-        .map_or(SYNTHETIC_SUPPLEMENTAL_SEARCH_LIMIT, |storage| storage.entries.len());
+        .map_or(SYNTHETIC_SUPPLEMENTAL_SEARCH_LIMIT, |storage| {
+            storage.entries.len()
+        });
 
     for _ in 0..supplemental_budget {
         if crate::cavity::analyze_genome_cavity(&structure, catalog)
@@ -1328,13 +1326,11 @@ fn construct_blueprint_bond_driven_internal(
             if let Some(storage) = available_materials.as_deref() {
                 let candidates = (0..storage.entries.len())
                     .filter(|storage_index| !reserved_storage_indices.contains(storage_index))
-                    .filter_map(|storage_index| {
-                        match storage.entries.get(storage_index) {
-                            Some(crate::material_storage::StoredMaterial::Physical(instance)) => {
-                                Some((storage_index, instance.clone()))
-                            }
-                            _ => None,
+                    .filter_map(|storage_index| match storage.entries.get(storage_index) {
+                        Some(crate::material_storage::StoredMaterial::Physical(instance)) => {
+                            Some((storage_index, instance.clone()))
                         }
+                        _ => None,
                     })
                     .collect::<Vec<_>>();
 
