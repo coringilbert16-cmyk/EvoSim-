@@ -547,6 +547,7 @@ fn realize_next_bond_driven(
     ledger: &EnergyLedger,
     available_energy: f64,
 ) -> Option<(
+    usize,
     OrganismStructure,
     Vec<usize>,
     usize,
@@ -776,6 +777,7 @@ fn realize_next_bond_driven(
             trial_energy,
         )| {
             (
+                topology_score,
                 trial,
                 indices,
                 part_index,
@@ -1127,6 +1129,7 @@ fn construct_blueprint_bond_driven_internal(
         // preferences; the first physically valid attachment must not become
         // an accidental hard constraint.
         let mut best_developmental: Option<(
+            usize,
             f64,
             usize,
             OrganismStructure,
@@ -1176,6 +1179,7 @@ fn construct_blueprint_bond_driven_internal(
                 };
 
                 let Some((
+                    topology_score,
                     trial_structure,
                     new_indices,
                     part_index,
@@ -1209,11 +1213,14 @@ fn construct_blueprint_bond_driven_internal(
                     .hypot(new_unit.placement.y - target_world.1);
 
                 let better = best_developmental.as_ref().is_none_or(|current| {
-                    target_distance < current.0
-                        || (target_distance == current.0 && storage_index < current.1)
+                    topology_score > current.0
+                        || (topology_score == current.0
+                            && (target_distance < current.1
+                                || (target_distance == current.1 && storage_index < current.2)))
                 });
                 if better {
                     best_developmental = Some((
+                        topology_score,
                         target_distance,
                         storage_index,
                         trial_structure,
@@ -1228,6 +1235,7 @@ fn construct_blueprint_bond_driven_internal(
         }
 
         let attached = if let Some((
+            _topology_score,
             _target_distance,
             storage_index,
             trial_structure,
