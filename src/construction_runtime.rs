@@ -663,6 +663,10 @@ fn realize_next_bond_driven(
                 let rotation_error =
                     normalize_angle(actual_candidate.rotation_radians - target_rotation).abs();
 
+                let realized_flags = realized_units
+                    .iter()
+                    .map(Option::is_some)
+                    .collect::<Vec<_>>();
                 let mut topology_score = 1usize;
                 for required_neighbor in
                     already_realized_neighbors(blueprint, index, &realized_flags)
@@ -1244,7 +1248,6 @@ fn construct_blueprint_bond_driven_internal(
         }
 
         let attached = if let Some((
-            _topology_score,
             _topology_score,
             _target_distance,
             storage_index,
