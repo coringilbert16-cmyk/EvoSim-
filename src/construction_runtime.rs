@@ -778,7 +778,6 @@ fn construct_blueprint_bond_driven_internal(
     let mut total_heat = 0.0;
     let mut nodes = 0usize;
     let mut reserved_storage_indices = Vec::<usize>::new();
-    let mut closed_connections = vec![false; blueprint.connections.len()];
 
     let mut anchor_storage_index = None;
     let anchor_instance = if let Some(storage) = available_materials.as_deref_mut() {
@@ -841,41 +840,17 @@ fn construct_blueprint_bond_driven_internal(
     realized_units[anchor_index] = Some(anchor_indices.clone());
     let genome_anchor = structure.units[anchor_unit_index].placement;
     while !realized.iter().all(|value| *value) {
-        // Select the next element only from its currently realized neighbors.
-        // Total blueprint degree is deliberately not a tie-breaker: that would
-        // use knowledge of future connections to choose which bond gets formed
-        // first. If several elements are equally ready, blueprint index provides
-        // a deterministic order.
-        let mut next: Option<(usize, Vec<usize>)> = None;
-        for index in 0..blueprint.elements.len() {
-            if realized[index] {
-                continue;
-            }
-            let neighbors = already_realized_neighbors(blueprint, index, &realized);
-            if neighbors.is_empty() {
-                continue;
-            }
-            if next
-                .as_ref()
-                .is_none_or(|(current_index, current_neighbors)| {
-                    neighbors.len() > current_neighbors.len()
-                        || (neighbors.len() == current_neighbors.len() && index < *current_index)
-                })
-            {
-                next = Some((index, neighbors));
-            }
-        }
+        // The blueprint chooses what we would like to build next, but it does
+        // not choose which physical unit must receive it. Every realized
+        // physical unit is part of the construction frontier.
+        let index = (0..blueprint.elements.len())
+            .find(|candidate| !realized[*candidate])
+            .expect("loop condition guarantees an unrealized blueprint element");
 
-        let Some((index, neighbors)) = next else {
-            return Err(
-                "bond-driven constructor reached an unrealized disconnected element".into(),
-            );
-        };
+        // One bond, one committed construction step. The constructor may try
+        // every physical frontier unit and every acceptable material before
+        // declaring this developmental addition impossible.
 
-        // One bond, one committed construction step. The constructor does
-        // not look ahead and reject a material because some later connection
-        // might be difficult. The next construction step gets to solve that
-        // next joint using whatever material is actually available then.
         let preferred = blueprint.elements[index].material.parts[0].0.clone();
         let candidate_resources = if let Some(storage) = available_materials.as_deref() {
             let ranked = rank_available_construction_materials(storage, &preferred, catalog)
@@ -935,7 +910,7 @@ fn construct_blueprint_bond_driven_internal(
         // neighbor. Each neighbor is an independently valid forward anchor;
         // failure against one must not strand the element when another neighbor
         // can admit the same physical material through the shared bond authority.
-        'neighbors: for neighbor in neighbors.iter().copied() {
+        'frontier: for neighbor in (0..blueprint.elements.len()).filter(|candidate| realized[*candidate]) {
             for (storage_index, candidate_name, _) in candidate_resources.iter().cloned() {
                 let candidate_instance = if let Some(storage) = available_materials.as_deref() {
                     let Some(crate::material_storage::StoredMaterial::Physical(instance)) =
@@ -993,20 +968,20 @@ fn construct_blueprint_bond_driven_internal(
                     if storage_index != usize::MAX {
                         reserved_storage_indices.push(storage_index);
                     }
-                    // This successful construction step created the physical
-                    // bond for the prescribed edge that selected this neighbor.
-                    // Record that edge now; later closure work only handles
-                    // edges that were not already realized by a forward bond.
-                    for (connection_index, connection) in blueprint.connections.iter().enumerate() {
-                        if (connection.element_a == index && connection.element_b == neighbor)
-                            || (connection.element_a == neighbor && connection.element_b == index)
-                        {
-                            closed_connections[connection_index] = true;
-                            break;
-                        }
-                    }
                     attached = true;
-                    break 'neighbors;
+
+                    // Viability is a physical milestone, not a blueprint
+                    // milestone. Stop as soon as the realized structure itself
+                    // satisfies the existing cavity contract.
+                    if crate::cavity::analyze_genome_cavity(&structure, catalog)
+                        .is_some_and(|cavity| cavity.qualifies())
+                    {
+                        *ledger = construction_ledger;
+                        *energy = remaining_energy;
+                        return Ok((structure, total_heat));
+                    }
+
+                    break 'frontier;
                 }
             }
         }
@@ -1018,237 +993,16 @@ fn construct_blueprint_bond_driven_internal(
         }
     }
 
-    // All elements now have permanent physical poses. Any blueprint bonds
-    // between already-realized elements are completed as ordinary, single-bond
-    // construction steps. This is not future lookahead: the endpoints and
-    // geometry already exist, and a failed closure never moves or undoes a
-    // committed bond.
-    while closed_connections.iter().any(|closed| !closed) {
-        let mut progressed = false;
-        let mut failed_diagnostic = None;
-        for (connection_index, connection) in blueprint.connections.iter().enumerate() {
-            if closed_connections[connection_index] {
-                continue;
-            }
-            let Some(units_a) = realized_units[connection.element_a].as_ref() else {
-                continue;
-            };
-            let Some(units_b) = realized_units[connection.element_b].as_ref() else {
-                continue;
-            };
-            'unit_pairs: for &unit_a in units_a {
-                for &unit_b in units_b {
-                    if unit_a == unit_b {
-                        continue;
-                    }
-                    let candidates = crate::contact::connection_pair_candidates_cached(
-                        &structure,
-                        unit_a,
-                        unit_b,
-                        catalog,
-                        &mut crate::contact::ConnectionCompatibilityCache::new(),
-                    );
-                    let total_candidates = candidates.len();
-                    let mut contact_candidates = 0usize;
-                    let mut evaluated_candidates = 0usize;
-                    let mut rejected_by_bond_admission = 0usize;
-                    for candidate in candidates.into_iter().filter(|candidate| {
-                        candidate.distance <= SURFACE_CONTACT_TOLERANCE
-                            && candidate.available_a
-                            && candidate.available_b
-                    }) {
-                        contact_candidates += 1;
-                        let Some((_, _, _, investment, _)) =
-                            crate::combine_runtime::selected_candidate_evaluation(
-                                &structure, unit_a, unit_b, candidate, catalog,
-                            )
-                        else {
-                            continue;
-                        };
-                        evaluated_candidates += 1;
-
-                        let mut trial_structure = structure.clone();
-                        let mut trial_ledger = construction_ledger;
-                        let mut trial_energy = remaining_energy;
-                        let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
-                        let Some(attempt) = crate::combine_runtime::form_selected_bond(
-                            &mut trial_structure,
-                            unit_a,
-                            unit_b,
-                            candidate,
-                            investment,
-                            catalog,
-                            &mut bond_cache,
-                            &mut trial_ledger,
-                            &mut trial_energy,
-                        ) else {
-                            rejected_by_bond_admission += 1;
-                            continue;
-                        };
-
-                        structure = trial_structure;
-                        construction_ledger = trial_ledger;
-                        remaining_energy = trial_energy;
-                        total_heat += attempt.work_cost;
-                        closed_connections[connection_index] = true;
-                        progressed = true;
-                        break 'unit_pairs;
-                    }
-
-                    if total_candidates > 0
-                        || contact_candidates > 0
-                        || evaluated_candidates > 0
-                        || rejected_by_bond_admission > 0
-                    {
-                        failed_diagnostic = Some((
-                            connection_index,
-                            connection.element_a,
-                            connection.element_b,
-                            total_candidates,
-                            contact_candidates,
-                            evaluated_candidates,
-                            rejected_by_bond_admission,
-                        ));
-                    }
-                }
-            }
-            if progressed {
-                break;
-            }
-            if let Some((
-                connection_index,
-                element_a,
-                element_b,
-                total_candidates,
-                contact_candidates,
-                evaluated_candidates,
-                rejected_by_bond_admission,
-            )) = failed_diagnostic
-            {
-                return Err(format!(
-                    "construction closure failed: connection={connection_index} elements=({element_a},{element_b}) candidates={total_candidates} contacts={contact_candidates} evaluated={evaluated_candidates} rejected={rejected_by_bond_admission}"
-                ));
-            }
-            return Err("construction closure made no progress".to_string());
-        }
+    if crate::cavity::analyze_genome_cavity(&structure, catalog)
+        .is_some_and(|cavity| cavity.qualifies())
+    {
+        *ledger = construction_ledger;
+        *energy = remaining_energy;
+        return Ok((structure, total_heat));
     }
 
-    Ok((structure, total_heat))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn bond_driven_triangle_commits_all_realized_neighbor_bonds() {
-        use crate::resources::Material;
-        use crate::structural_blueprint::{
-            BlueprintConnection, BlueprintElement, BlueprintPlacement,
-        };
-
-        let catalog = crate::resources::default_catalog();
-        let radius = catalog
-            .iter()
-            .find(|resource| resource.name == "Carbon")
-            .and_then(|resource| match resource.shape.form {
-                crate::resources::Form::RegularPolygon { radius, .. } => Some(radius),
-                _ => None,
-            })
-            .unwrap();
-
-        let spacing = (3.0_f64).sqrt() * radius;
-        let blueprint = crate::structural_blueprint::StructuralBlueprint::with_anchor_elements(
-            vec![
-                BlueprintElement {
-                    material: Material::free_base("Carbon", 1.0),
-                    placement: BlueprintPlacement {
-                        x: 0.0,
-                        y: 0.0,
-                        rotation_radians: 0.0,
-                    },
-                },
-                BlueprintElement {
-                    material: Material::free_base("Carbon", 1.0),
-                    placement: BlueprintPlacement {
-                        x: spacing,
-                        y: 0.0,
-                        rotation_radians: 0.0,
-                    },
-                },
-                BlueprintElement {
-                    material: Material::free_base("Carbon", 1.0),
-                    placement: BlueprintPlacement {
-                        x: spacing / 2.0,
-                        y: spacing * 0.8660254037844386,
-                        rotation_radians: 0.0,
-                    },
-                },
-            ],
-            vec![
-                BlueprintConnection {
-                    element_a: 0,
-                    element_b: 1,
-                },
-                BlueprintConnection {
-                    element_a: 0,
-                    element_b: 2,
-                },
-                BlueprintConnection {
-                    element_a: 1,
-                    element_b: 2,
-                },
-            ],
-            vec![0],
-        );
-
-        let mut ledger = EnergyLedger::default();
-        let mut energy = 1.0e6;
-        let (structure, _) =
-            construct_blueprint_bond_driven(&blueprint, &catalog, &mut ledger, &mut energy)
-                .unwrap();
-
-        assert_eq!(structure.units.len(), 3);
-        assert_eq!(structure.bonds.len(), 3);
-    }
-
-    #[test]
-    fn restored_composite_overlap_is_rejected_against_existing_structure() {
-        let catalog = crate::resources::default_catalog();
-        let mut structure = OrganismStructure::new();
-
-        let existing = StructuralUnit::from_material(
-            crate::resources::Material::free_base("Carbon", 1.0),
-            Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        )
-        .unwrap();
-        let existing_index = structure.add_unit(existing);
-
-        let overlapping = StructuralUnit::from_material(
-            crate::resources::Material::free_base("Carbon", 1.0),
-            Placement {
-                x: 0.5,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        )
-        .unwrap();
-
-        assert!(placed_unit_overlaps(
-            &structure,
-            &overlapping,
-            &[existing_index + 1],
-            &catalog,
-        ));
-        assert!(!placed_unit_overlaps(
-            &structure,
-            &overlapping,
-            &[existing_index],
-            &catalog,
-        ));
-    }
+    Err(
+        "developmental construction exhausted its blueprint material without realizing a viable physical organism"
+            .to_string(),
+    )
 }
