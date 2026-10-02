@@ -30,6 +30,23 @@ pub(crate) fn restore_material(
     origin: Placement,
     catalog: &[BaseResource],
 ) -> Option<Vec<usize>> {
+    let mut trial = structure.clone();
+    let indices = restore_material_in_place(&mut trial, instance, origin, catalog)?;
+    *structure = trial;
+    Some(indices)
+}
+
+/// Restore into an already-isolated transactional structure.
+///
+/// Callers that have already cloned their candidate structure can use this
+/// path to avoid cloning the entire organism a second time. On failure the
+/// caller should discard the isolated candidate.
+pub(crate) fn restore_material_in_place(
+    structure: &mut OrganismStructure,
+    instance: &PhysicalMaterial,
+    origin: Placement,
+    catalog: &[BaseResource],
+) -> Option<Vec<usize>> {
     let relative = instance.placements.as_ref()?;
     let connections = instance.internal_connections.as_ref()?;
     let material = &instance.material;
@@ -44,7 +61,6 @@ pub(crate) fn restore_material(
         return None;
     }
 
-    let mut trial = structure.clone();
     let mut indices = Vec::with_capacity(material.parts.len());
     for ((name, amount), placement) in material.parts.iter().zip(relative.iter()) {
         if amount.fract().abs() > EPSILON || (*amount - 1.0).abs() > EPSILON {
@@ -57,29 +73,29 @@ pub(crate) fn restore_material(
         if !unit.realize_default_geometry(catalog) {
             return None;
         }
-        indices.push(trial.add_unit(unit));
+        indices.push(structure.add_unit(unit));
     }
 
     // A stored physical material is authoritative, but it must still be
     // geometrically self-consistent when restored. Bonded contact is allowed;
     // physical penetration is not.
     for left in 0..indices.len() {
-        let Some(left_shape) = trial.units[indices[left]].shape(catalog) else {
+        let Some(left_shape) = structure.units[indices[left]].shape(catalog) else {
             return None;
         };
         let left_part = crate::material_geometry::PlacedMaterialPart {
             part_index: left,
             form: left_shape.form.clone(),
-            placement: trial.units[indices[left]].placement,
+            placement: structure.units[indices[left]].placement,
         };
         for right in (left + 1)..indices.len() {
-            let Some(right_shape) = trial.units[indices[right]].shape(catalog) else {
+            let Some(right_shape) = structure.units[indices[right]].shape(catalog) else {
                 return None;
             };
             let right_part = crate::material_geometry::PlacedMaterialPart {
                 part_index: right,
                 form: right_shape.form.clone(),
-                placement: trial.units[indices[right]].placement,
+                placement: structure.units[indices[right]].placement,
             };
             if crate::material_geometry::placed_forms_penetrate(&left_part, &right_part, 0.0) {
                 return None;
@@ -90,10 +106,10 @@ pub(crate) fn restore_material(
     for connection in connections {
         let unit_a = *indices.get(connection.part_a)?;
         let unit_b = *indices.get(connection.part_b)?;
-        let id_a = trial.physical_id(unit_a)?;
-        let id_b = trial.physical_id(unit_b)?;
-        let a = trial.units[unit_a].properties(catalog)?;
-        let b = trial.units[unit_b].properties(catalog)?;
+        let id_a = structure.physical_id(unit_a)?;
+        let id_b = structure.physical_id(unit_b)?;
+        let a = structure.units[unit_a].properties(catalog)?;
+        let b = structure.units[unit_b].properties(catalog)?;
         let strength = crate::combine::bond_strength(a, b);
         if !strength.is_finite() {
             return None;
@@ -106,9 +122,8 @@ pub(crate) fn restore_material(
             // carries no new COMBINE investment or energy transaction.
             bond_energy: 0.0,
         };
-        crate::contact::try_add_bond(&mut trial, bond, catalog).ok()?;
+        crate::contact::try_add_bond(structure, bond, catalog).ok()?;
     }
 
-    *structure = trial;
     Some(indices)
 }

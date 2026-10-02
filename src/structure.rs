@@ -194,10 +194,25 @@ impl<'de> Deserialize<'de> for StructuralUnit {
 }
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 pub enum ConnectionEndpoint {
-    Corner { point_index: usize },
-    LineEndpoint { point_index: usize },
-    Boundary { angle_radians: f64 },
-    Fluid { x: f64, y: f64 },
+    Corner {
+        point_index: usize,
+    },
+    LineEndpoint {
+        point_index: usize,
+    },
+    Boundary {
+        angle_radians: f64,
+    },
+    /// A persistent point on a rigid surface edge. The edge index identifies
+    /// the physical face and fraction identifies the point along that face.
+    Surface {
+        edge_index: usize,
+        fraction: f64,
+    },
+    Fluid {
+        x: f64,
+        y: f64,
+    },
 }
 #[derive(Serialize, Clone, Copy, Debug, PartialEq)]
 pub struct BondEndpoint {
@@ -261,15 +276,39 @@ impl ConnectionEndpoint {
                 )
             }
             Self::Boundary { angle_radians } => {
-                let crate::resources::Form::Circle { radius } = unit.shape(catalog)?.form else {
-                    return None;
-                };
+                let shape = unit.shape(catalog)?;
                 let (nx, ny) = (angle_radians.cos(), angle_radians.sin());
+                let boundary = crate::surface_geometry::boundary_point_toward(shape, nx, ny)?;
+                let normal_length = boundary.normal_x.hypot(boundary.normal_y);
+                let (normal_x, normal_y) = if normal_length > 1.0e-12 {
+                    (
+                        boundary.normal_x / normal_length,
+                        boundary.normal_y / normal_length,
+                    )
+                } else {
+                    (nx, ny)
+                };
                 Some(crate::connection_geometry::transform_derived_point(
-                    radius * nx,
-                    radius * ny,
-                    nx,
-                    ny,
+                    boundary.x,
+                    boundary.y,
+                    normal_x,
+                    normal_y,
+                    unit.placement.x,
+                    unit.placement.y,
+                    unit.placement.rotation_radians,
+                ))
+            }
+            Self::Surface {
+                edge_index,
+                fraction,
+            } => {
+                let shape = unit.shape(catalog)?;
+                let surface = crate::surface_geometry::surface_point(shape, edge_index, fraction)?;
+                Some(crate::connection_geometry::transform_derived_point(
+                    surface.x,
+                    surface.y,
+                    surface.normal_x,
+                    surface.normal_y,
                     unit.placement.x,
                     unit.placement.y,
                     unit.placement.rotation_radians,
@@ -295,6 +334,16 @@ impl ConnectionEndpoint {
             (Self::Boundary { angle_radians: a }, Self::Boundary { angle_radians: b }) => {
                 (a - b).abs() <= 1e-12
             }
+            (
+                Self::Surface {
+                    edge_index: ae,
+                    fraction: af,
+                },
+                Self::Surface {
+                    edge_index: be,
+                    fraction: bf,
+                },
+            ) => ae == be && (af - bf).abs() <= 1e-12,
             (Self::Fluid { x: ax, y: ay }, Self::Fluid { x: bx, y: by }) => {
                 (ax - bx).hypot(ay - by) <= 1e-12
             }
@@ -506,31 +555,47 @@ impl PhysicalConstituentGraph {
         self.unit_index(e.constituent_id)
     }
     pub fn is_valid_bond(&self, b: &Bond, c: &[BaseResource]) -> bool {
-        let Some(a) = self.endpoint_index(b.endpoint_a) else {
+        let Some(a) = self.endpoint_index(b.endpoint_a) else { return false; };
+        let Some(d) = self.endpoint_index(b.endpoint_b) else { return false; };
+        self.is_valid_bond_at_indices(b, a, d, c)
+    }
+
+    /// Validate a bond when its unit indices are already known.
+    pub(crate) fn is_valid_bond_at_indices(
+        &self,
+        b: &Bond,
+        a: usize,
+        d: usize,
+        c: &[BaseResource],
+    ) -> bool {
+        let Some(unit_a) = self.units.get(a) else { return false; };
+        let Some(unit_b) = self.units.get(d) else { return false; };
+        if unit_a.physical_id != b.endpoint_a.constituent_id
+            || unit_b.physical_id != b.endpoint_b.constituent_id
+        {
             return false;
-        };
-        let Some(d) = self.endpoint_index(b.endpoint_b) else {
-            return false;
-        };
+        }
         if !b.is_valid(|e| {
-            self.endpoint_index(e)
-                .and_then(|i| e.location.world_point(self.units.get(i)?, c))
-                .is_some()
+            let index = if e.constituent_id == unit_a.physical_id {
+                a
+            } else if e.constituent_id == unit_b.physical_id {
+                d
+            } else {
+                return false;
+            };
+            e.location.world_point(self.units.get(index)?, c).is_some()
         }) {
             return false;
         }
-        if units_strictly_overlap(&self.units[a], &self.units[d], c) {
+        if units_strictly_overlap(unit_a, unit_b, c) {
             return false;
         }
-        let Some(pa) = self.units[a].properties(c) else {
-            return false;
-        };
-        let Some(pb) = self.units[d].properties(c) else {
-            return false;
-        };
+        let Some(pa) = unit_a.properties(c) else { return false; };
+        let Some(pb) = unit_b.properties(c) else { return false; };
         let strength = crate::combine::bond_strength(pa, pb);
         strength.is_finite() && (0.0..=1.0).contains(&strength)
     }
+
     /// Stable physical IDs that established the qualifying genome cavity.
     pub fn genome_constituent_ids(&self) -> &[PhysicalConstituentId] {
         &self.genome_constituent_ids
@@ -977,6 +1042,25 @@ mod tests {
         });
         assert!(s.is_structurally_qualified(w1, &catalog));
         assert!(s.is_structurally_qualified(w2, &catalog));
+    }
+
+    #[test]
+    fn boundary_endpoint_persists_for_polygonal_geometry() {
+        let catalog = crate::resources::default_catalog();
+        let unit = StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 10.0,
+                y: -3.0,
+                rotation_radians: 0.0,
+            },
+        );
+        let endpoint = ConnectionEndpoint::Boundary { angle_radians: 0.0 };
+        let point = endpoint
+            .world_point(&unit, &catalog)
+            .expect("polygon boundary endpoints must resolve persistently");
+        assert!((point.x - 11.0).abs() < 1.0e-10);
+        assert!((point.y + 3.0).abs() < 1.0e-10);
     }
 
     #[test]

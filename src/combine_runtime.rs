@@ -16,7 +16,7 @@ use crate::state::{EnergyLedger, Environment, Organism};
 use crate::structure::{BondEndpoint, ConnectionEndpoint, Placement};
 
 const EPSILON: f64 = 1e-12;
-pub(crate) const COMBINE_CONTACT_TOLERANCE: f64 = 1.0;
+pub(crate) const COMBINE_CONTACT_TOLERANCE: f64 = 0.05;
 
 /// Developmental context is solver intent only. Physical validity is still
 /// established by the normal COMBINE candidate and formation checks.
@@ -174,6 +174,52 @@ pub(crate) fn form_selected_bond(
     )
 }
 
+pub(crate) fn form_selected_bond_in_place(
+    structure: &mut crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    candidate: crate::contact::ConnectionPairCandidate,
+    investment: f64,
+    catalog: &[BaseResource],
+    cache: &mut ConnectionCompatibilityCache,
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> Option<CombineAttempt> {
+    if unit_a >= structure.units.len()
+        || unit_b >= structure.units.len()
+        || unit_a == unit_b
+        || candidate.distance > COMBINE_CONTACT_TOLERANCE
+        || !candidate.available_a
+        || !candidate.available_b
+    {
+        return None;
+    }
+    let point_a = candidate
+        .endpoint_a
+        .world_point(&structure.units[unit_a], catalog)?;
+    let point_b = candidate
+        .endpoint_b
+        .world_point(&structure.units[unit_b], catalog)?;
+    if (point_a.x - point_b.x).hypot(point_a.y - point_b.y) > COMBINE_CONTACT_TOLERANCE {
+        return None;
+    }
+    form_bond_from_candidate_in_place(
+        structure,
+        BondFormationRequest {
+            unit_a,
+            unit_b,
+            endpoint_a: candidate.endpoint_a,
+            endpoint_b: candidate.endpoint_b,
+            investment,
+        },
+        candidate,
+        catalog,
+        cache,
+        ledger,
+        energy,
+    )
+}
+
 fn form_bond(
     structure: &mut crate::structure::OrganismStructure,
     request: BondFormationRequest,
@@ -253,13 +299,64 @@ fn form_bond_from_candidate(
         return None;
     }
     let mut trial_structure = structure.clone();
+    let result = form_bond_from_candidate_in_place(
+        &mut trial_structure,
+        request,
+        candidate,
+        catalog,
+        _cache,
+        ledger,
+        energy,
+    );
+    if result.is_some() {
+        *structure = trial_structure;
+    }
+    result
+}
+
+fn form_bond_from_candidate_in_place(
+    structure: &mut crate::structure::OrganismStructure,
+    request: BondFormationRequest,
+    candidate: crate::contact::ConnectionPairCandidate,
+    catalog: &[BaseResource],
+    _cache: &mut ConnectionCompatibilityCache,
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> Option<CombineAttempt> {
+    let BondFormationRequest {
+        unit_a: ua,
+        unit_b: ub,
+        endpoint_a,
+        endpoint_b,
+        investment,
+    } = request;
+    if ua >= structure.units.len() || ub >= structure.units.len() || ua == ub {
+        return None;
+    }
+    let id_a = structure.physical_id(ua)?;
+    let id_b = structure.physical_id(ub)?;
+    let a = structure.units[ua].properties(catalog)?;
+    let b = structure.units[ub].properties(catalog)?;
+    let evaluation = crate::combine::evaluate_formation(candidate, a.cohesion, b.cohesion);
+    if !crate::combine::formation_succeeds(evaluation, investment) {
+        return None;
+    }
+    let (interaction, work, threshold) = required_investment(a, b, evaluation).ok()?;
+    if (threshold - investment).abs() > EPSILON || interaction.signed_value < 0.0 {
+        return None;
+    }
+    let strength = bond_strength(a, b);
+    if !strength.is_finite() {
+        return None;
+    }
     let bond = crate::structure::Bond {
         endpoint_a: BondEndpoint::new(id_a, endpoint_a),
         endpoint_b: BondEndpoint::new(id_b, endpoint_b),
         strength,
         bond_energy: investment,
     };
-    crate::contact::try_add_bond(&mut trial_structure, bond, catalog).ok()?;
+    let previous_bond_count = structure.bonds.len();
+    crate::contact::try_add_bond_known_unique(structure, bond, ua, ub, catalog).ok()?;
     let before = *energy;
     let transaction = EnergyTransaction {
         reason: EnergyReason::Combine,
@@ -270,10 +367,10 @@ fn form_bond_from_candidate(
     };
     if !ledger.settle_transaction(energy, transaction) {
         *energy = before;
+        structure.bonds.truncate(previous_bond_count);
         return None;
     }
     let net = *energy - before;
-    *structure = trial_structure;
     Some(CombineAttempt {
         unit_a: ua,
         unit_b: ub,

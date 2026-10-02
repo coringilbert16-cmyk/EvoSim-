@@ -137,19 +137,76 @@ fn rigid_surface_candidates(
         return Vec::new();
     }
 
-    // The constructor still selects official connection points for placement.
-    // These additional endpoints are only the physical bond locations: a bond
-    // may land anywhere the two rigid boundaries actually touch.
+    // Enumerate exact points on overlapping rigid faces. The constructor
+    // aligns faces first; contact must use those same physical faces rather
+    // than rediscovering them through an angular ray sweep.
     let mut out = Vec::new();
-    let center_angle = dy.atan2(dx);
-    for step in -16..=16 {
-        let angle = center_angle + step as f64 * std::f64::consts::PI / 32.0;
-        let (s, c) = angle.sin_cos();
-        if let (Some(ea), Some(eb)) = (
-            rigid_boundary_endpoint(a, c, s),
-            rigid_boundary_endpoint(b, -c, -s),
-        ) {
-            out.push((ea, eb));
+    let edges_a = crate::rigid_boundary::polygon_edges(shape_a);
+    let edges_b = crate::rigid_boundary::polygon_edges(shape_b);
+    let world_point = |unit: &StructuralUnit, point: (f64, f64)| {
+        let (s, c) = unit.placement.rotation_radians.sin_cos();
+        (
+            unit.placement.x + point.0 * c - point.1 * s,
+            unit.placement.y + point.0 * s + point.1 * c,
+        )
+    };
+    let cross = |ax: f64, ay: f64, bx: f64, by: f64| ax * by - ay * bx;
+
+    for (edge_a, &(a0, a1)) in edges_a.iter().enumerate() {
+        let wa0 = world_point(a, a0);
+        let wa1 = world_point(a, a1);
+        let adx = wa1.0 - wa0.0;
+        let ady = wa1.1 - wa0.1;
+        let alen2 = adx * adx + ady * ady;
+        if alen2 <= f64::EPSILON {
+            continue;
+        }
+
+        for (edge_b, &(b0, b1)) in edges_b.iter().enumerate() {
+            let wb0 = world_point(b, b0);
+            let wb1 = world_point(b, b1);
+            let bdx = wb1.0 - wb0.0;
+            let bdy = wb1.1 - wb0.1;
+            let blen2 = bdx * bdx + bdy * bdy;
+            if blen2 <= f64::EPSILON {
+                continue;
+            }
+
+            let parallel_error = cross(adx, ady, bdx, bdy).abs();
+            let offset_error = cross(adx, ady, wb0.0 - wa0.0, wb0.1 - wa0.1).abs();
+            let scale = alen2.sqrt() * blen2.sqrt();
+            if parallel_error > 1.0e-8 * scale || offset_error > 1.0e-8 * alen2.sqrt() {
+                continue;
+            }
+
+            let project_a =
+                |point: (f64, f64)| ((point.0 - wa0.0) * adx + (point.1 - wa0.1) * ady) / alen2;
+            let b0_t = project_a(wb0);
+            let b1_t = project_a(wb1);
+            let overlap_start = 0.0_f64.max(b0_t.min(b1_t));
+            let overlap_end = 1.0_f64.min(b0_t.max(b1_t));
+            if overlap_end + 1.0e-10 < overlap_start {
+                continue;
+            }
+
+            let fraction_a = ((overlap_start + overlap_end) * 0.5).clamp(0.0, 1.0);
+            let contact_x = wa0.0 + adx * fraction_a;
+            let contact_y = wa0.1 + ady * fraction_a;
+            let fraction_b = ((contact_x - wb0.0) * bdx + (contact_y - wb0.1) * bdy) / blen2;
+            if !(0.0..=1.0).contains(&fraction_b) {
+                continue;
+            }
+
+            out.push((
+                ConnectionEndpoint::Surface {
+                    edge_index: edge_a,
+                    fraction: fraction_a,
+                },
+                ConnectionEndpoint::Surface {
+                    edge_index: edge_b,
+                    fraction: fraction_b,
+                },
+            ));
         }
     }
 
@@ -253,6 +310,21 @@ fn endpoint_world_point(
                 unit.placement.rotation_radians,
             ))
         }
+        ConnectionEndpoint::Surface {
+            edge_index,
+            fraction,
+        } => {
+            let point = crate::surface_geometry::surface_point(shape, edge_index, fraction)?;
+            Some(crate::connection_geometry::transform_derived_point(
+                point.x,
+                point.y,
+                point.normal_x,
+                point.normal_y,
+                unit.placement.x,
+                unit.placement.y,
+                unit.placement.rotation_radians,
+            ))
+        }
         ConnectionEndpoint::Fluid { x, y } => {
             let len = x.hypot(y);
             let (nx, ny) = if len > 1e-12 {
@@ -286,13 +358,15 @@ fn endpoint_facing(
     ))
 }
 
-fn candidate_for_endpoints(
+fn candidate_for_endpoints_with_loads(
     s: &OrganismStructure,
     ua: usize,
     ub: usize,
     a: ConnectionEndpoint,
     b: ConnectionEndpoint,
     c: &[crate::resources::BaseResource],
+    load_a: f64,
+    load_b: f64,
 ) -> Option<ConnectionPairCandidate> {
     let au = s.units.get(ua)?;
     let bu = s.units.get(ub)?;
@@ -303,8 +377,8 @@ fn candidate_for_endpoints(
         endpoint_b: b,
         distance: distance(wa, wb),
         facing: endpoint_facing(a, b, au, bu, c)?,
-        load_a: s.connection_load(ua, a, c),
-        load_b: s.connection_load(ub, b, c),
+        load_a,
+        load_b,
         available_a: true,
         available_b: true,
     })
@@ -321,7 +395,18 @@ pub fn connection_pair_candidates(
     };
     candidate_endpoints(a, b, c)
         .into_iter()
-        .filter_map(|(a, b)| candidate_for_endpoints(s, ua, ub, a, b, c))
+.filter_map(|(a, b)| {
+            candidate_for_endpoints_with_loads(
+                s,
+                ua,
+                ub,
+                a,
+                b,
+                c,
+                s.connection_load(ua, a, c),
+                s.connection_load(ub, b, c),
+            )
+        })
         .collect()
 }
 
@@ -341,11 +426,65 @@ pub fn contacting_connection_pair_candidates(
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct ConnectionCompatibilityCache;
+pub struct ConnectionCompatibilityCache {
+    loads: Vec<(crate::structure::PhysicalConstituentId, ConnectionEndpoint, f64)>,
+    complete: bool,
+}
 
 impl ConnectionCompatibilityCache {
     pub fn new() -> Self {
-        Self
+        Self::default()
+    }
+
+    /// Create a cache for a structure whose existing bonds are fully represented
+    /// by this cache. Missing endpoint entries therefore mean zero load rather
+    /// than requiring a fallback scan of the structure bond list.
+    pub fn new_complete() -> Self {
+        Self {
+            loads: Vec::new(),
+            complete: true,
+        }
+    }
+
+    pub fn record_bond(
+        &mut self,
+        id_a: crate::structure::PhysicalConstituentId,
+        endpoint_a: ConnectionEndpoint,
+        id_b: crate::structure::PhysicalConstituentId,
+        endpoint_b: ConnectionEndpoint,
+        bond_energy: f64,
+    ) {
+        let load = crate::combine::experimental_bond_strength(bond_energy);
+        self.loads.push((id_a, endpoint_a, load));
+        self.loads.push((id_b, endpoint_b, load));
+    }
+
+    fn load(
+        &self,
+        id: crate::structure::PhysicalConstituentId,
+        location: ConnectionEndpoint,
+    ) -> Option<f64> {
+        let mut found = false;
+        let total = self
+            .loads
+            .iter()
+            .filter(|(stored_id, stored_location, _)| {
+                if *stored_id == id && stored_location.same_location(location) {
+                    found = true;
+                    true
+                } else {
+                    false
+                }
+            })
+            .map(|(_, _, load)| *load)
+            .sum();
+        if found {
+            Some(total)
+        } else if self.complete {
+            Some(0.0)
+        } else {
+            None
+        }
     }
 }
 
@@ -354,9 +493,32 @@ pub fn connection_pair_candidates_cached(
     ua: usize,
     ub: usize,
     c: &[crate::resources::BaseResource],
-    _cache: &mut ConnectionCompatibilityCache,
+    cache: &mut ConnectionCompatibilityCache,
 ) -> Vec<ConnectionPairCandidate> {
-    connection_pair_candidates(s, ua, ub, c)
+    let (Some(a), Some(b)) = (s.units.get(ua), s.units.get(ub)) else {
+        return Vec::new();
+    };
+    candidate_endpoints(a, b, c)
+        .into_iter()
+        .filter_map(|(a, b)| {
+            let id_a = s.physical_id(ua)?;
+            let id_b = s.physical_id(ub)?;
+            candidate_for_endpoints_with_loads(
+                s,
+                ua,
+                ub,
+                a,
+                b,
+                c,
+                cache
+                    .load(id_a, a)
+                    .unwrap_or_else(|| s.connection_load(ua, a, c)),
+                cache
+                    .load(id_b, b)
+                    .unwrap_or_else(|| s.connection_load(ub, b, c)),
+            )
+        })
+        .collect()
 }
 
 pub fn try_add_bond(
@@ -372,6 +534,23 @@ pub fn try_add_bond(
         .any(|existing| existing.has_same_identity(&b))
     {
         return Err("duplicate bond");
+    }
+    Ok(s.push_bond_unchecked(b))
+}
+
+/// Insert a bond after the caller has established that this connection identity
+/// cannot already exist. All physical bond validation remains authoritative.
+/// This is used by local assembly when one endpoint belongs to a newly restored
+/// unit, so a whole-organism duplicate scan would add no correctness.
+pub(crate) fn try_add_bond_known_unique(
+    s: &mut OrganismStructure,
+    b: Bond,
+    unit_a: usize,
+    unit_b: usize,
+    c: &[crate::resources::BaseResource],
+) -> Result<usize, &'static str> {
+    if !s.is_valid_bond_at_indices(&b, unit_a, unit_b, c) {
+        return Err("invalid bond");
     }
     Ok(s.push_bond_unchecked(b))
 }
