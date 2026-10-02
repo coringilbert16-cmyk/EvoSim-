@@ -359,6 +359,13 @@ pub(crate) fn score_supplemental_trial(
                     future_bonds += 1;
                     best_facing = best_facing.max(candidate.facing);
                     contact_distance = contact_distance.min(candidate.distance);
+                    // Two available future contacts are enough to identify a
+                    // closure-capable placement. More contacts do not change
+                    // the constructor's developmental decision, so stop the
+                    // expensive contact scan here.
+                    if future_bonds >= 2 {
+                        return (future_bonds, best_facing, contact_distance);
+                    }
                 }
             }
         }
