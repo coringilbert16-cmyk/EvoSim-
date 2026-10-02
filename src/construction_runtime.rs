@@ -765,7 +765,7 @@ fn realize_next_bond_driven(
 
     best_candidate.map(
         |(
-            _topology_score,
+            topology_score,
             _target_distance,
             _rotation_error,
             _contact_distance,
