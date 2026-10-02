@@ -86,6 +86,7 @@ fn boundary_to_circle_placements(
     target_shape: &crate::resources::Shape,
     target_placement: Placement,
     candidate_shape: &crate::resources::Shape,
+    candidate_relative_placement: Placement,
 ) -> Vec<Placement> {
     let crate::resources::Form::Circle {
         radius: target_radius,
