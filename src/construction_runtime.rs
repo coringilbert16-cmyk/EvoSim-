@@ -673,8 +673,7 @@ fn realize_next_bond_driven(
                         new_unit_index,
                         candidate,
                         catalog,
-                    )
-                else {
+                    ) else {
                     continue;
                 };
 
