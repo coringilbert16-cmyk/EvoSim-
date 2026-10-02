@@ -1,5 +1,8 @@
 # Phase 6.1 — Developmental Field Blueprint Specification
 
+> **CONSTRUCTOR CONTROL STATUS — SUPERSEDED (2026-10-02):** The developmental blueprint authority described here remains active where it concerns inherited fields and realization. Any older constructor/search interpretation that treats the blueprint as a target for global solving, exact topology, exhaustive backtracking, or whole-organism planning is historical only. The active constructor uses the blueprint as local developmental preference under physical authority, as specified in `README.md`.
+
+
 ## Status
 
 **Approved architectural direction; implementation boundary established.**
