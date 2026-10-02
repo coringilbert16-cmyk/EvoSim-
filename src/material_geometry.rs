@@ -239,8 +239,7 @@ fn circle_line_penetration(
     let Some((a, b)) = line_segment(&line.form, line.placement) else {
         return false;
     };
-    point_segment_distance((circle.placement.x, circle.placement.y), a, b)
-        + tolerance < radius
+    point_segment_distance((circle.placement.x, circle.placement.y), a, b) + tolerance < radius
 }
 fn line_line_overlap(a: &PlacedMaterialPart, b: &PlacedMaterialPart, tolerance: f64) -> bool {
     let Some((a0, a1)) = line_segment(&a.form, a.placement) else {
