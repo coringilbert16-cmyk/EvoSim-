@@ -1063,12 +1063,7 @@ fn construct_blueprint_bond_driven_internal(
         // tie-breaker. This does not add a topology requirement: elements with
         // no currently realized neighbor remain eligible.
         let Some(index) = (0..blueprint.elements.len())
-            .filter(|candidate| !realized[*candidate] && !deferred_elements[*candidate])
-            .max_by_key(|candidate| {
-                let realized_neighbors =
-                    already_realized_neighbors(blueprint, *candidate, &realized).len();
-                (realized_neighbors, std::cmp::Reverse(*candidate))
-            })
+            .find(|candidate| !realized[*candidate] && !deferred_elements[*candidate])
         else {
             break;
         };
