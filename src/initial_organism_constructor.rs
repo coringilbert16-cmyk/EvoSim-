@@ -199,11 +199,7 @@ fn construct_scaffold(
             axial_to_world(coordinate.0, coordinate.1),
             catalog,
         )?;
-        let inner_coordinate = inner_coordinates[side * INNER_RING_RADIUS as usize];
-        let inner_position = inner_coordinates
-            .iter()
-            .position(|&value| value == inner_coordinate)
-            .ok_or_else(|| "inner ring coordinate mapping failed".to_string())?;
+        let inner_position = side * INNER_RING_RADIUS as usize;
         bond_units(
             &mut structure,
             index,
@@ -260,14 +256,7 @@ fn construct_scaffold(
     // correspondence is selected from the physical contact graph rather than
     // by inventing a special construction bond.
     for side in 1..6 {
-        let coordinate = spoke_coordinates[side * SPOKE_RADIUS as usize];
-        let outer_coordinate = outer_coordinates
-            .iter()
-            .position(|&value| {
-                (value.0 as f64 - coordinate.0 as f64).abs() <= 1.0
-                    && (value.1 as f64 - coordinate.1 as f64).abs() <= 1.0
-            })
-            .ok_or_else(|| "outer ring coordinate mapping failed".to_string())?;
+        let outer_coordinate = side * OUTER_RING_RADIUS as usize;
         bond_units(
             &mut structure,
             spokes[side],
