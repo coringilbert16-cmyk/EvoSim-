@@ -151,7 +151,7 @@ pub const FACE_LENGTH_TOLERANCE: f64 = 0.5;
 
 /// Return the rigid polygon edges as local endpoint pairs.
 pub fn polygon_edges(shape: &Shape) -> Vec<((f64, f64), (f64, f64))> {
-    match shape.form {
+    match &shape.form {
         Form::Line { length } => vec![
             ((-length * 0.5, 0.0), (length * 0.5, 0.0)),
         ],
