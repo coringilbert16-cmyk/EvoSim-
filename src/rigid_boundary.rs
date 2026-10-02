@@ -15,77 +15,6 @@ fn edge_angle(a: (f64, f64), b: (f64, f64)) -> Option<f64> {
     }
 }
 
-pub fn corner_alignment_rotations(
-    candidate: &Shape,
-    candidate_vertex: usize,
-    target: &Shape,
-    target_vertex: usize,
-    target_rotation: f64,
-) -> Vec<f64> {
-    let (Some(cv), Some(tv)) = (vertices(candidate), vertices(target)) else {
-        return Vec::new();
-    };
-    if cv.len() < 3 || tv.len() < 3 || candidate_vertex >= cv.len() || target_vertex >= tv.len() {
-        return Vec::new();
-    }
-    let c_prev = cv[(candidate_vertex + cv.len() - 1) % cv.len()];
-    let c_here = cv[candidate_vertex];
-    let c_next = cv[(candidate_vertex + 1) % cv.len()];
-    let t_prev = tv[(target_vertex + tv.len() - 1) % tv.len()];
-    let t_here = tv[target_vertex];
-    let t_next = tv[(target_vertex + 1) % tv.len()];
-    let mut out = Vec::new();
-    for ca in [edge_angle(c_prev, c_here), edge_angle(c_here, c_next)]
-        .into_iter()
-        .flatten()
-    {
-        for ta in [edge_angle(t_prev, t_here), edge_angle(t_here, t_next)]
-            .into_iter()
-            .flatten()
-        {
-            for relative in [ta - ca, ta + std::f64::consts::PI - ca] {
-                let rotation = normalize_angle(target_rotation + relative);
-                if !out.iter().any(|r: &f64| (r - rotation).abs() <= 1e-10) {
-                    out.push(rotation);
-                }
-            }
-        }
-    }
-    out.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-    out
-}
-
-pub fn line_endpoint_alignment_rotations(
-    candidate_endpoint: usize,
-    target_endpoint: usize,
-    target_rotation: f64,
-) -> Vec<f64> {
-    if candidate_endpoint > 1 || target_endpoint > 1 {
-        return Vec::new();
-    }
-    let candidate_interior = if candidate_endpoint == 0 {
-        0.0
-    } else {
-        std::f64::consts::PI
-    };
-    let target_interior = target_rotation
-        + if target_endpoint == 0 {
-            0.0
-        } else {
-            std::f64::consts::PI
-        };
-    let mut rotations = vec![
-        target_interior + std::f64::consts::PI - candidate_interior,
-        target_interior - candidate_interior,
-    ];
-    for rotation in &mut rotations {
-        *rotation = normalize_angle(*rotation);
-    }
-    rotations.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-    rotations.dedup_by(|a, b| (*a - *b).abs() <= 1e-10);
-    rotations
-}
-
 /// Outward unit normal of the actual polygon boundary at a vertex, derived only from its incident edges.
 pub fn corner_normal(shape: &Shape, vertex: usize) -> Option<(f64, f64)> {
     let vertices = vertices(shape)?;
@@ -311,19 +240,6 @@ mod tests {
                 ],
             },
         }
-    }
-    #[test]
-    fn corner_alignment_uses_incident_edges_not_authored_normals() {
-        let rotations = corner_alignment_rotations(&square(), 0, &square(), 2, 0.0);
-        assert!(rotations.iter().any(|r| (r - PI / 2.0).abs() < 1e-10));
-        assert!(rotations.iter().any(|r| r.abs() < 1e-10));
-    }
-    #[test]
-    fn line_endpoint_alignment_is_rigid() {
-        let rotations = line_endpoint_alignment_rotations(0, 1, 0.0);
-        assert_eq!(rotations.len(), 2);
-        assert!(rotations.iter().any(|r| r.abs() < 1e-12));
-        assert!(rotations.iter().any(|r| (r - PI).abs() < 1e-12));
     }
     #[test]
     fn l_shape_preserves_its_concave_boundary() {
