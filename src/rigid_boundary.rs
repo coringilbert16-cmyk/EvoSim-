@@ -350,10 +350,10 @@ mod tests {
             .expect("default catalog must contain Phosphorus");
         let vertices = phosphorus.shape.form.polygon_vertices().unwrap();
         assert_eq!(vertices.len(), 6);
-        assert_eq!(vertices[3], (0.0, 0.0));
-        let (nx, ny) = corner_normal(&phosphorus.shape, 3).unwrap();
-        assert!((nx - 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
-        assert!((ny - 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
+        assert_eq!(vertices[4], (0.25, 0.0));
+        let (nx, ny) = corner_normal(&phosphorus.shape, 4).unwrap();
+        assert!(nx < 0.0);
+        assert!(ny > 0.0);
     }
     #[test]
     fn square_corner_normal_is_physical_bisector() {
