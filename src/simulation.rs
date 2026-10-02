@@ -55,7 +55,7 @@ impl Simulation {
         let genome = initial_genome();
         let catalog = crate::resources::default_catalog();
         let construction = crate::initial_organism_constructor::construct_valid(&catalog)
-            .expect("blueprint-free constructor must find a valid initial organism");
+            .expect("initial organism constructor must find a valid organism");
         let mut structure = construction.structure;
 
         let anchor = Position { x: 500.0, y: 500.0 };
