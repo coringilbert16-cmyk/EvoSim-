@@ -828,14 +828,24 @@ fn construct_blueprint_bond_driven_internal(
     let anchor_instance = if let Some(storage) = available_materials.as_deref_mut() {
         let candidates = rank_available_construction_materials(storage, &anchor_preferred, catalog)
             .map_err(|e| e.to_string())?;
-        let (storage_index, _, _) = candidates
+        let storage_index = candidates
             .into_iter()
             .find(|(storage_index, _, _score)| {
                 !reserved_storage_indices.contains(storage_index)
             })
-            .ok_or_else(|| format!(
-                "construction material need: preferred={anchor_preferred}, no usable physical material available"
-            ))?;
+            .map(|(storage_index, _, _)| storage_index)
+            .or_else(|| {
+                storage.entries.iter().enumerate().find_map(|(storage_index, entry)| {
+                    if reserved_storage_indices.contains(&storage_index) {
+                        return None;
+                    }
+                    matches!(entry, crate::material_storage::StoredMaterial::Physical(_))
+                        .then_some(storage_index)
+                })
+            })
+            .ok_or_else(|| {
+                "construction has no usable physical material for its initial structure".to_string()
+            })?;
         let crate::material_storage::StoredMaterial::Physical(instance) =
             storage.entries.get(storage_index).cloned().ok_or_else(|| {
                 "selected construction anchor material disappeared from storage".to_string()
