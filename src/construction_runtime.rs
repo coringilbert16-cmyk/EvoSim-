@@ -778,7 +778,7 @@ fn construct_blueprint_bond_driven_internal(
                 !reserved_storage_indices.contains(storage_index)
             })
             .ok_or_else(|| format!(
-                "construction material need: preferred={anchor_preferred}, threshold={MIN_CONSTRUCTION_MATERIAL_MATCH:.6}"
+                "construction material need: preferred={anchor_preferred}, no usable physical material available"
             ))?;
         let crate::material_storage::StoredMaterial::Physical(instance) =
             storage.entries.get(storage_index).cloned().ok_or_else(|| {
