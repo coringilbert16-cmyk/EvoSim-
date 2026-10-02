@@ -170,6 +170,118 @@ fn valid_construction(
     Some(acquired)
 }
 
+fn close_new_physical_contacts(
+    mut structure: crate::structure::OrganismStructure,
+    new_indices: &[usize],
+    catalog: &[BaseResource],
+    mut ledger: EnergyLedger,
+    mut energy: f64,
+) -> (crate::structure::OrganismStructure, EnergyLedger, f64) {
+    loop {
+        let mut best: Option<(
+            f64,
+            usize,
+            usize,
+            crate::contact::ConnectionPairCandidate,
+            f64,
+        )> = None;
+
+        for &new_index in new_indices {
+            if new_index >= structure.units.len() {
+                continue;
+            }
+            for other_index in 0..structure.units.len() {
+                if new_index == other_index {
+                    continue;
+                }
+
+                let Some(id_a) = structure.physical_id(new_index) else {
+                    continue;
+                };
+                let Some(id_b) = structure.physical_id(other_index) else {
+                    continue;
+                };
+                if structure.bonds.iter().any(|bond| {
+                    (bond.endpoint_a.constituent_id == id_a
+                        && bond.endpoint_b.constituent_id == id_b)
+                        || (bond.endpoint_a.constituent_id == id_b
+                            && bond.endpoint_b.constituent_id == id_a)
+                }) {
+                    continue;
+                }
+
+                let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+                for candidate in crate::contact::connection_pair_candidates_cached(
+                    &structure,
+                    new_index,
+                    other_index,
+                    catalog,
+                    &mut cache,
+                )
+                .into_iter()
+                .filter(|candidate| {
+                    candidate.distance
+                        <= crate::construction_runtime::SURFACE_CONTACT_TOLERANCE
+                        && candidate.available_a
+                        && candidate.available_b
+                }) {
+                    let Some((_, _, _, investment, _)) =
+                        crate::combine_runtime::selected_candidate_evaluation(
+                            &structure,
+                            new_index,
+                            other_index,
+                            candidate,
+                            catalog,
+                        )
+                    else {
+                        continue;
+                    };
+
+                    let score = candidate.facing;
+                    let replace = best.as_ref().is_none_or(|current| score > current.0);
+                    if replace {
+                        best = Some((
+                            score,
+                            new_index,
+                            other_index,
+                            candidate,
+                            investment,
+                        ));
+                    }
+                }
+            }
+        }
+
+        let Some((_, unit_a, unit_b, candidate, investment)) = best else {
+            break;
+        };
+
+        let mut next = structure.clone();
+        let mut next_ledger = ledger;
+        let mut next_energy = energy;
+        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+        let Some(_) = crate::combine_runtime::form_selected_bond(
+            &mut next,
+            unit_a,
+            unit_b,
+            candidate,
+            investment,
+            catalog,
+            &mut cache,
+            &mut next_ledger,
+            &mut next_energy,
+        ) else {
+            break;
+        };
+
+        structure = next;
+        ledger = next_ledger;
+        energy = next_energy;
+    }
+
+    (structure, ledger, energy)
+}
+
 fn free_form_search(
     structure: crate::structure::OrganismStructure,
     catalog: &[BaseResource],
@@ -232,12 +344,21 @@ fn free_form_search(
                 continue;
             };
 
+            let (closed_structure, closed_ledger, closed_energy) =
+                close_new_physical_contacts(
+                    next_structure,
+                    &_indices,
+                    catalog,
+                    next_ledger,
+                    next_energy,
+                );
+
             if let Some(result) = free_form_search(
-                next_structure,
+                closed_structure,
                 catalog,
                 acquisition_candidates,
-                next_ledger,
-                next_energy,
+                closed_ledger,
+                closed_energy,
                 depth + 1,
                 nodes,
             ) {
