@@ -175,9 +175,7 @@ fn rigid_surface_candidates(
             let parallel_error = cross(adx, ady, bdx, bdy).abs();
             let offset_error = cross(adx, ady, wb0.0 - wa0.0, wb0.1 - wa0.1).abs();
             let scale = alen2.sqrt() * blen2.sqrt();
-            if parallel_error > 1.0e-8 * scale
-                || offset_error > 1.0e-8 * alen2.sqrt()
-            {
+            if parallel_error > 1.0e-8 * scale || offset_error > 1.0e-8 * alen2.sqrt() {
                 continue;
             }
 
