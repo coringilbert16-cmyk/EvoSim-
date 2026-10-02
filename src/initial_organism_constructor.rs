@@ -430,7 +430,7 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
         }
     }
 
-    Err("blueprint-free constructor found no physically valid organism within the physical search budget".into())
+    Err("blueprint-free constructor exhausted its physically reachable growth candidates before producing a valid organism".into())
 }
 
 #[cfg(test)]
