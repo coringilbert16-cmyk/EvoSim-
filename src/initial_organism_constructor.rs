@@ -1,10 +1,9 @@
-//! Blueprint-free search for the first physically valid organism.
+//! Deterministic physical construction of the first valid organism.
 //!
 //! The initial organism has no developmental blueprint, target topology,
 //! shape, material recipe, or construction plan. It starts from one physical
-//! unit and grows only through the same physical attachment transaction used
-//! by runtime construction. The first realized state satisfying the organism
-//! validity contract is accepted.
+//! physical bond transaction used by runtime construction. The realized scaffold
+//! is accepted only after the normal organism validity contract is satisfied.
 
 use crate::resources::{BaseResource, Material, PhysicalState};
 use crate::state::EnergyLedger;
@@ -189,7 +188,6 @@ fn construct_scaffold(
     // the genome boundary to the eventual outer boundary.
     let mut spokes = Vec::with_capacity(6);
     let spoke_coordinates = hex_ring(SPOKE_RADIUS);
-    let inner_coordinates = hex_ring(INNER_RING_RADIUS);
     let outer_coordinates = hex_ring(OUTER_RING_RADIUS);
     for side in 0..6 {
         let coordinate = spoke_coordinates[side * SPOKE_RADIUS as usize];
