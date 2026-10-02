@@ -151,15 +151,22 @@ pub const FACE_LENGTH_TOLERANCE: f64 = 0.5;
 
 /// Return the rigid polygon edges as local endpoint pairs.
 pub fn polygon_edges(shape: &Shape) -> Vec<((f64, f64), (f64, f64))> {
-    let Some(vertices) = vertices(shape) else {
-        return Vec::new();
-    };
-    if vertices.len() < 2 {
-        return Vec::new();
+    match shape.form {
+        Form::Line { length } => vec![
+            ((-length * 0.5, 0.0), (length * 0.5, 0.0)),
+        ],
+        _ => {
+            let Some(vertices) = vertices(shape) else {
+                return Vec::new();
+            };
+            if vertices.len() < 2 {
+                return Vec::new();
+            }
+            (0..vertices.len())
+                .map(|i| (vertices[i], vertices[(i + 1) % vertices.len()]))
+                .collect()
+        }
     }
-    (0..vertices.len())
-        .map(|i| (vertices[i], vertices[(i + 1) % vertices.len()]))
-        .collect()
 }
 
 /// Build a whole-material placement that puts one candidate face against one
@@ -354,6 +361,58 @@ mod tests {
         assert!((nx + 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
         assert!((ny + 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
     }
+    #[test]
+    fn surface_alignment_requires_matching_face_length_within_tolerance() {
+        let long = Shape {
+            form: Form::Line { length: 1.0 },
+        };
+        let short = Shape {
+            form: Form::Line { length: 0.5 },
+        };
+        let too_short = Shape {
+            form: Form::Line { length: 0.49 },
+        };
+        let origin = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+
+        assert!(surface_alignment_placement(
+            &long, origin, 0, &short, origin, 0, 0.0
+        )
+        .is_some());
+        assert!(surface_alignment_placement(
+            &long, origin, 0, &too_short, origin, 0, 0.0
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn surface_alignment_places_equal_faces_opposite_each_other() {
+        let square = Shape {
+            form: Form::Rectangle {
+                width: 1.0,
+                height: 1.0,
+            },
+        };
+        let origin = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let placements = surface_alignment_placements(&square, origin, &square, origin);
+        assert!(!placements.is_empty());
+
+        let p = placements[0];
+        let vertices = square.form.polygon_vertices().unwrap();
+        let (a, b) = (vertices[0], vertices[1]);
+        let edge_angle = (b.1 - a.1).atan2(b.0 - a.0);
+        let candidate_edge_angle = edge_angle + p.rotation_radians;
+        assert!((normalize_angle(candidate_edge_angle - edge_angle) - PI).abs() < 1e-10
+            || (normalize_angle(candidate_edge_angle - edge_angle) + PI).abs() < 1e-10);
+    }
+
     #[test]
     fn world_vertex_applies_only_rigid_transform() {
         let p = world_vertex(
