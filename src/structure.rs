@@ -263,8 +263,7 @@ impl ConnectionEndpoint {
             Self::Boundary { angle_radians } => {
                 let shape = unit.shape(catalog)?;
                 let (nx, ny) = (angle_radians.cos(), angle_radians.sin());
-                let boundary =
-                    crate::surface_geometry::boundary_point_toward(shape, nx, ny)?;
+                let boundary = crate::surface_geometry::boundary_point_toward(shape, nx, ny)?;
                 let normal_length = boundary.normal_x.hypot(boundary.normal_y);
                 let (normal_x, normal_y) = if normal_length > 1.0e-12 {
                     (
