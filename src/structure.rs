@@ -197,6 +197,9 @@ pub enum ConnectionEndpoint {
     Corner { point_index: usize },
     LineEndpoint { point_index: usize },
     Boundary { angle_radians: f64 },
+    /// A persistent point on a rigid surface edge. The edge index identifies
+    /// the physical face and fraction identifies the point along that face.
+    Surface { edge_index: usize, fraction: f64 },
     Fluid { x: f64, y: f64 },
 }
 #[derive(Serialize, Clone, Copy, Debug, PartialEq)]
@@ -283,6 +286,19 @@ impl ConnectionEndpoint {
                     unit.placement.rotation_radians,
                 ))
             }
+            Self::Surface { edge_index, fraction } => {
+                let shape = unit.shape(catalog)?;
+                let surface = crate::surface_geometry::surface_point(shape, edge_index, fraction)?;
+                Some(crate::connection_geometry::transform_derived_point(
+                    surface.x,
+                    surface.y,
+                    surface.normal_x,
+                    surface.normal_y,
+                    unit.placement.x,
+                    unit.placement.y,
+                    unit.placement.rotation_radians,
+                ))
+            }
             Self::Fluid { x, y } => Some(crate::connection_geometry::transform_derived_point(
                 x,
                 y,
@@ -303,6 +319,16 @@ impl ConnectionEndpoint {
             (Self::Boundary { angle_radians: a }, Self::Boundary { angle_radians: b }) => {
                 (a - b).abs() <= 1e-12
             }
+            (
+                Self::Surface {
+                    edge_index: ae,
+                    fraction: af,
+                },
+                Self::Surface {
+                    edge_index: be,
+                    fraction: bf,
+                },
+            ) => ae == be && (af - bf).abs() <= 1e-12,
             (Self::Fluid { x: ax, y: ay }, Self::Fluid { x: bx, y: by }) => {
                 (ax - bx).hypot(ay - by) <= 1e-12
             }
