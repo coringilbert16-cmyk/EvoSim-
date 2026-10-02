@@ -42,7 +42,9 @@ pub(crate) struct ValidConstruction {
 /// still instantiated and every connection is admitted through the normal
 /// physical bond transaction.
 fn axial_to_world(q: i32, r: i32) -> (f64, f64) {
-    (SQRT_3 * (q as f64 + r as f64 * 0.5), 1.5 * r as f64)
+    // Carbon's catalog hexagon has a vertex on the +x axis. These axial
+    // basis vectors therefore match the actual tessellation of that shape.
+    (1.5 * q as f64, (SQRT_3 * 0.5) * q as f64 + SQRT_3 * r as f64)
 }
 
 fn hex_ring(radius: i32) -> Vec<(i32, i32)> {
@@ -119,7 +121,11 @@ fn bond_units(
             && candidate.available_a
             && candidate.available_b
     })
-    .min_by(|a, b| {
+    // For a shared rigid edge, the two corners of that edge are the physical
+    // wall segment. A corner-to-corner bond that spans that segment is therefore
+    // the candidate that actually seals the boundary; a zero-distance corner
+    // coincidence does not seal the edge and would fail cavity qualification.
+    .max_by(|a, b| {
         a.distance
             .partial_cmp(&b.distance)
             .unwrap_or(std::cmp::Ordering::Equal)
