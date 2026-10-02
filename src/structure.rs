@@ -999,9 +999,7 @@ mod tests {
                 rotation_radians: 0.0,
             },
         );
-        let endpoint = ConnectionEndpoint::Boundary {
-            angle_radians: 0.0,
-        };
+        let endpoint = ConnectionEndpoint::Boundary { angle_radians: 0.0 };
         let point = endpoint
             .world_point(&unit, &catalog)
             .expect("polygon boundary endpoints must resolve persistently");
