@@ -159,7 +159,7 @@ fn attach_local_piece(
         };
 
         let candidates = crate::contact::connection_pair_candidates_cached(
-            structure, anchor, new_index, catalog, &mut cache,
+            structure, anchor, new_index, catalog, cache,
         );
 
         let mut bonded = false;
