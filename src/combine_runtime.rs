@@ -370,6 +370,7 @@ fn form_bond_from_candidate_in_place(
         structure.bonds.truncate(previous_bond_count);
         return None;
     }
+    let net = *energy - before;
     Some(CombineAttempt {
         unit_a: ua,
         unit_b: ub,
