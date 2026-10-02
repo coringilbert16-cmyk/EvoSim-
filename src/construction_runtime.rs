@@ -44,7 +44,7 @@ fn circle_boundary_placements(
 ) -> Vec<Placement> {
     let crate::resources::Form::Circle {
         radius: candidate_radius,
-    } = candidate_shape.form
+    } = &candidate_shape.form
     else {
         return Vec::new();
     };
@@ -96,9 +96,9 @@ pub(crate) fn candidate_placements(
             continue;
         };
 
-        let placements = if matches!(resource.shape.form, Form::Circle { .. }) {
+        let placements = if matches!(&resource.shape.form, Form::Circle { .. }) {
             circle_boundary_placements(&target_shape, unit.placement, &resource.shape)
-        } else if matches!(target_shape.form, Form::Circle { .. }) {
+        } else if matches!(&target_shape.form, Form::Circle { .. }) {
             Vec::new()
         } else {
             crate::rigid_boundary::surface_alignment_placements(
