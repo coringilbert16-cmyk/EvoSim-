@@ -293,11 +293,7 @@ fn candidate_placement_overlaps_structure(
             form: shape.form.clone(),
             placement: unit.placement,
         };
-        crate::material_geometry::placed_forms_penetrate(
-            &candidate_part,
-            &existing_part,
-            0.0,
-        )
+        crate::material_geometry::placed_forms_penetrate(&candidate_part, &existing_part, 0.0)
     })
 }
 
