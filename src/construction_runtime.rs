@@ -807,6 +807,7 @@ fn close_one_realized_blueprint_connection(
     f64,
 )> {
     let mut best: Option<(
+        usize,
         f64,
         OrganismStructure,
         crate::combine_runtime::CombineAttempt,
@@ -850,6 +851,15 @@ fn close_one_realized_blueprint_connection(
         if already_closed {
             continue;
         }
+
+        let mut connection_candidate_count = 0usize;
+        let mut best_connection: Option<(
+            f64,
+            OrganismStructure,
+            crate::combine_runtime::CombineAttempt,
+            EnergyLedger,
+            f64,
+        )> = None;
 
         for &unit_a in a_units {
             for &unit_b in b_units {
@@ -911,17 +921,38 @@ fn close_one_realized_blueprint_connection(
                         continue;
                     };
 
+                    connection_candidate_count += 1;
                     let score = candidate.facing;
-                    let replace = best.as_ref().is_none_or(|current| score > current.0);
+                    let replace = best_connection
+                        .as_ref()
+                        .is_none_or(|current| score > current.0);
                     if replace {
-                        best = Some((score, trial, attempt, trial_ledger, trial_energy));
+                        best_connection =
+                            Some((score, trial, attempt, trial_ledger, trial_energy));
                     }
                 }
             }
         }
+
+        if let Some((score, trial, attempt, trial_ledger, trial_energy)) = best_connection {
+            let replace = best.as_ref().is_none_or(|current| {
+                connection_candidate_count < current.0
+                    || (connection_candidate_count == current.0 && score > current.1)
+            });
+            if replace {
+                best = Some((
+                    connection_candidate_count,
+                    score,
+                    trial,
+                    attempt,
+                    trial_ledger,
+                    trial_energy,
+                ));
+            }
+        }
     }
 
-    best.map(|(_, structure, attempt, ledger, energy)| (structure, attempt, ledger, energy))
+    best.map(|(_, _, structure, attempt, ledger, energy)| (structure, attempt, ledger, energy))
 }
 
 /// Bond-driven construction is forward-only. Once a bond is formed it is
