@@ -1035,8 +1035,7 @@ fn construct_blueprint_bond_driven_internal(
                 *score >= crate::construction_material_selection::MIN_CONSTRUCTION_MATERIAL_MATCH
                     && !reserved_storage_indices.contains(storage_index)
             })
-            .map(|(storage_index, _, _)| storage_index)
-
+.map(|(storage_index, _, _)| storage_index)
             .ok_or_else(|| {
                 "construction has no usable physical material for its initial structure".to_string()
             })?;
