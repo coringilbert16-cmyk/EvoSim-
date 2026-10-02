@@ -1389,7 +1389,8 @@ fn construct_blueprint_bond_driven_internal(
                         &mut nodes,
                         &construction_ledger,
                         remaining_energy,
-                    ) else {
+                    )
+                    else {
                         continue;
                     };
 
