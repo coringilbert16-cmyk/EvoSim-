@@ -1069,8 +1069,21 @@ fn construct_blueprint_bond_driven_internal(
         // The blueprint chooses what we would like to build next, but it does
         // not choose which physical unit must receive it. Every realized
         // physical unit is part of the construction frontier.
+        // Forward-only construction makes the choice of the next
+        // developmental element an ordering decision. Prefer an unrealized
+        // element whose declared neighbors are already realized, because its
+        // physical attachment can then establish one of the blueprint's
+        // existing required relationships immediately. Among otherwise
+        // equivalent candidates, retain blueprint order as the deterministic
+        // tie-breaker. This does not add a topology requirement: elements with
+        // no currently realized neighbor remain eligible.
         let Some(index) = (0..blueprint.elements.len())
-            .find(|candidate| !realized[*candidate] && !deferred_elements[*candidate])
+            .filter(|candidate| !realized[*candidate] && !deferred_elements[*candidate])
+            .max_by_key(|candidate| {
+                let realized_neighbors = already_realized_neighbors(blueprint, *candidate, &realized)
+                    .len();
+                (realized_neighbors, std::cmp::Reverse(*candidate))
+            })
         else {
             break;
         };
