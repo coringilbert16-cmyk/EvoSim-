@@ -200,6 +200,7 @@ fn attach_local_piece(
         // physical contact is already present, take that second local bond
         // immediately. This is how closed local structures can emerge without
         // a global closure solver.
+        let mut closed_target = None;
         for &target in local_neighbors {
             let candidates = crate::contact::connection_pair_candidates_cached(
                 structure, target, new_index, catalog, &mut cache,
@@ -226,6 +227,7 @@ fn attach_local_piece(
                 .is_some()
                 {
                     closed = true;
+                    closed_target = Some(target);
                     break;
                 }
             }
@@ -234,7 +236,7 @@ fn attach_local_piece(
             }
         }
 
-        let closed_target = local_neighbors
+        let closed_target
             .iter()
             .copied()
             .find(|&target| {
