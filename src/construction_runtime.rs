@@ -1211,8 +1211,7 @@ fn construct_blueprint_bond_driven_internal(
                 let target_distance = (new_unit.placement.x - target_world.0)
                     .hypot(new_unit.placement.y - target_world.1);
                 let target_rotation = normalize_angle(
-                    genome_anchor.rotation_radians
-                        + target.rotation_radians
+                    genome_anchor.rotation_radians + target.rotation_radians
                         - anchor_element.placement.rotation_radians,
                 );
                 let rotation_error =
