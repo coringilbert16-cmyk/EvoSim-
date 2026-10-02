@@ -428,11 +428,22 @@ pub fn contacting_connection_pair_candidates(
 #[derive(Clone, Debug, Default)]
 pub struct ConnectionCompatibilityCache {
     loads: Vec<(crate::structure::PhysicalConstituentId, ConnectionEndpoint, f64)>,
+    complete: bool,
 }
 
 impl ConnectionCompatibilityCache {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Create a cache for a structure whose existing bonds are fully represented
+    /// by this cache. Missing endpoint entries therefore mean zero load rather
+    /// than requiring a fallback scan of the structure bond list.
+    pub fn new_complete() -> Self {
+        Self {
+            loads: Vec::new(),
+            complete: true,
+        }
     }
 
     pub fn record_bond(
@@ -467,7 +478,13 @@ impl ConnectionCompatibilityCache {
             })
             .map(|(_, _, load)| *load)
             .sum();
-        found.then_some(total)
+        if found {
+            Some(total)
+        } else if self.complete {
+            Some(0.0)
+        } else {
+            None
+        }
     }
 }
 
