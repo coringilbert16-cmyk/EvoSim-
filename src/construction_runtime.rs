@@ -745,17 +745,8 @@ fn construct_blueprint_bond_driven_internal(
     if blueprint.elements.is_empty() {
         return Err("blueprint must contain at least one element".into());
     }
-    if blueprint
-        .elements
-        .iter()
-        .any(|element| element.material.parts.len() != 1)
-    {
-        return Err(
-            "bond-driven developmental construction currently requires single-constituent elements"
-                .into(),
-        );
-    }
-
+    // A blueprint element may describe an intact composite physical material.
+    // Restoration, not this constructor, owns the constituent-count invariant.
     let anchor_index = *blueprint
         .anchor_elements
         .first()
