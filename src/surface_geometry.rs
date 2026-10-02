@@ -88,6 +88,58 @@ fn line_endpoint_toward(length: f64, target_x: f64, target_y: f64) -> Option<Bou
             normal_y: ny,
         })
 }
+
+/// Return an exact point and outward normal on a rigid boundary edge.
+/// The edge index is stable for the realized shape and fraction is measured
+/// from the first endpoint toward the second endpoint.
+pub fn surface_point(shape: &Shape, edge_index: usize, fraction: f64) -> Option<BoundaryPoint> {
+    if !fraction.is_finite() || !(0.0..=1.0).contains(&fraction) {
+        return None;
+    }
+    match &shape.form {
+        Form::Line { length } => {
+            if edge_index != 0 {
+                return None;
+            }
+            let half = *length * 0.5;
+            let x = -half + *length * fraction;
+            let normal_x = if fraction <= 0.5 { -1.0 } else { 1.0 };
+            Some(BoundaryPoint {
+                x,
+                y: 0.0,
+                normal_x,
+                normal_y: 0.0,
+            })
+        }
+        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
+            let vertices = shape.form.polygon_vertices()?;
+            if vertices.len() < 3 || edge_index >= vertices.len() {
+                return None;
+            }
+            let (ax, ay) = vertices[edge_index];
+            let (bx, by) = vertices[(edge_index + 1) % vertices.len()];
+            let ex = bx - ax;
+            let ey = by - ay;
+            let length = ex.hypot(ey);
+            if length <= f64::EPSILON {
+                return None;
+            }
+            let winding = polygon_winding(&vertices);
+            if winding.abs() <= 1e-12 {
+                return None;
+            }
+            let sign = winding.signum();
+            Some(BoundaryPoint {
+                x: ax + ex * fraction,
+                y: ay + ey * fraction,
+                normal_x: sign * ey / length,
+                normal_y: -sign * ex / length,
+            })
+        }
+        Form::Circle { .. } | Form::Fluid { .. } => None,
+    }
+}
+
 pub fn boundary_point_toward(shape: &Shape, target_x: f64, target_y: f64) -> Option<BoundaryPoint> {
     match &shape.form {
         Form::Circle { radius } => {
