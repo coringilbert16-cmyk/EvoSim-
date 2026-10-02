@@ -222,93 +222,18 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
         return Err("no rigid resource can seed a physical organism".into());
     }
 
-    let required_resources = required_acquisition_resources(catalog);
-    if required_resources.len() < 3 {
+    let acquisition_candidates = available_acquisition_resources(catalog);
+    if acquisition_candidates.len() < 3 {
         return Err("catalog does not contain three non-water acquisition resources".into());
     }
+    let Some(spoke_resource) = catalog.iter().find(|resource| {
+        resource.physical_state == PhysicalState::Rigid
+            && matches!(resource.shape.form, Form::Line { .. })
+            && resource.shape.is_valid()
+    }) else {
+        return Err("catalog does not contain a rigid line resource for structural bridging".into());
+    };
 
-    for resource in structural_candidates {
-        if !matches!(
-            resource.shape.form,
-            Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. }
-        ) {
-            continue;
-        }
-
-        for sides in MIN_RING_SIDES..=MAX_RING_SIDES {
-            let candidate = candidate_ring(resource, sides);
-            if !candidate.is_valid() {
-                continue;
-            }
-
-            let mut ledger = EnergyLedger::default();
-            let mut energy = SEARCH_ENERGY;
-            let Ok((structure, _heat)) =
-                crate::construction_runtime::construct_blueprint_bond_driven(
-                    &candidate,
-                    catalog,
-                    &mut ledger,
-                    &mut energy,
-                )
-            else {
-                continue;
-            };
-
-            let Some(cavity) = crate::cavity::analyze_genome_cavity(&structure, catalog)
-                .ok()
-                .flatten()
-            else {
-                continue;
-            };
-            if !cavity.qualifies() {
-                continue;
-            }
-
-            let regions =
-                crate::interior_geometry::find_accessible_interior_regions(&structure, catalog)
-                    .ok()
-                    .unwrap_or_default();
-            if regions.is_empty() {
-                continue;
-            }
-
-            let mut acquired_resource_placements = Vec::new();
-            let mut acquisition_failed = false;
-            for required in required_resources.iter().copied() {
-                let placement = regions
-                    .iter()
-                    .find_map(|region| placement_fits_resource(required, region, catalog));
-                let Some(placement) = placement else {
-                    acquisition_failed = true;
-                    break;
-                };
-                acquired_resource_placements.push((required.name.clone(), placement));
-            }
-
-            let Some(water) = catalog.iter().find(|resource| resource.name == "Water") else {
-                continue;
-            };
-            let water_placement = regions
-                .iter()
-                .find_map(|region| placement_fits_resource(water, region, catalog));
-            let Some(water_placement) = water_placement else {
-                continue;
-            };
-            acquired_resource_placements.push((water.name.clone(), water_placement));
-
-            if acquisition_failed {
-                continue;
-            }
-
-            return Ok(ValidConstruction {
-                structure,
-                energy,
-                acquired_resource_placements,
-            });
-        }
-    }
-
-    let acquisition_candidates = available_acquisition_resources(catalog);
     if acquisition_candidates.len() < 3 {
         return Err("catalog does not contain three non-water acquisition resources".into());
     }
