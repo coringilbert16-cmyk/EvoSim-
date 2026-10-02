@@ -30,8 +30,7 @@ fn placement(p: BlueprintPlacement) -> Placement {
 const SURFACE_CONTACT_TOLERANCE: f64 = 1.0e-8;
 
 fn normalize_angle(angle: f64) -> f64 {
-    (angle + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU)
-        - std::f64::consts::PI
+    (angle + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI
 }
 
 /// Explicit non-polygon construction path for curved boundaries. A circle has
@@ -93,8 +92,7 @@ fn boundary_to_circle_placements(
 
     let mut out = Vec::new();
     for target_step in 0..16 {
-        let target_angle =
-            target_step as f64 * std::f64::consts::TAU / 16.0;
+        let target_angle = target_step as f64 * std::f64::consts::TAU / 16.0;
         let (ts, tc) = target_angle.sin_cos();
         let target_contact = (
             target_placement.x + *target_radius * tc,
@@ -103,19 +101,18 @@ fn boundary_to_circle_placements(
         let target_normal_angle = target_angle + target_placement.rotation_radians;
 
         for candidate_step in 0..16 {
-            let candidate_angle =
-                candidate_step as f64 * std::f64::consts::TAU / 16.0;
+            let candidate_angle = candidate_step as f64 * std::f64::consts::TAU / 16.0;
             let (cs, cc) = candidate_angle.sin_cos();
             let Some(candidate_boundary) =
                 crate::surface_geometry::boundary_point_toward(candidate_shape, cc, cs)
             else {
                 continue;
             };
-            let candidate_normal_angle =
-                candidate_boundary.normal_y.atan2(candidate_boundary.normal_x);
+            let candidate_normal_angle = candidate_boundary
+                .normal_y
+                .atan2(candidate_boundary.normal_x);
             let rotation = normalize_angle(
-                target_normal_angle + std::f64::consts::PI
-                    - candidate_normal_angle,
+                target_normal_angle + std::f64::consts::PI - candidate_normal_angle,
             );
             let (rs, rc) = rotation.sin_cos();
             let rotated_point = (
@@ -155,11 +152,7 @@ pub(crate) fn candidate_placements(
         let placements = if matches!(&resource.shape.form, Form::Circle { .. }) {
             circle_boundary_placements(&target_shape, unit.placement, &resource.shape)
         } else if matches!(&target_shape.form, Form::Circle { .. }) {
-            boundary_to_circle_placements(
-                &target_shape,
-                unit.placement,
-                &resource.shape,
-            )
+            boundary_to_circle_placements(&target_shape, unit.placement, &resource.shape)
         } else {
             crate::rigid_boundary::surface_alignment_placements(
                 &target_shape,
@@ -346,7 +339,8 @@ pub(crate) fn try_attach_physical_material_bond_driven(
         if (*amount - 1.0).abs() > 1e-9 {
             continue;
         }
-        let Some(candidate_shape) = resource(catalog, name).map(|resource| &resource.shape) else {
+        let Some(candidate_shape) = resource(catalog, name).map(|resource| &resource.shape)
+            else {
             continue;
         };
 
@@ -478,8 +472,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
             let replace = best.as_ref().is_none_or(|current| {
                 score.0 > current.0
                     || (score.0 == current.0
-                        && (score.1 > current.1
-                            || (score.1 == current.1 && score.2 > current.2)))
+                        && (score.1 > current.1 || (score.1 == current.1 && score.2 > current.2)))
             });
             if replace {
                 best = Some((
@@ -542,16 +535,11 @@ fn realize_next_bond_driven(
     let target = blueprint.elements[index].placement;
     let (s, c) = genome_anchor.rotation_radians.sin_cos();
     let target_world = (
-        genome_anchor.x + (target.x - anchor_declared.x) * c
-            - (target.y - anchor_declared.y) * s,
-        genome_anchor.y
-            + (target.x - anchor_declared.x) * s
-            + (target.y - anchor_declared.y) * c,
+        genome_anchor.x + (target.x - anchor_declared.x) * c - (target.y - anchor_declared.y) * s,
+        genome_anchor.y + (target.x - anchor_declared.x) * s + (target.y - anchor_declared.y) * c,
     );
     let target_rotation = normalize_angle(
-        genome_anchor.rotation_radians
-            + target.rotation_radians
-            - anchor_declared.rotation_radians,
+        genome_anchor.rotation_radians + target.rotation_radians - anchor_declared.rotation_radians,
     );
 
     // Candidate score is a preference only. Physical validity is established
@@ -587,7 +575,8 @@ fn realize_next_bond_driven(
             if (*amount - 1.0).abs() > 1e-9 {
                 continue;
             }
-            let Some(candidate_shape) = resource(catalog, name).map(|resource| &resource.shape) else {
+            let Some(candidate_shape) = resource(catalog, name).map(|resource| &resource.shape)
+            else {
                 continue;
             };
 
@@ -612,12 +601,7 @@ fn realize_next_bond_driven(
                 let new_unit_index = *indices.get(part_index)?;
                 let ignored_units = indices.clone();
                 if indices.iter().any(|unit_index| {
-                    placed_unit_overlaps(
-                        &trial,
-                        &trial.units[unit_index],
-                        &ignored_units,
-                        catalog,
-                    )
+                    placed_unit_overlaps(&trial, &trial.units[unit_index], &ignored_units, catalog)
                 }) {
                     continue;
                 }
