@@ -153,7 +153,7 @@ pub const FACE_LENGTH_TOLERANCE: f64 = 0.5;
 pub fn polygon_edges(shape: &Shape) -> Vec<((f64, f64), (f64, f64))> {
     match &shape.form {
         Form::Line { length } => vec![
-            ((-length * 0.5, 0.0), (length * 0.5, 0.0)),
+            ((-*length * 0.5, 0.0), (*length * 0.5, 0.0)),
         ],
         _ => {
             let Some(vertices) = vertices(shape) else {
