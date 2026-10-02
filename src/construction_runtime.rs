@@ -387,31 +387,10 @@ pub(crate) fn try_attach_physical_material_bond_driven(
     let existing_shape = existing_unit.shape(catalog)?;
     let placements = new_material.placements.as_ref()?;
 
-    // Do not commit the first geometrically valid attachment. The constructor
-    // is allowed to look one bond ahead: after a candidate is physically
-    // attached, inspect the remaining exposed surfaces and prefer the
-    // candidate that leaves the most immediately available future bonds.
-    //
-    // This is deliberately a bounded local lookahead, not a prescribed body
-    // plan. It observes actual material and bond opportunities already present
-    // in the trial structure.
-    let mut best: Option<(
-        usize,
-        f64,
-        f64,
-        OrganismStructure,
-        Vec<usize>,
-        usize,
-        crate::combine_runtime::CombineAttempt,
-        EnergyLedger,
-        f64,
-    )> = None;
-    let realized_flags = structure
-        .units
-        .iter()
-        .map(|_| true)
-        .collect::<Vec<_>>();
-
+    // Hot-path attachment primitive. Candidate generation is geometry-first;
+    // the first candidate that satisfies the real physical COMBINE transaction
+    // is accepted. Blueprint similarity and higher-level developmental
+    // preference belong to the caller, not to this physical primitive.
     for (part_index, ((name, amount), relative)) in new_material
         .material
         .parts
@@ -457,9 +436,6 @@ pub(crate) fn try_attach_physical_material_bond_driven(
 
             let mut trial_ledger = *ledger;
             let mut trial_energy = available_energy;
-            // One cache serves the entire candidate scan for this material
-            // attachment. This changes no physical decision; it only avoids
-            // rebuilding the same compatibility data for each candidate.
             let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
             let Some(candidate) = crate::contact::connection_pair_candidates_cached(
                 &trial,
@@ -513,72 +489,18 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                 continue;
             };
 
-            // Look one bond ahead through the material actually restored by
-            // this candidate. Count distinct existing units for which at least
-            // one exposed boundary-to-boundary bond is immediately available.
-            let mut future_bonds = 0usize;
-            for existing_other in 0..structure.units.len() {
-                if existing_other == existing_index {
-                    continue;
-                }
-                let available = indices.iter().any(|&new_index| {
-                    if new_index == existing_other {
-                        return false;
-                    }
-                    crate::contact::connection_pair_candidates_cached(
-                        &trial,
-                        new_index,
-                        existing_other,
-                        catalog,
-                        &mut crate::contact::ConnectionCompatibilityCache::new(),
-                    )
-                    .into_iter()
-                    .any(|future| {
-                        future.distance <= SURFACE_CONTACT_TOLERANCE
-                            && future.available_a
-                            && future.available_b
-                    })
-                });
-                if available {
-                    future_bonds += 1;
-                }
-            }
-
-            let score = (future_bonds, candidate.facing, -candidate.distance);
-            let replace = best.as_ref().is_none_or(|current| {
-                score.0 > current.0
-                    || (score.0 == current.0
-                        && (score.1 > current.1 || (score.1 == current.1 && score.2 > current.2)))
-            });
-            if replace {
-                best = Some((
-                    score.0,
-                    score.1,
-                    score.2,
-                    trial,
-                    indices,
-                    part_index,
-                    attempt,
-                    trial_ledger,
-                    trial_energy,
-                ));
-            }
+            return Some((
+                trial,
+                indices,
+                part_index,
+                attempt,
+                trial_ledger,
+                trial_energy,
+            ));
         }
     }
 
-    best.map(
-        |(
-            _future_bonds,
-            _facing,
-            _negative_distance,
-            structure,
-            indices,
-            part_index,
-            attempt,
-            ledger,
-            energy,
-        )| (structure, indices, part_index, attempt, ledger, energy),
-    )
+    None
 }
 
 fn realize_next_bond_driven(
@@ -1798,23 +1720,3 @@ fn construct_blueprint_bond_driven_internal(
             trial_structure,
             attempt,
             trial_ledger,
-            trial_energy,
-        )) = best_supplemental
-        else {
-            break;
-        };
-
-        structure = trial_structure;
-        construction_ledger = trial_ledger;
-        remaining_energy = trial_energy;
-        total_heat += attempt.work_cost;
-        if candidate_order != usize::MAX {
-            reserved_storage_indices.push(candidate_order);
-        }
-    }
-
-    Err(
-        "construction exhausted all currently available physical continuation attempts without realizing a viable physical organism"
-            .to_string(),
-    )
-}
