@@ -776,9 +776,8 @@ fn construct_blueprint_bond_driven_internal(
             .map_err(|e| e.to_string())?;
         let (storage_index, _, _) = candidates
             .into_iter()
-            .find(|(storage_index, _, score)| {
+            .find(|(storage_index, _, _score)| {
                 !reserved_storage_indices.contains(storage_index)
-                    && *score >= MIN_CONSTRUCTION_MATERIAL_MATCH
             })
             .ok_or_else(|| format!(
                 "construction material need: preferred={anchor_preferred}, threshold={MIN_CONSTRUCTION_MATERIAL_MATCH:.6}"
@@ -848,9 +847,8 @@ fn construct_blueprint_bond_driven_internal(
                 .map_err(|e| e.to_string())?;
             let candidates = ranked
                 .iter()
-                .filter(|(storage_index, _, score)| {
+                .filter(|(storage_index, _, _score)| {
                     !reserved_storage_indices.contains(storage_index)
-                        && *score >= MIN_CONSTRUCTION_MATERIAL_MATCH
                 })
                 .cloned()
                 .collect::<Vec<_>>();
@@ -882,8 +880,8 @@ fn construct_blueprint_bond_driven_internal(
         };
 
         // An unavailable preferred material is not construction failure. The
-        // blueprint preference is allowed to fall through to the physical
-        // supplemental-construction phase below.
+        // blueprint preference is only a search ordering; any available
+        // physical material may be considered before supplemental construction.
         if candidate_resources.is_empty() && available_materials.is_some() {
             break;
         }
@@ -1108,7 +1106,7 @@ fn construct_blueprint_bond_driven_internal(
     }
 
     Err(
-        "developmental construction exhausted its blueprint material without realizing a viable physical organism"
+        "construction exhausted all currently available physical continuation attempts without realizing a viable physical organism"
             .to_string(),
     )
 }
