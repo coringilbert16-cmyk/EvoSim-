@@ -890,19 +890,11 @@ fn construct_blueprint_bond_driven_internal(
             candidates
         };
 
+        // An unavailable preferred material is not construction failure. The
+        // blueprint preference is allowed to fall through to the physical
+        // supplemental-construction phase below.
         if candidate_resources.is_empty() && available_materials.is_some() {
-            let best = rank_available_construction_materials(
-                available_materials.as_deref().expect("checked above"),
-                &preferred,
-                catalog,
-            )
-            .map_err(|e| e.to_string())?
-            .first()
-            .map(|candidate| candidate.2)
-            .unwrap_or(0.0);
-            return Err(format!(
-                "construction material need: preferred={preferred}, best_available_structural_match={best:.6}, threshold={MIN_CONSTRUCTION_MATERIAL_MATCH:.6}"
-            ));
+            break;
         }
 
         let mut attached = false;
@@ -988,9 +980,11 @@ fn construct_blueprint_bond_driven_internal(
         }
 
         if !attached {
-            return Err(format!(
-                "no physical frontier placement found for developmental element {index} after {nodes} placement attempts"
-            ));
+            // The developmental request could not be realized from the current
+            // frontier. Do not declare the organism impossible yet: physical
+            // construction is allowed to diverge from the blueprint and
+            // continue with other available material.
+            break;
         }
     }
 
