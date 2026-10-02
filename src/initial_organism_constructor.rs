@@ -162,13 +162,7 @@ fn contact_candidate(
     catalog: &[BaseResource],
 ) -> Option<crate::contact::ConnectionPairCandidate> {
     let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-    crate::contact::connection_pair_candidates_cached(
-        structure,
-        first,
-        second,
-        catalog,
-        &mut cache,
-    )
+    crate::contact::connection_pair_candidates_cached(structure, first, second, catalog, &mut cache)
     .into_iter()
     .filter(|candidate| {
         candidate.distance <= CONTACT_TOLERANCE
@@ -310,8 +304,7 @@ fn grow_until_valid(
                 for material in materials {
                     if let Some((trial, trial_ledger, trial_energy)) = try_close_with_new_unit(
                         &structure, anchor, target, material, catalog, &ledger, energy,
-                    )
-                    {
+                    ) {
                         structure = trial;
                         ledger = trial_ledger;
                         energy = trial_energy;
