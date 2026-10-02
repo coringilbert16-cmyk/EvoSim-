@@ -68,7 +68,7 @@ fn circle_boundary_placements(
             target_boundary.normal_x * rs + target_boundary.normal_y * rc,
         );
         out.push(Placement {
-            x: point.0 + normal.0 * candidate_radius,
+            x: point.0 + normal.0 * *candidate_radius,
             y: point.1 + normal.1 * candidate_radius,
             rotation_radians: 0.0,
         });
