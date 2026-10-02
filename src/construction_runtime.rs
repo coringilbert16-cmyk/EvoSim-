@@ -1051,22 +1051,10 @@ fn construct_blueprint_bond_driven_internal(
     realized_units[anchor_index] = Some(anchor_indices.clone());
     let genome_anchor = structure.units[anchor_unit_index].placement;
     while !realized.iter().all(|value| *value) {
-        // The blueprint chooses what we would like to build next, but it does
-        // not choose which physical unit must receive it. Every realized
-        // physical unit is part of the construction frontier.
-        // Forward-only construction makes the choice of the next
-        // developmental element an ordering decision. Prefer an unrealized
-        // element whose declared neighbors are already realized, because its
-        // physical attachment can then establish one of the blueprint's
-        // existing required relationships immediately. Among otherwise
-        // equivalent candidates, retain blueprint order as the deterministic
-        // tie-breaker. This does not add a topology requirement: elements with
-        // no currently realized neighbor remain eligible.
-        let Some(index) = (0..blueprint.elements.len())
-            .find(|candidate| !realized[*candidate] && !deferred_elements[*candidate])
-        else {
-            break;
-        };
+        // The blueprint supplies the developmental sequence preference only.
+        // The next unrealized element is a local request; physical attachment
+        // determines whether and where it can actually be realized. A blocked
+        // request is deferred rather than forcing a global topology solution.
 
         // One bond, one committed construction step. The constructor may try
         // every physical frontier unit and every acceptable material before
