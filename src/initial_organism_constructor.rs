@@ -29,7 +29,10 @@ pub(crate) struct ValidConstruction {
 fn axial_to_world(q: i32, r: i32) -> (f64, f64) {
     // Carbon's catalog hexagon has a vertex on the +x axis. These axial
     // basis vectors therefore match the actual tessellation of that shape.
-    (1.5 * q as f64, (SQRT_3 * 0.5) * q as f64 + SQRT_3 * r as f64)
+    (
+        1.5 * q as f64,
+        (SQRT_3 * 0.5) * q as f64 + SQRT_3 * r as f64,
+    )
 }
 
 fn hex_ring(radius: i32) -> Vec<(i32, i32)> {
@@ -78,15 +81,12 @@ fn add_unit(
         catalog,
     )
     .ok_or_else(|| format!("failed to restore construction unit {}", resource.name))?;
-    indices
-        .first()
-        .copied()
-        .ok_or_else(|| {
-            format!(
-                "construction unit {} restored no physical constituent",
-                resource.name
-            )
-        })
+    indices.first().copied().ok_or_else(|| {
+        format!(
+            "construction unit {} restored no physical constituent",
+            resource.name
+        )
+    })
 }
 
 fn bond_units(
@@ -99,11 +99,7 @@ fn bond_units(
 ) -> Result<(), String> {
     let mut cache = crate::contact::ConnectionCompatibilityCache::new();
     let candidate = crate::contact::connection_pair_candidates_cached(
-        structure,
-        unit_a,
-        unit_b,
-        catalog,
-        &mut cache,
+        structure, unit_a, unit_b, catalog, &mut cache,
     )
     .into_iter()
     .filter(|candidate| {
@@ -120,32 +116,15 @@ fn bond_units(
             .partial_cmp(&b.distance)
             .unwrap_or(std::cmp::Ordering::Equal)
     })
-    .ok_or_else(|| {
-        format!(
-            "no physical contact between construction units {unit_a} and {unit_b}"
-        )
-    })?;
+    .ok_or_else(|| format!("no physical contact between construction units {unit_a} and {unit_b}"))?;
 
-    let (_, _, _, investment, _) =
-        crate::combine_runtime::selected_candidate_evaluation(
-            structure,
-            unit_a,
-            unit_b,
-            candidate,
-            catalog,
-        )
+    let (_, _, _, investment, _) = crate::combine_runtime::selected_candidate_evaluation(
+        structure, unit_a, unit_b, candidate, catalog,
+    )
         .ok_or_else(|| format!("physical bond candidate {unit_a}-{unit_b} failed evaluation"))?;
 
     crate::combine_runtime::form_selected_bond(
-        structure,
-        unit_a,
-        unit_b,
-        candidate,
-        investment,
-        catalog,
-        &mut cache,
-        ledger,
-        energy,
+        structure, unit_a, unit_b, candidate, investment, catalog, &mut cache, ledger, energy,
     )
     .ok_or_else(|| format!("physical bond transaction {unit_a}-{unit_b} failed"))
     .map(|_| ())
@@ -370,8 +349,8 @@ fn valid_construction(
         return None;
     }
 
-    let regions = crate::interior_geometry::find_accessible_interior_regions(structure, catalog)
-        .ok()?;
+    let regions =
+        crate::interior_geometry::find_accessible_interior_regions(structure, catalog).ok()?;
     if regions.is_empty() {
         return None;
     }
@@ -396,10 +375,9 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
 
     let (structure, ledger, energy) = construct_scaffold(catalog)?;
     let acquired_resource_placements =
-        valid_construction(&structure, catalog, &acquisition_candidates)
-            .ok_or_else(|| {
-                "deterministic construction scaffold did not satisfy viability".to_string()
-            })?;
+        valid_construction(&structure, catalog, &acquisition_candidates).ok_or_else(|| {
+            "deterministic construction scaffold did not satisfy viability".to_string()
+        })?;
 
     Ok(ValidConstruction {
         structure,
