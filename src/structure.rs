@@ -261,15 +261,24 @@ impl ConnectionEndpoint {
                 )
             }
             Self::Boundary { angle_radians } => {
-                let crate::resources::Form::Circle { radius } = unit.shape(catalog)?.form else {
-                    return None;
-                };
+                let shape = unit.shape(catalog)?;
                 let (nx, ny) = (angle_radians.cos(), angle_radians.sin());
+                let boundary =
+                    crate::surface_geometry::boundary_point_toward(shape, nx, ny)?;
+                let normal_length = boundary.normal_x.hypot(boundary.normal_y);
+                let (normal_x, normal_y) = if normal_length > 1.0e-12 {
+                    (
+                        boundary.normal_x / normal_length,
+                        boundary.normal_y / normal_length,
+                    )
+                } else {
+                    (nx, ny)
+                };
                 Some(crate::connection_geometry::transform_derived_point(
-                    radius * nx,
-                    radius * ny,
-                    nx,
-                    ny,
+                    boundary.x,
+                    boundary.y,
+                    normal_x,
+                    normal_y,
                     unit.placement.x,
                     unit.placement.y,
                     unit.placement.rotation_radians,
