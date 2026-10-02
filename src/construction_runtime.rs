@@ -906,11 +906,12 @@ fn construct_blueprint_bond_driven_internal(
         }
 
         let mut attached = false;
-        // A not-yet-realized element may have more than one realized blueprint
-        // neighbor. Each neighbor is an independently valid forward anchor;
-        // failure against one must not strand the element when another neighbor
-        // can admit the same physical material through the shared bond authority.
-        'frontier: for neighbor in (0..blueprint.elements.len()).filter(|candidate| realized[*candidate]) {
+        // Any already-realized developmental element may contribute a physical
+        // frontier unit. Blueprint connectivity is therefore a ranking signal
+        // inside candidate scoring, not a prerequisite for attachment.
+        'frontier: for neighbor in
+            (0..blueprint.elements.len()).filter(|candidate| realized[*candidate])
+        {
             for (storage_index, candidate_name, _) in candidate_resources.iter().cloned() {
                 let candidate_instance = if let Some(storage) = available_materials.as_deref() {
                     let Some(crate::material_storage::StoredMaterial::Physical(instance)) =
@@ -988,7 +989,7 @@ fn construct_blueprint_bond_driven_internal(
 
         if !attached {
             return Err(format!(
-                "no forward bond-driven placement found for blueprint element {index} after {nodes} placement attempts"
+                "no physical frontier placement found for developmental element {index} after {nodes} placement attempts"
             ));
         }
     }
