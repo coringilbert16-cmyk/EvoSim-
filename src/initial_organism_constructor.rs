@@ -116,12 +116,14 @@ fn bond_units(
             .partial_cmp(&b.distance)
             .unwrap_or(std::cmp::Ordering::Equal)
     })
-    .ok_or_else(|| format!("no physical contact between construction units {unit_a} and {unit_b}"))?;
+    .ok_or_else(|| {
+        format!("no physical contact between construction units {unit_a} and {unit_b}")
+    })?;
 
     let (_, _, _, investment, _) = crate::combine_runtime::selected_candidate_evaluation(
         structure, unit_a, unit_b, candidate, catalog,
     )
-        .ok_or_else(|| format!("physical bond candidate {unit_a}-{unit_b} failed evaluation"))?;
+    .ok_or_else(|| format!("physical bond candidate {unit_a}-{unit_b} failed evaluation"))?;
 
     crate::combine_runtime::form_selected_bond(
         structure, unit_a, unit_b, candidate, investment, catalog, &mut cache, ledger, energy,
