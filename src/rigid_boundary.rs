@@ -377,6 +377,27 @@ mod tests {
     }
 
     #[test]
+    fn surface_alignment_includes_vertex_to_vertex_contact() {
+        let triangle = Shape {
+            form: Form::Polygon {
+                vertices: vec![(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)],
+            },
+        };
+        let origin = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let placements = surface_alignment_placements(&triangle, origin, &triangle, origin);
+        assert!(placements.iter().any(|placement| {
+            let Some(point) = world_vertex(&triangle, 0, *placement) else {
+                return false;
+            };
+            point.0.abs() < 1e-10 && point.1.abs() < 1e-10
+        }));
+    }
+
+    #[test]
     fn world_vertex_applies_only_rigid_transform() {
         let p = world_vertex(
             &square(),
