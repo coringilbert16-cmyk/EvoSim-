@@ -313,21 +313,49 @@ fn free_form_search(
             f64,
         )> = None;
 
-        // Grow from the current physical frontier first. Normal growth does
-        // not rescan every historical unit on every step. If this frontier
-        // cannot continue, the loop can fall back to the full structure.
-        let anchor_indices = if structure.units.len() <= 2 {
+        // The frontier is geometric, not merely chronological. The newest
+        // units are always included, together with older units whose bodies are
+        // close enough to one of those frontier units that the next physical
+        // attachment could plausibly reach them. This is the minimum local
+        // information needed to permit real cavity closure without rescanning
+        // the whole organism on every step.
+        let max_candidate_radius = rigid_resources
+            .iter()
+            .map(|resource| resource.shape.form.bounding_radius())
+            .fold(0.0_f64, f64::max);
+        let recent_indices = if structure.units.len() <= 2 {
             (0..structure.units.len()).collect::<Vec<_>>()
         } else {
             (structure.units.len() - 2..structure.units.len()).collect::<Vec<_>>()
         };
+        let mut anchor_indices = recent_indices.clone();
+        for candidate_index in 0..structure.units.len() {
+            if anchor_indices.contains(&candidate_index) {
+                continue;
+            }
+            let Some(candidate_shape) = structure.units[candidate_index].shape(catalog) else {
+                continue;
+            };
+            let candidate_radius = candidate_shape.form.bounding_radius();
+            let near_frontier = recent_indices.iter().any(|&recent_index| {
+                let recent = &structure.units[recent_index].placement;
+                let candidate = &structure.units[candidate_index].placement;
+                (recent.x - candidate.x).hypot(recent.y - candidate.y)
+                    <= candidate_radius + max_candidate_radius + SURFACE_CONTACT_TOLERANCE
+            });
+            if near_frontier {
+                anchor_indices.push(candidate_index);
+            }
+        }
 
-        // Candidate generation is deliberately local: an attachment is tried
-        // only against an existing frontier unit. No future tree, target
-        // topology, or global body-plan search is constructed.
-        for anchor_index in anchor_indices {
-            for resource in &rigid_resources {
-                let Some(material) = crate::physical_material::PhysicalMaterial::realized(
+        // Candidate materials are immutable catalog descriptions. Build their
+        // one-unit physical representations once for this growth step rather
+        // than reconstructing and validating the same material for every
+        // anchor/material pair.
+        let rigid_materials = rigid_resources
+            .iter()
+            .filter_map(|resource| {
+                crate::physical_material::PhysicalMaterial::realized(
                     Material::free_base(resource.name.clone(), 1.0),
                     vec![Placement {
                         x: 0.0,
@@ -335,9 +363,17 @@ fn free_form_search(
                         rotation_radians: 0.0,
                     }],
                     catalog,
-                ) else {
-                    continue;
-                };
+                )
+                .map(|material| (*resource, material))
+            })
+            .collect::<Vec<_>>();
+
+        // Candidate generation is deliberately local: an attachment is tried
+        // only against an existing frontier or nearby closure-capable unit.
+        // No future tree, target topology, or global body-plan search is
+        // constructed.
+        for anchor_index in anchor_indices {
+            for (_resource, material) in &rigid_materials {
 
                 let before_nodes = *nodes;
                 let Some((trial, indices, _part, _attempt, trial_ledger, trial_energy)) =
