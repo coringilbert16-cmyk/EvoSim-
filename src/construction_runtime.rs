@@ -989,6 +989,179 @@ pub(crate) fn construct_blueprint_bond_driven_with_materials(
     )
 }
 
+
+const CONSTRUCTOR_LOOKAHEAD_DEPTH: usize = 10;
+const CONSTRUCTOR_LOOKAHEAD_NODE_BUDGET: usize = 512;
+
+/// Search a bounded number of future developmental placements without
+/// committing any material or bonds. This is deliberately a search aid, not
+/// an alternate construction rule: every trial goes through the same
+/// bond-driven realization path used by the real constructor.
+///
+/// The horizon is ten placements. Within that horizon we explore alternatives
+/// until either a continuation is found or the small node budget is exhausted.
+/// Physical inventory is treated transactionally: a storage entry used by a
+/// lookahead branch is unavailable to descendants of that branch, but nothing
+/// is consumed from the real storage.
+fn developmental_lookahead_depth(
+    blueprint: &crate::structural_blueprint::StructuralBlueprint,
+    catalog: &[BaseResource],
+    structure: &OrganismStructure,
+    realized_units: &[Option<Vec<usize>>],
+    realized: &[bool],
+    genome_anchor: Placement,
+    available_materials: Option<&crate::material_storage::MaterialStorage>,
+    reserved_storage_indices: &[usize],
+    used_storage_indices: &[usize],
+    depth: usize,
+    nodes: &mut usize,
+    ledger: &EnergyLedger,
+    available_energy: f64,
+) -> usize {
+    if realized.iter().all(|value| *value) {
+        return depth;
+    }
+    if depth >= CONSTRUCTOR_LOOKAHEAD_DEPTH || *nodes >= CONSTRUCTOR_LOOKAHEAD_NODE_BUDGET {
+        return depth;
+    }
+
+    let Some(index) = (0..blueprint.elements.len())
+        .filter(|candidate| !realized[*candidate])
+        .max_by_key(|candidate| {
+            let realized_neighbors =
+                already_realized_neighbors(blueprint, *candidate, realized).len();
+            (realized_neighbors, std::cmp::Reverse(*candidate))
+        })
+    else {
+        return depth;
+    };
+
+    let preferred = blueprint.elements[index].material.parts[0].0.clone();
+    let candidate_resources = if let Some(storage) = available_materials {
+        let Ok(ranked) = rank_available_construction_materials(storage, &preferred, catalog) else {
+            return depth;
+        };
+        ranked
+            .into_iter()
+            .filter(|(storage_index, _, score)| {
+                *score >= crate::construction_material_selection::MIN_CONSTRUCTION_MATERIAL_MATCH
+                    && !reserved_storage_indices.contains(storage_index)
+                    && !used_storage_indices.contains(storage_index)
+            })
+            .collect::<Vec<_>>()
+    } else {
+        let mut candidates = Vec::new();
+        if resource(catalog, &preferred)
+            .is_some_and(|candidate| candidate.physical_state == PhysicalState::Rigid)
+        {
+            candidates.push((usize::MAX, preferred.clone(), 1.0));
+        }
+        for candidate in catalog {
+            if candidate.name == preferred || candidate.physical_state != PhysicalState::Rigid {
+                continue;
+            }
+            candidates.push((usize::MAX, candidate.name.clone(), 0.0));
+        }
+        if resource(catalog, "Water").is_some() {
+            candidates.push((usize::MAX, "Water".to_string(), 0.0));
+        }
+        candidates
+    };
+
+    let mut best_depth = depth;
+
+    for existing_index in 0..structure.units.len() {
+        for (storage_index, candidate_name, _) in candidate_resources.iter().cloned() {
+            if *nodes >= CONSTRUCTOR_LOOKAHEAD_NODE_BUDGET {
+                return best_depth;
+            }
+
+            let candidate_instance = if let Some(storage) = available_materials {
+                let Some(crate::material_storage::StoredMaterial::Physical(instance)) =
+                    storage.entries.get(storage_index)
+                else {
+                    continue;
+                };
+                instance.clone()
+            } else {
+                let Some(candidate_resource) = resource(catalog, &candidate_name) else {
+                    continue;
+                };
+                let Some(instance) = crate::physical_material::PhysicalMaterial::realized(
+                    crate::resources::Material::free_base(candidate_resource.name.clone(), 1.0),
+                    vec![Placement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    }],
+                    catalog,
+                ) else {
+                    continue;
+                };
+                instance
+            };
+
+            let Some((
+                _topology_score,
+                trial_structure,
+                new_indices,
+                _part_index,
+                _attempt,
+                trial_ledger,
+                trial_energy,
+            )) = realize_next_bond_driven(
+                blueprint,
+                catalog,
+                structure,
+                realized_units,
+                index,
+                existing_index,
+                genome_anchor,
+                blueprint.elements[index].placement,
+                &candidate_instance,
+                nodes,
+                ledger,
+                available_energy,
+            ) else {
+                continue;
+            };
+
+            let mut trial_realized = realized.to_vec();
+            let mut trial_realized_units = realized_units.to_vec();
+            trial_realized[index] = true;
+            trial_realized_units[index] = Some(new_indices);
+
+            let mut trial_used_storage = used_storage_indices.to_vec();
+            if storage_index != usize::MAX {
+                trial_used_storage.push(storage_index);
+            }
+
+            let branch_depth = developmental_lookahead_depth(
+                blueprint,
+                catalog,
+                &trial_structure,
+                &trial_realized_units,
+                &trial_realized,
+                genome_anchor,
+                available_materials,
+                reserved_storage_indices,
+                &trial_used_storage,
+                depth + 1,
+                nodes,
+                &trial_ledger,
+                trial_energy,
+            );
+            best_depth = best_depth.max(branch_depth);
+
+            if best_depth >= CONSTRUCTOR_LOOKAHEAD_DEPTH {
+                return best_depth;
+            }
+        }
+    }
+
+    best_depth
+}
+
 fn construct_blueprint_bond_driven_internal(
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     catalog: &[BaseResource],
@@ -1165,6 +1338,7 @@ fn construct_blueprint_bond_driven_internal(
         // an accidental hard constraint.
         let mut best_developmental: Option<(
             usize,
+            usize,
             f64,
             usize,
             OrganismStructure,
@@ -1247,14 +1421,42 @@ fn construct_blueprint_bond_driven_internal(
                 let target_distance = (new_unit.placement.x - target_world.0)
                     .hypot(new_unit.placement.y - target_world.1);
 
+                let mut lookahead_realized = realized.clone();
+                let mut lookahead_units = realized_units.clone();
+                lookahead_realized[index] = true;
+                lookahead_units[index] = Some(new_indices.clone());
+                let mut lookahead_used_storage = reserved_storage_indices.clone();
+                if storage_index != usize::MAX {
+                    lookahead_used_storage.push(storage_index);
+                }
+                let lookahead_depth = developmental_lookahead_depth(
+                    blueprint,
+                    catalog,
+                    &trial_structure,
+                    &lookahead_units,
+                    &lookahead_realized,
+                    genome_anchor,
+                    available_materials.as_deref(),
+                    &reserved_storage_indices,
+                    &lookahead_used_storage,
+                    1,
+                    &mut nodes,
+                    &trial_ledger,
+                    trial_energy,
+                );
+
                 let better = best_developmental.as_ref().is_none_or(|current| {
-                    topology_score > current.0
-                        || (topology_score == current.0
-                            && (target_distance < current.1
-                                || (target_distance == current.1 && storage_index < current.2)))
+                    lookahead_depth > current.0
+                        || (lookahead_depth == current.0
+                            && (topology_score > current.1
+                                || (topology_score == current.1
+                                    && (target_distance < current.2
+                                        || (target_distance == current.2
+                                            && storage_index < current.3)))))
                 });
                 if better {
                     best_developmental = Some((
+                        lookahead_depth,
                         topology_score,
                         target_distance,
                         storage_index,
@@ -1270,6 +1472,7 @@ fn construct_blueprint_bond_driven_internal(
         }
 
         let attached = if let Some((
+            _lookahead_depth,
             _topology_score,
             _target_distance,
             storage_index,
