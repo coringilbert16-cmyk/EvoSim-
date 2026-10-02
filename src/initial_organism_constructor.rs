@@ -59,6 +59,7 @@ fn penetrates_local_neighborhood(
     candidate_shape: &crate::resources::Shape,
     candidate_placement: Placement,
     anchor: usize,
+    local_neighbors: &[usize],
     catalog: &[BaseResource],
 ) -> bool {
     let candidate = crate::material_geometry::PlacedMaterialPart {
@@ -67,12 +68,11 @@ fn penetrates_local_neighborhood(
         placement: candidate_placement,
     };
 
-    let mut local_units = structure.direct_neighbor_indices(anchor);
-    local_units.push(anchor);
-    local_units.sort_unstable();
-    local_units.dedup();
-
-    local_units.into_iter().any(|index| {
+    local_neighbors
+        .iter()
+        .copied()
+        .chain(std::iter::once(anchor))
+        .any(|index| {
         let Some(unit) = structure.units.get(index) else {
             return true;
         };
@@ -96,11 +96,12 @@ fn penetrates_local_neighborhood(
 fn attach_local_piece(
     structure: &mut crate::structure::OrganismStructure,
     anchor: usize,
+    local_neighbors: &[usize],
     material: &crate::physical_material::PhysicalMaterial,
     catalog: &[BaseResource],
     ledger: &mut EnergyLedger,
     energy: &mut f64,
-) -> Option<usize> {
+) -> Option<(usize, Option<usize>)> {
     let resource_name = material.material.parts.first()?.0.as_str();
     let resource = catalog
         .iter()
@@ -127,7 +128,14 @@ fn attach_local_piece(
     );
 
     for origin in origins {
-        if penetrates_local_neighborhood(structure, &resource.shape, origin, anchor, catalog) {
+        if penetrates_local_neighborhood(
+            structure,
+            &resource.shape,
+            origin,
+            anchor,
+            local_neighbors,
+            catalog,
+        ) {
             continue;
         }
 
@@ -192,12 +200,7 @@ fn attach_local_piece(
         // physical contact is already present, take that second local bond
         // immediately. This is how closed local structures can emerge without
         // a global closure solver.
-        let mut local_targets = structure.direct_neighbor_indices(anchor);
-        local_targets.retain(|&index| index != new_index);
-        local_targets.sort_unstable();
-        local_targets.dedup();
-
-        for target in local_targets {
+        for &target in local_neighbors {
             let candidates = crate::contact::connection_pair_candidates_cached(
                 structure, target, new_index, catalog, &mut cache,
             );
@@ -231,7 +234,22 @@ fn attach_local_piece(
             }
         }
 
-        return Some(new_index);
+        let closed_target = local_neighbors
+            .iter()
+            .copied()
+            .find(|&target| {
+                structure
+                    .bonds
+                    .iter()
+                    .any(|bond| {
+                        let a = bond.endpoint_a.constituent_id;
+                        let b = bond.endpoint_b.constituent_id;
+                        let target_id = structure.units[target].physical_id;
+                        let new_id = structure.units[new_index].physical_id;
+                        (a == target_id && b == new_id) || (a == new_id && b == target_id)
+                    })
+            });
+        return Some((new_index, closed_target));
     }
 
     None
@@ -248,8 +266,10 @@ fn assemble_local(
     catalog: &[BaseResource],
 ) -> Option<(crate::structure::OrganismStructure, EnergyLedger, f64)> {
     let mut frontier = VecDeque::new();
+    let mut adjacency: Vec<Vec<usize>> = Vec::new();
     if !structure.units.is_empty() {
         frontier.push_back(0);
+        adjacency.push(Vec::new());
     }
 
     let mut ledger = EnergyLedger::default();
@@ -268,14 +288,21 @@ fn assemble_local(
             };
 
             for material in materials.iter().cycle().take(materials.len()) {
-                if let Some(new_index) = attach_local_piece(
+                if let Some((new_index, closed_target)) = attach_local_piece(
                     &mut structure,
                     anchor,
+                    &adjacency[anchor],
                     material,
                     catalog,
                     &mut ledger,
                     &mut energy,
                 ) {
+                    adjacency.push(vec![anchor]);
+                    adjacency[anchor].push(new_index);
+                    if let Some(target) = closed_target {
+                        adjacency[new_index].push(target);
+                        adjacency[target].push(new_index);
+                    }
                     frontier.push_back(anchor);
                     frontier.push_back(new_index);
                     attached = true;
