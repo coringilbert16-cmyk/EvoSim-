@@ -333,6 +333,40 @@ fn already_realized_neighbors(
 /// a later connection would overshoot a previously established anchor, the
 /// constructor tries the other connection points on that anchor rather than
 /// abandoning the cavity.
+fn score_supplemental_trial(
+    structure: &OrganismStructure,
+    trial_structure: &OrganismStructure,
+    catalog: &[BaseResource],
+) -> (usize, f64, f64) {
+    let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+    let mut future_bonds = 0usize;
+    let mut best_facing = f64::NEG_INFINITY;
+    let mut contact_distance = f64::INFINITY;
+
+    for new_index in structure.units.len()..trial_structure.units.len() {
+        for other_index in 0..structure.units.len() {
+            for candidate in crate::contact::connection_pair_candidates_cached(
+                trial_structure,
+                new_index,
+                other_index,
+                catalog,
+                &mut cache,
+            ) {
+                if candidate.distance <= SURFACE_CONTACT_TOLERANCE
+                    && candidate.available_a
+                    && candidate.available_b
+                {
+                    future_bonds += 1;
+                    best_facing = best_facing.max(candidate.facing);
+                    contact_distance = contact_distance.min(candidate.distance);
+                }
+            }
+        }
+    }
+
+    (future_bonds, best_facing, contact_distance)
+}
+
 pub(crate) fn try_attach_physical_material_bond_driven(
     structure: &OrganismStructure,
     existing_index: usize,
@@ -1639,48 +1673,8 @@ fn construct_blueprint_bond_driven_internal(
                         continue;
                     };
 
-                    let mut future_bonds = 0usize;
-                    for new_index in structure.units.len()..trial_structure.units.len() {
-                        for other_index in 0..structure.units.len() {
-                            if crate::contact::connection_pair_candidates_cached(
-                                &trial_structure,
-                                new_index,
-                                other_index,
-                                catalog,
-                                &mut crate::contact::ConnectionCompatibilityCache::new(),
-                            )
-                            .into_iter()
-                            .any(|candidate| {
-                                candidate.distance <= SURFACE_CONTACT_TOLERANCE
-                                    && candidate.available_a
-                                    && candidate.available_b
-                            }) {
-                                future_bonds += 1;
-                            }
-                        }
-                    }
-
-                    let mut best_facing = f64::NEG_INFINITY;
-                    let mut contact_distance = f64::INFINITY;
-                    for new_index in structure.units.len()..trial_structure.units.len() {
-                        for other_index in 0..structure.units.len() {
-                            for candidate in crate::contact::connection_pair_candidates_cached(
-                                &trial_structure,
-                                new_index,
-                                other_index,
-                                catalog,
-                                &mut crate::contact::ConnectionCompatibilityCache::new(),
-                            ) {
-                                if candidate.distance <= SURFACE_CONTACT_TOLERANCE
-                                    && candidate.available_a
-                                    && candidate.available_b
-                                {
-                                    best_facing = best_facing.max(candidate.facing);
-                                    contact_distance = contact_distance.min(candidate.distance);
-                                }
-                            }
-                        }
-                    }
+                    let (future_bonds, best_facing, contact_distance) =
+                        score_supplemental_trial(&structure, &trial_structure, catalog);
 
                     let replace = best_supplemental.as_ref().is_none_or(|current| {
                         future_bonds > current.0
@@ -1744,48 +1738,8 @@ fn construct_blueprint_bond_driven_internal(
                         continue;
                     };
 
-                    let mut future_bonds = 0usize;
-                    for new_index in structure.units.len()..trial_structure.units.len() {
-                        for other_index in 0..structure.units.len() {
-                            if crate::contact::connection_pair_candidates_cached(
-                                &trial_structure,
-                                new_index,
-                                other_index,
-                                catalog,
-                                &mut crate::contact::ConnectionCompatibilityCache::new(),
-                            )
-                            .into_iter()
-                            .any(|candidate| {
-                                candidate.distance <= SURFACE_CONTACT_TOLERANCE
-                                    && candidate.available_a
-                                    && candidate.available_b
-                            }) {
-                                future_bonds += 1;
-                            }
-                        }
-                    }
-
-                    let mut best_facing = f64::NEG_INFINITY;
-                    let mut contact_distance = f64::INFINITY;
-                    for new_index in structure.units.len()..trial_structure.units.len() {
-                        for other_index in 0..structure.units.len() {
-                            for candidate in crate::contact::connection_pair_candidates_cached(
-                                &trial_structure,
-                                new_index,
-                                other_index,
-                                catalog,
-                                &mut crate::contact::ConnectionCompatibilityCache::new(),
-                            ) {
-                                if candidate.distance <= SURFACE_CONTACT_TOLERANCE
-                                    && candidate.available_a
-                                    && candidate.available_b
-                                {
-                                    best_facing = best_facing.max(candidate.facing);
-                                    contact_distance = contact_distance.min(candidate.distance);
-                                }
-                            }
-                        }
-                    }
+                    let (future_bonds, best_facing, contact_distance) =
+                        score_supplemental_trial(&structure, &trial_structure, catalog);
 
                     let replace = best_supplemental.as_ref().is_none_or(|current| {
                         future_bonds > current.0
