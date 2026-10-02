@@ -370,19 +370,6 @@ fn form_bond_from_candidate_in_place(
         structure.bonds.truncate(previous_bond_count);
         return None;
     }
-    let net = *energy - before;
-    let transaction = EnergyTransaction {
-        reason: EnergyReason::Combine,
-        potential_released: interaction.signed_value,
-        usable_delta: interaction.signed_value - investment - work,
-        structural_delta: investment,
-        heat_dissipated: work,
-    };
-    if !ledger.settle_transaction(energy, transaction) {
-        *energy = before;
-        return None;
-    }
-    let net = *energy - before;
     Some(CombineAttempt {
         unit_a: ua,
         unit_b: ub,
