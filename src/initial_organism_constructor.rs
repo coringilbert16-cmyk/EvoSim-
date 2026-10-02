@@ -149,8 +149,7 @@ fn bond_exists(
     };
 
     structure.bonds.iter().any(|bond| {
-        (bond.endpoint_a.constituent_id == first_id
-            && bond.endpoint_b.constituent_id == second_id)
+        (bond.endpoint_a.constituent_id == first_id && bond.endpoint_b.constituent_id == second_id)
             || (bond.endpoint_a.constituent_id == second_id
                 && bond.endpoint_b.constituent_id == first_id)
     })
@@ -194,29 +193,15 @@ fn commit_bond(
     let Some(candidate) = contact_candidate(structure, first, second, catalog) else {
         return false;
     };
-    let Some((_, _, _, investment, _)) =
-        crate::combine_runtime::selected_candidate_evaluation(
-            structure,
-            first,
-            second,
-            candidate,
-            catalog,
-        )
-    else {
+    let Some((_, _, _, investment, _)) = crate::combine_runtime::selected_candidate_evaluation(
+        structure, first, second, candidate, catalog,
+    ) else {
         return false;
     };
 
     let mut cache = crate::contact::ConnectionCompatibilityCache::new();
     crate::combine_runtime::form_selected_bond(
-        structure,
-        first,
-        second,
-        candidate,
-        investment,
-        catalog,
-        &mut cache,
-        ledger,
-        energy,
+        structure, first, second, candidate, investment, catalog, &mut cache, ledger, energy,
     )
     .is_some()
 }
@@ -247,10 +232,7 @@ fn try_close_with_new_unit(
     for origin in placements {
         let mut trial = structure.clone();
         let indices = crate::material_restoration::restore_material_in_place(
-            &mut trial,
-            material,
-            origin,
-            catalog,
+            &mut trial, material, origin, catalog,
         )?;
         let new_index = *indices.first()?;
 
@@ -297,13 +279,7 @@ fn attach_one(
         let mut nodes = 0;
         let Some((trial, _, _, _, ledger, energy)) =
             crate::construction_runtime::try_attach_physical_material_bond_driven(
-                structure,
-                anchor,
-                material,
-                catalog,
-                &mut nodes,
-                ledger,
-                energy,
+                structure, anchor, material, catalog, &mut nodes, ledger, energy,
             )
         else {
             continue;
@@ -332,16 +308,9 @@ fn grow_until_valid(
         for anchor in 0..structure.units.len() {
             for target in 0..structure.units.len() {
                 for material in materials {
-                    if let Some((trial, trial_ledger, trial_energy)) =
-                        try_close_with_new_unit(
-                            &structure,
-                            anchor,
-                            target,
-                            material,
-                            catalog,
-                            &ledger,
-                            energy,
-                        )
+                    if let Some((trial, trial_ledger, trial_energy)) = try_close_with_new_unit(
+                        &structure, anchor, target, material, catalog, &ledger, energy,
+                    )
                     {
                         structure = trial;
                         ledger = trial_ledger;
@@ -434,7 +403,10 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
         }
     }
 
-    Err("blueprint-free constructor could not reach a valid organism through physical growth".into())
+    Err(
+        "blueprint-free constructor could not reach a valid organism through physical growth"
+            .into(),
+    )
 }
 
 #[cfg(test)]
