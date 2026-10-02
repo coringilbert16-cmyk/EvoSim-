@@ -163,17 +163,17 @@ fn contact_candidate(
 ) -> Option<crate::contact::ConnectionPairCandidate> {
     let mut cache = crate::contact::ConnectionCompatibilityCache::new();
     crate::contact::connection_pair_candidates_cached(structure, first, second, catalog, &mut cache)
-    .into_iter()
-    .filter(|candidate| {
-        candidate.distance <= CONTACT_TOLERANCE
-            && candidate.available_a
-            && candidate.available_b
-    })
-    .max_by(|a, b| {
-        a.facing
-            .partial_cmp(&b.facing)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    })
+        .into_iter()
+        .filter(|candidate| {
+            candidate.distance <= CONTACT_TOLERANCE
+                && candidate.available_a
+                && candidate.available_b
+        })
+        .max_by(|a, b| {
+            a.facing
+                .partial_cmp(&b.facing)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
 }
 
 fn commit_bond(
