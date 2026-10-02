@@ -1031,21 +1031,12 @@ fn construct_blueprint_bond_driven_internal(
             .map_err(|e| e.to_string())?;
         let storage_index = candidates
             .into_iter()
-            .find(|(storage_index, _, _score)| !reserved_storage_indices.contains(storage_index))
-            .map(|(storage_index, _, _)| storage_index)
-            .or_else(|| {
-                storage
-                    .entries
-                    .iter()
-                    .enumerate()
-                    .find_map(|(storage_index, entry)| {
-                        if reserved_storage_indices.contains(&storage_index) {
-                            return None;
-                        }
-                        matches!(entry, crate::material_storage::StoredMaterial::Physical(_))
-                            .then_some(storage_index)
-                    })
+            .find(|(storage_index, _, score)| {
+                *score >= crate::construction_material_selection::MIN_CONSTRUCTION_MATERIAL_MATCH
+                    && !reserved_storage_indices.contains(storage_index)
             })
+            .map(|(storage_index, _, _)| storage_index)
+
             .ok_or_else(|| {
                 "construction has no usable physical material for its initial structure".to_string()
             })?;
@@ -1129,8 +1120,9 @@ fn construct_blueprint_bond_driven_internal(
                 .map_err(|e| e.to_string())?;
             let candidates = ranked
                 .iter()
-                .filter(|(storage_index, _, _score)| {
-                    !reserved_storage_indices.contains(storage_index)
+                .filter(|(storage_index, _, score)| {
+                    *score >= crate::construction_material_selection::MIN_CONSTRUCTION_MATERIAL_MATCH
+                        && !reserved_storage_indices.contains(storage_index)
                 })
                 .cloned()
                 .collect::<Vec<_>>();
