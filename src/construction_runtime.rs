@@ -314,7 +314,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                         crate::structure::ConnectionEndpoint::Boundary { .. },
                         crate::structure::ConnectionEndpoint::Boundary { .. }
                     )
-                ) && candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                ) && candidate.distance <= SURFACE_CONTACT_TOLERANCE
                     && candidate.available_a
                     && candidate.available_b
             })
@@ -499,7 +499,7 @@ fn realize_next_bond_driven(
                             crate::structure::ConnectionEndpoint::Boundary { .. },
                             crate::structure::ConnectionEndpoint::Boundary { .. }
                         )
-                    ) && candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                    ) && candidate.distance <= SURFACE_CONTACT_TOLERANCE
                         && candidate.available_a
                         && candidate.available_b
                 })
@@ -988,7 +988,7 @@ fn construct_blueprint_bond_driven_internal(
                     let mut evaluated_candidates = 0usize;
                     let mut rejected_by_bond_admission = 0usize;
                     for candidate in candidates.into_iter().filter(|candidate| {
-                        candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                        candidate.distance <= SURFACE_CONTACT_TOLERANCE
                             && candidate.available_a
                             && candidate.available_b
                     }) {
