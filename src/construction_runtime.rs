@@ -427,6 +427,9 @@ pub(crate) fn try_attach_physical_material_bond_driven(
             candidate_shape,
             *relative,
         ) {
+            if construction_budget_exhausted(*nodes) {
+                return None;
+            }
             *nodes += 1;
 
             let mut trial = structure.clone();
@@ -652,6 +655,9 @@ fn realize_next_bond_driven(
                 candidate_shape,
                 *relative,
             ) {
+                if construction_budget_exhausted(*nodes) {
+                    return None;
+                }
                 *nodes += 1;
 
                 let mut trial = structure.clone();
@@ -1026,6 +1032,9 @@ pub(crate) fn construct_blueprint_bond_driven_with_materials(
 
 const CONSTRUCTOR_LOOKAHEAD_DEPTH: usize = 10;
 const CONSTRUCTOR_LOOKAHEAD_NODE_BUDGET: usize = 512;
+const fn construction_budget_exhausted(nodes: usize) -> bool {
+    nodes >= CONSTRUCTOR_LOOKAHEAD_NODE_BUDGET
+}
 
 /// Search a bounded number of future developmental placements without
 /// committing any material or bonds. This is deliberately a search aid, not
@@ -1106,8 +1115,11 @@ fn developmental_lookahead_depth(
     let mut best_depth = depth;
 
     for existing_index in 0..structure.units.len() {
+        if construction_budget_exhausted(*nodes) {
+            return best_depth;
+        }
         for (storage_index, candidate_name, _) in candidate_resources.iter().cloned() {
-            if *nodes >= CONSTRUCTOR_LOOKAHEAD_NODE_BUDGET {
+            if construction_budget_exhausted(*nodes) {
                 return best_depth;
             }
 
@@ -1297,6 +1309,9 @@ fn construct_blueprint_bond_driven_internal(
     realized_units[anchor_index] = Some(anchor_indices.clone());
     let genome_anchor = structure.units[anchor_unit_index].placement;
     while !realized.iter().all(|value| *value) {
+        if construction_budget_exhausted(nodes) {
+            break;
+        }
         // The blueprint chooses what we would like to build next, but it does
         // not choose which physical unit must receive it. Every realized
         // physical unit is part of the construction frontier.
@@ -1614,6 +1629,9 @@ fn construct_blueprint_bond_driven_internal(
         });
 
     for _ in 0..supplemental_budget {
+        if construction_budget_exhausted(nodes) {
+            break;
+        }
         if crate::cavity::analyze_genome_cavity(&structure, catalog)?
             .is_some_and(|cavity| cavity.qualifies())
         {
