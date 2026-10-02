@@ -337,6 +337,9 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                 matches!(
                     (candidate.endpoint_a, candidate.endpoint_b),
                     (
+                        crate::structure::ConnectionEndpoint::Surface { .. },
+                        crate::structure::ConnectionEndpoint::Surface { .. }
+                    ) | (
                         crate::structure::ConnectionEndpoint::Boundary { .. },
                         crate::structure::ConnectionEndpoint::Boundary { .. }
                     )
