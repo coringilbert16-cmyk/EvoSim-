@@ -823,6 +823,7 @@ fn construct_blueprint_bond_driven_internal(
     let mut total_heat = 0.0;
     let mut nodes = 0usize;
     let mut reserved_storage_indices = Vec::<usize>::new();
+    let mut deferred_elements = vec![false; blueprint.elements.len()];
 
     let mut anchor_storage_index = None;
     let anchor_instance = if let Some(storage) = available_materials.as_deref_mut() {
@@ -897,9 +898,11 @@ fn construct_blueprint_bond_driven_internal(
         // The blueprint chooses what we would like to build next, but it does
         // not choose which physical unit must receive it. Every realized
         // physical unit is part of the construction frontier.
-        let index = (0..blueprint.elements.len())
-            .find(|candidate| !realized[*candidate])
-            .expect("loop condition guarantees an unrealized blueprint element");
+        let Some(index) = (0..blueprint.elements.len())
+            .find(|candidate| !realized[*candidate] && !deferred_elements[*candidate])
+        else {
+            break;
+        };
 
         // One bond, one committed construction step. The constructor may try
         // every physical frontier unit and every acceptable material before
@@ -1074,17 +1077,17 @@ fn construct_blueprint_bond_driven_internal(
             if storage_index != usize::MAX {
                 reserved_storage_indices.push(storage_index);
             }
+            deferred_elements.fill(false);
             true
         } else {
             false
         };
 
         if !attached {
-            // The developmental request could not be realized from the current
-            // frontier. Do not declare the organism impossible yet: physical
-            // construction is allowed to diverge from the blueprint and
-            // continue with other available material.
-            break;
+            // One blocked developmental request does not block the rest of the
+            // blueprint. Defer it, try another unrealized developmental goal,
+            // and revisit this one after any successful physical growth.
+            deferred_elements[index] = true;
         }
     }
 
