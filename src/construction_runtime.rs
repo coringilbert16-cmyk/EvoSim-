@@ -1150,9 +1150,7 @@ fn construct_blueprint_bond_driven_internal(
                     }
                 }
             } else {
-                for candidate_resource in catalog.iter().filter(|resource| {
-                    resource.physical_state == PhysicalState::Rigid
-                }) {
+                for candidate_resource in catalog {
                     let Some(candidate_instance) =
                         crate::physical_material::PhysicalMaterial::realized(
                             crate::resources::Material::free_base(
