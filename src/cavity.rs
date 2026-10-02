@@ -15,13 +15,10 @@ struct Point {
     y: f64,
 }
 
-fn bond_seals_segment(
+fn bond_connects_units(
     structure: &OrganismStructure,
-    catalog: &[BaseResource],
     unit_a: usize,
     unit_b: usize,
-    segment_a: Point,
-    segment_b: Point,
 ) -> bool {
     let Some(expected_a) = structure.units.get(unit_a) else {
         return false;
@@ -29,66 +26,14 @@ fn bond_seals_segment(
     let Some(expected_b) = structure.units.get(unit_b) else {
         return false;
     };
+    if unit_a == unit_b {
+        return true;
+    }
     let id_a = expected_a.physical_id;
     let id_b = expected_b.physical_id;
-
-    // Bonds are physical connections between surfaces, not prescribed
-    // corner-to-corner edges. A face-to-face bond may therefore land anywhere
-    // along the shared boundary segment. Cavity sealing must recognize that
-    // physical contact instead of requiring the bond endpoints to coincide
-    // with both segment corners.
-    let point_on_segment = |point: Point, a: Point, b: Point| {
-        let ab = b.sub(a);
-        let length_sq = ab.dot(ab);
-        if length_sq <= EPS {
-            return point.sub(a).norm() <= NODE_TOLERANCE * 10.0;
-        }
-        let t = point.sub(a).dot(ab) / length_sq;
-        if !(-NODE_TOLERANCE..=1.0 + NODE_TOLERANCE).contains(&t) {
-            return false;
-        }
-        point.sub(a.add(ab.scale(t))).norm() <= NODE_TOLERANCE * 10.0
-    };
-
     structure.bonds.iter().any(|bond| {
-        let endpoint_a_is_unit_a = bond.endpoint_a.constituent_id == id_a;
-        let endpoint_b_is_unit_b = bond.endpoint_b.constituent_id == id_b;
-        let endpoint_a_is_unit_b = bond.endpoint_a.constituent_id == id_b;
-        let endpoint_b_is_unit_a = bond.endpoint_b.constituent_id == id_a;
-
-        if !(endpoint_a_is_unit_a && endpoint_b_is_unit_b
-            || endpoint_a_is_unit_b && endpoint_b_is_unit_a)
-        {
-            return false;
-        }
-
-        let (unit_for_a, endpoint_a) = if endpoint_a_is_unit_a {
-            (expected_a, bond.endpoint_a.location)
-        } else {
-            (expected_b, bond.endpoint_a.location)
-        };
-        let (unit_for_b, endpoint_b) = if endpoint_b_is_unit_b {
-            (expected_b, bond.endpoint_b.location)
-        } else {
-            (expected_a, bond.endpoint_b.location)
-        };
-
-        let Some(world_a) = endpoint_a.world_point(unit_for_a, catalog) else {
-            return false;
-        };
-        let Some(world_b) = endpoint_b.world_point(unit_for_b, catalog) else {
-            return false;
-        };
-
-        point_on_segment(
-            Point { x: world_a.x, y: world_a.y },
-            segment_a,
-            segment_b,
-        ) && point_on_segment(
-            Point { x: world_b.x, y: world_b.y },
-            segment_a,
-            segment_b,
-        )
+        (bond.endpoint_a.constituent_id == id_a && bond.endpoint_b.constituent_id == id_b)
+            || (bond.endpoint_a.constituent_id == id_b && bond.endpoint_b.constituent_id == id_a)
     })
 }
 
@@ -172,53 +117,32 @@ impl GenomeCavity {
     pub fn boundary_bond_indices(
         &self,
         structure: &OrganismStructure,
-        catalog: &[BaseResource],
+        _catalog: &[BaseResource],
     ) -> Vec<usize> {
-        self.boundary_segments
-            .iter()
-            .filter_map(|&(segment_a, segment_b, unit_a, unit_b)| {
-                structure
-                    .bonds
-                    .iter()
-                    .enumerate()
-                    .find_map(|(index, bond)| {
-                        let id_a = structure.units.get(unit_a)?.physical_id;
-                        let id_b = structure.units.get(unit_b)?.physical_id;
-                        let matches_units = (bond.endpoint_a.constituent_id == id_a
-                            && bond.endpoint_b.constituent_id == id_b)
-                            || (bond.endpoint_a.constituent_id == id_b
-                                && bond.endpoint_b.constituent_id == id_a);
-                        if !matches_units {
-                            return None;
-                        }
-
-                        let resolve =
-                            |endpoint: ConnectionEndpoint, unit_index: usize| -> Option<Point> {
-                                let unit = structure.units.get(unit_index)?;
-                                let world = endpoint.world_point(unit, catalog)?;
-                                Some(Point {
-                                    x: world.x,
-                                    y: world.y,
-                                })
-                            };
-                        let (world_a, world_b) = if bond.endpoint_a.constituent_id == id_a {
-                            (
-                                resolve(bond.endpoint_a.location, unit_a)?,
-                                resolve(bond.endpoint_b.location, unit_b)?,
-                            )
-                        } else {
-                            (
-                                resolve(bond.endpoint_a.location, unit_b)?,
-                                resolve(bond.endpoint_b.location, unit_a)?,
-                            )
-                        };
-                        let close = |a: Point, b: Point| a.sub(b).norm() <= NODE_TOLERANCE * 10.0;
-                        (close(world_a, segment_a) && close(world_b, segment_b)
-                            || close(world_a, segment_b) && close(world_b, segment_a))
-                        .then_some(index)
-                    })
-            })
-            .collect()
+        let mut indices = Vec::new();
+        for &(_, _, unit_a, unit_b) in &self.boundary_segments {
+            if unit_a == unit_b {
+                continue;
+            }
+            let Some(id_a) = structure.units.get(unit_a).map(|unit| unit.physical_id) else {
+                continue;
+            };
+            let Some(id_b) = structure.units.get(unit_b).map(|unit| unit.physical_id) else {
+                continue;
+            };
+            if let Some(index) = structure.bonds.iter().enumerate().find_map(|(index, bond)| {
+                ((bond.endpoint_a.constituent_id == id_a
+                    && bond.endpoint_b.constituent_id == id_b)
+                    || (bond.endpoint_a.constituent_id == id_b
+                        && bond.endpoint_b.constituent_id == id_a))
+                    .then_some(index)
+            }) {
+                if !indices.contains(&index) {
+                    indices.push(index);
+                }
+            }
+        }
+        indices
     }
 }
 
@@ -303,7 +227,8 @@ fn analyze_genome_cavity_in_indices(
     let mut points = Vec::new();
     let mut point_index = HashMap::new();
     let mut edges = Vec::new();
-    for (_, polygon) in &polygons {
+    let mut edge_units = Vec::new();
+    for (unit, polygon) in &polygons {
         for i in 0..polygon.len() {
             let a = intern(polygon[i], &mut points, &mut point_index);
             let b = intern(
@@ -313,7 +238,9 @@ fn analyze_genome_cavity_in_indices(
             );
             if a != b {
                 edges.push(Edge { from: a, to: b });
+                edge_units.push(*unit);
                 edges.push(Edge { from: b, to: a });
+                edge_units.push(*unit);
             }
         }
     }
@@ -400,39 +327,32 @@ fn analyze_genome_cavity_in_indices(
         }
         let mut boundary_units = Vec::new();
         let mut boundary_segments = Vec::new();
-        for &i in &face {
-            let a = points[edges[i].from];
-            let b = points[edges[i].to];
-            let mut segment_units = polygons
-                .iter()
-                .filter_map(|(unit, polygon)| {
-                    segment_in_polygon_boundary(a, b, polygon).then_some(*unit)
-                })
-                .collect::<Vec<_>>();
-            segment_units.sort_unstable();
-            segment_units.dedup();
-            if segment_units.len() != 2 {
-                continue;
-            }
-            let unit_a = segment_units[0];
-            let unit_b = segment_units[1];
+        let face_units = face
+            .iter()
+            .map(|&edge_index| edge_units[edge_index])
+            .collect::<Vec<_>>();
+        for (position, &edge_index) in face.iter().enumerate() {
+            let a = points[edges[edge_index].from];
+            let b = points[edges[edge_index].to];
+            let unit_a = face_units[position];
+            let unit_b = face_units[(position + 1) % face_units.len()];
             boundary_segments.push((a, b, unit_a, unit_b));
             if !boundary_units.contains(&unit_a) {
                 boundary_units.push(unit_a);
-            }
-            if !boundary_units.contains(&unit_b) {
-                boundary_units.push(unit_b);
             }
         }
         if boundary_units.len() < 2 || boundary_segments.len() < 3 {
             continue;
         }
-        // A cavity wall is sealed only when the actual bond endpoints occupy
-        // the physical segment that forms that wall. A bond elsewhere between
-        // the same two units is legal, but it does not seal this cavity edge.
-        let sealed = boundary_segments.iter().all(|&(a, b, unit_a, unit_b)| {
-            bond_seals_segment(structure, catalog, unit_a, unit_b, a, b)
-        });
+        // A cavity boundary is physically sealed when every transition from
+        // one boundary constituent to the next is an actual structural bond.
+        // The bond belongs to the constituent interface, not necessarily to
+        // the empty cavity wall itself: face-to-face bonds commonly lie on the
+        // occupied side of that wall. A single constituent may own consecutive
+        // boundary segments and needs no self-bond.
+        let sealed = boundary_segments
+            .iter()
+            .all(|&(_, _, unit_a, unit_b)| bond_connects_units(structure, unit_a, unit_b));
         if !sealed {
             continue;
         }
@@ -465,73 +385,75 @@ fn analyze_genome_cavity_in_indices(
             {
                 continue;
             }
-            let closed = region.boundary.iter().enumerate().all(|(i, &(ax, ay))| {
-                let (bx, by) = region.boundary[(i + 1) % region.boundary.len()];
-                let segment_a = Point { x: ax, y: ay };
-                let segment_b = Point { x: bx, y: by };
-                let segment_units = region
-                    .boundary_units
-                    .iter()
-                    .copied()
-                    .filter(|unit_index| {
-                        unit_boundary_matches_segment(
-                            structure,
-                            catalog,
-                            *unit_index,
-                            segment_a,
-                            segment_b,
-                        )
-                    })
-                    .collect::<Vec<_>>();
-                if segment_units.len() != 2 {
-                    return false;
-                }
-                bond_seals_segment(
-                    structure,
-                    catalog,
-                    segment_units[0],
-                    segment_units[1],
-                    segment_a,
-                    segment_b,
-                )
-            });
-            if closed {
-                best = Some(GenomeCavity {
-                    area: region.area,
-                    boundary_units: region.boundary_units.clone(),
-                    minimum_area,
-                    boundary_segments: region
-                        .boundary
+            let segment_units = region
+                .boundary
+                .iter()
+                .enumerate()
+                .map(|(i, &(ax, ay))| {
+                    let (bx, by) = region.boundary[(i + 1) % region.boundary.len()];
+                    let segment_a = Point { x: ax, y: ay };
+                    let segment_b = Point { x: bx, y: by };
+                    region
+                        .boundary_units
                         .iter()
-                        .enumerate()
-                        .filter_map(|(i, &(ax, ay))| {
-                            let (bx, by) = region.boundary[(i + 1) % region.boundary.len()];
-                            let segment_a = Point { x: ax, y: ay };
-                            let segment_b = Point { x: bx, y: by };
-                            let segment_units = region
-                                .boundary_units
-                                .iter()
-                                .copied()
-                                .filter(|unit_index| {
-                                    unit_boundary_matches_segment(
-                                        structure,
-                                        catalog,
-                                        *unit_index,
-                                        segment_a,
-                                        segment_b,
-                                    )
-                                })
-                                .collect::<Vec<_>>();
-                            (segment_units.len() == 2).then_some((
+                        .copied()
+                        .filter(|unit_index| {
+                            unit_boundary_matches_segment(
+                                structure,
+                                catalog,
+                                *unit_index,
                                 segment_a,
                                 segment_b,
-                                segment_units[0],
-                                segment_units[1],
-                            ))
+                            )
                         })
-                        .collect(),
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+            let closed = !segment_units.is_empty()
+                && segment_units.iter().all(|units| !units.is_empty())
+                && segment_units.iter().enumerate().all(|(i, current_units)| {
+                    let next_units = &segment_units[(i + 1) % segment_units.len()];
+                    current_units.iter().any(|&unit_a| {
+                        next_units
+                            .iter()
+                            .any(|&unit_b| bond_connects_units(structure, unit_a, unit_b))
+                    })
                 });
-                break;
+            if closed {
+                let boundary_segments = region
+                    .boundary
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, &(ax, ay))| {
+                        let (bx, by) = region.boundary[(i + 1) % region.boundary.len()];
+                        let units_a = &segment_units[i];
+                        let units_b = &segment_units[(i + 1) % segment_units.len()];
+                        let unit_a = units_a.iter().copied().find(|&unit_a| {
+                            units_b
+                                .iter()
+                                .copied()
+                                .any(|unit_b| bond_connects_units(structure, unit_a, unit_b))
+                        })?;
+                        let unit_b = units_b.iter().copied().find(|&unit_b| {
+                            bond_connects_units(structure, unit_a, unit_b)
+                        })?;
+                        Some((
+                            Point { x: ax, y: ay },
+                            Point { x: bx, y: by },
+                            unit_a,
+                            unit_b,
+                        ))
+                    })
+                    .collect::<Vec<_>>();
+                if boundary_segments.len() == region.boundary.len() {
+                    best = Some(GenomeCavity {
+                        area: region.area,
+                        boundary_units: region.boundary_units.clone(),
+                        minimum_area,
+                        boundary_segments,
+                    });
+                    break;
+                }
             }
         }
     }
