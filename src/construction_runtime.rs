@@ -1002,6 +1002,126 @@ fn construct_blueprint_bond_driven_internal(
         return Ok((structure, total_heat));
     }
 
+    // The blueprint is guidance, not a material ceiling. If its requested
+    // developmental elements are exhausted and the realized structure is still
+    // not viable, continue from the actual physical frontier. This phase has no
+    // blueprint topology requirement; it searches real material and real contact
+    // opportunities until viability is reached or no physical continuation exists.
+    let supplemental_budget = blueprint
+        .elements
+        .len()
+        .saturating_mul(16)
+        .max(32);
+
+    for _ in 0..supplemental_budget {
+        if crate::cavity::analyze_genome_cavity(&structure, catalog)
+            .is_some_and(|cavity| cavity.qualifies())
+        {
+            *ledger = construction_ledger;
+            *energy = remaining_energy;
+            return Ok((structure, total_heat));
+        }
+
+        let frontier = (0..structure.units.len()).collect::<Vec<_>>();
+        let mut progressed = false;
+
+        for existing_index in frontier {
+            if let Some(storage) = available_materials.as_deref() {
+                let candidates = (0..storage.entries.len())
+                    .filter(|storage_index| !reserved_storage_indices.contains(storage_index))
+                    .filter_map(|storage_index| {
+                        match storage.entries.get(storage_index) {
+                            Some(crate::material_storage::StoredMaterial::Physical(instance)) => {
+                                Some((storage_index, instance.clone()))
+                            }
+                            _ => None,
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                for (storage_index, candidate_instance) in candidates {
+                    if let Some((
+                        trial_structure,
+                        _indices,
+                        _part_index,
+                        attempt,
+                        trial_ledger,
+                        trial_energy,
+                    )) = try_attach_physical_material_bond_driven(
+                        &structure,
+                        existing_index,
+                        &candidate_instance,
+                        catalog,
+                        &mut nodes,
+                        &construction_ledger,
+                        remaining_energy,
+                    ) {
+                        structure = trial_structure;
+                        construction_ledger = trial_ledger;
+                        remaining_energy = trial_energy;
+                        total_heat += attempt.work_cost;
+                        reserved_storage_indices.push(storage_index);
+                        progressed = true;
+                        break;
+                    }
+                }
+            } else {
+                for candidate_resource in catalog.iter().filter(|resource| {
+                    resource.physical_state == PhysicalState::Rigid
+                }) {
+                    let Some(candidate_instance) =
+                        crate::physical_material::PhysicalMaterial::realized(
+                            crate::resources::Material::free_base(
+                                candidate_resource.name.clone(),
+                                1.0,
+                            ),
+                            vec![Placement {
+                                x: 0.0,
+                                y: 0.0,
+                                rotation_radians: 0.0,
+                            }],
+                            catalog,
+                        )
+                    else {
+                        continue;
+                    };
+
+                    if let Some((
+                        trial_structure,
+                        _indices,
+                        _part_index,
+                        attempt,
+                        trial_ledger,
+                        trial_energy,
+                    )) = try_attach_physical_material_bond_driven(
+                        &structure,
+                        existing_index,
+                        &candidate_instance,
+                        catalog,
+                        &mut nodes,
+                        &construction_ledger,
+                        remaining_energy,
+                    ) {
+                        structure = trial_structure;
+                        construction_ledger = trial_ledger;
+                        remaining_energy = trial_energy;
+                        total_heat += attempt.work_cost;
+                        progressed = true;
+                        break;
+                    }
+                }
+            }
+
+            if progressed {
+                break;
+            }
+        }
+
+        if !progressed {
+            break;
+        }
+    }
+
     Err(
         "developmental construction exhausted its blueprint material without realizing a viable physical organism"
             .to_string(),
