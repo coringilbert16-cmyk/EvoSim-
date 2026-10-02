@@ -137,9 +137,9 @@ fn rigid_surface_candidates(
         return Vec::new();
     }
 
-    // The constructor still selects official connection points for placement.
-    // These additional endpoints are only the physical bond locations: a bond
-    // may land anywhere the two rigid boundaries actually touch.
+    // These endpoints are physical boundary locations. The constructor places
+    // rigid pieces face-to-face; bonds may therefore land on the touching faces
+    // rather than being forced through authored corners.
     let mut out = Vec::new();
     let center_angle = dy.atan2(dx);
     for step in -16..=16 {
@@ -150,6 +150,39 @@ fn rigid_surface_candidates(
             rigid_boundary_endpoint(b, -c, -s),
         ) {
             out.push((ea, eb));
+        }
+    }
+
+    // Sample every rigid face midpoint as well as the old directional
+    // candidates. This makes exact face-to-face placement observable to the
+    // shared contact system instead of relying on an angular sweep to hit it.
+    for (unit, shape, other) in [
+        (a, shape_a, b),
+        (b, shape_b, a),
+    ] {
+        for (v) in shape.form.polygon_vertices().unwrap_or_default() {
+            let _ = v;
+        }
+        let edges = crate::rigid_boundary::polygon_edges(shape);
+        for (start, end) in edges {
+            let local_mid = ((start.0 + end.0) * 0.5, (start.1 + end.1) * 0.5);
+            let (s, c) = unit.placement.rotation_radians.sin_cos();
+            let world_x = unit.placement.x + local_mid.0 * c - local_mid.1 * s;
+            let world_y = unit.placement.y + local_mid.0 * s + local_mid.1 * c;
+            if let (Some(ea), Some(eb)) = (
+                rigid_boundary_endpoint(
+                    unit,
+                    world_x - unit.placement.x,
+                    world_y - unit.placement.y,
+                ),
+                rigid_boundary_endpoint(
+                    other,
+                    world_x - other.placement.x,
+                    world_y - other.placement.y,
+                ),
+            ) {
+                out.push((ea, eb));
+            }
         }
     }
 
