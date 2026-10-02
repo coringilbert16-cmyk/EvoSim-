@@ -234,17 +234,6 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
         return Err("catalog does not contain a rigid line resource for structural bridging".into());
     };
 
-    if acquisition_candidates.len() < 3 {
-        return Err("catalog does not contain three non-water acquisition resources".into());
-    }
-    let Some(spoke_resource) = catalog.iter().find(|resource| {
-        resource.physical_state == PhysicalState::Rigid
-            && matches!(resource.shape.form, Form::Line { .. })
-            && resource.shape.is_valid()
-    }) else {
-        return Err("catalog does not contain a rigid line resource for structural bridging".into());
-    };
-
     for resource in structural_candidates {
         if !matches!(
             resource.shape.form,
