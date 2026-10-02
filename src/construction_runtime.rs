@@ -411,9 +411,6 @@ pub(crate) fn try_attach_physical_material_bond_driven(
             candidate_shape,
             *relative,
         ) {
-            if construction_budget_exhausted(*nodes) {
-                return None;
-            }
             *nodes += 1;
 
             let mut trial = structure.clone();
@@ -585,9 +582,6 @@ fn realize_next_bond_driven(
                 candidate_shape,
                 *relative,
             ) {
-                if construction_budget_exhausted(*nodes) {
-                    return None;
-                }
                 *nodes += 1;
 
                 let mut trial = structure.clone();
@@ -1053,9 +1047,6 @@ fn construct_blueprint_bond_driven_internal(
     realized_units[anchor_index] = Some(anchor_indices.clone());
     let genome_anchor = structure.units[anchor_unit_index].placement;
     while !realized.iter().all(|value| *value) {
-        if construction_budget_exhausted(nodes) {
-            break;
-        }
         // The blueprint chooses what we would like to build next, but it does
         // not choose which physical unit must receive it. Every realized
         // physical unit is part of the construction frontier.
