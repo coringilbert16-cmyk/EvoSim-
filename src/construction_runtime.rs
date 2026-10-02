@@ -1660,47 +1660,27 @@ fn construct_blueprint_bond_driven_internal(
                         }
                     }
 
-                    let best_facing = (structure.units.len()..trial_structure.units.len())
-                        .flat_map(|new_index| {
-                            (0..structure.units.len()).flat_map(move |other_index| {
-                                crate::contact::connection_pair_candidates_cached(
-                                    &trial_structure,
-                                    new_index,
-                                    other_index,
-                                    catalog,
-                                    &mut crate::contact::ConnectionCompatibilityCache::new(),
-                                )
-                                .into_iter()
-                                .filter(|candidate| {
-                                    candidate.distance <= SURFACE_CONTACT_TOLERANCE
-                                        && candidate.available_a
-                                        && candidate.available_b
-                                })
-                                .map(|candidate| candidate.facing)
-                            })
-                        })
-                        .fold(f64::NEG_INFINITY, f64::max);
-
-                    let contact_distance = (structure.units.len()..trial_structure.units.len())
-                        .flat_map(|new_index| {
-                            (0..structure.units.len()).flat_map(|other_index| {
-                                crate::contact::connection_pair_candidates_cached(
-                                    &trial_structure,
-                                    new_index,
-                                    other_index,
-                                    catalog,
-                                    &mut crate::contact::ConnectionCompatibilityCache::new(),
-                                )
-                                .into_iter()
-                                .filter(|candidate| {
-                                    candidate.distance <= SURFACE_CONTACT_TOLERANCE
-                                        && candidate.available_a
-                                        && candidate.available_b
-                                })
-                                .map(|candidate| candidate.distance)
-                            })
-                        })
-                        .fold(f64::INFINITY, f64::min);
+                    let mut best_facing = f64::NEG_INFINITY;
+                    let mut contact_distance = f64::INFINITY;
+                    for new_index in structure.units.len()..trial_structure.units.len() {
+                        for other_index in 0..structure.units.len() {
+                            for candidate in crate::contact::connection_pair_candidates_cached(
+                                &trial_structure,
+                                new_index,
+                                other_index,
+                                catalog,
+                                &mut crate::contact::ConnectionCompatibilityCache::new(),
+                            ) {
+                                if candidate.distance <= SURFACE_CONTACT_TOLERANCE
+                                    && candidate.available_a
+                                    && candidate.available_b
+                                {
+                                    best_facing = best_facing.max(candidate.facing);
+                                    contact_distance = contact_distance.min(candidate.distance);
+                                }
+                            }
+                        }
+                    }
 
                     let replace = best_supplemental.as_ref().is_none_or(|current| {
                         future_bonds > current.0
@@ -1785,47 +1765,27 @@ fn construct_blueprint_bond_driven_internal(
                         }
                     }
 
-                    let best_facing = (structure.units.len()..trial_structure.units.len())
-                        .flat_map(|new_index| {
-                            (0..structure.units.len()).flat_map(|other_index| {
-                                crate::contact::connection_pair_candidates_cached(
-                                    &trial_structure,
-                                    new_index,
-                                    other_index,
-                                    catalog,
-                                    &mut crate::contact::ConnectionCompatibilityCache::new(),
-                                )
-                                .into_iter()
-                                .filter(|candidate| {
-                                    candidate.distance <= SURFACE_CONTACT_TOLERANCE
-                                        && candidate.available_a
-                                        && candidate.available_b
-                                })
-                                .map(|candidate| candidate.facing)
-                            })
-                        })
-                        .fold(f64::NEG_INFINITY, f64::max);
-
-                    let contact_distance = (structure.units.len()..trial_structure.units.len())
-                        .flat_map(|new_index| {
-                            (0..structure.units.len()).flat_map(|other_index| {
-                                crate::contact::connection_pair_candidates_cached(
-                                    &trial_structure,
-                                    new_index,
-                                    other_index,
-                                    catalog,
-                                    &mut crate::contact::ConnectionCompatibilityCache::new(),
-                                )
-                                .into_iter()
-                                .filter(|candidate| {
-                                    candidate.distance <= SURFACE_CONTACT_TOLERANCE
-                                        && candidate.available_a
-                                        && candidate.available_b
-                                })
-                                .map(|candidate| candidate.distance)
-                            })
-                        })
-                        .fold(f64::INFINITY, f64::min);
+                    let mut best_facing = f64::NEG_INFINITY;
+                    let mut contact_distance = f64::INFINITY;
+                    for new_index in structure.units.len()..trial_structure.units.len() {
+                        for other_index in 0..structure.units.len() {
+                            for candidate in crate::contact::connection_pair_candidates_cached(
+                                &trial_structure,
+                                new_index,
+                                other_index,
+                                catalog,
+                                &mut crate::contact::ConnectionCompatibilityCache::new(),
+                            ) {
+                                if candidate.distance <= SURFACE_CONTACT_TOLERANCE
+                                    && candidate.available_a
+                                    && candidate.available_b
+                                {
+                                    best_facing = best_facing.max(candidate.facing);
+                                    contact_distance = contact_distance.min(candidate.distance);
+                                }
+                            }
+                        }
+                    }
 
                     let replace = best_supplemental.as_ref().is_none_or(|current| {
                         future_bonds > current.0
