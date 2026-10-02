@@ -670,9 +670,6 @@ fn realize_next_bond_driven(
                         .map(Option::is_some)
                         .collect::<Vec<_>>(),
                 ) {
-                    if required_neighbor == usize::MAX {
-                        continue;
-                    }
                     let Some(neighbor_units) = realized_units[required_neighbor].as_ref() else {
                         continue;
                     };
