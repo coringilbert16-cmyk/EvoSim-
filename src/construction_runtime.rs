@@ -211,53 +211,6 @@ pub(crate) fn placed_unit_overlaps(
     })
 }
 
-fn point_in_triangle(point: (f64, f64), triangle: &[(f64, f64); 3]) -> bool {
-    fn cross(a: (f64, f64), b: (f64, f64), p: (f64, f64)) -> f64 {
-        (b.0 - a.0) * (p.1 - a.1) - (b.1 - a.1) * (p.0 - a.0)
-    }
-    let a = cross(triangle[0], triangle[1], point);
-    let b = cross(triangle[1], triangle[2], point);
-    let c = cross(triangle[2], triangle[0], point);
-    (a >= -1e-10 && b >= -1e-10 && c >= -1e-10) || (a <= 1e-10 && b <= 1e-10 && c <= 1e-10)
-}
-
-fn form_vertices_world(form: &Form, placement: Placement) -> Vec<(f64, f64)> {
-    form.polygon_vertices()
-        .unwrap_or_default()
-        .into_iter()
-        .map(|(x, y)| {
-            let (s, c) = placement.rotation_radians.sin_cos();
-            (placement.x + x * c - y * s, placement.y + x * s + y * c)
-        })
-        .collect()
-}
-
-fn point_inside_form(form: &Form, placement: Placement, x: f64, y: f64) -> bool {
-    match form {
-        Form::Circle { radius } => (x - placement.x).hypot(y - placement.y) <= *radius,
-        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
-            let Some(vertices) = form.polygon_vertices() else {
-                return false;
-            };
-            let (s, c) = placement.rotation_radians.sin_cos();
-            let local_x = (x - placement.x) * c + (y - placement.y) * s;
-            let local_y = -(x - placement.x) * s + (y - placement.y) * c;
-            let mut inside = false;
-            for i in 0..vertices.len() {
-                let a = vertices[i];
-                let b = vertices[(i + 1) % vertices.len()];
-                if (a.1 > local_y) != (b.1 > local_y)
-                    && local_x < (b.0 - a.0) * (local_y - a.1) / (b.1 - a.1) + a.0
-                {
-                    inside = !inside;
-                }
-            }
-            inside
-        }
-        Form::Line { .. } | Form::Fluid { .. } => false,
-    }
-}
-
 fn already_realized_neighbors(
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     index: usize,
