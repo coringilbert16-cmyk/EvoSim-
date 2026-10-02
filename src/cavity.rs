@@ -15,11 +15,7 @@ struct Point {
     y: f64,
 }
 
-fn bond_connects_units(
-    structure: &OrganismStructure,
-    unit_a: usize,
-    unit_b: usize,
-) -> bool {
+fn bond_connects_units(structure: &OrganismStructure, unit_a: usize, unit_b: usize) -> bool {
     let Some(expected_a) = structure.units.get(unit_a) else {
         return false;
     };
@@ -130,13 +126,18 @@ impl GenomeCavity {
             let Some(id_b) = structure.units.get(unit_b).map(|unit| unit.physical_id) else {
                 continue;
             };
-            if let Some(index) = structure.bonds.iter().enumerate().find_map(|(index, bond)| {
-                ((bond.endpoint_a.constituent_id == id_a
-                    && bond.endpoint_b.constituent_id == id_b)
-                    || (bond.endpoint_a.constituent_id == id_b
-                        && bond.endpoint_b.constituent_id == id_a))
-                    .then_some(index)
-            }) {
+            if let Some(index) = structure
+                .bonds
+                .iter()
+                .enumerate()
+                .find_map(|(index, bond)| {
+                    ((bond.endpoint_a.constituent_id == id_a
+                        && bond.endpoint_b.constituent_id == id_b)
+                        || (bond.endpoint_a.constituent_id == id_b
+                            && bond.endpoint_b.constituent_id == id_a))
+                        .then_some(index)
+                })
+            {
                 if !indices.contains(&index) {
                     indices.push(index);
                 }
@@ -434,9 +435,10 @@ fn analyze_genome_cavity_in_indices(
                                 .copied()
                                 .any(|unit_b| bond_connects_units(structure, unit_a, unit_b))
                         })?;
-                        let unit_b = units_b.iter().copied().find(|&unit_b| {
-                            bond_connects_units(structure, unit_a, unit_b)
-                        })?;
+                        let unit_b = units_b
+                            .iter()
+                            .copied()
+                            .find(|&unit_b| bond_connects_units(structure, unit_a, unit_b))?;
                         Some((
                             Point { x: ax, y: ay },
                             Point { x: bx, y: by },
