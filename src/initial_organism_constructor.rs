@@ -175,6 +175,7 @@ fn score_local_growth_potential(
     structure: &crate::structure::OrganismStructure,
     trial: &crate::structure::OrganismStructure,
     new_indices: &[usize],
+    excluded_existing_index: usize,
     catalog: &[BaseResource],
 ) -> (usize, f64) {
     let mut nearby = 0usize;
@@ -190,7 +191,11 @@ fn score_local_growth_potential(
         let new_radius = new_shape.form.bounding_radius();
 
         for (other_index, other) in structure.units.iter().enumerate() {
-            if other_index == new_index {
+            // The anchor is already known to be bonded to the new material.
+            // Count only additional nearby structure; otherwise every outward
+            // chain would score as "future closure" simply because it touches
+            // the unit it was just attached to.
+            if other_index == excluded_existing_index {
                 continue;
             }
             let Some(other_shape) = other.shape(catalog) else {
@@ -426,7 +431,7 @@ fn free_form_search(
                 // The trial has already passed the real physical bond transaction;
                 // we do not need another full contact search just to rank it.
                 let (future_contacts, distance) =
-                    score_local_growth_potential(&structure, &trial, &indices, catalog);
+                    score_local_growth_potential(&structure, &trial, &indices, anchor_index, catalog);
 
                 let score = (future_contacts, indices.len(), 0.0, -distance);
                 let replace = best.as_ref().is_none_or(|current| score > current.0);
