@@ -505,7 +505,7 @@ fn realize_next_bond_driven(
     structure: &OrganismStructure,
     realized_units: &[Option<Vec<usize>>],
     index: usize,
-    neighbor: usize,
+    existing_index: usize,
     genome_anchor: Placement,
     anchor_declared: BlueprintPlacement,
     new_material: &crate::physical_material::PhysicalMaterial,
@@ -520,7 +520,7 @@ fn realize_next_bond_driven(
     EnergyLedger,
     f64,
 )> {
-    let existing_indices = realized_units[neighbor].as_ref()?.clone();
+    let existing_indices = vec![existing_index];
     let placements = new_material.placements.as_ref()?;
     if existing_indices.is_empty() {
         return None;
@@ -670,7 +670,7 @@ fn realize_next_bond_driven(
                         .map(Option::is_some)
                         .collect::<Vec<_>>(),
                 ) {
-                    if required_neighbor == neighbor {
+                    if required_neighbor == usize::MAX {
                         continue;
                     }
                     let Some(neighbor_units) = realized_units[required_neighbor].as_ref() else {
@@ -977,7 +977,7 @@ fn construct_blueprint_bond_driven_internal(
                 + (target.y - anchor_element.placement.y) * c,
         );
 
-        for neighbor in (0..blueprint.elements.len()).filter(|candidate| realized[*candidate]) {
+        for existing_index in 0..structure.units.len() {
             for (storage_index, candidate_name, _) in candidate_resources.iter().cloned() {
                 let candidate_instance = if let Some(storage) = available_materials.as_deref() {
                     let Some(crate::material_storage::StoredMaterial::Physical(instance)) =
@@ -1018,7 +1018,7 @@ fn construct_blueprint_bond_driven_internal(
                     &structure,
                     &realized_units,
                     index,
-                    neighbor,
+                    existing_index,
                     genome_anchor,
                     anchor_element.placement,
                     &candidate_instance,
