@@ -433,6 +433,14 @@ fn free_form_search(
                 let (future_contacts, distance) =
                     score_local_growth_potential(&structure, &trial, &indices, anchor_index, catalog);
 
+                // After the two-unit seed exists, every additional unit must
+                // reach some older structure besides its immediate anchor.
+                // Otherwise the constructor can keep extending an open chain
+                // forever even though that growth cannot help close a cavity.
+                if structure.units.len() >= 2 && future_contacts == 0 {
+                    continue;
+                }
+
                 let score = (future_contacts, indices.len(), 0.0, -distance);
                 let replace = best.as_ref().is_none_or(|current| score > current.0);
                 if replace {
