@@ -309,16 +309,11 @@ pub(crate) fn try_attach_physical_material_bond_driven(
     let existing_shape = existing_unit.shape(catalog)?;
     let placements = new_material.placements.as_ref()?;
 
-    // Do not commit the first geometrically valid attachment. The constructor
-    // is allowed to look one bond ahead: after a candidate is physically
-    // attached, inspect the remaining exposed surfaces and prefer the
-    // candidate that leaves the most immediately available future bonds.
-    //
-    // This is deliberately a bounded local lookahead, not a prescribed body
-    // plan. It observes actual material and bond opportunities already present
-    // in the trial structure.
+    // Evaluate all physically valid current-state attachments and prefer
+    // stronger present contact. The constructor does not inspect or score
+    // future bonds; every decision is based only on geometry and state that
+    // already exists at this step.
     let mut best: Option<(
-        usize,
         f64,
         f64,
         OrganismStructure,
@@ -430,54 +425,15 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                 continue;
             };
 
-            // Look one bond ahead through the material actually restored by
-            // this candidate. Count distinct existing units for which at least
-            // one exposed boundary-to-boundary bond is immediately available.
-            let mut future_bonds = 0usize;
-            for existing_other in 0..structure.units.len() {
-                if existing_other == existing_index {
-                    continue;
-                }
-                let available = indices.iter().any(|&new_index| {
-                    if new_index == existing_other {
-                        return false;
-                    }
-                    crate::contact::connection_pair_candidates_cached(
-                        &trial,
-                        new_index,
-                        existing_other,
-                        catalog,
-                        &mut crate::contact::ConnectionCompatibilityCache::new(),
-                    )
-                    .into_iter()
-                    .any(|future| {
-                        matches!(
-                            (future.endpoint_a, future.endpoint_b),
-                            (
-                                crate::structure::ConnectionEndpoint::Boundary { .. },
-                                crate::structure::ConnectionEndpoint::Boundary { .. }
-                            )
-                        ) && future.distance <= SURFACE_CONTACT_TOLERANCE
-                            && future.available_a
-                            && future.available_b
-                    })
-                });
-                if available {
-                    future_bonds += 1;
-                }
-            }
-
-            let score = (future_bonds, candidate.facing, -candidate.distance);
+            let score = (candidate.facing, -candidate.distance);
             let replace = best.as_ref().is_none_or(|current| {
                 score.0 > current.0
-                    || (score.0 == current.0
-                        && (score.1 > current.1 || (score.1 == current.1 && score.2 > current.2)))
+                    || (score.0 == current.0 && score.1 > current.1)
             });
             if replace {
                 best = Some((
                     score.0,
                     score.1,
-                    score.2,
                     trial,
                     indices,
                     part_index,
@@ -491,7 +447,6 @@ pub(crate) fn try_attach_physical_material_bond_driven(
 
     best.map(
         |(
-            _future_bonds,
             _facing,
             _negative_distance,
             structure,
