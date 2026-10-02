@@ -1,16 +1,19 @@
-//! Minimal blueprint-free constructor for the first organism.
+//! Blueprint-free local assembler for the first organism.
 //!
-//! The initial organism has no body plan. It grows physical material through
-//! the normal construction/COMBINE path and accepts the first state that
-//! satisfies the actual initial-organism contract.
+//! The initial constructor does not solve a final topology. It grows rigid
+//! physical pieces from a local construction frontier, using normal geometry
+//! and COMBINE/bond authority. Cavity and resource viability are evaluated
+//! only after the realized structure has been assembled.
+
+use std::collections::VecDeque;
 
 use crate::resources::{BaseResource, Material, PhysicalState};
 use crate::state::EnergyLedger;
 use crate::structure::Placement;
 
-const SEARCH_ENERGY: f64 = 1.0e12;
-const ACQUISITION_SAMPLES: usize = 48;
-const CONTACT_TOLERANCE: f64 = 1.0e-8;
+const ASSEMBLY_TARGET: usize = 400;
+const ASSEMBLY_ENERGY: f64 = 1.0e12;
+const CONTACT_TOLERANCE: f64 = 0.05;
 
 #[derive(Clone, Debug)]
 pub(crate) struct ValidConstruction {
@@ -19,11 +22,310 @@ pub(crate) struct ValidConstruction {
     pub acquired_resource_placements: Vec<(String, Placement)>,
 }
 
+fn rigid_materials(
+    catalog: &[BaseResource],
+) -> Vec<crate::physical_material::PhysicalMaterial> {
+    catalog
+        .iter()
+        .filter(|resource| resource.physical_state == PhysicalState::Rigid)
+        .filter(|resource| resource.shape.is_valid())
+        .filter_map(|resource| {
+            crate::physical_material::PhysicalMaterial::realized(
+                Material::free_base(resource.name.clone(), 1.0),
+                vec![Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                catalog,
+            )
+        })
+        .collect()
+}
+
+fn non_water_resources(catalog: &[BaseResource]) -> Vec<&BaseResource> {
+    catalog
+        .iter()
+        .filter(|resource| resource.name != "Water")
+        .filter(|resource| resource.shape.is_valid())
+        .collect()
+}
+
+/// Check only the local neighborhood of an attachment candidate.
+///
+/// The constructor intentionally does not scan the whole organism. The anchor
+/// and its direct bonded neighbors are the only existing geometry that can
+/// affect this local assembly decision.
+fn penetrates_local_neighborhood(
+    structure: &crate::structure::OrganismStructure,
+    candidate_shape: &crate::resources::Shape,
+    candidate_placement: Placement,
+    anchor: usize,
+    catalog: &[BaseResource],
+) -> bool {
+    let candidate = crate::material_geometry::PlacedMaterialPart {
+        part_index: 0,
+        form: candidate_shape.form.clone(),
+        placement: candidate_placement,
+    };
+
+    let mut local_units = structure.direct_neighbor_indices(anchor);
+    local_units.push(anchor);
+    local_units.sort_unstable();
+    local_units.dedup();
+
+    local_units.into_iter().any(|index| {
+        let Some(unit) = structure.units.get(index) else {
+            return true;
+        };
+        let Some(shape) = unit.shape(catalog) else {
+            return true;
+        };
+        let existing = crate::material_geometry::PlacedMaterialPart {
+            part_index: index + 1,
+            form: shape.form.clone(),
+            placement: unit.placement,
+        };
+        crate::material_geometry::placed_forms_penetrate(&candidate, &existing, 0.0)
+    })
+}
+
+/// Try one new physical piece against one frontier anchor.
+///
+/// The only speculative state is the single newly restored piece and its
+/// immediate bond(s). A failed candidate is discarded by truncating those
+/// additions; no whole-organism clone or future branch is created.
+fn attach_local_piece(
+    structure: &mut crate::structure::OrganismStructure,
+    anchor: usize,
+    material: &crate::physical_material::PhysicalMaterial,
+    catalog: &[BaseResource],
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> Option<usize> {
+    let resource_name = material.material.parts.first()?.0.as_str();
+    let resource = catalog.iter().find(|candidate| candidate.name == resource_name)?;
+    let anchor_placement = structure.units.get(anchor)?.placement;
+
+    let origins = crate::construction_runtime::candidate_placements(
+        structure,
+        resource,
+        anchor_placement,
+        &[anchor],
+        catalog,
+    );
+
+    for origin in origins {
+        if penetrates_local_neighborhood(
+            structure,
+            &resource.shape,
+            origin,
+            anchor,
+            catalog,
+        ) {
+            continue;
+        }
+
+        let previous_units = structure.units.len();
+        let previous_bonds = structure.bonds.len();
+        let previous_ledger = *ledger;
+        let previous_energy = *energy;
+
+        let Some(indices) = crate::material_restoration::restore_material_in_place(
+            structure,
+            material,
+            origin,
+            catalog,
+        ) else {
+            continue;
+        };
+        let Some(new_index) = indices.first().copied() else {
+            structure.units.truncate(previous_units);
+            structure.bonds.truncate(previous_bonds);
+            *ledger = previous_ledger;
+            *energy = previous_energy;
+            continue;
+        };
+
+        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+        let candidates = crate::contact::connection_pair_candidates_cached(
+            structure,
+            anchor,
+            new_index,
+            catalog,
+            &mut cache,
+        );
+
+        let mut bonded = false;
+        for candidate in candidates {
+            if candidate.distance > CONTACT_TOLERANCE
+                || !candidate.available_a
+                || !candidate.available_b
+            {
+                continue;
+            }
+            let Some((_, _, _, investment, _)) =
+                crate::combine_runtime::selected_candidate_evaluation(
+                    structure,
+                    anchor,
+                    new_index,
+                    candidate,
+                    catalog,
+                )
+            else {
+                continue;
+            };
+            if crate::combine_runtime::form_selected_bond_in_place(
+                structure,
+                anchor,
+                new_index,
+                candidate,
+                investment,
+                catalog,
+                &mut cache,
+                ledger,
+                energy,
+            )
+            .is_some()
+            {
+                bonded = true;
+                break;
+            }
+        }
+
+        if !bonded {
+            structure.units.truncate(previous_units);
+            structure.bonds.truncate(previous_bonds);
+            *ledger = previous_ledger;
+            *energy = previous_energy;
+            continue;
+        }
+
+        // A new piece may also contact a direct neighbor of the anchor. If the
+        // physical contact is already present, take that second local bond
+        // immediately. This is how closed local structures can emerge without
+        // a global closure solver.
+        let mut local_targets = structure.direct_neighbor_indices(anchor);
+        local_targets.retain(|&index| index != new_index);
+        local_targets.sort_unstable();
+        local_targets.dedup();
+
+        for target in local_targets {
+            let candidates = crate::contact::connection_pair_candidates_cached(
+                structure,
+                target,
+                new_index,
+                catalog,
+                &mut cache,
+            );
+            let mut closed = false;
+            for candidate in candidates {
+                if candidate.distance > CONTACT_TOLERANCE
+                    || !candidate.available_a
+                    || !candidate.available_b
+                {
+                    continue;
+                }
+                let Some((_, _, _, investment, _)) =
+                    crate::combine_runtime::selected_candidate_evaluation(
+                        structure,
+                        target,
+                        new_index,
+                        candidate,
+                        catalog,
+                    )
+                else {
+                    continue;
+                };
+                if crate::combine_runtime::form_selected_bond_in_place(
+                    structure,
+                    target,
+                    new_index,
+                    candidate,
+                    investment,
+                    catalog,
+                    &mut cache,
+                    ledger,
+                    energy,
+                )
+                .is_some()
+                {
+                    closed = true;
+                    break;
+                }
+            }
+            if closed {
+                break;
+            }
+        }
+
+        return Some(new_index);
+    }
+
+    None
+}
+
+/// Grow a connected structure through a FIFO frontier.
+///
+/// Each successful attachment adds the new piece to the frontier. Frontier
+/// growth is local: adding one piece does not enumerate all existing units or
+/// all future structures.
+fn assemble_local(
+    mut structure: crate::structure::OrganismStructure,
+    materials: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[BaseResource],
+) -> Option<(crate::structure::OrganismStructure, EnergyLedger, f64)> {
+    let mut frontier = VecDeque::new();
+    if !structure.units.is_empty() {
+        frontier.push_back(0);
+    }
+
+    let mut ledger = EnergyLedger::default();
+    let mut energy = ASSEMBLY_ENERGY;
+
+    while structure.units.len() < ASSEMBLY_TARGET {
+        let frontier_len = frontier.len();
+        if frontier_len == 0 {
+            return None;
+        }
+
+        let mut attached = false;
+        for _ in 0..frontier_len {
+            let Some(anchor) = frontier.pop_front() else {
+                break;
+            };
+
+            for material in materials.iter().cycle().take(materials.len()) {
+                if let Some(new_index) =
+                    attach_local_piece(&mut structure, anchor, material, catalog, &mut ledger, &mut energy)
+                {
+                    frontier.push_back(anchor);
+                    frontier.push_back(new_index);
+                    attached = true;
+                    break;
+                }
+            }
+
+            if attached {
+                break;
+            }
+        }
+
+        if !attached {
+            return None;
+        }
+    }
+
+    Some((structure, ledger, energy))
+}
+
 fn placement_fits_resource(
     resource: &BaseResource,
     region: &crate::interior_geometry::EnclosedRegion,
     catalog: &[BaseResource],
 ) -> Option<Placement> {
+    // Acquisition placement is deliberately a completion-time check. It is
+    // not part of local construction and therefore never runs during assembly.
     let (min_x, max_x, min_y, max_y) = region.boundary.iter().fold(
         (
             f64::INFINITY,
@@ -40,10 +342,11 @@ fn placement_fits_resource(
         return None;
     }
 
-    for ix in 0..=ACQUISITION_SAMPLES {
-        let x = min_x + (max_x - min_x) * ix as f64 / ACQUISITION_SAMPLES as f64;
-        for iy in 0..=ACQUISITION_SAMPLES {
-            let y = min_y + (max_y - min_y) * iy as f64 / ACQUISITION_SAMPLES as f64;
+    let samples = 12;
+    for ix in 0..=samples {
+        let x = min_x + (max_x - min_x) * ix as f64 / samples as f64;
+        for iy in 0..=samples {
+            let y = min_y + (max_y - min_y) * iy as f64 / samples as f64;
             for rotation_index in 0..4 {
                 let placement = Placement {
                     x,
@@ -71,48 +374,26 @@ fn placement_fits_resource(
     None
 }
 
-fn acquisition_candidates(catalog: &[BaseResource]) -> Vec<&BaseResource> {
-    catalog
-        .iter()
-        .filter(|resource| resource.name != "Water")
-        .filter(|resource| resource.shape.is_valid())
-        .collect()
-}
-
 fn find_acquisition_set(
     candidates: &[&BaseResource],
     regions: &[crate::interior_geometry::EnclosedRegion],
     catalog: &[BaseResource],
 ) -> Option<Vec<(String, Placement)>> {
-    for first in 0..candidates.len() {
-        for second in first + 1..candidates.len() {
-            for third in second + 1..candidates.len() {
-                let selected = [candidates[first], candidates[second], candidates[third]];
-                let mut placements = Vec::with_capacity(3);
-
-                for resource in selected {
-                    let placement = regions
-                        .iter()
-                        .find_map(|region| placement_fits_resource(resource, region, catalog))?;
-                    placements.push((resource.name.clone(), placement));
-                }
-
-                return Some(placements);
-            }
-        }
+    let mut result = Vec::new();
+    for resource in candidates.iter().take(3) {
+        let placement = regions
+            .iter()
+            .find_map(|region| placement_fits_resource(resource, region, catalog))?;
+        result.push((resource.name.clone(), placement));
     }
-    None
+    Some(result)
 }
 
-fn valid_construction(
+fn validate_completed_structure(
     structure: &crate::structure::OrganismStructure,
     catalog: &[BaseResource],
     acquisition: &[&BaseResource],
 ) -> Option<Vec<(String, Placement)>> {
-    if structure.bonds.len() < structure.units.len() {
-        return None;
-    }
-
     let cavity = crate::cavity::analyze_genome_cavity(structure, catalog)
         .ok()
         .flatten()?;
@@ -136,236 +417,19 @@ fn valid_construction(
     Some(result)
 }
 
-fn bond_exists(
-    structure: &crate::structure::OrganismStructure,
-    first: usize,
-    second: usize,
-) -> bool {
-    let Some(first_id) = structure.physical_id(first) else {
-        return false;
-    };
-    let Some(second_id) = structure.physical_id(second) else {
-        return false;
-    };
-
-    structure.bonds.iter().any(|bond| {
-        (bond.endpoint_a.constituent_id == first_id && bond.endpoint_b.constituent_id == second_id)
-            || (bond.endpoint_a.constituent_id == second_id
-                && bond.endpoint_b.constituent_id == first_id)
-    })
-}
-
-fn contact_candidate(
-    structure: &crate::structure::OrganismStructure,
-    first: usize,
-    second: usize,
-    catalog: &[BaseResource],
-) -> Option<crate::contact::ConnectionPairCandidate> {
-    let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-    crate::contact::connection_pair_candidates_cached(structure, first, second, catalog, &mut cache)
-        .into_iter()
-        .filter(|candidate| {
-            candidate.distance <= CONTACT_TOLERANCE
-                && candidate.available_a
-                && candidate.available_b
-        })
-        .max_by(|a, b| {
-            a.facing
-                .partial_cmp(&b.facing)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-}
-
-fn commit_bond(
-    structure: &mut crate::structure::OrganismStructure,
-    first: usize,
-    second: usize,
-    catalog: &[BaseResource],
-    ledger: &mut EnergyLedger,
-    energy: &mut f64,
-) -> bool {
-    let Some(candidate) = contact_candidate(structure, first, second, catalog) else {
-        return false;
-    };
-    let Some((_, _, _, investment, _)) = crate::combine_runtime::selected_candidate_evaluation(
-        structure, first, second, candidate, catalog,
-    ) else {
-        return false;
-    };
-
-    let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-    crate::combine_runtime::form_selected_bond(
-        structure, first, second, candidate, investment, catalog, &mut cache, ledger, energy,
-    )
-    .is_some()
-}
-
-fn try_close_with_new_unit(
-    structure: &crate::structure::OrganismStructure,
-    anchor: usize,
-    target: usize,
-    material: &crate::physical_material::PhysicalMaterial,
-    catalog: &[BaseResource],
-    ledger: &EnergyLedger,
-    energy: f64,
-) -> Option<(crate::structure::OrganismStructure, EnergyLedger, f64)> {
-    if anchor == target || bond_exists(structure, anchor, target) {
-        return None;
-    }
-
-    let resource = material.material.parts.first()?.0.clone();
-    let resource = catalog.iter().find(|r| r.name == resource)?;
-    let placements = crate::construction_runtime::candidate_placements(
-        structure,
-        resource,
-        structure.units.get(anchor)?.placement,
-        &[anchor, target],
-        catalog,
-    );
-
-    for origin in placements {
-        let mut trial = structure.clone();
-        let indices = crate::material_restoration::restore_material_in_place(
-            &mut trial, material, origin, catalog,
-        )?;
-        let new_index = *indices.first()?;
-
-        let mut trial_ledger = *ledger;
-        let mut trial_energy = energy;
-
-        if !commit_bond(
-            &mut trial,
-            anchor,
-            new_index,
-            catalog,
-            &mut trial_ledger,
-            &mut trial_energy,
-        ) {
-            continue;
-        }
-
-        if !commit_bond(
-            &mut trial,
-            target,
-            new_index,
-            catalog,
-            &mut trial_ledger,
-            &mut trial_energy,
-        ) {
-            continue;
-        }
-
-        return Some((trial, trial_ledger, trial_energy));
-    }
-
-    None
-}
-
-fn attach_one(
-    structure: &crate::structure::OrganismStructure,
-    anchor: usize,
-    materials: &[crate::physical_material::PhysicalMaterial],
-    catalog: &[BaseResource],
-    ledger: &EnergyLedger,
-    energy: f64,
-) -> Option<(crate::structure::OrganismStructure, EnergyLedger, f64)> {
-    for material in materials {
-        let mut nodes = 0;
-        let Some((trial, _, _, _, ledger, energy)) =
-            crate::construction_runtime::try_attach_physical_material_bond_driven(
-                structure, anchor, material, catalog, &mut nodes, ledger, energy,
-            )
-        else {
-            continue;
-        };
-        return Some((trial, ledger, energy));
-    }
-    None
-}
-
-fn grow_until_valid(
-    mut structure: crate::structure::OrganismStructure,
-    materials: &[crate::physical_material::PhysicalMaterial],
-    catalog: &[BaseResource],
-    acquisition: &[&BaseResource],
-    mut ledger: EnergyLedger,
-    mut energy: f64,
-) -> Option<ValidConstruction> {
-    // Every iteration does only two things:
-    // 1. try to close a loop by inserting one unit between two existing units;
-    // 2. if no closure exists yet, attach one unit and repeat.
-    //
-    // There is no score, body plan, lookahead, backtracking tree, or arbitrary
-    // attempt budget. Physical validity and the organism validity contract are
-    // the only authorities.
-    loop {
-        for anchor in 0..structure.units.len() {
-            for target in 0..structure.units.len() {
-                for material in materials {
-                    if let Some((trial, trial_ledger, trial_energy)) = try_close_with_new_unit(
-                        &structure, anchor, target, material, catalog, &ledger, energy,
-                    ) {
-                        structure = trial;
-                        ledger = trial_ledger;
-                        energy = trial_energy;
-
-                        if let Some(acquired_resource_placements) =
-                            valid_construction(&structure, catalog, acquisition)
-                        {
-                            return Some(ValidConstruction {
-                                structure,
-                                energy,
-                                acquired_resource_placements,
-                            });
-                        }
-                    }
-                }
-            }
-        }
-
-        let anchor = structure.units.len().saturating_sub(1);
-        let (trial, trial_ledger, trial_energy) =
-            attach_one(&structure, anchor, materials, catalog, &ledger, energy)?;
-
-        structure = trial;
-        ledger = trial_ledger;
-        energy = trial_energy;
-    }
-}
-
 pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruction, String> {
-    let rigid_resources = catalog
-        .iter()
-        .filter(|resource| resource.physical_state == PhysicalState::Rigid)
-        .filter(|resource| resource.shape.is_valid())
-        .collect::<Vec<_>>();
-
-    if rigid_resources.is_empty() {
+    let materials = rigid_materials(catalog);
+    if materials.is_empty() {
         return Err("no rigid resource can seed a physical organism".into());
     }
 
-    let acquisition = acquisition_candidates(catalog);
+    let acquisition = non_water_resources(catalog);
     if acquisition.len() < 3 {
         return Err("catalog does not contain three non-water acquisition resources".into());
     }
     if !catalog.iter().any(|resource| resource.name == "Water") {
         return Err("catalog does not contain Water".into());
     }
-
-    let materials = rigid_resources
-        .iter()
-        .filter_map(|resource| {
-            crate::physical_material::PhysicalMaterial::realized(
-                Material::free_base(resource.name.clone(), 1.0),
-                vec![Placement {
-                    x: 0.0,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                }],
-                catalog,
-            )
-        })
-        .collect::<Vec<_>>();
 
     for seed in &materials {
         let mut structure = crate::structure::OrganismStructure::new();
@@ -384,22 +448,22 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
             continue;
         }
 
-        if let Some(result) = grow_until_valid(
-            structure,
-            &materials,
-            catalog,
-            &acquisition,
-            EnergyLedger::default(),
-            SEARCH_ENERGY,
-        ) {
-            return Ok(result);
+        if let Some((structure, _ledger, energy)) =
+            assemble_local(structure, &materials, catalog)
+        {
+            if let Some(acquired_resource_placements) =
+                validate_completed_structure(&structure, catalog, &acquisition)
+            {
+                return Ok(ValidConstruction {
+                    structure,
+                    energy,
+                    acquired_resource_placements,
+                });
+            }
         }
     }
 
-    Err(
-        "blueprint-free constructor could not reach a valid organism through physical growth"
-            .into(),
-    )
+    Err("local frontier assembler did not realize a viable organism".into())
 }
 
 #[cfg(test)]
