@@ -333,7 +333,7 @@ fn already_realized_neighbors(
 /// a later connection would overshoot a previously established anchor, the
 /// constructor tries the other connection points on that anchor rather than
 /// abandoning the cavity.
-fn score_supplemental_trial(
+pub(crate) fn score_supplemental_trial(
     structure: &OrganismStructure,
     trial_structure: &OrganismStructure,
     catalog: &[BaseResource],
@@ -1051,6 +1051,16 @@ fn construct_blueprint_bond_driven_internal(
     realized_units[anchor_index] = Some(anchor_indices.clone());
     let genome_anchor = structure.units[anchor_unit_index].placement;
     while !realized.iter().all(|value| *value) {
+        let Some(index) = (0..blueprint.elements.len())
+            .find(|&candidate| !realized[candidate] && !deferred_elements[candidate])
+        else {
+            // Every remaining developmental request is currently blocked by
+            // the realized physical frontier. Stop this developmental pass
+            // rather than spinning on deferred requests; the supplemental
+            // physical-growth phase below may still extend the frontier.
+            break;
+        };
+
         // The blueprint supplies the developmental sequence preference only.
         // The next unrealized element is a local request; physical attachment
         // determines whether and where it can actually be realized. A blocked
@@ -1233,6 +1243,7 @@ fn construct_blueprint_bond_driven_internal(
         let attached = if let Some((
             _topology_score,
             _target_distance,
+            _rotation_error,
             storage_index,
             trial_structure,
             new_indices,
