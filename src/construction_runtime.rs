@@ -1096,8 +1096,7 @@ fn developmental_lookahead_depth(
                         rotation_radians: 0.0,
                     }],
                     catalog,
-                )
-                else {
+                ) else {
                     continue;
                 };
                 instance
