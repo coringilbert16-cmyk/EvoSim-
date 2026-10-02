@@ -334,16 +334,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
             )
             .into_iter()
             .filter(|candidate| {
-                matches!(
-                    (candidate.endpoint_a, candidate.endpoint_b),
-                    (
-                        crate::structure::ConnectionEndpoint::Surface { .. },
-                        crate::structure::ConnectionEndpoint::Surface { .. }
-                    ) | (
-                        crate::structure::ConnectionEndpoint::Boundary { .. },
-                        crate::structure::ConnectionEndpoint::Boundary { .. }
-                    )
-                ) && candidate.distance <= SURFACE_CONTACT_TOLERANCE
+                candidate.distance <= SURFACE_CONTACT_TOLERANCE
                     && candidate.available_a
                     && candidate.available_b
             })
@@ -407,13 +398,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     )
                     .into_iter()
                     .any(|future| {
-                        matches!(
-                            (future.endpoint_a, future.endpoint_b),
-                            (
-                                crate::structure::ConnectionEndpoint::Boundary { .. },
-                                crate::structure::ConnectionEndpoint::Boundary { .. }
-                            )
-                        ) && future.distance <= SURFACE_CONTACT_TOLERANCE
+                        future.distance <= SURFACE_CONTACT_TOLERANCE
                             && future.available_a
                             && future.available_b
                     })
