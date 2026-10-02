@@ -22,9 +22,7 @@ pub(crate) struct ValidConstruction {
     pub acquired_resource_placements: Vec<(String, Placement)>,
 }
 
-fn rigid_materials(
-    catalog: &[BaseResource],
-) -> Vec<crate::physical_material::PhysicalMaterial> {
+fn rigid_materials(catalog: &[BaseResource]) -> Vec<crate::physical_material::PhysicalMaterial> {
     catalog
         .iter()
         .filter(|resource| resource.physical_state == PhysicalState::Rigid)
@@ -104,7 +102,9 @@ fn attach_local_piece(
     energy: &mut f64,
 ) -> Option<usize> {
     let resource_name = material.material.parts.first()?.0.as_str();
-    let resource = catalog.iter().find(|candidate| candidate.name == resource_name)?;
+    let resource = catalog
+        .iter()
+        .find(|candidate| candidate.name == resource_name)?;
     let anchor_placement = structure.units.get(anchor)?.placement;
 
     let origins = crate::construction_runtime::candidate_placements(
@@ -116,13 +116,7 @@ fn attach_local_piece(
     );
 
     for origin in origins {
-        if penetrates_local_neighborhood(
-            structure,
-            &resource.shape,
-            origin,
-            anchor,
-            catalog,
-        ) {
+        if penetrates_local_neighborhood(structure, &resource.shape, origin, anchor, catalog) {
             continue;
         }
 
@@ -132,10 +126,7 @@ fn attach_local_piece(
         let previous_energy = *energy;
 
         let Some(indices) = crate::material_restoration::restore_material_in_place(
-            structure,
-            material,
-            origin,
-            catalog,
+            structure, material, origin, catalog,
         ) else {
             continue;
         };
@@ -149,11 +140,7 @@ fn attach_local_piece(
 
         let mut cache = crate::contact::ConnectionCompatibilityCache::new();
         let candidates = crate::contact::connection_pair_candidates_cached(
-            structure,
-            anchor,
-            new_index,
-            catalog,
-            &mut cache,
+            structure, anchor, new_index, catalog, &mut cache,
         );
 
         let mut bonded = false;
@@ -166,24 +153,13 @@ fn attach_local_piece(
             }
             let Some((_, _, _, investment, _)) =
                 crate::combine_runtime::selected_candidate_evaluation(
-                    structure,
-                    anchor,
-                    new_index,
-                    candidate,
-                    catalog,
+                    structure, anchor, new_index, candidate, catalog,
                 )
             else {
                 continue;
             };
             if crate::combine_runtime::form_selected_bond_in_place(
-                structure,
-                anchor,
-                new_index,
-                candidate,
-                investment,
-                catalog,
-                &mut cache,
-                ledger,
+                structure, anchor, new_index, candidate, investment, catalog, &mut cache, ledger,
                 energy,
             )
             .is_some()
@@ -212,11 +188,7 @@ fn attach_local_piece(
 
         for target in local_targets {
             let candidates = crate::contact::connection_pair_candidates_cached(
-                structure,
-                target,
-                new_index,
-                catalog,
-                &mut cache,
+                structure, target, new_index, catalog, &mut cache,
             );
             let mut closed = false;
             for candidate in candidates {
@@ -228,25 +200,14 @@ fn attach_local_piece(
                 }
                 let Some((_, _, _, investment, _)) =
                     crate::combine_runtime::selected_candidate_evaluation(
-                        structure,
-                        target,
-                        new_index,
-                        candidate,
-                        catalog,
+                        structure, target, new_index, candidate, catalog,
                     )
                 else {
                     continue;
                 };
                 if crate::combine_runtime::form_selected_bond_in_place(
-                    structure,
-                    target,
-                    new_index,
-                    candidate,
-                    investment,
-                    catalog,
-                    &mut cache,
-                    ledger,
-                    energy,
+                    structure, target, new_index, candidate, investment, catalog, &mut cache,
+                    ledger, energy,
                 )
                 .is_some()
                 {
@@ -296,9 +257,14 @@ fn assemble_local(
             };
 
             for material in materials.iter().cycle().take(materials.len()) {
-                if let Some(new_index) =
-                    attach_local_piece(&mut structure, anchor, material, catalog, &mut ledger, &mut energy)
-                {
+                if let Some(new_index) = attach_local_piece(
+                    &mut structure,
+                    anchor,
+                    material,
+                    catalog,
+                    &mut ledger,
+                    &mut energy,
+                ) {
                     frontier.push_back(anchor);
                     frontier.push_back(new_index);
                     attached = true;
@@ -448,9 +414,7 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
             continue;
         }
 
-        if let Some((structure, _ledger, energy)) =
-            assemble_local(structure, &materials, catalog)
-        {
+        if let Some((structure, _ledger, energy)) = assemble_local(structure, &materials, catalog) {
             if let Some(acquired_resource_placements) =
                 validate_completed_structure(&structure, catalog, &acquisition)
             {
