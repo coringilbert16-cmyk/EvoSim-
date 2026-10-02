@@ -15,6 +15,9 @@ const SEARCH_ENERGY: f64 = 1.0e12;
 // deliberately expressed as a unit-search depth so no body-plan size is baked
 // into organism validity.
 const MAX_FREE_FORM_UNITS: usize = 32;
+// Computational guard for physical search work. This bounds candidate
+// attachments, not organism size or topology.
+const MAX_FREE_FORM_NODES: usize = 20_000;
 const ACQUISITION_SAMPLES: usize = 48;
 
 #[derive(Clone, Debug)]
@@ -148,6 +151,7 @@ fn free_form_search(
     ledger: EnergyLedger,
     energy: f64,
     depth: usize,
+    nodes: &mut usize,
 ) -> Option<ValidConstruction> {
     if let Some(acquired_resource_placements) =
         valid_construction(&structure, catalog, acquisition_candidates)
@@ -159,7 +163,7 @@ fn free_form_search(
         });
     }
 
-    if depth >= MAX_FREE_FORM_UNITS {
+    if depth >= MAX_FREE_FORM_UNITS || *nodes >= MAX_FREE_FORM_NODES {
         return None;
     }
 
@@ -185,14 +189,16 @@ fn free_form_search(
                 continue;
             };
 
-            let mut nodes = 0usize;
+            if *nodes >= MAX_FREE_FORM_NODES {
+                return None;
+            }
             let Some((next_structure, _indices, _part, _attempt, next_ledger, next_energy)) =
                 crate::construction_runtime::try_attach_physical_material_bond_driven(
                     &structure,
                     anchor_index,
                     &material,
                     catalog,
-                    &mut nodes,
+                    nodes,
                     &ledger,
                     energy,
                 )
@@ -207,6 +213,7 @@ fn free_form_search(
                 next_ledger,
                 next_energy,
                 depth + 1,
+                nodes,
             ) {
                 return Some(result);
             }
@@ -262,6 +269,7 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
             continue;
         }
 
+        let mut nodes = 0usize;
         if let Some(result) = free_form_search(
             structure,
             catalog,
@@ -269,6 +277,7 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
             EnergyLedger::default(),
             SEARCH_ENERGY,
             1,
+            &mut nodes,
         ) {
             return Ok(result);
         }
