@@ -171,6 +171,48 @@ fn valid_construction(
     Some(acquired)
 }
 
+fn score_local_growth_potential(
+    structure: &crate::structure::OrganismStructure,
+    trial: &crate::structure::OrganismStructure,
+    new_indices: &[usize],
+    catalog: &[BaseResource],
+) -> (usize, f64) {
+    let mut nearby = 0usize;
+    let mut nearest_distance = f64::INFINITY;
+
+    for &new_index in new_indices {
+        let Some(new_unit) = trial.units.get(new_index) else {
+            continue;
+        };
+        let Some(new_shape) = new_unit.shape(catalog) else {
+            continue;
+        };
+        let new_radius = new_shape.form.bounding_radius();
+
+        for (other_index, other) in structure.units.iter().enumerate() {
+            if other_index == new_index {
+                continue;
+            }
+            let Some(other_shape) = other.shape(catalog) else {
+                continue;
+            };
+            let distance = (new_unit.placement.x - other.placement.x)
+                .hypot(new_unit.placement.y - other.placement.y);
+            let contact_distance =
+                new_radius + other_shape.form.bounding_radius() + SURFACE_CONTACT_TOLERANCE;
+            if distance <= contact_distance {
+                nearby = nearby.saturating_add(1).min(2);
+                nearest_distance = nearest_distance.min(distance);
+                if nearby >= 2 {
+                    return (2, nearest_distance);
+                }
+            }
+        }
+    }
+
+    (nearby, nearest_distance)
+}
+
 fn close_new_physical_contacts(
     mut structure: crate::structure::OrganismStructure,
     new_indices: &[usize],
@@ -381,12 +423,13 @@ fn free_form_search(
                     continue;
                 };
                 let local_work = (*nodes).saturating_sub(before_nodes);
-                let (future_bonds, facing, distance) =
-                    crate::construction_runtime::score_supplemental_trial(
-                        &structure, &trial, catalog,
-                    );
+                // This is deliberately only a cheap geometric preference.
+                // The trial has already passed the real physical bond transaction;
+                // we do not need another full contact search just to rank it.
+                let (future_contacts, distance) =
+                    score_local_growth_potential(&structure, &trial, &indices, catalog);
 
-                let score = (future_bonds, indices.len(), facing, -distance);
+                let score = (future_contacts, indices.len(), 0.0, -distance);
                 let replace = best.as_ref().is_none_or(|current| score > current.0);
                 if replace {
                     best = Some((score, trial, indices, trial_ledger, trial_energy));
