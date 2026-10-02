@@ -1216,48 +1216,31 @@ fn construct_blueprint_bond_driven_internal(
                 };
                 let Some(new_unit) = trial_structure.units.get(new_index) else {
                     continue;
-                };                let target_distance = (new_unit.placement.x - target_world.0)
+                };
+                let target_distance = (new_unit.placement.x - target_world.0)
                     .hypot(new_unit.placement.y - target_world.1);
-
-                let mut lookahead_realized = realized.clone();
-                let mut lookahead_units = realized_units.clone();
-                lookahead_realized[index] = true;
-                lookahead_units[index] = Some(new_indices.clone());
-                let mut lookahead_used_storage = reserved_storage_indices.clone();
-                if storage_index != usize::MAX {
-                    lookahead_used_storage.push(storage_index);
-                }
-                let lookahead_depth = developmental_lookahead_depth(
-                    blueprint,
-                    catalog,
-                    &trial_structure,
-                    &lookahead_units,
-                    &lookahead_realized,
-                    genome_anchor,
-                    anchor_element.placement,
-                    available_materials.as_deref(),
-                    &reserved_storage_indices,
-                    &lookahead_used_storage,
-                    1,
-                    &mut nodes,
-                    &trial_ledger,
-                    trial_energy,
+                let target_rotation = normalize_angle(
+                    genome_anchor.rotation_radians
+                        + target.rotation_radians
+                        - anchor_element.placement.rotation_radians,
                 );
+                let rotation_error =
+                    normalize_angle(new_unit.placement.rotation_radians - target_rotation).abs();
 
                 let better = best_developmental.as_ref().is_none_or(|current| {
-                    lookahead_depth > current.0
-                        || (lookahead_depth == current.0
-                            && (topology_score > current.1
-                                || (topology_score == current.1
-                                    && (target_distance < current.2
-                                        || (target_distance == current.2
+                    topology_score > current.0
+                        || (topology_score == current.0
+                            && (target_distance < current.1
+                                || (target_distance == current.1
+                                    && (rotation_error < current.2
+                                        || (rotation_error == current.2
                                             && storage_index < current.3)))))
                 });
                 if better {
                     best_developmental = Some((
-                        lookahead_depth,
                         topology_score,
                         target_distance,
+                        rotation_error,
                         storage_index,
                         trial_structure,
                         new_indices,
@@ -1271,7 +1254,7 @@ fn construct_blueprint_bond_driven_internal(
         }
 
         let attached = if let Some((
-            _lookahead_depth,
+            _topology_score,
             _topology_score,
             _target_distance,
             storage_index,
