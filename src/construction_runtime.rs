@@ -1102,16 +1102,14 @@ fn construct_blueprint_bond_driven_internal(
     // blueprint topology requirement; it searches real material and real contact
     // opportunities until viability is reached or no physical continuation exists.
     // With real storage, every successful supplemental step consumes and
-    // reserves one finite inventory entry, so the search can terminate on an
-    // exact physical inventory bound rather than an arbitrary step count.
-    // The no-storage constructor still has synthetic unlimited catalog
-    // material and retains its bounded developmental safeguard.
+    // reserves one finite inventory entry, so the search has an exact physical
+    // inventory bound. The no-storage API synthesizes catalog material, so it
+    // cannot prove physical exhaustion; its limit is explicitly a computational
+    // search guard, not a biological organism-size rule.
+    const SYNTHETIC_SUPPLEMENTAL_SEARCH_LIMIT: usize = 64;
     let supplemental_budget = available_materials
         .as_ref()
-        .map_or_else(
-            || blueprint.elements.len().saturating_mul(16).max(32),
-            |storage| storage.entries.len(),
-        );
+        .map_or(SYNTHETIC_SUPPLEMENTAL_SEARCH_LIMIT, |storage| storage.entries.len());
 
     for _ in 0..supplemental_budget {
         if crate::cavity::analyze_genome_cavity(&structure, catalog)
