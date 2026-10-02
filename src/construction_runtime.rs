@@ -670,11 +670,9 @@ fn realize_next_bond_driven(
                     normalize_angle(actual_candidate.rotation_radians - target_rotation).abs();
 
                 let mut topology_score = 1usize;
-                for required_neighbor in already_realized_neighbors(
-                    blueprint,
-                    index,
-                    &realized_flags,
-                ) {
+                for required_neighbor in
+                    already_realized_neighbors(blueprint, index, &realized_flags)
+                {
                     let Some(neighbor_units) = realized_units[required_neighbor].as_ref() else {
                         continue;
                     };
