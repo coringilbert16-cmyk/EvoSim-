@@ -1145,6 +1145,7 @@ fn developmental_lookahead_depth(
                 &trial_realized_units,
                 &trial_realized,
                 genome_anchor,
+                anchor_declared,
                 available_materials,
                 reserved_storage_indices,
                 &trial_used_storage,
@@ -1661,7 +1662,7 @@ fn construct_blueprint_bond_driven_internal(
 
                     let best_facing = (structure.units.len()..trial_structure.units.len())
                         .flat_map(|new_index| {
-                            (0..structure.units.len()).flat_map(move |other_index| {
+                            (0..structure.units.len()).flat_map(|other_index| {
                                 crate::contact::connection_pair_candidates_cached(
                                     &trial_structure,
                                     new_index,
@@ -1682,7 +1683,7 @@ fn construct_blueprint_bond_driven_internal(
 
                     let contact_distance = (structure.units.len()..trial_structure.units.len())
                         .flat_map(|new_index| {
-                            (0..structure.units.len()).flat_map(move |other_index| {
+                            (0..structure.units.len()).flat_map(|other_index| {
                                 crate::contact::connection_pair_candidates_cached(
                                     &trial_structure,
                                     new_index,
@@ -1786,7 +1787,7 @@ fn construct_blueprint_bond_driven_internal(
 
                     let best_facing = (structure.units.len()..trial_structure.units.len())
                         .flat_map(|new_index| {
-                            (0..structure.units.len()).flat_map(move |other_index| {
+                            (0..structure.units.len()).flat_map(|other_index| {
                                 crate::contact::connection_pair_candidates_cached(
                                     &trial_structure,
                                     new_index,
@@ -1807,7 +1808,7 @@ fn construct_blueprint_bond_driven_internal(
 
                     let contact_distance = (structure.units.len()..trial_structure.units.len())
                         .flat_map(|new_index| {
-                            (0..structure.units.len()).flat_map(move |other_index| {
+                            (0..structure.units.len()).flat_map(|other_index| {
                                 crate::contact::connection_pair_candidates_cached(
                                     &trial_structure,
                                     new_index,
