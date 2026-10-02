@@ -1113,8 +1113,23 @@ fn construct_blueprint_bond_driven_internal(
         }
 
         let frontier = (0..structure.units.len()).collect::<Vec<_>>();
-        let mut progressed = false;
+        let mut best_supplemental: Option<(
+            usize,
+            f64,
+            f64,
+            usize,
+            OrganismStructure,
+            crate::combine_runtime::CombineAttempt,
+            EnergyLedger,
+            f64,
+            usize,
+        )> = None;
 
+        // Evaluate every currently available physical continuation before
+        // committing. Search order is never allowed to become constructor
+        // behavior. The score is entirely derived from the realized trial:
+        // future exposed bond opportunities first, then bond facing, then
+        // contact distance. Blueprint order is not involved in this phase.
         for existing_index in frontier {
             if let Some(storage) = available_materials.as_deref() {
                 let candidates = (0..storage.entries.len())
@@ -1130,7 +1145,7 @@ fn construct_blueprint_bond_driven_internal(
                     .collect::<Vec<_>>();
 
                 for (storage_index, candidate_instance) in candidates {
-                    if let Some((
+                    let Some((
                         trial_structure,
                         _indices,
                         _part_index,
@@ -1145,18 +1160,99 @@ fn construct_blueprint_bond_driven_internal(
                         &mut nodes,
                         &construction_ledger,
                         remaining_energy,
-                    ) {
-                        structure = trial_structure;
-                        construction_ledger = trial_ledger;
-                        remaining_energy = trial_energy;
-                        total_heat += attempt.work_cost;
-                        reserved_storage_indices.push(storage_index);
-                        progressed = true;
-                        break;
+                    ) else {
+                        continue;
+                    };
+
+                    let mut future_bonds = 0usize;
+                    for new_index in structure.units.len()..trial_structure.units.len() {
+                        for other_index in 0..structure.units.len() {
+                            if crate::contact::connection_pair_candidates_cached(
+                                &trial_structure,
+                                new_index,
+                                other_index,
+                                catalog,
+                                &mut crate::contact::ConnectionCompatibilityCache::new(),
+                            )
+                            .into_iter()
+                            .any(|candidate| {
+                                candidate.distance <= SURFACE_CONTACT_TOLERANCE
+                                    && candidate.available_a
+                                    && candidate.available_b
+                            }) {
+                                future_bonds += 1;
+                            }
+                        }
+                    }
+
+                    let best_facing = (structure.units.len()..trial_structure.units.len())
+                        .flat_map(|new_index| {
+                            (0..structure.units.len()).flat_map(move |other_index| {
+                                crate::contact::connection_pair_candidates_cached(
+                                    &trial_structure,
+                                    new_index,
+                                    other_index,
+                                    catalog,
+                                    &mut crate::contact::ConnectionCompatibilityCache::new(),
+                                )
+                                .into_iter()
+                                .filter(|candidate| {
+                                    candidate.distance <= SURFACE_CONTACT_TOLERANCE
+                                        && candidate.available_a
+                                        && candidate.available_b
+                                })
+                                .map(|candidate| candidate.facing)
+                            })
+                        })
+                        .fold(f64::NEG_INFINITY, f64::max);
+
+                    let contact_distance = (structure.units.len()..trial_structure.units.len())
+                        .flat_map(|new_index| {
+                            (0..structure.units.len()).flat_map(move |other_index| {
+                                crate::contact::connection_pair_candidates_cached(
+                                    &trial_structure,
+                                    new_index,
+                                    other_index,
+                                    catalog,
+                                    &mut crate::contact::ConnectionCompatibilityCache::new(),
+                                )
+                                .into_iter()
+                                .filter(|candidate| {
+                                    candidate.distance <= SURFACE_CONTACT_TOLERANCE
+                                        && candidate.available_a
+                                        && candidate.available_b
+                                })
+                                .map(|candidate| candidate.distance)
+                            })
+                        })
+                        .fold(f64::INFINITY, f64::min);
+
+                    let replace = best_supplemental.as_ref().is_none_or(|current| {
+                        future_bonds > current.0
+                            || (future_bonds == current.0
+                                && (best_facing > current.1
+                                    || (best_facing == current.1
+                                        && (contact_distance < current.2
+                                            || (contact_distance == current.2
+                                                && storage_index < current.3)))))
+                    });
+
+                    if replace {
+                        best_supplemental = Some((
+                            future_bonds,
+                            best_facing,
+                            contact_distance,
+                            storage_index,
+                            trial_structure,
+                            attempt,
+                            trial_ledger,
+                            trial_energy,
+                            storage_index,
+                        ));
                     }
                 }
             } else {
-                for candidate_resource in catalog {
+                for (resource_index, candidate_resource) in catalog.iter().enumerate() {
                     let Some(candidate_instance) =
                         crate::physical_material::PhysicalMaterial::realized(
                             crate::resources::Material::free_base(
@@ -1174,7 +1270,7 @@ fn construct_blueprint_bond_driven_internal(
                         continue;
                     };
 
-                    if let Some((
+                    let Some((
                         trial_structure,
                         _indices,
                         _part_index,
@@ -1189,24 +1285,121 @@ fn construct_blueprint_bond_driven_internal(
                         &mut nodes,
                         &construction_ledger,
                         remaining_energy,
-                    ) {
-                        structure = trial_structure;
-                        construction_ledger = trial_ledger;
-                        remaining_energy = trial_energy;
-                        total_heat += attempt.work_cost;
-                        progressed = true;
-                        break;
+                    ) else {
+                        continue;
+                    };
+
+                    let mut future_bonds = 0usize;
+                    for new_index in structure.units.len()..trial_structure.units.len() {
+                        for other_index in 0..structure.units.len() {
+                            if crate::contact::connection_pair_candidates_cached(
+                                &trial_structure,
+                                new_index,
+                                other_index,
+                                catalog,
+                                &mut crate::contact::ConnectionCompatibilityCache::new(),
+                            )
+                            .into_iter()
+                            .any(|candidate| {
+                                candidate.distance <= SURFACE_CONTACT_TOLERANCE
+                                    && candidate.available_a
+                                    && candidate.available_b
+                            }) {
+                                future_bonds += 1;
+                            }
+                        }
+                    }
+
+                    let best_facing = (structure.units.len()..trial_structure.units.len())
+                        .flat_map(|new_index| {
+                            (0..structure.units.len()).flat_map(move |other_index| {
+                                crate::contact::connection_pair_candidates_cached(
+                                    &trial_structure,
+                                    new_index,
+                                    other_index,
+                                    catalog,
+                                    &mut crate::contact::ConnectionCompatibilityCache::new(),
+                                )
+                                .into_iter()
+                                .filter(|candidate| {
+                                    candidate.distance <= SURFACE_CONTACT_TOLERANCE
+                                        && candidate.available_a
+                                        && candidate.available_b
+                                })
+                                .map(|candidate| candidate.facing)
+                            })
+                        })
+                        .fold(f64::NEG_INFINITY, f64::max);
+
+                    let contact_distance = (structure.units.len()..trial_structure.units.len())
+                        .flat_map(|new_index| {
+                            (0..structure.units.len()).flat_map(move |other_index| {
+                                crate::contact::connection_pair_candidates_cached(
+                                    &trial_structure,
+                                    new_index,
+                                    other_index,
+                                    catalog,
+                                    &mut crate::contact::ConnectionCompatibilityCache::new(),
+                                )
+                                .into_iter()
+                                .filter(|candidate| {
+                                    candidate.distance <= SURFACE_CONTACT_TOLERANCE
+                                        && candidate.available_a
+                                        && candidate.available_b
+                                })
+                                .map(|candidate| candidate.distance)
+                            })
+                        })
+                        .fold(f64::INFINITY, f64::min);
+
+                    let replace = best_supplemental.as_ref().is_none_or(|current| {
+                        future_bonds > current.0
+                            || (future_bonds == current.0
+                                && (best_facing > current.1
+                                    || (best_facing == current.1
+                                        && (contact_distance < current.2
+                                            || (contact_distance == current.2
+                                                && resource_index < current.3)))))
+                    });
+
+                    if replace {
+                        best_supplemental = Some((
+                            future_bonds,
+                            best_facing,
+                            contact_distance,
+                            resource_index,
+                            trial_structure,
+                            attempt,
+                            trial_ledger,
+                            trial_energy,
+                            usize::MAX,
+                        ));
                     }
                 }
             }
-
-            if progressed {
-                break;
-            }
         }
 
-        if !progressed {
+        let Some((
+            _future_bonds,
+            _best_facing,
+            _contact_distance,
+            _candidate_order,
+            trial_structure,
+            attempt,
+            trial_ledger,
+            trial_energy,
+            storage_index,
+        )) = best_supplemental
+        else {
             break;
+        };
+
+        structure = trial_structure;
+        construction_ledger = trial_ledger;
+        remaining_energy = trial_energy;
+        total_heat += attempt.work_cost;
+        if storage_index != usize::MAX {
+            reserved_storage_indices.push(storage_index);
         }
     }
 
