@@ -76,8 +76,6 @@ fn normalize_angle(angle: f64) -> f64 {
     normalized
 }
 
-pub const FACE_LENGTH_TOLERANCE: f64 = 0.5;
-
 /// Return the rigid polygon edges as local endpoint pairs.
 pub fn polygon_edges(shape: &Shape) -> Vec<((f64, f64), (f64, f64))> {
     match &shape.form {
@@ -114,10 +112,7 @@ pub fn surface_alignment_placement(
 
     let existing_length = (eb.0 - ea.0).hypot(eb.1 - ea.1);
     let candidate_length = (cb.0 - ca.0).hypot(cb.1 - ca.1);
-    if existing_length <= f64::EPSILON
-        || candidate_length <= f64::EPSILON
-        || (existing_length - candidate_length).abs() > FACE_LENGTH_TOLERANCE + 1e-12
-    {
+    if existing_length <= f64::EPSILON || candidate_length <= f64::EPSILON {
         return None;
     }
 
@@ -153,8 +148,8 @@ pub fn surface_alignment_placement(
     })
 }
 
-/// Enumerate physically meaningful face-to-face placements. A face pair is
-/// admissible when its lengths differ by no more than the shared tolerance.
+/// Enumerate physically meaningful face-to-face placements. Face length similarity
+/// affects placement preference, not physical admissibility.
 pub fn surface_alignment_placements(
     existing_shape: &Shape,
     existing_placement: Placement,
@@ -174,12 +169,13 @@ pub fn surface_alignment_placements(
         for candidate_index in 0..candidate_edges.len() {
             let (ca, cb) = candidate_edges[candidate_index];
             let candidate_length = (cb.0 - ca.0).hypot(cb.1 - ca.1);
-            if candidate_length <= f64::EPSILON
-                || (existing_length - candidate_length).abs() > FACE_LENGTH_TOLERANCE + 1e-12
-            {
+            if candidate_length <= f64::EPSILON {
                 continue;
             }
 
+            // Face length is a preference, not a physical admissibility gate.
+            // Center, left-end, and right-end alignments cover the meaningful
+            // ways to place unequal segments while preserving actual contact.
             let delta = (existing_length - candidate_length) * 0.5;
             for offset in [0.0, delta, -delta] {
                 if let Some(placement) = surface_alignment_placement(
@@ -273,15 +269,12 @@ mod tests {
         assert!((ny + 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
     }
     #[test]
-    fn surface_alignment_requires_matching_face_length_within_tolerance() {
+    fn surface_alignment_allows_unequal_face_lengths() {
         let long = Shape {
             form: Form::Line { length: 1.0 },
         };
         let short = Shape {
-            form: Form::Line { length: 0.5 },
-        };
-        let too_short = Shape {
-            form: Form::Line { length: 0.49 },
+            form: Form::Line { length: 0.25 },
         };
         let origin = Placement {
             x: 0.0,
@@ -290,9 +283,7 @@ mod tests {
         };
 
         assert!(surface_alignment_placement(&long, origin, 0, &short, origin, 0, 0.0).is_some());
-        assert!(
-            surface_alignment_placement(&long, origin, 0, &too_short, origin, 0, 0.0).is_none()
-        );
+        assert!(!surface_alignment_placements(&long, origin, &short, origin).is_empty());
     }
 
     #[test]
