@@ -406,6 +406,11 @@ pub(crate) fn try_attach_physical_material_bond_driven(
         EnergyLedger,
         f64,
     )> = None;
+    let realized_flags = structure
+        .units
+        .iter()
+        .map(|_| true)
+        .collect::<Vec<_>>();
 
     for (part_index, ((name, amount), relative)) in new_material
         .material
@@ -452,6 +457,9 @@ pub(crate) fn try_attach_physical_material_bond_driven(
 
             let mut trial_ledger = *ledger;
             let mut trial_energy = available_energy;
+            // One cache serves the entire candidate scan for this material
+            // attachment. This changes no physical decision; it only avoids
+            // rebuilding the same compatibility data for each candidate.
             let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
             let Some(candidate) = crate::contact::connection_pair_candidates_cached(
                 &trial,
@@ -743,10 +751,7 @@ fn realize_next_bond_driven(
                 for required_neighbor in already_realized_neighbors(
                     blueprint,
                     index,
-                    &realized_units
-                        .iter()
-                        .map(Option::is_some)
-                        .collect::<Vec<_>>(),
+                    &realized_flags,
                 ) {
                     let Some(neighbor_units) = realized_units[required_neighbor].as_ref() else {
                         continue;
