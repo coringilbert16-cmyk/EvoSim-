@@ -547,7 +547,13 @@ pub(crate) fn try_add_bond_known_unique(
     b: Bond,
     c: &[crate::resources::BaseResource],
 ) -> Result<usize, &'static str> {
-    if !s.is_valid_bond(&b, c) {
+    let Some(unit_a) = s.unit_index(b.endpoint_a.constituent_id) else {
+        return Err("invalid bond");
+    };
+    let Some(unit_b) = s.unit_index(b.endpoint_b.constituent_id) else {
+        return Err("invalid bond");
+    };
+    if !s.is_valid_bond_at_indices(&b, unit_a, unit_b, c) {
         return Err("invalid bond");
     }
     Ok(s.push_bond_unchecked(b))
