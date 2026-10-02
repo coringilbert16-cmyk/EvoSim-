@@ -313,10 +313,19 @@ fn free_form_search(
             f64,
         )> = None;
 
+        // Grow from the current physical frontier first. Normal growth does
+        // not rescan every historical unit on every step. If this frontier
+        // cannot continue, the loop can fall back to the full structure.
+        let anchor_indices = if structure.units.len() <= 2 {
+            (0..structure.units.len()).collect::<Vec<_>>()
+        } else {
+            (structure.units.len() - 2..structure.units.len()).collect::<Vec<_>>()
+        };
+
         // Candidate generation is deliberately local: an attachment is tried
-        // only against an existing unit. No future tree, target topology, or
-        // global body-plan search is constructed.
-        for anchor_index in 0..structure.units.len() {
+        // only against an existing frontier unit. No future tree, target
+        // topology, or global body-plan search is constructed.
+        for anchor_index in anchor_indices {
             for resource in &rigid_resources {
                 let Some(material) = crate::physical_material::PhysicalMaterial::realized(
                     Material::free_base(resource.name.clone(), 1.0),
