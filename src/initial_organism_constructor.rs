@@ -19,6 +19,7 @@ const MAX_FREE_FORM_UNITS: usize = 32;
 // attachments, not organism size or topology.
 const MAX_FREE_FORM_NODES: usize = 20_000;
 const ACQUISITION_SAMPLES: usize = 48;
+const SURFACE_CONTACT_TOLERANCE: f64 = 1.0e-8;
 
 #[derive(Clone, Debug)]
 pub(crate) struct ValidConstruction {
@@ -221,7 +222,7 @@ fn close_new_physical_contacts(
                 .into_iter()
                 .filter(|candidate| {
                     candidate.distance
-                        <= crate::construction_runtime::SURFACE_CONTACT_TOLERANCE
+                        <= SURFACE_CONTACT_TOLERANCE
                         && candidate.available_a
                         && candidate.available_b
                 }) {
