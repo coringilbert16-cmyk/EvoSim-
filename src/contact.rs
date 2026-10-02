@@ -452,14 +452,22 @@ impl ConnectionCompatibilityCache {
         &self,
         id: crate::structure::PhysicalConstituentId,
         location: ConnectionEndpoint,
-    ) -> f64 {
-        self.loads
+    ) -> Option<f64> {
+        let mut found = false;
+        let total = self
+            .loads
             .iter()
             .filter(|(stored_id, stored_location, _)| {
-                *stored_id == id && stored_location.same_location(location)
+                if *stored_id == id && stored_location.same_location(location) {
+                    found = true;
+                    true
+                } else {
+                    false
+                }
             })
             .map(|(_, _, load)| *load)
-            .sum()
+            .sum();
+        found.then_some(total)
     }
 }
 
@@ -485,8 +493,12 @@ pub fn connection_pair_candidates_cached(
                 a,
                 b,
                 c,
-                cache.load(id_a, a),
-                cache.load(id_b, b),
+                cache
+                    .load(id_a, a)
+                    .unwrap_or_else(|| s.connection_load(ua, a, c)),
+                cache
+                    .load(id_b, b)
+                    .unwrap_or_else(|| s.connection_load(ub, b, c)),
             )
         })
         .collect()
