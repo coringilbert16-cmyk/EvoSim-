@@ -538,6 +538,21 @@ pub fn try_add_bond(
     Ok(s.push_bond_unchecked(b))
 }
 
+/// Insert a bond after the caller has established that this connection identity
+/// cannot already exist. All physical bond validation remains authoritative.
+/// This is used by local assembly when one endpoint belongs to a newly restored
+/// unit, so a whole-organism duplicate scan would add no correctness.
+pub(crate) fn try_add_bond_known_unique(
+    s: &mut OrganismStructure,
+    b: Bond,
+    c: &[crate::resources::BaseResource],
+) -> Result<usize, &'static str> {
+    if !s.is_valid_bond(&b, c) {
+        return Err("invalid bond");
+    }
+    Ok(s.push_bond_unchecked(b))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
