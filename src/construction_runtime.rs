@@ -12,6 +12,36 @@ fn resource<'a>(catalog: &'a [BaseResource], name: &str) -> Option<&'a BaseResou
     catalog.iter().find(|r| r.name == name)
 }
 
+fn commit_reserved_storage(
+    available_materials: &mut Option<&mut crate::material_storage::MaterialStorage>,
+    reserved_storage_indices: &[usize],
+) -> Result<(), String> {
+    let Some(storage) = available_materials.as_deref_mut() else {
+        return Ok(());
+    };
+
+    let mut indices = reserved_storage_indices.to_vec();
+    indices.sort_unstable();
+    indices.dedup();
+    if indices.iter().any(|&index| {
+        !matches!(
+            storage.entries.get(index),
+            Some(crate::material_storage::StoredMaterial::Physical(instance))
+                if instance.is_realized()
+        )
+    }) {
+        return Err("construction inventory changed before commit".into());
+    }
+
+    for index in indices.into_iter().rev() {
+        storage.take_physical_at(index).ok_or_else(|| {
+            "construction could not consume reserved physical material".to_string()
+        })?;
+    }
+    Ok(())
+}
+
+
 fn placement(p: BlueprintPlacement) -> Placement {
     Placement {
         x: p.x,
@@ -1274,6 +1304,7 @@ fn construct_blueprint_bond_driven_internal(
     if crate::cavity::analyze_genome_cavity(&structure, catalog)
         .is_some_and(|cavity| cavity.qualifies())
     {
+        commit_reserved_storage(&mut available_materials, &reserved_storage_indices)?;
         *ledger = construction_ledger;
         *energy = remaining_energy;
         return Ok((structure, total_heat));
