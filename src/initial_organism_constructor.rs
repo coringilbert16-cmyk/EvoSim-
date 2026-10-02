@@ -10,20 +10,6 @@ use crate::resources::{BaseResource, Material, PhysicalState};
 use crate::state::EnergyLedger;
 use crate::structure::Placement;
 
-const SEARCH_ENERGY: f64 = 1.0e12;
-// This is a computational search guard, not a biological requirement. It is
-// deliberately expressed as a unit-search depth so no body-plan size is baked
-// into organism validity.
-const MAX_FREE_FORM_UNITS: usize = 32;
-const ACQUISITION_SAMPLES: usize = 48;
-
-#[derive(Clone, Debug)]
-pub(crate) struct ValidConstruction {
-    pub structure: crate::structure::OrganismStructure,
-    pub energy: f64,
-    pub acquired_resource_placements: Vec<(String, Placement)>,
-}
-
 const CONSTRUCTION_ENERGY: f64 = 1.0e12;
 const INNER_RING_RADIUS: i32 = 2;
 const OUTER_RING_RADIUS: i32 = 4;
@@ -75,8 +61,8 @@ fn add_unit(
     let instance = crate::physical_material::PhysicalMaterial::realized(
         material,
         vec![Placement {
-            x: center.0,
-            y: center.1,
+            x: 0.0,
+            y: 0.0,
             rotation_radians: 0.0,
         }],
         catalog,
