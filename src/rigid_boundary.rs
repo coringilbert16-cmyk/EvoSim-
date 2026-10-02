@@ -232,15 +232,20 @@ pub fn surface_alignment_placements(
             let candidate_normal_angle = candidate_normal.1.atan2(candidate_normal.0);
             let target_normal_angle = existing_world_normal.1.atan2(existing_world_normal.0)
                 + std::f64::consts::PI;
-            let rotation = normalize_angle(target_normal_angle - candidate_normal_angle);
-            let (rs, rc) = rotation.sin_cos();
+            let final_rotation = normalize_angle(
+                target_normal_angle
+                    - candidate_normal_angle
+                    - candidate_relative_placement.rotation_radians,
+            );
+            let (rs, rc) = final_rotation.sin_cos();
+            let (relative_s, relative_c) = candidate_relative_placement.rotation_radians.sin_cos();
             let relative_point = (
                 candidate_relative_placement.x
-                    + candidate_vertex.0 * candidate_relative_placement.rotation_radians.cos()
-                    - candidate_vertex.1 * candidate_relative_placement.rotation_radians.sin(),
+                    + candidate_vertex.0 * relative_c
+                    - candidate_vertex.1 * relative_s,
                 candidate_relative_placement.y
-                    + candidate_vertex.0 * candidate_relative_placement.rotation_radians.sin()
-                    + candidate_vertex.1 * candidate_relative_placement.rotation_radians.cos(),
+                    + candidate_vertex.0 * relative_s
+                    + candidate_vertex.1 * relative_c,
             );
             let rotated_relative_point = (
                 relative_point.0 * rc - relative_point.1 * rs,
@@ -249,7 +254,7 @@ pub fn surface_alignment_placements(
             let placement = Placement {
                 x: existing_world.0 - rotated_relative_point.0,
                 y: existing_world.1 - rotated_relative_point.1,
-                rotation_radians: rotation,
+                rotation_radians: final_rotation,
             };
 
             if !out.iter().any(|p: &Placement| {
