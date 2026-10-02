@@ -303,8 +303,7 @@ impl ConnectionEndpoint {
                 fraction,
             } => {
                 let shape = unit.shape(catalog)?;
-                let surface =
-                    crate::surface_geometry::surface_point(shape, edge_index, fraction)?;
+                let surface = crate::surface_geometry::surface_point(shape, edge_index, fraction)?;
                 Some(crate::connection_geometry::transform_derived_point(
                     surface.x,
                     surface.y,
