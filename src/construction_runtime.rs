@@ -927,11 +927,6 @@ fn construct_blueprint_bond_driven_internal(
                 }
                 candidates.push((usize::MAX, candidate.name.clone(), 0.0));
             }
-            // Water is the final developmental construction fallback after
-            // all rigid material alternatives have failed.
-            if resource(catalog, "Water").is_some() {
-                candidates.push((usize::MAX, "Water".to_string(), 0.0));
-            }
             candidates
         };
 
