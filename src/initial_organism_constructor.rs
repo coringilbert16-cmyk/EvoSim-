@@ -221,8 +221,7 @@ fn close_new_physical_contacts(
                 )
                 .into_iter()
                 .filter(|candidate| {
-                    candidate.distance
-                        <= SURFACE_CONTACT_TOLERANCE
+                    candidate.distance <= SURFACE_CONTACT_TOLERANCE
                         && candidate.available_a
                         && candidate.available_b
                 }) {
@@ -241,13 +240,7 @@ fn close_new_physical_contacts(
                     let score = candidate.facing;
                     let replace = best.as_ref().is_none_or(|current| score > current.0);
                     if replace {
-                        best = Some((
-                            score,
-                            new_index,
-                            other_index,
-                            candidate,
-                            investment,
-                        ));
+                        best = Some((score, new_index, other_index, candidate, investment));
                     }
                 }
             }
@@ -345,14 +338,13 @@ fn free_form_search(
                 continue;
             };
 
-            let (closed_structure, closed_ledger, closed_energy) =
-                close_new_physical_contacts(
-                    next_structure,
-                    &_indices,
-                    catalog,
-                    next_ledger,
-                    next_energy,
-                );
+            let (closed_structure, closed_ledger, closed_energy) = close_new_physical_contacts(
+                next_structure,
+                &_indices,
+                catalog,
+                next_ledger,
+                next_energy,
+            );
 
             if let Some(result) = free_form_search(
                 closed_structure,
