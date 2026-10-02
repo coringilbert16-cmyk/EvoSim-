@@ -2,9 +2,7 @@
     dead_code,
     reason = "Staged construction helper retained for subsystem integration"
 )]
-use crate::construction_material_selection::{
-    rank_available_construction_materials, MIN_CONSTRUCTION_MATERIAL_MATCH,
-};
+use crate::construction_material_selection::rank_available_construction_materials;
 use crate::resources::{BaseResource, Form, PhysicalState};
 use crate::state::EnergyLedger;
 use crate::structural_blueprint::BlueprintPlacement;
