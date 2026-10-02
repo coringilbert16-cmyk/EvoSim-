@@ -32,13 +32,15 @@ pub(crate) fn restore_material(
 ) -> Option<Vec<usize>> {
     let mut trial = structure.clone();
     let indices = restore_material_in_place(&mut trial, instance, origin, catalog)?;
+    *structure = trial;
     Some(indices)
 }
 
 /// Restore into an already-isolated transactional structure.
 ///
 /// Callers that have already cloned their candidate structure can use this
-/// path to avoid cloning the entire organism a second time.
+/// path to avoid cloning the entire organism a second time. On failure the
+/// caller should discard the isolated candidate.
 pub(crate) fn restore_material_in_place(
     structure: &mut OrganismStructure,
     instance: &PhysicalMaterial,
@@ -71,7 +73,7 @@ pub(crate) fn restore_material_in_place(
         if !unit.realize_default_geometry(catalog) {
             return None;
         }
-        indices.push(trial.add_unit(unit));
+        indices.push(structure.add_unit(unit));
     }
 
     // A stored physical material is authoritative, but it must still be
@@ -123,6 +125,5 @@ pub(crate) fn restore_material_in_place(
         crate::contact::try_add_bond(structure, bond, catalog).ok()?;
     }
 
-    *structure = trial;
     Some(indices)
 }
