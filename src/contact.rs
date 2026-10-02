@@ -181,9 +181,8 @@ fn rigid_surface_candidates(
                 continue;
             }
 
-            let project_a = |point: (f64, f64)| {
-                ((point.0 - wa0.0) * adx + (point.1 - wa0.1) * ady) / alen2
-            };
+            let project_a =
+                |point: (f64, f64)| ((point.0 - wa0.0) * adx + (point.1 - wa0.1) * ady) / alen2;
             let b0_t = project_a(wb0);
             let b1_t = project_a(wb1);
             let overlap_start = 0.0_f64.max(b0_t.min(b1_t));
@@ -195,8 +194,7 @@ fn rigid_surface_candidates(
             let fraction_a = ((overlap_start + overlap_end) * 0.5).clamp(0.0, 1.0);
             let contact_x = wa0.0 + adx * fraction_a;
             let contact_y = wa0.1 + ady * fraction_a;
-            let fraction_b = ((contact_x - wb0.0) * bdx + (contact_y - wb0.1) * bdy)
-                / blen2;
+            let fraction_b = ((contact_x - wb0.0) * bdx + (contact_y - wb0.1) * bdy) / blen2;
             if !(0.0..=1.0).contains(&fraction_b) {
                 continue;
             }
