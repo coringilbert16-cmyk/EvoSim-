@@ -28,6 +28,6 @@ jobs:
       # being finalized. Do not block it behind retired developmental/reproduction
       # constructor tests.
       - name: Run initial constructor tests
-        run: cargo test --lib initial_organism_constructor::tests
+        run: cargo test --bin evosim initial_organism_constructor::tests
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of
