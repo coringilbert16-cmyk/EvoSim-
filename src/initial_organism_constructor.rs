@@ -11,13 +11,6 @@ use crate::state::EnergyLedger;
 use crate::structure::Placement;
 
 const SEARCH_ENERGY: f64 = 1.0e12;
-// This is a computational search guard, not a biological requirement. It is
-// deliberately expressed as a unit-search depth so no body-plan size is baked
-// into organism validity.
-const MAX_FREE_FORM_UNITS: usize = 32;
-// Computational guard for physical search work. This bounds candidate
-// attachments, not organism size or topology.
-const MAX_FREE_FORM_NODES: usize = 20_000;
 const ACQUISITION_SAMPLES: usize = 48;
 const SURFACE_CONTACT_TOLERANCE: f64 = 1.0e-8;
 
@@ -277,90 +270,104 @@ fn close_new_physical_contacts(
 }
 
 fn free_form_search(
-    structure: crate::structure::OrganismStructure,
+    mut structure: crate::structure::OrganismStructure,
     catalog: &[BaseResource],
     acquisition_candidates: &[&BaseResource],
-    ledger: EnergyLedger,
-    energy: f64,
-    depth: usize,
+    mut ledger: EnergyLedger,
+    mut energy: f64,
+    _depth: usize,
     nodes: &mut usize,
 ) -> Option<ValidConstruction> {
-    if let Some(acquired_resource_placements) =
-        valid_construction(&structure, catalog, acquisition_candidates)
-    {
-        return Some(ValidConstruction {
-            structure,
-            energy,
-            acquired_resource_placements,
-        });
-    }
+    // Blueprint-free construction is a forward local-growth process. At each
+    // step we enumerate only physically adjacent attachment opportunities,
+    // score the resulting local state, commit one, then close newly created
+    // contacts through the normal COMBINE bond transaction.
+    loop {
+        if let Some(acquired_resource_placements) =
+            valid_construction(&structure, catalog, acquisition_candidates)
+        {
+            return Some(ValidConstruction {
+                structure,
+                energy,
+                acquired_resource_placements,
+            });
+        }
 
-    if depth >= MAX_FREE_FORM_UNITS || *nodes >= MAX_FREE_FORM_NODES {
-        return None;
-    }
+        let rigid_resources = catalog
+            .iter()
+            .filter(|resource| resource.physical_state == PhysicalState::Rigid)
+            .filter(|resource| resource.shape.is_valid())
+            .collect::<Vec<_>>();
 
-    let rigid_resources = catalog
-        .iter()
-        .filter(|resource| resource.physical_state == PhysicalState::Rigid)
-        .filter(|resource| resource.shape.is_valid());
+        let mut best: Option<(
+            (usize, usize, f64, f64),
+            crate::structure::OrganismStructure,
+            Vec<usize>,
+            EnergyLedger,
+            f64,
+        )> = None;
 
-    // No target unit, angle, topology, or material is prescribed here. Each
-    // branch asks the physical construction machinery whether this material can
-    // form one valid new bond to one currently realized unit.
-    for anchor_index in 0..structure.units.len() {
-        for resource in rigid_resources.clone() {
-            let Some(material) = crate::physical_material::PhysicalMaterial::realized(
-                Material::free_base(resource.name.clone(), 1.0),
-                vec![Placement {
-                    x: 0.0,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                }],
-                catalog,
-            ) else {
-                continue;
-            };
-
-            if *nodes >= MAX_FREE_FORM_NODES {
-                return None;
-            }
-            let Some((next_structure, _indices, _part, _attempt, next_ledger, next_energy)) =
-                crate::construction_runtime::try_attach_physical_material_bond_driven(
-                    &structure,
-                    anchor_index,
-                    &material,
+        // Candidate generation is deliberately local: an attachment is tried
+        // only against an existing unit. No future tree, target topology, or
+        // global body-plan search is constructed.
+        for anchor_index in 0..structure.units.len() {
+            for resource in &rigid_resources {
+                let Some(material) = crate::physical_material::PhysicalMaterial::realized(
+                    Material::free_base(resource.name.clone(), 1.0),
+                    vec![Placement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    }],
                     catalog,
-                    nodes,
-                    &ledger,
-                    energy,
-                )
-            else {
-                continue;
-            };
+                ) else {
+                    continue;
+                };
 
-            let (closed_structure, closed_ledger, closed_energy) = close_new_physical_contacts(
-                next_structure,
-                &_indices,
-                catalog,
-                next_ledger,
-                next_energy,
-            );
+                let before_nodes = *nodes;
+                let Some((trial, indices, _part, _attempt, trial_ledger, trial_energy)) =
+                    crate::construction_runtime::try_attach_physical_material_bond_driven(
+                        &structure,
+                        anchor_index,
+                        &material,
+                        catalog,
+                        nodes,
+                        &ledger,
+                        energy,
+                    )
+                else {
+                    continue;
+                };
+                let local_work = (*nodes).saturating_sub(before_nodes);
+                let (future_bonds, facing, distance) =
+                    crate::construction_runtime::score_supplemental_trial(
+                        &structure, &trial, catalog,
+                    );
 
-            if let Some(result) = free_form_search(
-                closed_structure,
-                catalog,
-                acquisition_candidates,
-                closed_ledger,
-                closed_energy,
-                depth + 1,
-                nodes,
-            ) {
-                return Some(result);
+                let score = (future_bonds, indices.len(), facing, -distance);
+                let replace = best
+                    .as_ref()
+                    .is_none_or(|current| score > current.0);
+                if replace {
+                    best = Some((score, trial, indices, trial_ledger, trial_energy));
+                }
+
+                // Keep the candidate accounting monotonic, but do not use it as
+                // an artificial biological termination condition.
+                *nodes = (*nodes).max(before_nodes.saturating_add(local_work));
             }
         }
-    }
 
-    None
+        let Some((_, trial, indices, trial_ledger, trial_energy)) = best else {
+            return None;
+        };
+
+        let (closed_structure, closed_ledger, closed_energy) =
+            close_new_physical_contacts(trial, &indices, catalog, trial_ledger, trial_energy);
+        structure = closed_structure;
+        ledger = closed_ledger;
+        energy = closed_energy;
+    }
 }
 
 pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruction, String> {
