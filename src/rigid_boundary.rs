@@ -230,8 +230,8 @@ pub fn surface_alignment_placements(
             // Opposing outward normals provide a physically meaningful
             // point-contact orientation without imposing a blueprint angle.
             let candidate_normal_angle = candidate_normal.1.atan2(candidate_normal.0);
-            let target_normal_angle = existing_world_normal.1.atan2(existing_world_normal.0)
-                + std::f64::consts::PI;
+            let target_normal_angle =
+                existing_world_normal.1.atan2(existing_world_normal.0) + std::f64::consts::PI;
             let final_rotation = normalize_angle(
                 target_normal_angle
                     - candidate_normal_angle
@@ -240,8 +240,7 @@ pub fn surface_alignment_placements(
             let (rs, rc) = final_rotation.sin_cos();
             let (relative_s, relative_c) = candidate_relative_placement.rotation_radians.sin_cos();
             let relative_point = (
-                candidate_relative_placement.x
-                    + candidate_vertex.0 * relative_c
+                candidate_relative_placement.x + candidate_vertex.0 * relative_c
                     - candidate_vertex.1 * relative_s,
                 candidate_relative_placement.y
                     + candidate_vertex.0 * relative_s
