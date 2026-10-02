@@ -554,7 +554,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                 continue;
             };
 
-            let Some(attempt) = crate::combine_runtime::form_selected_bond(
+            let Some(attempt) = crate::combine_runtime::form_selected_bond_in_place(
                 &mut trial,
                 existing_index,
                 new_unit_index,
