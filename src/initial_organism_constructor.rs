@@ -274,7 +274,7 @@ fn assemble_local(
 
     let mut ledger = EnergyLedger::default();
     let mut energy = ASSEMBLY_ENERGY;
-    let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+    let mut cache = crate::contact::ConnectionCompatibilityCache::new_complete();
 
     while structure.units.len() < ASSEMBLY_TARGET {
         let frontier_len = frontier.len();
