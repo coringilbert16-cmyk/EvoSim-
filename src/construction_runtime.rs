@@ -1080,8 +1080,8 @@ fn construct_blueprint_bond_driven_internal(
         let Some(index) = (0..blueprint.elements.len())
             .filter(|candidate| !realized[*candidate] && !deferred_elements[*candidate])
             .max_by_key(|candidate| {
-                let realized_neighbors = already_realized_neighbors(blueprint, *candidate, &realized)
-                    .len();
+                let realized_neighbors =
+                    already_realized_neighbors(blueprint, *candidate, &realized).len();
                 (realized_neighbors, std::cmp::Reverse(*candidate))
             })
         else {
