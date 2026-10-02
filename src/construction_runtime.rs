@@ -752,6 +752,130 @@ fn realize_next_bond_driven(
     )
 }
 
+/// Close one still-unrealized developmental connection using only the
+/// physical units already realized for its two blueprint elements. This does
+/// not move either side or create material: it is a bond-only closure step
+/// through the same COMBINE/physical-contact authority as forward growth.
+fn close_one_realized_blueprint_connection(
+    blueprint: &crate::structural_blueprint::StructuralBlueprint,
+    catalog: &[BaseResource],
+    structure: &OrganismStructure,
+    realized_units: &[Option<Vec<usize>>],
+    ledger: &EnergyLedger,
+    available_energy: f64,
+) -> Option<(
+    OrganismStructure,
+    crate::combine_runtime::CombineAttempt,
+    EnergyLedger,
+    f64,
+)> {
+    let mut best: Option<(
+        f64,
+        OrganismStructure,
+        crate::combine_runtime::CombineAttempt,
+        EnergyLedger,
+        f64,
+    )> = None;
+
+    for connection in &blueprint.connections {
+        let Some(a_units) = realized_units.get(connection.element_a).and_then(Option::as_ref)
+        else {
+            continue;
+        };
+        let Some(b_units) = realized_units.get(connection.element_b).and_then(Option::as_ref)
+        else {
+            continue;
+        };
+
+        for &unit_a in a_units {
+            for &unit_b in b_units {
+                if unit_a == unit_b {
+                    continue;
+                }
+                let Some(id_a) = structure.physical_id(unit_a) else {
+                    continue;
+                };
+                let Some(id_b) = structure.physical_id(unit_b) else {
+                    continue;
+                };
+
+                // An existing bond between these physical constituents already
+                // closes this developmental connection. Internal bonds inside
+                // a composite material cannot masquerade as an external edge
+                // because the two IDs must belong to the two distinct elements.
+                if structure.bonds.iter().any(|bond| {
+                    (bond.endpoint_a.constituent_id == id_a
+                        && bond.endpoint_b.constituent_id == id_b)
+                        || (bond.endpoint_a.constituent_id == id_b
+                            && bond.endpoint_b.constituent_id == id_a)
+                }) {
+                    continue;
+                }
+
+                let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+                for candidate in crate::contact::connection_pair_candidates_cached(
+                    structure,
+                    unit_a,
+                    unit_b,
+                    catalog,
+                    &mut cache,
+                )
+                .into_iter()
+                .filter(|candidate| {
+                    candidate.distance <= SURFACE_CONTACT_TOLERANCE
+                        && candidate.available_a
+                        && candidate.available_b
+                }) {
+                    let Some((_, _, _, investment, _required_energy)) =
+                        crate::combine_runtime::selected_candidate_evaluation(
+                            structure,
+                            unit_a,
+                            unit_b,
+                            candidate,
+                            catalog,
+                        )
+                    else {
+                        continue;
+                    };
+
+                    let mut trial = structure.clone();
+                    let mut trial_ledger = *ledger;
+                    let mut trial_energy = available_energy;
+                    let Some(attempt) = crate::combine_runtime::form_selected_bond(
+                        &mut trial,
+                        unit_a,
+                        unit_b,
+                        candidate,
+                        investment,
+                        catalog,
+                        &mut cache,
+                        &mut trial_ledger,
+                        &mut trial_energy,
+                    ) else {
+                        continue;
+                    };
+
+                    let score = candidate.facing;
+                    let replace = best.as_ref().is_none_or(|current| score > current.0);
+                    if replace {
+                        best = Some((
+                            score,
+                            trial,
+                            attempt,
+                            trial_ledger,
+                            trial_energy,
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    best.map(|(_, structure, attempt, ledger, energy)| {
+        (structure, attempt, ledger, energy)
+    })
+}
+
 /// Bond-driven construction is forward-only. Once a bond is formed it is
 /// never undone. When a requested joint cannot be realized, the constructor
 /// keeps trying available material variants and orientations until it finds a
@@ -1086,6 +1210,46 @@ fn construct_blueprint_bond_driven_internal(
             // and revisit this one after any successful physical growth.
             deferred_elements[index] = true;
         }
+
+        // Placement and bond closure are separate forward-only steps. A new
+        // unit may already be physically touching another realized unit, but
+        // that contact does not become a bond merely because the placement
+        // happened to touch it. Close one still-open blueprint edge at a time,
+        // without moving or undoing any committed structure.
+        while let Some((closed_structure, attempt, closed_ledger, closed_energy)) =
+            close_one_realized_blueprint_connection(
+                blueprint,
+                catalog,
+                &structure,
+                &realized_units,
+                &construction_ledger,
+                remaining_energy,
+            )
+        {
+            structure = closed_structure;
+            construction_ledger = closed_ledger;
+            remaining_energy = closed_energy;
+            total_heat += attempt.work_cost;
+        }
+    }
+
+    // All developmental elements may be realized before the last prescribed
+    // physical edges become bondable. Run the same bond-only closure pass once
+    // more before abandoning the developmental phase.
+    while let Some((closed_structure, attempt, closed_ledger, closed_energy)) =
+        close_one_realized_blueprint_connection(
+            blueprint,
+            catalog,
+            &structure,
+            &realized_units,
+            &construction_ledger,
+            remaining_energy,
+        )
+    {
+        structure = closed_structure;
+        construction_ledger = closed_ledger;
+        remaining_energy = closed_energy;
+        total_heat += attempt.work_cost;
     }
 
     if crate::cavity::analyze_genome_cavity(&structure, catalog)
