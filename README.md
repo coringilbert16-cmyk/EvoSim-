@@ -18,9 +18,9 @@ Recent implementation work has included:
 - repairing stale constructor/scaffold call sites after the API migration;
 - completing shared COMBINE/bond-formation integration;
 - implementing deterministic forward candidate selection;
-- retaining the globally nearest valid construction pose before committing;
+- scoring physically valid construction candidates by current-state topology, blueprint fit, contact quality, and deterministic tie-breaks;
 - typing and simplifying forward-constructor candidate-selection state;
-- pruning physically expensive candidates without changing the nearest-pose rule;
+- pruning physically expensive candidates without changing the approved current-state selection rule;
 - scoping that pruning to the forward constructor so unrelated physical attachment behavior is not changed;
 - calibrating the seed ring so its Carbon edges are physically sealed under the actual geometry rules;
 - formatting and validating each of these changes incrementally.
