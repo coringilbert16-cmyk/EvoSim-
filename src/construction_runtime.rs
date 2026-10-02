@@ -1132,7 +1132,6 @@ fn construct_blueprint_bond_driven_internal(
             crate::combine_runtime::CombineAttempt,
             EnergyLedger,
             f64,
-            usize,
         )> = None;
 
         // Evaluate every currently available physical continuation before
@@ -1257,7 +1256,6 @@ fn construct_blueprint_bond_driven_internal(
                             attempt,
                             trial_ledger,
                             trial_energy,
-                            storage_index,
                         ));
                     }
                 }
@@ -1382,7 +1380,6 @@ fn construct_blueprint_bond_driven_internal(
                             attempt,
                             trial_ledger,
                             trial_energy,
-                            usize::MAX,
                         ));
                     }
                 }
@@ -1398,7 +1395,6 @@ fn construct_blueprint_bond_driven_internal(
             attempt,
             trial_ledger,
             trial_energy,
-            storage_index,
         )) = best_supplemental
         else {
             break;
