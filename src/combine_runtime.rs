@@ -356,7 +356,7 @@ fn form_bond_from_candidate_in_place(
         bond_energy: investment,
     };
     let previous_bond_count = structure.bonds.len();
-    crate::contact::try_add_bond(structure, bond, catalog).ok()?;
+    crate::contact::try_add_bond_known_unique(structure, bond, ua, ub, catalog).ok()?;
     let before = *energy;
     let transaction = EnergyTransaction {
         reason: EnergyReason::Combine,
