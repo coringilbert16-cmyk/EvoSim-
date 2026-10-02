@@ -407,7 +407,6 @@ fn free_form_search(
         // constructed.
         for anchor_index in anchor_indices {
             for (_resource, material) in &rigid_materials {
-
                 let before_nodes = *nodes;
                 let Some((trial, indices, _part, _attempt, trial_ledger, trial_energy)) =
                     crate::construction_runtime::try_attach_physical_material_bond_driven(
