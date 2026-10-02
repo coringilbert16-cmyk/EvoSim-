@@ -200,6 +200,69 @@ pub fn surface_alignment_placements(
             }
         }
     }
+
+    // Face contact is preferred, but it is not the only legitimate physical
+    // contact. Also enumerate vertex-to-vertex placements using the actual
+    // boundary normals. These candidates do not declare a required bond angle;
+    // they simply place two real boundary points together without requiring
+    // matching faces. Final overlap and bond validity remain authoritative.
+    let existing_vertices = existing_shape.form.polygon_vertices().unwrap_or_default();
+    let candidate_vertices = candidate_shape.form.polygon_vertices().unwrap_or_default();
+    for (existing_index, &existing_vertex) in existing_vertices.iter().enumerate() {
+        let Some(existing_normal) = corner_normal(existing_shape, existing_index) else {
+            continue;
+        };
+        let (es, ec) = existing_placement.rotation_radians.sin_cos();
+        let existing_world = (
+            existing_placement.x + existing_vertex.0 * ec - existing_vertex.1 * es,
+            existing_placement.y + existing_vertex.0 * es + existing_vertex.1 * ec,
+        );
+        let existing_world_normal = (
+            existing_normal.0 * ec - existing_normal.1 * es,
+            existing_normal.0 * es + existing_normal.1 * ec,
+        );
+
+        for (candidate_index, &candidate_vertex) in candidate_vertices.iter().enumerate() {
+            let Some(candidate_normal) = corner_normal(candidate_shape, candidate_index) else {
+                continue;
+            };
+
+            // Opposing outward normals provide a physically meaningful
+            // point-contact orientation without imposing a blueprint angle.
+            let candidate_normal_angle = candidate_normal.1.atan2(candidate_normal.0);
+            let target_normal_angle = existing_world_normal.1.atan2(existing_world_normal.0)
+                + std::f64::consts::PI;
+            let rotation = normalize_angle(target_normal_angle - candidate_normal_angle);
+            let (rs, rc) = rotation.sin_cos();
+            let relative_point = (
+                candidate_relative_placement.x
+                    + candidate_vertex.0 * candidate_relative_placement.rotation_radians.cos()
+                    - candidate_vertex.1 * candidate_relative_placement.rotation_radians.sin(),
+                candidate_relative_placement.y
+                    + candidate_vertex.0 * candidate_relative_placement.rotation_radians.sin()
+                    + candidate_vertex.1 * candidate_relative_placement.rotation_radians.cos(),
+            );
+            let rotated_relative_point = (
+                relative_point.0 * rc - relative_point.1 * rs,
+                relative_point.0 * rs + relative_point.1 * rc,
+            );
+            let placement = Placement {
+                x: existing_world.0 - rotated_relative_point.0,
+                y: existing_world.1 - rotated_relative_point.1,
+                rotation_radians: rotation,
+            };
+
+            if !out.iter().any(|p: &Placement| {
+                (p.x - placement.x).abs() <= 1e-10
+                    && (p.y - placement.y).abs() <= 1e-10
+                    && normalize_angle(p.rotation_radians - placement.rotation_radians).abs()
+                        <= 1e-10
+            }) {
+                out.push(placement);
+            }
+        }
+    }
+
     out
 }
 
