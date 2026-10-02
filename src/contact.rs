@@ -157,7 +157,7 @@ fn rigid_surface_candidates(
     // candidates. This makes exact face-to-face placement observable to the
     // shared contact system instead of relying on an angular sweep to hit it.
     for (unit, shape, other) in [(a, shape_a, b), (b, shape_b, a)] {
-        for (v) in shape.form.polygon_vertices().unwrap_or_default() {
+        for v in shape.form.polygon_vertices().unwrap_or_default() {
             let _ = v;
         }
         let edges = crate::rigid_boundary::polygon_edges(shape);
