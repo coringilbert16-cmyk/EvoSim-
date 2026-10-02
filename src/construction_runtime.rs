@@ -401,8 +401,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                 new_material,
                 candidate_origin,
                 catalog,
-            )
-            else {
+            ) else {
                 continue;
             };
 
@@ -450,7 +449,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     new_unit_index,
                     candidate,
                     catalog,
-            )
+                )
             else {
                 continue;
             };
@@ -628,8 +627,7 @@ fn realize_next_bond_driven(
                     new_material,
                     candidate_origin,
                     catalog,
-                )
-                else {
+                ) else {
                     continue;
                 };
 
@@ -677,7 +675,7 @@ fn realize_next_bond_driven(
                         new_unit_index,
                         candidate,
                         catalog,
-                )
+                    )
                 else {
                     continue;
                 };
@@ -905,8 +903,7 @@ fn close_one_realized_blueprint_connection(
                     let Some((_, _, _, investment, _required_energy)) =
                         crate::combine_runtime::selected_candidate_evaluation(
                             structure, unit_a, unit_b, candidate, catalog,
-                        )
-                    else {
+                        ) else {
                         continue;
                     };
 
