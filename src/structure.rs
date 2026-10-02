@@ -555,31 +555,47 @@ impl PhysicalConstituentGraph {
         self.unit_index(e.constituent_id)
     }
     pub fn is_valid_bond(&self, b: &Bond, c: &[BaseResource]) -> bool {
-        let Some(a) = self.endpoint_index(b.endpoint_a) else {
+        let Some(a) = self.endpoint_index(b.endpoint_a) else { return false; };
+        let Some(d) = self.endpoint_index(b.endpoint_b) else { return false; };
+        self.is_valid_bond_at_indices(b, a, d, c)
+    }
+
+    /// Validate a bond when its unit indices are already known.
+    pub(crate) fn is_valid_bond_at_indices(
+        &self,
+        b: &Bond,
+        a: usize,
+        d: usize,
+        c: &[BaseResource],
+    ) -> bool {
+        let Some(unit_a) = self.units.get(a) else { return false; };
+        let Some(unit_b) = self.units.get(d) else { return false; };
+        if unit_a.physical_id != b.endpoint_a.constituent_id
+            || unit_b.physical_id != b.endpoint_b.constituent_id
+        {
             return false;
-        };
-        let Some(d) = self.endpoint_index(b.endpoint_b) else {
-            return false;
-        };
+        }
         if !b.is_valid(|e| {
-            self.endpoint_index(e)
-                .and_then(|i| e.location.world_point(self.units.get(i)?, c))
-                .is_some()
+            let index = if e.constituent_id == unit_a.physical_id {
+                a
+            } else if e.constituent_id == unit_b.physical_id {
+                d
+            } else {
+                return false;
+            };
+            e.location.world_point(self.units.get(index)?, c).is_some()
         }) {
             return false;
         }
-        if units_strictly_overlap(&self.units[a], &self.units[d], c) {
+        if units_strictly_overlap(unit_a, unit_b, c) {
             return false;
         }
-        let Some(pa) = self.units[a].properties(c) else {
-            return false;
-        };
-        let Some(pb) = self.units[d].properties(c) else {
-            return false;
-        };
+        let Some(pa) = unit_a.properties(c) else { return false; };
+        let Some(pb) = unit_b.properties(c) else { return false; };
         let strength = crate::combine::bond_strength(pa, pb);
         strength.is_finite() && (0.0..=1.0).contains(&strength)
     }
+
     /// Stable physical IDs that established the qualifying genome cavity.
     pub fn genome_constituent_ids(&self) -> &[PhysicalConstituentId] {
         &self.genome_constituent_ids
