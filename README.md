@@ -72,7 +72,8 @@ These are the constraints that matter to the current construction work:
 
 - Physical geometry is authoritative.
 - A permanent bond is created through the shared physical bond transaction.
-- Positive-length physical surface contact between distinct material units implies a permanent bond between those units; mathematical point/vertex coincidence alone does not. A contact may still use only one specific connection-point pairing as its bond.
+- Physical contact does not by itself create a permanent bond; unbonded physical contact is a valid structural state. Permanent bonds are created only through the bond transaction.
+- A qualifying genome cavity is a special case: its closed boundary must have a continuous bonded seal between the distinct material units that form that boundary. A merely coincidental geometric enclosure is not a genome.
 - Intended bond contact is distinct from unintended penetration.
 - Construction does not need a universal grid, 4N topology, or predefined cavity shape.
 - The genome is defined by a qualifying realized cavity, not by a hard-coded core.
