@@ -130,8 +130,22 @@ fn bond_units(
                 ) && !used_a.contains(&candidate.endpoint_a)
                     && !used_b.contains(&candidate.endpoint_b)
             })
-            .next()
-            .cloned()
+            .min_by(|a, b| {
+                a.distance
+                    .partial_cmp(&b.distance)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .or_else(|| {
+                if bonded {
+                    None
+                } else {
+                    candidates.into_iter().max_by(|a, b| {
+                        a.distance
+                            .partial_cmp(&b.distance)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                }
+            })
             .or_else(|| {
                 if bonded {
                     None
