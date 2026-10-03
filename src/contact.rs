@@ -328,35 +328,29 @@ pub fn connection_pair_candidates(
 #[allow(dead_code)]
 pub fn candidate_has_physical_boundary_contact(
     s: &OrganismStructure,
-    candidate: &ConnectionPairCandidate,
+    ua: usize,
+    ub: usize,
     c: &[crate::resources::BaseResource],
     tolerance: f64,
 ) -> bool {
-    let Some(a_index) = s.units.iter().position(|unit| {
-        candidate.endpoint_a.world_point(unit, c).is_some()
-    }) else {
+    let (Some(unit_a), Some(unit_b)) = (s.units.get(ua), s.units.get(ub)) else {
         return false;
     };
-    let Some(b_index) = s.units.iter().position(|unit| {
-        candidate.endpoint_b.world_point(unit, c).is_some()
-    }) else {
+    let Some(shape_a) = unit_a.shape(c) else {
         return false;
     };
-    let Some(a_shape) = s.units[a_index].shape(c) else {
-        return false;
-    };
-    let Some(b_shape) = s.units[b_index].shape(c) else {
+    let Some(shape_b) = unit_b.shape(c) else {
         return false;
     };
     let a = crate::material_geometry::PlacedMaterialPart {
-        part_index: a_index,
-        form: a_shape.form.clone(),
-        placement: s.units[a_index].placement,
+        part_index: ua,
+        form: shape_a.form.clone(),
+        placement: unit_a.placement,
     };
     let b = crate::material_geometry::PlacedMaterialPart {
-        part_index: b_index,
-        form: b_shape.form.clone(),
-        placement: s.units[b_index].placement,
+        part_index: ub,
+        form: shape_b.form.clone(),
+        placement: unit_b.placement,
     };
     crate::material_geometry::placed_forms_boundary_touch(&a, &b, tolerance)
 }
