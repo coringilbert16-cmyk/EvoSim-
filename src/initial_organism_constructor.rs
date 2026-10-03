@@ -16,37 +16,6 @@ pub(crate) struct ValidConstruction {
     pub acquired_resource_placements: Vec<(String, Placement)>,
 }
 
-/// Axial hex coordinates are used only as a deterministic geometric
-/// construction recipe. They are not a biological blueprint: every unit is
-/// still instantiated and every connection is admitted through the normal
-/// physical bond transaction.
-fn axial_to_world(q: i32, r: i32) -> (f64, f64) {
-    // Carbon's catalog hexagon has a vertex on the +x axis. These axial
-    // basis vectors therefore match the actual tessellation of that shape.
-    (
-        1.5 * q as f64,
-        (SQRT_3 * 0.5) * q as f64 + SQRT_3 * r as f64,
-    )
-}
-
-fn hex_ring(radius: i32) -> Vec<(i32, i32)> {
-    if radius <= 0 {
-        return Vec::new();
-    }
-    let directions = [(1, 0), (0, 1), (-1, 1), (-1, 0), (0, -1), (1, -1)];
-    let mut q = -radius;
-    let mut r = 0;
-    let mut result = Vec::with_capacity((radius * 6) as usize);
-    for (dq, dr) in directions {
-        for _ in 0..radius {
-            result.push((q, r));
-            q += dq;
-            r += dr;
-        }
-    }
-    result
-}
-
 fn add_unit(
     structure: &mut crate::structure::OrganismStructure,
     resource: &BaseResource,
@@ -296,7 +265,7 @@ fn construct_free_form(
                         &trial,
                         anchor_target,
                         new_index,
-                        &anchor_candidate,
+                        anchor_candidate,
                         catalog,
                     )
                 else {
@@ -381,7 +350,7 @@ fn construct_free_form(
                                 &trial,
                                 existing_index,
                                 new_index,
-                                &candidate,
+                                candidate,
                                 catalog,
                             )
                         else {
@@ -591,7 +560,7 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
         return Err("catalog does not contain Water".into());
     }
 
-    let (structure, ledger, energy) = construct_free_form(catalog)?;
+    let (structure, _ledger, energy) = construct_free_form(catalog)?;
     let acquired_resource_placements =
         valid_construction(&structure, catalog, &acquisition_candidates)
             .ok_or_else(|| "free-form construction did not satisfy viability".to_string())?;
