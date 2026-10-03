@@ -100,3 +100,39 @@ Do not redesign the constructor in response to a downstream failure until the un
 The long-term goal remains an open-ended simulation in which organisms can develop structure, acquire resources, sense their environment, reproduce, form niches, and potentially evolve multicellular cooperation from the same general physical and behavioral mechanisms.
 
 The current bottleneck is narrower: **constructing the first valid organism correctly and quickly.**
+
+## Construction geometry investigation: configuration space / Minkowski methods
+
+The constructor will investigate established computational-geometry methods before expanding the hand-built placement catalog further.
+
+The leading approach is **configuration-space geometry using Minkowski sums/differences (commonly represented by a no-fit polygon)**. For two rigid 2D shapes, this can represent the set of relative translations that produce separation, overlap, or boundary contact. This is a geometry primitive, not a biological bonding rule.
+
+The intended separation is:
+
+1. computational geometry determines physically valid relative configurations;
+2. EvoSim applies its own connection-scale rule (1:1, 1:0.5, and 0.5:0.25 allowed; 1:0.25 disallowed);
+3. EvoSim converts selected contact configurations into explicit bond candidates through the normal bond transaction;
+4. incidental physical contact remains valid without automatically becoming a bond;
+5. cavity qualification continues to depend on the realized bonded seal, not geometric contact alone.
+
+The investigation will first compare established implementations/algorithms against the actual EvoSim shape vocabulary, including the concave Phosphorus shape. Candidate implementations include Rust libraries exposing Minkowski sum/difference operations, while CGAL's 2D Minkowski-sum implementation is a reference for the underlying algorithms. Existing libraries demonstrate support for both convex and non-convex polygon Minkowski operations. No dependency is approved yet.
+
+### Audit plan before integration
+
+The geometry audit must establish:
+
+- whether the current Form geometry can be converted losslessly into the polygon representation required by the chosen method;
+- how relative **rotation** is represented, since a single no-fit polygon normally assumes fixed orientations;
+- how many distinct orientations are actually necessary after exploiting symmetry of Carbon, Methane, Sulfur, Nitrogen, Hydrogen, and the asymmetric/concave Phosphorus shape;
+- how vertex-vertex, vertex-edge, and edge-edge contact should map to EvoSim connection endpoints;
+- whether the method can represent the complete useful contact locus rather than only the hand-selected endpoint matches currently cached;
+- how non-convex Phosphorus behaves;
+- how numerical tolerances affect touching versus penetration;
+- whether generated geometry can be cached once and reused by the constructor;
+- whether the resulting candidate generation materially reduces constructor runtime instead of merely moving the same search elsewhere;
+- how the method interacts with multi-contact local growth and motif generation;
+- and how Water remains separate as a deformable, volume-conserving material rather than being forced into the rigid polygon catalog.
+
+The first implementation milestone is a **geometry-only proof of concept**, not a constructor rewrite. It must reproduce known valid Carbon↔Carbon, Carbon↔Nitrogen, Nitrogen↔Phosphorus, and Carbon↔Phosphorus contacts while rejecting genuine penetration. Only after those results are audited should the constructor consume the new configuration-space representation.
+
+This investigation supersedes the assumption that the hand-written edge-pair catalog must remain the long-term geometry engine. The existing catalog remains useful as a baseline and regression oracle during the investigation.
