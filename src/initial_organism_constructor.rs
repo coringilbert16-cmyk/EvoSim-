@@ -250,8 +250,21 @@ fn construct_scaffold(
                 .iter()
                 .map(|region| region.area)
                 .fold(0.0_f64, f64::max);
+            let first_a = structure.units[inner_indices[0]].physical_id;
+            let first_b = structure.units[inner_indices[1]].physical_id;
+            let first_pair_bonds = structure
+                .bonds
+                .iter()
+                .filter(|bond| {
+                    (bond.endpoint_a.constituent_id == first_a
+                        && bond.endpoint_b.constituent_id == first_b)
+                        || (bond.endpoint_a.constituent_id == first_b
+                            && bond.endpoint_b.constituent_id == first_a)
+                })
+                .map(|bond| (bond.endpoint_a.location, bond.endpoint_b.location))
+                .collect::<Vec<_>>();
             format!(
-                "inner construction phase did not produce a qualifying genome cavity: bonds={}, pair_counts={pair_counts:?}, enclosed_regions={}, max_region_area={max_region_area}",
+                "inner construction phase did not produce a qualifying genome cavity: bonds={}, pair_counts={pair_counts:?}, enclosed_regions={}, max_region_area={max_region_area}, first_pair_bonds={first_pair_bonds:?}",
                 structure.bonds.len(),
                 regions.len()
             )
