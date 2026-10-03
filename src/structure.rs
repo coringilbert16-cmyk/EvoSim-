@@ -366,7 +366,7 @@ fn units_strictly_overlap(
         form: form_b.form.clone(),
         placement: b.placement,
     };
-    crate::material_geometry::placed_forms_penetrate(&pa, &pb, 0.0)
+    crate::material_geometry::placed_forms_penetrate(&pa, &pb, 1e-9)
 }
 
 #[derive(Serialize, Clone, Debug)]
