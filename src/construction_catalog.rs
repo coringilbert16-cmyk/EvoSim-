@@ -203,7 +203,7 @@ fn generate_pair_formations(
             // both ways to place a shorter side against a longer side.
             let a_angle = (a1.1 - a0.1).atan2(a1.0 - a0.0);
             let b_angle = (b1.1 - b0.1).atan2(b1.0 - b0.0);
-            for reverse in [false, true] {
+            for reverse in [true] {
                 let target_angle = if reverse { b_angle + std::f64::consts::PI } else { b_angle };
                 let rotation = target_angle - a_angle;
                 let (s, c) = rotation.sin_cos();
