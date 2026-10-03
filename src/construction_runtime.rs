@@ -929,13 +929,26 @@ pub(crate) fn construct_blueprint_bond_driven(
     ledger: &mut EnergyLedger,
     energy: &mut f64,
 ) -> Result<(OrganismStructure, f64), String> {
-    construct_blueprint_bond_driven_internal(blueprint, catalog, ledger, energy, None)
+    construct_blueprint_bond_driven_internal(blueprint, catalog, ledger, energy, None, false)
 }
 
 /// Bond-driven construction using actual physical inventory. The structural
 /// blueprint supplies the material preference; storage supplies the material
 /// that can actually be used. No candidate below the structural match
 /// threshold is consumed.
+/// Construct only the genome-forming phase. The constructor stops immediately
+/// after a committed physical bond makes the realized cavity qualify. The
+/// blueprint is still temporary calibration input; it is not consulted after
+/// the milestone is reached.
+pub(crate) fn construct_bond_driven_until_genome(
+    blueprint: &crate::structural_blueprint::StructuralBlueprint,
+    catalog: &[BaseResource],
+    ledger: &mut EnergyLedger,
+    energy: &mut f64,
+) -> Result<(OrganismStructure, f64), String> {
+    construct_blueprint_bond_driven_internal(blueprint, catalog, ledger, energy, None, true)
+}
+
 pub(crate) fn construct_blueprint_bond_driven_with_materials(
     blueprint: &crate::structural_blueprint::StructuralBlueprint,
     catalog: &[BaseResource],
@@ -949,6 +962,7 @@ pub(crate) fn construct_blueprint_bond_driven_with_materials(
         ledger,
         energy,
         Some(available_materials),
+        false,
     )
 }
 
@@ -958,6 +972,7 @@ fn construct_blueprint_bond_driven_internal(
     ledger: &mut EnergyLedger,
     energy: &mut f64,
     mut available_materials: Option<&mut crate::material_storage::MaterialStorage>,
+    stop_at_genome: bool,
 ) -> Result<(OrganismStructure, f64), String> {
     if blueprint.elements.is_empty() {
         return Err("blueprint must contain at least one element".into());
@@ -1223,6 +1238,19 @@ fn construct_blueprint_bond_driven_internal(
                         }
                     }
                     attached = true;
+
+                    // The cavity is a construction milestone, not merely a
+                    // post-construction validation. As soon as the newly
+                    // committed physical graph qualifies, return the realized
+                    // structure and leave the next construction phase to the
+                    // caller. No uncommitted future topology is inspected.
+                    if stop_at_genome
+                        && crate::cavity::analyze_genome_cavity(&structure, catalog)?
+                            .is_some()
+                    {
+                        return Ok((structure, total_heat));
+                    }
+
                     break 'neighbors;
                 }
             }
@@ -1309,6 +1337,18 @@ fn construct_blueprint_bond_driven_internal(
                         total_heat += attempt.work_cost;
                         closed_connections[connection_index] = true;
                         progressed = true;
+
+                        // Closure bonds are evaluated only after both
+                        // endpoints already exist. If this committed bond
+                        // creates the qualifying cavity, that is the exact
+                        // end of the genome-construction phase.
+                        if stop_at_genome
+                            && crate::cavity::analyze_genome_cavity(&structure, catalog)?
+                                .is_some()
+                        {
+                            return Ok((structure, total_heat));
+                        }
+
                         break 'unit_pairs;
                     }
 
