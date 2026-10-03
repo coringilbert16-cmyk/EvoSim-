@@ -76,48 +76,74 @@ impl GenomeCavity {
     pub fn boundary_bond_indices(
         &self,
         structure: &OrganismStructure,
-        _catalog: &[BaseResource],
+        catalog: &[BaseResource],
     ) -> Vec<usize> {
-        let mut required_pairs = HashSet::new();
+        let mut seal_bonds = HashSet::new();
         let owners: Vec<usize> = self
             .boundary_segments
             .iter()
             .map(|&(_, _, owner)| owner)
             .collect();
 
-        for pair in owners
+        for (i, (a, b)) in owners
             .iter()
             .copied()
             .zip(owners.iter().copied().cycle().skip(1))
             .take(owners.len())
+            .enumerate()
         {
-            let (a, b) = pair;
-            if a != b {
-                let Some(a_id) = structure.units.get(a).map(|unit| unit.physical_id) else {
-                    return Vec::new();
+            if a == b {
+                continue;
+            }
+            let Some(a_id) = structure.units.get(a).map(|unit| unit.physical_id) else {
+                continue;
+            };
+            let Some(b_id) = structure.units.get(b).map(|unit| unit.physical_id) else {
+                continue;
+            };
+            let seal_point = self.boundary_segments[i].1;
+
+            for (bond_index, bond) in structure.bonds.iter().enumerate() {
+                let connects_units =
+                    (bond.endpoint_a.constituent_id == a_id
+                        && bond.endpoint_b.constituent_id == b_id)
+                        || (bond.endpoint_a.constituent_id == b_id
+                            && bond.endpoint_b.constituent_id == a_id);
+                if !connects_units {
+                    continue;
+                }
+
+                let Some(unit_a) = structure
+                    .unit_index(bond.endpoint_a.constituent_id)
+                    .and_then(|index| structure.units.get(index))
+                else {
+                    continue;
                 };
-                let Some(b_id) = structure.units.get(b).map(|unit| unit.physical_id) else {
-                    return Vec::new();
+                let Some(unit_b) = structure
+                    .unit_index(bond.endpoint_b.constituent_id)
+                    .and_then(|index| structure.units.get(index))
+                else {
+                    continue;
                 };
-                required_pairs.insert(if a_id <= b_id { (a_id, b_id) } else { (b_id, a_id) });
+                let Some(point_a) = bond.endpoint_a.location.world_point(unit_a, catalog) else {
+                    continue;
+                };
+                let Some(point_b) = bond.endpoint_b.location.world_point(unit_b, catalog) else {
+                    continue;
+                };
+
+                if (point_a.0 - seal_point.x).hypot(point_a.1 - seal_point.y) <= NODE_TOLERANCE
+                    && (point_b.0 - seal_point.x).hypot(point_b.1 - seal_point.y)
+                        <= NODE_TOLERANCE
+                {
+                    seal_bonds.insert(bond_index);
+                }
             }
         }
 
-        if required_pairs.is_empty() {
-            return Vec::new();
-        }
-
-        structure
-            .bonds
-            .iter()
-            .enumerate()
-            .filter_map(|(index, bond)| {
-                let a = bond.endpoint_a.constituent_id;
-                let b = bond.endpoint_b.constituent_id;
-                let pair = if a <= b { (a, b) } else { (b, a) };
-                required_pairs.contains(&pair).then_some(index)
-            })
-            .collect()
+        let mut result: Vec<_> = seal_bonds.into_iter().collect();
+        result.sort_unstable();
+        result
     }
 
     fn has_bonded_seal(&self, structure: &OrganismStructure, catalog: &[BaseResource]) -> bool {
