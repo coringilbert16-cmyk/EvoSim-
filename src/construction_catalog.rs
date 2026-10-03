@@ -295,7 +295,7 @@ mod tests {
     }
 
     #[test]
-    fn_two_scale_jump_cannot_bond() {
+    fn two_scale_jump_cannot_bond() {
         assert!(!segment_lengths_compatible(1.0, 0.25));
     }
 
