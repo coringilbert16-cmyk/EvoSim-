@@ -163,51 +163,73 @@ impl GenomeCavity {
         structure: &OrganismStructure,
         catalog: &[BaseResource],
     ) -> Vec<usize> {
-        self.boundary_segments
-            .iter()
-            .filter_map(|&(segment_a, segment_b, unit_a, unit_b)| {
-                structure
-                    .bonds
-                    .iter()
-                    .enumerate()
-                    .find_map(|(index, bond)| {
-                        let id_a = structure.units.get(unit_a)?.physical_id;
-                        let id_b = structure.units.get(unit_b)?.physical_id;
-                        let matches_units = (bond.endpoint_a.constituent_id == id_a
-                            && bond.endpoint_b.constituent_id == id_b)
-                            || (bond.endpoint_a.constituent_id == id_b
-                                && bond.endpoint_b.constituent_id == id_a);
-                        if !matches_units {
-                            return None;
-                        }
+        let mut result = Vec::new();
 
-                        let resolve =
-                            |endpoint: ConnectionEndpoint, unit_index: usize| -> Option<Point> {
-                                let unit = structure.units.get(unit_index)?;
-                                let world = endpoint.world_point(unit, catalog)?;
-                                Some(Point {
-                                    x: world.x,
-                                    y: world.y,
-                                })
-                            };
-                        let (world_a, world_b) = if bond.endpoint_a.constituent_id == id_a {
-                            (
-                                resolve(bond.endpoint_a.location, unit_a)?,
-                                resolve(bond.endpoint_b.location, unit_b)?,
-                            )
-                        } else {
-                            (
-                                resolve(bond.endpoint_a.location, unit_b)?,
-                                resolve(bond.endpoint_b.location, unit_a)?,
-                            )
-                        };
-                        let close = |a: Point, b: Point| a.sub(b).norm() <= NODE_TOLERANCE * 10.0;
-                        (close(world_a, segment_a) && close(world_b, segment_b)
-                            || close(world_a, segment_b) && close(world_b, segment_a))
-                        .then_some(index)
-                    })
-            })
-            .collect()
+        for &(segment_a, segment_b, unit_a, unit_b) in &self.boundary_segments {
+            let Some(expected_a) = structure.units.get(unit_a) else {
+                continue;
+            };
+            let Some(expected_b) = structure.units.get(unit_b) else {
+                continue;
+            };
+            let id_a = expected_a.physical_id;
+            let id_b = expected_b.physical_id;
+
+            let close = |a: Point, b: Point| a.sub(b).norm() <= NODE_TOLERANCE * 10.0;
+
+            for (index, bond) in structure.bonds.iter().enumerate() {
+                let matches_units =
+                    (bond.endpoint_a.constituent_id == id_a
+                        && bond.endpoint_b.constituent_id == id_b)
+                        || (bond.endpoint_a.constituent_id == id_b
+                            && bond.endpoint_b.constituent_id == id_a);
+                if !matches_units {
+                    continue;
+                }
+
+                let (unit_for_a, endpoint_a, unit_for_b, endpoint_b) =
+                    if bond.endpoint_a.constituent_id == id_a {
+                        (
+                            expected_a,
+                            bond.endpoint_a.location,
+                            expected_b,
+                            bond.endpoint_b.location,
+                        )
+                    } else {
+                        (
+                            expected_b,
+                            bond.endpoint_a.location,
+                            expected_a,
+                            bond.endpoint_b.location,
+                        )
+                    };
+
+                let Some(world_a) = endpoint_a.world_point(unit_for_a, catalog) else {
+                    continue;
+                };
+                let Some(world_b) = endpoint_b.world_point(unit_for_b, catalog) else {
+                    continue;
+                };
+                let world_a = Point {
+                    x: world_a.x,
+                    y: world_a.y,
+                };
+                let world_b = Point {
+                    x: world_b.x,
+                    y: world_b.y,
+                };
+
+                let seals_endpoint =
+                    (close(world_a, segment_a) && close(world_b, segment_a))
+                        || (close(world_a, segment_b) && close(world_b, segment_b));
+
+                if seals_endpoint && !result.contains(&index) {
+                    result.push(index);
+                }
+            }
+        }
+
+        result
     }
 }
 
