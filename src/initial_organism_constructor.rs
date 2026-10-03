@@ -123,9 +123,13 @@ fn bond_units(
             crate::structure::ConnectionEndpoint::Corner { .. }
         )
     }) {
-        if selected.iter().any(|chosen: &crate::contact::ConnectionPairCandidate| {
-            chosen.endpoint_a == candidate.endpoint_a && chosen.endpoint_b == candidate.endpoint_b
-        }) {
+        if selected
+            .iter()
+            .any(|chosen: &crate::contact::ConnectionPairCandidate| {
+                chosen.endpoint_a == candidate.endpoint_a
+                    && chosen.endpoint_b == candidate.endpoint_b
+            })
+        {
             continue;
         }
         selected.push(candidate.clone());
@@ -156,20 +160,10 @@ fn bond_units(
         let (_, _, _, investment, _) = crate::combine_runtime::selected_candidate_evaluation(
             structure, unit_a, unit_b, candidate, catalog,
         )
-        .ok_or_else(|| {
-            format!("physical bond candidate {unit_a}-{unit_b} failed evaluation")
-        })?;
+        .ok_or_else(|| format!("physical bond candidate {unit_a}-{unit_b} failed evaluation"))?;
 
         crate::combine_runtime::form_selected_bond(
-            structure,
-            unit_a,
-            unit_b,
-            candidate,
-            investment,
-            catalog,
-            &mut cache,
-            ledger,
-            energy,
+            structure, unit_a, unit_b, candidate, investment, catalog, &mut cache, ledger, energy,
         )
         .ok_or_else(|| format!("physical bond transaction {unit_a}-{unit_b} failed"))?;
     }
