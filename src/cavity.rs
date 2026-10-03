@@ -120,7 +120,7 @@ impl GenomeCavity {
             .collect()
     }
 
-    fn has_bonded_seal(&self, structure: &OrganismStructure) -> bool {
+    fn has_bonded_seal(&self, structure: &OrganismStructure, catalog: &[BaseResource]) -> bool {
         if self.boundary_segments.len() < 3 {
             return false;
         }
@@ -140,19 +140,46 @@ impl GenomeCavity {
             .copied()
             .zip(owners.iter().copied().cycle().skip(1))
             .take(owners.len())
-            .filter(|(a, b)| a != b)
-            .all(|(a, b)| {
-                let Some(a_id) = structure.units.get(a).map(|unit| unit.physical_id) else {
+            .enumerate()
+            .filter(|(_, (a, b))| a != b)
+            .all(|(i, (a, b))| {
+                let Some(a_id) = structure.units.get(*a).map(|unit| unit.physical_id) else {
                     return false;
                 };
-                let Some(b_id) = structure.units.get(b).map(|unit| unit.physical_id) else {
+                let Some(b_id) = structure.units.get(*b).map(|unit| unit.physical_id) else {
                     return false;
                 };
+                let seal_point = self.boundary_segments[i].1;
                 structure.bonds.iter().any(|bond| {
-                    (bond.endpoint_a.constituent_id == a_id
-                        && bond.endpoint_b.constituent_id == b_id)
-                        || (bond.endpoint_a.constituent_id == b_id
-                            && bond.endpoint_b.constituent_id == a_id)
+                    let connects_units =
+                        (bond.endpoint_a.constituent_id == a_id
+                            && bond.endpoint_b.constituent_id == b_id)
+                            || (bond.endpoint_a.constituent_id == b_id
+                                && bond.endpoint_b.constituent_id == a_id);
+                    if !connects_units {
+                        return false;
+                    }
+                    let Some(unit_a) = structure.unit_index(bond.endpoint_a.constituent_id)
+                        .and_then(|index| structure.units.get(index))
+                    else {
+                        return false;
+                    };
+                    let Some(unit_b) = structure.unit_index(bond.endpoint_b.constituent_id)
+                        .and_then(|index| structure.units.get(index))
+                    else {
+                        return false;
+                    };
+                    let Some(point_a) = bond.endpoint_a.location.world_point(unit_a, catalog)
+                    else {
+                        return false;
+                    };
+                    let Some(point_b) = bond.endpoint_b.location.world_point(unit_b, catalog)
+                    else {
+                        return false;
+                    };
+                    (point_a.0 - seal_point.x).hypot(point_a.1 - seal_point.y) <= NODE_TOLERANCE
+                        && (point_b.0 - seal_point.x).hypot(point_b.1 - seal_point.y)
+                            <= NODE_TOLERANCE
                 })
             })
     }
@@ -265,7 +292,7 @@ fn analyze_genome_cavity_in_indices(
             boundary_segments,
         };
 
-        if !candidate.has_bonded_seal(structure) {
+        if !candidate.has_bonded_seal(structure, catalog) {
             continue;
         }
 
