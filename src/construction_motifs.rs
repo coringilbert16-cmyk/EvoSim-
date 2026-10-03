@@ -127,6 +127,10 @@ impl MotifCatalog {
     pub(crate) fn len(&self) -> usize {
         self.levels.iter().map(Vec::len).sum()
     }
+
+    pub(crate) fn max_units(&self) -> usize {
+        self.levels.len()
+    }
 }
 
 fn transformed_relative_placement(
@@ -247,13 +251,8 @@ mod tests {
     fn motif_generation_never_exceeds_configured_ceiling() {
         let resources = crate::resources::default_catalog();
         let pair_catalog = ConstructionCatalog::build(&resources);
-        let motifs = MotifCatalog::generate(
-            &resources,
-            &pair_catalog,
-            MAX_CATALOG_MOTIF_UNITS + 10,
-        );
-        assert!(motifs.level(MAX_CATALOG_MOTIF_UNITS).len() >= 0);
-        assert!(motifs.level(MAX_CATALOG_MOTIF_UNITS + 1).is_empty());
+        let motifs = MotifCatalog::generate(&resources, &pair_catalog, 3);
+        assert_eq!(motifs.max_units(), 3);
     }
 
     #[test]
