@@ -18,7 +18,7 @@ The current implementation:
 - performs no recursive body-plan search and has no arbitrary placement-attempt budget;
 - currently realizes genesis construction material from the catalog rather than waiting on environmental inventory.
 
-The current scaffold is **not the final constructor architecture**. It is a temporary deterministic construction baseline used to prove that the physical construction, bonding, cavity, and acquisition contracts can work quickly.
+The current scaffold is **not the final constructor architecture**. It is a temporary deterministic construction baseline used to prove that the physical construction, bonding, cavity, and acquisition contracts can work quickly. The newly separated genome-phase entry point is an integration seam for replacing that baseline with the final free-form constructor; it does not make the blueprint authoritative topology acceptable as the final design.
 
 The present scaffold is a fixed 54-unit Carbon geometry consisting of an inner ring, six radial supports, and an outer ring. Adjacent rigid units are sealed with distinct endpoint bonds at the two ends of each shared wall segment. This must not be confused with the intended final free-form constructor.
 
@@ -48,8 +48,10 @@ Work proceeds in this order:
    - Fix only genuine implementation defects.
    - Keep construction deterministic and bounded.
 2. **Make cavity formation a real construction milestone.**
-   - Build only until the realized cavity qualifies as the genome.
-   - Stop that phase immediately when qualification occurs.
+   - The construction runtime now has an explicit genome-phase entry point.
+   - It checks the realized physical graph immediately after committed construction/closure bonds.
+   - When the cavity qualifies, that phase returns immediately instead of treating the cavity as a post-build assertion.
+   - The current baseline still uses the temporary blueprint to reach that milestone; it does not yet provide the final free-form topology.
 3. **Build the remainder locally.**
    - Replace the temporary fixed scaffold with the intended free-form constructive mechanism.
    - Select only from geometrically valid local continuations.
