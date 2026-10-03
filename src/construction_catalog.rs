@@ -180,81 +180,100 @@ fn generate_pair_formations(
         return out;
     };
 
-    for a_index in 0..a_vertices.len() {
-        let Some(a_normal) =
-            crate::rigid_boundary::corner_normal(&resource_a.shape, a_index)
-        else {
+    for a_edge in 0..a_vertices.len() {
+        let a0 = a_vertices[a_edge];
+        let a1 = a_vertices[(a_edge + 1) % a_vertices.len()];
+        let a_length = (a1.0 - a0.0).hypot(a1.1 - a0.1);
+        if !is_supported_segment_length(a_length) {
             continue;
-        };
-        let a_angle = a_normal.1.atan2(a_normal.0);
-        let a_segment_length = incident_segment_length(&a_vertices, a_index);
+        }
 
-        for b_index in 0..b_vertices.len() {
-            let Some(b_normal) =
-                crate::rigid_boundary::corner_normal(&resource_b.shape, b_index)
-            else {
-                continue;
-            };
-            let b_angle = b_normal.1.atan2(b_normal.0);
-            let b_segment_length = incident_segment_length(&b_vertices, b_index);
-
-            if !segment_lengths_compatible(a_segment_length, b_segment_length) {
+        for b_edge in 0..b_vertices.len() {
+            let b0 = b_vertices[b_edge];
+            let b1 = b_vertices[(b_edge + 1) % b_vertices.len()];
+            let b_length = (b1.0 - b0.0).hypot(b1.1 - b0.1);
+            if !is_supported_segment_length(b_length)
+                || !segment_lengths_compatible(a_length, b_length)
+            {
                 continue;
             }
 
-            let rotation = b_angle + std::f64::consts::PI - a_angle;
-            let Some(local_a) = crate::rigid_boundary::world_vertex(
-                &resource_a.shape,
-                a_index,
-                Placement {
-                    x: 0.0,
-                    y: 0.0,
-                    rotation_radians: rotation,
-                },
-            ) else {
-                continue;
-            };
+            // Align the selected side of A with the selected side of B.
+            // Both endpoint orders are retained: this gives the constructor
+            // both ways to place a shorter side against a longer side.
+            let a_angle = (a1.1 - a0.1).atan2(a1.0 - a0.0);
+            let b_angle = (b1.1 - b0.1).atan2(b1.0 - b0.0);
+            for reverse in [false, true] {
+                let target_angle = if reverse { b_angle + std::f64::consts::PI } else { b_angle };
+                let rotation = target_angle - a_angle;
+                let (s, c) = rotation.sin_cos();
+                let ax0 = a0.0 * c - a0.1 * s;
+                let ay0 = a0.0 * s + a0.1 * c;
+                let ax1 = a1.0 * c - a1.1 * s;
+                let ay1 = a1.0 * s + a1.1 * c;
+                let bx = if reverse { b1.0 } else { b0.0 };
+                let by = if reverse { b1.1 } else { b0.1 };
 
-            out.push(PairFormation {
-                resource_a: resource_a_index,
-                resource_b: resource_b_index,
-                endpoint_a: ConnectionEndpoint::Corner {
-                    point_index: a_index,
-                },
-                endpoint_b: ConnectionEndpoint::Corner {
-                    point_index: b_index,
-                },
-                placement_a_relative_to_b: RelativePlacement {
-                    x: -local_a.0,
-                    y: -local_a.1,
-                    rotation_radians: rotation,
-                },
-                segment_length_a: a_segment_length,
-                segment_length_b: b_segment_length,
-            });
+                out.push(PairFormation {
+                    resource_a: resource_a_index,
+                    resource_b: resource_b_index,
+                    endpoint_a: ConnectionEndpoint::Corner {
+                        point_index: a_edge,
+                    },
+                    endpoint_b: ConnectionEndpoint::Corner {
+                        point_index: if reverse {
+                            (b_edge + 1) % b_vertices.len()
+                        } else {
+                            b_edge
+                        },
+                    },
+                    placement_a_relative_to_b: RelativePlacement {
+                        x: bx - ax0,
+                        y: by - ay0,
+                        rotation_radians: rotation,
+                    },
+                    segment_length_a: a_length,
+                    segment_length_b: b_length,
+                });
+
+                // Retain the opposite endpoint pairing as a distinct local
+                // formation when the side lengths differ.
+                if (a_length - b_length).abs() > GEOMETRY_TOLERANCE {
+                    let bx = if reverse { b0.0 } else { b1.0 };
+                    let by = if reverse { b0.1 } else { b1.1 };
+                    out.push(PairFormation {
+                        resource_a: resource_a_index,
+                        resource_b: resource_b_index,
+                        endpoint_a: ConnectionEndpoint::Corner {
+                            point_index: (a_edge + 1) % a_vertices.len(),
+                        },
+                        endpoint_b: ConnectionEndpoint::Corner {
+                            point_index: if reverse {
+                                b_edge
+                            } else {
+                                (b_edge + 1) % b_vertices.len()
+                            },
+                        },
+                        placement_a_relative_to_b: RelativePlacement {
+                            x: bx - ax1,
+                            y: by - ay1,
+                            rotation_radians: rotation,
+                        },
+                        segment_length_a: a_length,
+                        segment_length_b: b_length,
+                    });
+                }
+            }
         }
     }
 
     out
 }
 
-fn incident_segment_length(vertices: &[(f64, f64)], vertex: usize) -> f64 {
-    if vertices.len() < 2 {
-        return 0.0;
-    }
-
-    let current = vertices[vertex];
-    let previous = vertices[(vertex + vertices.len() - 1) % vertices.len()];
-    let next = vertices[(vertex + 1) % vertices.len()];
-
-    let previous_length = (current.0 - previous.0).hypot(current.1 - previous.1);
-    let next_length = (next.0 - current.0).hypot(next.1 - current.1);
-
-    // A corner is represented by the two incident sides.  Use the shorter
-    // side as the connection scale so a small side cannot accidentally be
-    // treated as a larger attachment merely because its neighboring side is
-    // long.
-    previous_length.min(next_length)
+fn is_supported_segment_length(length: f64) -> bool {
+    [0.25_f64, 0.5, 1.0]
+        .iter()
+        .any(|scale| (length - *scale).abs() <= GEOMETRY_TOLERANCE)
 }
 
 fn same_placement(a: RelativePlacement, b: RelativePlacement) -> bool {
