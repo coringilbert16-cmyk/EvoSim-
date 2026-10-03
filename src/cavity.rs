@@ -162,18 +162,19 @@ impl GenomeCavity {
         structure: &OrganismStructure,
         _catalog: &[BaseResource],
     ) -> Vec<usize> {
+        let boundary_ids = self
+            .boundary_units
+            .iter()
+            .filter_map(|&index| structure.units.get(index).map(|unit| unit.physical_id))
+            .collect::<HashSet<_>>();
+
         structure
             .bonds
             .iter()
             .enumerate()
             .filter_map(|(index, bond)| {
-                let a = structure.units.iter().position(|unit| {
-                    unit.physical_id == bond.endpoint_a.constituent_id
-                })?;
-                let b = structure.units.iter().position(|unit| {
-                    unit.physical_id == bond.endpoint_b.constituent_id
-                })?;
-                (self.boundary_units.contains(&a) && self.boundary_units.contains(&b))
+                (boundary_ids.contains(&bond.endpoint_a.constituent_id)
+                    && boundary_ids.contains(&bond.endpoint_b.constituent_id))
                     .then_some(index)
             })
             .collect()
