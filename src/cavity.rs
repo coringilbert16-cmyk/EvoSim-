@@ -708,8 +708,14 @@ mod tests {
         let id_a = structure.units[a].physical_id;
         let id_b = structure.units[b].physical_id;
         let bonds = [
-            (ConnectionEndpoint::Corner { point_index: 0 }, ConnectionEndpoint::Corner { point_index: 4 }),
-            (ConnectionEndpoint::Corner { point_index: 1 }, ConnectionEndpoint::Corner { point_index: 3 }),
+            (
+                ConnectionEndpoint::Corner { point_index: 0 },
+                ConnectionEndpoint::Corner { point_index: 4 },
+            ),
+            (
+                ConnectionEndpoint::Corner { point_index: 1 },
+                ConnectionEndpoint::Corner { point_index: 3 },
+            ),
         ];
         for (endpoint_a, endpoint_b) in bonds {
             let bond = crate::structure::Bond {
