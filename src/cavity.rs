@@ -411,4 +411,21 @@ mod tests {
             .unwrap()
             .is_none());
     }
+
+    #[test]
+    fn removing_one_seal_bond_disqualifies_the_cavity() {
+        let catalog = default_catalog();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
+        let (mut structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
+        let cavity = analyze_genome_cavity(&structure, &catalog)
+            .unwrap()
+            .expect("baseline must provide a qualifying bonded cavity");
+        let seal_bonds = cavity.boundary_bond_indices(&structure, &catalog);
+        assert!(!seal_bonds.is_empty(), "qualifying cavity must have a bonded seal");
+
+        structure.bonds.remove(seal_bonds[0]);
+        assert!(analyze_genome_cavity(&structure, &catalog)
+            .unwrap()
+            .is_none());
+    }
 }
