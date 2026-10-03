@@ -135,6 +135,7 @@ fn bond_units(
                     .partial_cmp(&b.distance)
                     .unwrap_or(std::cmp::Ordering::Equal)
             })
+            .cloned()
             .or_else(|| {
                 if bonded {
                     None
