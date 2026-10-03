@@ -162,43 +162,10 @@ fn bond_units(
 
         // Recompute candidates on the next iteration after this transaction
         // changes endpoint availability.
-        let diagnostic_strength = structure
-            .units
-            .get(unit_a)
-            .and_then(|unit| unit.properties(catalog))
-            .zip(
-                structure
-                    .units
-                    .get(unit_b)
-                    .and_then(|unit| unit.properties(catalog)),
-            )
-            .map(|(a, b)| crate::combine::bond_strength(a, b));
-        let diagnostic_bond_valid = diagnostic_strength.is_some_and(|strength| {
-            let Some(id_a) = structure.physical_id(unit_a) else {
-                return false;
-            };
-            let Some(id_b) = structure.physical_id(unit_b) else {
-                return false;
-            };
-            structure.is_valid_bond(
-                &crate::structure::Bond {
-                    endpoint_a: crate::structure::BondEndpoint::new(id_a, candidate.endpoint_a),
-                    endpoint_b: crate::structure::BondEndpoint::new(id_b, candidate.endpoint_b),
-                    strength,
-                    bond_energy: investment,
-                },
-                catalog,
-            )
-        });
-
         crate::combine_runtime::form_selected_bond(
             structure, unit_a, unit_b, candidate, investment, catalog, &mut cache, ledger, energy,
         )
-        .ok_or_else(|| {
-            format!(
-                "physical bond transaction {unit_a}-{unit_b} failed (bond_valid={diagnostic_bond_valid}, energy={energy}, investment={investment})"
-            )
-        })?;
+        .ok_or_else(|| format!("physical bond transaction {unit_a}-{unit_b} failed"))?;
 
         used_a.push(endpoint_a);
         used_b.push(endpoint_b);
