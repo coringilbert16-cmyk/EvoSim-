@@ -1,9 +1,10 @@
-//! Deterministic physical construction of the first valid organism.
+//! Deterministic physical construction baseline for the first valid organism.
 //!
-//! The initial organism has no developmental blueprint, target topology,
-//! shape, material recipe, or construction plan. It starts from one physical
-//! physical bond transaction used by runtime construction. The realized scaffold
-//! is accepted only after the normal organism validity contract is satisfied.
+//! The current baseline has no developmental blueprint or target topology. It
+//! uses a temporary deterministic Carbon scaffold only to prove the physical
+//! construction, genome-cavity, and acquisition contracts. The final constructor
+//! will replace this fixed scaffold with local free-form construction while
+//! retaining the same physical bond authority.
 
 use crate::resources::{BaseResource, Material, PhysicalState};
 use crate::state::EnergyLedger;
