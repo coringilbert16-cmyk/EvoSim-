@@ -36,7 +36,10 @@ fn bond_seals_segment(
         (x.x - y.x).hypot(x.y - y.y) <= NODE_TOLERANCE * 10.0
     };
 
-    structure.bonds.iter().any(|bond| {
+    let mut seals_a = false;
+    let mut seals_b = false;
+
+    for bond in &structure.bonds {
         let endpoint_a_is_unit_a = bond.endpoint_a.constituent_id == id_a;
         let endpoint_b_is_unit_b = bond.endpoint_b.constituent_id == id_b;
         let endpoint_a_is_unit_b = bond.endpoint_a.constituent_id == id_b;
@@ -45,7 +48,7 @@ fn bond_seals_segment(
         if !(endpoint_a_is_unit_a && endpoint_b_is_unit_b
             || endpoint_a_is_unit_b && endpoint_b_is_unit_a)
         {
-            return false;
+            continue;
         }
 
         let (unit_for_a, endpoint_a) = if endpoint_a_is_unit_a {
@@ -60,15 +63,22 @@ fn bond_seals_segment(
         };
 
         let Some(world_a) = endpoint_a.world_point(unit_for_a, catalog) else {
-            return false;
+            continue;
         };
         let Some(world_b) = endpoint_b.world_point(unit_for_b, catalog) else {
-            return false;
+            continue;
         };
 
-        (same_point(world_a, segment_a) && same_point(world_b, segment_b))
-            || (same_point(world_a, segment_b) && same_point(world_b, segment_a))
-    })
+        let at_segment_a =
+            same_point(world_a, segment_a) && same_point(world_b, segment_a);
+        let at_segment_b =
+            same_point(world_a, segment_b) && same_point(world_b, segment_b);
+
+        seals_a |= at_segment_a;
+        seals_b |= at_segment_b;
+    }
+
+    seals_a && seals_b
 }
 
 impl Point {
