@@ -19,6 +19,7 @@ mod structure_authority;
 mod cavity;
 mod connection_geometry;
 mod construction_material_selection;
+mod construction_catalog;
 mod construction_runtime;
 mod contact;
 mod initial_organism_constructor;
