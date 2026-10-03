@@ -262,7 +262,7 @@ fn construct_scaffold(
 
                 let mut contacts = Vec::<(
                     usize,
-                    crate::contact::ConnectionCandidate,
+                    crate::contact::ConnectionPairCandidate,
                 )>::new();
 
                 for existing_index in 0..new_index {
@@ -332,7 +332,7 @@ fn construct_scaffold(
 
                 // Recompute after the first bond so endpoint availability is
                 // authoritative before any local closure bonds are attempted.
-                for (existing_index, _) in contacts {
+                for (existing_index, _) in contacts.iter().copied() {
                     if existing_index == anchor_index {
                         continue;
                     }
