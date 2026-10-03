@@ -326,6 +326,35 @@ pub fn connection_pair_candidates(
 }
 
 #[allow(dead_code)]
+pub fn units_have_physical_boundary_contact(
+    s: &OrganismStructure,
+    ua: usize,
+    ub: usize,
+    c: &[crate::resources::BaseResource],
+    tolerance: f64,
+) -> bool {
+    let (Some(unit_a), Some(unit_b)) = (s.units.get(ua), s.units.get(ub)) else {
+        return false;
+    };
+    let Some(shape_a) = unit_a.shape(c) else {
+        return false;
+    };
+    let Some(shape_b) = unit_b.shape(c) else {
+        return false;
+    };
+    let a = crate::material_geometry::PlacedMaterialPart {
+        part_index: ua,
+        form: shape_a.form.clone(),
+        placement: unit_a.placement,
+    };
+    let b = crate::material_geometry::PlacedMaterialPart {
+        part_index: ub,
+        form: shape_b.form.clone(),
+        placement: unit_b.placement,
+    };
+    crate::material_geometry::placed_forms_boundary_touch(&a, &b, tolerance)
+}
+
 pub fn contacting_connection_pair_candidates(
     s: &OrganismStructure,
     ua: usize,
@@ -394,7 +423,7 @@ mod tests {
         let b = structure.add_unit(StructuralUnit::new(
             "Carbon",
             Placement {
-                x: 10.0,
+                x: 3f64.sqrt(),
                 y: 0.0,
                 rotation_radians: 0.0,
             },
@@ -404,6 +433,42 @@ mod tests {
             structure.units[b].physical_id,
         ];
         (structure, physical_ids)
+    }
+
+    #[test]
+    fn try_add_bond_rejects_when_units_are_not_in_physical_contact() {
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+        let a = structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let b = structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 10.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let bond = Bond {
+            endpoint_a: BondEndpoint::new(
+                structure.units[a].physical_id,
+                ConnectionEndpoint::Corner { point_index: 0 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                structure.units[b].physical_id,
+                ConnectionEndpoint::Corner { point_index: 0 },
+            ),
+            strength: 0.5,
+            bond_energy: 1.0,
+        };
+        assert_eq!(try_add_bond(&mut structure, bond, &catalog), Err("invalid bond"));
+        assert!(structure.bonds.is_empty());
     }
 
     #[test]

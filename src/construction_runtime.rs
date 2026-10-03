@@ -656,6 +656,9 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                         && candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
                         && candidate.available_a
                         && candidate.available_b
+                        && crate::contact::units_have_physical_boundary_contact(
+                            &trial, existing_index, new_unit_index, catalog, 1e-7,
+                        )
                 }) else {
                     continue;
                 };
@@ -845,6 +848,9 @@ fn realize_next_bond_driven(
                         candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
                             && candidate.available_a
                             && candidate.available_b
+                            && crate::contact::candidate_has_physical_boundary_contact(
+                                &trial, existing_index, new_unit_index, catalog, 1e-7,
+                            )
                     })
                     .min_by(|a, b| {
                         a.distance
@@ -1245,8 +1251,7 @@ fn construct_blueprint_bond_driven_internal(
                     // structure and leave the next construction phase to the
                     // caller. No uncommitted future topology is inspected.
                     if stop_at_genome
-                        && crate::cavity::analyze_genome_cavity(&structure, catalog)?
-                            .is_some()
+                        && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_some()
                     {
                         return Ok((structure, total_heat));
                     }
@@ -1343,8 +1348,7 @@ fn construct_blueprint_bond_driven_internal(
                         // creates the qualifying cavity, that is the exact
                         // end of the genome-construction phase.
                         if stop_at_genome
-                            && crate::cavity::analyze_genome_cavity(&structure, catalog)?
-                                .is_some()
+                            && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_some()
                         {
                             return Ok((structure, total_heat));
                         }

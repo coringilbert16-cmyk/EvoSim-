@@ -162,6 +162,70 @@ pub fn placed_forms_boundary_contact(
     false
 }
 
+/// Returns whether two realized material boundaries actually touch without
+/// requiring positive-area penetration. This is the physical predicate used by
+/// permanent bond admission; candidate endpoint distance is not sufficient.
+pub fn placed_forms_boundary_touch(
+    a: &PlacedMaterialPart,
+    b: &PlacedMaterialPart,
+    tolerance: f64,
+) -> bool {
+    if !tolerance.is_finite() {
+        return false;
+    }
+    let tolerance = tolerance.max(0.0);
+
+    fn fluid_boundary_part(part: &PlacedMaterialPart) -> Option<PlacedMaterialPart> {
+        let Form::Fluid { boundary: Some(vertices), .. } = &part.form else {
+            return None;
+        };
+        Some(PlacedMaterialPart {
+            part_index: part.part_index,
+            form: Form::Polygon { vertices: vertices.clone() },
+            placement: part.placement,
+        })
+    }
+
+    let (a, b) = match (&a.form, &b.form) {
+        (Form::Fluid { .. }, _) => match fluid_boundary_part(a) {
+            Some(boundary) => return placed_forms_boundary_touch(&boundary, b, tolerance),
+            None => return false,
+        },
+        (_, Form::Fluid { .. }) => match fluid_boundary_part(b) {
+            Some(boundary) => return placed_forms_boundary_touch(a, &boundary, tolerance),
+            None => return false,
+        },
+        _ => (a, b),
+    };
+
+    if !placed_forms_overlap(a, b, tolerance) {
+        return false;
+    }
+
+    match (&a.form, &b.form) {
+        (Form::Line { .. }, polygon) => line_polygon_boundary_touch(a, b, polygon, tolerance),
+        (polygon, Form::Line { .. }) => line_polygon_boundary_touch(b, a, polygon, tolerance),
+        _ => !placed_forms_penetrate(a, b, tolerance),
+    }
+}
+
+fn line_polygon_boundary_touch(
+    line: &PlacedMaterialPart,
+    polygon: &PlacedMaterialPart,
+    form: &Form,
+    tolerance: f64,
+) -> bool {
+    let Some(line_endpoints) = line_segment_world_endpoints(&line.form, line.placement) else {
+        return false;
+    };
+    let Some(vertices) = world_polygon_vertices(form, polygon.placement) else {
+        return false;
+    };
+    polygon_edges(&vertices).any(|(start, end)| {
+        segments_distance(line_endpoints.0, line_endpoints.1, start, end) <= tolerance
+    })
+}
+
 pub fn placed_forms_penetrate(
     a: &PlacedMaterialPart,
     b: &PlacedMaterialPart,
@@ -344,34 +408,114 @@ fn polygons_overlap(a: &PlacedMaterialPart, b: &PlacedMaterialPart, tolerance: f
     let Some(b_vertices) = world_polygon_vertices(&b.form, b.placement) else {
         return false;
     };
-    let mut axes = polygon_axes(&a_vertices);
-    axes.extend(polygon_axes(&b_vertices));
-    for (axis_x, axis_y) in axes {
-        let (a_min, a_max) = project_polygon(&a_vertices, axis_x, axis_y);
-        let (b_min, b_max) = project_polygon(&b_vertices, axis_x, axis_y);
-        if a_max + tolerance < b_min || b_max + tolerance < a_min {
-            return false;
-        }
-    }
-    true
+
+    polygon_edges(&a_vertices).any(|(a0, a1)| {
+        polygon_edges(&b_vertices).any(|(b0, b1)| {
+            segments_distance(a0, a1, b0, b1) <= tolerance
+        })
+    }) || a_vertices
+        .iter()
+        .any(|&point| point_in_polygon(point, &b_vertices))
+        || b_vertices
+            .iter()
+            .any(|&point| point_in_polygon(point, &a_vertices))
 }
 fn polygons_penetrate(a: &PlacedMaterialPart, b: &PlacedMaterialPart, tolerance: f64) -> bool {
+    if !polygons_overlap(a, b, tolerance) {
+        return false;
+    }
+
     let Some(a_vertices) = world_polygon_vertices(&a.form, a.placement) else {
         return false;
     };
     let Some(b_vertices) = world_polygon_vertices(&b.form, b.placement) else {
         return false;
     };
-    let mut axes = polygon_axes(&a_vertices);
-    axes.extend(polygon_axes(&b_vertices));
-    for (axis_x, axis_y) in axes {
-        let (a_min, a_max) = project_polygon(&a_vertices, axis_x, axis_y);
-        let (b_min, b_max) = project_polygon(&b_vertices, axis_x, axis_y);
-        if a_max - tolerance <= b_min || b_max - tolerance <= a_min {
-            return false;
-        }
+
+    if polygon_edges(&a_vertices).any(|(a0, a1)| {
+        polygon_edges(&b_vertices)
+            .any(|(b0, b1)| proper_segment_intersection(a0, a1, b0, b1, tolerance))
+    }) {
+        return true;
     }
-    true
+
+    if a_vertices
+        .iter()
+        .any(|&point| point_in_polygon(point, &b_vertices))
+        || b_vertices
+            .iter()
+            .any(|&point| point_in_polygon(point, &a_vertices))
+    {
+        return true;
+    }
+
+    // Identical/coincident boundaries have positive shared area even though
+    // no vertex is strictly inside the other polygon.
+    polygon_boundaries_coincide(&a_vertices, &b_vertices, tolerance)
+}
+fn polygon_edges(vertices: &[(f64, f64)]) -> impl Iterator<Item = ((f64, f64), (f64, f64))> + '_ {
+    vertices
+        .iter()
+        .enumerate()
+        .map(move |(index, &start)| (start, vertices[(index + 1) % vertices.len()]))
+}
+fn proper_segment_intersection(
+    a0: (f64, f64),
+    a1: (f64, f64),
+    b0: (f64, f64),
+    b1: (f64, f64),
+    tolerance: f64,
+) -> bool {
+    if segments_distance(a0, a1, b0, b1) > tolerance {
+        return false;
+    }
+
+    const ORIENTATION_EPSILON: f64 = 1e-12;
+    let o1 = orientation(a0, a1, b0);
+    let o2 = orientation(a0, a1, b1);
+    let o3 = orientation(b0, b1, a0);
+    let o4 = orientation(b0, b1, a1);
+    let proper = (o1 > ORIENTATION_EPSILON && o2 < -ORIENTATION_EPSILON
+        || o1 < -ORIENTATION_EPSILON && o2 > ORIENTATION_EPSILON)
+        && (o3 > ORIENTATION_EPSILON && o4 < -ORIENTATION_EPSILON
+            || o3 < -ORIENTATION_EPSILON && o4 > ORIENTATION_EPSILON);
+
+    if !proper {
+        return false;
+    }
+
+    // A crossing that occurs only within the contact tolerance of an endpoint
+    // is treated as touching rather than positive-area penetration.
+    ![
+        point_segment_distance(a0, b0, b1),
+        point_segment_distance(a1, b0, b1),
+        point_segment_distance(b0, a0, a1),
+        point_segment_distance(b1, a0, a1),
+    ]
+    .into_iter()
+    .any(|distance| distance <= tolerance)
+}
+fn polygon_boundaries_coincide(
+    a_vertices: &[(f64, f64)],
+    b_vertices: &[(f64, f64)],
+    tolerance: f64,
+) -> bool {
+    let on_boundary = |point: (f64, f64), vertices: &[(f64, f64)]| {
+        polygon_edges(vertices)
+            .any(|(start, end)| point_segment_distance(point, start, end) <= tolerance)
+    };
+
+    a_vertices.iter().all(|&point| on_boundary(point, b_vertices))
+        && b_vertices.iter().all(|&point| on_boundary(point, a_vertices))
+}
+fn line_segment_world_endpoints(form: &Form, placement: Placement) -> Option<((f64, f64), (f64, f64))> {
+    let Form::Line { length } = form else { return None; };
+    let half = length / 2.0;
+    let (sin, cos) = placement.rotation_radians.sin_cos();
+    Some((
+        (placement.x - half * cos, placement.y - half * sin),
+        (placement.x + half * cos, placement.y + half * sin),
+    ))
 }
 fn world_polygon_vertices(form: &Form, placement: Placement) -> Option<Vec<(f64, f64)>> {
     let vertices = form.polygon_vertices()?;
@@ -586,6 +730,119 @@ mod tests {
             0.0
         ));
     }
+    #[test]
+    fn concave_polygon_notch_is_not_a_false_positive() {
+        let phosphorus = part(
+            Form::Polygon {
+                vertices: vec![
+                    (-0.5, -0.5),
+                    (0.5, -0.5),
+                    (0.5, 0.0),
+                    (0.0, 0.0),
+                    (0.0, 0.5),
+                    (-0.5, 0.5),
+                ],
+            },
+            0.0,
+            0.0,
+            0.0,
+        );
+        let in_notch = part(
+            Form::Rectangle {
+                width: 0.2,
+                height: 0.2,
+            },
+            0.35,
+            0.35,
+            0.0,
+        );
+        assert!(!placed_forms_overlap(&phosphorus, &in_notch, 0.0));
+        assert!(!placed_forms_penetrate(&phosphorus, &in_notch, 0.0));
+    }
+
+    #[test]
+    fn concave_polygon_notch_wall_is_contact_without_penetration() {
+        let phosphorus = part(
+            Form::Polygon {
+                vertices: vec![
+                    (-0.5, -0.5),
+                    (0.5, -0.5),
+                    (0.5, 0.0),
+                    (0.0, 0.0),
+                    (0.0, 0.5),
+                    (-0.5, 0.5),
+                ],
+            },
+            0.0,
+            0.0,
+            0.0,
+        );
+        let touching = part(
+            Form::Rectangle {
+                width: 0.2,
+                height: 0.2,
+            },
+            0.1,
+            0.1,
+            0.0,
+        );
+        assert!(placed_forms_overlap(&phosphorus, &touching, 0.0));
+        assert!(!placed_forms_penetrate(&phosphorus, &touching, 0.0));
+    }
+
+    #[test]
+    fn concave_polygon_crossing_notch_wall_penetrates() {
+        let phosphorus = part(
+            Form::Polygon {
+                vertices: vec![
+                    (-0.5, -0.5),
+                    (0.5, -0.5),
+                    (0.5, 0.0),
+                    (0.0, 0.0),
+                    (0.0, 0.5),
+                    (-0.5, 0.5),
+                ],
+            },
+            0.0,
+            0.0,
+            0.0,
+        );
+        let crossing = part(
+            Form::Rectangle {
+                width: 0.4,
+                height: 0.2,
+            },
+            0.0,
+            0.1,
+            0.0,
+        );
+        assert!(placed_forms_overlap(&phosphorus, &crossing, 0.0));
+        assert!(placed_forms_penetrate(&phosphorus, &crossing, 0.0));
+    }
+
+    #[test]
+    fn line_inside_polygon_is_not_boundary_touch() {
+        let line = part(Form::Line { length: 0.4 }, 0.0, 0.0, 0.0);
+        let square = part(Form::Rectangle { width: 2.0, height: 2.0 }, 0.0, 0.0, 0.0);
+        assert!(placed_forms_overlap(&line, &square, 0.0));
+        assert!(!placed_forms_boundary_touch(&line, &square, 0.0));
+    }
+
+    #[test]
+    fn line_crossing_polygon_boundary_is_boundary_touch() {
+        let line = part(Form::Line { length: 4.0 }, 0.0, 0.0, 0.0);
+        let square = part(Form::Rectangle { width: 2.0, height: 2.0 }, 0.0, 0.0, 0.0);
+        assert!(placed_forms_boundary_touch(&line, &square, 0.0));
+    }
+
+    #[test]
+    fn penetrating_polygons_are_not_boundary_touch_only() {
+        let a = part(Form::Rectangle { width: 2.0, height: 2.0 }, 0.0, 0.0, 0.0);
+        let b = part(Form::Rectangle { width: 2.0, height: 2.0 }, 1.0, 0.0, 0.0);
+        assert!(placed_forms_penetrate(&a, &b, 0.0));
+        assert!(!placed_forms_boundary_touch(&a, &b, 0.0));
+    }
+
     #[test]
     fn fluid_has_no_invented_spatial_boundary() {
         let fluid = part(

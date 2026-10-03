@@ -595,7 +595,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
             shape: Shape {
                 form: Form::Rectangle {
                     width: 1.0,
-                    height: 1.0,
+                    height: 0.5,
                 },
             },
         },
@@ -800,9 +800,23 @@ mod shape_tests {
         assert!(matches!(hydrogen, Form::Line { length } if (length - 1.0).abs() < 1e-12));
 
         let nitrogen = find("Nitrogen").shape.form.polygon_vertices().unwrap();
-        for i in 0..nitrogen.len() {
-            assert!((distance(nitrogen[i], nitrogen[(i + 1) % nitrogen.len()]) - 1.0).abs() < 1e-9);
-        }
+        let nitrogen_lengths = (0..nitrogen.len())
+            .map(|i| distance(nitrogen[i], nitrogen[(i + 1) % nitrogen.len()]))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            nitrogen_lengths
+                .iter()
+                .filter(|length| (**length - 1.0).abs() < 1e-9)
+                .count(),
+            2
+        );
+        assert_eq!(
+            nitrogen_lengths
+                .iter()
+                .filter(|length| (**length - 0.5).abs() < 1e-9)
+                .count(),
+            2
+        );
 
         let phosphorus = find("Phosphorus").shape.form.polygon_vertices().unwrap();
         let lengths = (0..phosphorus.len())

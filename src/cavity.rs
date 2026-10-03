@@ -66,30 +66,147 @@ impl GenomeCavity {
             .collect()
     }
 
-    /// Return bonds whose two constituents belong to the realized cavity wall.
-    /// The cavity boundary itself is an exposed material surface and therefore
-    /// does not require a bond running along the empty side of that surface.
+    /// Return bonds that participate in the cavity's bonded seal.
+    ///
+    /// The cavity boundary is an exposed material surface, so there is no bond
+    /// on the empty side of a boundary segment. Instead, every transition
+    /// between distinct boundary-owner units around the closed boundary must
+    /// be represented by a permanent bond between those units. This prevents a
+    /// merely coincidental geometric enclosure from qualifying as a genome.
     pub fn boundary_bond_indices(
         &self,
         structure: &OrganismStructure,
-        _catalog: &[BaseResource],
+        catalog: &[BaseResource],
     ) -> Vec<usize> {
-        let boundary_ids = self
-            .boundary_units
+        let mut seal_bonds = HashSet::new();
+        let owners: Vec<usize> = self
+            .boundary_segments
             .iter()
-            .filter_map(|&index| structure.units.get(index).map(|unit| unit.physical_id))
-            .collect::<HashSet<_>>();
+            .map(|&(_, _, owner)| owner)
+            .collect();
 
-        structure
-            .bonds
+        for (i, (a, b)) in owners
             .iter()
+            .copied()
+            .zip(owners.iter().copied().cycle().skip(1))
+            .take(owners.len())
             .enumerate()
-            .filter_map(|(index, bond)| {
-                (boundary_ids.contains(&bond.endpoint_a.constituent_id)
-                    && boundary_ids.contains(&bond.endpoint_b.constituent_id))
-                    .then_some(index)
+        {
+            if a == b {
+                continue;
+            }
+            let Some(a_id) = structure.units.get(a).map(|unit| unit.physical_id) else {
+                continue;
+            };
+            let Some(b_id) = structure.units.get(b).map(|unit| unit.physical_id) else {
+                continue;
+            };
+            let seal_point = self.boundary_segments[i].1;
+
+            for (bond_index, bond) in structure.bonds.iter().enumerate() {
+                let connects_units = (bond.endpoint_a.constituent_id == a_id
+                    && bond.endpoint_b.constituent_id == b_id)
+                    || (bond.endpoint_a.constituent_id == b_id
+                        && bond.endpoint_b.constituent_id == a_id);
+                if !connects_units {
+                    continue;
+                }
+
+                let Some(unit_a) = structure
+                    .unit_index(bond.endpoint_a.constituent_id)
+                    .and_then(|index| structure.units.get(index))
+                else {
+                    continue;
+                };
+                let Some(unit_b) = structure
+                    .unit_index(bond.endpoint_b.constituent_id)
+                    .and_then(|index| structure.units.get(index))
+                else {
+                    continue;
+                };
+                let Some(point_a) = bond.endpoint_a.location.world_point(unit_a, catalog) else {
+                    continue;
+                };
+                let Some(point_b) = bond.endpoint_b.location.world_point(unit_b, catalog) else {
+                    continue;
+                };
+
+                if (point_a.x - seal_point.x).hypot(point_a.y - seal_point.y) <= NODE_TOLERANCE
+                    && (point_b.x - seal_point.x).hypot(point_b.y - seal_point.y) <= NODE_TOLERANCE
+                {
+                    seal_bonds.insert(bond_index);
+                }
+            }
+        }
+
+        let mut result: Vec<_> = seal_bonds.into_iter().collect();
+        result.sort_unstable();
+        result
+    }
+
+    fn has_bonded_seal(&self, structure: &OrganismStructure, catalog: &[BaseResource]) -> bool {
+        if self.boundary_segments.len() < 3 {
+            return false;
+        }
+
+        let owners: Vec<usize> = self
+            .boundary_segments
+            .iter()
+            .map(|&(_, _, owner)| owner)
+            .collect();
+
+        if owners.iter().all(|&owner| owner == owners[0]) {
+            return false;
+        }
+
+        owners
+            .iter()
+            .copied()
+            .zip(owners.iter().copied().cycle().skip(1))
+            .take(owners.len())
+            .enumerate()
+            .filter(|(_, (a, b))| a != b)
+            .all(|(i, (a, b))| {
+                let Some(a_id) = structure.units.get(a).map(|unit| unit.physical_id) else {
+                    return false;
+                };
+                let Some(b_id) = structure.units.get(b).map(|unit| unit.physical_id) else {
+                    return false;
+                };
+                let seal_point = self.boundary_segments[i].1;
+                structure.bonds.iter().any(|bond| {
+                    let connects_units = (bond.endpoint_a.constituent_id == a_id
+                        && bond.endpoint_b.constituent_id == b_id)
+                        || (bond.endpoint_a.constituent_id == b_id
+                            && bond.endpoint_b.constituent_id == a_id);
+                    if !connects_units {
+                        return false;
+                    }
+                    let Some(unit_a) = structure
+                        .unit_index(bond.endpoint_a.constituent_id)
+                        .and_then(|index| structure.units.get(index))
+                    else {
+                        return false;
+                    };
+                    let Some(unit_b) = structure
+                        .unit_index(bond.endpoint_b.constituent_id)
+                        .and_then(|index| structure.units.get(index))
+                    else {
+                        return false;
+                    };
+                    let Some(point_a) = bond.endpoint_a.location.world_point(unit_a, catalog)
+                    else {
+                        return false;
+                    };
+                    let Some(point_b) = bond.endpoint_b.location.world_point(unit_b, catalog)
+                    else {
+                        return false;
+                    };
+                    (point_a.x - seal_point.x).hypot(point_a.y - seal_point.y) <= NODE_TOLERANCE
+                        && (point_b.x - seal_point.x).hypot(point_b.y - seal_point.y)
+                            <= NODE_TOLERANCE
+                })
             })
-            .collect()
     }
 }
 
@@ -173,11 +290,7 @@ fn analyze_genome_cavity_in_indices(
                 .copied()
                 .filter(|&unit_index| {
                     unit_boundary_matches_segment(
-                        structure,
-                        catalog,
-                        unit_index,
-                        segment_a,
-                        segment_b,
+                        structure, catalog, unit_index, segment_a, segment_b,
                     )
                 })
                 .collect::<Vec<_>>();
@@ -199,6 +312,10 @@ fn analyze_genome_cavity_in_indices(
             minimum_area,
             boundary_segments,
         };
+
+        if !candidate.has_bonded_seal(structure, catalog) {
+            continue;
+        }
 
         if best
             .as_ref()
@@ -338,6 +455,26 @@ mod tests {
         let blueprint = crate::juvenile::confirmed_seed_baseline(&default_catalog()).unwrap();
         let mut structure = blueprint.realize(&catalog).unwrap();
         structure.bonds.clear();
+        assert!(analyze_genome_cavity(&structure, &catalog)
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn removing_one_seal_bond_disqualifies_the_cavity() {
+        let catalog = default_catalog();
+        let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
+        let (mut structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
+        let cavity = analyze_genome_cavity(&structure, &catalog)
+            .unwrap()
+            .expect("baseline must provide a qualifying bonded cavity");
+        let seal_bonds = cavity.boundary_bond_indices(&structure, &catalog);
+        assert!(
+            !seal_bonds.is_empty(),
+            "qualifying cavity must have a bonded seal"
+        );
+
+        structure.bonds.remove(seal_bonds[0]);
         assert!(analyze_genome_cavity(&structure, &catalog)
             .unwrap()
             .is_none());
