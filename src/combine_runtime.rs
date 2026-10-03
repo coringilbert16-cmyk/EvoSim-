@@ -148,6 +148,22 @@ pub(crate) fn form_selected_bond(
     {
         return None;
     }
+
+    let unit_a_shape = structure.units.get(unit_a)?.shape(catalog)?;
+    let unit_b_shape = structure.units.get(unit_b)?.shape(catalog)?;
+    let part_a = crate::material_geometry::PlacedMaterialPart {
+        part_index: unit_a,
+        form: unit_a_shape.form.clone(),
+        placement: structure.units[unit_a].placement,
+    };
+    let part_b = crate::material_geometry::PlacedMaterialPart {
+        part_index: unit_b,
+        form: unit_b_shape.form.clone(),
+        placement: structure.units[unit_b].placement,
+    };
+    if !crate::material_geometry::placed_forms_boundary_touch(&part_a, &part_b, 1e-7) {
+        return None;
+    }
     let point_a = candidate
         .endpoint_a
         .world_point(&structure.units[unit_a], catalog)?;
