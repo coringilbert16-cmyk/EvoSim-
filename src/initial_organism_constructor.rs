@@ -244,9 +244,16 @@ fn construct_scaffold(
                         .count()
                 })
                 .collect::<Vec<_>>();
+            let regions =
+                crate::interior_geometry::find_enclosed_regions(&structure, catalog).unwrap_or_default();
+            let max_region_area = regions
+                .iter()
+                .map(|region| region.area)
+                .fold(0.0_f64, f64::max);
             format!(
-                "inner construction phase did not produce a qualifying genome cavity: bonds={}, pair_counts={pair_counts:?}",
-                structure.bonds.len()
+                "inner construction phase did not produce a qualifying genome cavity: bonds={}, pair_counts={pair_counts:?}, enclosed_regions={}, max_region_area={max_region_area}",
+                structure.bonds.len(),
+                regions.len()
             )
         })?;
     if cavity.boundary_units.is_empty() {
