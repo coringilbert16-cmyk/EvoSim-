@@ -349,7 +349,7 @@ fn cavity_center(cavity: &crate::cavity::GenomeCavity) -> (f64, f64) {
     let mut x = 0.0;
     let mut y = 0.0;
     let mut count = 0.0;
-    for (a, b, _, _) in segments {
+    for (a, b, _) in segments {
         x += a.0 + b.0;
         y += a.1 + b.1;
         count += 2.0;
@@ -375,7 +375,7 @@ fn environmental_contributions(
             continue;
         }
         for physical in &cell.physical_materials {
-            for (a, b, _, _) in &segments {
+            for (a, b, _) in &segments {
                 if let Some((perception, contribution)) =
                     environmental_contribution(physical, catalog, *a, *b, center)
                 {
