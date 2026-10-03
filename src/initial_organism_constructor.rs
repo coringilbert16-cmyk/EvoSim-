@@ -145,17 +145,6 @@ fn bond_units(
                             .unwrap_or(std::cmp::Ordering::Equal)
                     })
                 }
-            })
-            .or_else(|| {
-                if bonded {
-                    None
-                } else {
-                    candidates.into_iter().max_by(|a, b| {
-                        a.distance
-                            .partial_cmp(&b.distance)
-                            .unwrap_or(std::cmp::Ordering::Equal)
-                    })
-                }
             });
 
         let Some(candidate) = candidate else {
