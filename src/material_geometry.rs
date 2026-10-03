@@ -202,10 +202,10 @@ pub fn placed_forms_surface_contact(
     }
 
     fn segment(part: &PlacedMaterialPart) -> Option<((f64, f64), (f64, f64))> {
-        let Form::Line { length } = part.form else {
+        let Form::Line { length } = &part.form else {
             return None;
         };
-        let half = length / 2.0;
+        let half = *length / 2.0;
         let (sin, cos) = part.placement.rotation_radians.sin_cos();
         Some((
             (
