@@ -10,9 +10,9 @@ use crate::state::EnergyLedger;
 use crate::structure::Placement;
 
 const CONSTRUCTION_ENERGY: f64 = 1.0e12;
-const INNER_RING_RADIUS: i32 = 2;
-const OUTER_RING_RADIUS: i32 = 4;
-const SPOKE_RADIUS: i32 = 3;
+const INNER_RING_RADIUS: i32 = 3;
+const OUTER_RING_RADIUS: i32 = 5;
+const SPOKE_RADIUS: i32 = 4;
 const SQRT_3: f64 = 1.7320508075688772935;
 
 #[derive(Clone, Debug)]
@@ -151,8 +151,9 @@ fn construct_scaffold(
     let mut ledger = EnergyLedger::default();
     let mut energy = CONSTRUCTION_ENERGY;
 
-    // The inner ring closes the first qualifying genome cavity. Its geometry
-    // is deliberately larger than the minimum cavity reference.
+    // The inner ring closes the genome cavity. Its radius is deliberately large
+    // enough that the realized enclosed area exceeds the three-Carbon minimum
+    // reference; a radius-two ring leaves only a one-Carbon-scale central void.
     let inner = hex_ring(INNER_RING_RADIUS);
     let mut inner_indices = Vec::with_capacity(inner.len());
     for coordinate in inner {
@@ -174,8 +175,8 @@ fn construct_scaffold(
         )?;
     }
 
-    // Build six radial supports. They remain part of the structural path from
-    // the genome boundary to the eventual outer boundary.
+    // Build six radial supports one ring outside the cavity boundary. They remain
+    // part of the structural path from the genome boundary to the outer boundary.
     let mut spokes = Vec::with_capacity(6);
     let spoke_coordinates = hex_ring(SPOKE_RADIUS);
     let outer_coordinates = hex_ring(OUTER_RING_RADIUS);
