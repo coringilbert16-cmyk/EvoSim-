@@ -686,6 +686,56 @@ mod tests {
     }
 
     #[test]
+    fn two_endpoint_bonds_seal_a_shared_hex_wall() {
+        let catalog = default_catalog();
+        let mut structure = OrganismStructure::new();
+        let a = structure.add_unit(crate::structure::StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let b = structure.add_unit(crate::structure::StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 1.5,
+                y: 3.0_f64.sqrt() * 0.5,
+                rotation_radians: 0.0,
+            },
+        ));
+        let id_a = structure.units[a].physical_id;
+        let id_b = structure.units[b].physical_id;
+        let bonds = [
+            (ConnectionEndpoint::Corner { point_index: 0 }, ConnectionEndpoint::Corner { point_index: 4 }),
+            (ConnectionEndpoint::Corner { point_index: 1 }, ConnectionEndpoint::Corner { point_index: 3 }),
+        ];
+        for (endpoint_a, endpoint_b) in bonds {
+            let bond = crate::structure::Bond {
+                endpoint_a: crate::structure::BondEndpoint::new(id_a, endpoint_a),
+                endpoint_b: crate::structure::BondEndpoint::new(id_b, endpoint_b),
+                strength: 0.95,
+                bond_energy: 0.95,
+            };
+            crate::contact::try_add_bond(&mut structure, bond, &catalog)
+                .expect("shared-wall endpoint bond should be physically valid");
+        }
+
+        assert!(bond_seals_segment(
+            &structure,
+            &catalog,
+            a,
+            b,
+            Point { x: 1.0, y: 0.0 },
+            Point {
+                x: 0.5,
+                y: 3.0_f64.sqrt() * 0.5,
+            },
+        ));
+    }
+
+    #[test]
     fn realized_structure_cavity_qualifies_without_a_predefined_core() {
         let catalog = default_catalog();
         let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
