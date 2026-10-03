@@ -98,74 +98,88 @@ fn bond_units(
     ledger: &mut EnergyLedger,
     energy: &mut f64,
 ) -> Result<(), String> {
-    let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-    let candidates = crate::contact::connection_pair_candidates_cached(
-        structure, unit_a, unit_b, catalog, &mut cache,
-    )
-    .into_iter()
-    .filter(|candidate| {
-        candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-            && candidate.available_a
-            && candidate.available_b
-    })
-    .collect::<Vec<_>>();
+    let mut bonded = false;
+    let mut used_a = Vec::new();
+    let mut used_b = Vec::new();
 
-    // Adjacent rigid polygons share a boundary segment, not just a point. Two
-    // distinct endpoint bonds, one at each end of that shared segment, seal the
-    // wall while still respecting the one-connection-point-per-bond invariant.
-    let mut selected = Vec::new();
-    for candidate in candidates.iter().filter(|candidate| {
-        matches!(
-            candidate.endpoint_a,
-            crate::structure::ConnectionEndpoint::Corner { .. }
-        ) && matches!(
-            candidate.endpoint_b,
-            crate::structure::ConnectionEndpoint::Corner { .. }
+    // A shared wall segment is sealed by at most two endpoint bonds. Recompute
+    // the physical candidate graph after each commit so endpoint availability
+    // cannot become stale after the first permanent bond.
+    for _ in 0..2 {
+        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+        let candidates = crate::contact::connection_pair_candidates_cached(
+            structure, unit_a, unit_b, catalog, &mut cache,
         )
-    }) {
-        if selected
+        .into_iter()
+        .filter(|candidate| {
+            candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                && candidate.available_a
+                && candidate.available_b
+        })
+        .collect::<Vec<_>>();
+
+        let candidate = candidates
             .iter()
-            .any(|chosen: &crate::contact::ConnectionPairCandidate| {
-                chosen.endpoint_a == candidate.endpoint_a
-                    || chosen.endpoint_b == candidate.endpoint_b
+            .filter(|candidate| {
+                matches!(
+                    candidate.endpoint_a,
+                    crate::structure::ConnectionEndpoint::Corner { .. }
+                ) && matches!(
+                    candidate.endpoint_b,
+                    crate::structure::ConnectionEndpoint::Corner { .. }
+                ) && !used_a.contains(&candidate.endpoint_a)
+                    && !used_b.contains(&candidate.endpoint_b)
             })
-        {
-            continue;
-        }
-        selected.push(candidate.clone());
-        if selected.len() == 2 {
-            break;
-        }
-    }
+            .cloned()
+            .or_else(|| {
+                if bonded {
+                    None
+                } else {
+                    candidates.into_iter().max_by(|a, b| {
+                        a.distance
+                            .partial_cmp(&b.distance)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                }
+            });
 
-    if selected.len() < 2 {
-        selected = candidates
-            .into_iter()
-            .max_by(|a, b| {
-                a.distance
-                    .partial_cmp(&b.distance)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .into_iter()
-            .collect();
-    }
+        let Some(candidate) = candidate else {
+            if bonded {
+                break;
+            }
+            return Err(format!(
+                "no physical contact between construction units {unit_a} and {unit_b}"
+            ));
+        };
 
-    if selected.is_empty() {
-        return Err(format!(
-            "no physical contact between construction units {unit_a} and {unit_b}"
-        ));
-    }
+        let endpoint_a = candidate.endpoint_a.clone();
+        let endpoint_b = candidate.endpoint_b.clone();
+        let (_, _, _, investment, _) =
+            crate::combine_runtime::selected_candidate_evaluation(
+                structure, unit_a, unit_b, candidate, catalog,
+            )
+            .ok_or_else(|| {
+                format!("physical bond candidate {unit_a}-{unit_b} failed evaluation")
+            })?;
 
-    for candidate in selected {
-        let (_, _, _, investment, _) = crate::combine_runtime::selected_candidate_evaluation(
-            structure, unit_a, unit_b, candidate, catalog,
-        )
-        .ok_or_else(|| format!("physical bond candidate {unit_a}-{unit_b} failed evaluation"))?;
-
+        // Recompute candidates on the next iteration after this transaction
+        // changes endpoint availability.
         crate::combine_runtime::form_selected_bond(
-            structure, unit_a, unit_b, candidate, investment, catalog, &mut cache, ledger, energy,
+            structure,
+            unit_a,
+            unit_b,
+            candidate,
+            investment,
+            catalog,
+            &mut cache,
+            ledger,
+            energy,
         )
         .ok_or_else(|| format!("physical bond transaction {unit_a}-{unit_b} failed"))?;
+
+        used_a.push(endpoint_a);
+        used_b.push(endpoint_b);
+        bonded = true;
     }
 
     Ok(())
