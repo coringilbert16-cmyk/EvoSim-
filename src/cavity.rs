@@ -66,30 +66,95 @@ impl GenomeCavity {
             .collect()
     }
 
-    /// Return bonds whose two constituents belong to the realized cavity wall.
-    /// The cavity boundary itself is an exposed material surface and therefore
-    /// does not require a bond running along the empty side of that surface.
+    /// Return bonds that participate in the cavity's bonded seal.
+    ///
+    /// The cavity boundary is an exposed material surface, so there is no bond
+    /// on the empty side of a boundary segment. Instead, every transition
+    /// between distinct boundary-owner units around the closed boundary must
+    /// be represented by a permanent bond between those units. This prevents a
+    /// merely coincidental geometric enclosure from qualifying as a genome.
     pub fn boundary_bond_indices(
         &self,
         structure: &OrganismStructure,
         _catalog: &[BaseResource],
     ) -> Vec<usize> {
-        let boundary_ids = self
-            .boundary_units
+        let mut required_pairs = HashSet::new();
+        let owners: Vec<usize> = self
+            .boundary_segments
             .iter()
-            .filter_map(|&index| structure.units.get(index).map(|unit| unit.physical_id))
-            .collect::<HashSet<_>>();
+            .map(|&(_, _, owner)| owner)
+            .collect();
+
+        for pair in owners
+            .iter()
+            .copied()
+            .zip(owners.iter().copied().cycle().skip(1))
+            .take(owners.len())
+        {
+            let (a, b) = pair;
+            if a != b {
+                let Some(a_id) = structure.units.get(a).map(|unit| unit.physical_id) else {
+                    return Vec::new();
+                };
+                let Some(b_id) = structure.units.get(b).map(|unit| unit.physical_id) else {
+                    return Vec::new();
+                };
+                required_pairs.insert(if a_id <= b_id { (a_id, b_id) } else { (b_id, a_id) });
+            }
+        }
+
+        if required_pairs.is_empty() {
+            return Vec::new();
+        }
 
         structure
             .bonds
             .iter()
             .enumerate()
             .filter_map(|(index, bond)| {
-                (boundary_ids.contains(&bond.endpoint_a.constituent_id)
-                    && boundary_ids.contains(&bond.endpoint_b.constituent_id))
-                    .then_some(index)
+                let a = bond.endpoint_a.constituent_id;
+                let b = bond.endpoint_b.constituent_id;
+                let pair = if a <= b { (a, b) } else { (b, a) };
+                required_pairs.contains(&pair).then_some(index)
             })
             .collect()
+    }
+
+    fn has_bonded_seal(&self, structure: &OrganismStructure) -> bool {
+        if self.boundary_segments.len() < 3 {
+            return false;
+        }
+
+        let owners: Vec<usize> = self
+            .boundary_segments
+            .iter()
+            .map(|&(_, _, owner)| owner)
+            .collect();
+
+        if owners.iter().all(|&owner| owner == owners[0]) {
+            return false;
+        }
+
+        owners
+            .iter()
+            .copied()
+            .zip(owners.iter().copied().cycle().skip(1))
+            .take(owners.len())
+            .filter(|(a, b)| a != b)
+            .all(|(a, b)| {
+                let Some(a_id) = structure.units.get(a).map(|unit| unit.physical_id) else {
+                    return false;
+                };
+                let Some(b_id) = structure.units.get(b).map(|unit| unit.physical_id) else {
+                    return false;
+                };
+                structure.bonds.iter().any(|bond| {
+                    (bond.endpoint_a.constituent_id == a_id
+                        && bond.endpoint_b.constituent_id == b_id)
+                        || (bond.endpoint_a.constituent_id == b_id
+                            && bond.endpoint_b.constituent_id == a_id)
+                })
+            })
     }
 }
 
@@ -199,6 +264,10 @@ fn analyze_genome_cavity_in_indices(
             minimum_area,
             boundary_segments,
         };
+
+        if !candidate.has_bonded_seal(structure) {
+            continue;
+        }
 
         if best
             .as_ref()
