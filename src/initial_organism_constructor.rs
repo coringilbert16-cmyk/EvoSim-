@@ -130,6 +130,7 @@ fn bond_units(
                 ) && !used_a.contains(&candidate.endpoint_a)
                     && !used_b.contains(&candidate.endpoint_b)
             })
+            .find(|_| true)
             .cloned()
             .or_else(|| {
                 if bonded {
