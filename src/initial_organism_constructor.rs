@@ -123,10 +123,13 @@ fn bond_units(
             crate::structure::ConnectionEndpoint::Corner { .. }
         )
     }) {
-        if selected.iter().any(|chosen: &crate::contact::ConnectionPairCandidate| {
-            chosen.endpoint_a == candidate.endpoint_a
-                || chosen.endpoint_b == candidate.endpoint_b
-        }) {
+        if selected
+            .iter()
+            .any(|chosen: &crate::contact::ConnectionPairCandidate| {
+                chosen.endpoint_a == candidate.endpoint_a
+                    || chosen.endpoint_b == candidate.endpoint_b
+            })
+        {
             continue;
         }
         selected.push(candidate.clone());
