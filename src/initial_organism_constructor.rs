@@ -98,7 +98,7 @@ fn bond_units(
     energy: &mut f64,
 ) -> Result<(), String> {
     let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-    let candidate = crate::contact::connection_pair_candidates_cached(
+    let candidates = crate::contact::connection_pair_candidates_cached(
         structure, unit_a, unit_b, catalog, &mut cache,
     )
     .into_iter()
@@ -107,29 +107,67 @@ fn bond_units(
             && candidate.available_a
             && candidate.available_b
     })
-    // For a shared rigid edge, the two corners of that edge are the physical
-    // wall segment. A corner-to-corner bond that spans that segment is therefore
-    // the candidate that actually seals the boundary; a zero-distance corner
-    // coincidence does not seal the edge and would fail cavity qualification.
-    .max_by(|a, b| {
-        a.distance
-            .partial_cmp(&b.distance)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    })
-    .ok_or_else(|| {
-        format!("no physical contact between construction units {unit_a} and {unit_b}")
-    })?;
+    .collect::<Vec<_>>();
 
-    let (_, _, _, investment, _) = crate::combine_runtime::selected_candidate_evaluation(
-        structure, unit_a, unit_b, candidate, catalog,
-    )
-    .ok_or_else(|| format!("physical bond candidate {unit_a}-{unit_b} failed evaluation"))?;
+    // Adjacent rigid polygons share a boundary segment, not just a point. Two
+    // distinct endpoint bonds, one at each end of that shared segment, seal the
+    // wall while still respecting the one-connection-point-per-bond invariant.
+    let mut selected = candidates
+        .iter()
+        .filter(|candidate| {
+            matches!(
+                candidate.endpoint_a,
+                crate::structure::ConnectionEndpoint::Corner { .. }
+            ) && matches!(
+                candidate.endpoint_b,
+                crate::structure::ConnectionEndpoint::Corner { .. }
+            )
+        })
+        .take(2)
+        .cloned()
+        .collect::<Vec<_>>();
 
-    crate::combine_runtime::form_selected_bond(
-        structure, unit_a, unit_b, candidate, investment, catalog, &mut cache, ledger, energy,
-    )
-    .ok_or_else(|| format!("physical bond transaction {unit_a}-{unit_b} failed"))
-    .map(|_| ())
+    if selected.len() < 2 {
+        selected = candidates
+            .into_iter()
+            .max_by(|a, b| {
+                a.distance
+                    .partial_cmp(&b.distance)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .into_iter()
+            .collect();
+    }
+
+    if selected.is_empty() {
+        return Err(format!(
+            "no physical contact between construction units {unit_a} and {unit_b}"
+        ));
+    }
+
+    for candidate in selected {
+        let (_, _, _, investment, _) = crate::combine_runtime::selected_candidate_evaluation(
+            structure, unit_a, unit_b, candidate, catalog,
+        )
+        .ok_or_else(|| {
+            format!("physical bond candidate {unit_a}-{unit_b} failed evaluation")
+        })?;
+
+        crate::combine_runtime::form_selected_bond(
+            structure,
+            unit_a,
+            unit_b,
+            candidate,
+            investment,
+            catalog,
+            &mut cache,
+            ledger,
+            energy,
+        )
+        .ok_or_else(|| format!("physical bond transaction {unit_a}-{unit_b} failed"))?;
+    }
+
+    Ok(())
 }
 
 /// Place the fixed geometric scaffold directly, while using the ordinary
