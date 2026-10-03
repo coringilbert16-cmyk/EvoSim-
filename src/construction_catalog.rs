@@ -82,6 +82,35 @@ impl ConstructionCatalog {
         Self { pair_formations }
     }
 
+    pub(crate) fn placements_for_pair(
+        &self,
+        resource_a: usize,
+        resource_b: usize,
+        anchor: Placement,
+    ) -> Vec<Placement> {
+        let (s, c) = anchor.rotation_radians.sin_cos();
+        let mut out = vec![anchor];
+        for formation in self.pair_formations_for(resource_a, resource_b) {
+            let relative = formation.placement_a_relative_to_b;
+            out.push(Placement {
+                x: anchor.x + relative.x * c - relative.y * s,
+                y: anchor.y + relative.x * s + relative.y * c,
+                rotation_radians: relative.rotation_radians + anchor.rotation_radians,
+            });
+        }
+        out.sort_by(|a, b| {
+            (a.x - anchor.x)
+                .hypot(a.y - anchor.y)
+                .partial_cmp(&(b.x - anchor.x).hypot(b.y - anchor.y))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        out.dedup_by(|a, b| same_placement(
+            RelativePlacement { x: a.x, y: a.y, rotation_radians: a.rotation_radians },
+            RelativePlacement { x: b.x, y: b.y, rotation_radians: b.rotation_radians },
+        ));
+        out
+    }
+
     pub(crate) fn pair_formations_for(
         &self,
         resource_a: usize,
