@@ -1,57 +1,19 @@
-//! Deterministic physical construction baseline for the first valid organism.
+//! Local free-form construction baseline for the first valid organism.
 //!
-//! The current baseline has no developmental blueprint or target topology. It
-//! uses a temporary deterministic Carbon scaffold only to prove the physical
-//! construction, genome-cavity, and acquisition contracts. The final constructor
-//! will replace this fixed scaffold with local free-form construction while
-//! retaining the same physical bond authority.
+//! Construction grows from realized physical frontier units. No fixed ring,
+//! spoke, or outer-boundary topology is supplied; geometry-derived candidates
+//! are admitted through the normal physical bond transaction.
 
 use crate::resources::{BaseResource, Material, PhysicalState};
 use crate::state::EnergyLedger;
 use crate::structure::Placement;
 
 const CONSTRUCTION_ENERGY: f64 = 1.0e12;
-const INNER_RING_RADIUS: i32 = 3;
-const OUTER_RING_RADIUS: i32 = 5;
-const SPOKE_RADIUS: i32 = 4;
-const SQRT_3: f64 = 1.7320508075688772935;
-
 #[derive(Clone, Debug)]
 pub(crate) struct ValidConstruction {
     pub structure: crate::structure::OrganismStructure,
     pub energy: f64,
     pub acquired_resource_placements: Vec<(String, Placement)>,
-}
-
-/// Axial hex coordinates are used only as a deterministic geometric
-/// construction recipe. They are not a biological blueprint: every unit is
-/// still instantiated and every connection is admitted through the normal
-/// physical bond transaction.
-fn axial_to_world(q: i32, r: i32) -> (f64, f64) {
-    // Carbon's catalog hexagon has a vertex on the +x axis. These axial
-    // basis vectors therefore match the actual tessellation of that shape.
-    (
-        1.5 * q as f64,
-        (SQRT_3 * 0.5) * q as f64 + SQRT_3 * r as f64,
-    )
-}
-
-fn hex_ring(radius: i32) -> Vec<(i32, i32)> {
-    if radius <= 0 {
-        return Vec::new();
-    }
-    let directions = [(1, 0), (0, 1), (-1, 1), (-1, 0), (0, -1), (1, -1)];
-    let mut q = -radius;
-    let mut r = 0;
-    let mut result = Vec::with_capacity((radius * 6) as usize);
-    for (dq, dr) in directions {
-        for _ in 0..radius {
-            result.push((q, r));
-            q += dq;
-            r += dr;
-        }
-    }
-    result
 }
 
 fn add_unit(
@@ -90,7 +52,7 @@ fn add_unit(
     })
 }
 
-fn bond_units(
+fn bond_units_legacy(
     structure: &mut crate::structure::OrganismStructure,
     unit_a: usize,
     unit_b: usize,
@@ -182,7 +144,14 @@ fn bond_units(
 /// Place the fixed geometric scaffold directly, while using the ordinary
 /// physical bond transaction for every permanent connection. There is no
 /// speculative placement search and no recursive body-plan search.
-fn construct_scaffold(
+/// Build the initial body by local geometric growth.
+///
+/// No target outline, ring, spoke, or blueprint is supplied. Each step starts
+/// from a realized frontier unit, derives candidate placements from its actual
+/// connection geometry, rejects only true penetration, commits explicit bonds,
+/// and checks whether the realized structure has produced a qualifying bonded
+/// cavity. Incidental contact alone never becomes a bond.
+fn construct_free_form(
     catalog: &[BaseResource],
 ) -> Result<(crate::structure::OrganismStructure, EnergyLedger, f64), String> {
     let carbon = catalog
@@ -197,164 +166,281 @@ fn construct_scaffold(
     let mut structure = crate::structure::OrganismStructure::new();
     let mut ledger = EnergyLedger::default();
     let mut energy = CONSTRUCTION_ENERGY;
+    let seed = add_unit(&mut structure, carbon, (0.0, 0.0), catalog)?;
+    let mut frontier = vec![seed];
 
-    // The inner ring closes the genome cavity. Its radius is deliberately large
-    // enough that the realized enclosed area exceeds the three-Carbon minimum
-    // reference; a radius-two ring leaves only a one-Carbon-scale central void.
-    let inner = hex_ring(INNER_RING_RADIUS);
-    let mut inner_indices = Vec::with_capacity(inner.len());
-    for coordinate in inner {
-        inner_indices.push(add_unit(
-            &mut structure,
-            carbon,
-            axial_to_world(coordinate.0, coordinate.1),
-            catalog,
-        )?);
-    }
-    for i in 0..inner_indices.len() {
-        bond_units(
-            &mut structure,
-            inner_indices[i],
-            inner_indices[(i + 1) % inner_indices.len()],
-            catalog,
-            &mut ledger,
-            &mut energy,
-        )?;
-    }
+    for _step in 0..256 {
+        let snapshot = structure.clone();
+        let mut best: Option<(
+            i32,
+            f64,
+            crate::structure::OrganismStructure,
+            EnergyLedger,
+            f64,
+            usize,
+        )> = None;
 
-    // The genome is a construction milestone, not a post-hoc property of the
-    // completed scaffold. Nothing outside this ring is needed to qualify it.
-    let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)
-        .map_err(|error| format!("genome cavity analysis failed: {error}"))?
-        .filter(|cavity| cavity.qualifies())
-        .ok_or_else(|| {
-            let pair_counts = (0..inner_indices.len())
-                .map(|i| {
-                    let a = structure.units[inner_indices[i]].physical_id;
-                    let b = structure.units[inner_indices[(i + 1) % inner_indices.len()]].physical_id;
-                    structure
-                        .bonds
-                        .iter()
-                        .filter(|bond| {
-                            (bond.endpoint_a.constituent_id == a
-                                && bond.endpoint_b.constituent_id == b)
-                                || (bond.endpoint_a.constituent_id == b
-                                    && bond.endpoint_b.constituent_id == a)
-                        })
-                        .count()
-                })
-                .collect::<Vec<_>>();
-            let regions =
-                crate::interior_geometry::find_enclosed_regions(&structure, catalog);
-            let max_region_area = regions
-                .iter()
-                .map(|region| region.area)
-                .fold(0.0_f64, f64::max);
-            let first_a = structure.units[inner_indices[0]].physical_id;
-            let first_b = structure.units[inner_indices[1]].physical_id;
-            let first_pair_bonds = structure
-                .bonds
-                .iter()
-                .filter(|bond| {
-                    (bond.endpoint_a.constituent_id == first_a
-                        && bond.endpoint_b.constituent_id == first_b)
-                        || (bond.endpoint_a.constituent_id == first_b
-                            && bond.endpoint_b.constituent_id == first_a)
-                })
-                .map(|bond| (bond.endpoint_a.location, bond.endpoint_b.location))
-                .collect::<Vec<_>>();
-            format!(
-                "inner construction phase did not produce a qualifying genome cavity: bonds={}, pair_counts={pair_counts:?}, enclosed_regions={}, max_region_area={max_region_area}, first_pair_bonds={first_pair_bonds:?}",
-                structure.bonds.len(),
-                regions.len()
+        for &anchor_index in &frontier {
+            let Some(anchor_unit) = snapshot.units.get(anchor_index) else {
+                continue;
+            };
+            let anchor = anchor_unit.placement;
+
+            for placement in crate::construction_runtime::candidate_placements(
+                &snapshot,
+                carbon,
+                anchor,
+                &[anchor_index],
+                catalog,
             )
-        })?;
-    if cavity.boundary_units.is_empty() {
-        return Err("qualifying genome cavity has no physical boundary".into());
-    }
+            .into_iter()
+            .skip(1)
+            {
+                let instance = crate::physical_material::PhysicalMaterial::realized(
+                    Material::free_base(carbon.name.clone(), 1.0),
+                    vec![Placement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    }],
+                    catalog,
+                )
+                .ok_or_else(|| "Carbon construction material has invalid geometry".to_string())?;
 
-    // Build six radial supports one ring outside the cavity boundary. They remain
-    // part of the structural path from the genome boundary to the outer boundary.
-    let mut spokes = Vec::with_capacity(6);
-    let spoke_coordinates = hex_ring(SPOKE_RADIUS);
-    let outer_coordinates = hex_ring(OUTER_RING_RADIUS);
-    for side in 0..6 {
-        let coordinate = spoke_coordinates[side * SPOKE_RADIUS as usize];
-        let index = add_unit(
-            &mut structure,
-            carbon,
-            axial_to_world(coordinate.0, coordinate.1),
-            catalog,
-        )?;
-        let inner_position = side * INNER_RING_RADIUS as usize;
-        bond_units(
-            &mut structure,
-            index,
-            inner_indices[inner_position],
-            catalog,
-            &mut ledger,
-            &mut energy,
-        )?;
-        spokes.push(index);
-    }
+                let mut trial = snapshot.clone();
+                let Some(indices) = crate::material_restoration::restore_material(
+                    &mut trial, &instance, placement, catalog,
+                ) else {
+                    continue;
+                };
+                let Some(new_index) = indices.first().copied() else {
+                    continue;
+                };
 
-    // Grow the outer ring from the spokes. Every new unit is attached before
-    // the next one is created; the final six closure bonds are ordinary
-    // forward construction transactions between already realized units.
-    let mut outer_indices = Vec::with_capacity(outer_coordinates.len());
-    for (i, coordinate) in outer_coordinates.iter().enumerate() {
-        let index = add_unit(
-            &mut structure,
-            carbon,
-            axial_to_world(coordinate.0, coordinate.1),
-            catalog,
-        )?;
-        if i == 0 {
-            bond_units(
-                &mut structure,
-                index,
-                spokes[0],
-                catalog,
-                &mut ledger,
-                &mut energy,
-            )?;
-        } else {
-            bond_units(
-                &mut structure,
-                index,
-                outer_indices[i - 1],
-                catalog,
-                &mut ledger,
-                &mut energy,
-            )?;
+                if crate::construction_runtime::placed_unit_overlaps(
+                    &trial,
+                    &trial.units[new_index],
+                    &indices,
+                    catalog,
+                ) {
+                    continue;
+                }
+
+                let mut contacts = Vec::<(usize, crate::contact::ConnectionPairCandidate)>::new();
+
+                for existing_index in 0..new_index {
+                    let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+                    if let Some(candidate) = crate::contact::connection_pair_candidates_cached(
+                        &trial,
+                        existing_index,
+                        new_index,
+                        catalog,
+                        &mut cache,
+                    )
+                    .into_iter()
+                    .filter(|candidate| {
+                        candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                            && candidate.available_a
+                            && candidate.available_b
+                    })
+                    .min_by(|a, b| {
+                        a.distance
+                            .partial_cmp(&b.distance)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    }) {
+                        contacts.push((existing_index, candidate));
+                    }
+                }
+
+                let Some((anchor_target, anchor_candidate)) = contacts
+                    .iter()
+                    .find(|(index, _)| *index == anchor_index)
+                    .cloned()
+                else {
+                    continue;
+                };
+
+                let Some((_, _, _, investment, _)) =
+                    crate::combine_runtime::selected_candidate_evaluation(
+                        &trial,
+                        anchor_target,
+                        new_index,
+                        anchor_candidate,
+                        catalog,
+                    )
+                else {
+                    continue;
+                };
+
+                let mut trial_ledger = ledger.clone();
+                let mut trial_energy = energy;
+                let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+
+                if crate::combine_runtime::form_selected_bond(
+                    &mut trial,
+                    anchor_target,
+                    new_index,
+                    anchor_candidate,
+                    investment,
+                    catalog,
+                    &mut cache,
+                    &mut trial_ledger,
+                    &mut trial_energy,
+                )
+                .is_none()
+                {
+                    continue;
+                }
+
+                // Recompute after every bond so endpoint availability is
+                // authoritative. When two units physically share a boundary,
+                // allow up to two explicit corner bonds: one for each endpoint
+                // of that shared contact. This is local bond formation, not a
+                // global rule that all physical contacts must be bonded.
+                for (existing_index, _) in contacts.iter().copied() {
+                    let attempts = if existing_index == anchor_index { 1 } else { 2 };
+                    for _ in 0..attempts {
+                        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+                        let candidates = crate::contact::connection_pair_candidates_cached(
+                            &trial,
+                            existing_index,
+                            new_index,
+                            catalog,
+                            &mut cache,
+                        )
+                        .into_iter()
+                        .filter(|candidate| {
+                            candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                                && candidate.available_a
+                                && candidate.available_b
+                        })
+                        .collect::<Vec<_>>();
+
+                        let candidate = candidates
+                            .iter()
+                            .filter(|candidate| {
+                                matches!(
+                                    candidate.endpoint_a,
+                                    crate::structure::ConnectionEndpoint::Corner { .. }
+                                ) && matches!(
+                                    candidate.endpoint_b,
+                                    crate::structure::ConnectionEndpoint::Corner { .. }
+                                )
+                            })
+                            .min_by(|a, b| {
+                                a.distance
+                                    .partial_cmp(&b.distance)
+                                    .unwrap_or(std::cmp::Ordering::Equal)
+                            })
+                            .copied()
+                            .or_else(|| {
+                                candidates.into_iter().min_by(|a, b| {
+                                    a.distance
+                                        .partial_cmp(&b.distance)
+                                        .unwrap_or(std::cmp::Ordering::Equal)
+                                })
+                            });
+
+                        let Some(candidate) = candidate else {
+                            break;
+                        };
+
+                        let Some((_, _, _, investment, _)) =
+                            crate::combine_runtime::selected_candidate_evaluation(
+                                &trial,
+                                existing_index,
+                                new_index,
+                                candidate,
+                                catalog,
+                            )
+                        else {
+                            break;
+                        };
+
+                        if crate::combine_runtime::form_selected_bond(
+                            &mut trial,
+                            existing_index,
+                            new_index,
+                            candidate,
+                            investment,
+                            catalog,
+                            &mut cache,
+                            &mut trial_ledger,
+                            &mut trial_energy,
+                        )
+                        .is_none()
+                        {
+                            break;
+                        }
+                    }
+                }
+
+                let contact_count = contacts.len() as i32;
+                let cavity_bonus = crate::cavity::analyze_genome_cavity(&trial, catalog)
+                    .ok()
+                    .flatten()
+                    .map(|cavity| (cavity.area * 1000.0) as i32)
+                    .unwrap_or(0);
+
+                // Grow outward with single-contact candidates, but once a
+                // larger local body exists, allow multi-contact candidates to
+                // close loops. No global topology is prescribed.
+                let loop_preference = if snapshot.units.len() >= 6 {
+                    contact_count * 1000
+                } else {
+                    -contact_count * 1000
+                };
+                let score = loop_preference + cavity_bonus;
+                let distance = (placement.x - anchor.x).hypot(placement.y - anchor.y);
+
+                if best
+                    .as_ref()
+                    .is_none_or(|(best_score, best_distance, _, _, _, _)| {
+                        score > *best_score || (score == *best_score && distance < *best_distance)
+                    })
+                {
+                    best = Some((
+                        score,
+                        distance,
+                        trial,
+                        trial_ledger,
+                        trial_energy,
+                        new_index,
+                    ));
+                }
+            }
         }
-        outer_indices.push(index);
-    }
-    bond_units(
-        &mut structure,
-        outer_indices[0],
-        outer_indices[outer_indices.len() - 1],
-        catalog,
-        &mut ledger,
-        &mut energy,
-    )?;
 
-    // Connect the remaining spokes to the outer boundary. The exact radial
-    // correspondence is selected from the physical contact graph rather than
-    // by inventing a special construction bond.
-    for side in 1..6 {
-        let outer_coordinate = side * OUTER_RING_RADIUS as usize;
-        bond_units(
-            &mut structure,
-            spokes[side],
-            outer_indices[outer_coordinate],
-            catalog,
-            &mut ledger,
-            &mut energy,
-        )?;
+        let Some((_, _, next_structure, next_ledger, next_energy, new_index)) = best else {
+            return Err(format!(
+                "free-form constructor reached a geometric dead end after {} units",
+                structure.units.len()
+            ));
+        };
+
+        structure = next_structure;
+        ledger = next_ledger;
+        energy = next_energy;
+        frontier.push(new_index);
+
+        if let Some(cavity) = crate::cavity::analyze_genome_cavity(&structure, catalog)
+            .map_err(|error| format!("genome cavity analysis failed: {error}"))?
+        {
+            if cavity.qualifies()
+                && structure.units.len() > cavity.boundary_units.len()
+                && valid_construction(
+                    &structure,
+                    catalog,
+                    &available_acquisition_resources(catalog),
+                )
+                .is_some()
+            {
+                return Ok((structure, ledger, energy));
+            }
+        }
     }
 
-    Ok((structure, ledger, energy))
+    Err("free-form constructor exhausted local geometric growth before satisfying viability".into())
 }
 
 fn placement_fits_resource(
@@ -474,11 +560,10 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
         return Err("catalog does not contain Water".into());
     }
 
-    let (structure, ledger, energy) = construct_scaffold(catalog)?;
+    let (structure, _ledger, energy) = construct_free_form(catalog)?;
     let acquired_resource_placements =
-        valid_construction(&structure, catalog, &acquisition_candidates).ok_or_else(|| {
-            "deterministic construction scaffold did not satisfy viability".to_string()
-        })?;
+        valid_construction(&structure, catalog, &acquisition_candidates)
+            .ok_or_else(|| "free-form construction did not satisfy viability".to_string())?;
 
     Ok(ValidConstruction {
         structure,
@@ -492,7 +577,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn blueprint_free_constructor_produces_a_valid_organism() {
+    fn free_form_constructor_produces_a_valid_organism() {
         let catalog = crate::resources::default_catalog();
         let result = construct_valid(&catalog).expect("constructor should find a valid organism");
         assert!(!result.structure.units.is_empty());
