@@ -163,6 +163,12 @@ fn construct_free_form(
         })
         .ok_or_else(|| "catalog lacks valid rigid Carbon geometry".to_string())?;
 
+    let carbon_index = catalog
+        .iter()
+        .position(|resource| resource.name == carbon.name)
+        .ok_or_else(|| "Carbon is missing from the construction catalog".to_string())?;
+    let construction_catalog = crate::construction_catalog::ConstructionCatalog::build(catalog);
+
     let mut structure = crate::structure::OrganismStructure::new();
     let mut ledger = EnergyLedger::default();
     let mut energy = CONSTRUCTION_ENERGY;
@@ -186,15 +192,10 @@ fn construct_free_form(
             };
             let anchor = anchor_unit.placement;
 
-            for placement in crate::construction_runtime::candidate_placements(
-                &snapshot,
-                carbon,
-                anchor,
-                &[anchor_index],
-                catalog,
-            )
-            .into_iter()
-            .skip(1)
+            for placement in construction_catalog
+                .placements_for_pair(carbon_index, carbon_index, anchor)
+                .into_iter()
+                .skip(1)
             {
                 let instance = crate::physical_material::PhysicalMaterial::realized(
                     Material::free_base(carbon.name.clone(), 1.0),
