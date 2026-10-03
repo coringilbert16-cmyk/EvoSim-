@@ -113,20 +113,26 @@ fn bond_units(
     // Adjacent rigid polygons share a boundary segment, not just a point. Two
     // distinct endpoint bonds, one at each end of that shared segment, seal the
     // wall while still respecting the one-connection-point-per-bond invariant.
-    let mut selected = candidates
-        .iter()
-        .filter(|candidate| {
-            matches!(
-                candidate.endpoint_a,
-                crate::structure::ConnectionEndpoint::Corner { .. }
-            ) && matches!(
-                candidate.endpoint_b,
-                crate::structure::ConnectionEndpoint::Corner { .. }
-            )
-        })
-        .take(2)
-        .cloned()
-        .collect::<Vec<_>>();
+    let mut selected = Vec::new();
+    for candidate in candidates.iter().filter(|candidate| {
+        matches!(
+            candidate.endpoint_a,
+            crate::structure::ConnectionEndpoint::Corner { .. }
+        ) && matches!(
+            candidate.endpoint_b,
+            crate::structure::ConnectionEndpoint::Corner { .. }
+        )
+    }) {
+        if selected.iter().any(|chosen: &crate::contact::ConnectionPairCandidate| {
+            chosen.endpoint_a == candidate.endpoint_a && chosen.endpoint_b == candidate.endpoint_b
+        }) {
+            continue;
+        }
+        selected.push(candidate.clone());
+        if selected.len() == 2 {
+            break;
+        }
+    }
 
     if selected.len() < 2 {
         selected = candidates
