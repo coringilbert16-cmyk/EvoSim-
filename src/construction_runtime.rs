@@ -686,13 +686,6 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     continue;
                 };
 
-                // Contact is a structural fact, not an optional side effect:
-                // every non-penetrating material contact created by this
-                // placement must have a permanent bond.
-                if !trial.has_complete_contact_bonding(catalog) {
-                    continue;
-                }
-
                 return Some((
                     trial,
                     indices,
@@ -891,13 +884,6 @@ fn realize_next_bond_driven(
                     ) else {
                         continue;
                     };
-
-                    // Contact is a structural fact, not an optional side effect:
-                    // every non-penetrating material contact created by this
-                    // placement must have a permanent bond.
-                    if !trial.has_complete_contact_bonding(catalog) {
-                        continue;
-                    }
 
                     if best_candidate
                         .as_ref()
