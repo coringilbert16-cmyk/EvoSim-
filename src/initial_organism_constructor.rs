@@ -228,7 +228,26 @@ fn construct_scaffold(
         .map_err(|error| format!("genome cavity analysis failed: {error}"))?
         .filter(|cavity| cavity.qualifies())
         .ok_or_else(|| {
-            "inner construction phase did not produce a qualifying genome cavity".to_string()
+            let pair_counts = (0..inner_indices.len())
+                .map(|i| {
+                    let a = structure.units[inner_indices[i]].physical_id;
+                    let b = structure.units[inner_indices[(i + 1) % inner_indices.len()]].physical_id;
+                    structure
+                        .bonds
+                        .iter()
+                        .filter(|bond| {
+                            (bond.endpoint_a.constituent_id == a
+                                && bond.endpoint_b.constituent_id == b)
+                                || (bond.endpoint_a.constituent_id == b
+                                    && bond.endpoint_b.constituent_id == a)
+                        })
+                        .count()
+                })
+                .collect::<Vec<_>>();
+            format!(
+                "inner construction phase did not produce a qualifying genome cavity: bonds={}, pair_counts={pair_counts:?}",
+                structure.bonds.len()
+            )
         })?;
     if cavity.boundary_units.is_empty() {
         return Err("qualifying genome cavity has no physical boundary".into());
