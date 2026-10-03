@@ -848,6 +848,9 @@ fn realize_next_bond_driven(
                         candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
                             && candidate.available_a
                             && candidate.available_b
+                            && crate::contact::candidate_has_physical_boundary_contact(
+                                &trial, existing_index, new_unit_index, catalog, 1e-7,
+                            )
                     })
                     .min_by(|a, b| {
                         a.distance
