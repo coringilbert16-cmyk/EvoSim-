@@ -173,101 +173,215 @@ fn generate_pair_formations(
     resource_b: &BaseResource,
 ) -> Vec<PairFormation> {
     let mut out = Vec::new();
-    let Some(a_vertices) = resource_a.shape.form.polygon_vertices() else {
-        return out;
-    };
-    let Some(b_vertices) = resource_b.shape.form.polygon_vertices() else {
-        return out;
-    };
 
-    for a_edge in 0..a_vertices.len() {
-        let a0 = a_vertices[a_edge];
-        let a1 = a_vertices[(a_edge + 1) % a_vertices.len()];
-        let a_length = (a1.0 - a0.0).hypot(a1.1 - a0.1);
-        if !is_supported_segment_length(a_length) {
-            continue;
-        }
-
-        for b_edge in 0..b_vertices.len() {
-            let b0 = b_vertices[b_edge];
-            let b1 = b_vertices[(b_edge + 1) % b_vertices.len()];
-            let b_length = (b1.0 - b0.0).hypot(b1.1 - b0.1);
-            if !is_supported_segment_length(b_length)
-                || !segment_lengths_compatible(a_length, b_length)
-            {
-                continue;
+    match (&resource_a.shape.form, &resource_b.shape.form) {
+        (Form::Line { length: a_length }, Form::Line { length: b_length }) => {
+            if segment_lengths_compatible(*a_length, *b_length) {
+                for a_index in 0..2 {
+                    for b_index in 0..2 {
+                        for rotation in crate::rigid_boundary::line_endpoint_alignment_rotations(
+                            a_index,
+                            b_index,
+                            0.0,
+                        ) {
+                            let a_x = if a_index == 0 { -*a_length / 2.0 } else { *a_length / 2.0 };
+                            let b_x = if b_index == 0 { -*b_length / 2.0 } else { *b_length / 2.0 };
+                            let (s, c) = rotation.sin_cos();
+                            out.push(PairFormation {
+                                resource_a: resource_a_index,
+                                resource_b: resource_b_index,
+                                endpoint_a: ConnectionEndpoint::LineEndpoint {
+                                    point_index: a_index,
+                                },
+                                endpoint_b: ConnectionEndpoint::LineEndpoint {
+                                    point_index: b_index,
+                                },
+                                placement_a_relative_to_b: RelativePlacement {
+                                    x: b_x - a_x * c,
+                                    y: -a_x * s,
+                                    rotation_radians: rotation,
+                                },
+                                segment_length_a: *a_length,
+                                segment_length_b: *b_length,
+                            });
+                        }
+                    }
+                }
             }
-
-            // Align the selected side of A with the selected side of B.
-            // Both endpoint orders are retained: this gives the constructor
-            // both ways to place a shorter side against a longer side.
-            let a_angle = (a1.1 - a0.1).atan2(a1.0 - a0.0);
-            let b_angle = (b1.1 - b0.1).atan2(b1.0 - b0.0);
-            for reverse in [true] {
-                let target_angle = if reverse { b_angle + std::f64::consts::PI } else { b_angle };
-                let rotation = target_angle - a_angle;
-                let (s, c) = rotation.sin_cos();
-                let ax0 = a0.0 * c - a0.1 * s;
-                let ay0 = a0.0 * s + a0.1 * c;
-                let ax1 = a1.0 * c - a1.1 * s;
-                let ay1 = a1.0 * s + a1.1 * c;
-                let bx = if reverse { b1.0 } else { b0.0 };
-                let by = if reverse { b1.1 } else { b0.1 };
-
-                out.push(PairFormation {
-                    resource_a: resource_a_index,
-                    resource_b: resource_b_index,
-                    endpoint_a: ConnectionEndpoint::Corner {
-                        point_index: a_edge,
-                    },
-                    endpoint_b: ConnectionEndpoint::Corner {
-                        point_index: if reverse {
-                            (b_edge + 1) % b_vertices.len()
-                        } else {
-                            b_edge
-                        },
-                    },
-                    placement_a_relative_to_b: RelativePlacement {
-                        x: bx - ax0,
-                        y: by - ay0,
-                        rotation_radians: rotation,
-                    },
-                    segment_length_a: a_length,
-                    segment_length_b: b_length,
-                });
-
-                // Retain the opposite endpoint pairing as a distinct local
-                // formation when the side lengths differ.
-                if (a_length - b_length).abs() > GEOMETRY_TOLERANCE {
-                    let bx = if reverse { b0.0 } else { b1.0 };
-                    let by = if reverse { b0.1 } else { b1.1 };
+        }
+        (
+            Form::Line { length: a_length },
+            Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
+        ) => {
+            let Some(vertices) = resource_b.shape.form.polygon_vertices() else {
+                return out;
+            };
+            for b_index in 0..vertices.len() {
+                let Some(normal) =
+                    crate::rigid_boundary::corner_normal(&resource_b.shape, b_index)
+                else {
+                    continue;
+                };
+                let target_angle = normal.1.atan2(normal.0);
+                for a_index in 0..2 {
+                    let endpoint_angle =
+                        crate::rigid_boundary::line_endpoint_normal(&resource_a.shape, a_index)
+                            .map(|n| n.1.atan2(n.0))
+                            .unwrap_or(0.0);
+                    let rotation = target_angle + std::f64::consts::PI - endpoint_angle;
+                    let local_x = if a_index == 0 { -*a_length / 2.0 } else { *a_length / 2.0 };
+                    let (s, c) = rotation.sin_cos();
+                    let lx = local_x * c;
+                    let ly = local_x * s;
+                    let target = vertices[b_index];
                     out.push(PairFormation {
                         resource_a: resource_a_index,
                         resource_b: resource_b_index,
-                        endpoint_a: ConnectionEndpoint::Corner {
-                            point_index: (a_edge + 1) % a_vertices.len(),
+                        endpoint_a: ConnectionEndpoint::LineEndpoint {
+                            point_index: a_index,
                         },
                         endpoint_b: ConnectionEndpoint::Corner {
-                            point_index: if reverse {
-                                b_edge
-                            } else {
-                                (b_edge + 1) % b_vertices.len()
-                            },
+                            point_index: b_index,
                         },
                         placement_a_relative_to_b: RelativePlacement {
-                            x: bx - ax1,
-                            y: by - ay1,
+                            x: target.0 - lx,
+                            y: target.1 - ly,
                             rotation_radians: rotation,
                         },
-                        segment_length_a: a_length,
-                        segment_length_b: b_length,
+                        segment_length_a: *a_length,
+                        segment_length_b: incident_segment_length(&vertices, b_index),
                     });
                 }
             }
         }
+        (
+            Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
+            Form::Line { length: b_length },
+        ) => {
+            for formation in generate_pair_formations(
+                resource_b_index,
+                resource_b,
+                resource_a_index,
+                resource_a,
+            ) {
+                out.push(PairFormation {
+                    resource_a: resource_a_index,
+                    resource_b: resource_b_index,
+                    endpoint_a: formation.endpoint_b,
+                    endpoint_b: formation.endpoint_a,
+                    placement_a_relative_to_b: invert_relative_placement(
+                        formation.placement_a_relative_to_b,
+                    ),
+                    segment_length_a: formation.segment_length_b,
+                    segment_length_b: formation.segment_length_a,
+                });
+            }
+        }
+        (
+            Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
+            Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
+        ) => {
+            let Some(a_vertices) = resource_a.shape.form.polygon_vertices() else {
+                return out;
+            };
+            let Some(b_vertices) = resource_b.shape.form.polygon_vertices() else {
+                return out;
+            };
+
+            for a_edge in 0..a_vertices.len() {
+                let a0 = a_vertices[a_edge];
+                let a1 = a_vertices[(a_edge + 1) % a_vertices.len()];
+                let a_length = (a1.0 - a0.0).hypot(a1.1 - a0.1);
+                if !is_supported_segment_length(a_length) {
+                    continue;
+                }
+
+                for b_edge in 0..b_vertices.len() {
+                    let b0 = b_vertices[b_edge];
+                    let b1 = b_vertices[(b_edge + 1) % b_vertices.len()];
+                    let b_length = (b1.0 - b0.0).hypot(b1.1 - b0.1);
+                    if !is_supported_segment_length(b_length)
+                        || !segment_lengths_compatible(a_length, b_length)
+                    {
+                        continue;
+                    }
+
+                    let a_angle = (a1.1 - a0.1).atan2(a1.0 - a0.0);
+                    let b_angle = (b1.1 - b0.1).atan2(b1.0 - b0.0);
+                    let rotation = b_angle + std::f64::consts::PI - a_angle;
+                    let (s, c) = rotation.sin_cos();
+                    let ax0 = a0.0 * c - a0.1 * s;
+                    let ay0 = a0.0 * s + a0.1 * c;
+                    let ax1 = a1.0 * c - a1.1 * s;
+                    let ay1 = a1.0 * s + a1.1 * c;
+
+                    for (a_endpoint, b_endpoint, ax, ay, bx, by) in [
+                        (
+                            a_edge,
+                            b_edge,
+                            ax0,
+                            ay0,
+                            b1.0,
+                            b1.1,
+                        ),
+                        (
+                            (a_edge + 1) % a_vertices.len(),
+                            (b_edge + 1) % b_vertices.len(),
+                            ax1,
+                            ay1,
+                            b0.0,
+                            b0.1,
+                        ),
+                    ] {
+                        out.push(PairFormation {
+                            resource_a: resource_a_index,
+                            resource_b: resource_b_index,
+                            endpoint_a: ConnectionEndpoint::Corner {
+                                point_index: a_endpoint,
+                            },
+                            endpoint_b: ConnectionEndpoint::Corner {
+                                point_index: b_endpoint,
+                            },
+                            placement_a_relative_to_b: RelativePlacement {
+                                x: bx - ax,
+                                y: by - ay,
+                                rotation_radians: rotation,
+                            },
+                            segment_length_a: a_length,
+                            segment_length_b: b_length,
+                        });
+                    }
+                }
+            }
+        }
+        _ => {}
     }
 
     out
+}
+
+fn invert_relative_placement(relative: RelativePlacement) -> RelativePlacement {
+    let (s, c) = relative.rotation_radians.sin_cos();
+    RelativePlacement {
+        x: -(relative.x * c + relative.y * s),
+        y: relative.x * s - relative.y * c,
+        rotation_radians: -relative.rotation_radians,
+    }
+}
+
+fn incident_segment_length(vertices: &[(f64, f64)], vertex: usize) -> f64 {
+    if vertices.len() < 2 {
+        return 0.0;
+    }
+
+    let current = vertices[vertex];
+    let previous = vertices[(vertex + vertices.len() - 1) % vertices.len()];
+    let next = vertices[(vertex + 1) % vertices.len()];
+
+    let previous_length = (current.0 - previous.0).hypot(current.1 - previous.1);
+    let next_length = (next.0 - current.0).hypot(next.1 - current.1);
+
+    previous_length.min(next_length)
 }
 
 fn is_supported_segment_length(length: f64) -> bool {
