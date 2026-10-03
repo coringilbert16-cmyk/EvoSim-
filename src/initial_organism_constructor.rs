@@ -330,60 +330,89 @@ fn construct_free_form(
                     continue;
                 }
 
-                // Recompute after the first bond so endpoint availability is
-                // authoritative before any local closure bonds are attempted.
+                // Recompute after every bond so endpoint availability is
+                // authoritative. When two units physically share a boundary,
+                // allow up to two explicit corner bonds: one for each endpoint
+                // of that shared contact. This is local bond formation, not a
+                // global rule that all physical contacts must be bonded.
                 for (existing_index, _) in contacts.iter().copied() {
-                    if existing_index == anchor_index {
-                        continue;
-                    }
-                    let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-                    let Some(candidate) =
-                        crate::contact::connection_pair_candidates_cached(
-                            &trial,
+                    let attempts = if existing_index == anchor_index { 1 } else { 2 };
+                    for _ in 0..attempts {
+                        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+                        let candidates =
+                            crate::contact::connection_pair_candidates_cached(
+                                &trial,
+                                existing_index,
+                                new_index,
+                                catalog,
+                                &mut cache,
+                            )
+                            .into_iter()
+                            .filter(|candidate| {
+                                candidate.distance
+                                    <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                                    && candidate.available_a
+                                    && candidate.available_b
+                            })
+                            .collect::<Vec<_>>();
+
+                        let candidate = candidates
+                            .iter()
+                            .filter(|candidate| {
+                                matches!(
+                                    candidate.endpoint_a,
+                                    crate::structure::ConnectionEndpoint::Corner { .. }
+                                ) && matches!(
+                                    candidate.endpoint_b,
+                                    crate::structure::ConnectionEndpoint::Corner { .. }
+                                )
+                            })
+                            .min_by(|a, b| {
+                                a.distance
+                                    .partial_cmp(&b.distance)
+                                    .unwrap_or(std::cmp::Ordering::Equal)
+                            })
+                            .copied()
+                            .or_else(|| {
+                                candidates.into_iter().min_by(|a, b| {
+                                    a.distance
+                                        .partial_cmp(&b.distance)
+                                        .unwrap_or(std::cmp::Ordering::Equal)
+                                })
+                            });
+
+                        let Some(candidate) = candidate else {
+                            break;
+                        };
+
+                        let Some((_, _, _, investment, _)) =
+                            crate::combine_runtime::selected_candidate_evaluation(
+                                &trial,
+                                existing_index,
+                                new_index,
+                                &candidate,
+                                catalog,
+                            )
+                        else {
+                            break;
+                        };
+
+                        if crate::combine_runtime::form_selected_bond(
+                            &mut trial,
                             existing_index,
                             new_index,
+                            candidate,
+                            investment,
                             catalog,
                             &mut cache,
+                            &mut trial_ledger,
+                            &mut trial_energy,
                         )
-                        .into_iter()
-                        .filter(|candidate| {
-                            candidate.distance
-                                <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                                && candidate.available_a
-                                && candidate.available_b
-                        })
-                        .min_by(|a, b| {
-                            a.distance
-                                .partial_cmp(&b.distance)
-                                .unwrap_or(std::cmp::Ordering::Equal)
-                        })
-                    else {
-                        continue;
-                    };
-
-                    let Some((_, _, _, investment, _)) =
-                        crate::combine_runtime::selected_candidate_evaluation(
-                            &trial,
-                            existing_index,
-                            new_index,
-                            &candidate,
-                            catalog,
-                        )
-                    else {
-                        continue;
-                    };
-
-                    let _ = crate::combine_runtime::form_selected_bond(
-                        &mut trial,
-                        existing_index,
-                        new_index,
-                        candidate,
-                        investment,
-                        catalog,
-                        &mut cache,
-                        &mut trial_ledger,
-                        &mut trial_energy,
-                    );
+                        .is_none()
+                        {
+                            break;
+                        }
+                    }
                 }
 
                 let contact_count = contacts.len() as i32;
