@@ -69,10 +69,8 @@ fn bond_seals_segment(
             continue;
         };
 
-        let at_segment_a =
-            same_point(world_a, segment_a) && same_point(world_b, segment_a);
-        let at_segment_b =
-            same_point(world_a, segment_b) && same_point(world_b, segment_b);
+        let at_segment_a = same_point(world_a, segment_a) && same_point(world_b, segment_a);
+        let at_segment_b = same_point(world_a, segment_b) && same_point(world_b, segment_b);
 
         seals_a |= at_segment_a;
         seals_b |= at_segment_b;
@@ -178,11 +176,10 @@ impl GenomeCavity {
             let close = |a: Point, b: Point| a.sub(b).norm() <= NODE_TOLERANCE * 10.0;
 
             for (index, bond) in structure.bonds.iter().enumerate() {
-                let matches_units =
-                    (bond.endpoint_a.constituent_id == id_a
-                        && bond.endpoint_b.constituent_id == id_b)
-                        || (bond.endpoint_a.constituent_id == id_b
-                            && bond.endpoint_b.constituent_id == id_a);
+                let matches_units = (bond.endpoint_a.constituent_id == id_a
+                    && bond.endpoint_b.constituent_id == id_b)
+                    || (bond.endpoint_a.constituent_id == id_b
+                        && bond.endpoint_b.constituent_id == id_a);
                 if !matches_units {
                     continue;
                 }
@@ -219,9 +216,8 @@ impl GenomeCavity {
                     y: world_b.y,
                 };
 
-                let seals_endpoint =
-                    (close(world_a, segment_a) && close(world_b, segment_a))
-                        || (close(world_a, segment_b) && close(world_b, segment_b));
+                let seals_endpoint = (close(world_a, segment_a) && close(world_b, segment_a))
+                    || (close(world_a, segment_b) && close(world_b, segment_b));
 
                 if seals_endpoint && !result.contains(&index) {
                     result.push(index);
