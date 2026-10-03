@@ -194,7 +194,8 @@ fn canonical_key(motif: &ConstructionMotif) -> String {
     let mut units = motif
         .units
         .iter()
-        .map(|unit| {
+        .enumerate()
+        .map(|(old_index, unit)| {
             let dx = unit.placement.x - root.x;
             let dy = unit.placement.y - root.y;
             let x = dx * c + dy * s;
@@ -204,25 +205,38 @@ fn canonical_key(motif: &ConstructionMotif) -> String {
                 quantize(x),
                 quantize(y),
                 quantize(unit.placement.rotation_radians - root.rotation_radians),
+                old_index,
             )
         })
         .collect::<Vec<_>>();
     units.sort();
 
-    let bonds = motif
+    let mut remap = vec![0usize; units.len()];
+    for (new_index, unit) in units.iter().enumerate() {
+        remap[unit.4] = new_index;
+    }
+
+    let unit_key = units
+        .iter()
+        .map(|(resource, x, y, rotation, _)| (*resource, *x, *y, *rotation))
+        .collect::<Vec<_>>();
+
+    let mut bonds = motif
         .bonds
         .iter()
         .map(|bond| {
-            (
-                bond.unit_a.min(bond.unit_b),
-                bond.unit_a.max(bond.unit_b),
-                endpoint_key(bond.endpoint_a),
-                endpoint_key(bond.endpoint_b),
-            )
+            let a = remap[bond.unit_a];
+            let b = remap[bond.unit_b];
+            if a <= b {
+                (a, b, endpoint_key(bond.endpoint_a), endpoint_key(bond.endpoint_b))
+            } else {
+                (b, a, endpoint_key(bond.endpoint_b), endpoint_key(bond.endpoint_a))
+            }
         })
         .collect::<Vec<_>>();
+    bonds.sort();
 
-    format!("{units:?}|{bonds:?}")
+    format!("{unit_key:?}|{bonds:?}")
 }
 
 fn endpoint_key(endpoint: ConnectionEndpoint) -> String {
