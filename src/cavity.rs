@@ -131,8 +131,8 @@ impl GenomeCavity {
                     continue;
                 };
 
-                if (point_a.0 - seal_point.x).hypot(point_a.1 - seal_point.y) <= NODE_TOLERANCE
-                    && (point_b.0 - seal_point.x).hypot(point_b.1 - seal_point.y) <= NODE_TOLERANCE
+                if (point_a.x - seal_point.x).hypot(point_a.y - seal_point.y) <= NODE_TOLERANCE
+                    && (point_b.x - seal_point.x).hypot(point_b.y - seal_point.y) <= NODE_TOLERANCE
                 {
                     seal_bonds.insert(bond_index);
                 }
@@ -167,10 +167,10 @@ impl GenomeCavity {
             .enumerate()
             .filter(|(_, (a, b))| a != b)
             .all(|(i, (a, b))| {
-                let Some(a_id) = structure.units.get(*a).map(|unit| unit.physical_id) else {
+                let Some(a_id) = structure.units.get(a).map(|unit| unit.physical_id) else {
                     return false;
                 };
-                let Some(b_id) = structure.units.get(*b).map(|unit| unit.physical_id) else {
+                let Some(b_id) = structure.units.get(b).map(|unit| unit.physical_id) else {
                     return false;
                 };
                 let seal_point = self.boundary_segments[i].1;
@@ -202,8 +202,8 @@ impl GenomeCavity {
                     else {
                         return false;
                     };
-                    (point_a.0 - seal_point.x).hypot(point_a.1 - seal_point.y) <= NODE_TOLERANCE
-                        && (point_b.0 - seal_point.x).hypot(point_b.1 - seal_point.y)
+                    (point_a.x - seal_point.x).hypot(point_a.y - seal_point.y) <= NODE_TOLERANCE
+                        && (point_b.x - seal_point.x).hypot(point_b.y - seal_point.y)
                             <= NODE_TOLERANCE
                 })
             })
