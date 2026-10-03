@@ -314,6 +314,28 @@ mod tests {
     }
 
     #[test]
+    fn catalog_contains_the_declared_side_scale_matches() {
+        let catalog = crate::resources::default_catalog();
+        let construction = ConstructionCatalog::build(&catalog);
+        let nitrogen = catalog.iter().position(|r| r.name == "Nitrogen").unwrap();
+        let phosphorus = catalog.iter().position(|r| r.name == "Phosphorus").unwrap();
+        let carbon = catalog.iter().position(|r| r.name == "Carbon").unwrap();
+
+        assert!(construction
+            .pair_formations_for(nitrogen, phosphorus)
+            .any(|formation| {
+                (formation.segment_length_a - 0.5).abs() < 1e-9
+                    && (formation.segment_length_b - 0.5).abs() < 1e-9
+            }));
+        assert!(construction
+            .pair_formations_for(carbon, phosphorus)
+            .any(|formation| {
+                (formation.segment_length_a - 1.0).abs() < 1e-9
+                    && (formation.segment_length_b - 0.5).abs() < 1e-9
+            }));
+    }
+
+    #[test]
     fn fluid_resources_are_not_treated_as_rigid_pair_geometry() {
         let catalog = crate::resources::default_catalog();
         let construction = ConstructionCatalog::build(&catalog);
