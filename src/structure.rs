@@ -522,6 +522,31 @@ impl PhysicalConstituentGraph {
         if units_strictly_overlap(&self.units[a], &self.units[d], c) {
             return false;
         }
+
+        // A permanent bond is a physical transaction. The two realized
+        // constituents must actually share a boundary; endpoint validity alone
+        // must not allow a low-level bond path to bypass physical-contact
+        // authority.
+        let Some(shape_a) = self.units[a].shape(c) else {
+            return false;
+        };
+        let Some(shape_b) = self.units[d].shape(c) else {
+            return false;
+        };
+        let part_a = crate::material_geometry::PlacedMaterialPart {
+            part_index: a,
+            form: shape_a.form.clone(),
+            placement: self.units[a].placement,
+        };
+        let part_b = crate::material_geometry::PlacedMaterialPart {
+            part_index: d,
+            form: shape_b.form.clone(),
+            placement: self.units[d].placement,
+        };
+        if !crate::material_geometry::placed_forms_boundary_touch(&part_a, &part_b, 1e-7) {
+            return false;
+        }
+
         let Some(pa) = self.units[a].properties(c) else {
             return false;
         };
