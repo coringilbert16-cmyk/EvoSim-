@@ -72,7 +72,7 @@ These are the constraints that matter to the current construction work:
 
 - Physical geometry is authoritative.
 - A permanent bond is created through the shared physical bond transaction.
-- Physical material contact implies a permanent bond between the contacting units; a contact may still use only one specific connection-point pairing as its bond.
+- Positive-length physical surface contact between distinct material units implies a permanent bond between those units; mathematical point/vertex coincidence alone does not. A contact may still use only one specific connection-point pairing as its bond.
 - Intended bond contact is distinct from unintended penetration.
 - Construction does not need a universal grid, 4N topology, or predefined cavity shape.
 - The genome is defined by a qualifying realized cavity, not by a hard-coded core.
