@@ -245,7 +245,7 @@ fn construct_scaffold(
                 })
                 .collect::<Vec<_>>();
             let regions =
-                crate::interior_geometry::find_enclosed_regions(&structure, catalog).unwrap_or_default();
+                crate::interior_geometry::find_enclosed_regions(&structure, catalog);
             let max_region_area = regions
                 .iter()
                 .map(|region| region.area)
