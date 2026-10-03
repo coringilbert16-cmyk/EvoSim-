@@ -15,11 +15,12 @@ The current implementation:
 - requires a qualifying genome cavity;
 - requires Water plus three additional acquirable resources;
 - checks acquisition by actual physical placement inside an accessible region;
-- performs no recursive body-plan search and has no arbitrary placement-attempt budget.
+- performs no recursive body-plan search and has no arbitrary placement-attempt budget;
+- currently realizes genesis construction material from the catalog rather than waiting on environmental inventory.
 
 The current scaffold is **not the final constructor architecture**. It is a temporary deterministic construction baseline used to prove that the physical construction, bonding, cavity, and acquisition contracts can work quickly.
 
-The present scaffold is a fixed Carbon geometry consisting of an inner ring, six radial supports, and an outer ring. This must not be confused with the intended final free-form constructor.
+The present scaffold is a fixed 54-unit Carbon geometry consisting of an inner ring, six radial supports, and an outer ring. Adjacent rigid units are sealed with distinct endpoint bonds at the two ends of each shared wall segment. This must not be confused with the intended final free-form constructor.
 
 ## Intended constructor architecture
 
@@ -57,6 +58,7 @@ Work proceeds in this order:
    - Water plus any three additional resources must each be physically acquirable.
 5. **Integrate waiting behavior where required.**
    - Resource shortage becomes a pending construction state rather than constructor failure or a simulation-thread block.
+   - This is not yet part of the current catalog-backed genesis constructor.
 6. **Only then broaden validation.**
    - Classify downstream failures by contract.
    - Migrate tests that still encode retired assumptions.
