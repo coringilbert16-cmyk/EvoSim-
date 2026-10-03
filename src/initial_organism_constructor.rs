@@ -213,6 +213,18 @@ fn construct_scaffold(
         )?;
     }
 
+    // The genome is a construction milestone, not a post-hoc property of the
+    // completed scaffold. Nothing outside this ring is needed to qualify it.
+    let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)
+        .map_err(|error| format!("genome cavity analysis failed: {error}"))?
+        .filter(|cavity| cavity.qualifies())
+        .ok_or_else(|| {
+            "inner construction phase did not produce a qualifying genome cavity".to_string()
+        })?;
+    if cavity.boundary_units.is_empty() {
+        return Err("qualifying genome cavity has no physical boundary".into());
+    }
+
     // Build six radial supports one ring outside the cavity boundary. They remain
     // part of the structural path from the genome boundary to the outer boundary.
     let mut spokes = Vec::with_capacity(6);
