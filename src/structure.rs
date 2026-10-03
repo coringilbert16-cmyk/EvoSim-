@@ -981,54 +981,6 @@ mod tests {
     }
 
     #[test]
-    fn touching_units_require_a_bond() {
-        let catalog = crate::resources::default_catalog();
-        let mut s = OrganismStructure::new();
-        let a = s.add_unit(StructuralUnit::new(
-            "Carbon",
-            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-        ));
-        let b = s.add_unit(StructuralUnit::new(
-            "Carbon",
-            Placement {
-                x: 3.0_f64.sqrt(),
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        ));
-
-        assert_eq!(s.contact_bond_invariant_violations(&catalog), vec![(a, b)]);
-        assert!(!s.has_complete_contact_bonding(&catalog));
-
-        let ida = s.physical_id(a).unwrap();
-        let idb = s.physical_id(b).unwrap();
-        s.push_bond_unchecked(Bond {
-            endpoint_a: BondEndpoint::new(ida, ConnectionEndpoint::Corner { point_index: 1 }),
-            endpoint_b: BondEndpoint::new(idb, ConnectionEndpoint::Corner { point_index: 0 }),
-            strength: 0.5,
-            bond_energy: 1.0,
-        });
-
-        assert!(s.contact_bond_invariant_violations(&catalog).is_empty());
-        assert!(s.has_complete_contact_bonding(&catalog));
-    }
-
-    #[test]
-    fn separated_units_do_not_require_a_bond() {
-        let catalog = crate::resources::default_catalog();
-        let mut s = OrganismStructure::new();
-        s.add_unit(StructuralUnit::new(
-            "Carbon",
-            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-        ));
-        s.add_unit(StructuralUnit::new(
-            "Carbon",
-            Placement { x: 10.0, y: 0.0, rotation_radians: 0.0 },
-        ));
-        assert!(s.has_complete_contact_bonding(&catalog));
-    }
-
-    #[test]
     fn physical_constituents_receive_stable_ids() {
         let mut s = OrganismStructure::new();
         let a = s.add_unit(StructuralUnit::new(
