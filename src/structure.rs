@@ -546,8 +546,7 @@ impl PhysicalConstituentGraph {
             form: shape_b.form.clone(),
             placement: self.units[b].placement,
         };
-        crate::material_geometry::placed_forms_boundary_contact(&part_a, &part_b, 0.0)
-            && !crate::material_geometry::placed_forms_penetrate(&part_a, &part_b, 1e-9)
+        crate::material_geometry::placed_forms_surface_contact(&part_a, &part_b, 0.0)
     }
 
     fn units_are_bonded(&self, a: usize, b: usize) -> bool {
@@ -1043,7 +1042,11 @@ mod tests {
         ));
         let b = s.add_unit(StructuralUnit::new(
             "Carbon",
-            Placement { x: 2.0, y: 0.0, rotation_radians: 0.0 },
+            Placement {
+                x: 3.0_f64.sqrt(),
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
         ));
 
         assert_eq!(s.contact_bond_invariant_violations(&catalog), vec![(a, b)]);
