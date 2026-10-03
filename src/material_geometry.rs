@@ -402,15 +402,34 @@ fn proper_segment_intersection(
     b1: (f64, f64),
     tolerance: f64,
 ) -> bool {
-    if segments_distance(a0, a1, b0, b1) <= tolerance {
-        let o1 = orientation(a0, a1, b0);
-        let o2 = orientation(a0, a1, b1);
-        let o3 = orientation(b0, b1, a0);
-        let o4 = orientation(b0, b1, a1);
-        return (o1 > tolerance && o2 < -tolerance || o1 < -tolerance && o2 > tolerance)
-            && (o3 > tolerance && o4 < -tolerance || o3 < -tolerance && o4 > tolerance);
+    if segments_distance(a0, a1, b0, b1) > tolerance {
+        return false;
     }
-    false
+
+    const ORIENTATION_EPSILON: f64 = 1e-12;
+    let o1 = orientation(a0, a1, b0);
+    let o2 = orientation(a0, a1, b1);
+    let o3 = orientation(b0, b1, a0);
+    let o4 = orientation(b0, b1, a1);
+    let proper = (o1 > ORIENTATION_EPSILON && o2 < -ORIENTATION_EPSILON
+        || o1 < -ORIENTATION_EPSILON && o2 > ORIENTATION_EPSILON)
+        && (o3 > ORIENTATION_EPSILON && o4 < -ORIENTATION_EPSILON
+            || o3 < -ORIENTATION_EPSILON && o4 > ORIENTATION_EPSILON);
+
+    if !proper {
+        return false;
+    }
+
+    // A crossing that occurs only within the contact tolerance of an endpoint
+    // is treated as touching rather than positive-area penetration.
+    ![
+        point_segment_distance(a0, b0, b1),
+        point_segment_distance(a1, b0, b1),
+        point_segment_distance(b0, a0, a1),
+        point_segment_distance(b1, a0, a1),
+    ]
+    .into_iter()
+    .any(|distance| distance <= tolerance)
 }
 fn polygon_boundaries_coincide(
     a_vertices: &[(f64, f64)],
