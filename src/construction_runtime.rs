@@ -1244,8 +1244,7 @@ fn construct_blueprint_bond_driven_internal(
                     // committed physical graph qualifies, return the realized
                     // structure and leave the next construction phase to the
                     // caller. No uncommitted future topology is inspected.
-                    if stop_at_genome
-                        && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_some()
+                    if stop_at_genome && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_some()
                     {
                         return Ok((structure, total_heat));
                     }
