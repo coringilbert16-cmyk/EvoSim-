@@ -326,7 +326,7 @@ pub fn connection_pair_candidates(
 }
 
 #[allow(dead_code)]
-pub fn candidate_has_physical_boundary_contact(
+pub fn units_have_physical_boundary_contact(
     s: &OrganismStructure,
     ua: usize,
     ub: usize,
