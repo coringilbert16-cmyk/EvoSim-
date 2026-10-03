@@ -240,10 +240,7 @@ fn construct_free_form(
 
                 let mut trial = snapshot.clone();
                 let Some(indices) = crate::material_restoration::restore_material(
-                    &mut trial,
-                    &instance,
-                    placement,
-                    catalog,
+                    &mut trial, &instance, placement, catalog,
                 ) else {
                     continue;
                 };
@@ -260,10 +257,7 @@ fn construct_free_form(
                     continue;
                 }
 
-                let mut contacts = Vec::<(
-                    usize,
-                    crate::contact::ConnectionPairCandidate,
-                )>::new();
+                let mut contacts = Vec::<(usize, crate::contact::ConnectionPairCandidate)>::new();
 
                 for existing_index in 0..new_index {
                     let mut cache = crate::contact::ConnectionCompatibilityCache::new();
@@ -292,8 +286,10 @@ fn construct_free_form(
                     }
                 }
 
-                let Some((anchor_target, anchor_candidate)) =
-                    contacts.iter().find(|(index, _)| *index == anchor_index).cloned()
+                let Some((anchor_target, anchor_candidate)) = contacts
+                    .iter()
+                    .find(|(index, _)| *index == anchor_index)
+                    .cloned()
                 else {
                     continue;
                 };
@@ -339,22 +335,20 @@ fn construct_free_form(
                     let attempts = if existing_index == anchor_index { 1 } else { 2 };
                     for _ in 0..attempts {
                         let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-                        let candidates =
-                            crate::contact::connection_pair_candidates_cached(
-                                &trial,
-                                existing_index,
-                                new_index,
-                                catalog,
-                                &mut cache,
-                            )
-                            .into_iter()
-                            .filter(|candidate| {
-                                candidate.distance
-                                    <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                                    && candidate.available_a
-                                    && candidate.available_b
-                            })
-                            .collect::<Vec<_>>();
+                        let candidates = crate::contact::connection_pair_candidates_cached(
+                            &trial,
+                            existing_index,
+                            new_index,
+                            catalog,
+                            &mut cache,
+                        )
+                        .into_iter()
+                        .filter(|candidate| {
+                            candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                                && candidate.available_a
+                                && candidate.available_b
+                        })
+                        .collect::<Vec<_>>();
 
                         let candidate = candidates
                             .iter()
@@ -433,12 +427,12 @@ fn construct_free_form(
                 let score = loop_preference + cavity_bonus;
                 let distance = (placement.x - anchor.x).hypot(placement.y - anchor.y);
 
-                if best.as_ref().is_none_or(
-                    |(best_score, best_distance, _, _, _, _)| {
-                        score > *best_score
-                            || (score == *best_score && distance < *best_distance)
-                    },
-                ) {
+                if best
+                    .as_ref()
+                    .is_none_or(|(best_score, best_distance, _, _, _, _)| {
+                        score > *best_score || (score == *best_score && distance < *best_distance)
+                    })
+                {
                     best = Some((
                         score,
                         distance,
@@ -602,9 +596,8 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
 
     let (structure, ledger, energy) = construct_free_form(catalog)?;
     let acquired_resource_placements =
-        valid_construction(&structure, catalog, &acquisition_candidates).ok_or_else(|| {
-            "free-form construction did not satisfy viability".to_string()
-        })?;
+        valid_construction(&structure, catalog, &acquisition_candidates)
+            .ok_or_else(|| "free-form construction did not satisfy viability".to_string())?;
 
     Ok(ValidConstruction {
         structure,
