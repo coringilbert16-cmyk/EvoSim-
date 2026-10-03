@@ -531,6 +531,60 @@ impl PhysicalConstituentGraph {
         let strength = crate::combine::bond_strength(pa, pb);
         strength.is_finite() && (0.0..=1.0).contains(&strength)
     }
+
+    fn units_have_surface_contact(&self, a: usize, b: usize, catalog: &[BaseResource]) -> bool {
+        let (Some(shape_a), Some(shape_b)) = (self.units[a].shape(catalog), self.units[b].shape(catalog)) else {
+            return false;
+        };
+        let part_a = crate::material_geometry::PlacedMaterialPart {
+            part_index: a,
+            form: shape_a.form.clone(),
+            placement: self.units[a].placement,
+        };
+        let part_b = crate::material_geometry::PlacedMaterialPart {
+            part_index: b,
+            form: shape_b.form.clone(),
+            placement: self.units[b].placement,
+        };
+        crate::material_geometry::placed_forms_boundary_contact(&part_a, &part_b, 0.0)
+            && !crate::material_geometry::placed_forms_penetrate(&part_a, &part_b, 1e-9)
+    }
+
+    fn units_are_bonded(&self, a: usize, b: usize) -> bool {
+        let (Some(id_a), Some(id_b)) = (self.physical_id(a), self.physical_id(b)) else {
+            return false;
+        };
+        self.bonds.iter().any(|bond| {
+            (bond.endpoint_a.constituent_id == id_a && bond.endpoint_b.constituent_id == id_b)
+                || (bond.endpoint_a.constituent_id == id_b && bond.endpoint_b.constituent_id == id_a)
+        })
+    }
+
+    /// Return every pair of physical material units that are in surface contact
+    /// without a corresponding permanent bond. Contact is geometric; a bond is
+    /// the structural record of that contact. Penetration is reported by the
+    /// separate geometry invariant and is therefore not treated as valid contact.
+    pub fn contact_bond_invariant_violations(
+        &self,
+        catalog: &[BaseResource],
+    ) -> Vec<(usize, usize)> {
+        let mut violations = Vec::new();
+        for a in 0..self.units.len() {
+            for b in (a + 1)..self.units.len() {
+                if self.units_have_surface_contact(a, b, catalog) && !self.units_are_bonded(a, b) {
+                    violations.push((a, b));
+                }
+            }
+        }
+        violations
+    }
+
+    /// Whether every non-penetrating physical material contact in this realized
+    /// structure has a permanent bond between the two material units.
+    pub fn has_complete_contact_bonding(&self, catalog: &[BaseResource]) -> bool {
+        self.contact_bond_invariant_violations(catalog).is_empty()
+    }
+
     /// Stable physical IDs that established the qualifying genome cavity.
     pub fn genome_constituent_ids(&self) -> &[PhysicalConstituentId] {
         &self.genome_constituent_ids
@@ -977,6 +1031,50 @@ mod tests {
         });
         assert!(s.is_structurally_qualified(w1, &catalog));
         assert!(s.is_structurally_qualified(w2, &catalog));
+    }
+
+    #[test]
+    fn touching_units_require_a_bond() {
+        let catalog = crate::resources::default_catalog();
+        let mut s = OrganismStructure::new();
+        let a = s.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+        ));
+        let b = s.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement { x: 2.0, y: 0.0, rotation_radians: 0.0 },
+        ));
+
+        assert_eq!(s.contact_bond_invariant_violations(&catalog), vec![(a, b)]);
+        assert!(!s.has_complete_contact_bonding(&catalog));
+
+        let ida = s.physical_id(a).unwrap();
+        let idb = s.physical_id(b).unwrap();
+        s.push_bond_unchecked(Bond {
+            endpoint_a: BondEndpoint::new(ida, ConnectionEndpoint::Corner { point_index: 1 }),
+            endpoint_b: BondEndpoint::new(idb, ConnectionEndpoint::Corner { point_index: 0 }),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+
+        assert!(s.contact_bond_invariant_violations(&catalog).is_empty());
+        assert!(s.has_complete_contact_bonding(&catalog));
+    }
+
+    #[test]
+    fn separated_units_do_not_require_a_bond() {
+        let catalog = crate::resources::default_catalog();
+        let mut s = OrganismStructure::new();
+        s.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+        ));
+        s.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement { x: 10.0, y: 0.0, rotation_radians: 0.0 },
+        ));
+        assert!(s.has_complete_contact_bonding(&catalog));
     }
 
     #[test]
