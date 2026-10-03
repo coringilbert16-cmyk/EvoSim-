@@ -252,6 +252,21 @@ fn form_bond_from_candidate(
     if ua >= structure.units.len() || ub >= structure.units.len() || ua == ub {
         return None;
     }
+    let unit_a_shape = structure.units[ua].shape(catalog)?;
+    let unit_b_shape = structure.units[ub].shape(catalog)?;
+    let part_a = crate::material_geometry::PlacedMaterialPart {
+        part_index: ua,
+        form: unit_a_shape.form.clone(),
+        placement: structure.units[ua].placement,
+    };
+    let part_b = crate::material_geometry::PlacedMaterialPart {
+        part_index: ub,
+        form: unit_b_shape.form.clone(),
+        placement: structure.units[ub].placement,
+    };
+    if !crate::material_geometry::placed_forms_boundary_touch(&part_a, &part_b, 1e-7) {
+        return None;
+    }
     let id_a = structure.physical_id(ua)?;
     let id_b = structure.physical_id(ub)?;
     let a = structure.units[ua].properties(catalog)?;
