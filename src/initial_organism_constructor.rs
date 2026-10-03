@@ -83,7 +83,7 @@ fn add_unit(
     })
 }
 
-fn bond_units(
+fn bond_units_legacy(
     structure: &mut crate::structure::OrganismStructure,
     unit_a: usize,
     unit_b: usize,
@@ -182,7 +182,7 @@ fn bond_units(
 /// connection geometry, rejects only true penetration, commits explicit bonds,
 /// and checks whether the realized structure has produced a qualifying bonded
 /// cavity. Incidental contact alone never becomes a bond.
-fn construct_scaffold(
+fn construct_free_form(
     catalog: &[BaseResource],
 ) -> Result<(crate::structure::OrganismStructure, EnergyLedger, f64), String> {
     let carbon = catalog
@@ -310,7 +310,7 @@ fn construct_scaffold(
                     continue;
                 };
 
-                let mut trial_ledger = ledger;
+                let mut trial_ledger = ledger.clone();
                 let mut trial_energy = energy;
                 let mut cache = crate::contact::ConnectionCompatibilityCache::new();
 
@@ -571,10 +571,10 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
         return Err("catalog does not contain Water".into());
     }
 
-    let (structure, ledger, energy) = construct_scaffold(catalog)?;
+    let (structure, ledger, energy) = construct_free_form(catalog)?;
     let acquired_resource_placements =
         valid_construction(&structure, catalog, &acquisition_candidates).ok_or_else(|| {
-            "deterministic construction scaffold did not satisfy viability".to_string()
+            "free-form construction did not satisfy viability".to_string()
         })?;
 
     Ok(ValidConstruction {
@@ -589,7 +589,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn blueprint_free_constructor_produces_a_valid_organism() {
+    fn free_form_constructor_produces_a_valid_organism() {
         let catalog = crate::resources::default_catalog();
         let result = construct_valid(&catalog).expect("constructor should find a valid organism");
         assert!(!result.structure.units.is_empty());
