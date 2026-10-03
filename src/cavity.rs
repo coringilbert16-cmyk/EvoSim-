@@ -104,11 +104,10 @@ impl GenomeCavity {
             let seal_point = self.boundary_segments[i].1;
 
             for (bond_index, bond) in structure.bonds.iter().enumerate() {
-                let connects_units =
-                    (bond.endpoint_a.constituent_id == a_id
-                        && bond.endpoint_b.constituent_id == b_id)
-                        || (bond.endpoint_a.constituent_id == b_id
-                            && bond.endpoint_b.constituent_id == a_id);
+                let connects_units = (bond.endpoint_a.constituent_id == a_id
+                    && bond.endpoint_b.constituent_id == b_id)
+                    || (bond.endpoint_a.constituent_id == b_id
+                        && bond.endpoint_b.constituent_id == a_id);
                 if !connects_units {
                     continue;
                 }
@@ -133,8 +132,7 @@ impl GenomeCavity {
                 };
 
                 if (point_a.0 - seal_point.x).hypot(point_a.1 - seal_point.y) <= NODE_TOLERANCE
-                    && (point_b.0 - seal_point.x).hypot(point_b.1 - seal_point.y)
-                        <= NODE_TOLERANCE
+                    && (point_b.0 - seal_point.x).hypot(point_b.1 - seal_point.y) <= NODE_TOLERANCE
                 {
                     seal_bonds.insert(bond_index);
                 }
@@ -177,20 +175,21 @@ impl GenomeCavity {
                 };
                 let seal_point = self.boundary_segments[i].1;
                 structure.bonds.iter().any(|bond| {
-                    let connects_units =
-                        (bond.endpoint_a.constituent_id == a_id
-                            && bond.endpoint_b.constituent_id == b_id)
-                            || (bond.endpoint_a.constituent_id == b_id
-                                && bond.endpoint_b.constituent_id == a_id);
+                    let connects_units = (bond.endpoint_a.constituent_id == a_id
+                        && bond.endpoint_b.constituent_id == b_id)
+                        || (bond.endpoint_a.constituent_id == b_id
+                            && bond.endpoint_b.constituent_id == a_id);
                     if !connects_units {
                         return false;
                     }
-                    let Some(unit_a) = structure.unit_index(bond.endpoint_a.constituent_id)
+                    let Some(unit_a) = structure
+                        .unit_index(bond.endpoint_a.constituent_id)
                         .and_then(|index| structure.units.get(index))
                     else {
                         return false;
                     };
-                    let Some(unit_b) = structure.unit_index(bond.endpoint_b.constituent_id)
+                    let Some(unit_b) = structure
+                        .unit_index(bond.endpoint_b.constituent_id)
                         .and_then(|index| structure.units.get(index))
                     else {
                         return false;
@@ -291,11 +290,7 @@ fn analyze_genome_cavity_in_indices(
                 .copied()
                 .filter(|&unit_index| {
                     unit_boundary_matches_segment(
-                        structure,
-                        catalog,
-                        unit_index,
-                        segment_a,
-                        segment_b,
+                        structure, catalog, unit_index, segment_a, segment_b,
                     )
                 })
                 .collect::<Vec<_>>();
@@ -474,7 +469,10 @@ mod tests {
             .unwrap()
             .expect("baseline must provide a qualifying bonded cavity");
         let seal_bonds = cavity.boundary_bond_indices(&structure, &catalog);
-        assert!(!seal_bonds.is_empty(), "qualifying cavity must have a bonded seal");
+        assert!(
+            !seal_bonds.is_empty(),
+            "qualifying cavity must have a bonded seal"
+        );
 
         structure.bonds.remove(seal_bonds[0]);
         assert!(analyze_genome_cavity(&structure, &catalog)
