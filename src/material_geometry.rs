@@ -162,6 +162,70 @@ pub fn placed_forms_boundary_contact(
     false
 }
 
+/// Returns whether two realized material boundaries actually touch without
+/// requiring positive-area penetration. This is the physical predicate used by
+/// permanent bond admission; candidate endpoint distance is not sufficient.
+pub fn placed_forms_boundary_touch(
+    a: &PlacedMaterialPart,
+    b: &PlacedMaterialPart,
+    tolerance: f64,
+) -> bool {
+    if !tolerance.is_finite() {
+        return false;
+    }
+    let tolerance = tolerance.max(0.0);
+
+    fn fluid_boundary_part(part: &PlacedMaterialPart) -> Option<PlacedMaterialPart> {
+        let Form::Fluid { boundary: Some(vertices), .. } = &part.form else {
+            return None;
+        };
+        Some(PlacedMaterialPart {
+            part_index: part.part_index,
+            form: Form::Polygon { vertices: vertices.clone() },
+            placement: part.placement,
+        })
+    }
+
+    let (a, b) = match (&a.form, &b.form) {
+        (Form::Fluid { .. }, _) => match fluid_boundary_part(a) {
+            Some(boundary) => return placed_forms_boundary_touch(&boundary, b, tolerance),
+            None => return false,
+        },
+        (_, Form::Fluid { .. }) => match fluid_boundary_part(b) {
+            Some(boundary) => return placed_forms_boundary_touch(a, &boundary, tolerance),
+            None => return false,
+        },
+        _ => (a, b),
+    };
+
+    if !placed_forms_overlap(a, b, tolerance) {
+        return false;
+    }
+
+    match (&a.form, &b.form) {
+        (Form::Line { .. }, polygon) => line_polygon_boundary_touch(a, b, polygon, tolerance),
+        (polygon, Form::Line { .. }) => line_polygon_boundary_touch(b, a, polygon, tolerance),
+        _ => !placed_forms_penetrate(a, b, tolerance),
+    }
+}
+
+fn line_polygon_boundary_touch(
+    line: &PlacedMaterialPart,
+    polygon: &PlacedMaterialPart,
+    form: &Form,
+    tolerance: f64,
+) -> bool {
+    let Some(line_endpoints) = line_segment_world_endpoints(&line.form, line.placement) else {
+        return false;
+    };
+    let Some(vertices) = world_polygon_vertices(form, polygon.placement) else {
+        return false;
+    };
+    polygon_edges(&vertices).any(|(start, end)| {
+        segments_distance(line_endpoints.0, line_endpoints.1, start, end) <= tolerance
+    })
+}
+
 pub fn placed_forms_penetrate(
     a: &PlacedMaterialPart,
     b: &PlacedMaterialPart,
@@ -443,6 +507,15 @@ fn polygon_boundaries_coincide(
 
     a_vertices.iter().all(|&point| on_boundary(point, b_vertices))
         && b_vertices.iter().all(|&point| on_boundary(point, a_vertices))
+}
+fn line_segment_world_endpoints(form: &Form, placement: Placement) -> Option<((f64, f64), (f64, f64))> {
+    let Form::Line { length } = form else { return None; };
+    let half = length / 2.0;
+    let (sin, cos) = placement.rotation_radians.sin_cos();
+    Some((
+        (placement.x - half * cos, placement.y - half * sin),
+        (placement.x + half * cos, placement.y + half * sin),
+    ))
 }
 fn world_polygon_vertices(form: &Form, placement: Placement) -> Option<Vec<(f64, f64)>> {
     let vertices = form.polygon_vertices()?;
@@ -745,6 +818,29 @@ mod tests {
         );
         assert!(placed_forms_overlap(&phosphorus, &crossing, 0.0));
         assert!(placed_forms_penetrate(&phosphorus, &crossing, 0.0));
+    }
+
+    #[test]
+    fn line_inside_polygon_is_not_boundary_touch() {
+        let line = part(Form::Line { length: 0.4 }, 0.0, 0.0, 0.0);
+        let square = part(Form::Rectangle { width: 2.0, height: 2.0 }, 0.0, 0.0, 0.0);
+        assert!(placed_forms_overlap(&line, &square, 0.0));
+        assert!(!placed_forms_boundary_touch(&line, &square, 0.0));
+    }
+
+    #[test]
+    fn line_crossing_polygon_boundary_is_boundary_touch() {
+        let line = part(Form::Line { length: 4.0 }, 0.0, 0.0, 0.0);
+        let square = part(Form::Rectangle { width: 2.0, height: 2.0 }, 0.0, 0.0, 0.0);
+        assert!(placed_forms_boundary_touch(&line, &square, 0.0));
+    }
+
+    #[test]
+    fn penetrating_polygons_are_not_boundary_touch_only() {
+        let a = part(Form::Rectangle { width: 2.0, height: 2.0 }, 0.0, 0.0, 0.0);
+        let b = part(Form::Rectangle { width: 2.0, height: 2.0 }, 1.0, 0.0, 0.0);
+        assert!(placed_forms_penetrate(&a, &b, 0.0));
+        assert!(!placed_forms_boundary_touch(&a, &b, 0.0));
     }
 
     #[test]
