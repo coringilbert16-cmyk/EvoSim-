@@ -77,6 +77,9 @@ fn bond_units_legacy(
             candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
                 && candidate.available_a
                 && candidate.available_b
+                && crate::contact::candidate_has_physical_boundary_contact(
+                    structure, unit_a, unit_b, catalog, 1e-7,
+                )
         })
         .collect::<Vec<_>>();
 
