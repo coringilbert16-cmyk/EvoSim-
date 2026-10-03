@@ -450,6 +450,21 @@ mod tests {
     }
 
     #[test]
+    fn hydrogen_has_cached_one_unit_endpoint_matches() {
+        let catalog = crate::resources::default_catalog();
+        let construction = ConstructionCatalog::build(&catalog);
+        let hydrogen = catalog.iter().position(|r| r.name == "Hydrogen").unwrap();
+        let carbon = catalog.iter().position(|r| r.name == "Carbon").unwrap();
+        assert!(construction
+            .pair_formations_for(hydrogen, carbon)
+            .any(|formation| {
+                (formation.segment_length_a - 1.0).abs() < 1e-9
+                    && (formation.segment_length_b - 1.0).abs() < 1e-9
+                    && matches!(formation.endpoint_a, ConnectionEndpoint::LineEndpoint { .. })
+            }));
+    }
+
+    #[test]
     fn fluid_resources_are_not_treated_as_rigid_pair_geometry() {
         let catalog = crate::resources::default_catalog();
         let construction = ConstructionCatalog::build(&catalog);
