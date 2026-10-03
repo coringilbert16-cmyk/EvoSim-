@@ -261,27 +261,24 @@ fn construct_free_form(
 
                 for existing_index in 0..new_index {
                     let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-                    if let Some(candidate) =
-                        crate::contact::connection_pair_candidates_cached(
-                            &trial,
-                            existing_index,
-                            new_index,
-                            catalog,
-                            &mut cache,
-                        )
-                        .into_iter()
-                        .filter(|candidate| {
-                            candidate.distance
-                                <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                                && candidate.available_a
-                                && candidate.available_b
-                        })
-                        .min_by(|a, b| {
-                            a.distance
-                                .partial_cmp(&b.distance)
-                                .unwrap_or(std::cmp::Ordering::Equal)
-                        })
-                    {
+                    if let Some(candidate) = crate::contact::connection_pair_candidates_cached(
+                        &trial,
+                        existing_index,
+                        new_index,
+                        catalog,
+                        &mut cache,
+                    )
+                    .into_iter()
+                    .filter(|candidate| {
+                        candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                            && candidate.available_a
+                            && candidate.available_b
+                    })
+                    .min_by(|a, b| {
+                        a.distance
+                            .partial_cmp(&b.distance)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    }) {
                         contacts.push((existing_index, candidate));
                     }
                 }
