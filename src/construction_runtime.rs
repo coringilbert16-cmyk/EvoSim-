@@ -207,7 +207,7 @@ pub(crate) fn candidate_placements(
     // For rigid polygon-to-polygon placement, the configuration-space boundary
     // is now the authoritative translation locus. Keep the legacy path only
     // for mixed/non-polygon shapes while those cases are migrated separately.
-    if targets.iter().all(|&target| {
+    if !targets.is_empty() && targets.iter().all(|&target| {
         structure
             .units
             .get(target)
@@ -1662,6 +1662,67 @@ mod tests {
 
         assert_eq!(structure.units.len(), 3);
         assert_eq!(structure.bonds.len(), 3);
+    }
+
+
+    #[test]
+    fn nfp_polygon_candidates_are_exact_touching_placements() {
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+        let target = StructuralUnit::from_material(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        )
+        .unwrap();
+        structure.add_unit(target);
+
+        let carbon = catalog.iter().find(|r| r.name == "Carbon").unwrap();
+        let placements = candidate_placements(
+            &structure,
+            carbon,
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            &[0],
+            &catalog,
+        );
+
+        assert!(!placements.is_empty());
+        for placement in &placements {
+            let candidate = StructuralUnit::from_material(
+                crate::resources::Material::free_base("Carbon", 1.0),
+                *placement,
+            )
+            .unwrap();
+            assert!(!placed_unit_overlaps(&structure, &candidate, &[], &catalog));
+        }
+    }
+
+    #[test]
+    fn empty_target_list_retains_anchor_candidate() {
+        let catalog = crate::resources::default_catalog();
+        let carbon = catalog.iter().find(|r| r.name == "Carbon").unwrap();
+        let anchor = Placement {
+            x: 3.0,
+            y: -2.0,
+            rotation_radians: 0.25,
+        };
+        assert_eq!(
+            candidate_placements(
+                &OrganismStructure::new(),
+                carbon,
+                anchor,
+                &[],
+                &catalog,
+            ),
+            vec![anchor]
+        );
     }
 
     #[test]
