@@ -692,7 +692,7 @@ fn birth_ready(
 fn birth_ready_with_reference(
     construction: &ReproductiveConstruction,
     catalog: &[crate::resources::BaseResource],
-    seed_reference: Option<(f64, f64)>,
+    _seed_reference: Option<(f64, f64)>,
 ) -> bool {
     let Ok(cavity) =
         crate::cavity::analyze_genome_cavity(&construction.developing_structure, catalog)
