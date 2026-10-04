@@ -14,7 +14,7 @@ pub struct Point {
     pub y: f64,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PlacementBoundarySegment {
     pub start: Point,
     pub end: Point,
@@ -368,6 +368,18 @@ mod tests {
             .iter()
             .any(|pair| matches!(pair.a, MinkowskiFeature::Edge(_))
                 && matches!(pair.b, MinkowskiFeature::Edge(_))));
+    }
+
+    #[test]
+    fn provenance_can_represent_vertex_edge_contact() {
+        let triangle = vec![(0.0, 1.0), (-1.0, -1.0), (1.0, -1.0)];
+        let boundary = convex_minkowski_difference(&triangle, &square()).unwrap();
+        assert!(boundary.segments.iter().any(|segment| {
+            segment.feature_pairs.iter().any(|pair| {
+                matches!(pair.a, MinkowskiFeature::Vertex(_))
+                    && matches!(pair.b, MinkowskiFeature::Edge(_))
+            })
+        }));
     }
 
     #[test]
