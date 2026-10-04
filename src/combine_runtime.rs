@@ -16,7 +16,7 @@ use crate::state::{EnergyLedger, Environment, Organism};
 use crate::structure::{BondEndpoint, ConnectionEndpoint, Placement};
 
 const EPSILON: f64 = 1e-12;
-pub(crate) const COMBINE_CONTACT_TOLERANCE: f64 = 1.0;
+pub(crate) const COMBINE_CONTACT_TOLERANCE: f64 = 0.1;
 
 /// Developmental context is solver intent only. Physical validity is still
 /// established by the normal COMBINE candidate and formation checks.
@@ -248,7 +248,12 @@ fn form_bond_from_candidate(
     if (threshold - investment).abs() > EPSILON || interaction.signed_value < 0.0 {
         return None;
     }
-    let strength = bond_strength(a, b);
+    let base_strength = bond_strength(a, b);
+    if !base_strength.is_finite() {
+        return None;
+    }
+    let contact_factor = candidate.bond_strength_factor.unwrap_or(1.0);
+    let strength = base_strength * contact_factor;
     if !strength.is_finite() {
         return None;
     }
