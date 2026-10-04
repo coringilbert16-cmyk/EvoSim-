@@ -58,6 +58,7 @@ fn nfp_orientation_candidates(
     // sweep or attempt budget.
     let feature_normals = |vertices: &[(f64, f64)], rotation: f64| {
         let mut normals = Vec::with_capacity(vertices.len() * 2);
+        let (s, c) = rotation.sin_cos();
         for i in 0..vertices.len() {
             let a = vertices[i];
             let b = vertices[(i + 1) % vertices.len()];
@@ -68,22 +69,24 @@ fn nfp_orientation_candidates(
                 continue;
             }
             let edge_normal = (dy / length, -dx / length);
-            let (s, c) = rotation.sin_cos();
-            normals.push((edge_normal.1.atan2(edge_normal.0), i));
+            let rotate_normal = |normal: (f64, f64)| {
+                (normal.0 * c - normal.1 * s, normal.0 * s + normal.1 * c)
+            };
+            let edge_normal = rotate_normal(edge_normal);
+            normals.push(edge_normal.1.atan2(edge_normal.0));
 
             let previous = vertices[(i + vertices.len() - 1) % vertices.len()];
             let prev_dx = a.0 - previous.0;
             let prev_dy = a.1 - previous.1;
             let prev_length = prev_dx.hypot(prev_dy);
             if prev_length > 1e-12 {
-                let prev_normal = (prev_dy / prev_length, -prev_dx / prev_length);
+                let prev_normal = rotate_normal((prev_dy / prev_length, -prev_dx / prev_length));
                 let nx = prev_normal.0 + edge_normal.0;
                 let ny = prev_normal.1 + edge_normal.1;
                 if nx.hypot(ny) > 1e-12 {
-                    normals.push(((ny.atan2(nx)), i));
+                    normals.push(ny.atan2(nx));
                 }
             }
-            let _ = (s, c);
         }
         normals
     };
@@ -201,6 +204,25 @@ pub(crate) fn candidate_placements(
     targets: &[usize],
     catalog: &[BaseResource],
 ) -> Vec<Placement> {
+    // For rigid polygon-to-polygon placement, the configuration-space boundary
+    // is now the authoritative translation locus. Keep the legacy path only
+    // for mixed/non-polygon shapes while those cases are migrated separately.
+    if targets.iter().all(|&target| {
+        structure
+            .units
+            .get(target)
+            .and_then(|unit| unit.shape(catalog))
+            .and_then(polygon_local_vertices)
+            .is_some()
+    }) && polygon_local_vertices(&resource.shape).is_some()
+    {
+        if let Some(placements) =
+            nfp_candidate_placements(structure, resource, anchor, targets, catalog)
+        {
+            return placements;
+        }
+    }
+
     let mut out = vec![anchor];
     for &target in targets {
         let Some(unit) = structure.units.get(target) else {
