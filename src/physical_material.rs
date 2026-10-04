@@ -71,7 +71,32 @@ impl PhysicalMaterial {
                 connection_pair_candidates(&structure, bond.part_a, bond.part_b, catalog)
                     .into_iter()
                     .find(|candidate| {
-                        candidate.available_a && candidate.available_b && candidate.distance <= 1.0
+                        candidate.available_a
+                            && candidate.available_b
+                            && candidate.distance <= 1.0
+                            && {
+                                let Some(shape_a) = structure.units[bond.part_a].shape(catalog) else {
+                                    return false;
+                                };
+                                let Some(shape_b) = structure.units[bond.part_b].shape(catalog) else {
+                                    return false;
+                                };
+                                let part_a = crate::material_geometry::PlacedMaterialPart {
+                                    part_index: bond.part_a,
+                                    form: shape_a.form.clone(),
+                                    placement: structure.units[bond.part_a].placement,
+                                };
+                                let part_b = crate::material_geometry::PlacedMaterialPart {
+                                    part_index: bond.part_b,
+                                    form: shape_b.form.clone(),
+                                    placement: structure.units[bond.part_b].placement,
+                                };
+                                crate::material_geometry::placed_forms_boundary_touch(
+                                    &part_a,
+                                    &part_b,
+                                    1e-7,
+                                )
+                            }
                     })?;
             internal_connections.push(PhysicalMaterialBond {
                 part_a: bond.part_a,
