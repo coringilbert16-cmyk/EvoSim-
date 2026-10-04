@@ -388,6 +388,27 @@ mod tests {
     }
 
     #[test]
+    fn translation_on_boundary_means_external_tangency() {
+        let a = square();
+        let b = square();
+        let boundary = convex_minkowski_difference(&a, &b).unwrap();
+        let right = boundary
+            .segments
+            .iter()
+            .find(|s| (s.start.x - 2.0).abs() < 1e-12 && (s.end.x - 2.0).abs() < 1e-12)
+            .unwrap();
+        let translation = Point { x: 2.0, y: 0.0 };
+        assert!(right.start.y <= translation.y && translation.y <= right.end.y);
+    }
+
+    #[test]
+    fn origin_is_inside_equal_square_configuration_region() {
+        let boundary = convex_minkowski_difference(&square(), &square()).unwrap();
+        assert!(boundary.vertices.iter().all(|p| p.x.abs() <= 2.0 + 1e-12));
+        assert!(boundary.vertices.iter().all(|p| p.y.abs() <= 2.0 + 1e-12));
+    }
+
+    #[test]
     fn corner_support_is_retained_as_vertex_provenance() {
         let triangle = vec![(0.0, 1.0), (-1.0, -1.0), (1.0, -1.0)];
         let boundary = convex_minkowski_difference(&triangle, &square()).unwrap();
