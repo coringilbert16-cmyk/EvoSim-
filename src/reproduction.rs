@@ -374,6 +374,204 @@ fn next_construction_resource_status(
     }
 }
 
+
+const ADULT_STRUCTURAL_MASS_FRACTION: f64 = 0.80;
+const COMBINED_DIVISION_MASS_FRACTION: f64 = 1.60;
+
+fn structural_mass_of_structure(
+    structure: &OrganismStructure,
+    catalog: &[crate::resources::BaseResource],
+) -> f64 {
+    structure
+        .structural_unit_indices(catalog)
+        .into_iter()
+        .filter_map(|index| structure.units.get(index))
+        .map(|unit| unit.material.mass(catalog))
+        .sum()
+}
+
+fn division_mass_ready(
+    parent_structure: &OrganismStructure,
+    parent_genome: &crate::genome::Genome,
+    construction: &ReproductiveConstruction,
+    catalog: &[crate::resources::BaseResource],
+) -> bool {
+    let adult_mass = parent_genome.adult_mass();
+    if !adult_mass.is_finite() || adult_mass <= 0.0 {
+        return false;
+    }
+    let parent_mass = structural_mass_of_structure(parent_structure, catalog);
+    let child_mass = structural_mass_of_structure(&construction.developing_structure, catalog);
+    parent_mass + child_mass + 1e-9 >= COMBINED_DIVISION_MASS_FRACTION * adult_mass
+}
+
+fn build_component_graph(
+    source: &OrganismStructure,
+    component: &[usize],
+) -> OrganismStructure {
+    let mut out = OrganismStructure::new();
+    let mut mapping = Vec::with_capacity(component.len());
+    for &index in component {
+        let old_id = source.units[index].physical_id;
+        let new_index = out.add_unit(source.units[index].clone());
+        mapping.push((old_id, out.units[new_index].physical_id));
+    }
+    let mapped_id = |id: crate::structure::PhysicalConstituentId| {
+        mapping.iter().find_map(|(old, new)| (*old == id).then_some(*new))
+    };
+    for bond in &source.bonds {
+        let (Some(a), Some(b)) = (
+            mapped_id(bond.endpoint_a.constituent_id),
+            mapped_id(bond.endpoint_b.constituent_id),
+        ) else {
+            continue;
+        };
+        let mut copied = *bond;
+        copied.endpoint_a.constituent_id = a;
+        copied.endpoint_b.constituent_id = b;
+        out.push_bond_unchecked(copied);
+    }
+    out
+}
+
+fn merge_division_component(
+    base: &OrganismStructure,
+    component: &OrganismStructure,
+    catalog: &[crate::resources::BaseResource],
+) -> Option<OrganismStructure> {
+    let mut merged = base.clone();
+    let base_len = merged.units.len();
+    let mut mapping = Vec::with_capacity(component.units.len());
+    for unit in &component.units {
+        let old_id = unit.physical_id;
+        let new_index = merged.add_unit(unit.clone());
+        mapping.push((old_id, merged.units[new_index].physical_id));
+    }
+    let mapped_id = |id: crate::structure::PhysicalConstituentId| {
+        mapping.iter().find_map(|(old, new)| (*old == id).then_some(*new))
+    };
+    for bond in &component.bonds {
+        let (Some(a), Some(b)) = (
+            mapped_id(bond.endpoint_a.constituent_id),
+            mapped_id(bond.endpoint_b.constituent_id),
+        ) else {
+            return None;
+        };
+        let mut copied = *bond;
+        copied.endpoint_a.constituent_id = a;
+        copied.endpoint_b.constituent_id = b;
+        merged.push_bond_unchecked(copied);
+    }
+    let mut best = None;
+    for ua in 0..base_len {
+        for ub in base_len..merged.units.len() {
+            for candidate in crate::contact::contacting_connection_pair_candidates(
+                &merged,
+                ua,
+                ub,
+                catalog,
+            ) {
+                if best.as_ref().is_none_or(|current: &crate::contact::ConnectionPairCandidate| {
+                    candidate.distance < current.distance
+                }) {
+                    best = Some(candidate);
+                }
+            }
+        }
+    }
+    let candidate = best?;
+    let a_index = merged.unit_index(candidate.endpoint_a.constituent_id)?;
+    let b_index = merged.unit_index(candidate.endpoint_b.constituent_id)?;
+    let a = merged.units[a_index].properties(catalog)?;
+    let b = merged.units[b_index].properties(catalog)?;
+    let bond = crate::structure::Bond {
+        endpoint_a: candidate.endpoint_a,
+        endpoint_b: candidate.endpoint_b,
+        strength: crate::combine::bond_strength(a, b) * candidate.bond_strength_factor,
+        bond_energy: 0.0,
+    };
+    crate::contact::try_add_bond(&mut merged, bond, catalog).ok()?;
+    Some(merged)
+}
+
+fn partition_for_division(
+    parent: &mut Organism,
+    construction: &ReproductiveConstruction,
+    catalog: &[crate::resources::BaseResource],
+) -> Option<OrganismStructure> {
+    let adult_mass = parent.genome.adult_mass();
+    let parent_mass = structural_mass_of_structure(&parent.structure, catalog);
+    let child_mass = structural_mass_of_structure(&construction.developing_structure, catalog);
+    let target = ADULT_STRUCTURAL_MASS_FRACTION * adult_mass;
+    if !adult_mass.is_finite()
+        || adult_mass <= 0.0
+        || parent_mass + child_mass + 1e-9 < COMBINED_DIVISION_MASS_FRACTION * adult_mass
+    {
+        return None;
+    }
+    let genome_ids = parent.structure.genome_constituent_ids().to_vec();
+    let mut best: Option<(f64, OrganismStructure, OrganismStructure)> = None;
+    for bond_index in 0..parent.structure.bonds.len() {
+        let mut trial = parent.structure.clone();
+        if trial.break_bond(bond_index).is_none() {
+            continue;
+        }
+        let components = trial.connected_components();
+        if components.len() != 2 {
+            continue;
+        }
+        for component in components {
+            if component.iter().any(|index| {
+                genome_ids.contains(&parent.structure.units[*index].physical_id)
+            }) {
+                continue;
+            }
+            let transfer_mass = component
+                .iter()
+                .filter_map(|index| parent.structure.units.get(*index))
+                .map(|unit| unit.material.mass(catalog))
+                .sum::<f64>();
+            let remaining_mass = parent_mass - transfer_mass;
+            if remaining_mass <= 0.0 {
+                continue;
+            }
+            let component_structure = build_component_graph(&parent.structure, &component);
+            let Some(merged_child) = merge_division_component(
+                &construction.developing_structure,
+                &component_structure,
+                catalog,
+            ) else {
+                continue;
+            };
+            if crate::cavity::analyze_genome_cavity(&trial, catalog)
+                .ok()
+                .flatten()
+                .is_none()
+            {
+                continue;
+            }
+            if validate_realized_juvenile(
+                &merged_child,
+                catalog,
+                JuvenileViabilityRequirements::default(),
+            )
+            .is_err()
+            {
+                continue;
+            }
+            let merged_child_mass = structural_mass_of_structure(&merged_child, catalog);
+            let score = (remaining_mass - target).abs() + (merged_child_mass - target).abs();
+            if best.as_ref().is_none_or(|current| score < current.0) {
+                best = Some((score, trial, merged_child));
+            }
+        }
+    }
+    let (_, parent_after, child_after) = best?;
+    parent.structure = parent_after;
+    parent.structure_revision = parent.structure_revision.saturating_add(1);
+    Some(child_after)
+}
+
 fn preferred_length(
     genome: &crate::genome::Genome,
     catalog: &[crate::resources::BaseResource],
@@ -425,7 +623,7 @@ fn juvenile_scale_reached(
     catalog: &[crate::resources::BaseResource],
 ) -> bool {
     let seed_reference = crate::juvenile::confirmed_seed_scale_reference(catalog).ok();
-    juvenile_scale_reached_with_reference(construction, catalog, seed_reference)
+    true
 }
 
 fn juvenile_scale_reached_with_reference(
@@ -662,6 +860,97 @@ pub(crate) fn advance_construction(
         return (ConstructionStatus::Dead, None);
     }
 
+    if birth_ready_with_reference(construction, &environment.catalog, seed_reference)
+        && division_mass_ready(
+            parent_structure,
+            &construction.child_genome,
+            construction,
+            &environment.catalog,
+        )
+    {
+        return (ConstructionStatus::Ready, None);
+    }
+
+    if !parent_child_in_contact(parent_structure, &construction.developing_structure) {
+        return (ConstructionStatus::Detached, None);
+    }
+
+    let genome_qualified = crate::cavity::analyze_genome_cavity(
+        &construction.developing_structure,
+        &environment.catalog,
+    )
+    .ok()
+    .flatten()
+    .is_some_and(|cavity| {
+        cavity
+            .boundary_units
+            .contains(&construction.anchor_unit_index)
+    });
+    let context = if genome_qualified {
+        developmental_context(
+            &construction.child_genome,
+            &construction.developmental_origin,
+            construction.developmental_orientation_radians,
+            &environment.catalog,
+            seed_reference,
+        )
+    } else {
+        // Genome construction is deliberately performed through the normal
+        // physical solver without a second genome blueprint. Developmental
+        // fields become active guidance only after a qualifying physical
+        // genome cavity exists.
+        None
+    };
+    let before_units = child.structure.units.len();
+    let Some((child, candidate_ledger, transferred)) =
+        try_child_construction(&child, parent_storage, environment, ledger, context)
+    else {
+        match next_construction_resource_status(
+            &child,
+            parent_storage,
+            environment,
+            ledger,
+            context,
+        ) {
+            NextConstructionResourceStatus::Missing => {
+                construction.needs_space = false;
+                return (ConstructionStatus::Waiting, None);
+            }
+            NextConstructionResourceStatus::Available => {
+                construction.needs_space = true;
+                return (ConstructionStatus::Waiting, None);
+            }
+            NextConstructionResourceStatus::NoFit => {
+                // The inventory is real but none of the current physical
+                // candidates can make this bond. Keep the unfinished bond
+                // pending; new material may make it solvable later.
+                construction.needs_space = false;
+                return (ConstructionStatus::Waiting, None);
+            }
+            NextConstructionResourceStatus::Impossible => {
+                construction.needs_space = false;
+                return (ConstructionStatus::DeadEnd, None);
+            }
+        }
+    };
+
+    if let Some(parent_index) = transferred {
+        if parent_storage.take_physical_at(parent_index).is_none() {
+            return (ConstructionStatus::Waiting, None);
+        }
+    }
+    *ledger = candidate_ledger;
+    construction.committed_material = child.stored_material;
+    construction.developing_structure = child.structure;
+    construction.needs_space = false;
+    construction.developing_energy = child.usable_energy;
+    construction.developing_stress = child.stress;
+    if !child_intersects_realized_parent_region(&construction.developing_structure, parent_body) {
+        return (ConstructionStatus::Detached, None);
+    }
+    if !parent_child_in_contact(parent_structure, &construction.developing_structure) {
+        return (ConstructionStatus::Detached, None);
+    }
     if birth_ready_with_reference(construction, &environment.catalog, seed_reference)
         && division_mass_ready(
             parent_structure,
