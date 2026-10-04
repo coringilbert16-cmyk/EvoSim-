@@ -116,7 +116,7 @@ fn commit_contact_set(
                 catalog,
             )
         else {
-            break;
+            continue;
         };
 
         if crate::combine_runtime::form_selected_bond(
@@ -130,11 +130,10 @@ fn commit_contact_set(
             ledger,
             energy,
         )
-        .is_none()
+        .is_some()
         {
-            break;
+            formed += 1;
         }
-        formed += 1;
     }
     formed
 }
@@ -202,7 +201,9 @@ fn try_local_continuation(
 
     for placement in candidate_placements(structure, resource, catalog) {
         let mut trial = structure.clone();
-        let new_unit = restore_single(&mut trial, resource, placement, catalog)?;
+        let Some(new_unit) = restore_single(&mut trial, resource, placement, catalog) else {
+            continue;
+        };
         if crate::construction_runtime::placed_unit_overlaps(
             &trial,
             &trial.units[new_unit],
