@@ -261,15 +261,15 @@ impl ConnectionEndpoint {
                 )
             }
             Self::Boundary { angle_radians } => {
-                let crate::resources::Form::Circle { radius } = unit.shape(catalog)?.form else {
-                    return None;
-                };
+                let shape = unit.shape(catalog)?;
                 let (nx, ny) = (angle_radians.cos(), angle_radians.sin());
+                let point =
+                    crate::surface_geometry::boundary_point_toward(shape, nx, ny)?;
                 Some(crate::connection_geometry::transform_derived_point(
-                    radius * nx,
-                    radius * ny,
-                    nx,
-                    ny,
+                    point.x,
+                    point.y,
+                    point.normal_x,
+                    point.normal_y,
                     unit.placement.x,
                     unit.placement.y,
                     unit.placement.rotation_radians,
@@ -782,6 +782,28 @@ pub fn formation_threshold(a: f64, b: f64, la: f64, lb: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn boundary_endpoint_resolves_against_rigid_surface_geometry() {
+        let catalog = crate::resources::default_catalog();
+        let unit = StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 2.0,
+                y: -3.0,
+                rotation_radians: 0.0,
+            },
+        );
+        let point = ConnectionEndpoint::Boundary {
+            angle_radians: 0.0,
+        }
+        .world_point(&unit, &catalog)
+        .expect("rigid boundary endpoint should resolve");
+        assert!(point.x.is_finite());
+        assert!(point.y.is_finite());
+        assert!((point.x - 3.0).abs() < 1e-12);
+        assert!(point.y.abs() < 1e-12 + 3.0);
+    }
+
     #[test]
     fn only_fluid_resources_can_take_context_fitting_geometry() {
         let catalog = crate::resources::default_catalog();
