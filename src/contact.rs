@@ -674,7 +674,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn polygon_boundary_facing_uses_actual_edge_normal_not_radial_direction() {
         let catalog = crate::resources::default_catalog();
         let structure = test_structure().0;
