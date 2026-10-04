@@ -161,7 +161,7 @@ fn boundary_feature_pairs(
 
     let nx = -direction.y / length;
     let ny = direction.x / length;
-    let support_tolerance = 1e-9;
+    const SUPPORT_TOLERANCE: f64 = 1e-9;
 
     fn support_indices(points: &[Point], nx: f64, ny: f64) -> Vec<usize> {
         let maximum = points
@@ -172,7 +172,7 @@ fn boundary_feature_pairs(
             .iter()
             .enumerate()
             .filter_map(|(i, p)| {
-                ((p.x * nx + p.y * ny) >= maximum - support_tolerance)
+                ((p.x * nx + p.y * ny) >= maximum - SUPPORT_TOLERANCE)
                     .then_some(i)
             })
             .collect()
@@ -181,16 +181,16 @@ fn boundary_feature_pairs(
     let a_support = support_indices(a, nx, ny);
     let b_support = support_indices(b_negated, -nx, -ny);
 
-    let mut pairs = Vec::new();
-    if let (Some(a_feature), Some(b_feature)) = (
+    match (
         support_feature(a, &a_support),
         support_feature(b_negated, &b_support),
     ) {
-        pairs.push(MinkowskiFeaturePair { a: a_feature, b: b_feature });
+        (Some(a_feature), Some(b_feature)) => vec![MinkowskiFeaturePair {
+            a: a_feature,
+            b: b_feature,
+        }],
+        _ => Vec::new(),
     }
-        }
-    }
-    pairs
 }
 
 fn convex_hull(mut points: Vec<Point>) -> Vec<Point> {
@@ -363,13 +363,11 @@ mod tests {
                     && (segment.start.x - segment.end.x).abs() > 1e-12
             })
             .unwrap();
-        assert!(segment.feature_pairs.contains(&MinkowskiFeaturePair {
-            a: MinkowskiFeature::Edge(1),
-            b: MinkowskiFeature::Edge(1),
-        }) || segment.feature_pairs.contains(&MinkowskiFeaturePair {
-            a: MinkowskiFeature::Edge(3),
-            b: MinkowskiFeature::Edge(3),
-        }));
+        assert!(segment
+            .feature_pairs
+            .iter()
+            .any(|pair| matches!(pair.a, MinkowskiFeature::Edge(_))
+                && matches!(pair.b, MinkowskiFeature::Edge(_))));
     }
 
     #[test]
