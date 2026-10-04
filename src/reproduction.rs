@@ -662,91 +662,14 @@ pub(crate) fn advance_construction(
         return (ConstructionStatus::Dead, None);
     }
 
-    if birth_ready_with_reference(construction, &environment.catalog, seed_reference) {
-        return (ConstructionStatus::Ready, None);
-    }
-
-    if !parent_child_in_contact(parent_structure, &construction.developing_structure) {
-        return (ConstructionStatus::Detached, None);
-    }
-
-    let genome_qualified = crate::cavity::analyze_genome_cavity(
-        &construction.developing_structure,
-        &environment.catalog,
-    )
-    .ok()
-    .flatten()
-    .is_some_and(|cavity| {
-        cavity
-            .boundary_units
-            .contains(&construction.anchor_unit_index)
-    });
-    let context = if genome_qualified {
-        developmental_context(
+    if birth_ready_with_reference(construction, &environment.catalog, seed_reference)
+        && division_mass_ready(
+            parent_structure,
             &construction.child_genome,
-            &construction.developmental_origin,
-            construction.developmental_orientation_radians,
+            construction,
             &environment.catalog,
-            seed_reference,
         )
-    } else {
-        // Genome construction is deliberately performed through the normal
-        // physical solver without a second genome blueprint. Developmental
-        // fields become active guidance only after a qualifying physical
-        // genome cavity exists.
-        None
-    };
-    let before_units = child.structure.units.len();
-    let Some((child, candidate_ledger, transferred)) =
-        try_child_construction(&child, parent_storage, environment, ledger, context)
-    else {
-        match next_construction_resource_status(
-            &child,
-            parent_storage,
-            environment,
-            ledger,
-            context,
-        ) {
-            NextConstructionResourceStatus::Missing => {
-                construction.needs_space = false;
-                return (ConstructionStatus::Waiting, None);
-            }
-            NextConstructionResourceStatus::Available => {
-                construction.needs_space = true;
-                return (ConstructionStatus::Waiting, None);
-            }
-            NextConstructionResourceStatus::NoFit => {
-                // The inventory is real but none of the current physical
-                // candidates can make this bond. Keep the unfinished bond
-                // pending; new material may make it solvable later.
-                construction.needs_space = false;
-                return (ConstructionStatus::Waiting, None);
-            }
-            NextConstructionResourceStatus::Impossible => {
-                construction.needs_space = false;
-                return (ConstructionStatus::DeadEnd, None);
-            }
-        }
-    };
-
-    if let Some(parent_index) = transferred {
-        if parent_storage.take_physical_at(parent_index).is_none() {
-            return (ConstructionStatus::Waiting, None);
-        }
-    }
-    *ledger = candidate_ledger;
-    construction.committed_material = child.stored_material;
-    construction.developing_structure = child.structure;
-    construction.needs_space = false;
-    construction.developing_energy = child.usable_energy;
-    construction.developing_stress = child.stress;
-    if !child_intersects_realized_parent_region(&construction.developing_structure, parent_body) {
-        return (ConstructionStatus::Detached, None);
-    }
-    if !parent_child_in_contact(parent_structure, &construction.developing_structure) {
-        return (ConstructionStatus::Detached, None);
-    }
-    if birth_ready_with_reference(construction, &environment.catalog, seed_reference) {
+    {
         return (ConstructionStatus::Ready, None);
     }
     if construction.developing_structure.units.len() > before_units {
@@ -763,12 +686,23 @@ pub(crate) fn finish_reproduction(
     _ledger: &mut EnergyLedger,
     seed_reference: Option<(f64, f64)>,
 ) -> Option<Organism> {
-    let construction = parent.reproductive_construction.take()?;
-    let ready = birth_ready_with_reference(&construction, catalog, seed_reference);
-    if !ready && construction.developing_structure.units.is_empty() {
+    let mut construction = parent.reproductive_construction.take()?;
+    let ready = birth_ready_with_reference(&construction, catalog, seed_reference)
+        && division_mass_ready(
+            &parent.structure,
+            &construction.child_genome,
+            &construction,
+            catalog,
+        );
+    if !ready {
         parent.reproductive_construction = Some(construction);
         return None;
     }
+    let Some(child_structure) = partition_for_division(parent, &construction, catalog) else {
+        parent.reproductive_construction = Some(construction);
+        return None;
+    };
+    construction.developing_structure = child_structure;
     let child_position = construction.developmental_origin.clone();
     Some(Organism {
         id: child_id,
