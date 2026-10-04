@@ -196,6 +196,7 @@ fn try_local_continuation(
     usize,
     bool,
     f64,
+    f64,
 )> {
     let mut best = None;
 
