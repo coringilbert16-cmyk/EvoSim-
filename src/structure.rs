@@ -801,7 +801,7 @@ mod tests {
         assert!(point.x.is_finite());
         assert!(point.y.is_finite());
         assert!((point.x - 3.0).abs() < 1e-12);
-        assert!(point.y.abs() < 1e-12 + 3.0);
+        assert!((point.y + 3.0).abs() < 1e-12);
     }
 
     #[test]
