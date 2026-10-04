@@ -303,12 +303,20 @@ fn rigid_contact_endpoint(
     if let Some(point_index) = vertex_index {
         return Some(ConnectionEndpoint::Corner { point_index });
     }
-    rigid_boundary_endpoint(
+    let endpoint = rigid_boundary_endpoint(
         unit,
         point.0 - unit.placement.x,
         point.1 - unit.placement.y,
-    )
-    .filter(|endpoint| matches!(unit.shape(catalog)?.form, Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. }))
+    )?;
+    let shape = unit.shape(catalog)?;
+    if matches!(
+        shape.form,
+        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. }
+    ) {
+        Some(endpoint)
+    } else {
+        None
+    }
 }
 
 fn rigid_surface_candidates(
