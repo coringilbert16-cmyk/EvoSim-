@@ -758,6 +758,170 @@ fn construction_angle_candidates(
     angles
 }
 
+fn try_attach_physical_material_nfp(
+    structure: &OrganismStructure,
+    existing_index: usize,
+    new_material: &crate::physical_material::PhysicalMaterial,
+    catalog: &[BaseResource],
+    nodes: &mut usize,
+    ledger: &EnergyLedger,
+    available_energy: f64,
+) -> Option<(
+    OrganismStructure,
+    Vec<usize>,
+    usize,
+    crate::combine_runtime::CombineAttempt,
+    EnergyLedger,
+    f64,
+)> {
+    let existing_unit = structure.units.get(existing_index)?;
+    let existing_shape = existing_unit.shape(catalog)?;
+    polygon_local_vertices(existing_shape)?;
+    let placements = new_material.placements.as_ref()?;
+    if new_material.material.parts.len() != placements.len() {
+        return None;
+    }
+
+    let mut best_candidate: Option<(
+        f64,
+        OrganismStructure,
+        Vec<usize>,
+        usize,
+        crate::combine_runtime::CombineAttempt,
+        EnergyLedger,
+        f64,
+    )> = None;
+
+    for part_index in 0..new_material.material.parts.len() {
+        let (name, _) = new_material.material.parts.get(part_index)?;
+        let resource = resource(catalog, name)?;
+        polygon_local_vertices(&resource.shape)?;
+        let relative = *placements.get(part_index)?;
+
+        let preferred = Placement {
+            x: existing_unit.placement.x,
+            y: existing_unit.placement.y,
+            rotation_radians: existing_unit.placement.rotation_radians
+                + relative.rotation_radians,
+        };
+        let part_placements = nfp_candidate_placements(
+            structure,
+            resource,
+            preferred,
+            &[existing_index],
+            catalog,
+        )?;
+
+        for part_placement in part_placements {
+            let candidate_origin =
+                crate::material_restoration::origin_for_relative_placement(
+                    part_placement,
+                    relative,
+                );
+            let preference_distance = (candidate_origin.x - existing_unit.placement.x)
+                .hypot(candidate_origin.y - existing_unit.placement.y);
+
+            *nodes += 1;
+            let mut trial = structure.clone();
+            let indices = crate::material_restoration::restore_material(
+                &mut trial,
+                new_material,
+                candidate_origin,
+                catalog,
+            )?;
+            let new_unit_index = *indices.get(part_index)?;
+            let ignored_units = indices.clone();
+            if indices.iter().any(|index| {
+                placed_unit_overlaps(&trial, &trial.units[*index], &ignored_units, catalog)
+            }) {
+                continue;
+            }
+
+            let mut trial_ledger = *ledger;
+            let mut trial_energy = available_energy;
+            let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
+            let Some(candidate) = crate::contact::connection_pair_candidates_cached(
+                &trial,
+                existing_index,
+                new_unit_index,
+                catalog,
+                &mut bond_cache,
+            )
+            .into_iter()
+            .filter(|candidate| {
+                candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                    && candidate.available_a
+                    && candidate.available_b
+            })
+            .min_by(|a, b| {
+                a.distance
+                    .partial_cmp(&b.distance)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| {
+                        b.facing
+                            .partial_cmp(&a.facing)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    })
+            }) else {
+                continue;
+            };
+
+            let Some((_, _, _, investment, _required_energy)) =
+                crate::combine_runtime::selected_candidate_evaluation(
+                    &trial,
+                    existing_index,
+                    new_unit_index,
+                    candidate,
+                    catalog,
+                )
+            else {
+                continue;
+            };
+            let Some(attempt) = crate::combine_runtime::form_selected_bond(
+                &mut trial,
+                existing_index,
+                new_unit_index,
+                candidate,
+                investment,
+                catalog,
+                &mut bond_cache,
+                &mut trial_ledger,
+                &mut trial_energy,
+            ) else {
+                continue;
+            };
+
+            if best_candidate
+                .as_ref()
+                .is_none_or(|current| preference_distance < current.0)
+            {
+                best_candidate = Some((
+                    preference_distance,
+                    trial,
+                    indices,
+                    part_index,
+                    attempt,
+                    trial_ledger,
+                    trial_energy,
+                ));
+            }
+        }
+    }
+
+    best_candidate.map(
+        |(_, trial, indices, part_index, attempt, trial_ledger, trial_energy)| {
+            (
+                trial,
+                indices,
+                part_index,
+                attempt,
+                trial_ledger,
+                trial_energy,
+            )
+        },
+    )
+}
+
 pub(crate) fn try_attach_physical_material_bond_driven(
     structure: &OrganismStructure,
     existing_index: usize,
@@ -775,6 +939,37 @@ pub(crate) fn try_attach_physical_material_bond_driven(
     f64,
 )> {
     let existing_unit = structure.units.get(existing_index)?;
+
+    // Rigid polygon construction uses the exact configuration-space boundary.
+    // Mixed/non-polygon material remains on the legacy endpoint path until its
+    // geometry has an equivalent placement model.
+    if existing_unit
+        .shape(catalog)
+        .and_then(polygon_local_vertices)
+        .is_some()
+        && new_material
+            .material
+            .parts
+            .iter()
+            .all(|(name, _)| {
+                resource(catalog, name)
+                    .and_then(|resource| polygon_local_vertices(&resource.shape))
+                    .is_some()
+            })
+    {
+        if let Some(result) = try_attach_physical_material_nfp(
+            structure,
+            existing_index,
+            new_material,
+            catalog,
+            nodes,
+            ledger,
+            available_energy,
+        ) {
+            return Some(result);
+        }
+    }
+
     let existing_endpoints = structure_unit_endpoint_options(existing_unit, catalog);
     let new_endpoints = physical_material_endpoint_options(new_material, catalog);
     if existing_endpoints.is_empty() || new_endpoints.is_empty() {
