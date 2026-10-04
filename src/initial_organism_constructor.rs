@@ -226,6 +226,15 @@ fn try_local_continuation(
             continue;
         }
 
+        // Rank by actual enclosed-region progress before distance. A candidate
+        // that creates a larger realized interior is preferred over one that
+        // merely extends the outer chain. Qualification is still the terminal
+        // condition; this score does not redefine the genome.
+        let enclosed_area = crate::interior_geometry::find_enclosed_regions(&trial, catalog)
+            .into_iter()
+            .map(|region| region.area)
+            .filter(|area| area.is_finite() && *area > 0.0)
+            .fold(0.0, f64::max);
         let cavity_qualifies = crate::cavity::analyze_genome_cavity(&trial, catalog)
             .ok()
             .flatten()
@@ -241,9 +250,9 @@ fn try_local_continuation(
             .fold(f64::INFINITY, f64::min);
 
         if best.as_ref().is_none_or(
-            |current: &(crate::structure::OrganismStructure, EnergyLedger, f64, usize, bool, f64)| {
-                (cavity_qualifies, formed, -nearest)
-                    > (current.4, current.3, -current.5)
+            |current: &(crate::structure::OrganismStructure, EnergyLedger, f64, usize, bool, f64, f64)| {
+                (cavity_qualifies, enclosed_area, formed, -nearest)
+                    > (current.4, current.5, current.3, -current.6)
             },
         )
         {
@@ -253,6 +262,7 @@ fn try_local_continuation(
                 trial_energy,
                 new_unit,
                 cavity_qualifies,
+                enclosed_area,
                 nearest,
             ));
         }
@@ -297,7 +307,7 @@ fn construct_until_genome(
             return Ok(structure);
         }
 
-        let Some((next, next_ledger, next_energy, _, _, _)) =
+        let Some((next, next_ledger, next_energy, _, _, _, _)) =
             try_local_continuation(&structure, carbon, catalog, &current_ledger, current_energy)
         else {
             return Err(
@@ -518,7 +528,7 @@ fn finish_after_genome(
             return Ok((structure, *energy, acquired));
         }
 
-        let Some((next, next_ledger, next_energy, _, _, _)) =
+        let Some((next, next_ledger, next_energy, _, _, _, _)) =
             try_local_continuation(
                 &structure,
                 resource(catalog, "Carbon")
