@@ -850,6 +850,47 @@ mod tests {
     }
 
     #[test]
+    fn rigid_polygon_boundary_endpoints_can_form_a_valid_bond() {
+        let catalog = crate::resources::default_catalog();
+        let mut s = OrganismStructure::new();
+        let a = s.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let b = s.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 1.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let ida = s.physical_id(a).unwrap();
+        let idb = s.physical_id(b).unwrap();
+        let bond = Bond {
+            endpoint_a: BondEndpoint::new(
+                ida,
+                ConnectionEndpoint::Boundary {
+                    angle_radians: std::f64::consts::FRAC_PI_3,
+                },
+            ),
+            endpoint_b: BondEndpoint::new(
+                idb,
+                ConnectionEndpoint::Boundary {
+                    angle_radians: 2.0 * std::f64::consts::FRAC_PI_3,
+                },
+            ),
+            strength: 0.5,
+            bond_energy: 1.0,
+        };
+        assert!(s.is_valid_bond(&bond, &catalog));
+    }
+
+    #[test]
     fn structural_membership_follows_realized_bonded_components() {
         let catalog = crate::resources::default_catalog();
         let mut s = OrganismStructure::new();
