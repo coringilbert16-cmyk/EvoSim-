@@ -94,7 +94,21 @@ pub(crate) fn restore_material(
         let id_b = trial.physical_id(unit_b)?;
         let a = trial.units[unit_a].properties(catalog)?;
         let b = trial.units[unit_b].properties(catalog)?;
-        let strength = crate::combine::bond_strength(a, b);
+        let base_strength = crate::combine::bond_strength(a, b);
+        if !base_strength.is_finite() {
+            return None;
+        }
+        let feature_a = crate::contact::contact_feature_measurement(
+            &trial.units[unit_a],
+            connection.endpoint_a,
+            catalog,
+        )?;
+        let feature_b = crate::contact::contact_feature_measurement(
+            &trial.units[unit_b],
+            connection.endpoint_b,
+            catalog,
+        )?;
+        let strength = base_strength * feature_a.feature.bond_strength_factor(feature_b.feature).unwrap_or(1.0);
         if !strength.is_finite() {
             return None;
         }
