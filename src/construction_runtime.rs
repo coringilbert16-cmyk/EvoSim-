@@ -917,11 +917,20 @@ fn realize_next_bond_driven(
     f64,
 )> {
     let existing_indices = realized_units[neighbor].as_ref()?.clone();
-    let new_endpoints = physical_material_endpoint_options(new_material, catalog);
 
-    if existing_indices.is_empty() || new_endpoints.is_empty() {
+    if existing_indices.is_empty() {
         return None;
     }
+
+    let target = blueprint.elements[_index].placement;
+    let (s, c) = genome_anchor.rotation_radians.sin_cos();
+    let target_world = (
+        genome_anchor.x + (target.x - anchor_declared.x) * c
+            - (target.y - anchor_declared.y) * s,
+        genome_anchor.y
+            + (target.x - anchor_declared.x) * s
+            + (target.y - anchor_declared.y) * c,
+    );
 
     let mut best_candidate: Option<(
         f64,
@@ -933,167 +942,143 @@ fn realize_next_bond_driven(
         f64,
     )> = None;
 
+    // The configuration-space boundary is now the placement authority for
+    // rigid polygon parts. The blueprint contributes only a preferred point
+    // on that exact touching locus. No angular sweep and no attempt budget are
+    // used here.
+    let placements = new_material.placements.as_ref()?;
     for existing_index in existing_indices {
         let existing_unit = structure.units.get(existing_index)?;
-        let existing_endpoints = structure_unit_endpoint_options(existing_unit, catalog);
-        for endpoint_a in existing_endpoints {
-            let joint = endpoint_a.world_point(&structure.units[existing_index], catalog)?;
-            for (part_index, endpoint_b) in new_endpoints.iter().copied() {
-                let local_b = physical_material_endpoint_local_point(
+        if existing_unit.shape(catalog).and_then(polygon_local_vertices).is_none() {
+            continue;
+        }
+
+        for part_index in 0..new_material.material.parts.len() {
+            let Some((name, _)) = new_material.material.parts.get(part_index) else {
+                continue;
+            };
+            let Some(resource) = resource(catalog, name) else {
+                continue;
+            };
+            if polygon_local_vertices(&resource.shape).is_none() {
+                continue;
+            }
+
+            let Some(part_placements) = nfp_candidate_placements(
+                structure,
+                resource,
+                Placement {
+                    x: target_world.0,
+                    y: target_world.1,
+                    rotation_radians: 0.0,
+                },
+                &[existing_index],
+                catalog,
+            ) else {
+                continue;
+            };
+
+            let Some(relative) = placements.get(part_index).copied() else {
+                continue;
+            };
+            for part_placement in part_placements {
+                let candidate_origin =
+                    crate::material_restoration::origin_for_relative_placement(
+                        part_placement,
+                        relative,
+                    );
+                let target_distance = (candidate_origin.x - target_world.0)
+                    .hypot(candidate_origin.y - target_world.1);
+
+                *nodes += 1;
+
+                let mut trial = structure.clone();
+                let Some(indices) = crate::material_restoration::restore_material(
+                    &mut trial,
                     new_material,
-                    part_index,
-                    endpoint_b,
+                    candidate_origin,
                     catalog,
-                )?;
-
-                // The blueprint pose is a preference, not a placement command.
-                // The analytic target angle is followed by exact boundary alignments
-                // and a small coarse fallback rather than a blind 360-degree sweep.
-                let target = blueprint.elements[_index].placement;
-                let (s, c) = genome_anchor.rotation_radians.sin_cos();
-                let target_world = (
-                    genome_anchor.x + (target.x - anchor_declared.x) * c
-                        - (target.y - anchor_declared.y) * s,
-                    genome_anchor.y
-                        + (target.x - anchor_declared.x) * s
-                        + (target.y - anchor_declared.y) * c,
-                );
-                let ideal_angle = (joint.y - target_world.1).atan2(joint.x - target_world.0)
-                    - local_b.y.atan2(local_b.x);
-
-                let Some(existing_shape) = existing_unit.shape(catalog) else {
+                ) else {
                     continue;
                 };
-                let Some(candidate_shape) = new_material
-                    .material
-                    .parts
-                    .get(part_index)
-                    .and_then(|(name, _)| resource(catalog, name))
-                    .map(|resource| &resource.shape)
-                else {
+
+                let new_unit_index = *indices.get(part_index)?;
+                let ignored_units = indices.clone();
+                if indices.iter().any(|index| {
+                    placed_unit_overlaps(&trial, &trial.units[*index], &ignored_units, catalog)
+                }) {
+                    continue;
+                }
+
+                let mut trial_ledger = *ledger;
+                let mut trial_energy = available_energy;
+                let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
+
+                let Some(candidate) = crate::contact::connection_pair_candidates_cached(
+                    &trial,
+                    existing_index,
+                    new_unit_index,
+                    catalog,
+                    &mut bond_cache,
+                )
+                .into_iter()
+                .filter(|candidate| {
+                    candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                        && candidate.available_a
+                        && candidate.available_b
+                })
+                .min_by(|a, b| {
+                    a.distance
+                        .partial_cmp(&b.distance)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                        .then_with(|| {
+                            b.facing
+                                .partial_cmp(&a.facing)
+                                .unwrap_or(std::cmp::Ordering::Equal)
+                        })
+                }) else {
                     continue;
                 };
-                let angles = construction_angle_candidates(
-                    existing_shape,
-                    endpoint_a,
-                    existing_unit.placement.rotation_radians,
-                    candidate_shape,
-                    endpoint_b,
-                    new_material
-                        .placements
-                        .as_ref()
-                        .and_then(|placements| placements.get(part_index))
-                        .map(|placement| placement.rotation_radians)
-                        .unwrap_or(0.0),
-                    ideal_angle,
-                );
-                for angle in angles {
-                    let candidate_origin =
-                        placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
-                    let target_distance = (candidate_origin.x - target_world.0)
-                        .hypot(candidate_origin.y - target_world.1);
 
-                    // Do not prune solely because this pose is farther from the
-                    // declared preference than the best candidate found so far.
-                    // Physical validity is evaluated only after restoration,
-                    // penetration checks, and the shared bond admission. A farther
-                    // pose may be the first (or only) physically valid one, so
-                    // pruning here would silently turn preference into authority.
-
-                    *nodes += 1;
-
-                    let mut trial = structure.clone();
-                    let Some(indices) = crate::material_restoration::restore_material(
-                        &mut trial,
-                        new_material,
-                        candidate_origin,
-                        catalog,
-                    ) else {
-                        continue;
-                    };
-
-                    let new_unit_index = *indices.get(part_index)?;
-                    let ignored_units = indices.clone();
-                    if indices.iter().any(|index| {
-                        placed_unit_overlaps(&trial, &trial.units[*index], &ignored_units, catalog)
-                    }) {
-                        continue;
-                    }
-
-                    let mut trial_ledger = *ledger;
-                    let mut trial_energy = available_energy;
-                    let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
-
-                    // The official connection points determine where the
-                    // constructor works from and how the new material is placed.
-                    // Once the material is physically placed, the actual bond may
-                    // land anywhere on the touching boundaries.
-                    let Some(candidate) = crate::contact::connection_pair_candidates_cached(
+                let Some((_, _, _, investment, _required_energy)) =
+                    crate::combine_runtime::selected_candidate_evaluation(
                         &trial,
                         existing_index,
                         new_unit_index,
-                        catalog,
-                        &mut bond_cache,
-                    )
-                    .into_iter()
-                    .filter(|candidate| {
-                        candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                            && candidate.available_a
-                            && candidate.available_b
-                    })
-                    .min_by(|a, b| {
-                        a.distance
-                            .partial_cmp(&b.distance)
-                            .unwrap_or(std::cmp::Ordering::Equal)
-                            .then_with(|| {
-                                b.facing
-                                    .partial_cmp(&a.facing)
-                                    .unwrap_or(std::cmp::Ordering::Equal)
-                            })
-                    }) else {
-                        continue;
-                    };
-
-                    let Some((_, _, _, investment, _required_energy)) =
-                        crate::combine_runtime::selected_candidate_evaluation(
-                            &trial,
-                            existing_index,
-                            new_unit_index,
-                            candidate,
-                            catalog,
-                        )
-                    else {
-                        continue;
-                    };
-
-                    let Some(attempt) = crate::combine_runtime::form_selected_bond(
-                        &mut trial,
-                        existing_index,
-                        new_unit_index,
                         candidate,
-                        investment,
                         catalog,
-                        &mut bond_cache,
-                        &mut trial_ledger,
-                        &mut trial_energy,
-                    ) else {
-                        continue;
-                    };
+                    )
+                else {
+                    continue;
+                };
 
-                    if best_candidate
-                        .as_ref()
-                        .is_none_or(|current| target_distance < current.0)
-                    {
-                        best_candidate = Some((
-                            target_distance,
-                            trial,
-                            indices,
-                            part_index,
-                            attempt,
-                            trial_ledger,
-                            trial_energy,
-                        ));
-                    }
+                let Some(attempt) = crate::combine_runtime::form_selected_bond(
+                    &mut trial,
+                    existing_index,
+                    new_unit_index,
+                    candidate,
+                    investment,
+                    catalog,
+                    &mut bond_cache,
+                    &mut trial_ledger,
+                    &mut trial_energy,
+                ) else {
+                    continue;
+                };
+
+                if best_candidate
+                    .as_ref()
+                    .is_none_or(|current| target_distance < current.0)
+                {
+                    best_candidate = Some((
+                        target_distance,
+                        trial,
+                        indices,
+                        part_index,
+                        attempt,
+                        trial_ledger,
+                        trial_energy,
+                    ));
                 }
             }
         }

@@ -19,6 +19,25 @@ fn transform_relative(origin: Placement, relative: Placement) -> Placement {
     }
 }
 
+/// Recover the material origin from one constituent's absolute placement.
+///
+/// restore_material applies the relative placement as a rigid transform:
+/// absolute = origin composed with relative. This helper is the exact inverse,
+/// allowing configuration-space placement to operate on constituent geometry
+/// while restoration still receives the material-level origin.
+pub(crate) fn origin_for_relative_placement(
+    absolute: Placement,
+    relative: Placement,
+) -> Placement {
+    let origin_rotation = absolute.rotation_radians - relative.rotation_radians;
+    let (sin, cos) = origin_rotation.sin_cos();
+    Placement {
+        x: absolute.x - (relative.x * cos - relative.y * sin),
+        y: absolute.y - (relative.x * sin + relative.y * cos),
+        rotation_radians: origin_rotation,
+    }
+}
+
 /// Restore an intact stored physical material into `structure` at `origin`.
 ///
 /// The stored constituent arrangement and stored internal bond endpoints are
@@ -129,4 +148,37 @@ pub(crate) fn restore_material(
 
     *structure = trial;
     Some(indices)
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::origin_for_relative_placement;
+    use crate::structure::Placement;
+
+    #[test]
+    fn origin_for_relative_placement_is_exact_inverse() {
+        let origin = Placement {
+            x: 3.25,
+            y: -1.75,
+            rotation_radians: 0.73,
+        };
+        let relative = Placement {
+            x: 1.4,
+            y: -0.8,
+            rotation_radians: -0.31,
+        };
+        let absolute = {
+            let (sin, cos) = origin.rotation_radians.sin_cos();
+            Placement {
+                x: origin.x + relative.x * cos - relative.y * sin,
+                y: origin.y + relative.x * sin + relative.y * cos,
+                rotation_radians: origin.rotation_radians + relative.rotation_radians,
+            }
+        };
+        let recovered = origin_for_relative_placement(absolute, relative);
+        assert!((recovered.x - origin.x).abs() < 1e-12);
+        assert!((recovered.y - origin.y).abs() < 1e-12);
+        assert!((recovered.rotation_radians - origin.rotation_radians).abs() < 1e-12);
+    }
 }
