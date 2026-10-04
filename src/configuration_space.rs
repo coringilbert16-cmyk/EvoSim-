@@ -2,8 +2,8 @@
 //!
 //! For a fixed orientation, the touching translations of a convex polygon B
 //! around a convex polygon A are the boundary of the Minkowski difference
-//! A + (-B). Boundary segments are retained because an edge-flush contact is
-//! a continuous placement locus, not an arbitrary point sample.
+//! A + (-B). Boundary segments are retained because an edge-flush contact is a
+//! continuous placement locus, not an arbitrary point sample.
 //!
 //! Concave polygons are deliberately rejected here until their general
 //! configuration-space construction is separately audited.
@@ -431,6 +431,50 @@ mod tests {
             .unwrap();
         let translation = Point { x: 2.0, y: 0.0 };
         assert!(right.start.y <= translation.y && translation.y <= right.end.y);
+    }
+
+    #[test]
+    fn placement_translation_is_world_center_translation() {
+        let a = square();
+        let b = square();
+        let boundary = convex_minkowski_difference(&a, &b).unwrap();
+        let right = boundary
+            .segments
+            .iter()
+            .find(|s| (s.start.x - 2.0).abs() < 1e-12 && (s.end.x - 2.0).abs() < 1e-12)
+            .unwrap();
+        let translation = Point { x: 2.0, y: 0.5 };
+        assert!(right.start.y <= translation.y && translation.y <= right.end.y);
+
+        // EvoSim applies Placement.x/y as a direct translation of local shape
+        // coordinates. The same translation therefore places B flush against
+        // A, without an additional origin or centroid offset.
+        let b_world = b
+            .iter()
+            .map(|&(x, y)| (translation.x + x, translation.y + y))
+            .collect::<Vec<_>>();
+        assert!(b_world.iter().any(|&(x, y)| {
+            (x - 1.0).abs() < 1e-12 && (y + 0.5).abs() < 1e-12
+        }));
+    }
+
+    #[test]
+    fn fixed_rotation_is_applied_before_configuration_space() {
+        let a = square();
+        let unrotated = square();
+        let angle = std::f64::consts::FRAC_PI_2;
+        let rotated = unrotated
+            .iter()
+            .map(|&(x, y)| {
+                let (sin, cos) = angle.sin_cos();
+                (x * cos - y * sin, x * sin + y * cos)
+            })
+            .collect::<Vec<_>>();
+        let boundary = convex_minkowski_difference(&a, &rotated).unwrap();
+        assert!(boundary
+            .vertices
+            .iter()
+            .any(|p| (p.x.abs() - 2.0).abs() < 1e-12));
     }
 
     #[test]
