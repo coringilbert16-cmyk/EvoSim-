@@ -312,26 +312,114 @@ fn construct_until_genome(
     }
 }
 
+fn acquisition_candidate_points(
+    region: &crate::interior_geometry::EnclosedRegion,
+    clearance: f64,
+) -> Vec<(f64, f64)> {
+    let boundary = &region.boundary;
+    if boundary.len() < 3 || !clearance.is_finite() || clearance < 0.0 {
+        return Vec::new();
+    }
+
+    // Region faces have positive area, so their boundary is CCW and the
+    // left-hand edge normal points into the face. These are geometric
+    // candidates, not a sampling grid.
+    let mut points = Vec::with_capacity(boundary.len() * 2 + 1);
+    for index in 0..boundary.len() {
+        let a = boundary[index];
+        let b = boundary[(index + 1) % boundary.len()];
+        let dx = b.0 - a.0;
+        let dy = b.1 - a.1;
+        let length = dx.hypot(dy);
+        if length <= 1e-12 {
+            continue;
+        }
+        let midpoint = ((a.0 + b.0) * 0.5, (a.1 + b.1) * 0.5);
+        points.push((
+            midpoint.0 - dy / length * clearance,
+            midpoint.1 + dx / length * clearance,
+        ));
+        points.push(midpoint);
+    }
+
+    // Polygon centroid is another geometry-derived candidate. The complete
+    // physical containment check below remains authoritative for concave faces.
+    let mut twice_area = 0.0;
+    let mut centroid_x = 0.0;
+    let mut centroid_y = 0.0;
+    for index in 0..boundary.len() {
+        let a = boundary[index];
+        let b = boundary[(index + 1) % boundary.len()];
+        let cross = a.0 * b.1 - b.0 * a.1;
+        twice_area += cross;
+        centroid_x += (a.0 + b.0) * cross;
+        centroid_y += (a.1 + b.1) * cross;
+    }
+    if twice_area.abs() > 1e-12 {
+        points.push((
+            centroid_x / (3.0 * twice_area),
+            centroid_y / (3.0 * twice_area),
+        ));
+    }
+
+    points
+}
+
+fn acquisition_candidate_rotations(
+    resource: &BaseResource,
+    region: &crate::interior_geometry::EnclosedRegion,
+) -> Vec<f64> {
+    if !matches!(
+        resource.shape.form,
+        crate::resources::Form::Rectangle { .. }
+            | crate::resources::Form::RegularPolygon { .. }
+            | crate::resources::Form::Polygon { .. }
+    ) {
+        return vec![0.0];
+    }
+
+    let Some(resource_vertices) = resource.shape.form.polygon_vertices() else {
+        return vec![0.0];
+    };
+    if resource_vertices.len() < 2 || region.boundary.len() < 2 {
+        return vec![0.0];
+    }
+
+    let resource_edge_angle = (resource_vertices[1].1 - resource_vertices[0].1)
+        .atan2(resource_vertices[1].0 - resource_vertices[0].0);
+    let mut rotations = vec![0.0];
+    for index in 0..region.boundary.len() {
+        let a = region.boundary[index];
+        let b = region.boundary[(index + 1) % region.boundary.len()];
+        let region_angle = (b.1 - a.1).atan2(b.0 - a.0);
+        let rotation = region_angle - resource_edge_angle;
+        if !rotations.iter().any(|current| {
+            let delta = (rotation - *current + std::f64::consts::PI)
+                .rem_euclid(std::f64::consts::TAU)
+                - std::f64::consts::PI;
+            delta.abs() <= 1e-10
+        }) {
+            rotations.push(rotation);
+        }
+    }
+    rotations
+}
+
 fn placement_fits_resource(
     resource: &BaseResource,
     region: &crate::interior_geometry::EnclosedRegion,
     catalog: &[BaseResource],
 ) -> Option<Placement> {
-    let points = [
-        region.sample_point,
-        (region.sample_point.0 * 0.75, region.sample_point.1 * 0.75),
-        (region.sample_point.0 * 0.5, region.sample_point.1 * 0.5),
-        (region.sample_point.0 * 1.25, region.sample_point.1 * 1.25),
-    ];
+    let clearance = resource.shape.form.bounding_radius().max(0.0);
+    let points = acquisition_candidate_points(region, clearance);
+    let rotations = acquisition_candidate_rotations(resource, region);
+
     for &(x, y) in &points {
-        if !region.contains_point(x, y) {
-            continue;
-        }
-        for rotation_index in 0..4 {
+        for rotation in rotations.iter().copied() {
             let placement = Placement {
                 x,
                 y,
-                rotation_radians: rotation_index as f64 * std::f64::consts::FRAC_PI_2,
+                rotation_radians: rotation,
             };
             let Some(physical) = crate::physical_material::PhysicalMaterial::realized(
                 Material::free_base(resource.name.clone(), 1.0),
