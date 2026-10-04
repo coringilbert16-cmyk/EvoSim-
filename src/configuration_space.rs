@@ -15,7 +15,7 @@ pub struct Point {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct PlacementBoundarySegment {
+/// Project a preferred point onto a configuration-space boundary segment.\n///\n/// This does not search placements: the geometry has already reduced the\n/// physically valid touching configurations to this continuous locus.\n/// Developmental preference only chooses where on that locus to commit.\npub fn preferred_point_on_segment(\n    segment: &PlacementBoundarySegment,\n    preference: Point,\n) -> Point {\n    let dx = segment.end.x - segment.start.x;\n    let dy = segment.end.y - segment.start.y;\n    let length_squared = dx * dx + dy * dy;\n    if length_squared <= 1e-24 {\n        return segment.start;\n    }\n\n    let t = ((preference.x - segment.start.x) * dx\n        + (preference.y - segment.start.y) * dy)\n        / length_squared;\n    let t = t.clamp(0.0, 1.0);\n    Point {\n        x: segment.start.x + t * dx,\n        y: segment.start.y + t * dy,\n    }\n}\n\npub struct PlacementBoundarySegment {
     pub start: Point,
     pub end: Point,
     /// Source features whose Minkowski support can generate this boundary
