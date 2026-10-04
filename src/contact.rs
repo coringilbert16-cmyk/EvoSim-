@@ -674,6 +674,19 @@ mod tests {
     }
 
     #[test]
+    #[test]
+    fn polygon_boundary_facing_uses_actual_edge_normal_not_radial_direction() {
+        let catalog = crate::resources::default_catalog();
+        let structure = test_structure().0;
+        let unit = &structure.units[0];
+        let edge = ConnectionEndpoint::Boundary {
+            angle_radians: 0.0,
+        };
+        let world = endpoint_world_point(edge, unit, &catalog).unwrap();
+        assert!((world.normal_x - 1.0).abs() < 1e-12);
+        assert!(world.normal_y.abs() < 1e-12);
+    }
+
     fn try_add_bond_rejects_repeated_connection_points_in_either_endpoint_order() {
         let catalog = crate::resources::default_catalog();
         let (mut structure, [id_a, id_b]) = test_structure();
