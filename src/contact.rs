@@ -69,6 +69,14 @@ fn boundary_feature(
                     angle_radians.sin(),
                 )?;
                 let vertices = shape.form.polygon_vertices()?;
+                if let Some(point_index) = vertices.iter().position(|&(x, y)| {
+                    (point.x - x).hypot(point.y - y) <= 1e-9
+                }) {
+                    return Some(ContactFeatureMeasurement {
+                        feature: ContactFeature::Corner,
+                        scale: None,
+                    });
+                }
                 let mut best = None;
                 for i in 0..vertices.len() {
                     let a = vertices[i];
