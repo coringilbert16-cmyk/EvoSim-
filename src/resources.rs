@@ -611,12 +611,10 @@ pub fn default_catalog() -> Vec<BaseResource> {
             shape: Shape {
                 form: Form::Polygon {
                     vertices: vec![
-                        (-0.5, -0.5),
-                        (0.5, -0.5),
-                        (0.5, 0.0),
-                        (0.0, 0.0),
-                        (0.0, 0.5),
-                        (-0.5, 0.5),
+                        (-0.75, -0.216_506_350_946_109_65),
+                        (0.75, -0.216_506_350_946_109_65),
+                        (0.5, 0.216_506_350_946_109_65),
+                        (-0.5, 0.216_506_350_946_109_65),
                     ],
                 },
             },
@@ -811,16 +809,23 @@ mod shape_tests {
         assert_eq!(
             lengths
                 .iter()
+                .filter(|length| (**length - 1.5).abs() < 1e-9)
+                .count(),
+            1
+        );
+        assert_eq!(
+            lengths
+                .iter()
                 .filter(|length| (**length - 1.0).abs() < 1e-9)
                 .count(),
-            2
+            1
         );
         assert_eq!(
             lengths
                 .iter()
                 .filter(|length| (**length - 0.5).abs() < 1e-9)
                 .count(),
-            4
+            2
         );
     }
 
