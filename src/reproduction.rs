@@ -509,21 +509,51 @@ fn partition_for_division(
     {
         return None;
     }
+
     let genome_ids = parent.structure.genome_constituent_ids().to_vec();
+    let genome_component = parent
+        .structure
+        .genome_constituent_ids()
+        .first()
+        .and_then(|id| parent.structure.unit_index(*id))
+        .map(|index| parent.structure.connected_component_containing(index))?;
     let mut best: Option<(f64, OrganismStructure, OrganismStructure)> = None;
-    for bond_index in 0..parent.structure.bonds.len() {
-        let mut trial = parent.structure.clone();
-        if trial.break_bond(bond_index).is_none() {
+
+    for &seed in &genome_component {
+        if genome_ids.contains(&parent.structure.units[seed].physical_id) {
             continue;
         }
-        let components = trial.connected_components();
-        if components.len() != 2 {
-            continue;
+        let mut order = Vec::new();
+        let mut seen = vec![false; parent.structure.units.len()];
+        let mut queue = vec![seed];
+        seen[seed] = true;
+        while let Some(index) = queue.pop() {
+            order.push(index);
+            for neighbor in parent.structure.direct_neighbor_indices(index) {
+                if seen[neighbor]
+                    || genome_ids.contains(&parent.structure.units[neighbor].physical_id)
+                {
+                    continue;
+                }
+                seen[neighbor] = true;
+                queue.push(neighbor);
+            }
         }
-        for component in components {
-            if component.iter().any(|index| {
-                genome_ids.contains(&parent.structure.units[*index].physical_id)
-            }) {
+
+        for end in 0..order.len() {
+            let component = &order[..=end];
+            let selected_ids: Vec<_> = component
+                .iter()
+                .map(|index| parent.structure.units[*index].physical_id)
+                .collect();
+            let mut trial = parent.structure.clone();
+            trial.bonds.retain(|bond| {
+                let a_selected = selected_ids.contains(&bond.endpoint_a.constituent_id);
+                let b_selected = selected_ids.contains(&bond.endpoint_b.constituent_id);
+                a_selected == b_selected
+            });
+            let components = trial.connected_components();
+            if components.len() != 2 {
                 continue;
             }
             let transfer_mass = component
@@ -535,7 +565,8 @@ fn partition_for_division(
             if remaining_mass <= 0.0 {
                 continue;
             }
-            let component_structure = build_component_graph(&parent.structure, &component);
+
+            let component_structure = build_component_graph(&parent.structure, component);
             let Some(merged_child) = merge_division_component(
                 &construction.developing_structure,
                 &component_structure,
@@ -543,10 +574,10 @@ fn partition_for_division(
             ) else {
                 continue;
             };
-            if crate::cavity::analyze_genome_cavity(&trial, catalog)
+            if !crate::cavity::analyze_genome_cavity(&trial, catalog)
                 .ok()
                 .flatten()
-                .is_none()
+                .is_some()
             {
                 continue;
             }
@@ -566,6 +597,7 @@ fn partition_for_division(
             }
         }
     }
+
     let (_, parent_after, child_after) = best?;
     parent.structure = parent_after;
     parent.structure_revision = parent.structure_revision.saturating_add(1);
