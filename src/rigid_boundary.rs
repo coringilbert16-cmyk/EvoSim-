@@ -207,17 +207,31 @@ mod tests {
         assert!((ny - 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
     }
     #[test]
-    fn catalog_phosphorus_l_has_a_real_interior_corner() {
+    fn catalog_phosphorus_is_the_approved_convex_trapezoid() {
         let phosphorus = default_catalog()
             .into_iter()
             .find(|resource| resource.name == "Phosphorus")
             .expect("default catalog must contain Phosphorus");
         let vertices = phosphorus.shape.form.polygon_vertices().unwrap();
-        assert_eq!(vertices.len(), 6);
-        assert_eq!(vertices[3], (0.0, 0.0));
-        let (nx, ny) = corner_normal(&phosphorus.shape, 3).unwrap();
-        assert!((nx - 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
-        assert!((ny - 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
+        assert_eq!(vertices.len(), 4);
+
+        fn distance(a: (f64, f64), b: (f64, f64)) -> f64 {
+            (a.0 - b.0).hypot(a.1 - b.1)
+        }
+
+        let lengths = (0..vertices.len())
+            .map(|i| distance(vertices[i], vertices[(i + 1) % vertices.len()]))
+            .collect::<Vec<_>>();
+        assert!((lengths[0] - 1.5).abs() < 1e-9);
+        assert!((lengths[1] - 0.5).abs() < 1e-9);
+        assert!((lengths[2] - 1.0).abs() < 1e-9);
+        assert!((lengths[3] - 0.5).abs() < 1e-9);
+
+        assert!(phosphorus.shape.is_valid());
+        assert!(corner_normal(&phosphorus.shape, 0).is_some());
+        assert!(corner_normal(&phosphorus.shape, 1).is_some());
+        assert!(corner_normal(&phosphorus.shape, 2).is_some());
+        assert!(corner_normal(&phosphorus.shape, 3).is_some());
     }
     #[test]
     fn square_corner_normal_is_physical_bisector() {
