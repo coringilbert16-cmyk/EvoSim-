@@ -370,7 +370,7 @@ fn acquisition_candidate_rotations(
     region: &crate::interior_geometry::EnclosedRegion,
 ) -> Vec<f64> {
     if !matches!(
-        resource.shape.form,
+        &resource.shape.form,
         crate::resources::Form::Rectangle { .. }
             | crate::resources::Form::RegularPolygon { .. }
             | crate::resources::Form::Polygon { .. }
