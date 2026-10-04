@@ -216,6 +216,58 @@ fn rigid_boundary_endpoint(
     })
 }
 
+fn world_polygon_vertices(
+    unit: &StructuralUnit,
+    catalog: &[crate::resources::BaseResource],
+) -> Option<Vec<(f64, f64)>> {
+    let shape = unit.shape(catalog)?;
+    let vertices = shape.form.polygon_vertices()?;
+    let (s, c) = unit.placement.rotation_radians.sin_cos();
+    Some(
+        vertices
+            .into_iter()
+            .map(|(x, y)| {
+                (
+                    unit.placement.x + x * c - y * s,
+                    unit.placement.y + x * s + y * c,
+                )
+            })
+            .collect(),
+    )
+}
+
+fn closest_point_on_segment(
+    p: (f64, f64),
+    a: (f64, f64),
+    b: (f64, f64),
+) -> (f64, f64) {
+    let dx = b.0 - a.0;
+    let dy = b.1 - a.1;
+    let length_sq = dx * dx + dy * dy;
+    if length_sq <= f64::EPSILON {
+        return a;
+    }
+    let t = (((p.0 - a.0) * dx + (p.1 - a.1) * dy) / length_sq).clamp(0.0, 1.0);
+    (a.0 + t * dx, a.1 + t * dy)
+}
+
+fn rigid_contact_endpoint(
+    unit: &StructuralUnit,
+    point: (f64, f64),
+    vertex_index: Option<usize>,
+    catalog: &[crate::resources::BaseResource],
+) -> Option<ConnectionEndpoint> {
+    if let Some(point_index) = vertex_index {
+        return Some(ConnectionEndpoint::Corner { point_index });
+    }
+    rigid_boundary_endpoint(
+        unit,
+        point.0 - unit.placement.x,
+        point.1 - unit.placement.y,
+    )
+    .filter(|endpoint| matches!(unit.shape(catalog)?.form, Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. }))
+}
+
 fn rigid_surface_candidates(
     a: &StructuralUnit,
     b: &StructuralUnit,
@@ -227,63 +279,56 @@ fn rigid_surface_candidates(
     let Some(shape_b) = b.shape(catalog) else {
         return Vec::new();
     };
-    if matches!(
+    if !matches!(
         shape_a.form,
-        Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. }
-    ) || matches!(
+        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. }
+    ) || !matches!(
         shape_b.form,
-        Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. }
+        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. }
     ) {
         return Vec::new();
     }
 
-    let dx = b.placement.x - a.placement.x;
-    let dy = b.placement.y - a.placement.y;
-    let distance = dx.hypot(dy);
-    if distance <= 1e-12 {
+    let Some(vertices_a) = world_polygon_vertices(a, catalog) else {
         return Vec::new();
-    }
+    };
+    let Some(vertices_b) = world_polygon_vertices(b, catalog) else {
+        return Vec::new();
+    };
 
-    // The constructor still selects official connection points for placement.
-    // These additional endpoints are only the physical bond locations: a bond
-    // may land anywhere the two rigid boundaries actually touch.
+    // Generate candidates from actual polygon features only:
+    // vertex-to-edge, edge-to-vertex, and exact edge intersections.
+    // There is no angular sampling around the centerline.
     let mut out = Vec::new();
-    let center_angle = dy.atan2(dx);
-    for step in -16..=16 {
-        let angle = center_angle + step as f64 * std::f64::consts::PI / 32.0;
-        let (s, c) = angle.sin_cos();
-        if let (Some(ea), Some(eb)) = (
-            rigid_boundary_endpoint(a, c, s),
-            rigid_boundary_endpoint(b, -c, -s),
-        ) {
-            out.push((ea, eb));
+
+    for (index_a, &vertex_a) in vertices_a.iter().enumerate() {
+        for edge in 0..vertices_b.len() {
+            let b0 = vertices_b[edge];
+            let b1 = vertices_b[(edge + 1) % vertices_b.len()];
+            let point_b = closest_point_on_segment(vertex_a, b0, b1);
+            if let (Some(ea), Some(eb)) = (
+                rigid_contact_endpoint(a, vertex_a, Some(index_a), catalog),
+                rigid_contact_endpoint(b, point_b, None, catalog),
+            ) {
+                out.push((ea, eb));
+            }
         }
     }
 
-    // Also aim at every vertex direction. This catches asymmetric contacts
-    // where the closest point on a flat surface is offset from the centerline.
-    for vertex in shape_b.form.polygon_vertices().unwrap_or_default() {
-        let (s, c) = b.placement.rotation_radians.sin_cos();
-        let world_x = b.placement.x + vertex.0 * c - vertex.1 * s;
-        let world_y = b.placement.y + vertex.0 * s + vertex.1 * c;
-        if let (Some(ea), Some(eb)) = (
-            rigid_boundary_endpoint(a, world_x - a.placement.x, world_y - a.placement.y),
-            rigid_boundary_endpoint(b, a.placement.x - world_x, a.placement.y - world_y),
-        ) {
-            out.push((ea, eb));
+    for (index_b, &vertex_b) in vertices_b.iter().enumerate() {
+        for edge in 0..vertices_a.len() {
+            let a0 = vertices_a[edge];
+            let a1 = vertices_a[(edge + 1) % vertices_a.len()];
+            let point_a = closest_point_on_segment(vertex_b, a0, a1);
+            if let (Some(ea), Some(eb)) = (
+                rigid_contact_endpoint(a, point_a, None, catalog),
+                rigid_contact_endpoint(b, vertex_b, Some(index_b), catalog),
+            ) {
+                out.push((ea, eb));
+            }
         }
     }
-    for vertex in shape_a.form.polygon_vertices().unwrap_or_default() {
-        let (s, c) = a.placement.rotation_radians.sin_cos();
-        let world_x = a.placement.x + vertex.0 * c - vertex.1 * s;
-        let world_y = a.placement.y + vertex.0 * s + vertex.1 * c;
-        if let (Some(ea), Some(eb)) = (
-            rigid_boundary_endpoint(a, world_x - a.placement.x, world_y - a.placement.y),
-            rigid_boundary_endpoint(b, world_x - b.placement.x, world_y - b.placement.y),
-        ) {
-            out.push((ea, eb));
-        }
-    }
+
     out
 }
 
