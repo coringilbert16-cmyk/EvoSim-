@@ -239,6 +239,36 @@ mod tests {
     use crate::resources::{InternalBond, Material};
 
     #[test]
+    fn realization_rejects_an_internal_bond_without_physical_contact() {
+        let catalog = crate::resources::default_catalog();
+        let material = Material {
+            parts: vec![("Carbon".into(), 1.0), ("Carbon".into(), 1.0)],
+            internal_bonds: vec![InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
+        };
+
+        assert!(PhysicalMaterial::realized(
+            material,
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 10.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .is_none());
+    }
+
+    #[test]
     fn breaking_internal_bond_splits_only_the_stored_material() {
         let catalog = crate::resources::default_catalog();
         let material = Material {
