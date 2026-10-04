@@ -251,6 +251,49 @@ fn closest_point_on_segment(
     (a.0 + t * dx, a.1 + t * dy)
 }
 
+fn point_near(a: (f64, f64), b: (f64, f64)) -> bool {
+    (a.0 - b.0).hypot(a.1 - b.1) <= 1e-9
+}
+
+fn vertex_index_at(vertices: &[(f64, f64)], point: (f64, f64)) -> Option<usize> {
+    vertices
+        .iter()
+        .position(|&vertex| point_near(vertex, point))
+}
+
+fn cross(a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> f64 {
+    (b.0 - a.0) * (c.1 - a.1) - (b.1 - a.1) * (c.0 - a.0)
+}
+
+fn collinear_overlap_midpoint(
+    a0: (f64, f64),
+    a1: (f64, f64),
+    b0: (f64, f64),
+    b1: (f64, f64),
+) -> Option<(f64, f64)> {
+    if cross(a0, a1, b0).abs() > 1e-9 || cross(a0, a1, b1).abs() > 1e-9 {
+        return None;
+    }
+    let use_x = (a1.0 - a0.0).abs() >= (a1.1 - a0.1).abs();
+    let (a_start, a_end, b_start, b_end) = if use_x {
+        (a0.0, a1.0, b0.0, b1.0)
+    } else {
+        (a0.1, a1.1, b0.1, b1.1)
+    };
+    let lo = a_start.min(a_end).max(b_start.min(b_end));
+    let hi = a_start.max(a_end).min(b_start.max(b_end));
+    if hi - lo <= 1e-9 {
+        return None;
+    }
+    let value = (lo + hi) * 0.5;
+    let t = if use_x {
+        (value - a0.0) / (a1.0 - a0.0)
+    } else {
+        (value - a0.1) / (a1.1 - a0.1)
+    };
+    Some((a0.0 + t * (a1.0 - a0.0), a0.1 + t * (a1.1 - a0.1)))
+}
+
 fn rigid_contact_endpoint(
     unit: &StructuralUnit,
     point: (f64, f64),
@@ -297,7 +340,7 @@ fn rigid_surface_candidates(
     };
 
     // Generate candidates from actual polygon features only:
-    // vertex-to-edge, edge-to-vertex, and exact edge intersections.
+    // vertex-to-edge and edge-to-vertex contacts, plus edge-overlap contacts.
     // There is no angular sampling around the centerline.
     let mut out = Vec::new();
 
@@ -306,9 +349,10 @@ fn rigid_surface_candidates(
             let b0 = vertices_b[edge];
             let b1 = vertices_b[(edge + 1) % vertices_b.len()];
             let point_b = closest_point_on_segment(vertex_a, b0, b1);
+            let b_index = vertex_index_at(&vertices_b, point_b);
             if let (Some(ea), Some(eb)) = (
                 rigid_contact_endpoint(a, vertex_a, Some(index_a), catalog),
-                rigid_contact_endpoint(b, point_b, None, catalog),
+                rigid_contact_endpoint(b, point_b, b_index, catalog),
             ) {
                 out.push((ea, eb));
             }
@@ -320,12 +364,32 @@ fn rigid_surface_candidates(
             let a0 = vertices_a[edge];
             let a1 = vertices_a[(edge + 1) % vertices_a.len()];
             let point_a = closest_point_on_segment(vertex_b, a0, a1);
+            let a_index = vertex_index_at(&vertices_a, point_a);
             if let (Some(ea), Some(eb)) = (
-                rigid_contact_endpoint(a, point_a, None, catalog),
+                rigid_contact_endpoint(a, point_a, a_index, catalog),
                 rigid_contact_endpoint(b, vertex_b, Some(index_b), catalog),
             ) {
                 out.push((ea, eb));
             }
+        }
+    }
+
+    for edge_a in 0..vertices_a.len() {
+        let a0 = vertices_a[edge_a];
+        let a1 = vertices_a[(edge_a + 1) % vertices_a.len()];
+        for edge_b in 0..vertices_b.len() {
+            let b0 = vertices_b[edge_b];
+            let b1 = vertices_b[(edge_b + 1) % vertices_b.len()];
+            let Some(point) = collinear_overlap_midpoint(a0, a1, b0, b1) else {
+                continue;
+            };
+            let (Some(ea), Some(eb)) = (
+                rigid_contact_endpoint(a, point, None, catalog),
+                rigid_contact_endpoint(b, point, None, catalog),
+            ) else {
+                continue;
+            };
+            out.push((ea, eb));
         }
     }
 
