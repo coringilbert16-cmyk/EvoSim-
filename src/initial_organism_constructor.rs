@@ -101,10 +101,16 @@ fn commit_contact_set(
         let Some(candidate) = candidates.into_iter().next() else {
             break;
         };
+        // The candidate is ordered as existing -> new by contact_candidates.
+        let Some(existing) = (0..new_unit).find(|index| {
+            structure.units[*index].physical_id == candidate.endpoint_a.constituent_id
+        }) else {
+            break;
+        };
         let Some((_, _, _, investment, _)) =
             crate::combine_runtime::selected_candidate_evaluation(
                 structure,
-                new_unit.min(structure.units.len() - 1),
+                existing,
                 new_unit,
                 candidate.clone(),
                 catalog,
@@ -112,22 +118,6 @@ fn commit_contact_set(
         else {
             break;
         };
-
-        // The candidate is ordered as existing -> new by contact_candidates.
-        let existing = if candidate.endpoint_a.constituent_id
-            == structure.units[new_unit].physical_id
-        {
-            new_unit
-        } else {
-            (0..new_unit)
-                .find(|index| {
-                    structure.units[*index].physical_id == candidate.endpoint_a.constituent_id
-                })
-                .unwrap_or(new_unit)
-        };
-        if existing == new_unit {
-            break;
-        }
 
         if crate::combine_runtime::form_selected_bond(
             structure,
@@ -249,18 +239,12 @@ fn try_local_continuation(
             })
             .fold(f64::INFINITY, f64::min);
 
-        let score = if cavity_qualifies {
-            0.0
-        } else {
-            1.0 / (formed as f64)
-        };
-
-        if best
-            .as_ref()
-            .is_none_or(|current: &(crate::structure::OrganismStructure, EnergyLedger, f64, usize, bool, f64)| {
-                (cavity_qualifies, -score, -nearest)
-                    > (current.4, -current.5, -(current.5))
-            })
+        if best.as_ref().is_none_or(
+            |current: &(crate::structure::OrganismStructure, EnergyLedger, f64, usize, bool, f64)| {
+                (cavity_qualifies, formed, -nearest)
+                    > (current.4, current.3, -current.5)
+            },
+        )
         {
             best = Some((
                 trial,
