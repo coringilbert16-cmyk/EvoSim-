@@ -623,7 +623,7 @@ fn juvenile_scale_reached(
     catalog: &[crate::resources::BaseResource],
 ) -> bool {
     let seed_reference = crate::juvenile::confirmed_seed_scale_reference(catalog).ok();
-    true
+    juvenile_scale_reached_with_reference(construction, catalog, seed_reference)
 }
 
 fn juvenile_scale_reached_with_reference(
@@ -685,7 +685,7 @@ fn birth_ready_with_reference(
     {
         return false;
     }
-    juvenile_scale_reached_with_reference(construction, catalog, seed_reference)
+    true
 }
 
 fn anchor_structure(
