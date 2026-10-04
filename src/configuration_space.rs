@@ -182,10 +182,12 @@ fn boundary_feature_pairs(
     }
 
     let a_support = support_indices(a, nx, ny);
-    let b_support = support_indices(b_negated, -nx, -ny);
+    // Both operands of A + (-B) use the same outward support normal. The
+    // second operand is already the sign-flipped geometry, so reversing the
+    // normal here would identify the wrong B feature.
 
     let a_features = support_features(a, &a_support);
-    let b_features = support_features(b_negated, &b_support);
+    let b_features = support_features(b_negated, &support_indices(b_negated, nx, ny));
     let mut pairs = Vec::new();
     for a_feature in a_features {
         for b_feature in &b_features {
@@ -373,6 +375,18 @@ mod tests {
             .iter()
             .any(|pair| matches!(pair.a, MinkowskiFeature::Edge(_))
                 && matches!(pair.b, MinkowskiFeature::Edge(_))));
+    }
+
+    #[test]
+    fn edge_vertex_provenance_uses_same_minkowski_support_normal() {
+        let triangle = vec![(0.0, 1.0), (-1.0, -1.0), (1.0, -1.0)];
+        let boundary = convex_minkowski_difference(&square(), &triangle).unwrap();
+        assert!(boundary.segments.iter().any(|segment| {
+            segment.feature_pairs.iter().any(|pair| {
+                matches!(pair.a, MinkowskiFeature::Edge(_))
+                    && matches!(pair.b, MinkowskiFeature::Vertex(_))
+            })
+        }));
     }
 
     #[test]
