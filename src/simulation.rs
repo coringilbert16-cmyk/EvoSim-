@@ -1043,6 +1043,7 @@ impl Simulation {
                         &self.environment.catalog,
                         &mut self.energy_ledger,
                         self.seed_scale_reference,
+                        matches!(status, crate::reproduction::ConstructionStatus::Ready),
                     ) {
                         next_organism_id += 1;
                         offspring.push(child);
@@ -1069,6 +1070,7 @@ impl Simulation {
                         &self.environment.catalog,
                         &mut self.energy_ledger,
                         self.seed_scale_reference,
+                        false,
                     ) {
                         next_organism_id += 1;
                         survivors.push(child);
