@@ -995,24 +995,29 @@ pub(crate) fn finish_reproduction(
     catalog: &[crate::resources::BaseResource],
     _ledger: &mut EnergyLedger,
     seed_reference: Option<(f64, f64)>,
+    division_required: bool,
 ) -> Option<Organism> {
     let mut construction = parent.reproductive_construction.take()?;
-    let ready = birth_ready_with_reference(&construction, catalog, seed_reference)
-        && division_mass_ready(
+    if !birth_ready_with_reference(&construction, catalog, seed_reference) {
+        parent.reproductive_construction = Some(construction);
+        return None;
+    }
+    if division_required {
+        if !division_mass_ready(
             &parent.structure,
             &construction.child_genome,
             &construction,
             catalog,
-        );
-    if !ready {
-        parent.reproductive_construction = Some(construction);
-        return None;
+        ) {
+            parent.reproductive_construction = Some(construction);
+            return None;
+        }
+        let Some(child_structure) = partition_for_division(parent, &construction, catalog) else {
+            parent.reproductive_construction = Some(construction);
+            return None;
+        };
+        construction.developing_structure = child_structure;
     }
-    let Some(child_structure) = partition_for_division(parent, &construction, catalog) else {
-        parent.reproductive_construction = Some(construction);
-        return None;
-    };
-    construction.developing_structure = child_structure;
     let child_position = construction.developmental_origin.clone();
     Some(Organism {
         id: child_id,
