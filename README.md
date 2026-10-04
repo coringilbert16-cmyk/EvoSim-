@@ -6,21 +6,20 @@ EvoSim is an open-ended evolutionary organism simulation. The organism is built 
 
 The initial-organism constructor is currently in a **working-validation phase**.
 
-The current implementation:
+Current implementation:
 
-- creates a deterministic physical Carbon scaffold;
-- creates each physical unit through the normal material/structure machinery;
-- forms every permanent connection through the normal physical bond transaction;
-- uses realized geometry and the realized bond graph for cavity analysis;
-- requires a qualifying genome cavity;
+- starts from available catalog-backed Carbon genesis material;
+- grows one physical unit at a time from currently realized neighbors;
+- uses configuration-space/NFP placement for rigid polygon geometry;
+- admits each permanent connection through the shared physical bond transaction;
+- evaluates the realized graph after each local construction step;
+- stops the genome phase immediately when the realized cavity qualifies;
+- continues locally after the genome milestone until the acquisition contract is satisfied;
 - requires Water plus three additional acquirable resources;
 - checks acquisition by actual physical placement inside an accessible region;
-- performs no recursive body-plan search and has no arbitrary placement-attempt budget;
-- currently realizes genesis construction material from the catalog rather than waiting on environmental inventory.
+- performs no recursive body-plan search and has no arbitrary placement-attempt budget.
 
-The current scaffold is **not the final constructor architecture**. It is a temporary deterministic construction baseline used to prove that the physical construction, bonding, cavity, and acquisition contracts can work quickly. The newly separated genome-phase entry point is an integration seam for replacing that baseline with the final free-form constructor; it does not make the blueprint authoritative topology acceptable as the final design.
-
-The present scaffold is a fixed 54-unit Carbon geometry consisting of an inner ring, six radial supports, and an outer ring. Adjacent rigid units are sealed with distinct endpoint bonds at the two ends of each shared wall segment. This must not be confused with the intended final free-form constructor.
+The former fixed Carbon ring/spoke scaffold has been removed from the genesis path. The constructor is now structurally free-form at genesis: there is no prescribed ring, spiral, spoke, unit count, or final topology. Genesis material is still catalog-backed rather than environmental inventory, so resource-waiting behavior remains a separate integration step.
 
 ## Intended constructor architecture
 
