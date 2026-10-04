@@ -892,17 +892,6 @@ pub(crate) fn advance_construction(
         return (ConstructionStatus::Dead, None);
     }
 
-    if birth_ready_with_reference(construction, &environment.catalog, seed_reference)
-        && division_mass_ready(
-            parent_structure,
-            &construction.child_genome,
-            construction,
-            &environment.catalog,
-        )
-    {
-        return (ConstructionStatus::Ready, None);
-    }
-
     if !parent_child_in_contact(parent_structure, &construction.developing_structure) {
         return (ConstructionStatus::Detached, None);
     }
