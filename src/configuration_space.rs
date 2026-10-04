@@ -24,12 +24,6 @@ pub struct PlacementBoundarySegment {
     pub feature_pairs: Vec<MinkowskiFeaturePair>,
 }
 
-/// Project a preferred point onto a configuration-space boundary segment.
-///
-/// Choose the physically valid touching translation whose locus is nearest
-/// to a developmental preference point. Every returned translation lies on
-/// the exact fixed-orientation configuration-space boundary; no placement
-/// sampling or attempt budget is involved.
 /// Choose the physically valid touching translation whose locus is nearest
 /// to a developmental preference point. Every returned translation lies on
 /// the exact fixed-orientation configuration-space boundary; no placement
