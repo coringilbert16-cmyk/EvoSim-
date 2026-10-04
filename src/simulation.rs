@@ -12,8 +12,6 @@ use crate::genome::initial_genome;
 use crate::state::{DevelopmentStage, EnergyLedger, Environment, Organism, Position, Simulation};
 use crate::structure::Placement;
 
-const ADULTHOOD_GROWTH_FRACTION: f64 = 0.90;
-
 impl Simulation {
     pub(crate) fn new(seed: u64, ticks_per_second: f64) -> Self {
         let rng = ChaCha8Rng::seed_from_u64(seed);
@@ -196,7 +194,7 @@ impl Simulation {
     fn update_development_stage(
         organism: &mut Organism,
         environment: &Environment,
-        seed_reference: Option<(f64, f64)>,
+        _seed_reference: Option<(f64, f64)>,
     ) {
         match organism.development_stage {
             DevelopmentStage::Offspring => {
