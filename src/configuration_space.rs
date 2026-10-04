@@ -124,27 +124,30 @@ fn cross_vectors(a: Point, b: Point) -> f64 {
     a.x * b.y - a.y * b.x
 }
 
-fn support_feature(
+fn support_features(
     points: &[Point],
     indices: &[usize],
-) -> Option<MinkowskiFeature> {
-    match indices {
-        [] => None,
-        [index] => Some(MinkowskiFeature::Vertex(*index)),
-        _ => {
-            for &first in indices {
-                let next = (first + 1) % points.len();
-                if indices.contains(&next) {
-                    return Some(MinkowskiFeature::Edge(first));
-                }
-                let previous = (first + points.len() - 1) % points.len();
-                if indices.contains(&previous) {
-                    return Some(MinkowskiFeature::Edge(previous));
-                }
+) -> Vec<MinkowskiFeature> {
+    let mut features = Vec::new();
+    for &index in indices {
+        let next = (index + 1) % points.len();
+        if indices.contains(&next) {
+            features.push(MinkowskiFeature::Edge(index));
+        } else {
+            let previous = (index + points.len() - 1) % points.len();
+            if indices.contains(&previous) {
+                features.push(MinkowskiFeature::Edge(previous));
+            } else {
+                features.push(MinkowskiFeature::Vertex(index));
             }
-            Some(MinkowskiFeature::Vertex(indices[0]))
         }
     }
+    features.sort_by_key(|feature| match feature {
+        MinkowskiFeature::Vertex(index) => (0, *index),
+        MinkowskiFeature::Edge(index) => (1, *index),
+    });
+    features.dedup();
+    features
 }
 
 fn boundary_feature_pairs(
@@ -181,16 +184,18 @@ fn boundary_feature_pairs(
     let a_support = support_indices(a, nx, ny);
     let b_support = support_indices(b_negated, -nx, -ny);
 
-    match (
-        support_feature(a, &a_support),
-        support_feature(b_negated, &b_support),
-    ) {
-        (Some(a_feature), Some(b_feature)) => vec![MinkowskiFeaturePair {
-            a: a_feature,
-            b: b_feature,
-        }],
-        _ => Vec::new(),
+    let a_features = support_features(a, &a_support);
+    let b_features = support_features(b_negated, &b_support);
+    let mut pairs = Vec::new();
+    for a_feature in a_features {
+        for b_feature in &b_features {
+            pairs.push(MinkowskiFeaturePair {
+                a: a_feature,
+                b: *b_feature,
+            });
+        }
     }
+    pairs
 }
 
 fn convex_hull(mut points: Vec<Point>) -> Vec<Point> {
@@ -378,6 +383,18 @@ mod tests {
             segment.feature_pairs.iter().any(|pair| {
                 matches!(pair.a, MinkowskiFeature::Vertex(_))
                     && matches!(pair.b, MinkowskiFeature::Edge(_))
+            })
+        }));
+    }
+
+    #[test]
+    fn corner_support_is_retained_as_vertex_provenance() {
+        let triangle = vec![(0.0, 1.0), (-1.0, -1.0), (1.0, -1.0)];
+        let boundary = convex_minkowski_difference(&triangle, &square()).unwrap();
+        assert!(boundary.segments.iter().any(|segment| {
+            segment.feature_pairs.iter().any(|pair| {
+                matches!(pair.a, MinkowskiFeature::Vertex(_))
+                    || matches!(pair.b, MinkowskiFeature::Vertex(_))
             })
         }));
     }
