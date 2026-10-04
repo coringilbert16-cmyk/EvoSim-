@@ -162,23 +162,37 @@ pub(crate) fn nfp_candidate_placements(
                 continue;
             };
 
-            let Some(translation) =
-                crate::configuration_space::preferred_touching_translation(
-                    &boundary,
-                    crate::configuration_space::Point {
-                        x: anchor.x,
-                        y: anchor.y,
-                    },
-                )
-            else {
-                continue;
+            let preference = crate::configuration_space::Point {
+                x: anchor.x,
+                y: anchor.y,
             };
 
-            placements.push(Placement {
-                x: translation.x,
-                y: translation.y,
-                rotation_radians: rotation,
-            });
+            // A single nearest projection is insufficient for forward
+            // construction: cavity closure can require a translation where the
+            // new polygon touches more than one realized neighbor. The exact
+            // configuration-space boundary is continuous, so reduce it to a
+            // finite, geometry-derived candidate set consisting of every
+            // segment projection plus every boundary vertex. No angular sweep
+            // or arbitrary placement-attempt budget is introduced.
+            for segment in &boundary.segments {
+                let projected =
+                    crate::configuration_space::preferred_point_on_segment(segment, preference);
+                placements.push(Placement {
+                    x: projected.x,
+                    y: projected.y,
+                    rotation_radians: rotation,
+                });
+                placements.push(Placement {
+                    x: segment.start.x,
+                    y: segment.start.y,
+                    rotation_radians: rotation,
+                });
+                placements.push(Placement {
+                    x: segment.end.x,
+                    y: segment.end.y,
+                    rotation_radians: rotation,
+                });
+            }
         }
     }
 
