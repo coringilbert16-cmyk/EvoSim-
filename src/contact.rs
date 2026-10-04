@@ -6,6 +6,112 @@ use crate::resources::Form;
 use crate::structure::{Bond, ConnectionEndpoint, OrganismStructure, StructuralUnit};
 use crate::surface_geometry::boundary_point_toward;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ContactFeature {
+    Edge,
+    Corner,
+    LineEndpoint,
+    Surface,
+    Fluid,
+}
+
+impl ContactFeature {
+    pub fn bond_strength_factor(self, other: Self) -> f64 {
+        use ContactFeature::*;
+        match (self, other) {
+            (Edge, Edge) => 1.0,
+            (Edge, Corner) | (Corner, Edge) => 0.5,
+            (Corner, Corner) => 1.0,
+            (LineEndpoint, LineEndpoint) => 1.0,
+            (LineEndpoint, Corner) | (Corner, LineEndpoint) => 1.0,
+            (LineEndpoint, Edge) | (Edge, LineEndpoint) => 0.5,
+            // Curved/fluid contacts are not assigned a new scale rule here.
+            // They remain explicitly classified so callers cannot silently
+            // treat them as polygon edges or corners.
+            _ => 1.0,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ContactFeatureMeasurement {
+    pub feature: ContactFeature,
+    /// Length of the actual physical feature when the scale rule has one.
+    /// Corners have no invented characteristic length.
+    pub scale: Option<f64>,
+}
+
+fn boundary_feature(
+    unit: &StructuralUnit,
+    endpoint: ConnectionEndpoint,
+    catalog: &[crate::resources::BaseResource],
+) -> Option<ContactFeatureMeasurement> {
+    let shape = unit.shape(catalog)?;
+    match endpoint {
+        ConnectionEndpoint::Corner { .. } => Some(ContactFeatureMeasurement {
+            feature: ContactFeature::Corner,
+            scale: None,
+        }),
+        ConnectionEndpoint::LineEndpoint { .. } => match shape.form {
+            Form::Line { length } => Some(ContactFeatureMeasurement {
+                feature: ContactFeature::LineEndpoint,
+                scale: Some(length.abs()),
+            }),
+            _ => None,
+        },
+        ConnectionEndpoint::Boundary { angle_radians } => match &shape.form {
+            Form::Circle { .. } => Some(ContactFeatureMeasurement {
+                feature: ContactFeature::Surface,
+                scale: None,
+            }),
+            Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
+                let point = boundary_point_toward(
+                    shape,
+                    angle_radians.cos(),
+                    angle_radians.sin(),
+                )?;
+                let vertices = shape.form.polygon_vertices()?;
+                let mut best = None;
+                for i in 0..vertices.len() {
+                    let a = vertices[i];
+                    let b = vertices[(i + 1) % vertices.len()];
+                    let dx = b.0 - a.0;
+                    let dy = b.1 - a.1;
+                    let len_sq = dx * dx + dy * dy;
+                    if len_sq <= f64::EPSILON {
+                        continue;
+                    }
+                    let t = (((point.x - a.0) * dx + (point.y - a.1) * dy) / len_sq)
+                        .clamp(0.0, 1.0);
+                    let px = a.0 + t * dx;
+                    let py = a.1 + t * dy;
+                    let distance_sq = (point.x - px).powi(2) + (point.y - py).powi(2);
+                    if best.is_none_or(|(d, _): (f64, f64)| distance_sq < d) {
+                        best = Some((distance_sq, len_sq.sqrt()));
+                    }
+                }
+                Some(ContactFeatureMeasurement {
+                    feature: ContactFeature::Edge,
+                    scale: best.map(|(_, length)| length),
+                })
+            }
+            Form::Line { .. } | Form::Fluid { .. } => None,
+        },
+        ConnectionEndpoint::Fluid { .. } => Some(ContactFeatureMeasurement {
+            feature: ContactFeature::Fluid,
+            scale: None,
+        }),
+    }
+}
+
+pub fn contact_feature_measurement(
+    unit: &StructuralUnit,
+    endpoint: ConnectionEndpoint,
+    catalog: &[crate::resources::BaseResource],
+) -> Option<ContactFeatureMeasurement> {
+    boundary_feature(unit, endpoint, catalog)
+}
+
 fn distance(
     a: crate::connection_geometry::WorldConnectionPoint,
     b: crate::connection_geometry::WorldConnectionPoint,
@@ -30,6 +136,9 @@ pub struct ConnectionPairCandidate {
     pub load_b: f64,
     pub available_a: bool,
     pub available_b: bool,
+    pub feature_a: ContactFeatureMeasurement,
+    pub feature_b: ContactFeatureMeasurement,
+    pub bond_strength_factor: f64,
 }
 
 pub(crate) fn world_center(
@@ -298,6 +407,8 @@ fn candidate_for_endpoints(
     let bu = s.units.get(ub)?;
     let wa = endpoint_world_point(a, au, c)?;
     let wb = endpoint_world_point(b, bu, c)?;
+    let feature_a = contact_feature_measurement(au, a, c)?;
+    let feature_b = contact_feature_measurement(bu, b, c)?;
     Some(ConnectionPairCandidate {
         endpoint_a: a,
         endpoint_b: b,
@@ -307,6 +418,9 @@ fn candidate_for_endpoints(
         load_b: s.connection_load(ub, b, c),
         available_a: true,
         available_b: true,
+        bond_strength_factor: feature_a.feature.bond_strength_factor(feature_b.feature),
+        feature_a,
+        feature_b,
     })
 }
 
@@ -404,6 +518,41 @@ mod tests {
             structure.units[b].physical_id,
         ];
         (structure, physical_ids)
+    }
+
+    #[test]
+    fn polygon_boundary_is_classified_as_edge_without_inventing_corner_scale() {
+        let catalog = crate::resources::default_catalog();
+        let structure = test_structure().0;
+        let unit = &structure.units[0];
+        let measurement = contact_feature_measurement(
+            unit,
+            ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            &catalog,
+        )
+        .unwrap();
+        assert_eq!(measurement.feature, ContactFeature::Edge);
+        assert!(measurement.scale.is_some_and(|x| x > 0.0));
+
+        let corner = contact_feature_measurement(
+            unit,
+            ConnectionEndpoint::Corner { point_index: 0 },
+            &catalog,
+        )
+        .unwrap();
+        assert_eq!(corner.feature, ContactFeature::Corner);
+        assert_eq!(corner.scale, None);
+    }
+
+    #[test]
+    fn contact_strength_follows_physical_feature_pair() {
+        use ContactFeature::*;
+        assert_eq!(Edge.bond_strength_factor(Edge), 1.0);
+        assert_eq!(Edge.bond_strength_factor(Corner), 0.5);
+        assert_eq!(Corner.bond_strength_factor(Corner), 1.0);
+        assert_eq!(LineEndpoint.bond_strength_factor(LineEndpoint), 1.0);
+        assert_eq!(LineEndpoint.bond_strength_factor(Corner), 1.0);
+        assert_eq!(LineEndpoint.bond_strength_factor(Edge), 0.5);
     }
 
     #[test]
