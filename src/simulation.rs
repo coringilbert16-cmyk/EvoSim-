@@ -205,16 +205,10 @@ impl Simulation {
                 }
             }
             DevelopmentStage::Juvenile => {
-                if seed_reference
-                    .map(|reference| {
-                        crate::developmental_decision::growth_fraction_for_reference(
-                            organism,
-                            environment,
-                            reference,
-                        )
-                    })
-                    .unwrap_or(0.0)
-                    >= ADULTHOOD_GROWTH_FRACTION
+                let adult_mass = organism.genome.adult_mass();
+                if adult_mass.is_finite()
+                    && adult_mass > 0.0
+                    && organism.structural_mass(&environment.catalog) + 1e-9 >= adult_mass
                 {
                     organism.development_stage = DevelopmentStage::Adult
                 }
