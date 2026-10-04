@@ -124,6 +124,29 @@ fn cross_vectors(a: Point, b: Point) -> f64 {
     a.x * b.y - a.y * b.x
 }
 
+fn support_feature(
+    points: &[Point],
+    indices: &[usize],
+) -> Option<MinkowskiFeature> {
+    match indices {
+        [] => None,
+        [index] => Some(MinkowskiFeature::Vertex(*index)),
+        _ => {
+            for &first in indices {
+                let next = (first + 1) % points.len();
+                if indices.contains(&next) {
+                    return Some(MinkowskiFeature::Edge(first));
+                }
+                let previous = (first + points.len() - 1) % points.len();
+                if indices.contains(&previous) {
+                    return Some(MinkowskiFeature::Edge(previous));
+                }
+            }
+            Some(MinkowskiFeature::Vertex(indices[0]))
+        }
+    }
+}
+
 fn boundary_feature_pairs(
     a: &[Point],
     b_negated: &[Point],
@@ -159,22 +182,12 @@ fn boundary_feature_pairs(
     let b_support = support_indices(b_negated, -nx, -ny);
 
     let mut pairs = Vec::new();
-    for &ai in &a_support {
-        for &bi in &b_support {
-            let a_feature = if a_support.len() > 1 {
-                MinkowskiFeature::Edge(ai.min((ai + a.len() - 1) % a.len()))
-            } else {
-                MinkowskiFeature::Vertex(ai)
-            };
-            let b_feature = if b_support.len() > 1 {
-                MinkowskiFeature::Edge(bi.min((bi + b_negated.len() - 1) % b_negated.len()))
-            } else {
-                MinkowskiFeature::Vertex(bi)
-            };
-            let pair = MinkowskiFeaturePair { a: a_feature, b: b_feature };
-            if !pairs.contains(&pair) {
-                pairs.push(pair);
-            }
+    if let (Some(a_feature), Some(b_feature)) = (
+        support_feature(a, &a_support),
+        support_feature(b_negated, &b_support),
+    ) {
+        pairs.push(MinkowskiFeaturePair { a: a_feature, b: b_feature });
+    }
         }
     }
     pairs
@@ -255,13 +268,17 @@ pub fn convex_minkowski_difference(
     )?;
     let b = convex_vertices(
         &b.iter()
-            .map(|&(x, y)| Point { x: -x, y: -y })
+            .map(|&(x, y)| Point { x, y })
             .collect::<Vec<_>>(),
     )?;
+    let b_negated = b
+        .iter()
+        .map(|p| Point { x: -p.x, y: -p.y })
+        .collect::<Vec<_>>();
 
     let mut sums = Vec::with_capacity(a.len() * b.len());
     for pa in &a {
-        for pb in &b {
+        for pb in &b_negated {
             sums.push(Point {
                 x: pa.x + pb.x,
                 y: pa.y + pb.y,
@@ -284,7 +301,7 @@ pub fn convex_minkowski_difference(
         segments.push(PlacementBoundarySegment {
             start,
             end,
-            feature_pairs: boundary_feature_pairs(&a, &b, start, end),
+            feature_pairs: boundary_feature_pairs(&a, &b_negated, start, end),
         });
     }
 
@@ -333,6 +350,26 @@ mod tests {
             convex_minkowski_difference(&l, &square()),
             Err(ConfigurationSpaceError::NonConvexPolygon)
         );
+    }
+
+    #[test]
+    fn edge_flush_segment_has_edge_edge_provenance() {
+        let boundary = convex_minkowski_difference(&square(), &square()).unwrap();
+        let segment = boundary
+            .segments
+            .iter()
+            .find(|segment| {
+                (segment.start.y - segment.end.y).abs() <= 1e-12
+                    && (segment.start.x - segment.end.x).abs() > 1e-12
+            })
+            .unwrap();
+        assert!(segment.feature_pairs.contains(&MinkowskiFeaturePair {
+            a: MinkowskiFeature::Edge(1),
+            b: MinkowskiFeature::Edge(1),
+        }) || segment.feature_pairs.contains(&MinkowskiFeaturePair {
+            a: MinkowskiFeature::Edge(3),
+            b: MinkowskiFeature::Edge(3),
+        }));
     }
 
     #[test]
