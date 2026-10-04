@@ -15,7 +15,7 @@ pub struct Point {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-/// Project a preferred point onto a configuration-space boundary segment.\n///\n/// This does not search placements: the geometry has already reduced the\n/// physically valid touching configurations to this continuous locus.\n/// Developmental preference only chooses where on that locus to commit.\npub fn preferred_point_on_segment(\n    segment: &PlacementBoundarySegment,\n    preference: Point,\n) -> Point {\n    let dx = segment.end.x - segment.start.x;\n    let dy = segment.end.y - segment.start.y;\n    let length_squared = dx * dx + dy * dy;\n    if length_squared <= 1e-24 {\n        return segment.start;\n    }\n\n    let t = ((preference.x - segment.start.x) * dx\n        + (preference.y - segment.start.y) * dy)\n        / length_squared;\n    let t = t.clamp(0.0, 1.0);\n    Point {\n        x: segment.start.x + t * dx,\n        y: segment.start.y + t * dy,\n    }\n}\n\npub struct PlacementBoundarySegment {
+pub struct PlacementBoundarySegment {
     pub start: Point,
     pub end: Point,
     /// Source features whose Minkowski support can generate this boundary
@@ -23,6 +23,33 @@ pub struct Point {
     /// coincident support contributions.
     pub feature_pairs: Vec<MinkowskiFeaturePair>,
 }
+
+/// Project a preferred point onto a configuration-space boundary segment.
+///
+/// This does not search placements: the geometry has already reduced the
+/// physically valid touching configurations to this continuous locus.
+/// Developmental preference only chooses where on that locus to commit.
+pub fn preferred_point_on_segment(
+    segment: &PlacementBoundarySegment,
+    preference: Point,
+) -> Point {
+    let dx = segment.end.x - segment.start.x;
+    let dy = segment.end.y - segment.start.y;
+    let length_squared = dx * dx + dy * dy;
+    if length_squared <= 1e-24 {
+        return segment.start;
+    }
+
+    let t = ((preference.x - segment.start.x) * dx
+        + (preference.y - segment.start.y) * dy)
+        / length_squared;
+    let t = t.clamp(0.0, 1.0);
+    Point {
+        x: segment.start.x + t * dx,
+        y: segment.start.y + t * dy,
+    }
+}
+
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MinkowskiFeature {
@@ -323,6 +350,28 @@ mod tests {
 
     fn square() -> Vec<(f64, f64)> {
         vec![(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]
+    }
+
+    #[test]
+    fn preferred_point_projects_and_clamps_to_segment() {
+        let segment = PlacementBoundarySegment {
+            start: Point { x: 2.0, y: -1.0 },
+            end: Point { x: 2.0, y: 1.0 },
+            feature_pairs: Vec::new(),
+        };
+
+        assert_eq!(
+            preferred_point_on_segment(&segment, Point { x: 10.0, y: 0.25 }),
+            Point { x: 2.0, y: 0.25 }
+        );
+        assert_eq!(
+            preferred_point_on_segment(&segment, Point { x: 2.0, y: 4.0 }),
+            segment.end
+        );
+        assert_eq!(
+            preferred_point_on_segment(&segment, Point { x: 2.0, y: -4.0 }),
+            segment.start
+        );
     }
 
     #[test]
