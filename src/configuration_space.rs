@@ -29,6 +29,45 @@ pub struct PlacementBoundarySegment {
 /// This does not search placements: the geometry has already reduced the
 /// physically valid touching configurations to this continuous locus.
 /// Developmental preference only chooses where on that locus to commit.
+/// Choose the physically valid touching translation whose locus is nearest
+/// to a developmental preference point. Every returned translation lies on
+/// the exact fixed-orientation configuration-space boundary; no placement
+/// sampling or attempt budget is involved.
+pub fn preferred_touching_translation(
+    boundary: &ConvexConfigurationBoundary,
+    preference: Point,
+) -> Option<Point> {
+    boundary
+        .segments
+        .iter()
+        .filter(|segment| {
+            (segment.end.x - segment.start.x).hypot(segment.end.y - segment.start.y) > 1e-12
+        })
+        .map(|segment| {
+            let point = preferred_point_on_segment(segment, preference);
+            let distance = (point.x - preference.x).hypot(point.y - preference.y);
+            (distance, point)
+        })
+        .min_by(|(distance_a, point_a), (distance_b, point_b)| {
+            distance_a
+                .partial_cmp(distance_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| {
+                    point_a
+                        .x
+                        .partial_cmp(&point_b.x)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .then_with(|| {
+                    point_a
+                        .y
+                        .partial_cmp(&point_b.y)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+        })
+        .map(|(_, point)| point)
+}
+
 pub fn preferred_point_on_segment(
     segment: &PlacementBoundarySegment,
     preference: Point,
@@ -350,6 +389,32 @@ mod tests {
 
     fn square() -> Vec<(f64, f64)> {
         vec![(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]
+    }
+
+    #[test]
+    fn preferred_touching_translation_selects_nearest_locus_without_sampling() {
+        let boundary = ConvexConfigurationBoundary {
+            vertices: vec![
+                Point { x: -2.0, y: -2.0 },
+                Point { x: 2.0, y: -2.0 },
+                Point { x: 2.0, y: 2.0 },
+                Point { x: -2.0, y: 2.0 },
+            ],
+            segments: vec![
+                PlacementBoundarySegment {
+                    start: Point { x: 2.0, y: -2.0 },
+                    end: Point { x: 2.0, y: 2.0 },
+                    feature_pairs: Vec::new(),
+                },
+            ],
+        };
+        assert_eq!(
+            preferred_touching_translation(
+                &boundary,
+                Point { x: 5.0, y: 0.25 }
+            ),
+            Some(Point { x: 2.0, y: 0.25 })
+        );
     }
 
     #[test]
