@@ -21,6 +21,179 @@ fn placement(p: BlueprintPlacement) -> Placement {
         rotation_radians: p.rotation_radians,
     }
 }
+
+fn polygon_local_vertices(shape: &crate::resources::Shape) -> Option<Vec<(f64, f64)>> {
+    match shape.form {
+        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
+            shape.form.polygon_vertices()
+        }
+        _ => None,
+    }
+}
+
+fn nfp_orientation_candidates(
+    candidate_shape: &crate::resources::Shape,
+    target_shape: &crate::resources::Shape,
+    target_rotation: f64,
+) -> Vec<f64> {
+    let Some(candidate_vertices) = polygon_local_vertices(candidate_shape) else {
+        return Vec::new();
+    };
+    let Some(target_vertices) = polygon_local_vertices(target_shape) else {
+        return Vec::new();
+    };
+
+    let mut angles = Vec::new();
+    let mut push_unique = |angle: f64| {
+        let normalized = normalize_construction_angle(angle);
+        if !angles.iter().any(|current: &f64| {
+            normalize_construction_angle(*current - normalized).abs() <= 1e-10
+        }) {
+            angles.push(normalized);
+        }
+    };
+
+    // NFP is exact for a fixed orientation. The orientation set therefore
+    // comes only from actual boundary-feature alignments; there is no angular
+    // sweep or attempt budget.
+    let feature_normals = |vertices: &[(f64, f64)], rotation: f64| {
+        let mut normals = Vec::with_capacity(vertices.len() * 2);
+        for i in 0..vertices.len() {
+            let a = vertices[i];
+            let b = vertices[(i + 1) % vertices.len()];
+            let dx = b.0 - a.0;
+            let dy = b.1 - a.1;
+            let length = dx.hypot(dy);
+            if length <= 1e-12 {
+                continue;
+            }
+            let edge_normal = (dy / length, -dx / length);
+            let (s, c) = rotation.sin_cos();
+            normals.push((edge_normal.1.atan2(edge_normal.0), i));
+
+            let previous = vertices[(i + vertices.len() - 1) % vertices.len()];
+            let prev_dx = a.0 - previous.0;
+            let prev_dy = a.1 - previous.1;
+            let prev_length = prev_dx.hypot(prev_dy);
+            if prev_length > 1e-12 {
+                let prev_normal = (prev_dy / prev_length, -prev_dx / prev_length);
+                let nx = prev_normal.0 + edge_normal.0;
+                let ny = prev_normal.1 + edge_normal.1;
+                if nx.hypot(ny) > 1e-12 {
+                    normals.push(((ny.atan2(nx)), i));
+                }
+            }
+            let _ = (s, c);
+        }
+        normals
+    };
+
+    let candidate_features = feature_normals(&candidate_vertices, 0.0);
+    let target_features = feature_normals(&target_vertices, target_rotation);
+
+    for (candidate_angle, _) in &candidate_features {
+        for (target_angle, _) in &target_features {
+            push_unique(target_angle + std::f64::consts::PI - candidate_angle);
+        }
+    }
+
+    angles.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    angles
+}
+
+fn nfp_candidate_placements(
+    structure: &OrganismStructure,
+    resource: &BaseResource,
+    anchor: Placement,
+    targets: &[usize],
+    catalog: &[BaseResource],
+) -> Option<Vec<Placement>> {
+    let candidate_vertices = polygon_local_vertices(&resource.shape)?;
+    if candidate_vertices.len() < 3 {
+        return None;
+    }
+
+    let mut placements = Vec::new();
+    for &target_index in targets {
+        let unit = structure.units.get(target_index)?;
+        let target_shape = unit.shape(catalog)?;
+        let target_vertices_local = polygon_local_vertices(target_shape)?;
+        if target_vertices_local.len() < 3 {
+            continue;
+        }
+
+        let target_vertices_world = target_vertices_local
+            .iter()
+            .map(|&(x, y)| {
+                let (s, c) = unit.placement.rotation_radians.sin_cos();
+                (unit.placement.x + x * c - y * s, unit.placement.y + x * s + y * c)
+            })
+            .collect::<Vec<_>>();
+
+        for rotation in nfp_orientation_candidates(
+            &resource.shape,
+            target_shape,
+            unit.placement.rotation_radians,
+        ) {
+            let (s, c) = rotation.sin_cos();
+            let rotated_candidate = candidate_vertices
+                .iter()
+                .map(|&(x, y)| (x * c - y * s, x * s + y * c))
+                .collect::<Vec<_>>();
+
+            let Ok(boundary) =
+                crate::configuration_space::convex_minkowski_difference(
+                    &target_vertices_world,
+                    &rotated_candidate,
+                )
+            else {
+                continue;
+            };
+
+            let Some(translation) =
+                crate::configuration_space::preferred_touching_translation(
+                    &boundary,
+                    crate::configuration_space::Point {
+                        x: anchor.x,
+                        y: anchor.y,
+                    },
+                )
+            else {
+                continue;
+            };
+
+            placements.push(Placement {
+                x: translation.x,
+                y: translation.y,
+                rotation_radians: rotation,
+            });
+        }
+    }
+
+    placements.sort_by(|a, b| {
+        (a.x - anchor.x)
+            .hypot(a.y - anchor.y)
+            .partial_cmp(&(b.x - anchor.x).hypot(b.y - anchor.y))
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| {
+                normalize_construction_angle(a.rotation_radians - anchor.rotation_radians)
+                    .abs()
+                    .partial_cmp(
+                        &normalize_construction_angle(b.rotation_radians - anchor.rotation_radians)
+                            .abs(),
+                    )
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+    });
+    placements.dedup_by(|a, b| {
+        (a.x - b.x).abs() <= 1e-10
+            && (a.y - b.y).abs() <= 1e-10
+            && normalize_construction_angle(a.rotation_radians - b.rotation_radians).abs()
+                <= 1e-10
+    });
+    Some(placements)
+}
+
 pub(crate) fn candidate_placements(
     structure: &OrganismStructure,
     resource: &BaseResource,
