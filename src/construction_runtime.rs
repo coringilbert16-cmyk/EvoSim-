@@ -94,8 +94,8 @@ fn nfp_orientation_candidates(
     let candidate_features = feature_normals(&candidate_vertices, 0.0);
     let target_features = feature_normals(&target_vertices, target_rotation);
 
-    for (candidate_angle, _) in &candidate_features {
-        for (target_angle, _) in &target_features {
+    for candidate_angle in &candidate_features {
+        for target_angle in &target_features {
             push_unique(target_angle + std::f64::consts::PI - candidate_angle);
         }
     }
