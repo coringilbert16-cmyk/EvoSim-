@@ -162,8 +162,10 @@ fn boundary_feature_pairs(
         return Vec::new();
     }
 
-    let nx = -direction.y / length;
-    let ny = direction.x / length;
+    // The hull is CCW, so the boundary's outward normal is the right-hand
+    // normal of its directed edge.
+    let nx = direction.y / length;
+    let ny = -direction.x / length;
     const SUPPORT_TOLERANCE: f64 = 1e-9;
 
     fn support_indices(points: &[Point], nx: f64, ny: f64) -> Vec<usize> {
@@ -375,6 +377,22 @@ mod tests {
             .iter()
             .any(|pair| matches!(pair.a, MinkowskiFeature::Edge(_))
                 && matches!(pair.b, MinkowskiFeature::Edge(_))));
+    }
+
+    #[test]
+    fn square_right_boundary_uses_right_facing_supports() {
+        let boundary = convex_minkowski_difference(&square(), &square()).unwrap();
+        let segment = boundary
+            .segments
+            .iter()
+            .find(|segment| {
+                (segment.start.x - 2.0).abs() < 1e-12
+                    && (segment.end.x - 2.0).abs() < 1e-12
+            })
+            .unwrap();
+        assert!(segment.feature_pairs.iter().any(|pair| {
+            matches!(pair.a, MinkowskiFeature::Vertex(1) | MinkowskiFeature::Vertex(2))
+        }));
     }
 
     #[test]
