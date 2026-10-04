@@ -964,21 +964,30 @@ fn realize_next_bond_driven(
                 continue;
             }
 
+            let Some(relative) = placements.get(part_index).copied() else {
+                continue;
+            };
+
+            // The blueprint pose is expressed relative to the genome anchor.
+            // NFP works on the actual constituent, so its rotational preference
+            // must include both the blueprint's world rotation and this
+            // constituent's relative material rotation.
+            let target_rotation = genome_anchor.rotation_radians
+                + (blueprint.elements[_index].placement.rotation_radians
+                    - anchor_declared.rotation_radians);
+            let preferred_part_rotation = target_rotation + relative.rotation_radians;
+
             let Some(part_placements) = nfp_candidate_placements(
                 structure,
                 resource,
                 Placement {
                     x: target_world.0,
                     y: target_world.1,
-                    rotation_radians: 0.0,
+                    rotation_radians: preferred_part_rotation,
                 },
                 &[existing_index],
                 catalog,
             ) else {
-                continue;
-            };
-
-            let Some(relative) = placements.get(part_index).copied() else {
                 continue;
             };
             for part_placement in part_placements {
