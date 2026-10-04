@@ -35,6 +35,7 @@ fn nfp_orientation_candidates(
     candidate_shape: &crate::resources::Shape,
     target_shape: &crate::resources::Shape,
     target_rotation: f64,
+    preferred_rotation: f64,
 ) -> Vec<f64> {
     let Some(candidate_vertices) = polygon_local_vertices(candidate_shape) else {
         return Vec::new();
@@ -94,10 +95,11 @@ fn nfp_orientation_candidates(
     let candidate_features = feature_normals(&candidate_vertices, 0.0);
     let target_features = feature_normals(&target_vertices, target_rotation);
 
-    // Any fixed orientation is physically admissible; the developmental
-    // preference must therefore remain in the finite candidate set. Feature
+    // Any fixed orientation is physically admissible; the preferred
+    // orientation must therefore remain in the finite candidate set. Feature
     // alignments add useful exact docking orientations without introducing an
     // angular sweep or arbitrary attempt budget.
+    push_unique(preferred_rotation);
     push_unique(target_rotation);
 
     for candidate_angle in &candidate_features {
@@ -143,6 +145,7 @@ fn nfp_candidate_placements(
             &resource.shape,
             target_shape,
             unit.placement.rotation_radians,
+            anchor.rotation_radians,
         ) {
             let (s, c) = rotation.sin_cos();
             let rotated_candidate = candidate_vertices
