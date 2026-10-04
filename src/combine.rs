@@ -268,6 +268,15 @@ mod tests {
             load_b,
             available_a: true,
             available_b: true,
+            feature_a: crate::contact::ContactFeatureMeasurement {
+                feature: crate::contact::ContactFeature::Corner,
+                scale: None,
+            },
+            feature_b: crate::contact::ContactFeatureMeasurement {
+                feature: crate::contact::ContactFeature::Corner,
+                scale: None,
+            },
+            bond_strength_factor: Some(1.0),
         }
     }
     fn bond(a: usize, ap: usize, b: usize, bp: usize) -> Bond {
