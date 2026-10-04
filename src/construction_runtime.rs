@@ -23,7 +23,7 @@ fn placement(p: BlueprintPlacement) -> Placement {
 }
 
 fn polygon_local_vertices(shape: &crate::resources::Shape) -> Option<Vec<(f64, f64)>> {
-    match shape.form {
+    match &shape.form {
         Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
             shape.form.polygon_vertices()
         }
