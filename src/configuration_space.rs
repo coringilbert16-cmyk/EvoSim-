@@ -26,9 +26,10 @@ pub struct PlacementBoundarySegment {
 
 /// Project a preferred point onto a configuration-space boundary segment.
 ///
-/// This does not search placements: the geometry has already reduced the
-/// physically valid touching configurations to this continuous locus.
-/// Developmental preference only chooses where on that locus to commit.
+/// Choose the physically valid touching translation whose locus is nearest
+/// to a developmental preference point. Every returned translation lies on
+/// the exact fixed-orientation configuration-space boundary; no placement
+/// sampling or attempt budget is involved.
 /// Choose the physically valid touching translation whose locus is nearest
 /// to a developmental preference point. Every returned translation lies on
 /// the exact fixed-orientation configuration-space boundary; no placement
@@ -68,6 +69,11 @@ pub fn preferred_touching_translation(
         .map(|(_, point)| point)
 }
 
+/// Project a preferred point onto a configuration-space boundary segment.
+///
+/// This does not search placements: the geometry has already reduced the
+/// physically valid touching configurations to this continuous locus.
+/// Developmental preference only chooses where on that locus to commit.
 pub fn preferred_point_on_segment(
     segment: &PlacementBoundarySegment,
     preference: Point,
