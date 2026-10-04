@@ -960,7 +960,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     .is_some()
             })
     {
-        if let Some(result) = try_attach_physical_material_nfp(
+        return try_attach_physical_material_nfp(
             structure,
             existing_index,
             new_material,
@@ -968,9 +968,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
             nodes,
             ledger,
             available_energy,
-        ) {
-            return Some(result);
-        }
+        );
     }
 
     let existing_endpoints = structure_unit_endpoint_options(existing_unit, catalog);
