@@ -112,7 +112,7 @@ fn nfp_orientation_candidates(
     angles
 }
 
-fn nfp_candidate_placements(
+pub(crate) fn nfp_candidate_placements(
     structure: &OrganismStructure,
     resource: &BaseResource,
     anchor: Placement,
@@ -482,7 +482,7 @@ fn placement_for_joint(
     }
 }
 
-pub(crate) fn placed_unit_overlaps(
+pub(crate) pub(crate) fn placed_unit_overlaps(
     structure: &OrganismStructure,
     candidate: &StructuralUnit,
     ignored_units: &[usize],
