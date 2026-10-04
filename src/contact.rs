@@ -16,19 +16,17 @@ pub enum ContactFeature {
 }
 
 impl ContactFeature {
-    pub fn bond_strength_factor(self, other: Self) -> f64 {
+    pub fn bond_strength_factor(self, other: Self) -> Option<f64> {
         use ContactFeature::*;
         match (self, other) {
-            (Edge, Edge) => 1.0,
-            (Edge, Corner) | (Corner, Edge) => 0.5,
-            (Corner, Corner) => 1.0,
-            (LineEndpoint, LineEndpoint) => 1.0,
-            (LineEndpoint, Corner) | (Corner, LineEndpoint) => 1.0,
-            (LineEndpoint, Edge) | (Edge, LineEndpoint) => 0.5,
-            // Curved/fluid contacts are not assigned a new scale rule here.
-            // They remain explicitly classified so callers cannot silently
-            // treat them as polygon edges or corners.
-            _ => 1.0,
+            (Edge, Edge) => Some(1.0),
+            (Edge, Corner) | (Corner, Edge) => Some(0.5),
+            (Corner, Corner) => Some(1.0),
+            (LineEndpoint, LineEndpoint) => Some(1.0),
+            (LineEndpoint, Corner) | (Corner, LineEndpoint) => Some(1.0),
+            (LineEndpoint, Edge) | (Edge, LineEndpoint) => Some(0.5),
+            // Curved/fluid contacts have no approved strength rule yet.
+            _ => None,
         }
     }
 }
@@ -86,7 +84,7 @@ fn boundary_feature(
                     let px = a.0 + t * dx;
                     let py = a.1 + t * dy;
                     let distance_sq = (point.x - px).powi(2) + (point.y - py).powi(2);
-                    if best.is_none_or(|(d, _): (f64, f64)| distance_sq < d) {
+                    if best.map_or(true, |(d, _): (f64, f64)| distance_sq < d) {
                         best = Some((distance_sq, len_sq.sqrt()));
                     }
                 }
@@ -138,7 +136,7 @@ pub struct ConnectionPairCandidate {
     pub available_b: bool,
     pub feature_a: ContactFeatureMeasurement,
     pub feature_b: ContactFeatureMeasurement,
-    pub bond_strength_factor: f64,
+    pub bond_strength_factor: Option<f64>,
 }
 
 pub(crate) fn world_center(
@@ -547,12 +545,13 @@ mod tests {
     #[test]
     fn contact_strength_follows_physical_feature_pair() {
         use ContactFeature::*;
-        assert_eq!(Edge.bond_strength_factor(Edge), 1.0);
-        assert_eq!(Edge.bond_strength_factor(Corner), 0.5);
-        assert_eq!(Corner.bond_strength_factor(Corner), 1.0);
-        assert_eq!(LineEndpoint.bond_strength_factor(LineEndpoint), 1.0);
-        assert_eq!(LineEndpoint.bond_strength_factor(Corner), 1.0);
-        assert_eq!(LineEndpoint.bond_strength_factor(Edge), 0.5);
+        assert_eq!(Edge.bond_strength_factor(Edge), Some(1.0));
+        assert_eq!(Edge.bond_strength_factor(Corner), Some(0.5));
+        assert_eq!(Corner.bond_strength_factor(Corner), Some(1.0));
+        assert_eq!(LineEndpoint.bond_strength_factor(LineEndpoint), Some(1.0));
+        assert_eq!(LineEndpoint.bond_strength_factor(Corner), Some(1.0));
+        assert_eq!(LineEndpoint.bond_strength_factor(Edge), Some(0.5));
+        assert_eq!(Surface.bond_strength_factor(Edge), None);
     }
 
     #[test]
