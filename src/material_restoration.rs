@@ -108,7 +108,11 @@ pub(crate) fn restore_material(
             connection.endpoint_b,
             catalog,
         )?;
-        let strength = base_strength * feature_a.feature.bond_strength_factor(feature_b.feature).unwrap_or(1.0);
+        let contact_factor = feature_a
+            .feature
+            .bond_strength_factor(feature_b.feature)
+            .unwrap_or(1.0);
+        let strength = base_strength * contact_factor;
         if !strength.is_finite() {
             return None;
         }
