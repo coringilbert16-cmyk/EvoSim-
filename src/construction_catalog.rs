@@ -398,6 +398,44 @@ fn same_placement(a: RelativePlacement, b: RelativePlacement) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn every_cached_pair_formation_is_physical_boundary_contact() {
+        let resources = crate::resources::default_catalog();
+        let construction = ConstructionCatalog::build(&resources);
+
+        for formation in &construction.pair_formations {
+            let a = &resources[formation.resource_a];
+            let b = &resources[formation.resource_b];
+            let part_a = crate::material_geometry::PlacedMaterialPart {
+                part_index: formation.resource_a,
+                form: a.shape.form.clone(),
+                placement: Placement {
+                    x: formation.placement_a_relative_to_b.x,
+                    y: formation.placement_a_relative_to_b.y,
+                    rotation_radians: formation.placement_a_relative_to_b.rotation_radians,
+                },
+            };
+            let part_b = crate::material_geometry::PlacedMaterialPart {
+                part_index: formation.resource_b,
+                form: b.shape.form.clone(),
+                placement: Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            };
+
+            assert!(
+                crate::material_geometry::placed_forms_boundary_touch(&part_a, &part_b, 1e-7),
+                "cached formation is not a physical boundary touch: {formation:?}"
+            );
+            assert!(
+                !crate::material_geometry::placed_forms_penetrate(&part_a, &part_b, 1e-9),
+                "cached formation penetrates: {formation:?}"
+            );
+        }
+    }
+
     use super::*;
 
     #[test]
