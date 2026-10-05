@@ -252,8 +252,9 @@ fn circle_polygon_surface_candidates(
                        circle_is_a: bool,
                        polygon: &StructuralUnit,
                        polygon_shape: &crate::resources::Shape| {
-        let crate::resources::Form::Circle { radius } = circle.shape(catalog)?.form else {
-            return Some(());
+        let radius = match &circle.shape(catalog)?.form {
+            crate::resources::Form::Circle { radius } => *radius,
+            _ => return Some(()),
         };
         let Some(vertices) = polygon_shape.form.polygon_vertices() else {
             return Some(());
