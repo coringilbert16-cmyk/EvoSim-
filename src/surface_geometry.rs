@@ -88,6 +88,62 @@ fn line_endpoint_toward(length: f64, target_x: f64, target_y: f64) -> Option<Bou
             normal_y: ny,
         })
 }
+/// Recover an exact physical boundary point from its local-space coordinates.
+/// The point must lie on the realized boundary (within geometric tolerance).
+pub fn boundary_point_at(shape: &Shape, x: f64, y: f64) -> Option<BoundaryPoint> {
+    let tolerance = 1e-9;
+    match &shape.form {
+        Form::Circle { radius } => {
+            let length = x.hypot(y);
+            if (length - radius).abs() > tolerance || length <= f64::EPSILON {
+                return None;
+            }
+            Some(BoundaryPoint { x, y, normal_x: x / length, normal_y: y / length })
+        }
+        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
+            let vertices = shape.form.polygon_vertices()?;
+            boundary_point_at_polygon(&vertices, x, y, tolerance)
+        }
+        Form::Line { length } => {
+            let half = *length / 2.0;
+            if x.abs() <= tolerance && (y + half).abs() <= tolerance {
+                Some(BoundaryPoint { x: -half, y: 0.0, normal_x: -1.0, normal_y: 0.0 })
+            } else if x.abs() <= tolerance && (y - half).abs() <= tolerance {
+                Some(BoundaryPoint { x: half, y: 0.0, normal_x: 1.0, normal_y: 0.0 })
+            } else {
+                None
+            }
+        }
+        Form::Fluid { boundary, .. } => boundary.as_ref().and_then(|v| boundary_point_at_polygon(v, x, y, tolerance)),
+    }
+}
+
+fn boundary_point_at_polygon(vertices: &[(f64, f64)], x: f64, y: f64, tolerance: f64) -> Option<BoundaryPoint> {
+    if vertices.len() < 3 { return None; }
+    let winding = polygon_winding(vertices);
+    if winding.abs() <= 1e-12 { return None; }
+    let mut incident_normals = Vec::new();
+    for i in 0..vertices.len() {
+        let (ax, ay) = vertices[i];
+        let (bx, by) = vertices[(i + 1) % vertices.len()];
+        let ex = bx - ax;
+        let ey = by - ay;
+        let len = ex.hypot(ey);
+        if len <= f64::EPSILON { continue; }
+        let cross = (x - ax) * ey - (y - ay) * ex;
+        let dot = (x - ax) * ex + (y - ay) * ey;
+        if cross.abs() <= tolerance * len && dot >= -tolerance && dot <= len * len + tolerance {
+            let sign = winding.signum();
+            incident_normals.push((sign * ey / len, -sign * ex / len));
+        }
+    }
+    if incident_normals.is_empty() { return None; }
+    let (nx, ny) = incident_normals.iter().fold((0.0, 0.0), |(sx, sy), &(x, y)| (sx + x, sy + y));
+    let normal_len = nx.hypot(ny);
+    if normal_len <= f64::EPSILON { return None; }
+    Some(BoundaryPoint { x, y, normal_x: nx / normal_len, normal_y: ny / normal_len })
+}
+
 pub fn boundary_point_toward(shape: &Shape, target_x: f64, target_y: f64) -> Option<BoundaryPoint> {
     match &shape.form {
         Form::Circle { radius } => {
