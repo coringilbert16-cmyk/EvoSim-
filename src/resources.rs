@@ -781,13 +781,16 @@ mod shape_tests {
                     resource.shape.form.polygon_vertices().unwrap().len(),
                     vertices.len()
                 ),
-                Form::Fluid { boundary: Some(vertices), .. } => assert_eq!(
+                Form::Fluid {
+                    boundary: Some(vertices),
+                    ..
+                } => assert_eq!(
                     resource.shape.form.polygon_vertices().unwrap().len(),
                     vertices.len()
                 ),
                 Form::Fluid { boundary: None, .. } => {
                     assert!(resource.shape.form.polygon_vertices().is_none())
-                },
+                }
             }
         }
     }
