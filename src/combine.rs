@@ -79,12 +79,12 @@ pub fn bond_strength_with_contact_scale(
     if !a.cohesion.is_finite()
         || !b.cohesion.is_finite()
         || !contact_scale.is_finite()
-        || contact_scale < 0.0
+        || !(0.0..=1.0).contains(&contact_scale)
     {
         return 0.0;
     }
     ((a.cohesion.clamp(0.0, 1.0) * b.cohesion.clamp(0.0, 1.0)).sqrt()
-        * contact_scale.clamp(0.0, 1.0))
+        * contact_scale)
         .clamp(0.0, 1.0)
 }
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
