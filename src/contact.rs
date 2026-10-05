@@ -123,6 +123,239 @@ fn rigid_boundary_endpoint(
     }
 }
 
+fn circle_polygon_surface_candidates(
+    a: &StructuralUnit,
+    b: &StructuralUnit,
+    catalog: &[crate::resources::BaseResource],
+) -> Vec<(ConnectionEndpoint, ConnectionEndpoint)> {
+    let Some(shape_a) = a.shape(catalog) else {
+        return Vec::new();
+    };
+    let Some(shape_b) = b.shape(catalog) else {
+        return Vec::new();
+    };
+
+    let mut out = Vec::new();
+
+    let mut collect = |circle: &StructuralUnit,
+                       circle_is_a: bool,
+                       polygon: &StructuralUnit,
+                       polygon_shape: &crate::resources::Shape| {
+        let radius = match &circle.shape(catalog)?.form {
+            crate::resources::Form::Circle { radius } => *radius,
+            _ => return Some(()),
+        };
+        let Some(vertices) = polygon_shape.form.polygon_vertices() else {
+            return Some(());
+        };
+
+        let world_vertices = world_vertices(&vertices, polygon);
+        for i in 0..world_vertices.len() {
+            let p0 = world_vertices[i];
+            let p1 = world_vertices[(i + 1) % world_vertices.len()];
+            let dx = p1.0 - p0.0;
+            let dy = p1.1 - p0.1;
+            let fx = p0.0 - circle.placement.x;
+            let fy = p0.1 - circle.placement.y;
+            let a_coef = dx * dx + dy * dy;
+            if a_coef <= f64::EPSILON {
+                continue;
+            }
+            let b_coef = 2.0 * (fx * dx + fy * dy);
+            let c_coef = fx * fx + fy * fy - radius * radius;
+            let discriminant = b_coef * b_coef - 4.0 * a_coef * c_coef;
+            if discriminant < -1e-10 {
+                continue;
+            }
+
+            let sqrt_discriminant = discriminant.max(0.0).sqrt();
+            let mut roots = [0.0; 2];
+            let root_count = if sqrt_discriminant <= 1e-10 {
+                roots[0] = -b_coef / (2.0 * a_coef);
+                1
+            } else {
+                roots[0] = (-b_coef - sqrt_discriminant) / (2.0 * a_coef);
+                roots[1] = (-b_coef + sqrt_discriminant) / (2.0 * a_coef);
+                2
+            };
+
+            for root in roots.into_iter().take(root_count) {
+                if !(-1e-9..=1.0 + 1e-9).contains(&root) {
+                    continue;
+                }
+                let t = root.clamp(0.0, 1.0);
+                let point = (p0.0 + t * dx, p0.1 + t * dy);
+                let local_x = point.0 - circle.placement.x;
+                let local_y = point.1 - circle.placement.y;
+                let (s, c) = circle.placement.rotation_radians.sin_cos();
+                let circle_x = local_x * c + local_y * s;
+                let circle_y = -local_x * s + local_y * c;
+                let circle_endpoint = ConnectionEndpoint::Boundary {
+                    angle_radians: circle_y.atan2(circle_x),
+                };
+                let polygon_endpoint = if same_world_point(point, p0) {
+                    ConnectionEndpoint::Corner { point_index: i }
+                } else if same_world_point(point, p1) {
+                    ConnectionEndpoint::Corner {
+                        point_index: (i + 1) % world_vertices.len(),
+                    }
+                } else {
+                    let Some(endpoint) = boundary_point_endpoint(polygon, point, catalog) else {
+                        continue;
+                    };
+                    endpoint
+                };
+                let candidate = if circle_is_a {
+                    (circle_endpoint, polygon_endpoint)
+                } else {
+                    (polygon_endpoint, circle_endpoint)
+                };
+                if !out
+                    .iter()
+                    .any(|existing: &(ConnectionEndpoint, ConnectionEndpoint)| {
+                        existing.0.same_location(candidate.0)
+                            && existing.1.same_location(candidate.1)
+                    })
+                {
+                    out.push(candidate);
+                }
+            }
+        }
+        Some(())
+    };
+
+    match (&shape_a.form, &shape_b.form) {
+        (
+            Form::Circle { .. },
+            Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
+        ) => {
+            let _ = collect(a, true, b, shape_b);
+        }
+        (
+            Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
+            Form::Circle { .. },
+        ) => {
+            let _ = collect(b, false, a, shape_a);
+        }
+        _ => {}
+    }
+
+    out
+}
+
+fn line_polygon_surface_candidates(
+    a: &StructuralUnit,
+    b: &StructuralUnit,
+    catalog: &[crate::resources::BaseResource],
+) -> Vec<(ConnectionEndpoint, ConnectionEndpoint)> {
+    let Some(shape_a) = a.shape(catalog) else {
+        return Vec::new();
+    };
+    let Some(shape_b) = b.shape(catalog) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+
+    let mut collect = |line: &StructuralUnit,
+                       line_is_a: bool,
+                       polygon: &StructuralUnit,
+                       polygon_shape: &crate::resources::Shape| {
+        let Some(vertices) = polygon_shape.form.polygon_vertices() else {
+            return;
+        };
+        for endpoint_index in 0..2 {
+            let line_endpoint = ConnectionEndpoint::LineEndpoint {
+                point_index: endpoint_index,
+            };
+            let Some(world_endpoint) = endpoint_world_point(line_endpoint, line, catalog) else {
+                continue;
+            };
+            let point = (world_endpoint.x, world_endpoint.y);
+            let world_polygon = world_vertices(&vertices, polygon);
+            for i in 0..world_polygon.len() {
+                let start = world_polygon[i];
+                let end = world_polygon[(i + 1) % world_polygon.len()];
+                if !point_on_segment(point, start, end) {
+                    continue;
+                }
+                let polygon_endpoint = if same_world_point(point, start) {
+                    ConnectionEndpoint::Corner { point_index: i }
+                } else if same_world_point(point, end) {
+                    ConnectionEndpoint::Corner {
+                        point_index: (i + 1) % world_polygon.len(),
+                    }
+                } else {
+                    let Some(endpoint) = boundary_point_endpoint(polygon, point, catalog) else {
+                        continue;
+                    };
+                    endpoint
+                };
+                let candidate = if line_is_a {
+                    (line_endpoint, polygon_endpoint)
+                } else {
+                    (polygon_endpoint, line_endpoint)
+                };
+                if !out
+                    .iter()
+                    .any(|existing: &(ConnectionEndpoint, ConnectionEndpoint)| {
+                        existing.0.same_location(candidate.0)
+                            && existing.1.same_location(candidate.1)
+                    })
+                {
+                    out.push(candidate);
+                }
+            }
+        }
+    };
+
+    match (&shape_a.form, &shape_b.form) {
+        (
+            Form::Line { .. },
+            Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
+        ) => {
+            collect(a, true, b, shape_b);
+        }
+        (
+            Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
+            Form::Line { .. },
+        ) => {
+            collect(b, false, a, shape_a);
+        }
+        _ => {}
+    }
+    out
+}
+
+fn world_vertices(vertices: &[(f64, f64)], unit: &StructuralUnit) -> Vec<(f64, f64)> {
+    let (s, c) = unit.placement.rotation_radians.sin_cos();
+    vertices
+        .iter()
+        .map(|&(x, y)| {
+            (
+                unit.placement.x + x * c - y * s,
+                unit.placement.y + x * s + y * c,
+            )
+        })
+        .collect()
+}
+
+fn boundary_point_endpoint(
+    unit: &StructuralUnit,
+    world_point: (f64, f64),
+    catalog: &[crate::resources::BaseResource],
+) -> Option<ConnectionEndpoint> {
+    let (s, c) = unit.placement.rotation_radians.sin_cos();
+    let dx = world_point.0 - unit.placement.x;
+    let dy = world_point.1 - unit.placement.y;
+    let local_x = dx * c + dy * s;
+    let local_y = -dx * s + dy * c;
+    let point = crate::surface_geometry::boundary_point_at(unit.shape(catalog)?, local_x, local_y)?;
+    Some(ConnectionEndpoint::BoundaryPoint {
+        x: point.x,
+        y: point.y,
+    })
+}
+
 fn rigid_surface_candidates(
     a: &StructuralUnit,
     b: &StructuralUnit,
@@ -130,9 +363,15 @@ fn rigid_surface_candidates(
 ) -> Vec<(ConnectionEndpoint, ConnectionEndpoint)> {
     let Some(shape_a) = a.shape(catalog) else { return Vec::new(); };
     let Some(shape_b) = b.shape(catalog) else { return Vec::new(); };
-    let Some(vertices_a) = shape_a.form.polygon_vertices() else { return Vec::new(); };
-    let Some(vertices_b) = shape_b.form.polygon_vertices() else { return Vec::new(); };
-    if vertices_a.len() < 3 || vertices_b.len() < 3 { return Vec::new(); }
+
+    // Preserve exact analytic contacts for circle/polygon and line/polygon
+    // pairs. Polygon/polygon contacts continue through the exact feature path below.
+    let mut out = circle_polygon_surface_candidates(a, b, catalog);
+    out.extend(line_polygon_surface_candidates(a, b, catalog));
+
+    let Some(vertices_a) = shape_a.form.polygon_vertices() else { return out; };
+    let Some(vertices_b) = shape_b.form.polygon_vertices() else { return out; };
+    if vertices_a.len() < 3 || vertices_b.len() < 3 { return out; }
 
     fn world_vertex(unit: &StructuralUnit, vertex: (f64, f64)) -> (f64, f64) {
         let (s, c) = unit.placement.rotation_radians.sin_cos();
@@ -229,8 +468,6 @@ fn rigid_surface_candidates(
 
     let world_a = vertices_a.iter().copied().map(|v| world_vertex(a, v)).collect::<Vec<_>>();
     let world_b = vertices_b.iter().copied().map(|v| world_vertex(b, v)).collect::<Vec<_>>();
-    let mut out = Vec::new();
-
     // Exact candidates are generated only from real boundary features:
     // vertex-to-edge closest points and edge intersections. There is no
     // arbitrary angular sampling or coarse direction grid.
