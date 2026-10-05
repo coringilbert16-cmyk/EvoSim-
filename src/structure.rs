@@ -843,6 +843,7 @@ pub fn formation_threshold(a: f64, b: f64, la: f64, lb: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::resources::default_catalog;
     #[test]
     fn only_fluid_resources_can_take_context_fitting_geometry() {
         let catalog = crate::resources::default_catalog();
