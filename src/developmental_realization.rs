@@ -579,8 +579,8 @@ impl DevelopmentalFieldBlueprint {
         let kb = self.connectivity_preference_scaled(b.0, b.1, preferred_length);
         let qa = endpoint_opportunities.get_or_compute(structure, unit_a, endpoint_a, catalog);
         let qb = endpoint_opportunities.get_or_compute(structure, unit_b, endpoint_b, catalog);
-        let qreal_a = endpoint_realized_count(structure, unit_a, endpoint_a);
-        let qreal_b = endpoint_realized_count(structure, unit_b, endpoint_b);
+        let qreal_a = endpoint_realized_count(structure, unit_a, endpoint_a, catalog);
+        let qreal_b = endpoint_realized_count(structure, unit_b, endpoint_b, catalog);
         let n = 0.5 * (qreal_a as f64 / qa.max(1) as f64 + qreal_b as f64 / qb.max(1) as f64);
         let lambda = crate::developmental_blueprint::CANDIDATE_CONNECTIVITY_WEIGHT;
         ((ka + kb) * 0.5 + lambda * n).max(0.0)
