@@ -473,53 +473,47 @@ fn normalize_construction_angle(angle: f64) -> f64 {
     endpoint: ConnectionEndpoint,
 ) -> Option<(f64, f64, f64, f64)> {
     match endpoint {
-        ConnectionEndpoint::Corner { point_index }
-        | ConnectionEndpoint::BoundaryPoint {
-            x: _,
-            y: _,
-        } => {
-            let point = endpoint.world_point(
-                &StructuralUnit::new(
-                    "construction",
-                    Placement {
-                        x: 0.0,
-                        y: 0.0,
-                        rotation_radians: 0.0,
-                    },
-                ),
-                &[BaseResource {
-                    name: "construction".to_string(),
-                    physical_state: PhysicalState::Rigid,
-                    shape: shape.clone(),
-                    mass: 1.0,
-                    potential_energy: 0.0,
-                    reactivity: 0.0,
-                    cohesion: 0.0,
-                }],
-            )?;
+        ConnectionEndpoint::Corner { point_index } => {
+            let (x, y) = *shape.form.polygon_vertices()?.get(point_index)?;
+            let (normal_x, normal_y) =
+                crate::rigid_boundary::corner_normal(shape, point_index)?;
+            Some((x, y, normal_x, normal_y))
+        }
+        ConnectionEndpoint::BoundaryPoint { x, y } => {
+            let point = crate::surface_geometry::boundary_point_at(shape, x, y)?;
             Some((point.x, point.y, point.normal_x, point.normal_y))
         }
         ConnectionEndpoint::LineEndpoint { point_index } => {
-            let half = match shape.form {
-                Form::Line { length } => length * 0.5,
+            let length = match shape.form {
+                Form::Line { length } => length,
                 _ => return None,
             };
-            let x = if point_index == 0 { -half } else if point_index == 1 { half } else { return None };
-            let (nx, ny) = crate::rigid_boundary::line_endpoint_normal(shape, point_index)?;
-            Some((x, 0.0, nx, ny))
+            let x = if point_index == 0 {
+                -length * 0.5
+            } else if point_index == 1 {
+                length * 0.5
+            } else {
+                return None;
+            };
+            let (normal_x, normal_y) =
+                crate::rigid_boundary::line_endpoint_normal(shape, point_index)?;
+            Some((x, 0.0, normal_x, normal_y))
         }
         ConnectionEndpoint::Boundary { angle_radians } => {
             let Form::Circle { radius } = shape.form else {
                 return None;
             };
-            let (nx, ny) = angle_radians.sin_cos();
-            Some((radius * nx, radius * ny, nx, ny))
+            let (normal_x, normal_y) = angle_radians.sin_cos();
+            Some((
+                radius * normal_x,
+                radius * normal_y,
+                normal_x,
+                normal_y,
+            ))
         }
         ConnectionEndpoint::Fluid { .. } => None,
     }
 }
-
-
 
 fn construction_angle_candidates(
     existing_shape: &crate::resources::Shape,
@@ -1501,7 +1495,11 @@ fn construct_blueprint_bond_driven_internal(
             .find(|resource| resource.name == "Nitrogen")
             .map(|resource| resource.shape.clone())
             .unwrap();
-        let endpoint = ConnectionEndpoint::BoundaryPoint { x: 0.0, y: 0.0 };
+        let vertices = shape.form.polygon_vertices().unwrap();
+        let endpoint = ConnectionEndpoint::BoundaryPoint {
+            x: (vertices[0].0 + vertices[1].0) * 0.5,
+            y: (vertices[0].1 + vertices[1].1) * 0.5,
+        };
         let angles = construction_angle_candidates(
             &shape,
             endpoint,
@@ -1512,7 +1510,7 @@ fn construct_blueprint_bond_driven_internal(
             0.37,
         );
         assert!(angles.iter().any(|angle| (*angle - 0.37).abs() < 1e-10));
-        assert!(angles.len() <= 4);
+        assert!(angles.len() <= 2);
     }
 
 #[cfg(test)]
