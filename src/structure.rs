@@ -196,7 +196,10 @@ impl<'de> Deserialize<'de> for StructuralUnit {
 pub enum ConnectionEndpoint {
     Corner { point_index: usize },
     LineEndpoint { point_index: usize },
+    /// Analytic angular location on a circle.
     Boundary { angle_radians: f64 },
+    /// Exact local-space point on a rigid boundary.
+    BoundaryPoint { x: f64, y: f64 },
     Fluid { x: f64, y: f64 },
 }
 #[derive(Serialize, Clone, Copy, Debug, PartialEq)]
