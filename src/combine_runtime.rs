@@ -4,8 +4,7 @@
 //! candidate, applies the returned result, mutates structure, and settles
 //! the actual energy holder through the unified ledger authority.
 use crate::combine::{
-    bond_strength, eligible_candidates, required_investment, ExperimentalInteraction,
-    FormationEvaluation,
+    eligible_candidates, required_investment, ExperimentalInteraction, FormationEvaluation,
 };
 use crate::contact::ConnectionCompatibilityCache;
 use crate::developmental_blueprint::DevelopmentalFieldBlueprint;
@@ -248,7 +247,11 @@ fn form_bond_from_candidate(
     if (threshold - investment).abs() > EPSILON || interaction.signed_value < 0.0 {
         return None;
     }
-    let strength = bond_strength(a, b);
+    let strength = crate::combine::bond_strength_with_contact_scale(
+        a,
+        b,
+        candidate.contact_scale,
+    );
     if !strength.is_finite() {
         return None;
     }
