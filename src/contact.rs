@@ -799,6 +799,57 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_bond_rejects_corner_and_boundary_point_at_same_physical_location() {
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+        let a = structure.add_unit(StructuralUnit::new(
+            "Nitrogen",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let b = structure.add_unit(StructuralUnit::new(
+            "Nitrogen",
+            Placement {
+                x: 1.0,
+                y: 0.5,
+                rotation_radians: 0.0,
+            },
+        ));
+        let corner = ConnectionEndpoint::Corner { point_index: 1 };
+        let corner_world = corner
+            .world_point(&structure.units[a], &catalog)
+            .expect("corner should resolve");
+        let boundary = ConnectionEndpoint::BoundaryPoint {
+            x: corner_world.x,
+            y: corner_world.y,
+        };
+        let first = Bond {
+            endpoint_a: BondEndpoint::new(structure.units[a].physical_id, corner),
+            endpoint_b: BondEndpoint::new(
+                structure.units[b].physical_id,
+                ConnectionEndpoint::BoundaryPoint { x: -0.5, y: 0.0 },
+            ),
+            strength: 1.0,
+            bond_energy: 1.0,
+        };
+        try_add_bond(&mut structure, first, &catalog).expect("first bond should be admitted");
+
+        let duplicate = Bond {
+            endpoint_a: BondEndpoint::new(structure.units[a].physical_id, boundary),
+            endpoint_b: first.endpoint_b,
+            strength: 1.0,
+            bond_energy: 1.0,
+        };
+        assert_eq!(
+            try_add_bond(&mut structure, duplicate, &catalog),
+            Err("duplicate bond")
+        );
+    }
+
+    #[test]
     fn selected_endpoint_pair_resolves_without_candidate_discovery() {
         let catalog = crate::resources::default_catalog();
         let mut structure = OrganismStructure::new();
