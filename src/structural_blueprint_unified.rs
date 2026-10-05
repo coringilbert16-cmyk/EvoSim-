@@ -128,22 +128,25 @@ impl GenomeMeasurementScaffold {
             crate::resources::Form::RegularPolygon { radius, .. } => radius,
             _ => return Err("Carbon genome measurement requires a polygonal Carbon shape".into()),
         };
-        // Carbon is a rigid regular hexagon. The scaffold must be physical:
-        // neighboring Carbon pieces are placed exactly far enough apart that
-        // their boundaries can touch without their interiors overlapping.
-        // An equilateral triangle with side 2 * radius provides that spacing.
-        let side = radius * 2.0;
-        let circumradius = side / 3.0_f64.sqrt();
-        let reference_area = match carbon.shape.form {
-            crate::resources::Form::RegularPolygon { sides, radius } => {
-                3.0 * 0.5
-                    * sides as f64
-                    * radius
-                    * radius
-                    * (std::f64::consts::TAU / sides as f64).sin()
-            }
+        // Carbon is a rigid regular hexagon. The scaffold is physical:
+        // neighboring Carbon pieces touch edge-to-edge without overlapping.
+        // For the default hexagon, the center spacing is the apothem doubled,
+        // sqrt(3) * radius. The three centers therefore form an equilateral
+        // triangle whose central triangular gap is the measured reference.
+        let sides = match carbon.shape.form {
+            crate::resources::Form::RegularPolygon { sides, .. } => sides,
             _ => return Err("Carbon genome measurement requires a polygonal Carbon shape".into()),
         };
+        if sides != 6 {
+            return Err("Carbon genome measurement requires a hexagonal Carbon shape".into());
+        }
+        let side = 3.0_f64.sqrt() * radius;
+        let circumradius = side / 3.0_f64.sqrt();
+        // The three pairwise contact points form an equilateral triangle with
+        // side = side / 2. Its area is the actual empty region left by the
+        // temporary three-carbon scaffold.
+        let gap_side = side * 0.5;
+        let reference_area = 3.0_f64.sqrt() * gap_side * gap_side / 4.0;
         if !reference_area.is_finite() || reference_area <= 0.0 {
             return Err("invalid three-carbon genome reference area".into());
         }
