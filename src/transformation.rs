@@ -41,9 +41,10 @@ fn settle_break_energy(
     gross: f64,
     heat: f64,
     ledger: &mut EnergyLedger,
+    catalog: &[crate::resources::BaseResource],
 ) -> bool {
     let mut trial_structure = organism.structure.clone();
-    if trial_structure.break_matching_bond(bond).is_none() {
+    if trial_structure.break_matching_bond(bond, catalog).is_none() {
         return false;
     }
     let tx = EnergyTransaction {
@@ -132,7 +133,7 @@ pub(crate) fn resolve_stress_break(
     else {
         return false;
     };
-    settle_break_energy(organism, target, usable, gross, heat, ledger)
+    settle_break_energy(organism, target, usable, gross, heat, ledger, &environment.catalog)
 }
 
 impl Simulation {
