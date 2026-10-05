@@ -291,12 +291,31 @@ fn form_area(form: &Form) -> Option<f64> {
 }
 
 fn segment_in_polygon_boundary(a: Point, b: Point, polygon: &[Point]) -> bool {
+    // Interior topology may split a realized polygon edge at another
+    // boundary feature. A cavity face segment is therefore allowed to be a
+    // sub-segment of one physical material edge; requiring the original edge's
+    // exact endpoints would reject otherwise valid cavities after graph
+    // splitting.
     (0..polygon.len()).any(|i| {
         let p = polygon[i];
         let q = polygon[(i + 1) % polygon.len()];
-        (p.sub(a).norm() <= NODE_TOLERANCE && q.sub(b).norm() <= NODE_TOLERANCE)
-            || (p.sub(b).norm() <= NODE_TOLERANCE && q.sub(a).norm() <= NODE_TOLERANCE)
+        point_on_segment(a, p, q)
+            && point_on_segment(b, p, q)
     })
+}
+
+fn point_on_segment(point: Point, a: Point, b: Point) -> bool {
+    let ab = b.sub(a);
+    let length_sq = ab.dot(ab);
+    if length_sq <= EPS {
+        return point.sub(a).norm() <= NODE_TOLERANCE;
+    }
+    let t = point.sub(a).dot(ab) / length_sq;
+    if !(-NODE_TOLERANCE..=1.0 + NODE_TOLERANCE).contains(&t) {
+        return false;
+    }
+    let projection = a.add(ab.scale(t));
+    projection.sub(point).norm() <= NODE_TOLERANCE
 }
 
 #[cfg(test)]
