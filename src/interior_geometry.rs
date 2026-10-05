@@ -158,33 +158,16 @@ pub fn find_enclosed_regions(
         line_segments.push((index, (transform(-half, 0.0), transform(half, 0.0))));
     }
 
-    // A fitted Water constituent can itself be part of the organism's outer
-    // boundary. It participates in the enclosure topology for interior
-    // detection, but interior Water must not become a second artificial wall.
-    if !fluid_polygons.is_empty() {
-        let mut min_x = f64::INFINITY;
-        let mut max_x = f64::NEG_INFINITY;
-        let mut min_y = f64::INFINITY;
-        let mut max_y = f64::NEG_INFINITY;
-        for (_, polygon) in polygons.iter().chain(fluid_polygons.iter()) {
-            for point in polygon {
-                min_x = min_x.min(point.x);
-                max_x = max_x.max(point.x);
-                min_y = min_y.min(point.y);
-                max_y = max_y.max(point.y);
-            }
-        }
-        let tolerance = NODE_TOLERANCE * 10.0;
-        for (index, polygon) in fluid_polygons {
-            let on_outer_envelope = polygon.iter().any(|point| {
-                (point.x - min_x).abs() <= tolerance
-                    || (point.x - max_x).abs() <= tolerance
-                    || (point.y - min_y).abs() <= tolerance
-                    || (point.y - max_y).abs() <= tolerance
-            });
-            if on_outer_envelope {
-                polygons.push((index, polygon));
-            }
+    // A realized fluid boundary is part of organism topology only when
+    // some portion of that boundary is actually exposed to the environment.
+    // Do not infer this from a world-space bounding envelope: an interior
+    // fluid can share the organism's envelope without participating in its
+    // physical outer boundary.
+    let rigid_polygons = polygons.clone();
+    for index_fluid in 0..fluid_polygons.len() {
+        let (index, polygon) = &fluid_polygons[index_fluid];
+        if fluid_boundary_is_exposed(polygon, &rigid_polygons, &fluid_polygons, index_fluid) {
+            polygons.push((*index, polygon.clone()));
         }
     }
 
@@ -363,6 +346,70 @@ pub fn find_enclosed_regions(
     }
     regions.sort_by(|a, b| b.area.total_cmp(&a.area));
     regions
+}
+
+fn fluid_boundary_is_exposed(
+    fluid: &[Point],
+    rigid_polygons: &[(usize, Vec<Point>)],
+    all_fluids: &[(usize, Vec<Point>)],
+    fluid_index: usize,
+) -> bool {
+    if fluid.len() < 3 {
+        return false;
+    }
+
+    let signed_area = polygon_signed_area(fluid);
+    if signed_area.abs() <= EPS {
+        return false;
+    }
+
+    let outward_sign = if signed_area > 0.0 { -1.0 } else { 1.0 };
+    let sample_distance = NODE_TOLERANCE * 10.0;
+
+    for index in 0..fluid.len() {
+        let a = fluid[index];
+        let b = fluid[(index + 1) % fluid.len()];
+        let tangent = b.sub(a);
+        let length = tangent.norm();
+        if length <= EPS {
+            continue;
+        }
+
+        let outward = Point {
+            x: outward_sign * tangent.y / length,
+            y: outward_sign * -tangent.x / length,
+        };
+        let sample = a
+            .add(b)
+            .scale(0.5)
+            .add(outward.scale(sample_distance));
+
+        if rigid_polygons
+            .iter()
+            .any(|(_, polygon)| point_in_polygon(sample, polygon))
+        {
+            continue;
+        }
+
+        if all_fluids.iter().enumerate().any(|(other_index, (_, polygon))| {
+            other_index != fluid_index && point_in_polygon(sample, polygon)
+        }) {
+            continue;
+        }
+
+        return true;
+    }
+
+    false
+}
+
+fn polygon_signed_area(polygon: &[Point]) -> f64 {
+    polygon
+        .iter()
+        .enumerate()
+        .map(|(index, point)| point.cross(polygon[(index + 1) % polygon.len()]))
+        .sum::<f64>()
+        * 0.5
 }
 
 fn intern(point: Point, points: &mut Vec<Point>, index: &mut HashMap<(i64, i64), usize>) -> usize {
@@ -582,6 +629,64 @@ mod tests {
             }
         }
         count
+    }
+
+    #[test]
+    fn fluid_boundary_exposure_is_geometric_not_envelope_based() {
+        let rigid = vec![(
+            0,
+            vec![
+                Point { x: -2.0, y: -2.0 },
+                Point { x: 2.0, y: -2.0 },
+                Point { x: 2.0, y: 2.0 },
+                Point { x: -2.0, y: 2.0 },
+            ],
+        )];
+        let interior_fluid = vec![(
+            1,
+            vec![
+                Point { x: -0.5, y: -0.5 },
+                Point { x: 0.5, y: -0.5 },
+                Point { x: 0.5, y: 0.5 },
+                Point { x: -0.5, y: 0.5 },
+            ],
+        )];
+
+        assert!(!fluid_boundary_is_exposed(
+            &interior_fluid[0].1,
+            &rigid,
+            &interior_fluid,
+            0,
+        ));
+    }
+
+    #[test]
+    fn fluid_boundary_is_exposed_when_part_of_outer_material_surface() {
+        let rigid = vec![(
+            0,
+            vec![
+                Point { x: -1.0, y: -1.0 },
+                Point { x: 0.0, y: -1.0 },
+                Point { x: 0.0, y: 1.0 },
+                Point { x: -1.0, y: 1.0 },
+            ],
+        )];
+        let outer_fluid = vec![(
+            1,
+            vec![
+                Point { x: 0.0, y: -1.0 },
+                Point { x: 1.0, y: -1.0 },
+                Point { x: 1.0, y: 1.0 },
+                Point { x: 0.0, y: 1.0 },
+            ],
+        )];
+
+        assert!(fluid_boundary_is_exposed(
+            &outer_fluid[0].1,
+            &rigid,
+            &outer_fluid,
+            0,
+        ));
     }
 
     #[test]
