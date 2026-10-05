@@ -112,6 +112,63 @@ fn nfp_orientation_candidates(
     angles
 }
 
+fn segment_intersection_points(
+    a_start: crate::configuration_space::Point,
+    a_end: crate::configuration_space::Point,
+    b_start: crate::configuration_space::Point,
+    b_end: crate::configuration_space::Point,
+) -> Vec<crate::configuration_space::Point> {
+    let r = crate::configuration_space::Point { x: a_end.x - a_start.x, y: a_end.y - a_start.y };
+    let s = crate::configuration_space::Point { x: b_end.x - b_start.x, y: b_end.y - b_start.y };
+    let cross = r.x * s.y - r.y * s.x;
+    let offset = crate::configuration_space::Point { x: b_start.x - a_start.x, y: b_start.y - a_start.y };
+    const TOLERANCE: f64 = 1e-10;
+
+    if cross.abs() > TOLERANCE {
+        let t = (offset.x * s.y - offset.y * s.x) / cross;
+        let u = (offset.x * r.y - offset.y * r.x) / cross;
+        if t >= -TOLERANCE && t <= 1.0 + TOLERANCE && u >= -TOLERANCE && u <= 1.0 + TOLERANCE {
+            return vec![crate::configuration_space::Point {
+                x: a_start.x + t * r.x,
+                y: a_start.y + t * r.y,
+            }];
+        }
+        return Vec::new();
+    }
+
+    if (offset.x * r.y - offset.y * r.x).abs() > TOLERANCE {
+        return Vec::new();
+    }
+
+    fn on_segment(
+        point: crate::configuration_space::Point,
+        start: crate::configuration_space::Point,
+        end: crate::configuration_space::Point,
+    ) -> bool {
+        const TOLERANCE: f64 = 1e-10;
+        let min_x = start.x.min(end.x) - TOLERANCE;
+        let max_x = start.x.max(end.x) + TOLERANCE;
+        let min_y = start.y.min(end.y) - TOLERANCE;
+        let max_y = start.y.max(end.y) + TOLERANCE;
+        (min_x..=max_x).contains(&point.x) && (min_y..=max_y).contains(&point.y)
+            && ((point.x - start.x) * (end.y - start.y)
+                - (point.y - start.y) * (end.x - start.x)).abs()
+                <= TOLERANCE
+    }
+
+    [a_start, a_end, b_start, b_end]
+        .into_iter()
+        .filter(|&point| on_segment(point, a_start, a_end) && on_segment(point, b_start, b_end))
+        .fold(Vec::new(), |mut points, point| {
+            if !points.iter().any(|existing: &crate::configuration_space::Point| {
+                (existing.x - point.x).hypot(existing.y - point.y) <= TOLERANCE
+            }) {
+                points.push(point);
+            }
+            points
+        })
+}
+
 pub(crate) fn nfp_candidate_placements(
     structure: &OrganismStructure,
     resource: &BaseResource,
@@ -125,6 +182,7 @@ pub(crate) fn nfp_candidate_placements(
     }
 
     let mut placements = Vec::new();
+    let mut boundary_segments = Vec::new();
     for &target_index in targets {
         let unit = structure.units.get(target_index)?;
         let target_shape = unit.shape(catalog)?;
@@ -191,6 +249,30 @@ pub(crate) fn nfp_candidate_placements(
                     x: segment.end.x,
                     y: segment.end.y,
                     rotation_radians: rotation,
+                });
+                boundary_segments.push((rotation, segment.clone()));
+            }
+        }
+    }
+
+    // Multi-neighbor closure can occur at the intersection of two independent
+    // touching loci. Include those exact finite intersections rather than
+    // relying on a projection onto only one neighbor's locus.
+    for (index, &(rotation_a, ref segment_a)) in boundary_segments.iter().enumerate() {
+        for &(rotation_b, ref segment_b) in boundary_segments.iter().skip(index + 1) {
+            if normalize_construction_angle(rotation_a - rotation_b).abs() > 1e-10 {
+                continue;
+            }
+            for point in segment_intersection_points(
+                segment_a.start,
+                segment_a.end,
+                segment_b.start,
+                segment_b.end,
+            ) {
+                placements.push(Placement {
+                    x: point.x,
+                    y: point.y,
+                    rotation_radians: rotation_a,
                 });
             }
         }
