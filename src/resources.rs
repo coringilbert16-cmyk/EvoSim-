@@ -68,10 +68,14 @@ fn polygon_area(vertices: &[(f64, f64)]) -> f64 {
     if vertices.len() < 3 {
         return 0.0;
     }
-    let area2 = vertices.iter().enumerate().map(|(i, &(x1, y1))| {
-        let (x2, y2) = vertices[(i + 1) % vertices.len()];
-        x1 * y2 - x2 * y1
-    }).sum::<f64>();
+    let area2 = vertices
+        .iter()
+        .enumerate()
+        .map(|(i, &(x1, y1))| {
+            let (x2, y2) = vertices[(i + 1) % vertices.len()];
+            x1 * y2 - x2 * y1
+        })
+        .sum::<f64>();
     0.5 * area2.abs()
 }
 
@@ -155,7 +159,10 @@ impl Form {
                 *sides >= 3 && radius.is_finite() && *radius > 0.0
             }
             Form::Polygon { vertices } => polygon_geometry_is_valid(vertices),
-            Form::Fluid { nominal_area, boundary } => {
+            Form::Fluid {
+                nominal_area,
+                boundary,
+            } => {
                 nominal_area.is_finite()
                     && *nominal_area > 0.0
                     && boundary.as_ref().map_or(true, |vertices| {
@@ -201,7 +208,13 @@ impl Form {
                 0.5 * n * radius * radius * (std::f64::consts::TAU / n).sin()
             }
             Form::Polygon { vertices } => polygon_area(vertices),
-            Form::Fluid { nominal_area, boundary } => boundary.as_deref().map(polygon_area).unwrap_or(*nominal_area),
+            Form::Fluid {
+                nominal_area,
+                boundary,
+            } => boundary
+                .as_deref()
+                .map(polygon_area)
+                .unwrap_or(*nominal_area),
         }
     }
 
@@ -217,9 +230,17 @@ impl Form {
                 .iter()
                 .map(|(x, y)| (x * x + y * y).sqrt())
                 .fold(0.0_f64, f64::max),
-            Form::Fluid { nominal_area, boundary } => boundary
+            Form::Fluid {
+                nominal_area,
+                boundary,
+            } => boundary
                 .as_ref()
-                .map(|vertices| vertices.iter().map(|(x, y)| x.hypot(*y)).fold(0.0_f64, f64::max))
+                .map(|vertices| {
+                    vertices
+                        .iter()
+                        .map(|(x, y)| x.hypot(*y))
+                        .fold(0.0_f64, f64::max)
+                })
                 .filter(|radius| *radius > 0.0)
                 .unwrap_or_else(|| (nominal_area / std::f64::consts::PI).sqrt()),
         }
