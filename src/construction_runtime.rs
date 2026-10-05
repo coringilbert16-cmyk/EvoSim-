@@ -1480,9 +1480,9 @@ fn construction_endpoint_options_include_exact_edge_midpoints() {
         },
     );
     let endpoints = structure_unit_endpoint_options(&unit, &catalog);
-    assert!(endpoints.iter().any(|endpoint| {
-        matches!(endpoint, ConnectionEndpoint::BoundaryPoint { .. })
-    }));
+    assert!(endpoints
+        .iter()
+        .any(|endpoint| { matches!(endpoint, ConnectionEndpoint::BoundaryPoint { .. }) }));
 }
 
 #[test]
@@ -1498,15 +1498,7 @@ fn construction_angle_candidates_use_exact_boundary_normals_without_sampling() {
         x: (vertices[0].0 + vertices[1].0) * 0.5,
         y: (vertices[0].1 + vertices[1].1) * 0.5,
     };
-    let angles = construction_angle_candidates(
-        &shape,
-        endpoint,
-        0.0,
-        &shape,
-        endpoint,
-        0.0,
-        0.37,
-    );
+    let angles = construction_angle_candidates(&shape, endpoint, 0.0, &shape, endpoint, 0.0, 0.37);
     assert!(angles.iter().any(|angle| (*angle - 0.37).abs() < 1e-10));
     assert!(angles.len() <= 2);
 }
