@@ -116,6 +116,45 @@ fn bond_units(
                 && candidate.available_a
                 && candidate.available_b
         })
+        .filter(|candidate| {
+            let Some((_, _, _, investment, _)) =
+                crate::combine_runtime::selected_candidate_evaluation(
+                    structure,
+                    unit_a,
+                    unit_b,
+                    *candidate,
+                    catalog,
+                )
+            else {
+                return false;
+            };
+            let (Some(id_a), Some(id_b)) = (
+                structure.physical_id(unit_a),
+                structure.physical_id(unit_b),
+            ) else {
+                return false;
+            };
+            let (Some(a), Some(b)) = (
+                structure.units.get(unit_a).and_then(|unit| unit.properties(catalog)),
+                structure.units.get(unit_b).and_then(|unit| unit.properties(catalog)),
+            ) else {
+                return false;
+            };
+            let strength = crate::combine::bond_strength(a, b);
+            let bond = crate::structure::Bond {
+                endpoint_a: crate::structure::BondEndpoint::new(
+                    id_a,
+                    candidate.endpoint_a,
+                ),
+                endpoint_b: crate::structure::BondEndpoint::new(
+                    id_b,
+                    candidate.endpoint_b,
+                ),
+                strength,
+                bond_energy: investment,
+            };
+            structure.is_valid_bond(&bond, catalog)
+        })
         .collect::<Vec<_>>();
 
         let candidate = candidates
