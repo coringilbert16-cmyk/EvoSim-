@@ -864,15 +864,12 @@ fn try_combine_environmental(
         };
         let mut trial_ledger = *ledger;
         let mut trial_energy = organism.usable_energy;
-        let Some(attempt) = form_bond(
+        let Some(attempt) = form_selected_bond(
             &mut trial_structure,
-            BondFormationRequest {
-                unit_a: ua,
-                unit_b: restored_ub,
-                endpoint_a: evaluation.candidate.endpoint_a,
-                endpoint_b: evaluation.candidate.endpoint_b,
-                investment: evaluation.threshold,
-            },
+            ua,
+            restored_ub,
+            evaluation.candidate,
+            evaluation.threshold,
             &environment.catalog,
             cache,
             &mut trial_ledger,
@@ -1031,15 +1028,12 @@ pub(crate) fn try_combine(
         let mut trial_structure = organism.structure.clone();
         let mut trial_ledger = *ledger;
         let mut trial_energy = organism.usable_energy;
-        if let Some(attempt) = form_bond(
+        if let Some(attempt) = form_selected_bond(
             &mut trial_structure,
-            BondFormationRequest {
-                unit_a: ua,
-                unit_b: ub,
-                endpoint_a: evaluation.candidate.endpoint_a,
-                endpoint_b: evaluation.candidate.endpoint_b,
-                investment: evaluation.threshold,
-            },
+            ua,
+            ub,
+            evaluation.candidate,
+            evaluation.threshold,
             catalog,
             cache,
             &mut trial_ledger,
