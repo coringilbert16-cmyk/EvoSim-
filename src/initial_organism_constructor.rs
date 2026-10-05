@@ -515,7 +515,7 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
         return Err("catalog does not contain Water".into());
     }
 
-    let (structure, ledger, energy) = construct_scaffold(catalog)?;
+    let (structure, _ledger, energy) = construct_scaffold(catalog)?;
     let acquired_resource_placements =
         valid_construction(&structure, catalog, &acquisition_candidates).ok_or_else(|| {
             "deterministic construction scaffold did not satisfy viability".to_string()
