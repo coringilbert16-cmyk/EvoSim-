@@ -40,7 +40,7 @@ fn hex_ring(radius: i32) -> Vec<(i32, i32)> {
     if radius <= 0 {
         return Vec::new();
     }
-    let directions = [(1, 0), (0, 1), (-1, 1), (-1, 0), (0, -1), (1, -1)];
+    let directions = [(1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1)];
     // Start one axial step away from the center so the generated ring is
     // a true radius-n hex ring rather than passing through (0, 0).
     let mut q = -radius;
