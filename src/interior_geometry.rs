@@ -228,7 +228,10 @@ pub fn find_enclosed_regions(
                 // from being represented as the interior face.
                 let midpoint = pair[0].add(pair[1]).scale(0.5);
                 let shared_material_seam = polygons.iter().any(|(other_unit, other_polygon)| {
-                    *other_unit != *unit && point_on_polygon_boundary(midpoint, other_polygon)
+                    *other_unit != *unit
+                        && midpoint_on_collinear_shared_boundary(
+                            pair[0], pair[1], midpoint, other_polygon,
+                        )
                 });
                 if shared_material_seam {
                     continue;
@@ -483,6 +486,44 @@ fn point_on_segment(point: Point, a: Point, b: Point) -> bool {
         y: a.y + t * ab.y,
     };
     projection.sub(point).norm() <= NODE_TOLERANCE
+}
+
+fn midpoint_on_collinear_shared_boundary(
+    a: Point,
+    b: Point,
+    midpoint: Point,
+    polygon: &[Point],
+) -> bool {
+    let segment = b.sub(a);
+    let segment_length = segment.norm();
+    if segment_length <= EPS || !point_on_segment(midpoint, a, b) {
+        return false;
+    }
+
+    let tolerance = NODE_TOLERANCE * 10.0;
+    (0..polygon.len()).any(|i| {
+        let p = polygon[i];
+        let q = polygon[(i + 1) % polygon.len()];
+        let edge = q.sub(p);
+        let edge_length = edge.norm();
+        if edge_length <= EPS {
+            return false;
+        }
+
+        // A midpoint alone is not enough: another polygon must share the
+        // same supporting line and cover the entire realized segment. This
+        // preserves split shared walls while rejecting a crossing/touching
+        // boundary that merely happens to pass through the midpoint.
+        if segment.cross(edge).abs() > tolerance * segment_length.max(edge_length) {
+            return false;
+        }
+        if a.sub(p).cross(edge).abs() > tolerance * edge_length
+            || b.sub(p).cross(edge).abs() > tolerance * edge_length
+        {
+            return false;
+        }
+        point_on_segment(a, p, q) && point_on_segment(b, p, q)
+    })
 }
 
 fn point_on_polygon_boundary(point: Point, polygon: &[Point]) -> bool {
