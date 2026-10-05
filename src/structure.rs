@@ -378,29 +378,6 @@ impl Bond {
             || (self.endpoint_b.constituent_id == u
                 && self.endpoint_b.location.same_location(location))
     }
-    pub fn has_same_identity(&self, o: &Bond) -> bool {
-        (self.endpoint_a.constituent_id == o.endpoint_a.constituent_id
-            && self
-                .endpoint_a
-                .location
-                .same_location(o.endpoint_a.location)
-            && self.endpoint_b.constituent_id == o.endpoint_b.constituent_id
-            && self
-                .endpoint_b
-                .location
-                .same_location(o.endpoint_b.location))
-            || (self.endpoint_a.constituent_id == o.endpoint_b.constituent_id
-                && self
-                    .endpoint_a
-                    .location
-                    .same_location(o.endpoint_b.location)
-                && self.endpoint_b.constituent_id == o.endpoint_a.constituent_id
-                && self
-                    .endpoint_b
-                    .location
-                    .same_location(o.endpoint_a.location))
-    }
-
     /// Physical bond identity: the same two physical constituents joined at the same
     /// world-space endpoint locations, regardless of whether those locations are encoded
     /// as equivalent endpoint feature variants.
