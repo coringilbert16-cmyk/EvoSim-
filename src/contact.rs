@@ -651,7 +651,7 @@ fn endpoint_facing(
     ))
 }
 
-fn candidate_for_endpoints(
+pub(crate) fn candidate_for_endpoints(
     s: &OrganismStructure,
     ua: usize,
     ub: usize,
