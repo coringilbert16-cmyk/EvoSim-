@@ -62,6 +62,17 @@ pub enum Form {
     },
 }
 
+fn polygon_area(vertices: &[(f64, f64)]) -> f64 {
+    if vertices.len() < 3 {
+        return 0.0;
+    }
+    let area2 = vertices.iter().enumerate().map(|(i, &(x1, y1))| {
+        let (x2, y2) = vertices[(i + 1) % vertices.len()];
+        x1 * y2 - x2 * y1
+    }).sum::<f64>();
+    0.5 * area2.abs()
+}
+
 fn polygon_geometry_is_valid(vertices: &[(f64, f64)]) -> bool {
     const EPS: f64 = 1e-12;
 
@@ -149,9 +160,10 @@ impl Form {
                 if !nominal_area.is_finite() || *nominal_area <= 0.0 {
                     return false;
                 }
-                boundary
-                    .as_ref()
-                    .map_or(true, |vertices| polygon_geometry_is_valid(vertices))
+                boundary.as_ref().map_or(true, |vertices| {
+                    polygon_geometry_is_valid(vertices)
+                        && polygon_area(vertices) <= *nominal_area + 1e-12
+                })
             }
         }
     }
@@ -177,6 +189,26 @@ impl Form {
                 )
             }
             Form::Polygon { vertices } => Some(vertices.clone()),
+        }
+    }
+
+    /// Geometric area occupied by this form in local space. For fluids,
+    /// nominal_area is the maximum area available to one unit of material;
+    /// a realized boundary may occupy less as surrounding geometry constrains it.
+    pub fn area(&self) -> f64 {
+        match self {
+            Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+            Form::Line { .. } => 0.0,
+            Form::Rectangle { width, height } => width * height,
+            Form::RegularPolygon { sides, radius } => {
+                let n = *sides as f64;
+                0.5 * n * radius * radius * (std::f64::consts::TAU / n).sin()
+            }
+            Form::Polygon { vertices } => polygon_area(vertices),
+            Form::Fluid { nominal_area, boundary } => boundary
+                .as_deref()
+                .map(polygon_area)
+                .unwrap_or(*nominal_area),
         }
     }
 
