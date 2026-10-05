@@ -781,6 +781,7 @@ fn realize_next_bond_driven(
     realized_units: &[Option<Vec<usize>>],
     _index: usize,
     neighbor: usize,
+    realized_neighbors: &[usize],
     genome_anchor: Placement,
     anchor_declared: BlueprintPlacement,
     new_material: &crate::physical_material::PhysicalMaterial,
@@ -948,6 +949,41 @@ fn realize_next_bond_driven(
                     ) else {
                         continue;
                     };
+
+                    // Once an element has more than one already-realized
+                    // blueprint neighbor, its placement is constrained by all
+                    // of those current contacts. The constructor still does
+                    // not inspect unrealized/future edges: it merely refuses a
+                    // placement that would strand a contact that already exists
+                    // in the current developmental graph. The additional bonds
+                    // remain ordinary closure work after this placement commits.
+                    let all_current_contacts_valid = realized_neighbors.iter().copied().all(|other_neighbor| {
+                        if other_neighbor == neighbor {
+                            return true;
+                        }
+                        let Some(other_units) = realized_units[other_neighbor].as_ref() else {
+                            return false;
+                        };
+                        other_units.iter().any(|&other_index| {
+                            crate::contact::connection_pair_candidates_cached(
+                                &trial,
+                                other_index,
+                                new_unit_index,
+                                catalog,
+                                &mut crate::contact::ConnectionCompatibilityCache::new(),
+                            )
+                            .into_iter()
+                            .any(|secondary| {
+                                secondary.distance
+                                    <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                                    && secondary.available_a
+                                    && secondary.available_b
+                            })
+                        })
+                    });
+                    if !all_current_contacts_valid {
+                        continue;
+                    }
 
                     if best_candidate
                         .as_ref()
@@ -1273,6 +1309,7 @@ fn construct_blueprint_bond_driven_internal(
                     &realized_units,
                     index,
                     neighbor,
+                    &neighbors,
                     genome_anchor,
                     anchor_element.placement,
                     &candidate_instance,
