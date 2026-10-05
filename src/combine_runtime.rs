@@ -592,15 +592,12 @@ pub(crate) fn try_combine_stored_unit(
         let ub = *indices.first()?;
         let mut candidate_ledger = *ledger;
         let mut candidate_energy = organism.usable_energy;
-        if let Some(attempt) = form_bond(
+        if let Some(attempt) = form_selected_bond(
             &mut hypothetical,
-            BondFormationRequest {
-                unit_a: ua,
-                unit_b: ub,
-                endpoint_a: evaluation.candidate.endpoint_a,
-                endpoint_b: evaluation.candidate.endpoint_b,
-                investment: evaluation.threshold,
-            },
+            ua,
+            ub,
+            evaluation.candidate,
+            evaluation.threshold,
             &environment.catalog,
             cache,
             &mut candidate_ledger,
