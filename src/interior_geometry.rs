@@ -379,10 +379,7 @@ fn fluid_boundary_is_exposed(
             x: outward_sign * tangent.y / length,
             y: outward_sign * -tangent.x / length,
         };
-        let sample = a
-            .add(b)
-            .scale(0.5)
-            .add(outward.scale(sample_distance));
+        let sample = a.add(b).scale(0.5).add(outward.scale(sample_distance));
 
         if rigid_polygons
             .iter()
@@ -391,9 +388,13 @@ fn fluid_boundary_is_exposed(
             continue;
         }
 
-        if all_fluids.iter().enumerate().any(|(other_index, (_, polygon))| {
-            other_index != fluid_index && point_in_polygon(sample, polygon)
-        }) {
+        if all_fluids
+            .iter()
+            .enumerate()
+            .any(|(other_index, (_, polygon))| {
+                other_index != fluid_index && point_in_polygon(sample, polygon)
+            })
+        {
             continue;
         }
 
