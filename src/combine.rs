@@ -199,7 +199,7 @@ pub fn eligible_candidates(
     let Some(b) = structure.units.get(unit_b) else {
         return Vec::new();
     };
-    let is_water_only = |material: &Material| {
+    let is_fluid_only = |material: &Material| {
         !material.parts.is_empty()
             && material.parts.iter().all(|(name, amount)| {
                 *amount > EPSILON
@@ -207,12 +207,11 @@ pub fn eligible_candidates(
                         .iter()
                         .find(|resource| resource.name == *name)
                         .is_some_and(|resource| {
-                            resource.name == "Water"
-                                && resource.physical_state == crate::resources::PhysicalState::Fluid
+                            resource.physical_state == crate::resources::PhysicalState::Fluid
                         })
             })
     };
-    let both_fluid = is_water_only(&a.material) && is_water_only(&b.material);
+    let both_fluid = is_fluid_only(&a.material) && is_fluid_only(&b.material);
     if both_fluid {
         return Vec::new();
     }
