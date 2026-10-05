@@ -41,8 +41,10 @@ fn hex_ring(radius: i32) -> Vec<(i32, i32)> {
         return Vec::new();
     }
     let directions = [(1, 0), (0, 1), (-1, 1), (-1, 0), (0, -1), (1, -1)];
+    // Start one axial step away from the center so the generated ring is
+    // a true radius-n hex ring rather than passing through (0, 0).
     let mut q = -radius;
-    let mut r = 0;
+    let mut r = radius;
     let mut result = Vec::with_capacity((radius * 6) as usize);
     for (dq, dr) in directions {
         for _ in 0..radius {
