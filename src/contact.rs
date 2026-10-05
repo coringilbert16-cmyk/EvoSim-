@@ -226,6 +226,85 @@ fn rigid_surface_candidates(
         }
     }
 
+    // Exact line-endpoint/edge contacts are separate from polygon/polygon
+    // surface intersections because lines expose endpoints, not polygon edges.
+    for candidate in line_polygon_surface_candidates(a, b, catalog) {
+        push_unique(candidate);
+    }
+
+    out
+}
+
+fn line_polygon_surface_candidates(
+    a: &StructuralUnit,
+    b: &StructuralUnit,
+    catalog: &[crate::resources::BaseResource],
+) -> Vec<(ConnectionEndpoint, ConnectionEndpoint)> {
+    let Some(shape_a) = a.shape(catalog) else {
+        return Vec::new();
+    };
+    let Some(shape_b) = b.shape(catalog) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+
+    let mut collect = |line: &StructuralUnit,
+                       line_is_a: bool,
+                       polygon: &StructuralUnit,
+                       polygon_shape: &crate::resources::Shape| {
+        let Some(vertices) = polygon_shape.form.polygon_vertices() else {
+            return;
+        };
+        for endpoint_index in 0..2 {
+            let line_endpoint = ConnectionEndpoint::LineEndpoint {
+                point_index: endpoint_index,
+            };
+            let Some(world_endpoint) = endpoint_world_point(line_endpoint, line, catalog) else {
+                continue;
+            };
+            let point = (world_endpoint.x, world_endpoint.y);
+            let world_polygon = world_vertices(&vertices, polygon);
+            for i in 0..world_polygon.len() {
+                let start = world_polygon[i];
+                let end = world_polygon[(i + 1) % world_polygon.len()];
+                if !point_on_segment(point, start, end) {
+                    continue;
+                }
+                let polygon_endpoint = if same_world_point(point, start) {
+                    ConnectionEndpoint::Corner { point_index: i }
+                } else if same_world_point(point, end) {
+                    ConnectionEndpoint::Corner {
+                        point_index: (i + 1) % world_polygon.len(),
+                    }
+                } else {
+                    let Some(endpoint) = boundary_point_endpoint(polygon, point, catalog) else {
+                        continue;
+                    };
+                    endpoint
+                };
+                let candidate = if line_is_a {
+                    (line_endpoint, polygon_endpoint)
+                } else {
+                    (polygon_endpoint, line_endpoint)
+                };
+                if !out.iter().any(|existing: &(ConnectionEndpoint, ConnectionEndpoint)| {
+                    existing.0.same_location(candidate.0) && existing.1.same_location(candidate.1)
+                }) {
+                    out.push(candidate);
+                }
+            }
+        }
+    };
+
+    match (&shape_a.form, &shape_b.form) {
+        (Form::Line { .. }, Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. }) => {
+            collect(a, true, b, shape_b);
+        }
+        (Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. }, Form::Line { .. }) => {
+            collect(b, false, a, shape_a);
+        }
+        _ => {}
+    }
     out
 }
 
@@ -370,7 +449,16 @@ fn candidate_endpoints(
     };
 
     candidates.extend(rigid_surface_candidates(a, b, catalog));
-    candidates
+
+    let mut unique = Vec::with_capacity(candidates.len());
+    for candidate in candidates {
+        if !unique.iter().any(|existing: &(ConnectionEndpoint, ConnectionEndpoint)| {
+            existing.0.same_location(candidate.0) && existing.1.same_location(candidate.1)
+        }) {
+            unique.push(candidate);
+        }
+    }
+    unique
 }
 
 fn endpoint_world_point(
