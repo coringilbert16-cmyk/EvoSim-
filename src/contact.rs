@@ -724,6 +724,36 @@ pub fn connection_pair_candidates_cached(
     connection_pair_candidates(s, ua, ub, c)
 }
 
+fn same_physical_bond_identity(
+    s: &OrganismStructure,
+    a: &Bond,
+    b: &Bond,
+    c: &[crate::resources::BaseResource],
+) -> bool {
+    let matches = |aa: &BondEndpoint, bb: &BondEndpoint| {
+        let Some(ua) = s.unit_index(aa.constituent_id) else {
+            return false;
+        };
+        let Some(ub) = s.unit_index(bb.constituent_id) else {
+            return false;
+        };
+        aa.location.same_physical_location(
+            bb.location,
+            &s.units[ua],
+            &s.units[ub],
+            c,
+        )
+    };
+    (a.endpoint_a.constituent_id == b.endpoint_a.constituent_id
+        && a.endpoint_b.constituent_id == b.endpoint_b.constituent_id
+        && matches(&a.endpoint_a, &b.endpoint_a)
+        && matches(&a.endpoint_b, &b.endpoint_b))
+        || (a.endpoint_a.constituent_id == b.endpoint_b.constituent_id
+            && a.endpoint_b.constituent_id == b.endpoint_a.constituent_id
+            && matches(&a.endpoint_a, &b.endpoint_b)
+            && matches(&a.endpoint_b, &b.endpoint_a))
+}
+
 pub fn try_add_bond(
     s: &mut OrganismStructure,
     b: Bond,
@@ -732,10 +762,7 @@ pub fn try_add_bond(
     if !s.is_valid_bond(&b, c) {
         return Err("invalid bond");
     }
-    if s.bonds
-        .iter()
-        .any(|existing| existing.has_same_identity(&b))
-    {
+    if s.bonds.iter().any(|existing| same_physical_bond_identity(s, existing, &b, c)) {
         return Err("duplicate bond");
     }
     Ok(s.push_bond_unchecked(b))
