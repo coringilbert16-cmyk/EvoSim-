@@ -835,7 +835,7 @@ fn realize_next_bond_driven(
 
                 // The blueprint pose is a preference, not a placement command.
                 // The analytic target angle is followed by exact boundary alignments
-                // and a small coarse fallback rather than a blind 360-degree sweep.
+                // and exact feature alignments rather than a blind 360-degree sweep.
                 let target = blueprint.elements[_index].placement;
                 let (s, c) = genome_anchor.rotation_radians.sin_cos();
                 let target_world = (
