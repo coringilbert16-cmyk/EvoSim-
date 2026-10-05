@@ -123,6 +123,25 @@ fn rigid_boundary_endpoint(
     }
 }
 
+fn same_world_point(a: (f64, f64), b: (f64, f64)) -> bool {
+    (a.0 - b.0).hypot(a.1 - b.1) <= 1e-9
+}
+
+fn point_on_segment(point: (f64, f64), start: (f64, f64), end: (f64, f64)) -> bool {
+    let dx = end.0 - start.0;
+    let dy = end.1 - start.1;
+    let length = dx.hypot(dy);
+    if length <= f64::EPSILON {
+        return same_world_point(point, start);
+    }
+    let cross = (point.0 - start.0) * dy - (point.1 - start.1) * dx;
+    if cross.abs() > 1e-9 * length {
+        return false;
+    }
+    let dot = (point.0 - start.0) * dx + (point.1 - start.1) * dy;
+    dot >= -1e-9 && dot <= length * length + 1e-9
+}
+
 fn circle_polygon_surface_candidates(
     a: &StructuralUnit,
     b: &StructuralUnit,
