@@ -275,6 +275,18 @@ impl ConnectionEndpoint {
                     unit.placement.rotation_radians,
                 ))
             }
+            Self::BoundaryPoint { x, y } => {
+                let point = crate::surface_geometry::boundary_point_at(unit.shape(catalog)?, x, y)?;
+                Some(crate::connection_geometry::transform_derived_point(
+                    point.x,
+                    point.y,
+                    point.normal_x,
+                    point.normal_y,
+                    unit.placement.x,
+                    unit.placement.y,
+                    unit.placement.rotation_radians,
+                ))
+            }
             Self::Fluid { x, y } => Some(crate::connection_geometry::transform_derived_point(
                 x,
                 y,
@@ -294,6 +306,9 @@ impl ConnectionEndpoint {
             }
             (Self::Boundary { angle_radians: a }, Self::Boundary { angle_radians: b }) => {
                 (a - b).abs() <= 1e-12
+            }
+            (Self::BoundaryPoint { x: ax, y: ay }, Self::BoundaryPoint { x: bx, y: by }) => {
+                (ax - bx).hypot(ay - by) <= 1e-12
             }
             (Self::Fluid { x: ax, y: ay }, Self::Fluid { x: bx, y: by }) => {
                 (ax - bx).hypot(ay - by) <= 1e-12
