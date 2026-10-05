@@ -1111,22 +1111,40 @@ mod tests {
     }
 
     #[test]
-    fn bond_identity_uses_physical_ids() {
-        let a = PhysicalConstituentId(11);
-        let b = PhysicalConstituentId(22);
+    fn bond_identity_uses_physical_locations_and_constituent_ids() {
+        let catalog = default_catalog();
+        let mut structure = OrganismStructure::new();
+        let a = structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let b = structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 1.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let aid = structure.units[a].physical_id;
+        let bid = structure.units[b].physical_id;
         let x = Bond {
-            endpoint_a: BondEndpoint::new(a, ConnectionEndpoint::Corner { point_index: 0 }),
-            endpoint_b: BondEndpoint::new(b, ConnectionEndpoint::Corner { point_index: 1 }),
+            endpoint_a: BondEndpoint::new(aid, ConnectionEndpoint::Corner { point_index: 0 }),
+            endpoint_b: BondEndpoint::new(bid, ConnectionEndpoint::Corner { point_index: 1 }),
             strength: 0.5,
             bond_energy: 1.0,
         };
         let y = Bond {
-            endpoint_a: BondEndpoint::new(a, ConnectionEndpoint::Corner { point_index: 0 }),
-            endpoint_b: BondEndpoint::new(b, ConnectionEndpoint::Corner { point_index: 1 }),
+            endpoint_a: BondEndpoint::new(aid, ConnectionEndpoint::Corner { point_index: 0 }),
+            endpoint_b: BondEndpoint::new(bid, ConnectionEndpoint::Corner { point_index: 1 }),
             strength: 0.5,
             bond_energy: 1.0,
         };
-        assert!(x.has_same_identity(&y));
+        assert!(x.has_same_physical_identity(&y, &structure, &catalog));
     }
     #[test]
     fn structural_unit_serialization_uses_material_directly() {
