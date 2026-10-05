@@ -363,7 +363,7 @@ fn fluid_boundary_is_exposed(
         return false;
     }
 
-    let outward_sign = if signed_area > 0.0 { -1.0 } else { 1.0 };
+    let outward_sign = if signed_area > 0.0 { 1.0 } else { -1.0 };
     let sample_distance = NODE_TOLERANCE * 10.0;
 
     for index in 0..fluid.len() {
