@@ -718,18 +718,16 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                 let mut trial_ledger = *ledger;
                 let mut trial_energy = available_energy;
                 let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
-                let Some(candidate) = crate::contact::connection_pair_candidates_cached(
+                let Some(candidate) = crate::contact::candidate_for_endpoints(
                     &trial,
                     existing_index,
                     new_unit_index,
+                    endpoint_a,
+                    endpoint_b,
                     catalog,
-                    &mut bond_cache,
                 )
-                .into_iter()
-                .find(|candidate| {
-                    candidate.endpoint_a == endpoint_a
-                        && candidate.endpoint_b == endpoint_b
-                        && candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                .filter(|candidate| {
+                    candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
                         && candidate.available_a
                         && candidate.available_b
                 }) else {
@@ -907,29 +905,23 @@ fn realize_next_bond_driven(
 
                     // The official connection points determine where the
                     // constructor works from and how the new material is placed.
-                    // Once the material is physically placed, the actual bond may
-                    // land anywhere on the touching boundaries.
-                    // The placement was generated from this exact physical
-                    // endpoint pair. Re-querying contact is validation only: the
-                    // bond must be the same feature pair that drove placement,
-                    // never a newly selected nearby contact.
-                    let Some(candidate) = crate::contact::connection_pair_candidates_cached(
-                        &trial,
-                        existing_index,
-                        new_unit_index,
-                        catalog,
-                        &mut bond_cache,
-                    )
-                    .into_iter()
-                    .find(|candidate| {
-                        candidate.endpoint_a == endpoint_a
-                            && candidate.endpoint_b == endpoint_b
-                            && candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                            && candidate.available_a
-                            && candidate.available_b
-                    }) else {
-                        continue;
-                    };
+                    // The placement was generated from this exact endpoint pair;
+                    // resolve that pair directly rather than searching again.
+                    let Some(candidate) = crate::contact::candidate_for_endpoints(
+                    &trial,
+                    existing_index,
+                    new_unit_index,
+                    endpoint_a,
+                    endpoint_b,
+                    catalog,
+                )
+                .filter(|candidate| {
+                    candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                        && candidate.available_a
+                        && candidate.available_b
+                }) else {
+                    continue;
+                };
 
                     let Some((_, _, _, investment, _required_energy)) =
                         crate::combine_runtime::selected_candidate_evaluation(
