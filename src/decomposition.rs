@@ -79,7 +79,7 @@ pub(crate) fn resolve_one_bond_with_ledger(
         .properties(&environment.catalog)?;
 
     let mut trial_structure = body.structure.clone();
-    trial_structure.break_matching_bond(target)?;
+    trial_structure.break_matching_bond(target, &environment.catalog)?;
     let released_material = if trial_structure.bonds.is_empty() {
         Some(
             trial_structure
