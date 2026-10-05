@@ -770,6 +770,7 @@ enum EndpointOpportunityKey {
     Corner(usize),
     LineEndpoint(usize),
     Boundary(u64),
+    BoundaryPoint(u64, u64),
     Fluid(u64, u64),
 }
 
@@ -784,6 +785,9 @@ impl EndpointOpportunityKey {
             }
             crate::structure::ConnectionEndpoint::Boundary { angle_radians } => {
                 Self::Boundary(angle_radians.to_bits())
+            }
+            crate::structure::ConnectionEndpoint::BoundaryPoint { x, y } => {
+                Self::BoundaryPoint(x.to_bits(), y.to_bits())
             }
             crate::structure::ConnectionEndpoint::Fluid { x, y } => {
                 Self::Fluid(x.to_bits(), y.to_bits())
