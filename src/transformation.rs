@@ -904,10 +904,17 @@ mod tests {
             .iter()
             .filter_map(|&index| organism.structure.bonds.get(index).copied())
             .collect();
+        let structure_snapshot = organism.structure.clone();
         organism.structure.bonds.retain(|bond| {
             protected_bonds
                 .iter()
-                .any(|candidate| candidate.has_same_physical_identity(bond, &organism.structure, &environment.catalog))
+                .any(|candidate| {
+                    candidate.has_same_physical_identity(
+                        bond,
+                        &structure_snapshot,
+                        &environment.catalog,
+                    )
+                })
         });
         let candidates = stress_break_candidate_indices(&organism, &environment);
         assert_eq!(candidates.len(), organism.structure.bonds.len());
