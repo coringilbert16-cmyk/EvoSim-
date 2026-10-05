@@ -106,9 +106,9 @@ pub fn boundary_point_at(shape: &Shape, x: f64, y: f64) -> Option<BoundaryPoint>
         }
         Form::Line { length } => {
             let half = *length / 2.0;
-            if x.abs() <= tolerance && (y + half).abs() <= tolerance {
+            if (x + half).abs() <= tolerance && y.abs() <= tolerance {
                 Some(BoundaryPoint { x: -half, y: 0.0, normal_x: -1.0, normal_y: 0.0 })
-            } else if x.abs() <= tolerance && (y - half).abs() <= tolerance {
+            } else if (x - half).abs() <= tolerance && y.abs() <= tolerance {
                 Some(BoundaryPoint { x: half, y: 0.0, normal_x: 1.0, normal_y: 0.0 })
             } else {
                 None
