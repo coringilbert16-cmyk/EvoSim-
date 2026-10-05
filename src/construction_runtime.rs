@@ -1466,8 +1466,6 @@ fn construct_blueprint_bond_driven_internal(
 
     Ok((structure, total_heat))
 }
-
-
 #[test]
 fn construction_endpoint_options_include_exact_edge_midpoints() {
     let catalog = crate::resources::default_catalog();
