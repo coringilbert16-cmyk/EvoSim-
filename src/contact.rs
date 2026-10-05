@@ -811,6 +811,18 @@ mod tests {
             ConnectionEndpoint::BoundaryPoint { x: -0.5, y: 0.0 }
         );
         assert!(candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE);
+
+        let discovered = connection_pair_candidates(&structure, a, b, &catalog)
+            .into_iter()
+            .find(|discovered| {
+                discovered.endpoint_a.same_location(candidate.endpoint_a)
+                    && discovered.endpoint_b.same_location(candidate.endpoint_b)
+            })
+            .expect("direct resolution must match the discovered physical candidate");
+        assert!((candidate.distance - discovered.distance).abs() <= 1e-12);
+        assert!((candidate.facing - discovered.facing).abs() <= 1e-12);
+        assert!((candidate.load_a - discovered.load_a).abs() <= 1e-12);
+        assert!((candidate.load_b - discovered.load_b).abs() <= 1e-12);
     }
 
     #[test]
