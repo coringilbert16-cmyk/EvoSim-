@@ -18,6 +18,8 @@ jobs:
         with:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
+      - name: Auto-format Rust sources
+        run: cargo fmt --all
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Check source file sizes
