@@ -459,14 +459,15 @@ fn physical_material_endpoint_local_point(
     endpoint: ConnectionEndpoint,
     catalog: &[BaseResource],
 ) -> Option<crate::connection_geometry::WorldConnectionPoint> {
-    let placements = instance.placements.as_ref()?;
-    let (name, amount) = instance.material.parts.get(part_index)?;
-    let placement = *placements.get(part_index)?;
-    let unit = StructuralUnit::from_material(
-        crate::resources::Material::free_base(name.clone(), *amount),
-        placement,
-    )?;
-    endpoint.world_point(&unit, catalog)
+    let (name, _) = instance.material.parts.get(part_index)?;
+    let shape = resource(catalog, name)?.shape.clone();
+    let (x, y, normal_x, normal_y) = local_endpoint_geometry(&shape, endpoint)?;
+    Some(crate::connection_geometry::WorldConnectionPoint {
+        x,
+        y,
+        normal_x,
+        normal_y,
+    })
 }
 
 fn normalize_construction_angle(angle: f64) -> f64 {
