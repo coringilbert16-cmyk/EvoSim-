@@ -190,12 +190,31 @@ fn rigid_surface_candidates(
             let b0 = world_b[ib];
             let b1 = world_b[(ib + 1) % world_b.len()];
             for point in segment_contact_points(a0, a1, b0, b1) {
-                if let (Some(ea), Some(eb)) = (
-                    boundary_point_endpoint(a, point, catalog),
-                    boundary_point_endpoint(b, point, catalog),
-                ) {
-                    out.push((ea, eb));
-                }
+                let endpoint_a = if same_world_point(point, a0) {
+                    ConnectionEndpoint::Corner { point_index: ia }
+                } else if same_world_point(point, a1) {
+                    ConnectionEndpoint::Corner {
+                        point_index: (ia + 1) % world_a.len(),
+                    }
+                } else {
+                    let Some(endpoint) = boundary_point_endpoint(a, point, catalog) else {
+                        continue;
+                    };
+                    endpoint
+                };
+                let endpoint_b = if same_world_point(point, b0) {
+                    ConnectionEndpoint::Corner { point_index: ib }
+                } else if same_world_point(point, b1) {
+                    ConnectionEndpoint::Corner {
+                        point_index: (ib + 1) % world_b.len(),
+                    }
+                } else {
+                    let Some(endpoint) = boundary_point_endpoint(b, point, catalog) else {
+                        continue;
+                    };
+                    endpoint
+                };
+                out.push((endpoint_a, endpoint_b));
             }
         }
     }
