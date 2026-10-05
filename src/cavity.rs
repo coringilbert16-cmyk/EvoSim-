@@ -93,19 +93,17 @@ impl GenomeCavity {
     }
 }
 
-/// The minimum cavity is strictly larger than the area occupied by three
-/// joined Carbon hexagons. Carbon supplies only the geometric reference; it is
-/// not the genome.
-pub fn minimum_genome_cavity_area(catalog: &[BaseResource]) -> Result<f64, String> {
-    let carbon = catalog
-        .iter()
-        .find(|resource| resource.name == "Carbon")
-        .ok_or_else(|| "catalog has no Carbon resource".to_string())?;
-    let area =
-        form_area(&carbon.shape.form).ok_or_else(|| "Carbon has no finite 2D area".to_string())?;
-    let minimum = 3.0 * area;
+/// The temporary three-Carbon measurement scaffold is the single authority
+/// for the minimum genome scale. Cavity qualification does not independently
+/// reconstruct the reference from Carbon's catalog geometry.
+pub fn minimum_genome_cavity_area(
+    catalog: &[BaseResource],
+) -> Result<f64, String> {
+    let scaffold =
+        crate::structural_blueprint::GenomeMeasurementScaffold::three_carbon_reference(catalog)?;
+    let minimum = scaffold.reference_area();
     if !minimum.is_finite() || minimum <= 0.0 {
-        return Err("invalid Carbon cavity reference area".into());
+        return Err("invalid three-carbon genome reference area".into());
     }
     Ok(minimum)
 }
