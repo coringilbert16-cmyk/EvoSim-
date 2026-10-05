@@ -724,7 +724,7 @@ pub fn connection_pair_candidates_cached(
     connection_pair_candidates(s, ua, ub, c)
 }
 
-fn same_physical_bond_identity(
+pub(crate) fn same_physical_bond_identity(
     s: &OrganismStructure,
     a: &Bond,
     b: &Bond,
