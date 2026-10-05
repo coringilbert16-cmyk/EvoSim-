@@ -146,8 +146,6 @@ impl Form {
                 *sides >= 3 && radius.is_finite() && *radius > 0.0
             }
             Form::Polygon { vertices } => polygon_geometry_is_valid(vertices),
-            Form::Circle { radius } if *radius > 0.0 => radius.is_finite(),
-            Form::Circle { .. } => false,
         }
     }
 
@@ -174,9 +172,7 @@ impl Form {
         }
     }
 
-    /// Geometric area occupied by this form in local space. For fluids,
-    /// nominal_area is the maximum area available to one unit of material;
-    /// a realized boundary may occupy less as surrounding geometry constrains it.
+    /// Geometric area occupied by this form in local space.
     pub fn area(&self) -> f64 {
         match self {
             Form::Circle { radius } => std::f64::consts::PI * radius * radius,
@@ -187,7 +183,6 @@ impl Form {
                 0.5 * n * radius * radius * (std::f64::consts::TAU / n).sin()
             }
             Form::Polygon { vertices } => polygon_area(vertices),
-            Form::Circle { radius } => std::f64::consts::PI * radius * radius,
         }
     }
 
