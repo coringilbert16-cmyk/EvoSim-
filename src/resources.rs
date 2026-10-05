@@ -53,13 +53,6 @@ pub enum Form {
     Polygon {
         vertices: Vec<(f64, f64)>,
     },
-    /// Legacy serialized form retained only for migration compatibility.
-    /// New resource definitions must express fluidity through `PhysicalState`.
-    Fluid {
-        nominal_area: f64,
-        #[serde(default)]
-        boundary: Option<Vec<(f64, f64)>>,
-    },
 }
 
 fn polygon_area(vertices: &[(f64, f64)]) -> f64 {
@@ -153,25 +146,14 @@ impl Form {
                 *sides >= 3 && radius.is_finite() && *radius > 0.0
             }
             Form::Polygon { vertices } => polygon_geometry_is_valid(vertices),
-            Form::Fluid {
-                nominal_area,
-                boundary,
-            } => {
-                if !nominal_area.is_finite() || *nominal_area <= 0.0 {
-                    return false;
-                }
-                boundary.as_ref().map_or(true, |vertices| {
-                    polygon_geometry_is_valid(vertices)
-                        && polygon_area(vertices) <= *nominal_area + 1e-12
-                })
-            }
+            Form::Circle { radius } if *radius > 0.0 => radius.is_finite(),
+            Form::Circle { .. } => false,
         }
     }
 
     pub fn polygon_vertices(&self) -> Option<Vec<(f64, f64)>> {
         match self {
             Form::Circle { .. } | Form::Line { .. } => None,
-            Form::Fluid { boundary, .. } => boundary.clone(),
             Form::Rectangle { width, height } => {
                 let hw = width / 2.0;
                 let hh = height / 2.0;
@@ -205,10 +187,7 @@ impl Form {
                 0.5 * n * radius * radius * (std::f64::consts::TAU / n).sin()
             }
             Form::Polygon { vertices } => polygon_area(vertices),
-            Form::Fluid { nominal_area, boundary } => boundary
-                .as_deref()
-                .map(polygon_area)
-                .unwrap_or(*nominal_area),
+            Form::Circle { radius } => std::f64::consts::PI * radius * radius,
         }
     }
 
@@ -224,19 +203,6 @@ impl Form {
                 .iter()
                 .map(|(x, y)| (x * x + y * y).sqrt())
                 .fold(0.0_f64, f64::max),
-            Form::Fluid {
-                nominal_area,
-                boundary,
-            } => boundary
-                .as_ref()
-                .map(|vertices| {
-                    vertices
-                        .iter()
-                        .map(|(x, y)| x.hypot(*y))
-                        .fold(0.0_f64, f64::max)
-                })
-                .filter(|radius| *radius > 0.0)
-                .unwrap_or_else(|| (nominal_area / std::f64::consts::PI).sqrt()),
         }
     }
 }
@@ -663,12 +629,11 @@ pub fn default_catalog() -> Vec<BaseResource> {
             },
             physical_state: PhysicalState::Fluid,
             shape: Shape {
-                // Water is fluid: this is its conserved unit volume, not a
-                // permanent geometric boundary. A realized water constituent
-                // may fit a smaller/different boundary to its surroundings.
-                form: Form::Fluid {
-                    nominal_area: NOMINAL_UNIT_AREA,
-                    boundary: None,
+                // Water begins as a circle. Because it is Fluid, bonding may
+                // deform that geometry to fit its surroundings while conserving
+                // the constituent's physical amount/volume.
+                form: Form::Circle {
+                    radius: (NOMINAL_UNIT_AREA / std::f64::consts::PI).sqrt(),
                 },
             },
         },
@@ -758,7 +723,7 @@ mod shape_tests {
     fn polygon_vertices_resolve_correctly_per_form() {
         for resource in default_catalog() {
             match &resource.shape.form {
-                Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. } => {
+                Form::Circle { .. } | Form::Line { .. } => {
                     assert!(resource.shape.form.polygon_vertices().is_none())
                 }
                 Form::Rectangle { .. } => {
