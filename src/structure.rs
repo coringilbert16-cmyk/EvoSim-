@@ -400,6 +400,39 @@ impl Bond {
                     .location
                     .same_location(o.endpoint_a.location))
     }
+
+    /// Physical bond identity: the same two physical constituents joined at the same
+    /// world-space endpoint locations, regardless of whether those locations are encoded
+    /// as equivalent endpoint feature variants.
+    pub fn has_same_physical_identity(
+        &self,
+        other: &Bond,
+        structure: &OrganismStructure,
+        catalog: &[BaseResource],
+    ) -> bool {
+        let matches = |a: &BondEndpoint, b: &BondEndpoint| {
+            let Some(ua) = structure.unit_index(a.constituent_id) else {
+                return false;
+            };
+            let Some(ub) = structure.unit_index(b.constituent_id) else {
+                return false;
+            };
+            a.location.same_physical_location(
+                b.location,
+                &structure.units[ua],
+                &structure.units[ub],
+                catalog,
+            )
+        };
+        (self.endpoint_a.constituent_id == other.endpoint_a.constituent_id
+            && self.endpoint_b.constituent_id == other.endpoint_b.constituent_id
+            && matches(&self.endpoint_a, &other.endpoint_a)
+            && matches(&self.endpoint_b, &other.endpoint_b))
+            || (self.endpoint_a.constituent_id == other.endpoint_b.constituent_id
+                && self.endpoint_b.constituent_id == other.endpoint_a.constituent_id
+                && matches(&self.endpoint_a, &other.endpoint_b)
+                && matches(&self.endpoint_b, &other.endpoint_a))
+    }
     pub fn is_valid(&self, connection_is_valid: impl Fn(BondEndpoint) -> bool) -> bool {
         self.endpoint_a.constituent_id.0 != 0
             && self.endpoint_b.constituent_id.0 != 0
