@@ -191,9 +191,29 @@ fn rigid_surface_candidates(
         }
     }
 
+    fn endpoint_at_world_point(
+        unit: &StructuralUnit,
+        shape: &crate::resources::Shape,
+        world_point: (f64, f64),
+        catalog: &[crate::resources::BaseResource],
+    ) -> Option<ConnectionEndpoint> {
+        let vertices = shape.form.polygon_vertices()?;
+        let (s, c) = unit.placement.rotation_radians.sin_cos();
+        for (index, &(x, y)) in vertices.iter().enumerate() {
+            let wx = unit.placement.x + x * c - y * s;
+            let wy = unit.placement.y + x * s + y * c;
+            if (wx - world_point.0).hypot(wy - world_point.1) <= 1e-9 {
+                return Some(ConnectionEndpoint::Corner { point_index: index });
+            }
+        }
+        rigid_boundary_endpoint(unit, world_point, catalog)
+    }
+
     fn push(
         out: &mut Vec<(ConnectionEndpoint, ConnectionEndpoint)>,
         a: &StructuralUnit, b: &StructuralUnit,
+        shape_a: &crate::resources::Shape,
+        shape_b: &crate::resources::Shape,
         point_a: (f64, f64), point_b: (f64, f64),
     ) {
         if (point_a.0 - a.placement.x).hypot(point_a.1 - a.placement.y) <= 1e-12
@@ -201,8 +221,8 @@ fn rigid_surface_candidates(
         {
             return;
         }
-        let Some(ea) = rigid_boundary_endpoint(a, point_a, catalog) else { return; };
-        let Some(eb) = rigid_boundary_endpoint(b, point_b, catalog) else { return; };
+        let Some(ea) = endpoint_at_world_point(a, shape_a, point_a, catalog) else { return; };
+        let Some(eb) = endpoint_at_world_point(b, shape_b, point_b, catalog) else { return; };
         out.push((ea, eb));
     }
 
@@ -217,14 +237,14 @@ fn rigid_surface_candidates(
         for i in 0..world_b.len() {
             let edge_start = world_b[i];
             let edge_end = world_b[(i + 1) % world_b.len()];
-            push(&mut out, a, b, vertex, project(vertex, edge_start, edge_end));
+            push(&mut out, a, b, shape_a, shape_b, vertex, project(vertex, edge_start, edge_end));
         }
     }
     for &vertex in &world_b {
         for i in 0..world_a.len() {
             let edge_start = world_a[i];
             let edge_end = world_a[(i + 1) % world_a.len()];
-            push(&mut out, a, b, project(vertex, edge_start, edge_end), vertex);
+            push(&mut out, a, b, shape_a, shape_b, project(vertex, edge_start, edge_end), vertex);
         }
     }
     for i in 0..world_a.len() {
@@ -234,7 +254,7 @@ fn rigid_surface_candidates(
             let b0 = world_b[j];
             let b1 = world_b[(j + 1) % world_b.len()];
             for point in intersection(a0, a1, b0, b1) {
-                push(&mut out, a, b, point, point);
+                push(&mut out, a, b, shape_a, shape_b, point, point);
             }
         }
     }
