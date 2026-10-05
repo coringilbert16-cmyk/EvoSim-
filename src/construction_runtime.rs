@@ -853,20 +853,72 @@ fn realize_next_bond_driven(
                 else {
                     continue;
                 };
-                let angles = construction_angle_candidates(
+                let candidate_relative_rotation = new_material
+                    .placements
+                    .as_ref()
+                    .and_then(|placements| placements.get(part_index))
+                    .map(|placement| placement.rotation_radians)
+                    .unwrap_or(0.0);
+
+                // The first anchor supplies the committed bond, but every
+                // already-realized neighbor is current geometry and therefore
+                // may legitimately determine the placement. Union the exact
+                // feature-derived angles from all current neighbors instead
+                // of asking the first anchor to solve a multi-contact joint by
+                // itself. This remains forward-only: unrealized connections
+                // never contribute candidates.
+                let mut angles = construction_angle_candidates(
                     existing_shape,
                     endpoint_a,
                     existing_unit.placement.rotation_radians,
                     candidate_shape,
                     endpoint_b,
-                    new_material
-                        .placements
-                        .as_ref()
-                        .and_then(|placements| placements.get(part_index))
-                        .map(|placement| placement.rotation_radians)
-                        .unwrap_or(0.0),
+                    candidate_relative_rotation,
                     ideal_angle,
                 );
+
+                for &other_neighbor in realized_neighbors {
+                    if other_neighbor == neighbor {
+                        continue;
+                    }
+                    let Some(other_units) = realized_units[other_neighbor].as_ref() else {
+                        continue;
+                    };
+                    for &other_index in other_units {
+                        let Some(other_unit) = structure.units.get(other_index) else {
+                            continue;
+                        };
+                        let Some(other_shape) = other_unit.shape(catalog) else {
+                            continue;
+                        };
+                        for other_endpoint in structure_unit_endpoint_options(other_unit, catalog) {
+                            let Some(other_joint) = other_endpoint.world_point(other_unit, catalog)
+                            else {
+                                continue;
+                            };
+                            let other_target_angle =
+                                (other_joint.1 - target_world.1)
+                                    .atan2(other_joint.0 - target_world.0)
+                                    - local_b.y.atan2(local_b.x);
+                            for angle in construction_angle_candidates(
+                                other_shape,
+                                other_endpoint,
+                                other_unit.placement.rotation_radians,
+                                candidate_shape,
+                                endpoint_b,
+                                candidate_relative_rotation,
+                                other_target_angle,
+                            ) {
+                                if !angles.iter().any(|current| {
+                                    normalize_construction_angle(*current - angle).abs() <= 1e-10
+                                }) {
+                                    angles.push(angle);
+                                }
+                            }
+                        }
+                    }
+                }
+
                 for angle in angles {
                     let candidate_origin =
                         placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
