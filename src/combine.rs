@@ -276,6 +276,9 @@ mod tests {
         ConnectionPairCandidate {
             endpoint_a: ConnectionEndpoint::Corner { point_index: 0 },
             endpoint_b: ConnectionEndpoint::Corner { point_index: 0 },
+            feature_a: crate::contact::ContactFeature::Corner,
+            feature_b: crate::contact::ContactFeature::Corner,
+            contact_scale: 1.0,
             distance: 0.0,
             facing: 1.0,
             load_a,
@@ -365,6 +368,25 @@ mod tests {
         };
         assert!((bond_strength(a, b) - (0.8_f64 * 0.2).sqrt()).abs() < 1e-12)
     }
+    #[test]
+    fn contact_scale_modulates_bond_strength_without_changing_intrinsic_strength() {
+        let a = ResourceProperties {
+            mass: 1.0,
+            potential_energy: 1.0,
+            reactivity: 0.1,
+            cohesion: 0.8,
+        };
+        let b = ResourceProperties {
+            potential_energy: 10.0,
+            reactivity: 4.0,
+            cohesion: 0.2,
+            ..a
+        };
+        let intrinsic = bond_strength(a, b);
+        let scaled = bond_strength_with_contact_scale(a, b, 0.5);
+        assert!((scaled - intrinsic * 0.5).abs() < 1e-12);
+    }
+
     #[test]
     fn formation_threshold_is_only_an_eligibility_gate() {
         let free = evaluate_formation(candidate(0.0, 0.0), 0.8, 0.4);
