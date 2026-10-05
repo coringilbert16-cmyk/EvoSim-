@@ -469,6 +469,17 @@ mod tests {
     }
 
     #[test]
+    fn contact_feature_scale_matches_approved_rigid_feature_pairs() {
+        use ContactFeature::*;
+        assert_eq!(Corner.scale(Corner), 1.0);
+        assert_eq!(Edge.scale(Edge), 1.0);
+        assert_eq!(Corner.scale(Edge), 0.5);
+        assert_eq!(LineEndpoint.scale(LineEndpoint), 1.0);
+        assert_eq!(LineEndpoint.scale(Corner), 1.0);
+        assert_eq!(LineEndpoint.scale(Edge), 0.5);
+    }
+
+    #[test]
     fn try_add_bond_rejects_repeated_connection_points_in_either_endpoint_order() {
         let catalog = crate::resources::default_catalog();
         let (mut structure, [id_a, id_b]) = test_structure();
