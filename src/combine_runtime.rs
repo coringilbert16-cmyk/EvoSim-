@@ -142,48 +142,6 @@ pub(crate) fn form_selected_bond(
     )
 }
 
-fn form_bond(
-    structure: &mut crate::structure::OrganismStructure,
-    request: BondFormationRequest,
-    catalog: &[BaseResource],
-    cache: &mut ConnectionCompatibilityCache,
-    ledger: &mut EnergyLedger,
-    energy: &mut f64,
-) -> Option<CombineAttempt> {
-    let BondFormationRequest {
-        unit_a,
-        unit_b,
-        endpoint_a,
-        endpoint_b,
-        investment,
-    } = request;
-    let candidate = crate::contact::connection_pair_candidates_cached(
-        structure, unit_a, unit_b, catalog, cache,
-    )
-    .into_iter()
-    .find(|candidate| {
-        candidate.endpoint_a == endpoint_a
-            && candidate.endpoint_b == endpoint_b
-            && candidate.distance <= COMBINE_CONTACT_TOLERANCE
-            && candidate.available_a
-            && candidate.available_b
-    })?;
-    form_bond_from_candidate(
-        structure,
-        BondFormationRequest {
-            unit_a,
-            unit_b,
-            endpoint_a,
-            endpoint_b,
-            investment,
-        },
-        candidate,
-        catalog,
-        cache,
-        ledger,
-        energy,
-    )
-}
 
 fn form_bond_from_candidate(
     structure: &mut crate::structure::OrganismStructure,
