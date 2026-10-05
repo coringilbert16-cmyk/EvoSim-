@@ -805,7 +805,7 @@ mod tests {
         assert!(water.realize_default_geometry(&catalog));
         let fitted = crate::resources::Shape {
             form: crate::resources::Form::Fluid {
-                nominal_area: 2.0,
+                nominal_area: 1.0,
                 boundary: Some(vec![
                 (-0.7071067811865476, 0.0),
                 (0.0, 0.7071067811865476),
