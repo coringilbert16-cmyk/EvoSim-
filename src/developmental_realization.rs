@@ -730,7 +730,7 @@ mod fitted_water_tests {
         let fitted = Shape {
             form: Form::Fluid {
                 nominal_area: 1.0,
-                boundary: Some(vec![(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]),
+                boundary: Some(vec![(-0.5, -0.5), (0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)]),
             },
         };
         assert!(water.realize_fluid_geometry(fitted, &catalog));
