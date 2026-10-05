@@ -562,15 +562,15 @@ mod tests {
             "Nitrogen",
             Placement {
                 x: 1.0,
-                y: 1.0,
+                y: 0.5,
                 rotation_radians: 0.0,
             },
         ));
 
         let candidates = connection_pair_candidates(&structure, a, b, &catalog);
         assert!(candidates.iter().any(|candidate| {
-            matches!(candidate.endpoint_a, ConnectionEndpoint::BoundaryPoint { .. })
-                && matches!(candidate.endpoint_b, ConnectionEndpoint::Corner { .. })
+            matches!(candidate.endpoint_a, ConnectionEndpoint::Corner { .. })
+                && matches!(candidate.endpoint_b, ConnectionEndpoint::BoundaryPoint { .. })
                 && candidate.distance <= 1e-9
         }));
     }
