@@ -895,19 +895,19 @@ mod tests {
             &structure,
             a,
             b,
-            ConnectionEndpoint::Corner { point_index: 1 },
-            ConnectionEndpoint::BoundaryPoint { x: -0.5, y: -0.5 },
+            ConnectionEndpoint::BoundaryPoint { x: 0.5, y: 0.0 },
+            ConnectionEndpoint::BoundaryPoint { x: -0.5, y: 0.0 },
             &catalog,
         )
         .expect("selected physical endpoint pair should resolve directly");
 
         assert_eq!(
             candidate.endpoint_a,
-            ConnectionEndpoint::Corner { point_index: 1 }
+            ConnectionEndpoint::BoundaryPoint { x: 0.5, y: 0.0 }
         );
         assert_eq!(
             candidate.endpoint_b,
-            ConnectionEndpoint::BoundaryPoint { x: -0.5, y: -0.5 }
+            ConnectionEndpoint::BoundaryPoint { x: -0.5, y: 0.0 }
         );
         assert!(candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE);
 
