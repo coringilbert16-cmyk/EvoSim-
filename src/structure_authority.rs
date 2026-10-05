@@ -64,7 +64,9 @@ pub(crate) fn audit_structure(
         }
         if structure.bonds[..bond_index]
             .iter()
-            .any(|previous| crate::contact::same_physical_bond_identity(&structure, previous, bond, catalog))
+            .any(|previous| {
+                crate::contact::same_physical_bond_identity(&structure, previous, bond, catalog)
+            })
         {
             findings.push(AuthorityFinding::DuplicateBond { bond_index });
         }
