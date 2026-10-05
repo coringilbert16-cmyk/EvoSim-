@@ -103,8 +103,19 @@ pub(crate) struct GenomeMeasurementScaffold {
     pub(crate) placements: [BlueprintPlacement; 3],
     /// The temporary three-carbon reference is itself a triangle: all three
     /// Carbon pieces are internally bonded, with each edge contributing to the
-    /// cavity measurement.
+    /// reference measurement.
     pub(crate) bonds: [(usize, usize); 3],
+    /// The geometric reference is derived from the actual scaffold material,
+    /// rather than being independently re-derived by cavity qualification.
+    /// This keeps the temporary scaffold as the single authority for the
+    /// minimum genome scale.
+    pub(crate) reference_area: f64,
+}
+
+impl GenomeMeasurementScaffold {
+    pub(crate) fn reference_area(&self) -> f64 {
+        self.reference_area
+    }
 }
 
 impl GenomeMeasurementScaffold {
@@ -123,6 +134,12 @@ impl GenomeMeasurementScaffold {
         // An equilateral triangle with side 2 * radius provides that spacing.
         let side = radius * 2.0;
         let circumradius = side / 3.0_f64.sqrt();
+        let reference_area = 3.0
+            * crate::resources::form_area(&carbon.shape.form)
+                .ok_or_else(|| "Carbon has no finite 2D area".to_string())?;
+        if !reference_area.is_finite() || reference_area <= 0.0 {
+            return Err("invalid three-carbon genome reference area".into());
+        }
         Ok(Self {
             placements: [
                 BlueprintPlacement {
@@ -142,6 +159,7 @@ impl GenomeMeasurementScaffold {
                 },
             ],
             bonds: [(0, 1), (1, 2), (2, 0)],
+            reference_area,
         })
     }
 }
