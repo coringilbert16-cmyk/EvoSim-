@@ -73,6 +73,7 @@ These are the constraints that matter to the current construction work:
 - Physical geometry is authoritative.
 - A permanent bond is created through the shared physical bond transaction.
 - Intended bond contact is distinct from unintended penetration.
+- Bond contact is classified from the realized physical feature at each endpoint: corner, edge, line endpoint, continuous surface, or fluid boundary. The approved rigid contact-scale rules are 1.0 for corner-corner, edge-edge, and line-endpoint-line-endpoint; 0.5 for corner-edge and line-endpoint-edge; and 1.0 for line-endpoint-corner. Formation threshold remains a separate eligibility gate.
 - Construction does not need a universal grid, 4N topology, or predefined cavity shape.
 - The genome is defined by a qualifying realized cavity, not by a hard-coded core.
 - Water is a physical material when instantiated; it is not logical material placed into storage merely to satisfy a test.
