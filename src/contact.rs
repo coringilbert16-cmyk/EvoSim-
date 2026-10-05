@@ -261,6 +261,18 @@ fn endpoint_world_point(
                 unit.placement.rotation_radians,
             ))
         }
+        ConnectionEndpoint::BoundaryPoint { x, y } => {
+            let point = crate::surface_geometry::boundary_point_at(shape, x, y)?;
+            Some(crate::connection_geometry::transform_derived_point(
+                point.x,
+                point.y,
+                point.normal_x,
+                point.normal_y,
+                unit.placement.x,
+                unit.placement.y,
+                unit.placement.rotation_radians,
+            ))
+        }
         ConnectionEndpoint::Fluid { x, y } => {
             let len = x.hypot(y);
             let (nx, ny) = if len > 1e-12 {
