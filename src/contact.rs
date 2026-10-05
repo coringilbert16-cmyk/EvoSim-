@@ -95,19 +95,19 @@ pub(crate) fn endpoint_indices(
 
 fn rigid_boundary_endpoint(
     unit: &StructuralUnit,
-    world_dx: f64,
-    world_dy: f64,
+    world_point: (f64, f64),
     catalog: &[crate::resources::BaseResource],
 ) -> Option<ConnectionEndpoint> {
-    let len = world_dx.hypot(world_dy);
-    if len <= 1e-12 {
-        return None;
-    }
-    let (ux, uy) = (world_dx / len, world_dy / len);
+    let dx = world_point.0 - unit.placement.x;
+    let dy = world_point.1 - unit.placement.y;
     let (s, c) = unit.placement.rotation_radians.sin_cos();
-    let lx = ux * c + uy * s;
-    let ly = -ux * s + uy * c;
-    let point = crate::surface_geometry::boundary_point_toward(unit.shape(catalog)?, lx, ly)?;
+    let local_x = dx * c + dy * s;
+    let local_y = -dx * s + dy * c;
+    let point = crate::surface_geometry::boundary_point_at(
+        unit.shape(catalog)?,
+        local_x,
+        local_y,
+    )?;
     match unit.shape(catalog)?.form {
         Form::Circle { .. } => Some(ConnectionEndpoint::Boundary {
             angle_radians: point.y.atan2(point.x),
@@ -155,19 +155,40 @@ fn rigid_surface_candidates(
     fn intersection(
         a0: (f64, f64), a1: (f64, f64),
         b0: (f64, f64), b1: (f64, f64),
-    ) -> Option<(f64, f64)> {
+    ) -> Vec<(f64, f64)> {
         let r = (a1.0 - a0.0, a1.1 - a0.1);
         let s = (b1.0 - b0.0, b1.1 - b0.1);
         let denominator = r.0 * s.1 - r.1 * s.0;
-        if denominator.abs() <= 1e-12 { return None; }
         let qp = (b0.0 - a0.0, b0.1 - a0.1);
+        if denominator.abs() <= 1e-12 {
+            // Parallel edges can overlap over a real segment. Preserve one
+            // exact representative of that edge-edge contact: its midpoint.
+            if (qp.0 * r.1 - qp.1 * r.0).abs() > 1e-10 {
+                return Vec::new();
+            }
+            let length_sq = r.0 * r.0 + r.1 * r.1;
+            if length_sq <= f64::EPSILON {
+                return Vec::new();
+            }
+            let t0 = ((b0.0 - a0.0) * r.0 + (b0.1 - a0.1) * r.1) / length_sq;
+            let t1 = ((b1.0 - a0.0) * r.0 + (b1.1 - a0.1) * r.1) / length_sq;
+            let lo = t0.min(t1).max(0.0);
+            let hi = t0.max(t1).min(1.0);
+            if lo <= hi + 1e-10 {
+                let t = (lo + hi) * 0.5;
+                return vec![(a0.0 + t * r.0, a0.1 + t * r.1)];
+            }
+            return Vec::new();
+        }
         let t = (qp.0 * s.1 - qp.1 * s.0) / denominator;
         let u = (qp.0 * r.1 - qp.1 * r.0) / denominator;
         if (-1e-10..=1.0000000001).contains(&t)
             && (-1e-10..=1.0000000001).contains(&u)
         {
-            Some((a0.0 + t * r.0, a0.1 + t * r.1))
-        } else { None }
+            vec![(a0.0 + t * r.0, a0.1 + t * r.1)]
+        } else {
+            Vec::new()
+        }
     }
 
     fn push(
@@ -175,13 +196,13 @@ fn rigid_surface_candidates(
         a: &StructuralUnit, b: &StructuralUnit,
         point_a: (f64, f64), point_b: (f64, f64),
     ) {
-        let adx = point_a.0 - a.placement.x;
-        let ady = point_a.1 - a.placement.y;
-        let bdx = point_b.0 - b.placement.x;
-        let bdy = point_b.1 - b.placement.y;
-        if adx.hypot(ady) <= 1e-12 || bdx.hypot(bdy) <= 1e-12 { return; }
-        let Some(ea) = rigid_boundary_endpoint(a, adx, ady) else { return; };
-        let Some(eb) = rigid_boundary_endpoint(b, bdx, bdy) else { return; };
+        if (point_a.0 - a.placement.x).hypot(point_a.1 - a.placement.y) <= 1e-12
+            || (point_b.0 - b.placement.x).hypot(point_b.1 - b.placement.y) <= 1e-12
+        {
+            return;
+        }
+        let Some(ea) = rigid_boundary_endpoint(a, point_a, catalog) else { return; };
+        let Some(eb) = rigid_boundary_endpoint(b, point_b, catalog) else { return; };
         out.push((ea, eb));
     }
 
@@ -212,7 +233,7 @@ fn rigid_surface_candidates(
         for j in 0..world_b.len() {
             let b0 = world_b[j];
             let b1 = world_b[(j + 1) % world_b.len()];
-            if let Some(point) = intersection(a0, a1, b0, b1) {
+            for point in intersection(a0, a1, b0, b1) {
                 push(&mut out, a, b, point, point);
             }
         }
