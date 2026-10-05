@@ -772,6 +772,48 @@ mod tests {
     }
 
     #[test]
+    fn selected_endpoint_pair_resolves_without_candidate_discovery() {
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+        let a = structure.add_unit(StructuralUnit::new(
+            "Nitrogen",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let b = structure.add_unit(StructuralUnit::new(
+            "Nitrogen",
+            Placement {
+                x: 1.0,
+                y: 0.5,
+                rotation_radians: 0.0,
+            },
+        ));
+
+        let candidate = candidate_for_endpoints(
+            &structure,
+            a,
+            b,
+            ConnectionEndpoint::Corner { point_index: 1 },
+            ConnectionEndpoint::BoundaryPoint { x: -0.5, y: 0.0 },
+            &catalog,
+        )
+        .expect("selected physical endpoint pair should resolve directly");
+
+        assert_eq!(
+            candidate.endpoint_a,
+            ConnectionEndpoint::Corner { point_index: 1 }
+        );
+        assert_eq!(
+            candidate.endpoint_b,
+            ConnectionEndpoint::BoundaryPoint { x: -0.5, y: 0.0 }
+        );
+        assert!(candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE);
+    }
+
+    #[test]
     fn exact_polygon_contact_candidates_include_corner_edge_contact() {
         let catalog = crate::resources::default_catalog();
         let mut structure = OrganismStructure::new();
