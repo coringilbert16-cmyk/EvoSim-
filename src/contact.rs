@@ -20,10 +20,35 @@ fn facing(
     facing_compatibility(a, b)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ContactFeature {
+    Corner,
+    Edge,
+    LineEndpoint,
+    Surface,
+    Fluid,
+}
+
+impl ContactFeature {
+    pub fn scale(self, other: Self) -> f64 {
+        use ContactFeature::*;
+        match (self, other) {
+            (Corner, Corner) | (Edge, Edge) | (LineEndpoint, LineEndpoint) => 1.0,
+            (Corner, Edge) | (Edge, Corner) => 0.5,
+            (LineEndpoint, Corner) | (Corner, LineEndpoint) => 1.0,
+            (LineEndpoint, Edge) | (Edge, LineEndpoint) => 0.5,
+            _ => 1.0,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ConnectionPairCandidate {
     pub endpoint_a: ConnectionEndpoint,
     pub endpoint_b: ConnectionEndpoint,
+    pub feature_a: ContactFeature,
+    pub feature_b: ContactFeature,
+    pub contact_scale: f64,
     pub distance: f64,
     pub facing: f64,
     pub load_a: f64,
@@ -286,6 +311,38 @@ fn endpoint_facing(
     ))
 }
 
+fn contact_feature(
+    endpoint: ConnectionEndpoint,
+    unit: &StructuralUnit,
+    catalog: &[crate::resources::BaseResource],
+) -> Option<ContactFeature> {
+    match endpoint {
+        ConnectionEndpoint::Corner { .. } => Some(ContactFeature::Corner),
+        ConnectionEndpoint::LineEndpoint { .. } => Some(ContactFeature::LineEndpoint),
+        ConnectionEndpoint::Fluid { .. } => Some(ContactFeature::Fluid),
+        ConnectionEndpoint::Boundary { angle_radians } => {
+            let shape = unit.shape(catalog)?;
+            if matches!(shape.form, Form::Circle { .. }) {
+                return Some(ContactFeature::Surface);
+            }
+            if matches!(shape.form, Form::Fluid { .. }) {
+                return Some(ContactFeature::Fluid);
+            }
+            let (s, c) = angle_radians.sin_cos();
+            let point = boundary_point_toward(shape, c, s)?;
+            let vertices = shape.form.polygon_vertices()?;
+            let at_corner = vertices
+                .iter()
+                .any(|(x, y)| (x - point.x).hypot(y - point.y) <= 1e-9);
+            Some(if at_corner {
+                ContactFeature::Corner
+            } else {
+                ContactFeature::Edge
+            })
+        }
+    }
+}
+
 fn candidate_for_endpoints(
     s: &OrganismStructure,
     ua: usize,
@@ -298,9 +355,14 @@ fn candidate_for_endpoints(
     let bu = s.units.get(ub)?;
     let wa = endpoint_world_point(a, au, c)?;
     let wb = endpoint_world_point(b, bu, c)?;
+    let feature_a = contact_feature(a, au, c)?;
+    let feature_b = contact_feature(b, bu, c)?;
     Some(ConnectionPairCandidate {
         endpoint_a: a,
         endpoint_b: b,
+        feature_a,
+        feature_b,
+        contact_scale: feature_a.scale(feature_b),
         distance: distance(wa, wb),
         facing: endpoint_facing(a, b, au, bu, c)?,
         load_a: s.connection_load(ua, a, c),
