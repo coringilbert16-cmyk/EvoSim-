@@ -228,10 +228,7 @@ pub fn find_enclosed_regions(
                 // from being represented as the interior face.
                 let midpoint = pair[0].add(pair[1]).scale(0.5);
                 let shared_material_seam = polygons.iter().any(|(other_unit, other_polygon)| {
-                    *other_unit != *unit
-                        && point_on_polygon_boundary(pair[0], other_polygon)
-                        && point_on_polygon_boundary(pair[1], other_polygon)
-                        && point_on_polygon_boundary(midpoint, other_polygon)
+                    *other_unit != *unit && point_on_polygon_boundary(midpoint, other_polygon)
                 });
                 if shared_material_seam {
                     continue;
