@@ -66,6 +66,26 @@ Work proceeds in this order:
    - Migrate tests that still encode retired assumptions.
    - Run broader simulation/lifecycle validation after the construction layer is stable.
 
+## Fluid material model
+
+Fluid behavior belongs to the `PhysicalState::Fluid` material state, not to Water specifically. Water is currently the only fluid resource, but additional fluids may be added without introducing resource-specific fluid mechanics.
+
+The fluid rules are:
+
+- Every fluid has a normal resource-defined **default geometry**. Water's default geometry is a circle.
+- The default geometry is the fluid's starting physical shape; it is not a permanent constraint on the constituent.
+- When a fluid bonds into physical structure, its boundary may **deform to satisfy physical need and contact geometry**.
+- Deformation does not create or destroy material. The fluid's physical amount/volume is conserved and limits the geometry it can realize.
+- Rigid surrounding material constrains the space available to the fluid; the realized fluid boundary follows those physical constraints.
+- Fluid deformation is a consequence of the general bonding/geometry system, not a special Water rule and not a genetically prescribed water shape.
+- A future fluid should receive the same behavior automatically by being declared `PhysicalState::Fluid` and given its own default resource geometry.
+
+Conceptually:
+
+`fluid resource → default geometry → bonding/contact need → deformed realized geometry`,
+
+with conserved physical amount/volume constraining the final realization.
+
 ## Construction invariants
 
 These are the constraints that matter to the current construction work:
