@@ -118,10 +118,19 @@ fn segment_intersection_points(
     b_start: crate::configuration_space::Point,
     b_end: crate::configuration_space::Point,
 ) -> Vec<crate::configuration_space::Point> {
-    let r = crate::configuration_space::Point { x: a_end.x - a_start.x, y: a_end.y - a_start.y };
-    let s = crate::configuration_space::Point { x: b_end.x - b_start.x, y: b_end.y - b_start.y };
+    let r = crate::configuration_space::Point {
+        x: a_end.x - a_start.x,
+        y: a_end.y - a_start.y,
+    };
+    let s = crate::configuration_space::Point {
+        x: b_end.x - b_start.x,
+        y: b_end.y - b_start.y,
+    };
     let cross = r.x * s.y - r.y * s.x;
-    let offset = crate::configuration_space::Point { x: b_start.x - a_start.x, y: b_start.y - a_start.y };
+    let offset = crate::configuration_space::Point {
+        x: b_start.x - a_start.x,
+        y: b_start.y - a_start.y,
+    };
     const TOLERANCE: f64 = 1e-10;
 
     if cross.abs() > TOLERANCE {
@@ -160,9 +169,11 @@ fn segment_intersection_points(
         .into_iter()
         .filter(|&point| on_segment(point, a_start, a_end) && on_segment(point, b_start, b_end))
         .fold(Vec::new(), |mut points, point| {
-            if !points.iter().any(|existing: &crate::configuration_space::Point| {
-                (existing.x - point.x).hypot(existing.y - point.y) <= TOLERANCE
-            }) {
+            if !points
+                .iter()
+                .any(|existing: &crate::configuration_space::Point| {
+                    (existing.x - point.x).hypot(existing.y - point.y) <= TOLERANCE
+                }) {
                 points.push(point);
             }
             points
@@ -578,7 +589,7 @@ fn placement_for_joint(
     }
 }
 
-pub(crate) pub(crate) fn placed_unit_overlaps(
+pub(crate) fn placed_unit_overlaps(
     structure: &OrganismStructure,
     candidate: &StructuralUnit,
     ignored_units: &[usize],
