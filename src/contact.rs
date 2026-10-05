@@ -112,8 +112,14 @@ fn rigid_boundary_endpoint(
         Form::Circle { .. } => Some(ConnectionEndpoint::Boundary {
             angle_radians: point.y.atan2(point.x),
         }),
-        Form::Fluid { .. } => Some(ConnectionEndpoint::Fluid { x: point.x, y: point.y }),
-        _ => Some(ConnectionEndpoint::BoundaryPoint { x: point.x, y: point.y }),
+        Form::Fluid { .. } => Some(ConnectionEndpoint::Fluid {
+            x: point.x,
+            y: point.y,
+        }),
+        _ => Some(ConnectionEndpoint::BoundaryPoint {
+            x: point.x,
+            y: point.y,
+        }),
     }
 }
 
@@ -144,9 +150,12 @@ fn rigid_surface_candidates(
     let world_a = world_vertices(&vertices_a, a);
     let world_b = world_vertices(&vertices_b, b);
     let mut push_unique = |candidate: (ConnectionEndpoint, ConnectionEndpoint)| {
-        if !out.iter().any(|existing: &(ConnectionEndpoint, ConnectionEndpoint)| {
-            existing.0.same_location(candidate.0) && existing.1.same_location(candidate.1)
-        }) {
+        if !out
+            .iter()
+            .any(|existing: &(ConnectionEndpoint, ConnectionEndpoint)| {
+                existing.0.same_location(candidate.0) && existing.1.same_location(candidate.1)
+            })
+        {
             out.push(candidate);
         }
     };
@@ -170,10 +179,7 @@ fn rigid_surface_candidates(
             let qb = world_b[(ib + 1) % world_b.len()];
             if point_on_segment(pa, pb, qb) && !is_endpoint(pa, pb, qb) {
                 if let Some(endpoint_b) = boundary_point_endpoint(b, pa, catalog) {
-                    push_unique((
-                        ConnectionEndpoint::Corner { point_index: ia },
-                        endpoint_b,
-                    ));
+                    push_unique((ConnectionEndpoint::Corner { point_index: ia }, endpoint_b));
                 }
             }
         }
@@ -184,10 +190,7 @@ fn rigid_surface_candidates(
             let qa = world_a[(ia + 1) % world_a.len()];
             if point_on_segment(pb, pa, qa) && !is_endpoint(pb, pa, qa) {
                 if let Some(endpoint_a) = boundary_point_endpoint(a, pb, catalog) {
-                    push_unique((
-                        endpoint_a,
-                        ConnectionEndpoint::Corner { point_index: ib },
-                    ));
+                    push_unique((endpoint_a, ConnectionEndpoint::Corner { point_index: ib }));
                 }
             }
         }
@@ -321,9 +324,13 @@ fn circle_polygon_surface_candidates(
                 } else {
                     (polygon_endpoint, circle_endpoint)
                 };
-                if !out.iter().any(|existing: &(ConnectionEndpoint, ConnectionEndpoint)| {
-                    existing.0.same_location(candidate.0) && existing.1.same_location(candidate.1)
-                }) {
+                if !out
+                    .iter()
+                    .any(|existing: &(ConnectionEndpoint, ConnectionEndpoint)| {
+                        existing.0.same_location(candidate.0)
+                            && existing.1.same_location(candidate.1)
+                    })
+                {
                     out.push(candidate);
                 }
             }
@@ -332,10 +339,14 @@ fn circle_polygon_surface_candidates(
     };
 
     match (&shape_a.form, &shape_b.form) {
-        (Form::Circle { .. }, Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. }) => {
+        (Form::Circle { .. },
+            Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
+        ) => {
             let _ = collect(a, true, b, shape_b);
         }
-        (Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. }, Form::Circle { .. }) => {
+        (Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
+            Form::Circle { .. },
+        ) => {
             let _ = collect(b, false, a, shape_a);
         }
         _ => {}
@@ -396,9 +407,13 @@ fn line_polygon_surface_candidates(
                 } else {
                     (polygon_endpoint, line_endpoint)
                 };
-                if !out.iter().any(|existing: &(ConnectionEndpoint, ConnectionEndpoint)| {
-                    existing.0.same_location(candidate.0) && existing.1.same_location(candidate.1)
-                }) {
+                if !out
+                    .iter()
+                    .any(|existing: &(ConnectionEndpoint, ConnectionEndpoint)| {
+                        existing.0.same_location(candidate.0)
+                            && existing.1.same_location(candidate.1)
+                    })
+                {
                     out.push(candidate);
                 }
             }
@@ -406,10 +421,14 @@ fn line_polygon_surface_candidates(
     };
 
     match (&shape_a.form, &shape_b.form) {
-        (Form::Line { .. }, Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. }) => {
+        (Form::Line { .. },
+            Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
+        ) => {
             collect(a, true, b, shape_b);
         }
-        (Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. }, Form::Line { .. }) => {
+        (Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
+            Form::Line { .. },
+        ) => {
             collect(b, false, a, shape_a);
         }
         _ => {}
@@ -451,11 +470,7 @@ fn same_world_point(a: (f64, f64), b: (f64, f64)) -> bool {
     (a.0 - b.0).hypot(a.1 - b.1) <= 1e-9
 }
 
-fn point_on_segment(
-    point: (f64, f64),
-    start: (f64, f64),
-    end: (f64, f64),
-) -> bool {
+fn point_on_segment(point: (f64, f64), start: (f64, f64), end: (f64, f64)) -> bool {
     let dx = end.0 - start.0;
     let dy = end.1 - start.1;
     let length = dx.hypot(dy);
@@ -491,10 +506,7 @@ fn segment_contact_points(
         let t = (q_minus_p.0 * s.1 - q_minus_p.1 * s.0) / rxs;
         let u = (q_minus_p.0 * r.1 - q_minus_p.1 * r.0) / rxs;
         if t >= -epsilon && t <= 1.0 + epsilon && u >= -epsilon && u <= 1.0 + epsilon {
-            return vec![(
-                a0.0 + t * r.0,
-                a0.1 + t * r.1,
-            )];
+            return vec![(a0.0 + t * r.0, a0.1 + t * r.1)];
         }
         return Vec::new();
     }
@@ -561,9 +573,12 @@ fn candidate_endpoints(
 
     let mut unique = Vec::with_capacity(candidates.len());
     for candidate in candidates {
-        if !unique.iter().any(|existing: &(ConnectionEndpoint, ConnectionEndpoint)| {
-            existing.0.same_location(candidate.0) && existing.1.same_location(candidate.1)
-        }) {
+        if !unique
+            .iter()
+            .any(|existing: &(ConnectionEndpoint, ConnectionEndpoint)| {
+                existing.0.same_location(candidate.0) && existing.1.same_location(candidate.1)
+            })
+        {
             unique.push(candidate);
         }
     }
@@ -793,7 +808,10 @@ mod tests {
         let candidates = connection_pair_candidates(&structure, a, b, &catalog);
         assert!(candidates.iter().any(|candidate| {
             matches!(candidate.endpoint_a, ConnectionEndpoint::Corner { .. })
-                && matches!(candidate.endpoint_b, ConnectionEndpoint::BoundaryPoint { .. })
+                && matches!(
+                    candidate.endpoint_b,
+                    ConnectionEndpoint::BoundaryPoint { .. }
+                )
                 && candidate.distance <= 1e-9
         }));
     }
@@ -821,12 +839,17 @@ mod tests {
 
         let candidates = connection_pair_candidates(&structure, a, b, &catalog);
         assert!(candidates.iter().any(|candidate| {
-            matches!(candidate.endpoint_a, ConnectionEndpoint::BoundaryPoint { .. })
-                && matches!(candidate.endpoint_b, ConnectionEndpoint::BoundaryPoint { .. })
-                && candidate.distance <= 1e-9
+            matches!(
+                candidate.endpoint_a,
+                ConnectionEndpoint::BoundaryPoint { .. }
+            ) && matches!(
+                candidate.endpoint_b,
+                ConnectionEndpoint::BoundaryPoint { .. }
+            ) && candidate.distance <= 1e-9
         }));
         assert!(candidates.iter().any(|candidate| {
-            let Some(pa) = endpoint_world_point(candidate.endpoint_a, &structure.units[a], &catalog)
+            let Some(pa) =
+                endpoint_world_point(candidate.endpoint_a, &structure.units[a], &catalog)
             else {
                 return false;
             };
@@ -869,7 +892,10 @@ mod tests {
         let candidates = connection_pair_candidates(&structure, circle, rectangle, &catalog);
         assert!(candidates.iter().any(|candidate| {
             matches!(candidate.endpoint_a, ConnectionEndpoint::Boundary { .. })
-                && matches!(candidate.endpoint_b, ConnectionEndpoint::BoundaryPoint { .. })
+                && matches!(
+                    candidate.endpoint_b,
+                    ConnectionEndpoint::BoundaryPoint { .. }
+                )
                 && candidate.distance <= 1e-9
         }));
     }
