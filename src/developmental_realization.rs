@@ -754,14 +754,33 @@ fn endpoint_realized_count(
     structure: &crate::structure::OrganismStructure,
     unit: usize,
     endpoint: crate::structure::ConnectionEndpoint,
+    catalog: &[BaseResource],
 ) -> usize {
+    let Some(unit_ref) = structure.units.get(unit) else {
+        return 0;
+    };
     let Some(id) = structure.physical_id(unit) else {
         return 0;
     };
     structure
         .bonds
         .iter()
-        .filter(|bond| bond.touches(id, endpoint))
+        .filter(|bond| {
+            (bond.endpoint_a.constituent_id == id
+                && bond.endpoint_a.location.same_physical_location(
+                    endpoint,
+                    unit_ref,
+                    unit_ref,
+                    catalog,
+                ))
+                || (bond.endpoint_b.constituent_id == id
+                    && bond.endpoint_b.location.same_physical_location(
+                        endpoint,
+                        unit_ref,
+                        unit_ref,
+                        catalog,
+                    ))
+        })
         .count()
 }
 
@@ -825,7 +844,7 @@ fn endpoint_opportunity_count(
     endpoint: crate::structure::ConnectionEndpoint,
     catalog: &[BaseResource],
 ) -> usize {
-    let mut count = endpoint_realized_count(structure, unit, endpoint);
+    let mut count = endpoint_realized_count(structure, unit, endpoint, catalog);
     for other in 0..structure.units.len() {
         if other == unit {
             continue;
@@ -835,7 +854,12 @@ fn endpoint_opportunity_count(
             .any(|candidate| {
                 candidate.available_a
                     && candidate.available_b
-                    && candidate.endpoint_a.same_location(endpoint)
+                    && candidate.endpoint_a.same_physical_location(
+                        endpoint,
+                        &structure.units[unit],
+                        &structure.units[unit],
+                        catalog,
+                    )
             })
         {
             count += 1;
