@@ -852,7 +852,7 @@ mod tests {
             },
         ));
         let corner = ConnectionEndpoint::Corner { point_index: 1 };
-        let boundary = ConnectionEndpoint::BoundaryPoint { x: 0.5, y: 0.5 };
+        let boundary = ConnectionEndpoint::BoundaryPoint { x: 0.5, y: -0.5 };
         let bond = Bond {
             endpoint_a: BondEndpoint::new(structure.units[a].physical_id, corner),
             endpoint_b: BondEndpoint::new(
@@ -886,7 +886,7 @@ mod tests {
             "Nitrogen",
             Placement {
                 x: 1.0,
-                y: 0.5,
+                y: 0.0,
                 rotation_radians: 0.0,
             },
         ));
@@ -896,7 +896,7 @@ mod tests {
             a,
             b,
             ConnectionEndpoint::Corner { point_index: 1 },
-            ConnectionEndpoint::BoundaryPoint { x: -0.5, y: 0.0 },
+            ConnectionEndpoint::BoundaryPoint { x: -0.5, y: -0.5 },
             &catalog,
         )
         .expect("selected physical endpoint pair should resolve directly");
@@ -907,7 +907,7 @@ mod tests {
         );
         assert_eq!(
             candidate.endpoint_b,
-            ConnectionEndpoint::BoundaryPoint { x: -0.5, y: 0.0 }
+            ConnectionEndpoint::BoundaryPoint { x: -0.5, y: -0.5 }
         );
         assert!(candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE);
 
