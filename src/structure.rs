@@ -318,6 +318,11 @@ impl ConnectionEndpoint {
             )),
         }
     }
+    /// Structural endpoint identity: same encoded feature/location representation.
+    ///
+    /// This intentionally remains stricter than physical-location equivalence. A corner and
+    /// a non-vertex boundary point can describe the same world point while retaining different
+    /// feature semantics for contact scale and geometry.
     pub fn same_location(self, other: Self) -> bool {
         match (self, other) {
             (Self::Corner { point_index: a }, Self::Corner { point_index: b }) => a == b,
@@ -335,6 +340,28 @@ impl ConnectionEndpoint {
             }
             _ => false,
         }
+    }
+
+    /// Physical endpoint equivalence for a particular pair of realized units.
+    ///
+    /// Unlike `same_location`, this compares the resolved world positions. It is used only
+    /// where the architecture cares whether two endpoint representations would touch the same
+    /// physical point. Feature kind is deliberately not folded into this predicate: callers
+    /// that need corner/edge semantics still retain the original endpoint values.
+    pub fn same_physical_location(
+        self,
+        other: Self,
+        unit_a: &StructuralUnit,
+        unit_b: &StructuralUnit,
+        catalog: &[BaseResource],
+    ) -> bool {
+        let Some(a) = self.world_point(unit_a, catalog) else {
+            return false;
+        };
+        let Some(b) = other.world_point(unit_b, catalog) else {
+            return false;
+        };
+        (a.x - b.x).hypot(a.y - b.y) <= 1e-9
     }
 }
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
@@ -759,14 +786,22 @@ impl PhysicalConstituentGraph {
         &self,
         u: usize,
         location: ConnectionEndpoint,
-        _c: &[BaseResource],
+        c: &[BaseResource],
     ) -> f64 {
         let Some(id) = self.physical_id(u) else {
             return 0.0;
         };
+        let Some(unit) = self.units.get(u) else {
+            return 0.0;
+        };
         self.bonds
             .iter()
-            .filter(|b| b.touches(id, location))
+            .filter(|b| {
+                (b.endpoint_a.constituent_id == id
+                    && b.endpoint_a.location.same_physical_location(location, unit, unit, c))
+                    || (b.endpoint_b.constituent_id == id
+                        && b.endpoint_b.location.same_physical_location(location, unit, unit, c))
+            })
             .map(|b| crate::combine::experimental_bond_strength(b.bond_energy))
             .sum()
     }
