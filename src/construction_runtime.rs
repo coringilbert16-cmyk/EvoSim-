@@ -897,8 +897,8 @@ fn realize_next_bond_driven(
                                 continue;
                             };
                             let other_target_angle =
-                                (other_joint.1 - target_world.1)
-                                    .atan2(other_joint.0 - target_world.0)
+                                (other_joint.y - target_world.1)
+                                    .atan2(other_joint.x - target_world.0)
                                     - local_b.y.atan2(local_b.x);
                             for angle in construction_angle_candidates(
                                 other_shape,
