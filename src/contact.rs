@@ -547,6 +547,72 @@ mod tests {
     }
 
     #[test]
+    fn exact_polygon_contact_candidates_include_corner_edge_contact() {
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+        let a = structure.add_unit(StructuralUnit::new(
+            "Nitrogen",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let b = structure.add_unit(StructuralUnit::new(
+            "Nitrogen",
+            Placement {
+                x: 1.0,
+                y: 1.0,
+                rotation_radians: 0.0,
+            },
+        ));
+
+        let candidates = connection_pair_candidates(&structure, a, b, &catalog);
+        assert!(candidates.iter().any(|candidate| {
+            matches!(candidate.endpoint_a, ConnectionEndpoint::BoundaryPoint { .. })
+                && matches!(candidate.endpoint_b, ConnectionEndpoint::Corner { .. })
+                && candidate.distance <= 1e-9
+        }));
+    }
+
+    #[test]
+    fn exact_polygon_contact_candidates_use_midpoint_for_collinear_edge_overlap() {
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+        let a = structure.add_unit(StructuralUnit::new(
+            "Nitrogen",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let b = structure.add_unit(StructuralUnit::new(
+            "Nitrogen",
+            Placement {
+                x: 0.0,
+                y: 1.0,
+                rotation_radians: 0.0,
+            },
+        ));
+
+        let candidates = connection_pair_candidates(&structure, a, b, &catalog);
+        assert!(candidates.iter().any(|candidate| {
+            matches!(candidate.endpoint_a, ConnectionEndpoint::BoundaryPoint { .. })
+                && matches!(candidate.endpoint_b, ConnectionEndpoint::BoundaryPoint { .. })
+                && candidate.distance <= 1e-9
+        }));
+        assert!(candidates.iter().any(|candidate| {
+            let Some(pa) = endpoint_world_point(candidate.endpoint_a, &structure.units[a], &catalog)
+            else {
+                return false;
+            };
+            (pa.x - 0.0).abs() <= 1e-9 && (pa.y - 0.5).abs() <= 1e-9
+        }));
+    }
+
+
+    #[test]
     fn try_add_bond_rejects_repeated_connection_points_in_either_endpoint_order() {
         let catalog = crate::resources::default_catalog();
         let (mut structure, [id_a, id_b]) = test_structure();
