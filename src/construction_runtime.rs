@@ -420,9 +420,12 @@ fn physical_material_endpoint_options(
             ) else {
                 return Vec::new();
             };
-            let mut endpoints = match &unit.shape(catalog)?.form {
+            let Some(shape) = unit.shape(catalog) else {
+                return Vec::new();
+            };
+            let mut endpoints = match &shape.form {
                 Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
-                    rigid_construction_endpoint_options(unit.shape(catalog)?)
+                    rigid_construction_endpoint_options(shape)
                         .into_iter()
                         .map(|endpoint| (part_index, endpoint))
                         .collect::<Vec<_>>()
