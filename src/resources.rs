@@ -663,8 +663,12 @@ pub fn default_catalog() -> Vec<BaseResource> {
             },
             physical_state: PhysicalState::Fluid,
             shape: Shape {
-                form: Form::Circle {
-                    radius: (NOMINAL_UNIT_AREA / std::f64::consts::PI).sqrt(),
+                // Water is fluid: this is its conserved unit volume, not a
+                // permanent geometric boundary. A realized water constituent
+                // may fit a smaller/different boundary to its surroundings.
+                form: Form::Fluid {
+                    nominal_area: NOMINAL_UNIT_AREA,
+                    boundary: None,
                 },
             },
         },
