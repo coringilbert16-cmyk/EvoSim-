@@ -641,15 +641,12 @@ fn combine_pair_in_direction(
         let mut trial_structure = structure.clone();
         let mut trial_ledger = *ledger;
         let mut trial_energy = *energy;
-        if let Some(attempt) = form_bond(
+        if let Some(attempt) = form_selected_bond(
             &mut trial_structure,
-            BondFormationRequest {
-                unit_a,
-                unit_b,
-                endpoint_a: evaluation.candidate.endpoint_a,
-                endpoint_b: evaluation.candidate.endpoint_b,
-                investment: evaluation.threshold,
-            },
+            unit_a,
+            unit_b,
+            evaluation.candidate,
+            evaluation.threshold,
             catalog,
             cache,
             &mut trial_ledger,
