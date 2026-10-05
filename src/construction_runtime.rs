@@ -472,7 +472,9 @@ fn physical_material_endpoint_local_point(
 
 fn normalize_construction_angle(angle: f64) -> f64 {
     (angle + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI
-}\nfn local_endpoint_geometry(
+}
+
+fn local_endpoint_geometry(
     shape: &crate::resources::Shape,
     endpoint: ConnectionEndpoint,
 ) -> Option<(f64, f64, f64, f64)> {
