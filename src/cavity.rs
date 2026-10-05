@@ -87,7 +87,7 @@ impl GenomeCavity {
             .filter_map(|(index, bond)| {
                 (boundary_ids.contains(&bond.endpoint_a.constituent_id)
                     && boundary_ids.contains(&bond.endpoint_b.constituent_id))
-                                    .then_some(index)
+                                .then_some(index)
             })
             .collect()
     }
@@ -173,11 +173,7 @@ fn analyze_genome_cavity_in_indices(
                 .copied()
                 .filter(|&unit_index| {
                     unit_boundary_matches_segment(
-                        structure,
-                        catalog,
-                        unit_index,
-                        segment_a,
-                        segment_b,
+                        structure, catalog, unit_index, segment_a, segment_b,
                     )
                 })
                 .collect::<Vec<_>>();
