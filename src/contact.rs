@@ -339,12 +339,14 @@ fn circle_polygon_surface_candidates(
     };
 
     match (&shape_a.form, &shape_b.form) {
-        (Form::Circle { .. },
+        (
+            Form::Circle { .. },
             Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
         ) => {
             let _ = collect(a, true, b, shape_b);
         }
-        (Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
+        (
+            Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
             Form::Circle { .. },
         ) => {
             let _ = collect(b, false, a, shape_a);
@@ -421,12 +423,14 @@ fn line_polygon_surface_candidates(
     };
 
     match (&shape_a.form, &shape_b.form) {
-        (Form::Line { .. },
+        (
+            Form::Line { .. },
             Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
         ) => {
             collect(a, true, b, shape_b);
         }
-        (Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
+        (
+            Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
             Form::Line { .. },
         ) => {
             collect(b, false, a, shape_a);
