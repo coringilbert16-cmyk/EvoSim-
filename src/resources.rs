@@ -648,14 +648,18 @@ pub fn default_catalog() -> Vec<BaseResource> {
             physical_state: PhysicalState::Rigid,
             shape: Shape {
                 form: Form::Polygon {
-                    vertices: vec![
-                        (-0.5, -0.5),
-                        (0.5, -0.5),
-                        (0.5, 0.0),
-                        (0.0, 0.0),
-                        (0.0, 0.5),
-                        (-0.5, 0.5),
-                    ],
+                    // Isosceles trapezoid: 1.0-unit lower base, 0.5-unit
+                    // upper base, and 1.0-unit legs. This keeps the rigid
+                    // connection scale while avoiding a concave resource.
+                    vertices: {
+                        let half_height = (15.0_f64).sqrt() / 8.0;
+                        vec![
+                            (-0.5, -half_height),
+                            (0.5, -half_height),
+                            (0.25, half_height),
+                            (-0.25, half_height),
+                        ]
+                    },
                 },
             },
         },
@@ -802,9 +806,10 @@ mod shape_tests {
             find("Nitrogen").shape.form,
             Form::Rectangle { .. }
         ));
-        assert!(
-            matches!(&find("Phosphorus").shape.form, Form::Polygon { vertices } if vertices.len() == 6)
-        );
+        assert!(matches!(
+            &find("Phosphorus").shape.form,
+            Form::Polygon { vertices } if vertices.len() == 4
+        ));
         assert!(matches!(find("Water").shape.form, Form::Circle { .. }));
         assert_eq!(find("Water").physical_state, PhysicalState::Fluid);
         assert_eq!(find("Hydrogen").physical_state, PhysicalState::Rigid);
@@ -849,6 +854,7 @@ mod shape_tests {
         let lengths = (0..phosphorus.len())
             .map(|i| distance(phosphorus[i], phosphorus[(i + 1) % phosphorus.len()]))
             .collect::<Vec<_>>();
+        assert_eq!(lengths.len(), 4);
         assert_eq!(
             lengths
                 .iter()
@@ -861,7 +867,7 @@ mod shape_tests {
                 .iter()
                 .filter(|length| (**length - 0.5).abs() < 1e-9)
                 .count(),
-            4
+            2
         );
     }
 
