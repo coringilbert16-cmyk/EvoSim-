@@ -817,6 +817,57 @@ mod tests {
             try_add_bond(&mut structure, duplicate, &catalog),
             Err("duplicate bond")
         );
+
+        let distinct = Bond {
+            endpoint_a: BondEndpoint::new(
+                structure.units[a].physical_id,
+                ConnectionEndpoint::Corner { point_index: 0 },
+            ),
+            endpoint_b: first.endpoint_b,
+            strength: 1.0,
+            bond_energy: 1.0,
+        };
+        assert_eq!(try_add_bond(&mut structure, distinct, &catalog), Ok(1));
+        assert_eq!(structure.bonds.len(), 2);
+    }
+
+    #[test]
+    fn connection_load_matches_corner_and_boundary_point_representations() {
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+        let a = structure.add_unit(StructuralUnit::new(
+            "Nitrogen",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let b = structure.add_unit(StructuralUnit::new(
+            "Nitrogen",
+            Placement {
+                x: 1.0,
+                y: 0.5,
+                rotation_radians: 0.0,
+            },
+        ));
+        let corner = ConnectionEndpoint::Corner { point_index: 1 };
+        let boundary = ConnectionEndpoint::BoundaryPoint { x: 0.5, y: 0.5 };
+        let bond = Bond {
+            endpoint_a: BondEndpoint::new(structure.units[a].physical_id, corner),
+            endpoint_b: BondEndpoint::new(
+                structure.units[b].physical_id,
+                ConnectionEndpoint::BoundaryPoint { x: -0.5, y: 0.0 },
+            ),
+            strength: 1.0,
+            bond_energy: 1.0,
+        };
+        try_add_bond(&mut structure, bond, &catalog).expect("bond should be admitted");
+
+        let corner_load = structure.connection_load(a, corner, &catalog);
+        let boundary_load = structure.connection_load(a, boundary, &catalog);
+        assert!(corner_load > 0.0);
+        assert_eq!(corner_load, boundary_load);
     }
 
     #[test]
