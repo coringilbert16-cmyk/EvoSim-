@@ -314,7 +314,7 @@ fn point_on_segment(point: Point, a: Point, b: Point) -> bool {
     if !(-NODE_TOLERANCE..=1.0 + NODE_TOLERANCE).contains(&t) {
         return false;
     }
-    let projection = a.add(ab.scale(t));
+    let projection = Point {\n        x: a.x + ab.x * t,\n        y: a.y + ab.y * t,\n    };
     projection.sub(point).norm() <= NODE_TOLERANCE
 }
 
