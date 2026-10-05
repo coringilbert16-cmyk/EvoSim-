@@ -80,16 +80,18 @@ pub(crate) fn endpoint_indices(
         return Vec::new();
     };
     match &shape.form {
-        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
-            let count = shape.form.polygon_vertices().map_or(0, |v| v.len());
-            (0..count)
-                .map(|i| ConnectionEndpoint::Corner { point_index: i })
-                .collect()
-        }
+        // Rigid polygon contacts are resolved by the exact surface-feature
+        // path below. Only line endpoints remain discrete here because
+        // line↔line and line↔continuous-surface contacts still need their
+        // physical endpoints as candidate features.
         Form::Line { .. } => (0..2)
             .map(|i| ConnectionEndpoint::LineEndpoint { point_index: i })
             .collect(),
-        Form::Circle { .. } | Form::Fluid { .. } => Vec::new(),
+        Form::Rectangle { .. }
+        | Form::RegularPolygon { .. }
+        | Form::Polygon { .. }
+        | Form::Circle { .. }
+        | Form::Fluid { .. } => Vec::new(),
     }
 }
 
