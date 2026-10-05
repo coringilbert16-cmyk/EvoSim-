@@ -68,10 +68,24 @@ pub fn experimental_bond_strength(surplus: f64) -> f64 {
     max_strength * (1.0 - (-surplus / scale).exp())
 }
 pub fn bond_strength(a: ResourceProperties, b: ResourceProperties) -> f64 {
-    if !a.cohesion.is_finite() || !b.cohesion.is_finite() {
+    bond_strength_with_contact_scale(a, b, 1.0)
+}
+
+pub fn bond_strength_with_contact_scale(
+    a: ResourceProperties,
+    b: ResourceProperties,
+    contact_scale: f64,
+) -> f64 {
+    if !a.cohesion.is_finite()
+        || !b.cohesion.is_finite()
+        || !contact_scale.is_finite()
+        || contact_scale < 0.0
+    {
         return 0.0;
     }
-    (a.cohesion.clamp(0.0, 1.0) * b.cohesion.clamp(0.0, 1.0)).sqrt()
+    ((a.cohesion.clamp(0.0, 1.0) * b.cohesion.clamp(0.0, 1.0)).sqrt()
+        * contact_scale.clamp(0.0, 1.0))
+        .clamp(0.0, 1.0)
 }
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct MaterialIdentityKey {
