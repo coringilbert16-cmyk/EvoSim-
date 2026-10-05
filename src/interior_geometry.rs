@@ -220,6 +220,20 @@ pub fn find_enclosed_regions(
             });
             split_points.dedup_by(|left, right| left.sub(*right).norm() <= NODE_TOLERANCE);
             for pair in split_points.windows(2) {
+                // A segment shared by two realized material polygons is an
+                // internal material/material seam, not an exposed boundary.
+                // It must not become a face of the interior graph. Keeping
+                // these seams was causing each individual solid unit to look
+                // like an enclosed cavity and prevented a ring's actual void
+                // from being represented as the interior face.
+                let midpoint = pair[0].add(pair[1]).scale(0.5);
+                let shared_material_seam = polygons.iter().any(|(other_unit, other_polygon)| {
+                    *other_unit != *unit && point_on_polygon_boundary(midpoint, other_polygon)
+                });
+                if shared_material_seam {
+                    continue;
+                }
+
                 let a = intern(pair[0], &mut points, &mut point_index);
                 let b = intern(pair[1], &mut points, &mut point_index);
                 if a != b {
