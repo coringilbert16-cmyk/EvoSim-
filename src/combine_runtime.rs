@@ -95,39 +95,7 @@ pub(crate) fn selected_candidate_evaluation(
     evaluate_candidate(structure, unit_a, unit_b, candidate, catalog)
 }
 
-pub(crate) fn form_specific_bond(
-    structure: &mut crate::structure::OrganismStructure,
-    unit_a: usize,
-    unit_b: usize,
-    endpoint_a: ConnectionEndpoint,
-    endpoint_b: ConnectionEndpoint,
-    catalog: &[BaseResource],
-    cache: &mut ConnectionCompatibilityCache,
-    ledger: &mut EnergyLedger,
-    energy: &mut f64,
-) -> Option<CombineAttempt> {
-    let candidate = crate::contact::connection_pair_candidates_cached(
-        structure, unit_a, unit_b, catalog, cache,
-    )
-    .into_iter()
-    .find(|candidate| {
-        candidate.endpoint_a == endpoint_a
-            && candidate.endpoint_b == endpoint_b
-            && candidate.distance <= COMBINE_CONTACT_TOLERANCE
-            && candidate.available_a
-            && candidate.available_b
-    })?;
-    let (_, _, _, investment, _) =
-        evaluate_candidate(structure, unit_a, unit_b, candidate, catalog)?;
-    form_selected_bond(
-        structure, unit_a, unit_b, candidate, investment, catalog, cache, ledger, energy,
-    )
-}
 
-/// Forms exactly the supplied physical contact.
-///
-/// This is the shared transaction boundary for generic COMBINE and bond-driven
-/// construction. The caller has already selected the physical endpoint pair and pose.
 pub(crate) fn form_selected_bond(
     structure: &mut crate::structure::OrganismStructure,
     unit_a: usize,
