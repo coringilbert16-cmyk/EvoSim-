@@ -125,10 +125,10 @@ impl StructuralUnit {
         if resource.physical_state != crate::resources::PhysicalState::Fluid {
             return false;
         }
-        let available_area = match &resource.shape.form {
-            crate::resources::Form::Fluid { nominal_area, .. } => *nominal_area * *amount,
-            _ => return false,
-        };
+        let available_area = resource.shape.form.area() * *amount;
+        if !available_area.is_finite() || available_area <= 0.0 {
+            return false;
+        }
         if !matches!(
             shape.form,
             crate::resources::Form::Fluid {
