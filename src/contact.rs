@@ -128,64 +128,184 @@ fn rigid_surface_candidates(
     let Some(shape_b) = b.shape(catalog) else {
         return Vec::new();
     };
-    if matches!(
-        shape_a.form,
-        Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. }
-    ) || matches!(
-        shape_b.form,
-        Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. }
-    ) {
+    let Some(vertices_a) = shape_a.form.polygon_vertices() else {
         return Vec::new();
-    }
-
-    let dx = b.placement.x - a.placement.x;
-    let dy = b.placement.y - a.placement.y;
-    let distance = dx.hypot(dy);
-    if distance <= 1e-12 {
+    };
+    let Some(vertices_b) = shape_b.form.polygon_vertices() else {
         return Vec::new();
-    }
+    };
 
-    // The constructor still selects official connection points for placement.
-    // These additional endpoints are only the physical bond locations: a bond
-    // may land anywhere the two rigid boundaries actually touch.
+    let world_a = world_vertices(&vertices_a, a);
+    let world_b = world_vertices(&vertices_b, b);
     let mut out = Vec::new();
-    let center_angle = dy.atan2(dx);
-    for step in -16..=16 {
-        let angle = center_angle + step as f64 * std::f64::consts::PI / 32.0;
-        let (s, c) = angle.sin_cos();
-        if let (Some(ea), Some(eb)) = (
-            rigid_boundary_endpoint(a, c, s, catalog),
-            rigid_boundary_endpoint(b, -c, -s, catalog),
-        ) {
-            out.push((ea, eb));
+
+    // Exact corner/corner contacts.
+    for (ia, &pa) in world_a.iter().enumerate() {
+        for (ib, &pb) in world_b.iter().enumerate() {
+            if same_world_point(pa, pb) {
+                out.push((
+                    ConnectionEndpoint::Corner { point_index: ia },
+                    ConnectionEndpoint::Corner { point_index: ib },
+                ));
+            }
         }
     }
 
-    // Also aim at every vertex direction. This catches asymmetric contacts
-    // where the closest point on a flat surface is offset from the centerline.
-    for vertex in shape_b.form.polygon_vertices().unwrap_or_default() {
-        let (s, c) = b.placement.rotation_radians.sin_cos();
-        let world_x = b.placement.x + vertex.0 * c - vertex.1 * s;
-        let world_y = b.placement.y + vertex.0 * s + vertex.1 * c;
-        if let (Some(ea), Some(eb)) = (
-            rigid_boundary_endpoint(a, world_x - a.placement.x, world_y - a.placement.y, catalog),
-            rigid_boundary_endpoint(b, a.placement.x - world_x, a.placement.y - world_y, catalog),
-        ) {
-            out.push((ea, eb));
+    // Exact corner/edge contacts in both directions.
+    for (ia, &pa) in world_a.iter().enumerate() {
+        for ib in 0..world_b.len() {
+            let pb = world_b[ib];
+            let qb = world_b[(ib + 1) % world_b.len()];
+            if point_on_segment(pa, pb, qb) && !is_endpoint(pa, pb, qb) {
+                if let Some(endpoint_b) = boundary_point_endpoint(b, pa, catalog) {
+                    out.push((
+                        ConnectionEndpoint::Corner { point_index: ia },
+                        endpoint_b,
+                    ));
+                }
+            }
         }
     }
-    for vertex in shape_a.form.polygon_vertices().unwrap_or_default() {
-        let (s, c) = a.placement.rotation_radians.sin_cos();
-        let world_x = a.placement.x + vertex.0 * c - vertex.1 * s;
-        let world_y = a.placement.y + vertex.0 * s + vertex.1 * c;
-        if let (Some(ea), Some(eb)) = (
-            rigid_boundary_endpoint(a, world_x - a.placement.x, world_y - a.placement.y),
-            rigid_boundary_endpoint(b, world_x - b.placement.x, world_y - b.placement.y, catalog),
-        ) {
-            out.push((ea, eb));
+    for (ib, &pb) in world_b.iter().enumerate() {
+        for ia in 0..world_a.len() {
+            let pa = world_a[ia];
+            let qa = world_a[(ia + 1) % world_a.len()];
+            if point_on_segment(pb, pa, qa) && !is_endpoint(pb, pa, qa) {
+                if let Some(endpoint_a) = boundary_point_endpoint(a, pb, catalog) {
+                    out.push((
+                        endpoint_a,
+                        ConnectionEndpoint::Corner { point_index: ib },
+                    ));
+                }
+            }
         }
     }
+
+    // Exact edge/edge intersections and collinear overlaps. A crossing has
+    // one physical contact point; a coincident overlap uses its midpoint.
+    for ia in 0..world_a.len() {
+        let a0 = world_a[ia];
+        let a1 = world_a[(ia + 1) % world_a.len()];
+        for ib in 0..world_b.len() {
+            let b0 = world_b[ib];
+            let b1 = world_b[(ib + 1) % world_b.len()];
+            for point in segment_contact_points(a0, a1, b0, b1) {
+                if let (Some(ea), Some(eb)) = (
+                    boundary_point_endpoint(a, point, catalog),
+                    boundary_point_endpoint(b, point, catalog),
+                ) {
+                    out.push((ea, eb));
+                }
+            }
+        }
+    }
+
     out
+}
+
+fn world_vertices(vertices: &[(f64, f64)], unit: &StructuralUnit) -> Vec<(f64, f64)> {
+    let (s, c) = unit.placement.rotation_radians.sin_cos();
+    vertices
+        .iter()
+        .map(|&(x, y)| {
+            (
+                unit.placement.x + x * c - y * s,
+                unit.placement.y + x * s + y * c,
+            )
+        })
+        .collect()
+}
+
+fn boundary_point_endpoint(
+    unit: &StructuralUnit,
+    world_point: (f64, f64),
+    catalog: &[crate::resources::BaseResource],
+) -> Option<ConnectionEndpoint> {
+    let (s, c) = unit.placement.rotation_radians.sin_cos();
+    let dx = world_point.0 - unit.placement.x;
+    let dy = world_point.1 - unit.placement.y;
+    let local_x = dx * c + dy * s;
+    let local_y = -dx * s + dy * c;
+    let point = crate::surface_geometry::boundary_point_at(unit.shape(catalog)?, local_x, local_y)?;
+    Some(ConnectionEndpoint::BoundaryPoint {
+        x: point.x,
+        y: point.y,
+    })
+}
+
+fn same_world_point(a: (f64, f64), b: (f64, f64)) -> bool {
+    (a.0 - b.0).hypot(a.1 - b.1) <= 1e-9
+}
+
+fn point_on_segment(
+    point: (f64, f64),
+    start: (f64, f64),
+    end: (f64, f64),
+) -> bool {
+    let dx = end.0 - start.0;
+    let dy = end.1 - start.1;
+    let length = dx.hypot(dy);
+    if length <= f64::EPSILON {
+        return same_world_point(point, start);
+    }
+    let cross = (point.0 - start.0) * dy - (point.1 - start.1) * dx;
+    if cross.abs() > 1e-9 * length {
+        return false;
+    }
+    let dot = (point.0 - start.0) * dx + (point.1 - start.1) * dy;
+    dot >= -1e-9 && dot <= length * length + 1e-9
+}
+
+fn is_endpoint(point: (f64, f64), start: (f64, f64), end: (f64, f64)) -> bool {
+    same_world_point(point, start) || same_world_point(point, end)
+}
+
+fn segment_contact_points(
+    a0: (f64, f64),
+    a1: (f64, f64),
+    b0: (f64, f64),
+    b1: (f64, f64),
+) -> Vec<(f64, f64)> {
+    let r = (a1.0 - a0.0, a1.1 - a0.1);
+    let s = (b1.0 - b0.0, b1.1 - b0.1);
+    let rxs = r.0 * s.1 - r.1 * s.0;
+    let q_minus_p = (b0.0 - a0.0, b0.1 - a0.1);
+    let qpxr = q_minus_p.0 * r.1 - q_minus_p.1 * r.0;
+    let epsilon = 1e-10;
+
+    if rxs.abs() > epsilon {
+        let t = (q_minus_p.0 * s.1 - q_minus_p.1 * s.0) / rxs;
+        let u = (q_minus_p.0 * r.1 - q_minus_p.1 * r.0) / rxs;
+        if t >= -epsilon && t <= 1.0 + epsilon && u >= -epsilon && u <= 1.0 + epsilon {
+            return vec![(
+                a0.0 + t * r.0,
+                a0.1 + t * r.1,
+            )];
+        }
+        return Vec::new();
+    }
+
+    if qpxr.abs() > epsilon {
+        return Vec::new();
+    }
+
+    let rr = r.0 * r.0 + r.1 * r.1;
+    let ss = s.0 * s.0 + s.1 * s.1;
+    if rr <= f64::EPSILON || ss <= f64::EPSILON {
+        return Vec::new();
+    }
+
+    // Collinear overlap: project B onto A, then use the midpoint of the
+    // overlap interval as the single representative bond location.
+    let t0 = (q_minus_p.0 * r.0 + q_minus_p.1 * r.1) / rr;
+    let t1 = ((b1.0 - a0.0) * r.0 + (b1.1 - a0.1) * r.1) / rr;
+    let lo = t0.min(t1).max(0.0);
+    let hi = t0.max(t1).min(1.0);
+    if hi < lo - epsilon {
+        return Vec::new();
+    }
+    let t = (lo + hi) * 0.5;
+    vec![(a0.0 + t * r.0, a0.1 + t * r.1)]
 }
 
 fn candidate_endpoints(
