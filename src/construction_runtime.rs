@@ -241,6 +241,23 @@ pub(crate) fn candidate_placements(
     out
 }
 
+fn rigid_construction_endpoint_options(shape: &crate::resources::Shape) -> Vec<ConnectionEndpoint> {
+    let Some(vertices) = shape.form.polygon_vertices() else {
+        return Vec::new();
+    };
+
+    let mut endpoints = Vec::with_capacity(vertices.len() * 2);
+    for point_index in 0..vertices.len() {
+        endpoints.push(ConnectionEndpoint::Corner { point_index });
+        let next = vertices[(point_index + 1) % vertices.len()];
+        endpoints.push(ConnectionEndpoint::BoundaryPoint {
+            x: (vertices[point_index].0 + next.0) * 0.5,
+            y: (vertices[point_index].1 + next.1) * 0.5,
+        });
+    }
+    endpoints
+}
+
 fn structure_unit_endpoint_options(
     unit: &StructuralUnit,
     catalog: &[BaseResource],
@@ -249,15 +266,9 @@ fn structure_unit_endpoint_options(
         return Vec::new();
     };
     match &shape.form {
-        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => shape
-            .form
-            .polygon_vertices()
-            .map(|vertices| {
-                (0..vertices.len())
-                    .map(|point_index| ConnectionEndpoint::Corner { point_index })
-                    .collect()
-            })
-            .unwrap_or_default(),
+        Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
+            rigid_construction_endpoint_options(shape)
+        }
         Form::Line { .. } => (0..2)
             .map(|point_index| ConnectionEndpoint::LineEndpoint { point_index })
             .collect(),
@@ -409,10 +420,19 @@ fn physical_material_endpoint_options(
             ) else {
                 return Vec::new();
             };
-            let mut endpoints = crate::contact::endpoint_indices(&unit, catalog)
-                .into_iter()
-                .map(move |endpoint| (part_index, endpoint))
-                .collect::<Vec<_>>();
+            let mut endpoints = match &unit.shape(catalog)?.form {
+                Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
+                    rigid_construction_endpoint_options(unit.shape(catalog)?)
+                        .into_iter()
+                        .map(|endpoint| (part_index, endpoint))
+                        .collect::<Vec<_>>()
+                }
+                Form::Line { .. } => crate::contact::endpoint_indices(&unit, catalog)
+                    .into_iter()
+                    .map(|endpoint| (part_index, endpoint))
+                    .collect::<Vec<_>>(),
+                Form::Circle { .. } | Form::Fluid { .. } => Vec::new(),
+            };
             if endpoints.is_empty()
                 && resource(catalog, name.as_str())
                     .is_some_and(|resource| resource.physical_state == PhysicalState::Fluid)
@@ -448,7 +468,58 @@ fn physical_material_endpoint_local_point(
 
 fn normalize_construction_angle(angle: f64) -> f64 {
     (angle + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI
+}\nfn local_endpoint_geometry(
+    shape: &crate::resources::Shape,
+    endpoint: ConnectionEndpoint,
+) -> Option<(f64, f64, f64, f64)> {
+    match endpoint {
+        ConnectionEndpoint::Corner { point_index }
+        | ConnectionEndpoint::BoundaryPoint {
+            x: _,
+            y: _,
+        } => {
+            let point = endpoint.world_point(
+                &StructuralUnit::new(
+                    "construction",
+                    Placement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                ),
+                &[BaseResource {
+                    name: "construction".to_string(),
+                    physical_state: PhysicalState::Rigid,
+                    shape: shape.clone(),
+                    mass: 1.0,
+                    potential_energy: 0.0,
+                    reactivity: 0.0,
+                    cohesion: 0.0,
+                }],
+            )?;
+            Some((point.x, point.y, point.normal_x, point.normal_y))
+        }
+        ConnectionEndpoint::LineEndpoint { point_index } => {
+            let half = match shape.form {
+                Form::Line { length } => length * 0.5,
+                _ => return None,
+            };
+            let x = if point_index == 0 { -half } else if point_index == 1 { half } else { return None };
+            let (nx, ny) = crate::rigid_boundary::line_endpoint_normal(shape, point_index)?;
+            Some((x, 0.0, nx, ny))
+        }
+        ConnectionEndpoint::Boundary { angle_radians } => {
+            let Form::Circle { radius } = shape.form else {
+                return None;
+            };
+            let (nx, ny) = angle_radians.sin_cos();
+            Some((radius * nx, radius * ny, nx, ny))
+        }
+        ConnectionEndpoint::Fluid { .. } => None,
+    }
 }
+
+
 
 fn construction_angle_candidates(
     existing_shape: &crate::resources::Shape,
@@ -470,6 +541,24 @@ fn construction_angle_candidates(
     };
 
     push_unique(ideal_angle);
+
+    // Every rigid boundary feature now has a finite, exact construction
+    // representative. Align the realized boundary normals directly rather
+    // than sampling arbitrary angles. The midpoint representatives added to
+    // rigid_construction_endpoint_options cover edge contact without inventing
+    // a continuous socket grid.
+    if let (Some(existing), Some(candidate)) = (
+        local_endpoint_geometry(existing_shape, existing_endpoint),
+        local_endpoint_geometry(candidate_shape, candidate_endpoint),
+    ) {
+        let existing_angle = existing.3.atan2(existing.2) + existing_rotation;
+        let candidate_angle = candidate.3.atan2(candidate.2);
+        push_unique(
+            existing_angle + std::f64::consts::PI
+                - candidate_angle
+                - candidate_relative_rotation,
+        );
+    }
 
     match (existing_endpoint, candidate_endpoint) {
         (
@@ -547,13 +636,8 @@ fn construction_angle_candidates(
         _ => {}
     }
 
-    // Exact boundary alignments cover common packing: like-shape stacking and
-    // fitting rigid pieces against convex or concave corners. Keep a coarse
-    // fallback for irregular cases without returning to a 360-step sweep.
-    const COARSE_SAMPLES: usize = 24;
-    for step in 0..COARSE_SAMPLES {
-        push_unique(ideal_angle + std::f64::consts::TAU * step as f64 / COARSE_SAMPLES as f64);
-    }
+    // No arbitrary angular sampling is used. Candidates come from the
+    // declared developmental preference plus exact rigid boundary features.
     angles
 }
 
@@ -1390,6 +1474,46 @@ fn construct_blueprint_bond_driven_internal(
 
     Ok((structure, total_heat))
 }
+
+
+    #[test]
+    fn construction_endpoint_options_include_exact_edge_midpoints() {
+        let catalog = crate::resources::default_catalog();
+        let unit = StructuralUnit::new(
+            "Nitrogen",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        let endpoints = structure_unit_endpoint_options(&unit, &catalog);
+        assert!(endpoints.iter().any(|endpoint| {
+            matches!(endpoint, ConnectionEndpoint::BoundaryPoint { .. })
+        }));
+    }
+
+    #[test]
+    fn construction_angle_candidates_use_exact_boundary_normals_without_sampling() {
+        let catalog = crate::resources::default_catalog();
+        let shape = catalog
+            .iter()
+            .find(|resource| resource.name == "Nitrogen")
+            .map(|resource| resource.shape.clone())
+            .unwrap();
+        let endpoint = ConnectionEndpoint::BoundaryPoint { x: 0.0, y: 0.0 };
+        let angles = construction_angle_candidates(
+            &shape,
+            endpoint,
+            0.0,
+            &shape,
+            endpoint,
+            0.0,
+            0.37,
+        );
+        assert!(angles.iter().any(|angle| (*angle - 0.37).abs() < 1e-10));
+        assert!(angles.len() <= 4);
+    }
 
 #[cfg(test)]
 mod tests {
