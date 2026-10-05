@@ -134,9 +134,16 @@ impl GenomeMeasurementScaffold {
         // An equilateral triangle with side 2 * radius provides that spacing.
         let side = radius * 2.0;
         let circumradius = side / 3.0_f64.sqrt();
-        let reference_area = 3.0
-            * crate::resources::form_area(&carbon.shape.form)
-                .ok_or_else(|| "Carbon has no finite 2D area".to_string())?;
+        let reference_area = match carbon.shape.form {
+            crate::resources::Form::RegularPolygon { sides, radius } => {
+                3.0 * 0.5
+                    * sides as f64
+                    * radius
+                    * radius
+                    * (std::f64::consts::TAU / sides as f64).sin()
+            }
+            _ => return Err("Carbon genome measurement requires a polygonal Carbon shape".into()),
+        };
         if !reference_area.is_finite() || reference_area <= 0.0 {
             return Err("invalid three-carbon genome reference area".into());
         }
