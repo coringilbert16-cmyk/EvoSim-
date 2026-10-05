@@ -97,6 +97,7 @@ fn rigid_boundary_endpoint(
     unit: &StructuralUnit,
     world_dx: f64,
     world_dy: f64,
+    catalog: &[crate::resources::BaseResource],
 ) -> Option<ConnectionEndpoint> {
     let len = world_dx.hypot(world_dy);
     if len <= 1e-12 {
@@ -104,9 +105,16 @@ fn rigid_boundary_endpoint(
     }
     let (ux, uy) = (world_dx / len, world_dy / len);
     let (s, c) = unit.placement.rotation_radians.sin_cos();
-    Some(ConnectionEndpoint::Boundary {
-        angle_radians: (uy * c - ux * s).atan2(ux * c + uy * s),
-    })
+    let lx = ux * c + uy * s;
+    let ly = -ux * s + uy * c;
+    let point = crate::surface_geometry::boundary_point_toward(unit.shape(catalog)?, lx, ly)?;
+    match unit.shape(catalog)?.form {
+        Form::Circle { .. } => Some(ConnectionEndpoint::Boundary {
+            angle_radians: point.y.atan2(point.x),
+        }),
+        Form::Fluid { .. } => Some(ConnectionEndpoint::Fluid { x: point.x, y: point.y }),
+        _ => Some(ConnectionEndpoint::BoundaryPoint { x: point.x, y: point.y }),
+    }
 }
 
 fn rigid_surface_candidates(
@@ -146,8 +154,8 @@ fn rigid_surface_candidates(
         let angle = center_angle + step as f64 * std::f64::consts::PI / 32.0;
         let (s, c) = angle.sin_cos();
         if let (Some(ea), Some(eb)) = (
-            rigid_boundary_endpoint(a, c, s),
-            rigid_boundary_endpoint(b, -c, -s),
+            rigid_boundary_endpoint(a, c, s, catalog),
+            rigid_boundary_endpoint(b, -c, -s, catalog),
         ) {
             out.push((ea, eb));
         }
@@ -160,8 +168,8 @@ fn rigid_surface_candidates(
         let world_x = b.placement.x + vertex.0 * c - vertex.1 * s;
         let world_y = b.placement.y + vertex.0 * s + vertex.1 * c;
         if let (Some(ea), Some(eb)) = (
-            rigid_boundary_endpoint(a, world_x - a.placement.x, world_y - a.placement.y),
-            rigid_boundary_endpoint(b, a.placement.x - world_x, a.placement.y - world_y),
+            rigid_boundary_endpoint(a, world_x - a.placement.x, world_y - a.placement.y, catalog),
+            rigid_boundary_endpoint(b, a.placement.x - world_x, a.placement.y - world_y, catalog),
         ) {
             out.push((ea, eb));
         }
@@ -172,7 +180,7 @@ fn rigid_surface_candidates(
         let world_y = a.placement.y + vertex.0 * s + vertex.1 * c;
         if let (Some(ea), Some(eb)) = (
             rigid_boundary_endpoint(a, world_x - a.placement.x, world_y - a.placement.y),
-            rigid_boundary_endpoint(b, world_x - b.placement.x, world_y - b.placement.y),
+            rigid_boundary_endpoint(b, world_x - b.placement.x, world_y - b.placement.y, catalog),
         ) {
             out.push((ea, eb));
         }
