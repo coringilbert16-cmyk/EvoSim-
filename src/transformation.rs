@@ -907,7 +907,7 @@ mod tests {
         organism.structure.bonds.retain(|bond| {
             protected_bonds
                 .iter()
-                .any(|candidate| candidate.has_same_identity(bond))
+                .any(|candidate| candidate.has_same_physical_identity(bond, &organism.structure, &environment.catalog))
         });
         let candidates = stress_break_candidate_indices(&organism, &environment);
         assert_eq!(candidates.len(), organism.structure.bonds.len());
