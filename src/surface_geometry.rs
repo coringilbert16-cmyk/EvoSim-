@@ -183,11 +183,7 @@ fn boundary_point_at_polygon(
     })
 }
 
-pub fn boundary_point_toward(
-    shape: &Shape,
-    target_x: f64,
-    target_y: f64,
-) -> Option<BoundaryPoint> {
+pub fn boundary_point_toward(shape: &Shape, target_x: f64, target_y: f64) -> Option<BoundaryPoint> {
     match &shape.form {
         Form::Circle { radius } => {
             let (ux, uy) = normalized(target_x, target_y)?;
