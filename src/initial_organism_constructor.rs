@@ -143,19 +143,20 @@ fn candidate_placements(
     resource: &BaseResource,
     catalog: &[BaseResource],
 ) -> Vec<Placement> {
-    let mut placements = Vec::new();
-    for target in 0..structure.units.len() {
-        let Some(unit) = structure.units.get(target) else {
-            continue;
-        };
-        placements.extend(crate::construction_runtime::nfp_candidate_placements(
-            structure,
-            resource,
-            unit.placement,
-            &[target],
-            catalog,
-        ).unwrap_or_default());
-    }
+    let targets = (0..structure.units.len()).collect::<Vec<_>>();
+    let anchor = structure
+        .units
+        .first()
+        .map(|unit| unit.placement)
+        .unwrap_or_default();
+    let mut placements = crate::construction_runtime::nfp_candidate_placements(
+        structure,
+        resource,
+        anchor,
+        &targets,
+        catalog,
+    )
+    .unwrap_or_default();
     placements.sort_by(|a, b| {
         let da = structure
             .units
