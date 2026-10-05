@@ -128,414 +128,97 @@ fn rigid_surface_candidates(
     b: &StructuralUnit,
     catalog: &[crate::resources::BaseResource],
 ) -> Vec<(ConnectionEndpoint, ConnectionEndpoint)> {
-    let Some(shape_a) = a.shape(catalog) else {
-        return Vec::new();
-    };
-    let Some(shape_b) = b.shape(catalog) else {
-        return Vec::new();
-    };
-    // Circle/polygon and line/polygon contacts are valid rigid-surface
-    // contacts even when one side has no polygon vertex list of its own.
-    // Seed those candidates before entering the polygon/polygon path.
-    let mut out = circle_polygon_surface_candidates(a, b, catalog);
-    out.extend(line_polygon_surface_candidates(a, b, catalog));
+    let Some(shape_a) = a.shape(catalog) else { return Vec::new(); };
+    let Some(shape_b) = b.shape(catalog) else { return Vec::new(); };
+    let Some(vertices_a) = shape_a.form.polygon_vertices() else { return Vec::new(); };
+    let Some(vertices_b) = shape_b.form.polygon_vertices() else { return Vec::new(); };
+    if vertices_a.len() < 3 || vertices_b.len() < 3 { return Vec::new(); }
 
-    let Some(vertices_a) = shape_a.form.polygon_vertices() else {
-        return out;
-    };
-    let Some(vertices_b) = shape_b.form.polygon_vertices() else {
-        return out;
-    };
+    fn world_vertex(unit: &StructuralUnit, vertex: (f64, f64)) -> (f64, f64) {
+        let (s, c) = unit.placement.rotation_radians.sin_cos();
+        (
+            unit.placement.x + vertex.0 * c - vertex.1 * s,
+            unit.placement.y + vertex.0 * s + vertex.1 * c,
+        )
+    }
 
-    let world_a = world_vertices(&vertices_a, a);
-    let world_b = world_vertices(&vertices_b, b);
-    let mut push_unique = |candidate: (ConnectionEndpoint, ConnectionEndpoint)| {
-        if !out
-            .iter()
-            .any(|existing: &(ConnectionEndpoint, ConnectionEndpoint)| {
-                existing.0.same_location(candidate.0) && existing.1.same_location(candidate.1)
-            })
+    fn project(point: (f64, f64), start: (f64, f64), end: (f64, f64)) -> (f64, f64) {
+        let dx = end.0 - start.0;
+        let dy = end.1 - start.1;
+        let length_sq = dx * dx + dy * dy;
+        if length_sq <= f64::EPSILON { return start; }
+        let t = (((point.0 - start.0) * dx + (point.1 - start.1) * dy) / length_sq)
+            .clamp(0.0, 1.0);
+        (start.0 + t * dx, start.1 + t * dy)
+    }
+
+    fn intersection(
+        a0: (f64, f64), a1: (f64, f64),
+        b0: (f64, f64), b1: (f64, f64),
+    ) -> Option<(f64, f64)> {
+        let r = (a1.0 - a0.0, a1.1 - a0.1);
+        let s = (b1.0 - b0.0, b1.1 - b0.1);
+        let denominator = r.0 * s.1 - r.1 * s.0;
+        if denominator.abs() <= 1e-12 { return None; }
+        let qp = (b0.0 - a0.0, b0.1 - a0.1);
+        let t = (qp.0 * s.1 - qp.1 * s.0) / denominator;
+        let u = (qp.0 * r.1 - qp.1 * r.0) / denominator;
+        if (-1e-10..=1.0000000001).contains(&t)
+            && (-1e-10..=1.0000000001).contains(&u)
         {
-            out.push(candidate);
-        }
-    };
-
-    // Exact corner/corner contacts.
-    for (ia, &pa) in world_a.iter().enumerate() {
-        for (ib, &pb) in world_b.iter().enumerate() {
-            if same_world_point(pa, pb) {
-                push_unique((
-                    ConnectionEndpoint::Corner { point_index: ia },
-                    ConnectionEndpoint::Corner { point_index: ib },
-                ));
-            }
-        }
+            Some((a0.0 + t * r.0, a0.1 + t * r.1))
+        } else { None }
     }
 
-    // Exact corner/edge contacts in both directions.
-    for (ia, &pa) in world_a.iter().enumerate() {
-        for ib in 0..world_b.len() {
-            let pb = world_b[ib];
-            let qb = world_b[(ib + 1) % world_b.len()];
-            if point_on_segment(pa, pb, qb) && !is_endpoint(pa, pb, qb) {
-                if let Some(endpoint_b) = boundary_point_endpoint(b, pa, catalog) {
-                    push_unique((ConnectionEndpoint::Corner { point_index: ia }, endpoint_b));
-                }
-            }
-        }
-    }
-    for (ib, &pb) in world_b.iter().enumerate() {
-        for ia in 0..world_a.len() {
-            let pa = world_a[ia];
-            let qa = world_a[(ia + 1) % world_a.len()];
-            if point_on_segment(pb, pa, qa) && !is_endpoint(pb, pa, qa) {
-                if let Some(endpoint_a) = boundary_point_endpoint(a, pb, catalog) {
-                    push_unique((endpoint_a, ConnectionEndpoint::Corner { point_index: ib }));
-                }
-            }
-        }
+    fn push(
+        out: &mut Vec<(ConnectionEndpoint, ConnectionEndpoint)>,
+        a: &StructuralUnit, b: &StructuralUnit,
+        point_a: (f64, f64), point_b: (f64, f64),
+    ) {
+        let adx = point_a.0 - a.placement.x;
+        let ady = point_a.1 - a.placement.y;
+        let bdx = point_b.0 - b.placement.x;
+        let bdy = point_b.1 - b.placement.y;
+        if adx.hypot(ady) <= 1e-12 || bdx.hypot(bdy) <= 1e-12 { return; }
+        let Some(ea) = rigid_boundary_endpoint(a, adx, ady) else { return; };
+        let Some(eb) = rigid_boundary_endpoint(b, bdx, bdy) else { return; };
+        out.push((ea, eb));
     }
 
-    // Exact edge/edge intersections and collinear overlaps. A crossing has
-    // one physical contact point; a coincident overlap uses its midpoint.
-    for ia in 0..world_a.len() {
-        let a0 = world_a[ia];
-        let a1 = world_a[(ia + 1) % world_a.len()];
-        for ib in 0..world_b.len() {
-            let b0 = world_b[ib];
-            let b1 = world_b[(ib + 1) % world_b.len()];
-            for point in segment_contact_points(a0, a1, b0, b1) {
-                let endpoint_a = if same_world_point(point, a0) {
-                    ConnectionEndpoint::Corner { point_index: ia }
-                } else if same_world_point(point, a1) {
-                    ConnectionEndpoint::Corner {
-                        point_index: (ia + 1) % world_a.len(),
-                    }
-                } else {
-                    let Some(endpoint) = boundary_point_endpoint(a, point, catalog) else {
-                        continue;
-                    };
-                    endpoint
-                };
-                let endpoint_b = if same_world_point(point, b0) {
-                    ConnectionEndpoint::Corner { point_index: ib }
-                } else if same_world_point(point, b1) {
-                    ConnectionEndpoint::Corner {
-                        point_index: (ib + 1) % world_b.len(),
-                    }
-                } else {
-                    let Some(endpoint) = boundary_point_endpoint(b, point, catalog) else {
-                        continue;
-                    };
-                    endpoint
-                };
-                push_unique((endpoint_a, endpoint_b));
-            }
-        }
-    }
-
-    out
-}
-
-fn circle_polygon_surface_candidates(
-    a: &StructuralUnit,
-    b: &StructuralUnit,
-    catalog: &[crate::resources::BaseResource],
-) -> Vec<(ConnectionEndpoint, ConnectionEndpoint)> {
-    let Some(shape_a) = a.shape(catalog) else {
-        return Vec::new();
-    };
-    let Some(shape_b) = b.shape(catalog) else {
-        return Vec::new();
-    };
-
+    let world_a = vertices_a.iter().copied().map(|v| world_vertex(a, v)).collect::<Vec<_>>();
+    let world_b = vertices_b.iter().copied().map(|v| world_vertex(b, v)).collect::<Vec<_>>();
     let mut out = Vec::new();
 
-    let mut collect = |circle: &StructuralUnit,
-                       circle_is_a: bool,
-                       polygon: &StructuralUnit,
-                       polygon_shape: &crate::resources::Shape| {
-        let radius = match &circle.shape(catalog)?.form {
-            crate::resources::Form::Circle { radius } => *radius,
-            _ => return Some(()),
-        };
-        let Some(vertices) = polygon_shape.form.polygon_vertices() else {
-            return Some(());
-        };
-
-        let world_vertices = world_vertices(&vertices, polygon);
-        for i in 0..world_vertices.len() {
-            let p0 = world_vertices[i];
-            let p1 = world_vertices[(i + 1) % world_vertices.len()];
-            let dx = p1.0 - p0.0;
-            let dy = p1.1 - p0.1;
-            let fx = p0.0 - circle.placement.x;
-            let fy = p0.1 - circle.placement.y;
-            let a_coef = dx * dx + dy * dy;
-            if a_coef <= f64::EPSILON {
-                continue;
-            }
-            let b_coef = 2.0 * (fx * dx + fy * dy);
-            let c_coef = fx * fx + fy * fy - radius * radius;
-            let discriminant = b_coef * b_coef - 4.0 * a_coef * c_coef;
-            if discriminant < -1e-10 {
-                continue;
-            }
-
-            let sqrt_discriminant = discriminant.max(0.0).sqrt();
-            let mut roots = [0.0; 2];
-            let root_count = if sqrt_discriminant <= 1e-10 {
-                roots[0] = -b_coef / (2.0 * a_coef);
-                1
-            } else {
-                roots[0] = (-b_coef - sqrt_discriminant) / (2.0 * a_coef);
-                roots[1] = (-b_coef + sqrt_discriminant) / (2.0 * a_coef);
-                2
-            };
-
-            for root in roots.into_iter().take(root_count) {
-                if !(-1e-9..=1.0 + 1e-9).contains(&root) {
-                    continue;
-                }
-                let t = root.clamp(0.0, 1.0);
-                let point = (p0.0 + t * dx, p0.1 + t * dy);
-                let local_x = point.0 - circle.placement.x;
-                let local_y = point.1 - circle.placement.y;
-                let (s, c) = circle.placement.rotation_radians.sin_cos();
-                let circle_x = local_x * c + local_y * s;
-                let circle_y = -local_x * s + local_y * c;
-                let circle_endpoint = ConnectionEndpoint::Boundary {
-                    angle_radians: circle_y.atan2(circle_x),
-                };
-                let polygon_endpoint = if same_world_point(point, p0) {
-                    ConnectionEndpoint::Corner { point_index: i }
-                } else if same_world_point(point, p1) {
-                    ConnectionEndpoint::Corner {
-                        point_index: (i + 1) % world_vertices.len(),
-                    }
-                } else {
-                    let Some(endpoint) = boundary_point_endpoint(polygon, point, catalog) else {
-                        continue;
-                    };
-                    endpoint
-                };
-                let candidate = if circle_is_a {
-                    (circle_endpoint, polygon_endpoint)
-                } else {
-                    (polygon_endpoint, circle_endpoint)
-                };
-                if !out
-                    .iter()
-                    .any(|existing: &(ConnectionEndpoint, ConnectionEndpoint)| {
-                        existing.0.same_location(candidate.0)
-                            && existing.1.same_location(candidate.1)
-                    })
-                {
-                    out.push(candidate);
-                }
-            }
+    // Exact candidates are generated only from real boundary features:
+    // vertex-to-edge closest points and edge intersections. There is no
+    // arbitrary angular sampling or coarse direction grid.
+    for &vertex in &world_a {
+        for i in 0..world_b.len() {
+            let edge_start = world_b[i];
+            let edge_end = world_b[(i + 1) % world_b.len()];
+            push(&mut out, a, b, vertex, project(vertex, edge_start, edge_end));
         }
-        Some(())
-    };
-
-    match (&shape_a.form, &shape_b.form) {
-        (
-            Form::Circle { .. },
-            Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
-        ) => {
-            let _ = collect(a, true, b, shape_b);
-        }
-        (
-            Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
-            Form::Circle { .. },
-        ) => {
-            let _ = collect(b, false, a, shape_a);
-        }
-        _ => {}
     }
-
+    for &vertex in &world_b {
+        for i in 0..world_a.len() {
+            let edge_start = world_a[i];
+            let edge_end = world_a[(i + 1) % world_a.len()];
+            push(&mut out, a, b, project(vertex, edge_start, edge_end), vertex);
+        }
+    }
+    for i in 0..world_a.len() {
+        let a0 = world_a[i];
+        let a1 = world_a[(i + 1) % world_a.len()];
+        for j in 0..world_b.len() {
+            let b0 = world_b[j];
+            let b1 = world_b[(j + 1) % world_b.len()];
+            if let Some(point) = intersection(a0, a1, b0, b1) {
+                push(&mut out, a, b, point, point);
+            }
+        }
+    }
+    out.dedup_by(|(a0, b0), (a1, b1)| a0.same_location(*a1) && b0.same_location(*b1));
     out
-}
-
-fn line_polygon_surface_candidates(
-    a: &StructuralUnit,
-    b: &StructuralUnit,
-    catalog: &[crate::resources::BaseResource],
-) -> Vec<(ConnectionEndpoint, ConnectionEndpoint)> {
-    let Some(shape_a) = a.shape(catalog) else {
-        return Vec::new();
-    };
-    let Some(shape_b) = b.shape(catalog) else {
-        return Vec::new();
-    };
-    let mut out = Vec::new();
-
-    let mut collect = |line: &StructuralUnit,
-                       line_is_a: bool,
-                       polygon: &StructuralUnit,
-                       polygon_shape: &crate::resources::Shape| {
-        let Some(vertices) = polygon_shape.form.polygon_vertices() else {
-            return;
-        };
-        for endpoint_index in 0..2 {
-            let line_endpoint = ConnectionEndpoint::LineEndpoint {
-                point_index: endpoint_index,
-            };
-            let Some(world_endpoint) = endpoint_world_point(line_endpoint, line, catalog) else {
-                continue;
-            };
-            let point = (world_endpoint.x, world_endpoint.y);
-            let world_polygon = world_vertices(&vertices, polygon);
-            for i in 0..world_polygon.len() {
-                let start = world_polygon[i];
-                let end = world_polygon[(i + 1) % world_polygon.len()];
-                if !point_on_segment(point, start, end) {
-                    continue;
-                }
-                let polygon_endpoint = if same_world_point(point, start) {
-                    ConnectionEndpoint::Corner { point_index: i }
-                } else if same_world_point(point, end) {
-                    ConnectionEndpoint::Corner {
-                        point_index: (i + 1) % world_polygon.len(),
-                    }
-                } else {
-                    let Some(endpoint) = boundary_point_endpoint(polygon, point, catalog) else {
-                        continue;
-                    };
-                    endpoint
-                };
-                let candidate = if line_is_a {
-                    (line_endpoint, polygon_endpoint)
-                } else {
-                    (polygon_endpoint, line_endpoint)
-                };
-                if !out
-                    .iter()
-                    .any(|existing: &(ConnectionEndpoint, ConnectionEndpoint)| {
-                        existing.0.same_location(candidate.0)
-                            && existing.1.same_location(candidate.1)
-                    })
-                {
-                    out.push(candidate);
-                }
-            }
-        }
-    };
-
-    match (&shape_a.form, &shape_b.form) {
-        (
-            Form::Line { .. },
-            Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
-        ) => {
-            collect(a, true, b, shape_b);
-        }
-        (
-            Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. },
-            Form::Line { .. },
-        ) => {
-            collect(b, false, a, shape_a);
-        }
-        _ => {}
-    }
-    out
-}
-
-fn world_vertices(vertices: &[(f64, f64)], unit: &StructuralUnit) -> Vec<(f64, f64)> {
-    let (s, c) = unit.placement.rotation_radians.sin_cos();
-    vertices
-        .iter()
-        .map(|&(x, y)| {
-            (
-                unit.placement.x + x * c - y * s,
-                unit.placement.y + x * s + y * c,
-            )
-        })
-        .collect()
-}
-
-fn boundary_point_endpoint(
-    unit: &StructuralUnit,
-    world_point: (f64, f64),
-    catalog: &[crate::resources::BaseResource],
-) -> Option<ConnectionEndpoint> {
-    let (s, c) = unit.placement.rotation_radians.sin_cos();
-    let dx = world_point.0 - unit.placement.x;
-    let dy = world_point.1 - unit.placement.y;
-    let local_x = dx * c + dy * s;
-    let local_y = -dx * s + dy * c;
-    let point = crate::surface_geometry::boundary_point_at(unit.shape(catalog)?, local_x, local_y)?;
-    Some(ConnectionEndpoint::BoundaryPoint {
-        x: point.x,
-        y: point.y,
-    })
-}
-
-fn same_world_point(a: (f64, f64), b: (f64, f64)) -> bool {
-    (a.0 - b.0).hypot(a.1 - b.1) <= 1e-9
-}
-
-fn point_on_segment(point: (f64, f64), start: (f64, f64), end: (f64, f64)) -> bool {
-    let dx = end.0 - start.0;
-    let dy = end.1 - start.1;
-    let length = dx.hypot(dy);
-    if length <= f64::EPSILON {
-        return same_world_point(point, start);
-    }
-    let cross = (point.0 - start.0) * dy - (point.1 - start.1) * dx;
-    if cross.abs() > 1e-9 * length {
-        return false;
-    }
-    let dot = (point.0 - start.0) * dx + (point.1 - start.1) * dy;
-    dot >= -1e-9 && dot <= length * length + 1e-9
-}
-
-fn is_endpoint(point: (f64, f64), start: (f64, f64), end: (f64, f64)) -> bool {
-    same_world_point(point, start) || same_world_point(point, end)
-}
-
-fn segment_contact_points(
-    a0: (f64, f64),
-    a1: (f64, f64),
-    b0: (f64, f64),
-    b1: (f64, f64),
-) -> Vec<(f64, f64)> {
-    let r = (a1.0 - a0.0, a1.1 - a0.1);
-    let s = (b1.0 - b0.0, b1.1 - b0.1);
-    let rxs = r.0 * s.1 - r.1 * s.0;
-    let q_minus_p = (b0.0 - a0.0, b0.1 - a0.1);
-    let qpxr = q_minus_p.0 * r.1 - q_minus_p.1 * r.0;
-    let epsilon = 1e-10;
-
-    if rxs.abs() > epsilon {
-        let t = (q_minus_p.0 * s.1 - q_minus_p.1 * s.0) / rxs;
-        let u = (q_minus_p.0 * r.1 - q_minus_p.1 * r.0) / rxs;
-        if t >= -epsilon && t <= 1.0 + epsilon && u >= -epsilon && u <= 1.0 + epsilon {
-            return vec![(a0.0 + t * r.0, a0.1 + t * r.1)];
-        }
-        return Vec::new();
-    }
-
-    if qpxr.abs() > epsilon {
-        return Vec::new();
-    }
-
-    let rr = r.0 * r.0 + r.1 * r.1;
-    let ss = s.0 * s.0 + s.1 * s.1;
-    if rr <= f64::EPSILON || ss <= f64::EPSILON {
-        return Vec::new();
-    }
-
-    // Collinear overlap: project B onto A, then use the midpoint of the
-    // overlap interval as the single representative bond location.
-    let t0 = (q_minus_p.0 * r.0 + q_minus_p.1 * r.1) / rr;
-    let t1 = ((b1.0 - a0.0) * r.0 + (b1.1 - a0.1) * r.1) / rr;
-    let lo = t0.min(t1).max(0.0);
-    let hi = t0.max(t1).min(1.0);
-    if hi < lo - epsilon {
-        return Vec::new();
-    }
-    let t = (lo + hi) * 0.5;
-    vec![(a0.0 + t * r.0, a0.1 + t * r.1)]
 }
 
 fn candidate_endpoints(
