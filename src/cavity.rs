@@ -325,15 +325,20 @@ mod tests {
     use crate::resources::default_catalog;
 
     #[test]
-    fn three_carbon_reference_comes_from_carbon_geometry() {
+    fn three_carbon_reference_comes_from_the_physical_scaffold_gap() {
         let catalog = default_catalog();
+        let scaffold =
+            crate::structural_blueprint::GenomeMeasurementScaffold::three_carbon_reference(
+                &catalog,
+            )
+            .unwrap();
         let carbon = catalog.iter().find(|r| r.name == "Carbon").unwrap();
-        assert!(
-            (minimum_genome_cavity_area(&catalog).unwrap()
-                - 3.0 * form_area(&carbon.shape.form).unwrap())
-            .abs()
-                < 1e-12
-        );
+        let carbon_area = form_area(&carbon.shape.form).unwrap();
+        let reference = minimum_genome_cavity_area(&catalog).unwrap();
+
+        assert!((reference - scaffold.reference_area()).abs() < 1e-12);
+        assert!(reference > 0.0);
+        assert!(reference < carbon_area);
     }
 
     #[test]
