@@ -138,12 +138,19 @@ fn rigid_surface_candidates(
     let world_a = world_vertices(&vertices_a, a);
     let world_b = world_vertices(&vertices_b, b);
     let mut out = Vec::new();
+    let mut push_unique = |candidate: (ConnectionEndpoint, ConnectionEndpoint)| {
+        if !out.iter().any(|existing: &(ConnectionEndpoint, ConnectionEndpoint)| {
+            existing.0.same_location(candidate.0) && existing.1.same_location(candidate.1)
+        }) {
+            out.push(candidate);
+        }
+    };
 
     // Exact corner/corner contacts.
     for (ia, &pa) in world_a.iter().enumerate() {
         for (ib, &pb) in world_b.iter().enumerate() {
             if same_world_point(pa, pb) {
-                out.push((
+                push_unique((
                     ConnectionEndpoint::Corner { point_index: ia },
                     ConnectionEndpoint::Corner { point_index: ib },
                 ));
@@ -158,7 +165,7 @@ fn rigid_surface_candidates(
             let qb = world_b[(ib + 1) % world_b.len()];
             if point_on_segment(pa, pb, qb) && !is_endpoint(pa, pb, qb) {
                 if let Some(endpoint_b) = boundary_point_endpoint(b, pa, catalog) {
-                    out.push((
+                    push_unique((
                         ConnectionEndpoint::Corner { point_index: ia },
                         endpoint_b,
                     ));
@@ -172,7 +179,7 @@ fn rigid_surface_candidates(
             let qa = world_a[(ia + 1) % world_a.len()];
             if point_on_segment(pb, pa, qa) && !is_endpoint(pb, pa, qa) {
                 if let Some(endpoint_a) = boundary_point_endpoint(a, pb, catalog) {
-                    out.push((
+                    push_unique((
                         endpoint_a,
                         ConnectionEndpoint::Corner { point_index: ib },
                     ));
@@ -214,7 +221,7 @@ fn rigid_surface_candidates(
                     };
                     endpoint
                 };
-                out.push((endpoint_a, endpoint_b));
+                push_unique((endpoint_a, endpoint_b));
             }
         }
     }
