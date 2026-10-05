@@ -861,7 +861,6 @@ mod tests {
         }));
     }
 
-
     #[test]
     fn exact_circle_polygon_contact_candidates_include_tangent_contact() {
         let catalog = crate::resources::default_catalog();
