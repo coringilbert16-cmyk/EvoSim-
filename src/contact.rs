@@ -836,6 +836,88 @@ mod tests {
 
 
     #[test]
+    fn exact_circle_polygon_contact_candidates_include_tangent_contact() {
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+        let circle = structure.add_unit(StructuralUnit::new(
+            "Water",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let radius = match catalog
+            .iter()
+            .find(|resource| resource.name == "Water")
+            .unwrap()
+            .shape
+            .form
+        {
+            crate::resources::Form::Circle { radius } => radius,
+            _ => panic!("Water must be circular"),
+        };
+        let rectangle = structure.add_unit(StructuralUnit::new(
+            "Nitrogen",
+            Placement {
+                x: radius + 0.5,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+
+        let candidates = connection_pair_candidates(&structure, circle, rectangle, &catalog);
+        assert!(candidates.iter().any(|candidate| {
+            matches!(candidate.endpoint_a, ConnectionEndpoint::Boundary { .. })
+                && matches!(candidate.endpoint_b, ConnectionEndpoint::BoundaryPoint { .. })
+                && candidate.distance <= 1e-9
+        }));
+    }
+
+    #[test]
+    fn exact_circle_polygon_contact_candidates_include_both_secant_points() {
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+        let circle = structure.add_unit(StructuralUnit::new(
+            "Water",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let rectangle = structure.add_unit(StructuralUnit::new(
+            "Nitrogen",
+            Placement {
+                x: 0.3,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+
+        let candidates = connection_pair_candidates(&structure, circle, rectangle, &catalog);
+        let points = candidates
+            .iter()
+            .filter_map(|candidate| {
+                if !matches!(candidate.endpoint_a, ConnectionEndpoint::Boundary { .. })
+                    || !matches!(
+                        candidate.endpoint_b,
+                        ConnectionEndpoint::BoundaryPoint { .. }
+                    )
+                    || candidate.distance > 1e-9
+                {
+                    return None;
+                }
+                endpoint_world_point(candidate.endpoint_a, &structure.units[circle], &catalog)
+                    .map(|point| point.y)
+            })
+            .collect::<Vec<_>>();
+
+        assert!(points.iter().any(|y| *y > 0.1));
+        assert!(points.iter().any(|y| *y < -0.1));
+    }
+
+    #[test]
     fn try_add_bond_rejects_repeated_connection_points_in_either_endpoint_order() {
         let catalog = crate::resources::default_catalog();
         let (mut structure, [id_a, id_b]) = test_structure();
