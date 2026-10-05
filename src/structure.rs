@@ -845,8 +845,15 @@ impl PhysicalConstituentGraph {
             None
         }
     }
-    pub fn break_matching_bond(&mut self, t: Bond) -> Option<Bond> {
-        let i = self.bonds.iter().position(|b| b.has_same_identity(&t))?;
+    pub fn break_matching_bond(
+        &mut self,
+        target: Bond,
+        catalog: &[BaseResource],
+    ) -> Option<Bond> {
+        let i = self
+            .bonds
+            .iter()
+            .position(|bond| bond.has_same_physical_identity(&target, self, catalog))?;
         self.break_bond(i)
     }
 }
