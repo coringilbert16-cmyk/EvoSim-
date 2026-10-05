@@ -207,17 +207,20 @@ mod tests {
         assert!((ny - 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
     }
     #[test]
-    fn catalog_phosphorus_l_has_a_real_interior_corner() {
+    fn catalog_phosphorus_has_convex_trapezoid_corners() {
         let phosphorus = default_catalog()
             .into_iter()
             .find(|resource| resource.name == "Phosphorus")
             .expect("default catalog must contain Phosphorus");
         let vertices = phosphorus.shape.form.polygon_vertices().unwrap();
-        assert_eq!(vertices.len(), 6);
-        assert_eq!(vertices[3], (0.0, 0.0));
-        let (nx, ny) = corner_normal(&phosphorus.shape, 3).unwrap();
-        assert!((nx - 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
-        assert!((ny - 2.0_f64.sqrt() / 2.0).abs() < 1e-10);
+        assert_eq!(vertices.len(), 4);
+        assert!((vertices[0].0 + 0.5).abs() < 1e-12);
+        assert!((vertices[1].0 - 0.5).abs() < 1e-12);
+        assert!((vertices[2].0 - 0.25).abs() < 1e-12);
+        assert!((vertices[3].0 + 0.25).abs() < 1e-12);
+        let (nx, ny) = corner_normal(&phosphorus.shape, 0).unwrap();
+        assert!(nx.is_finite() && ny.is_finite());
+        assert!((nx * nx + ny * ny - 1.0).abs() < 1e-10);
     }
     #[test]
     fn square_corner_normal_is_physical_bisector() {
