@@ -806,7 +806,12 @@ mod tests {
         let fitted = crate::resources::Shape {
             form: crate::resources::Form::Fluid {
                 nominal_area: 2.0,
-                boundary: Some(vec![(-1.0, 0.0), (0.0, 1.0), (1.0, 0.0), (0.0, -1.0)]),
+                boundary: Some(vec![
+                (-0.7071067811865476, 0.0),
+                (0.0, 0.7071067811865476),
+                (0.7071067811865476, 0.0),
+                (0.0, -0.7071067811865476),
+            ]),
             },
         };
         assert!(water.realize_fluid_geometry(fitted.clone(), &catalog));
