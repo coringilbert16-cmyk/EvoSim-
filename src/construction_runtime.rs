@@ -481,8 +481,7 @@ fn local_endpoint_geometry(
     match endpoint {
         ConnectionEndpoint::Corner { point_index } => {
             let (x, y) = *shape.form.polygon_vertices()?.get(point_index)?;
-            let (normal_x, normal_y) =
-                crate::rigid_boundary::corner_normal(shape, point_index)?;
+            let (normal_x, normal_y) = crate::rigid_boundary::corner_normal(shape, point_index)?;
             Some((x, y, normal_x, normal_y))
         }
         ConnectionEndpoint::BoundaryPoint { x, y } => {
@@ -510,12 +509,7 @@ fn local_endpoint_geometry(
                 return None;
             };
             let (normal_x, normal_y) = angle_radians.sin_cos();
-            Some((
-                radius * normal_x,
-                radius * normal_y,
-                normal_x,
-                normal_y,
-            ))
+            Some((radius * normal_x, radius * normal_y, normal_x, normal_y))
         }
         ConnectionEndpoint::Fluid { .. } => None,
     }
@@ -554,9 +548,7 @@ fn construction_angle_candidates(
         let existing_angle = existing.3.atan2(existing.2) + existing_rotation;
         let candidate_angle = candidate.3.atan2(candidate.2);
         push_unique(
-            existing_angle + std::f64::consts::PI
-                - candidate_angle
-                - candidate_relative_rotation,
+            existing_angle + std::f64::consts::PI - candidate_angle - candidate_relative_rotation,
         );
     }
 
@@ -1476,48 +1468,48 @@ fn construct_blueprint_bond_driven_internal(
 }
 
 
-    #[test]
-    fn construction_endpoint_options_include_exact_edge_midpoints() {
-        let catalog = crate::resources::default_catalog();
-        let unit = StructuralUnit::new(
-            "Nitrogen",
-            Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        );
-        let endpoints = structure_unit_endpoint_options(&unit, &catalog);
-        assert!(endpoints.iter().any(|endpoint| {
-            matches!(endpoint, ConnectionEndpoint::BoundaryPoint { .. })
-        }));
-    }
+#[test]
+fn construction_endpoint_options_include_exact_edge_midpoints() {
+    let catalog = crate::resources::default_catalog();
+    let unit = StructuralUnit::new(
+        "Nitrogen",
+        Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        },
+    );
+    let endpoints = structure_unit_endpoint_options(&unit, &catalog);
+    assert!(endpoints.iter().any(|endpoint| {
+        matches!(endpoint, ConnectionEndpoint::BoundaryPoint { .. })
+    }));
+}
 
-    #[test]
-    fn construction_angle_candidates_use_exact_boundary_normals_without_sampling() {
-        let catalog = crate::resources::default_catalog();
-        let shape = catalog
-            .iter()
-            .find(|resource| resource.name == "Nitrogen")
-            .map(|resource| resource.shape.clone())
-            .unwrap();
-        let vertices = shape.form.polygon_vertices().unwrap();
-        let endpoint = ConnectionEndpoint::BoundaryPoint {
-            x: (vertices[0].0 + vertices[1].0) * 0.5,
-            y: (vertices[0].1 + vertices[1].1) * 0.5,
-        };
-        let angles = construction_angle_candidates(
-            &shape,
-            endpoint,
-            0.0,
-            &shape,
-            endpoint,
-            0.0,
-            0.37,
-        );
-        assert!(angles.iter().any(|angle| (*angle - 0.37).abs() < 1e-10));
-        assert!(angles.len() <= 2);
-    }
+#[test]
+fn construction_angle_candidates_use_exact_boundary_normals_without_sampling() {
+    let catalog = crate::resources::default_catalog();
+    let shape = catalog
+        .iter()
+        .find(|resource| resource.name == "Nitrogen")
+        .map(|resource| resource.shape.clone())
+        .unwrap();
+    let vertices = shape.form.polygon_vertices().unwrap();
+    let endpoint = ConnectionEndpoint::BoundaryPoint {
+        x: (vertices[0].0 + vertices[1].0) * 0.5,
+        y: (vertices[0].1 + vertices[1].1) * 0.5,
+    };
+    let angles = construction_angle_candidates(
+        &shape,
+        endpoint,
+        0.0,
+        &shape,
+        endpoint,
+        0.0,
+        0.37,
+    );
+    assert!(angles.iter().any(|angle| (*angle - 0.37).abs() < 1e-10));
+    assert!(angles.len() <= 2);
+}
 
 #[cfg(test)]
 mod tests {
