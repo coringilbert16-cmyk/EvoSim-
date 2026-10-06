@@ -139,6 +139,7 @@ pub enum GeometryFrontierState {
     Unexplored,
     InProgress,
     Exhausted,
+    ContinuousFamilyPending,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
