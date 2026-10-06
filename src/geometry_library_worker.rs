@@ -56,23 +56,17 @@ fn process_one_frontier(
             )?;
 
             if resource.name == "Water" {
+                // Every currently supported Water/rigid case is represented
+                // symbolically as an exact capillary contact family. If no
+                // family exists, the current boundary geometry has no valid
+                // Water contact; it is exhausted rather than left in a
+                // permanently "pending" state.
                 let families = generate_water_contact_families(&formation, resource, catalog);
-                if !families.is_empty() {
-                    library.insert_contact_families(families)?;
-                    library.set_frontier_state(
-                        formation.signature.clone(),
-                        resource.name.clone(),
-                        GeometryFrontierState::Exhausted,
-                    )?;
-                    return Ok(true);
-                }
-            }
-
-            if continuous_contact_family_exists(&formation, resource, catalog) {
+                library.insert_contact_families(families)?;
                 library.set_frontier_state(
                     formation.signature.clone(),
                     resource.name.clone(),
-                    GeometryFrontierState::ContinuousFamilyPending,
+                    GeometryFrontierState::Exhausted,
                 )?;
                 return Ok(true);
             }
