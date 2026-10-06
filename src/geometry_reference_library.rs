@@ -764,7 +764,7 @@ impl GeometryLibrary {
         for family in unique.values() {
             serde_json::to_writer(&mut file, family)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-            file.write_all(b"\\n")?;
+            file.write_all(b"\n")?;
         }
         file.sync_data()?;
 
@@ -833,7 +833,7 @@ impl GeometryLibrary {
         for formation in unique.values() {
             serde_json::to_writer(&mut file, formation)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-            file.write_all(b"\\n")?;
+            file.write_all(b"\n")?;
         }
         file.sync_data()?;
 
