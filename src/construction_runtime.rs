@@ -331,7 +331,14 @@ impl ConstructionSpatialIndex {
             cells: std::collections::HashMap::new(),
         };
         for (unit_index, unit) in structure.units.iter().enumerate() {
-            index.insert(unit_index, unit.placement.x, unit.placement.y);
+            index.insert(
+                unit_index,
+                unit.placement.x,
+                unit.placement.y,
+                unit.shape(catalog)
+                    .map(|shape| shape.form.bounding_radius())
+                    .unwrap_or(0.0),
+            );
         }
         index
     }
@@ -343,7 +350,8 @@ impl ConstructionSpatialIndex {
         )
     }
 
-    pub(crate) fn insert(&mut self, unit_index: usize, x: f64, y: f64) {
+    pub(crate) fn insert(&mut self, unit_index: usize, x: f64, y: f64, radius: f64) {
+        self.max_radius = self.max_radius.max(radius);
         self.cells
             .entry(self.cell(x, y))
             .or_default()
