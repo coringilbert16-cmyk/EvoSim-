@@ -1025,6 +1025,12 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
         f64,
         crate::configuration_space::ConvexConfigurationBoundary,
     )> = Vec::new();
+    // Cache feature-derived endpoint mappings so endpoint-pair enumeration
+    // never rescans the same NFP boundary.
+    let mut nfp_feature_cache: Vec<(
+        f64,
+        Vec<(Placement, ConnectionEndpoint, ConnectionEndpoint)>,
+    )> = Vec::new();
 
     // Edge-alignment rotations depend only on the two rigid shapes and their
     // orientations, not on which endpoint pair eventually consumes the contact.
@@ -1150,17 +1156,36 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
                 };
 
                 let nfp_feature = nfp_boundary.and_then(|boundary| {
-                    boundary.features.iter().find_map(|feature| {
-                        let (placement, feature_a, feature_b) = nfp_feature_placement(
-                            existing_shape,
-                            (existing_unit.placement.x, existing_unit.placement.y),
-                            candidate_shape,
-                            angle,
-                            feature,
-                        )?;
-                        (feature_a == endpoint_a && feature_b == endpoint_b)
-                            .then_some((placement, feature))
-                    })
+                    if !nfp_feature_cache.iter().any(|(cached_angle, _)| {
+                        (normalize_construction_angle(*cached_angle - angle)).abs() <= 1e-10
+                    }) {
+                        let features = boundary
+                            .features
+                            .iter()
+                            .filter_map(|feature| {
+                                let (placement, feature_a, feature_b) = nfp_feature_placement(
+                                    existing_shape,
+                                    (existing_unit.placement.x, existing_unit.placement.y),
+                                    candidate_shape,
+                                    angle,
+                                    feature,
+                                )?;
+                                Some((placement, feature_a, feature_b))
+                            })
+                            .collect::<Vec<_>>();
+                        nfp_feature_cache.push((angle, features));
+                    }
+                    nfp_feature_cache
+                        .iter()
+                        .find(|(cached_angle, _)| {
+                            (normalize_construction_angle(*cached_angle - angle)).abs() <= 1e-10
+                        })
+                        .and_then(|(_, features)| {
+                            features.iter().find_map(|(placement, feature_a, feature_b)| {
+                                (*feature_a == endpoint_a && *feature_b == endpoint_b)
+                                    .then_some(*placement)
+                            })
+                        })
                 });
 
                 let candidate_placement = nfp_feature
