@@ -10,7 +10,7 @@ The intended constructor is **free-form and cavity-driven**:
 
 - it does not begin from a fixed carbon ring, spoke layout, spiral, or outer shell;
 - it does not know in advance how many Carbon units must surround the genome;
-- Carbon hexagons naturally prefer face-to-face, flat-to-flat contact where geometry permits;
+- rigid constituents have no preferred material; each shape naturally participates in the exact contacts its geometry permits;
 - the resulting topology and silhouette are consequences of local physical placement and contact, not a prescribed body plan;
 - the genome is a qualifying empty cavity discovered from the realized physical graph;
 - the temporary three-Carbon measurement scaffold is only a measurement/qualification reference and is not part of the organism;
@@ -92,7 +92,7 @@ The genome cavity is genuinely empty and is part of the organism rather than the
 
 A developmental blueprint may eventually provide inherited spatial and material preferences, but it is never authoritative topology.
 
-The physical constructor may use those preferences to rank locally valid placements. It must not:
+The physical constructor does not use material preferences to rank or select constituents. Developmental preferences may influence other inherited behavior, but physical construction remains material-neutral. It must not:
 
 - require future blueprint edges to be realized;
 - force a prescribed number of constituents;
