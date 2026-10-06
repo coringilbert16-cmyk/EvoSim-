@@ -513,7 +513,15 @@ fn construct_physical_organism(
             viability_dirty = true;
         }
 
-        if scaffold_active && finalize_enclosed_scaffold(&mut structure, catalog, &scaffold_ids) {
+        // Temporary-scaffold enclosure is itself a cycle-creation event.
+        // A one-unit/one-bond extension cannot possibly enclose the scaffold,
+        // so do not clone the structure and run cavity analysis on every
+        // ordinary frontier step. Only attempt scaffold finalization after a
+        // transaction adds strictly more bonds than new constituents.
+        if scaffold_active
+            && added_bonds > added_units
+            && finalize_enclosed_scaffold(&mut structure, catalog, &scaffold_ids)
+        {
             scaffold_active = false;
             viability_dirty = true;
             // Scaffold removal can shift unit indices. Rebuild only the derived
