@@ -975,10 +975,16 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
                 .and_then(|placements| placements.get(part_index))
                 .map(|placement| placement.rotation_radians)
                 .unwrap_or(0.0);
+            let Some(existing_vertices) = existing_shape.form.polygon_vertices() else {
+                continue;
+            };
+            let Some(candidate_vertices) = candidate_shape.form.polygon_vertices() else {
+                continue;
+            };
             let mut angles = crate::configuration_space::edge_alignment_rotations(
-                &existing_shape.form.polygon_vertices(),
+                &existing_vertices,
                 existing_unit.placement.rotation_radians,
-                &candidate_shape.form.polygon_vertices(),
+                &candidate_vertices,
                 candidate_relative_rotation,
             );
             // Preserve point-contact geometry for endpoint classes that do not
