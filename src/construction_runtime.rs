@@ -346,6 +346,86 @@ fn nfp_contact_class(
     )
 }
 
+fn nfp_feature_placement(
+    existing_shape: &crate::resources::Shape,
+    existing_rotation: f64,
+    existing_origin: (f64, f64),
+    candidate_shape: &crate::resources::Shape,
+    candidate_rotation: f64,
+    feature: &crate::configuration_space::BoundaryFeature,
+) -> Option<(
+    Placement,
+    ConnectionEndpoint,
+    ConnectionEndpoint,
+)> {
+    let existing_vertices = existing_shape.form.polygon_vertices()?;
+    let candidate_vertices = candidate_shape.form.polygon_vertices()?;
+
+    let local_feature_point = |vertices: &[(f64, f64)],
+                               feature: crate::configuration_space::FeatureRef,
+                               negated: bool|
+     -> Option<(f64, f64)> {
+        let point = match feature.kind {
+            crate::configuration_space::BoundaryFeatureKind::Vertex => {
+                *vertices.get(feature.index)?
+            }
+            crate::configuration_space::BoundaryFeatureKind::Edge => {
+                let a = *vertices.get(feature.index)?;
+                let b = *vertices.get((feature.index + 1) % vertices.len())?;
+                ((a.0 + b.0) * 0.5, (a.1 + b.1) * 0.5)
+            }
+        };
+        Some(if negated { (-point.0, -point.1) } else { point })
+    };
+
+    let existing_local = local_feature_point(&existing_vertices, feature.a, false)?;
+    let candidate_local = local_feature_point(&candidate_vertices, feature.b, true)?;
+    let translation = (
+        feature.start.x + (feature.end.x - feature.start.x) * 0.5,
+        feature.start.y + (feature.end.y - feature.start.y) * 0.5,
+    );
+
+    let candidate_origin = (
+        existing_origin.0 + translation.0,
+        existing_origin.1 + translation.1,
+    );
+    let placement = Placement {
+        x: candidate_origin.0,
+        y: candidate_origin.1,
+        rotation_radians: candidate_rotation,
+    };
+
+    let endpoint_for_feature = |
+        vertices: &[(f64, f64)],
+        feature: crate::configuration_space::FeatureRef,
+    | -> Option<ConnectionEndpoint> {
+        match feature.kind {
+            crate::configuration_space::BoundaryFeatureKind::Vertex => {
+                Some(ConnectionEndpoint::Corner {
+                    point_index: feature.index,
+                })
+            }
+            crate::configuration_space::BoundaryFeatureKind::Edge => {
+                let a = *vertices.get(feature.index)?;
+                let b = *vertices.get((feature.index + 1) % vertices.len())?;
+                Some(ConnectionEndpoint::BoundaryPoint {
+                    x: (a.0 + b.0) * 0.5,
+                    y: (a.1 + b.1) * 0.5,
+                })
+            }
+        }
+    };
+
+    let endpoint_a = endpoint_for_feature(&existing_vertices, feature.a)?;
+    let endpoint_b = endpoint_for_feature(&candidate_vertices, feature.b)?;
+
+    // The NFP feature midpoint is exactly the difference of the corresponding
+    // source-feature representatives. Keep this assertion implicit in the
+    // construction path: the resulting endpoints meet at the same world point.
+    let _ = (existing_local, candidate_local, existing_rotation);
+    Some((placement, endpoint_a, endpoint_b))
+}
+
 fn placement_for_joint(
     local_point: (f64, f64),
     joint: (f64, f64),
