@@ -30,3 +30,10 @@ The persistent library should eventually store **contact families and boundary c
 The existing resource `cohesion` values are used only as a temporary deterministic **effective wetting adapter**. This is not treated as a complete thermodynamic Young-equation model; true interfacial energies can replace that adapter later without changing the capillary geometry equations.
 
 Water-to-water remains volume accumulation rather than a rigid geometry bond.
+
+
+### Symbolic fluid contact families
+
+Water contact is now represented as a persistent `GeometryContactFamily`, not as a sampled placement. Each family records the rigid anchor, boundary edge, equilibrium contact angle, free-interface curvature/radius, contact length, and the exact interval along that edge over which the equilibrium droplet can translate.
+
+This means a continuous family is now finite data: the mathematics describes the continuum instead of the worker pretending it can enumerate it. The worker may mark a Water frontier exhausted once the corresponding family records have been persisted. More complex cases where an existing deformed water region must itself be used as a boundary remain deferred until fluid boundary features can be composed symbolically.
