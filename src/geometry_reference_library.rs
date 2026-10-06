@@ -1421,6 +1421,24 @@ mod tests {
     }
 
     #[test]
+    fn interrupted_final_json_record_does_not_destroy_durable_library() {
+        let root = temp_root();
+        let catalog = default_catalog();
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+        seed_base_catalogue(&mut library, &catalog).unwrap();
+        drop(library);
+
+        let path = root.join("formations.jsonl");
+        let mut file = OpenOptions::new().append(true).open(&path).unwrap();
+        file.write_all(b"{\"schema_version\":1,\"truncated\":").unwrap();
+        file.sync_data().unwrap();
+
+        let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
+        assert_eq!(reopened.len(), catalog.len());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn frontier_state_persists_across_reopen() {
         let root = temp_root();
         let catalog = default_catalog();
