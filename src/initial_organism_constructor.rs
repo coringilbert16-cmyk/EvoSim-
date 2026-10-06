@@ -271,6 +271,13 @@ fn grow_one_step(
     for existing_index in existing_indices {
         for (_resource_name, instance) in candidates {
             let bonds_before = structure.bonds.len();
+            let available_existing_endpoints = crate::construction_runtime::structure_unit_endpoint_options_for_frontier(
+                structure.units.get(existing_index)?,
+                catalog,
+            )
+            .into_iter()
+            .filter(|endpoint| !occupancy.is_occupied(existing_index, endpoint))
+            .collect::<Vec<_>>();
             if let Some((
                 _indices,
                 _part_index,
@@ -280,6 +287,7 @@ fn grow_one_step(
             )) = crate::construction_runtime::try_attach_physical_material_bond_driven_indexed(
                 structure,
                 existing_index,
+                &available_existing_endpoints,
                 instance,
                 catalog,
                 nodes,
