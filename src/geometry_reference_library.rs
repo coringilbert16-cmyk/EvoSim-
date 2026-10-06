@@ -940,7 +940,7 @@ fn canonical_shape_rotation(form: &Form, angle: f64) -> f64 {
         Form::Rectangle { .. } => std::f64::consts::PI,
         Form::RegularPolygon { sides, .. } => std::f64::consts::TAU / (*sides as f64),
         Form::Polygon { vertices } => rotational_symmetry_period(vertices),
-        Form::Line { .. } => std::f64::consts::TAU,
+        Form::Line { .. } => std::f64::consts::PI,
         Form::Fluid { boundary, .. } => boundary.as_deref()
             .map(rotational_symmetry_period)
             .unwrap_or(std::f64::consts::TAU),
@@ -2267,6 +2267,25 @@ fn canonicalization_collapses_intrinsic_rotation() {
     rotated.constituents[0].placement.rotation_radians = std::f64::consts::PI / 3.0;
     assert_eq!(base.canonicalized(&catalog).unwrap().signature,
                rotated.canonicalized(&catalog).unwrap().signature);
+
+    let carbon = catalog.iter().find(|r| r.name == "Carbon").unwrap();
+    let vertex = carbon.shape.form.polygon_vertices().unwrap()[0];
+    let mut pair = GeometryFormation {
+        schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+        constituents: vec![
+            GeometryConstituent { resource: "Carbon".into(), placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 } },
+            GeometryConstituent { resource: "Carbon".into(), placement: Placement { x: vertex.0 * 2.0, y: vertex.1 * 2.0, rotation_radians: 0.0 } },
+        ],
+        bonds: vec![GeometryBond { constituent_a: 0, constituent_b: 1 }],
+        signature: String::new(),
+    };
+    if !validate_formation(&pair, &catalog) {
+        pair = generate_two_constituent_candidates(&base, carbon, &catalog).into_iter().next().unwrap();
+    }
+    let mut rotated_pair = pair.clone();
+    rotated_pair.constituents[1].placement.rotation_radians += std::f64::consts::PI / 3.0;
+    assert_eq!(pair.canonicalized(&catalog).unwrap().signature,
+               rotated_pair.canonicalized(&catalog).unwrap().signature);
 }
 
 #[cfg(test)]
