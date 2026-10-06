@@ -1,6 +1,6 @@
 use crate::geometry_reference_library::{
     expand_formation_candidates, generate_rigid_contact_families, generate_rigid_point_contact_families,
-    generate_rigid_vertex_contact_families, generate_water_contact_families, open_default_library,
+    generate_rigid_vertex_contact_families, generate_fluid_boundary_families, generate_water_contact_families, open_default_library,
     seed_base_catalogue, GeometryFrontierState, GeometryLibrary,
 };
 use crate::resources::{default_catalog, BaseResource};
@@ -78,6 +78,9 @@ fn process_one_frontier(
                 // permanently "pending" state.
                 let families = generate_water_contact_families(&formation, resource, catalog);
                 library.insert_contact_families(families)?;
+                let boundary_states =
+                    generate_fluid_boundary_families(&formation, resource, catalog);
+                library.insert_fluid_boundary_families(boundary_states)?;
                 library.set_frontier_state(
                     formation.signature.clone(),
                     resource.name.clone(),
