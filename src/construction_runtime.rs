@@ -1158,6 +1158,36 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
                 // the feature midpoint directly determines the candidate
                 // origin. The older endpoint-derived placement remains only as
                 // a fallback for contacts not represented by a polygon feature.
+                if !nfp_cache.iter().any(|(cached_part, cached_angle, _)| {
+                    *cached_part == part_index
+                        && (normalize_construction_angle(*cached_angle - angle)).abs() <= 1e-10
+                }) {
+                    let boundary = crate::configuration_space::convex_minkowski_difference(
+                        &rotated_polygon_vertices(
+                            existing_shape,
+                            existing_unit.placement.rotation_radians,
+                        )?,
+                        &rotated_polygon_vertices(candidate_shape, angle)?,
+                    )
+                    .ok()?;
+                    let features = boundary
+                        .features
+                        .iter()
+                        .filter_map(|feature| {
+                            let (placement, feature_a, feature_b) = nfp_feature_placement(
+                                existing_shape,
+                                (existing_unit.placement.x, existing_unit.placement.y),
+                                candidate_shape,
+                                angle,
+                                feature,
+                            )?;
+                            Some((placement, feature_a, feature_b))
+                        })
+                        .collect::<Vec<_>>();
+                    nfp_cache.push((part_index, angle, boundary));
+                    nfp_feature_cache.push((part_index, angle, features));
+                }
+
                 let nfp_boundary = nfp_cache
                     .iter()
                     .find(|(cached_part, cached_angle, _)| {
