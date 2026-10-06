@@ -762,6 +762,10 @@ pub(crate) fn try_attach_physical_material_bond_driven(
             else {
                 continue;
             };
+
+            // Genesis has no developmental pose preference. The angle set is
+            // therefore derived entirely from exact rigid boundary features;
+            // the zero value is only the neutral seed for the analytic helper.
             let angles = construction_angle_candidates(
                 existing_shape,
                 endpoint_a,
@@ -776,6 +780,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     .unwrap_or(0.0),
                 0.0,
             );
+
             for angle in angles {
                 let candidate_origin =
                     placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
@@ -791,7 +796,6 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     continue;
                 };
                 let new_unit_index = *indices.get(part_index)?;
-
                 let ignored_units = indices.clone();
                 if indices.iter().any(|index| {
                     placed_unit_overlaps(&trial, &trial.units[*index], &ignored_units, catalog)
@@ -802,6 +806,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                 let mut trial_ledger = *ledger;
                 let mut trial_energy = available_energy;
                 let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
+
                 let Some(candidate) = crate::contact::candidate_for_endpoints(
                     &trial,
                     existing_index,
@@ -818,7 +823,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     continue;
                 };
 
-                let Some((_, _, _, investment, _required_energy)) =
+                let Some((_, _, _, investment, _)) =
                     crate::combine_runtime::selected_candidate_evaluation(
                         &trial,
                         existing_index,
@@ -830,7 +835,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     continue;
                 };
 
-                let Some(attempt) = crate::combine_runtime::form_selected_bond(
+                let Some(mut attempt) = crate::combine_runtime::form_selected_bond(
                     &mut trial,
                     existing_index,
                     new_unit_index,
@@ -844,6 +849,80 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     continue;
                 };
 
+                // The placement is now committed as a single physical event.
+                // Discover every other exact contact created by the newly
+                // restored constituent against the current graph, then admit
+                // qualifying bonds through the same transaction authority.
+                // This is what lets ordinary face-to-face stacking naturally
+                // close a cavity when the geometry produces a multi-contact
+                // placement; there is no separate closure phase.
+                let mut additional_candidates = Vec::new();
+                for &new_index in &indices {
+                    for other_index in 0..trial.units.len() {
+                        if indices.contains(&other_index) {
+                            continue;
+                        }
+                        let mut contact_cache =
+                            crate::contact::ConnectionCompatibilityCache::new();
+                        for contact in crate::contact::connection_pair_candidates_cached(
+                            &trial,
+                            other_index,
+                            new_index,
+                            catalog,
+                            &mut contact_cache,
+                        )
+                        .into_iter()
+                        .filter(|contact| {
+                            contact.distance
+                                <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                                && contact.available_a
+                                && contact.available_b
+                        }) {
+                            let Some((_, _, _, investment, _)) =
+                                crate::combine_runtime::selected_candidate_evaluation(
+                                    &trial,
+                                    other_index,
+                                    new_index,
+                                    contact,
+                                    catalog,
+                                )
+                            else {
+                                continue;
+                            };
+                            additional_candidates.push((
+                                investment,
+                                other_index,
+                                new_index,
+                                contact,
+                            ));
+                        }
+                    }
+                }
+
+                additional_candidates.sort_by(|a, b| {
+                    b.0.partial_cmp(&a.0)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
+
+                for (investment, bond_a, bond_b, contact) in additional_candidates {
+                    let mut additional_cache =
+                        crate::contact::ConnectionCompatibilityCache::new();
+                    let Some(additional_attempt) = crate::combine_runtime::form_selected_bond(
+                        &mut trial,
+                        bond_a,
+                        bond_b,
+                        contact,
+                        investment,
+                        catalog,
+                        &mut additional_cache,
+                        &mut trial_ledger,
+                        &mut trial_energy,
+                    ) else {
+                        continue;
+                    };
+                    attempt.work_cost += additional_attempt.work_cost;
+                }
+
                 return Some((
                     trial,
                     indices,
@@ -855,6 +934,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
             }
         }
     }
+
     None
 }
 
