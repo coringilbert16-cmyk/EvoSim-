@@ -11,7 +11,7 @@ The source-of-truth implementation is src/geometry_reference_library.rs.
 
 ### Locked base-resource geometry
 
-- **Hydrogen:** rigid rectangle, **1.0 units long × 0.1 units thick**. Hydrogen has finite area and must never be treated as a zero-thickness line segment.
+- **Hydrogen:** rigid rectangle, **1.0 units long × 0.1 units thick**. Hydrogen has finite area and must never be treated as a zero-thickness line segment. Its primary structural topology remains exactly two end points, located at the centers of the two longitudinal end faces.
 - The generic line-segment geometry vocabulary remains available for mathematical/rigid line shapes that are explicitly defined as lines; it does not describe Hydrogen.
 
 
