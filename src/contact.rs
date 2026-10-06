@@ -122,6 +122,78 @@ fn rigid_boundary_endpoint(
     })
 }
 
+fn segment_feature_contacts(
+    a0: (f64, f64),
+    a1: (f64, f64),
+    b0: (f64, f64),
+    b1: (f64, f64),
+) -> Vec<((f64, f64), (f64, f64))> {
+    fn cross(a: (f64, f64), b: (f64, f64)) -> f64 {
+        a.0 * b.1 - a.1 * b.0
+    }
+    fn sub(a: (f64, f64), b: (f64, f64)) -> (f64, f64) {
+        (a.0 - b.0, a.1 - b.1)
+    }
+    fn add(a: (f64, f64), b: (f64, f64)) -> (f64, f64) {
+        (a.0 + b.0, a.1 + b.1)
+    }
+    fn scale(a: (f64, f64), t: f64) -> (f64, f64) {
+        (a.0 * t, a.1 * t)
+    }
+    fn projection(point: (f64, f64), start: (f64, f64), end: (f64, f64)) -> Option<(f64, f64)> {
+        let edge = sub(end, start);
+        let len2 = edge.0 * edge.0 + edge.1 * edge.1;
+        if len2 <= 1e-24 {
+            return None;
+        }
+        let t = ((point.0 - start.0) * edge.0 + (point.1 - start.1) * edge.1) / len2;
+        if t < -1e-10 || t > 1.0000000001 {
+            return None;
+        }
+        Some(add(start, scale(edge, t.clamp(0.0, 1.0))))
+    }
+    fn push_unique(
+        out: &mut Vec<((f64, f64), (f64, f64))>,
+        pair: ((f64, f64), (f64, f64)),
+    ) {
+        if !out.iter().any(|&(a, b)| {
+            (a.0 - pair.0.0).hypot(a.1 - pair.0.1) <= 1e-10
+                && (a.1 - pair.0.1).abs() <= 1e-10
+                && (b.0 - pair.1.0).hypot(b.1 - pair.1.1) <= 1e-10
+        }) {
+            out.push(pair);
+        }
+    }
+
+    let mut out = Vec::new();
+    let ar = sub(a1, a0);
+    let br = sub(b1, b0);
+    let denominator = cross(ar, br);
+    if denominator.abs() > 1e-12 {
+        let delta = sub(b0, a0);
+        let t = cross(delta, br) / denominator;
+        let u = cross(delta, ar) / denominator;
+        if (-1e-10..=1.0000000001).contains(&t)
+            && (-1e-10..=1.0000000001).contains(&u)
+        {
+            let point = add(a0, scale(ar, t.clamp(0.0, 1.0)));
+            push_unique(&mut out, (point, point));
+        }
+    }
+
+    for point in [a0, a1] {
+        if let Some(projected) = projection(point, b0, b1) {
+            push_unique(&mut out, (point, projected));
+        }
+    }
+    for point in [b0, b1] {
+        if let Some(projected) = projection(point, a0, a1) {
+            push_unique(&mut out, (projected, point));
+        }
+    }
+    out
+}
+
 fn rigid_surface_candidates(
     a: &StructuralUnit,
     b: &StructuralUnit,
@@ -143,51 +215,48 @@ fn rigid_surface_candidates(
         return Vec::new();
     }
 
-    let dx = b.placement.x - a.placement.x;
-    let dy = b.placement.y - a.placement.y;
-    let distance = dx.hypot(dy);
-    if distance <= 1e-12 {
+    let vertices_a = shape_a.form.polygon_vertices().unwrap_or_default();
+    let vertices_b = shape_b.form.polygon_vertices().unwrap_or_default();
+    if vertices_a.len() < 3 || vertices_b.len() < 3 {
         return Vec::new();
     }
 
-    // The constructor still selects official connection points for placement.
-    // These additional endpoints are only the physical bond locations: a bond
-    // may land anywhere the two rigid boundaries actually touch.
-    let mut out = Vec::new();
-    let center_angle = dy.atan2(dx);
-    for step in -16..=16 {
-        let angle = center_angle + step as f64 * std::f64::consts::PI / 32.0;
-        let (s, c) = angle.sin_cos();
-        if let (Some(ea), Some(eb)) = (
-            rigid_boundary_endpoint(a, c, s),
-            rigid_boundary_endpoint(b, -c, -s),
-        ) {
-            out.push((ea, eb));
-        }
-    }
+    // Physical bonds may land anywhere two rigid boundaries touch. Generate
+    // those locations from exact segment/segment feature relationships:
+    // edge intersections plus endpoint-to-edge projections. This covers
+    // vertex/edge, edge/vertex, crossing, and collinear-overlap contacts
+    // without angular sampling.
+    let world_vertex = |unit: &StructuralUnit, point: (f64, f64)| {
+        let (s, c) = unit.placement.rotation_radians.sin_cos();
+        (
+            unit.placement.x + point.0 * c - point.1 * s,
+            unit.placement.y + point.0 * s + point.1 * c,
+        )
+    };
 
-    // Also aim at every vertex direction. This catches asymmetric contacts
-    // where the closest point on a flat surface is offset from the centerline.
-    for vertex in shape_b.form.polygon_vertices().unwrap_or_default() {
-        let (s, c) = b.placement.rotation_radians.sin_cos();
-        let world_x = b.placement.x + vertex.0 * c - vertex.1 * s;
-        let world_y = b.placement.y + vertex.0 * s + vertex.1 * c;
-        if let (Some(ea), Some(eb)) = (
-            rigid_boundary_endpoint(a, world_x - a.placement.x, world_y - a.placement.y),
-            rigid_boundary_endpoint(b, a.placement.x - world_x, a.placement.y - world_y),
-        ) {
-            out.push((ea, eb));
-        }
-    }
-    for vertex in shape_a.form.polygon_vertices().unwrap_or_default() {
-        let (s, c) = a.placement.rotation_radians.sin_cos();
-        let world_x = a.placement.x + vertex.0 * c - vertex.1 * s;
-        let world_y = a.placement.y + vertex.0 * s + vertex.1 * c;
-        if let (Some(ea), Some(eb)) = (
-            rigid_boundary_endpoint(a, world_x - a.placement.x, world_y - a.placement.y),
-            rigid_boundary_endpoint(b, world_x - b.placement.x, world_y - b.placement.y),
-        ) {
-            out.push((ea, eb));
+    let mut out = Vec::new();
+    for ai in 0..vertices_a.len() {
+        let a0 = world_vertex(a, vertices_a[ai]);
+        let a1 = world_vertex(a, vertices_a[(ai + 1) % vertices_a.len()]);
+        for bi in 0..vertices_b.len() {
+            let b0 = world_vertex(b, vertices_b[bi]);
+            let b1 = world_vertex(b, vertices_b[(bi + 1) % vertices_b.len()]);
+            for (point_a, point_b) in segment_feature_contacts(a0, a1, b0, b1) {
+                if let (Some(ea), Some(eb)) = (
+                    rigid_boundary_endpoint(
+                        a,
+                        point_a.0 - a.placement.x,
+                        point_a.1 - a.placement.y,
+                    ),
+                    rigid_boundary_endpoint(
+                        b,
+                        point_b.0 - b.placement.x,
+                        point_b.1 - b.placement.y,
+                    ),
+                ) {
+                    out.push((ea, eb));
+                }
+            }
         }
     }
     out
@@ -440,6 +509,33 @@ mod tests {
         let right = endpoint_world_point(endpoints[1], &unit, &catalog).unwrap();
         assert_eq!((left.x, left.y), (-0.5, 0.0));
         assert_eq!((right.x, right.y), (0.5, 0.0));
+    }
+
+
+    #[test]
+    fn segment_feature_contacts_use_exact_intersections_and_projections() {
+        let crossing = segment_feature_contacts(
+            (-1.0, 0.0),
+            (1.0, 0.0),
+            (0.0, -1.0),
+            (0.0, 1.0),
+        );
+        assert!(crossing.iter().any(|(a, b)| {
+            (a.0.abs() + a.1.abs() + b.0.abs() + b.1.abs()) < 1e-12
+        }));
+
+        let touching = segment_feature_contacts(
+            (-1.0, 0.0),
+            (1.0, 0.0),
+            (0.5, 1.0),
+            (0.5, 2.0),
+        );
+        assert!(touching.iter().any(|(a, b)| {
+            (a.0 - 0.5).abs() < 1e-12
+                && a.1.abs() < 1e-12
+                && (b.0 - 0.5).abs() < 1e-12
+                && (b.1 - 1.0).abs() < 1e-12
+        }));
     }
 
     #[test]
