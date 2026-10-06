@@ -951,8 +951,8 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                         let center_distance = (structure.units[new_unit_index].placement.x
                             - structure.units[other_index].placement.x)
                             .hypot(
-                                trial.units[new_unit_index].placement.y
-                                    - trial.units[other_index].placement.y,
+                                structure.units[new_unit_index].placement.y
+                                    - structure.units[other_index].placement.y,
                             );
                         if center_distance
                             > new_shape.form.bounding_radius()
