@@ -264,30 +264,28 @@ fn try_child_construction(
         };
 
         for existing_index in 0..child.structure.units.len() {
+            let mut candidate = child.clone();
             let mut candidate_ledger = *ledger;
             let Some((
-                trial_structure,
                 _indices,
                 _part_index,
                 _attempt,
                 candidate_ledger,
                 candidate_energy,
             )) = crate::construction_runtime::try_attach_physical_material_bond_driven(
-                &child.structure,
+                &mut candidate.structure,
                 existing_index,
                 instance,
                 &environment.catalog,
                 &mut nodes,
                 &candidate_ledger,
-                child.usable_energy,
+                candidate.usable_energy,
             )
             else {
                 continue;
             };
 
-            let mut candidate = child.clone();
             candidate.stored_material.take_physical_at(storage_index)?;
-            candidate.structure = trial_structure;
             candidate.usable_energy = candidate_energy;
             return Some((candidate, candidate_ledger, None));
         }
@@ -313,29 +311,27 @@ fn try_child_construction(
         };
 
         for existing_index in 0..child.structure.units.len() {
+            let mut candidate = child.clone();
             let mut candidate_ledger = *ledger;
             let Some((
-                trial_structure,
                 _indices,
                 _part_index,
                 _attempt,
                 candidate_ledger,
                 candidate_energy,
             )) = crate::construction_runtime::try_attach_physical_material_bond_driven(
-                &child.structure,
+                &mut candidate.structure,
                 existing_index,
                 instance,
                 &environment.catalog,
                 &mut nodes,
                 &candidate_ledger,
-                child.usable_energy,
+                candidate.usable_energy,
             )
             else {
                 continue;
             };
 
-            let mut candidate = child.clone();
-            candidate.structure = trial_structure;
             candidate.usable_energy = candidate_energy;
             return Some((candidate, candidate_ledger, Some(parent_index)));
         }
