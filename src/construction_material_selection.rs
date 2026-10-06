@@ -1,37 +1,12 @@
 use crate::material_storage::{MaterialStorage, StoredMaterial};
+use crate::resources::{BaseResource, Form};
 
-/// Construction has no preferred material and no material-similarity threshold.
+/// Minimum structural similarity required before a physical material may be
+/// substituted for the material preferred at the current blueprint location.
 ///
-/// The compatibility arguments are retained temporarily because staged
-/// developmental callers still pass a blueprint resource name. They are
-/// deliberately ignored: every realized physical material is equally eligible
-/// and geometry decides whether it can actually be placed and bonded.
-pub(crate) const MIN_CONSTRUCTION_MATERIAL_MATCH: f64 = 0.0;
-
-pub(crate) fn rank_available_construction_materials(
-    storage: &MaterialStorage,
-    _preferred_resource_name: &str,
-    _catalog: &[crate::resources::BaseResource],
-) -> Result<Vec<(usize, String, f64)>, String> {
-    Ok(storage
-        .entries
-        .iter()
-        .enumerate()
-        .filter_map(|(index, entry)| {
-            let StoredMaterial::Physical(instance) = entry;
-            if !instance.is_realized() || instance.material.parts.is_empty() {
-                return None;
-            }
-            let resource_name = instance
-                .material
-                .parts
-                .iter()
-                .find(|(_, amount)| (*amount - 1.0).abs() <= 1e-12)
-                .map(|(name, _)| name.clone())?;
-            Some((index, resource_name, 1.0))
-        })
-        .collect())
-}
+/// This is deliberately a threshold, not a ranking: a candidate below it is
+/// not "least bad" construction material. Its absence becomes a material need.
+pub(crate) const MIN_CONSTRUCTION_MATERIAL_MATCH: f64 = 0.60;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum ConstructionMaterialDecision {
@@ -46,35 +21,294 @@ pub(crate) enum ConstructionMaterialDecision {
     },
 }
 
-/// Select the first realized physical material only as an inventory ordering
-/// decision. The resource identity has no preference or similarity advantage.
-pub(crate) fn select_construction_material(
-    storage: &MaterialStorage,
-    _preferred_resource_name: &str,
-    _catalog: &[crate::resources::BaseResource],
-) -> Result<ConstructionMaterialDecision, String> {
-    let candidates = rank_available_construction_materials(storage, "", &[])?;
-    Ok(candidates.first().map_or(
-        ConstructionMaterialDecision::Need {
-            preferred_resource: String::new(),
-            best_available_score: 0.0,
-        },
-        |(storage_index, resource_name, _)| ConstructionMaterialDecision::Selected {
-            storage_index: *storage_index,
-            resource_name: resource_name.clone(),
-            score: 1.0,
-        },
-    ))
+fn normalized_similarity(a: f64, b: f64, min: f64, max: f64) -> f64 {
+    let range = (max - min).abs();
+    if range <= f64::EPSILON {
+        return if (a - b).abs() <= f64::EPSILON {
+            1.0
+        } else {
+            0.0
+        };
+    }
+    (1.0 - (a - b).abs() / range).clamp(0.0, 1.0)
 }
 
-/// Enumerate realized physical materials without assigning any material a
-/// construction preference.
+fn form_family(form: &Form) -> u8 {
+    match form {
+        Form::Circle { .. } => 0,
+        Form::Line { .. } => 1,
+        Form::Rectangle { .. } => 2,
+        Form::RegularPolygon { .. } => 3,
+        Form::Polygon { .. } => 4,
+        Form::Fluid { .. } => 5,
+    }
+}
+
+fn structural_similarity(
+    preferred: &BaseResource,
+    candidate: &BaseResource,
+    catalog: &[BaseResource],
+) -> f64 {
+    if preferred.name == candidate.name {
+        return 1.0;
+    }
+
+    let ranges = |f: fn(&crate::resources::ResourceProperties) -> f64| {
+        let values = catalog.iter().map(|r| f(&r.properties));
+        let min = values.clone().fold(f64::INFINITY, f64::min);
+        let max = values.fold(f64::NEG_INFINITY, f64::max);
+        (min, max)
+    };
+
+    let (mass_min, mass_max) = ranges(|p| p.mass);
+    let (energy_min, energy_max) = ranges(|p| p.potential_energy);
+    let (reactivity_min, reactivity_max) = ranges(|p| p.reactivity);
+    let (cohesion_min, cohesion_max) = ranges(|p| p.cohesion);
+
+    let property_score = [
+        normalized_similarity(
+            preferred.properties.mass,
+            candidate.properties.mass,
+            mass_min,
+            mass_max,
+        ),
+        normalized_similarity(
+            preferred.properties.potential_energy,
+            candidate.properties.potential_energy,
+            energy_min,
+            energy_max,
+        ),
+        normalized_similarity(
+            preferred.properties.reactivity,
+            candidate.properties.reactivity,
+            reactivity_min,
+            reactivity_max,
+        ),
+        normalized_similarity(
+            preferred.properties.cohesion,
+            candidate.properties.cohesion,
+            cohesion_min,
+            cohesion_max,
+        ),
+    ]
+    .into_iter()
+    .sum::<f64>()
+        / 4.0;
+
+    let shape_score = if form_family(&preferred.shape.form) == form_family(&candidate.shape.form) {
+        1.0
+    } else {
+        0.0
+    };
+
+    // Geometry is a first-class structural property. The four resource
+    // properties provide the remaining material signature. Equal weighting
+    // keeps the selector small and prevents energy value from becoming a
+    // hidden "food" preference.
+    (property_score * 0.8 + shape_score * 0.2).clamp(0.0, 1.0)
+}
+
+pub(crate) fn rank_available_construction_materials(
+    storage: &MaterialStorage,
+    preferred_resource_name: &str,
+    catalog: &[BaseResource],
+) -> Result<Vec<(usize, String, f64)>, String> {
+    let preferred = catalog
+        .iter()
+        .find(|resource| resource.name == preferred_resource_name)
+        .ok_or_else(|| {
+            format!("unknown preferred construction resource {preferred_resource_name}")
+        })?;
+
+    let mut candidates = storage
+        .entries
+        .iter()
+        .enumerate()
+        .filter_map(|(index, entry)| {
+            let StoredMaterial::Physical(instance) = entry;
+            if !instance.is_realized() || instance.material.parts.is_empty() {
+                return None;
+            }
+            let (resource_name, score) = instance
+                .material
+                .parts
+                .iter()
+                .filter_map(|(resource_name, amount)| {
+                    if (*amount - 1.0).abs() > 1e-12 {
+                        return None;
+                    }
+                    let candidate = catalog
+                        .iter()
+                        .find(|resource| resource.name == *resource_name)?;
+                    Some((
+                        resource_name.clone(),
+                        structural_similarity(preferred, candidate, catalog),
+                    ))
+                })
+                .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))?;
+            Some((index, resource_name, score))
+        })
+        .collect::<Vec<_>>();
+
+    candidates.sort_by(|a, b| {
+        b.2.partial_cmp(&a.2)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.0.cmp(&b.0))
+    });
+    Ok(candidates)
+}
+
+pub(crate) fn select_construction_material(
+    storage: &MaterialStorage,
+    preferred_resource_name: &str,
+    catalog: &[BaseResource],
+) -> Result<ConstructionMaterialDecision, String> {
+    let candidates =
+        rank_available_construction_materials(storage, preferred_resource_name, catalog)?;
+
+    if let Some((storage_index, resource_name, score)) = candidates
+        .iter()
+        .find(|(_, _, score)| *score >= MIN_CONSTRUCTION_MATERIAL_MATCH)
+    {
+        return Ok(ConstructionMaterialDecision::Selected {
+            storage_index: *storage_index,
+            resource_name: resource_name.clone(),
+            score: *score,
+        });
+    }
+
+    Ok(ConstructionMaterialDecision::Need {
+        preferred_resource: preferred_resource_name.to_string(),
+        best_available_score: candidates.first().map_or(0.0, |candidate| candidate.2),
+    })
+}
+
+/// Enumerate realized physical materials for callers that need to inspect the
+/// available inventory without imposing a material preference.
 pub(crate) fn available_construction_materials(
     storage: &MaterialStorage,
 ) -> Vec<(usize, String)> {
-    rank_available_construction_materials(storage, "", &[])
-        .unwrap_or_default()
-        .into_iter()
-        .map(|(index, name, _)| (index, name))
+    storage
+        .entries
+        .iter()
+        .enumerate()
+        .filter_map(|(index, entry)| {
+            let StoredMaterial::Physical(instance) = entry;
+            if !instance.is_realized() || instance.material.parts.is_empty() {
+                return None;
+            }
+            let resource_name = instance
+                .material
+                .parts
+                .iter()
+                .find(|(_, amount)| (*amount - 1.0).abs() <= 1e-12)
+                .map(|(name, _)| name.clone())?;
+            Some((index, resource_name))
+        })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::resources::{default_catalog, Material};
+    use crate::structure::Placement;
+
+    fn storage_with(name: &str) -> MaterialStorage {
+        let catalog = default_catalog();
+        let mut storage = MaterialStorage::default();
+        assert!(storage.store_physical(
+            Material::free_base(name, 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        ));
+        storage
+    }
+
+    #[test]
+    fn exact_preference_is_selected() {
+        let catalog = default_catalog();
+        let storage = storage_with("Carbon");
+        assert_eq!(
+            select_construction_material(&storage, "Carbon", &catalog),
+            Ok(ConstructionMaterialDecision::Selected {
+                storage_index: 0,
+                resource_name: "Carbon".into(),
+                score: 1.0,
+            })
+        );
+    }
+
+    #[test]
+    fn structurally_close_substitute_is_accepted() {
+        let catalog = default_catalog();
+        let storage = storage_with("Nitrogen");
+        let decision = select_construction_material(&storage, "Carbon", &catalog).unwrap();
+        assert!(matches!(
+            decision,
+            ConstructionMaterialDecision::Selected {
+                resource_name,
+                score,
+                ..
+            } if resource_name == "Nitrogen" && score >= MIN_CONSTRUCTION_MATERIAL_MATCH
+        ));
+    }
+
+    #[test]
+    fn poor_match_becomes_need_instead_of_forced_substitution() {
+        let catalog = default_catalog();
+        let storage = storage_with("Hydrogen");
+        let decision = select_construction_material(&storage, "Carbon", &catalog).unwrap();
+        assert!(matches!(
+            decision,
+            ConstructionMaterialDecision::Need {
+                preferred_resource,
+                ..
+            } if preferred_resource == "Carbon"
+        ));
+    }
+    #[test]
+    fn composite_physical_instance_is_selected_as_the_actual_inventory_entry() {
+        let catalog = default_catalog();
+        let mut storage = MaterialStorage::default();
+        let material = Material {
+            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+            internal_bonds: vec![crate::resources::InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
+        };
+        assert!(storage.store_physical(
+            material.clone(),
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.838,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        ));
+
+        let decision = select_construction_material(&storage, "Carbon", &catalog).unwrap();
+        assert!(matches!(
+            decision,
+            ConstructionMaterialDecision::Selected {
+                storage_index: 0,
+                resource_name,
+                score,
+            } if resource_name == "Carbon" && score >= MIN_CONSTRUCTION_MATERIAL_MATCH
+        ));
+        assert_eq!(storage.len(), 1);
+        assert_eq!(storage.materials_snapshot(), vec![material]);
+    }
 }
