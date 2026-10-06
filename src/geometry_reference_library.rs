@@ -727,6 +727,57 @@ fn compose_placements(parent: Placement, local: Placement) -> Placement {
 }
 
 
+pub fn expand_formation_candidates(
+    formation: &GeometryFormation,
+    candidate_resource: &BaseResource,
+    catalog: &[BaseResource],
+) -> Vec<GeometryFormation> {
+    if formation.constituents.is_empty() || formation.constituents.len() >= 20 {
+        return Vec::new();
+    }
+
+    let mut out = Vec::new();
+    for anchor_index in 0..formation.constituents.len() {
+        let anchor = &formation.constituents[anchor_index];
+        let anchor_formation = GeometryFormation {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            constituents: vec![anchor.clone()],
+            bonds: Vec::new(),
+            signature: String::new(),
+        };
+
+        for pair in generate_two_constituent_candidates(
+            &anchor_formation,
+            candidate_resource,
+            catalog,
+        ) {
+            let world = compose_placements(anchor.placement, pair.constituents[1].placement);
+            let mut candidate = formation.clone();
+            let new_index = candidate.constituents.len();
+            candidate.constituents.push(GeometryConstituent {
+                resource: candidate_resource.name.clone(),
+                placement: world,
+            });
+            candidate.bonds.push(GeometryBond {
+                constituent_a: anchor_index,
+                constituent_b: new_index,
+            });
+
+            if validate_formation(&candidate, catalog) {
+                out.push(candidate);
+            }
+        }
+    }
+
+    let mut unique = BTreeMap::new();
+    for candidate in out {
+        if let Some(canonical) = candidate.canonicalized(catalog) {
+            unique.insert(canonical.signature.clone(), canonical);
+        }
+    }
+    unique.into_values().collect()
+}
+
 pub fn seed_two_constituent_catalogue(
     library: &mut GeometryLibrary,
     catalog: &[BaseResource],
