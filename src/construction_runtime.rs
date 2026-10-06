@@ -785,7 +785,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
     EnergyLedger,
     f64,
 )> {
-    let existing_unit = structure.units.get(existing_index)?;
+    let existing_unit = structure.units.get(existing_index)?.clone();
     let existing_endpoints = structure_unit_endpoint_options(existing_unit, catalog);
     let new_endpoints = physical_material_endpoint_options(new_material, catalog);
     if existing_endpoints.is_empty() || new_endpoints.is_empty() {
