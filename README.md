@@ -148,3 +148,23 @@ The worker now expands from validated formations rather than repeatedly solving 
 ### Geometry library progress
 
 The library now includes exact feature-contact generation for two-constituent rigid formations and expansion to three constituents. Two-body seeding considers every base resource against every single-resource formation, validates candidates, canonicalizes them, and persists only new formations. Three-body expansion reuses validated two-body contacts. Every declared rigid bond must correspond to actual physical boundary contact without positive-area/interior penetration. Fluid-to-fluid combinations are deliberately not represented as rigid bonds because they merge into the same fluid geometry with increased volume. This path does not use arbitrary angular sampling or an attempt budget. Continuous contact families are intentionally not yet claimed exhaustive; they need an explicit finite feature representation before completeness can be guaranteed.
+
+
+## Geometry Library Visualizer
+
+The geometry library now has a dedicated read-only browser microscope. It reads the persistent catalogue without participating in generation or modifying library state.
+
+Run it with:
+
+    cargo run -- --geometry-viewer
+
+Then open http://localhost:3001/geometry. The viewer supports:
+
+- browsing every persisted formation, ordered from smallest to largest;
+- filtering by constituent count or resource/signature text;
+- selecting a formation and seeing its actual constituent placements and shapes;
+- displaying the persisted bond topology;
+- inspecting persisted rigid, point-contact, vertex-contact, and fluid contact families;
+- zooming and panning the stored formation without changing it.
+
+The visualizer is deliberately separate from the catalogue worker and the live organism constructor. It is a verification microscope: it displays library knowledge as stored and does not generate candidates, alter formations, or substitute visual geometry for the library's authoritative validation.
