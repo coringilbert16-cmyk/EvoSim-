@@ -1022,6 +1022,15 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
             .and_then(|(name, _)| resource(catalog, name))
             .map(|resource| &resource.shape)
     });
+    // The translational NFP depends on the anchor/candidate orientation, not
+    // on which connection endpoint pair eventually consumes that contact feature.
+    // Cache each computed boundary so endpoint enumeration never rebuilds the
+    // same Minkowski configuration space.
+    let mut nfp_cache: Vec<(
+        f64,
+        crate::configuration_space::ConvexConfigurationBoundary,
+    )> = Vec::new();
+
     for endpoint_a in existing_endpoints {
         let joint = endpoint_a.world_point(&existing_unit, catalog)?;
         for (part_index, endpoint_b) in new_endpoints.iter().copied() {
@@ -1088,15 +1097,23 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
                 // the feature midpoint directly determines the candidate
                 // origin. The older endpoint-derived placement remains only as
                 // a fallback for contacts not represented by a polygon feature.
-                let nfp_boundary = crate::configuration_space::convex_minkowski_difference(
-                    &rotated_polygon_vertices(
-                        existing_shape,
-                        existing_unit.placement.rotation_radians,
-                    )?,
-                    &rotated_polygon_vertices(candidate_shape, angle)?,
-                ).ok();
+                let nfp_boundary = if let Some((_, boundary)) = nfp_cache.iter().find(|(cached_angle, _)| {
+                    (normalize_construction_angle(*cached_angle - angle)).abs() <= 1e-10
+                }) {
+                    Some(boundary)
+                } else {
+                    let boundary = crate::configuration_space::convex_minkowski_difference(
+                        &rotated_polygon_vertices(
+                            existing_shape,
+                            existing_unit.placement.rotation_radians,
+                        )?,
+                        &rotated_polygon_vertices(candidate_shape, angle)?,
+                    ).ok()?;
+                    nfp_cache.push((angle, boundary));
+                    nfp_cache.last().map(|(_, boundary)| boundary)
+                };
 
-                let nfp_placement = nfp_boundary.as_ref().and_then(|boundary| {
+                let nfp_placement = nfp_boundary.and_then(|boundary| {
                     boundary.features.iter().find_map(|feature| {
                         let (placement, feature_a, feature_b) = nfp_feature_placement(
                             existing_shape,
