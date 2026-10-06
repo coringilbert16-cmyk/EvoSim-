@@ -1128,6 +1128,20 @@ fn exposed_line_intervals(
     out
 }
 
+fn rigid_boundary_segments(form: &Form) -> Vec<((f64, f64), (f64, f64))> {
+    match form {
+        Form::Line { length } => vec![((-length * 0.5, 0.0), (length * 0.5, 0.0))],
+        _ => form
+            .polygon_vertices()
+            .map(|vertices| {
+                (0..vertices.len())
+                    .map(|i| (vertices[i], vertices[(i + 1) % vertices.len()]))
+                    .collect()
+            })
+            .unwrap_or_default(),
+    }
+}
+
 pub fn generate_two_constituent_candidates(
     target: &GeometryFormation,
     candidate_resource: &BaseResource,
