@@ -5,7 +5,7 @@
 //! the production catalogue lives outside `target/` and survives test runs and
 //! process restarts.
 
-use crate::capillary_geometry::{solve_water_against_solid, ContactTranslationInterval};
+use crate::capillary_geometry::{solve_water_against_solid, CapillaryContactFamily, ContactTranslationInterval};
 use crate::material_geometry::{placed_forms_penetrate, placed_forms_rigid_contact, PlacedMaterialPart};
 use crate::resources::{default_catalog, BaseResource, Form};
 use crate::structure::Placement;
@@ -46,6 +46,38 @@ pub struct GeometryFluidBoundaryFamily {
     pub contact_length: f64,
     pub edge_parameter_start: f64,
     pub edge_parameter_end: f64,
+}
+
+fn fluid_boundary_state_is_self_consistent(family: &GeometryFluidBoundaryFamily) -> bool {
+    if !(0.0 < family.contact_angle_radians
+        && family.contact_angle_radians < std::f64::consts::PI)
+    {
+        return false;
+    }
+    if family.edge_parameter_start < 0.0
+        || family.edge_parameter_end > 1.0
+        || family.edge_parameter_end < family.edge_parameter_start
+        || family.area <= 0.0
+        || family.curvature_radius <= 0.0
+        || family.contact_length <= 0.0
+        || family.free_arc_angle_radians <= 0.0
+    {
+        return false;
+    }
+
+    let Some(expected) =
+        CapillaryContactFamily::solve(family.area, family.contact_angle_radians)
+    else {
+        return false;
+    };
+
+    (expected.curvature_radius - family.curvature_radius).abs()
+        <= QUANTUM * expected.curvature_radius.max(1.0)
+        && (expected.contact_length - family.contact_length).abs()
+            <= QUANTUM * expected.contact_length.max(1.0)
+        && (expected.free_arc_angle_radians - family.free_arc_angle_radians).abs()
+            <= QUANTUM * expected.free_arc_angle_radians.max(1.0)
+        && family.edge_parameter_end - family.edge_parameter_start >= 0.0
 }
 
 impl GeometryFluidBoundaryFamily {
