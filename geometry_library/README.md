@@ -52,6 +52,10 @@ This means a continuous family is now finite data: the mathematics describes the
 The worker batches each formation-expansion result before syncing it to disk. Candidate formations are canonicalized and deduplicated in memory, then appended with one durable sync and one manifest update. Capillary contact families use the same batch boundary. This keeps persistent durability from turning every discovered geometry into a separate filesystem sync operation while preserving restart-safe committed batches.
 
 
+### Running the worker safely
+
+Use `cargo run -- --geometry-worker-once` for a bounded smoke test. It opens the same persistent library, seeds missing base formations, processes exactly one unfinished formation/resource pass, durably records its results, prints the resulting formation count, and exits. Once that succeeds, `cargo run -- --geometry-worker` runs the same worker continuously and resumes from the persisted frontier after restart.
+
 ### Worker frontier semantics
 
 A formation's seven resource frontiers are processed as one durable pass. Water is recorded as symbolic capillary families (or exhausted when no supported rigid boundary can accept the nominal water volume), while rigid candidates are expanded and batch-persisted. Restarted workers resume any frontier not marked `Exhausted`; an interrupted final JSON record is ignored as a truncated append tail rather than destroying the durable catalogue.
