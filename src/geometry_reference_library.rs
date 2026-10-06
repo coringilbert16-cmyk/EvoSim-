@@ -697,6 +697,7 @@ impl GeometryLibrary {
                 || family.edge_parameter_start < 0.0
                 || family.edge_parameter_end > 1.0
                 || family.edge_parameter_end < family.edge_parameter_start
+                || !fluid_boundary_state_is_self_consistent(&family)
                 || !self.entries.contains_key(&family.formation_signature)
             {
                 continue;
@@ -1212,6 +1213,7 @@ fn load_fluid_boundary_families(
             || family.edge_parameter_start < 0.0
             || family.edge_parameter_end > 1.0
             || family.edge_parameter_end < family.edge_parameter_start
+            || !fluid_boundary_state_is_self_consistent(&family)
             || !entries.contains_key(&family.formation_signature)
             || family.anchor_constituent >= entries.get(&family.formation_signature).map(|f| f.constituents.len()).unwrap_or(0)
             || catalog.iter().all(|r| r.name != family.fluid_resource)
