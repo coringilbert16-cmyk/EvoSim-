@@ -9,6 +9,8 @@ This directory is the persistent home for generated geometry knowledge.
 
 The source-of-truth implementation is src/geometry_reference_library.rs.
 
+The current rigid-boundary vocabulary is exact polygon edges and rigid line segments. Water can form symbolic capillary contact families against either boundary type; no angular or positional sampling is used.
+
 
 ## Fluid geometry: capillary equilibrium
 
@@ -18,7 +20,7 @@ For the first exact fluid case, EvoSim uses the zero-gravity Young–Laplace mod
 
 The persistent library should eventually store **contact families and boundary constraints** for fluid formations rather than millions of sampled placements. A translation interval along a compatible rigid edge is a continuous degree of freedom and is represented symbolically.
 
-`src/capillary_geometry.rs` currently implements the exact flat-boundary case:
+`src/capillary_geometry.rs` currently implements the exact flat-boundary equilibrium used by both polygon edges and rigid line segments:
 
 - conserved 2-D fluid area;
 - contact angle;
@@ -36,7 +38,7 @@ Water-to-water remains volume accumulation rather than a rigid geometry bond.
 
 Water contact is now represented as a persistent `GeometryContactFamily`, not as a sampled placement. Before a family is recorded, the worker derives the exact exposed portions of each rigid polygon edge. Fully internal shared edges are removed, and partial collinear occlusion is represented by the remaining parameter intervals. Each family then records the rigid anchor, exposed boundary edge, equilibrium contact angle, free-interface curvature/radius, contact length, and the exact interval along that edge over which the equilibrium droplet can translate.
 
-This means a continuous family is now finite data: the mathematics describes the continuum instead of the worker pretending it can enumerate it. The worker may mark a Water frontier exhausted once the corresponding family records have been persisted. More complex cases where an existing deformed water region must itself be used as a boundary remain deferred until fluid boundary features can be composed symbolically.
+This means a continuous family is now finite data: the mathematics describes the continuum instead of the worker pretending it can enumerate it. The worker may mark a Water frontier exhausted once the corresponding family records have been persisted. Water-to-water remains volume accumulation rather than a rigid geometry bond. A Water contact family is therefore recorded as symbolic geometry knowledge rather than pretending the nominal circle is a rigid constituent.
 
 
 ### Durable worker writes
