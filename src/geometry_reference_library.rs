@@ -331,14 +331,23 @@ impl GeometryLibrary {
         let mut rigid_contact_families = BTreeMap::new();
         if rigid_contact_family_path.exists() {
             let file = File::open(&rigid_contact_family_path)?;
-            for line in BufReader::new(file).lines() {
-                let line = line?;
+            let lines: Vec<String> = BufReader::new(file).lines().collect::<Result<_, _>>()?;
+            for (line_index, line) in lines.iter().enumerate() {
                 if line.trim().is_empty() {
                     continue;
                 }
-                let family: GeometryRigidContactFamily = match serde_json::from_str(&line) {
+                let family: GeometryRigidContactFamily = match serde_json::from_str(line) {
                     Ok(value) => value,
-                    Err(_) => continue,
+                    Err(error) if line_index + 1 == lines.len() => {
+                        let _ = error;
+                        continue;
+                    }
+                    Err(error) => {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            error,
+                        ));
+                    }
                 };
                 if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
                     || !family.candidate_rotation_radians.is_finite()
