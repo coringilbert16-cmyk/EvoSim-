@@ -994,105 +994,21 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
         f64,
         Vec<(Placement, ConnectionEndpoint, ConnectionEndpoint)>,
     )> = Vec::new();
-    // Preferred NFP angles are indexed by endpoint pair so the first candidate
-    // considered for a pair is the contact geometry that the configuration
-    // space actually derived. This is an interim ordering step toward making
-    // NFP features the primary candidate stream.
-    let mut nfp_feature_angle_cache: Vec<(
+    // The NFP stream is the sole placement source. We derive a finite set of
+    // orientation candidates from exact rigid-boundary geometry, then evaluate
+    // each orientation's configuration-space boundary. Endpoint pairs are not
+    // used to drive a second placement search.
+    let mut nfp_cache: Vec<(usize, f64, crate::configuration_space::ConvexConfigurationBoundary)> = Vec::new();
+    let mut nfp_feature_cache: Vec<(
         usize,
-        ConnectionEndpoint,
-        ConnectionEndpoint,
-        Vec<f64>,
+        f64,
+        Vec<(Placement, ConnectionEndpoint, ConnectionEndpoint)>,
     )> = Vec::new();
 
-    // Edge-alignment rotations are likewise invariant across endpoint pairs.
-    let mut edge_alignment_cache: Vec<(usize, Vec<f64>)> = Vec::new();
-    for part_index in 0..new_material.material.parts.len() {
-        let candidate_shape = if one_part {
-            one_part_geometry.flatten()
-        } else {
-            new_material
-                .material
-                .parts
-                .get(part_index)
-                .and_then(|(name, _)| resource(catalog, name))
-                .map(|resource| &resource.shape)
-        };
-        let Some(candidate_shape) = candidate_shape else {
-            continue;
-        };
-        let candidate_relative_rotation = new_material
-            .placements
-            .as_ref()
-            .and_then(|placements| placements.get(part_index))
-            .map(|placement| placement.rotation_radians)
-            .unwrap_or(0.0);
-        let Some(candidate_vertices) = candidate_shape.form.polygon_vertices() else {
-            continue;
-        };
-        let angles = crate::configuration_space::edge_alignment_rotations(
-            &existing_vertices,
-            existing_unit.placement.rotation_radians,
-            &candidate_vertices,
-            candidate_relative_rotation,
-        );
-        edge_alignment_cache.push((part_index, angles.clone()));
-
-        for angle in angles {
-            let existing_rotated_vertices =
-                rotated_polygon_vertices(existing_shape, existing_unit.placement.rotation_radians)?;
-            let candidate_rotated_vertices = rotated_polygon_vertices(candidate_shape, angle)?;
-            let boundary = crate::configuration_space::convex_minkowski_difference(
-                &existing_rotated_vertices,
-                &candidate_rotated_vertices,
-            )
-            .ok()?;
-            let features = boundary
-                .features
-                .iter()
-                .filter_map(|feature| {
-                    let (placement, feature_a, feature_b) = nfp_feature_placement(
-                        existing_shape,
-                        (existing_unit.placement.x, existing_unit.placement.y),
-                        candidate_shape,
-                        angle,
-                        feature,
-                    )?;
-                    Some((placement, feature_a, feature_b))
-                })
-                .collect::<Vec<_>>();
-            for (_, feature_a, feature_b) in &features {
-                if !existing_endpoints.contains(feature_a)
-                    || !new_endpoints.iter().any(|(_, endpoint)| endpoint == feature_b)
-                {
-                    continue;
-                }
-                if let Some((_, _, _, angles)) = nfp_feature_angle_cache.iter_mut().find(
-                    |(cached_part, cached_a, cached_b, _)| {
-                        *cached_part == part_index
-                            && *cached_a == *feature_a
-                            && *cached_b == *feature_b
-                    },
-                ) {
-                    angles.push(angle);
-                } else {
-                    nfp_feature_angle_cache.push((
-                        part_index,
-                        *feature_a,
-                        *feature_b,
-                        vec![angle],
-                    ));
-                }
-            }
-            nfp_cache.push((part_index, angle, boundary));
-            nfp_feature_cache.push((part_index, angle, features));
-        }
-    }
-
-    // The NFP feature stream is now the primary candidate source. Each
-    // legal configuration-space feature already identifies both physical
-    // endpoints and the candidate placement, so endpoint-pair enumeration is
-    // no longer the driver for these candidates.
+    // The NFP feature stream is the primary and only placement source. Each
+    // legal configuration-space feature identifies both physical endpoints
+    // and the candidate placement, so endpoint-pair enumeration is not a
+    // second placement-generation path.
     let mut candidate_stream: Vec<(
         usize,
         ConnectionEndpoint,
@@ -1118,159 +1034,10 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
         }
     }
 
-    // Keep the existing exact geometry-derived path as a fallback for contact
-    // types or endpoint combinations not represented by the NFP feature map.
-    for endpoint_a in existing_endpoints.iter().copied() {
-        for (part_index, endpoint_b) in new_endpoints.iter().copied() {
-            let candidate_shape = if one_part {
-                one_part_geometry.flatten()
-            } else {
-                new_material
-                    .material
-                    .parts
-                    .get(part_index)
-                    .and_then(|(name, _)| resource(catalog, name))
-                    .map(|resource| &resource.shape)
-            };
-            let Some(candidate_shape) = candidate_shape else {
-                continue;
-            };
-            let candidate_relative_rotation = new_material
-                .placements
-                .as_ref()
-                .and_then(|placements| placements.get(part_index))
-                .map(|placement| placement.rotation_radians)
-                .unwrap_or(0.0);
-            let Some(local_b) = physical_material_endpoint_local_point(
-                new_material,
-                part_index,
-                endpoint_b,
-                catalog,
-            ) else {
-                continue;
-            };
-            let Some(joint) = endpoint_a.world_point(&existing_unit, catalog) else {
-                continue;
-            };
-
-            let mut angles = nfp_feature_angle_cache
-                .iter()
-                .find(|(cached_part, cached_a, cached_b, _)| {
-                    *cached_part == part_index
-                        && *cached_a == endpoint_a
-                        && *cached_b == endpoint_b
-                })
-                .map(|(_, _, _, angles)| angles.clone())
-                .unwrap_or_default();
-            for angle in edge_alignment_cache
-                .iter()
-                .find(|(cached_part, _)| *cached_part == part_index)
-                .map(|(_, angles)| angles.iter().copied())
-                .into_iter()
-                .flatten()
-            {
-                if !angles.iter().any(|current|
-                    (normalize_construction_angle(*current - angle)).abs() <= 1e-10
-                ) {
-                    angles.push(angle);
-                }
-            }
-            for angle in construction_angle_candidates(
-                existing_shape,
-                endpoint_a,
-                existing_unit.placement.rotation_radians,
-                candidate_shape,
-                endpoint_b,
-                candidate_relative_rotation,
-                0.0,
-            ) {
-                if !angles.iter().any(|current|
-                    (normalize_construction_angle(*current - angle)).abs() <= 1e-10
-                ) {
-                    angles.push(angle);
-                }
-            }
-
-            for angle in angles {
-                if !nfp_cache.iter().any(|(cached_part, cached_angle, _)| {
-                    *cached_part == part_index
-                        && (normalize_construction_angle(*cached_angle - angle)).abs() <= 1e-10
-                }) {
-                    let existing_rotated_vertices =
-                        match rotated_polygon_vertices(existing_shape, existing_unit.placement.rotation_radians) {
-                            Some(vertices) => vertices,
-                            None => continue,
-                        };
-                    let candidate_rotated_vertices = match rotated_polygon_vertices(candidate_shape, angle) {
-                        Some(vertices) => vertices,
-                        None => continue,
-                    };
-                    let boundary = match crate::configuration_space::convex_minkowski_difference(
-                        &existing_rotated_vertices,
-                        &candidate_rotated_vertices,
-                    ) {
-                        Ok(boundary) => boundary,
-                        Err(_) => continue,
-                    };
-                    let features = boundary
-                        .features
-                        .iter()
-                        .filter_map(|feature| {
-                            let (placement, feature_a, feature_b) = nfp_feature_placement(
-                                existing_shape,
-                                (existing_unit.placement.x, existing_unit.placement.y),
-                                candidate_shape,
-                                angle,
-                                feature,
-                            )?;
-                            Some((placement, feature_a, feature_b))
-                        })
-                        .collect::<Vec<_>>();
-                    nfp_cache.push((part_index, angle, boundary));
-                    nfp_feature_cache.push((part_index, angle, features));
-                }
-
-                if candidate_stream.iter().any(
-                    |(_, cached_a, cached_b, cached_angle, _)| {
-                        *cached_a == endpoint_a
-                            && *cached_b == endpoint_b
-                            && (normalize_construction_angle(*cached_angle - angle)).abs()
-                                <= 1e-10
-                    },
-                ) {
-                    continue;
-                }
-                let placement = if let Some((_, _, features)) = nfp_feature_cache.iter().find(
-                    |(cached_part, cached_angle, _)| {
-                        *cached_part == part_index
-                            && (normalize_construction_angle(*cached_angle - angle)).abs()
-                                <= 1e-10
-                    },
-                ) {
-                    features
-                        .iter()
-                        .find_map(|(candidate, feature_a, feature_b)| {
-                            (*feature_a == endpoint_a && *feature_b == endpoint_b)
-                                .then_some(*candidate)
-                        })
-                        .unwrap_or_else(|| {
-                            placement_for_joint(
-                                (local_b.x, local_b.y),
-                                (joint.x, joint.y),
-                                angle,
-                            )
-                        })
-                } else {
-                    placement_for_joint(
-                        (local_b.x, local_b.y),
-                        (joint.x, joint.y),
-                        angle,
-                    )
-                };
-                candidate_stream.push((part_index, endpoint_a, endpoint_b, angle, placement));
-            }
-        }
-    }
+    // The NFP feature stream is the sole placement source. Do not re-enter
+    // the legacy endpoint-pair placement path after it has produced its
+    // finite legal-contact candidates. A failed stream means this frontier
+    // endpoint/material combination is not usable; the caller may try another.
 
     for (part_index, endpoint_a, endpoint_b, angle, candidate_placement) in candidate_stream {
         let candidate_shape = if one_part {
