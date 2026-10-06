@@ -90,7 +90,7 @@ All other orientations are consequences of the available geometry and physical c
 
 # Configuration-space / Minkowski plan
 
-The target architecture is a feature-preserving convex configuration-space implementation. The migration has now begun: the constructor uses the convex NFP as a first legal-contact gate for rigid candidates, while the older finite geometry-derived candidate generation still supplies the candidate orientations. The NFP is not yet the sole source of placement candidates.
+The target architecture is a feature-preserving convex configuration-space implementation. The migration has now begun: the constructor generates rigid placement candidates from convex NFP contact features when their feature representatives correspond to available construction endpoints. The NFP therefore supplies both legal contact geometry and, for supported feature pairs, the candidate placement itself. Older finite geometry-derived orientations and endpoint-derived placement remain only as fallbacks for contacts not yet represented by the NFP feature path. The NFP is not yet the sole source of all placement candidates.
 
 For convex existing shape `A` and candidate shape `B`, translational configuration space is represented by the Minkowski construction:
 
