@@ -37,3 +37,8 @@ Water-to-water remains volume accumulation rather than a rigid geometry bond.
 Water contact is now represented as a persistent `GeometryContactFamily`, not as a sampled placement. Before a family is recorded, the worker derives the exact exposed portions of each rigid polygon edge. Fully internal shared edges are removed, and partial collinear occlusion is represented by the remaining parameter intervals. Each family then records the rigid anchor, exposed boundary edge, equilibrium contact angle, free-interface curvature/radius, contact length, and the exact interval along that edge over which the equilibrium droplet can translate.
 
 This means a continuous family is now finite data: the mathematics describes the continuum instead of the worker pretending it can enumerate it. The worker may mark a Water frontier exhausted once the corresponding family records have been persisted. More complex cases where an existing deformed water region must itself be used as a boundary remain deferred until fluid boundary features can be composed symbolically.
+
+
+### Durable worker writes
+
+The worker batches each formation-expansion result before syncing it to disk. Candidate formations are canonicalized and deduplicated in memory, then appended with one durable sync and one manifest update. Capillary contact families use the same batch boundary. This keeps persistent durability from turning every discovered geometry into a separate filesystem sync operation while preserving restart-safe committed batches.
