@@ -212,6 +212,7 @@ pub struct GeometryLibrary {
     manifest: GeometryLibraryManifest,
     frontier: GeometryFrontier,
     contact_families: BTreeMap<String, GeometryContactFamily>,
+    rigid_contact_families: BTreeMap<String, GeometryRigidContactFamily>,
 }
 
 impl GeometryLibrary {
@@ -222,6 +223,7 @@ impl GeometryLibrary {
         let manifest_path = root.join("manifest.json");
         let frontier_path = root.join("frontier.json");
         let contact_family_path = root.join("contact_families.jsonl");
+        let rigid_contact_family_path = root.join("rigid_contact_families.jsonl");
 
         let mut entries = BTreeMap::new();
         if data_path.exists() {
@@ -341,6 +343,7 @@ impl GeometryLibrary {
             manifest,
             frontier,
             contact_families,
+            rigid_contact_families: BTreeMap::new(),
         };
         library.manifest.entries = library.entries.len() as u64;
         library.write_manifest()?;
