@@ -988,22 +988,99 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
     // Build invariant NFP configuration spaces and feature mappings before
     // endpoint-pair enumeration. The NFP depends on the two rigid geometries and
     // orientation, not on which available endpoints eventually consume the contact.
+    // The translational NFP depends on the anchor/candidate orientation,
+    // not on which endpoint pair eventually consumes the contact feature.
+    // Build each orientation once and retain its feature provenance.
     let mut nfp_cache: Vec<(usize, f64, crate::configuration_space::ConvexConfigurationBoundary)> = Vec::new();
     let mut nfp_feature_cache: Vec<(
         usize,
         f64,
         Vec<(Placement, ConnectionEndpoint, ConnectionEndpoint)>,
     )> = Vec::new();
-    // The NFP stream is the sole placement source. We derive a finite set of
-    // orientation candidates from exact rigid-boundary geometry, then evaluate
-    // each orientation's configuration-space boundary. Endpoint pairs are not
-    // used to drive a second placement search.
-    let mut nfp_cache: Vec<(usize, f64, crate::configuration_space::ConvexConfigurationBoundary)> = Vec::new();
-    let mut nfp_feature_cache: Vec<(
-        usize,
-        f64,
-        Vec<(Placement, ConnectionEndpoint, ConnectionEndpoint)>,
-    )> = Vec::new();
+
+    for part_index in 0..new_material.material.parts.len() {
+        let candidate_shape = if one_part {
+            one_part_geometry.flatten()
+        } else {
+            new_material
+                .material
+                .parts
+                .get(part_index)
+                .and_then(|(name, _)| resource(catalog, name))
+                .map(|resource| &resource.shape)
+        };
+        let Some(candidate_shape) = candidate_shape else {
+            continue;
+        };
+        let candidate_relative_rotation = new_material
+            .placements
+            .as_ref()
+            .and_then(|placements| placements.get(part_index))
+            .map(|placement| placement.rotation_radians)
+            .unwrap_or(0.0);
+        let Some(candidate_vertices) = candidate_shape.form.polygon_vertices() else {
+            continue;
+        };
+
+        let mut candidate_angles = crate::configuration_space::edge_alignment_rotations(
+            &existing_vertices,
+            existing_unit.placement.rotation_radians,
+            &candidate_vertices,
+            candidate_relative_rotation,
+        );
+
+        // Exact incident-edge and corner alignments supplement the parallel-edge
+        // orientations. These are finite geometry-derived orientations, not an
+        // angular sampling grid.
+        for endpoint_a in existing_endpoints.iter().copied() {
+            for (_, endpoint_b) in new_endpoints
+                .iter()
+                .copied()
+                .filter(|(p, _)| *p == part_index)
+            {
+                candidate_angles.extend(construction_angle_candidates(
+                    existing_shape,
+                    endpoint_a,
+                    existing_unit.placement.rotation_radians,
+                    candidate_shape,
+                    endpoint_b,
+                    candidate_relative_rotation,
+                    0.0,
+                ));
+            }
+        }
+        candidate_angles.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        candidate_angles.dedup_by(|a, b| {
+            normalize_construction_angle(*a - *b).abs() <= 1e-10
+        });
+
+        for angle in candidate_angles {
+            let existing_rotated_vertices =
+                rotated_polygon_vertices(existing_shape, existing_unit.placement.rotation_radians)?;
+            let candidate_rotated_vertices = rotated_polygon_vertices(candidate_shape, angle)?;
+            let boundary = crate::configuration_space::convex_minkowski_difference(
+                &existing_rotated_vertices,
+                &candidate_rotated_vertices,
+            )
+            .ok()?;
+            let features = boundary
+                .features
+                .iter()
+                .filter_map(|feature| {
+                    let (placement, feature_a, feature_b) = nfp_feature_placement(
+                        existing_shape,
+                        (existing_unit.placement.x, existing_unit.placement.y),
+                        candidate_shape,
+                        angle,
+                        feature,
+                    )?;
+                    Some((placement, feature_a, feature_b))
+                })
+                .collect::<Vec<_>>();
+            nfp_cache.push((part_index, angle, boundary));
+            nfp_feature_cache.push((part_index, angle, features));
+        }
+    }
 
     // The NFP feature stream is the primary and only placement source. Each
     // legal configuration-space feature identifies both physical endpoints
