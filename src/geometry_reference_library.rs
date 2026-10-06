@@ -308,6 +308,45 @@ impl GeometryLibrary {
         Ok(true)
     }
 
+    pub fn insert_contact_families(
+        &mut self,
+        families: Vec<GeometryContactFamily>,
+    ) -> std::io::Result<usize> {
+        let mut unique = BTreeMap::new();
+        for family in families {
+            if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
+                || !family.contact_angle_radians.is_finite()
+                || !family.curvature_radius.is_finite()
+                || !family.contact_length.is_finite()
+                || !family.edge_parameter_start.is_finite()
+                || !family.edge_parameter_end.is_finite()
+                || family.edge_parameter_end < family.edge_parameter_start
+            {
+                continue;
+            }
+            let signature = family.signature();
+            if !self.contact_families.contains_key(&signature) {
+                unique.insert(signature, family);
+            }
+        }
+        if unique.is_empty() {
+            return Ok(0);
+        }
+
+        let path = self.root.join("contact_families.jsonl");
+        let mut file = OpenOptions::new().create(true).append(true).open(path)?;
+        for family in unique.values() {
+            serde_json::to_writer(&mut file, family)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+            file.write_all(b"\\n")?;
+        }
+        file.sync_data()?;
+
+        let added = unique.len();
+        self.contact_families.extend(unique);
+        Ok(added)
+    }
+
     pub fn set_frontier_state(
         &mut self,
         formation_signature: impl Into<String>,
