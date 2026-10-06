@@ -558,26 +558,6 @@ fn rigid_endpoint_edge_angles(
         return Vec::new();
     }
 
-    // For the normal genesis case, flat-to-flat is a single exact
-    // orientation. Do not manufacture a larger angular search space.
-    if matches!(existing_endpoint, ConnectionEndpoint::BoundaryPoint { .. })
-        && matches!(candidate_endpoint, ConnectionEndpoint::BoundaryPoint { .. })
-    {
-        if let (Some(existing), Some(candidate)) = (
-            local_endpoint_geometry(existing_shape, existing_endpoint),
-            local_endpoint_geometry(candidate_shape, candidate_endpoint),
-        ) {
-            let existing_angle = existing.3.atan2(existing.2) + existing_rotation;
-            let candidate_angle = candidate.3.atan2(candidate.2);
-            return vec![normalize_construction_angle(
-                existing_angle
-                    + std::f64::consts::PI
-                    - candidate_angle
-                    - candidate_relative_rotation,
-            )];
-        }
-    }
-
     let mut angles = Vec::new();
     let mut push_unique = |angle: f64| {
         let normalized = normalize_construction_angle(angle);
@@ -645,6 +625,27 @@ fn construction_angle_candidates(
             angles.push(normalized);
         }
     };
+
+    // Face-to-face is the primary genesis placement: when both endpoints are
+    // boundary midpoints, their outward normals determine exactly one opposing
+    // orientation. Do not expand this normal case into a broader angular search.
+    if matches!(existing_endpoint, ConnectionEndpoint::BoundaryPoint { .. })
+        && matches!(candidate_endpoint, ConnectionEndpoint::BoundaryPoint { .. })
+    {
+        if let (Some(existing), Some(candidate)) = (
+            local_endpoint_geometry(existing_shape, existing_endpoint),
+            local_endpoint_geometry(candidate_shape, candidate_endpoint),
+        ) {
+            let existing_angle = existing.3.atan2(existing.2) + existing_rotation;
+            let candidate_angle = candidate.3.atan2(candidate.2);
+            push_unique(
+                existing_angle
+                    + std::f64::consts::PI
+                    - candidate_angle
+                    - candidate_relative_rotation,
+            );
+        }
+    }
 
     push_unique(ideal_angle);
 
