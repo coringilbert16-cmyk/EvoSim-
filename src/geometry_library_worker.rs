@@ -40,7 +40,11 @@ fn process_one_frontier(
         for resource in catalog {
             let key = format!("{}|{}", formation.signature, resource.name);
             let state = library.frontier().records.get(&key).map(|record| &record.state);
-            if matches!(state, Some(GeometryFrontierState::Exhausted)) {
+            if matches!(
+                state,
+                Some(GeometryFrontierState::Exhausted)
+                    | Some(GeometryFrontierState::ContinuousFamilyPending)
+            ) {
                 continue;
             }
 
@@ -49,6 +53,15 @@ fn process_one_frontier(
                 resource.name.clone(),
                 GeometryFrontierState::InProgress,
             )?;
+
+            if continuous_contact_family_exists(&formation, resource) {
+                library.set_frontier_state(
+                    formation.signature.clone(),
+                    resource.name.clone(),
+                    GeometryFrontierState::ContinuousFamilyPending,
+                )?;
+                return Ok(true);
+            }
 
             let candidates = expand_formation_candidates(&formation, resource, catalog);
             for candidate in candidates {
@@ -65,4 +78,33 @@ fn process_one_frontier(
     }
 
     Ok(false)
+}
+
+
+fn continuous_contact_family_exists(
+    formation: &crate::geometry_reference_library::GeometryFormation,
+    candidate: &BaseResource,
+) -> bool {
+    if formation.constituents.len() != 1 {
+        return false;
+    }
+    let target = &formation.constituents[0];
+    let is_circle = |resource: &BaseResource| {
+        matches!(resource.shape.form, crate::resources::Form::Circle { .. })
+    };
+    let target_resource = default_catalog()
+        .into_iter()
+        .find(|resource| resource.name == target.resource);
+    let Some(target_resource) = target_resource else {
+        return false;
+    };
+    if !is_circle(&target_resource) && !is_circle(candidate) {
+        return false;
+    }
+    if target_resource.physical_state == crate::resources::PhysicalState::Fluid
+        && candidate.physical_state == crate::resources::PhysicalState::Fluid
+    {
+        return false;
+    }
+    true
 }
