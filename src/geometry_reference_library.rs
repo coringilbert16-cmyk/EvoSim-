@@ -82,6 +82,39 @@ pub struct GeometryRigidPointContactFamily {
     pub candidate_rotation_end_radians: f64,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct GeometryRigidVertexContactFamily {
+    pub schema_version: u32,
+    pub formation_signature: String,
+    pub candidate_resource: String,
+    pub anchor_constituent: usize,
+    pub anchor_edge: usize,
+    pub candidate_vertex: usize,
+    pub anchor_parameter_start: f64,
+    pub anchor_parameter_end: f64,
+    pub candidate_rotation_start_radians: f64,
+    pub candidate_rotation_end_radians: f64,
+}
+
+impl GeometryRigidVertexContactFamily {
+    pub fn signature(&self) -> String {
+        format!(
+            "v{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}",
+            self.schema_version,
+            self.formation_signature,
+            self.candidate_resource,
+            self.anchor_constituent,
+            self.anchor_edge,
+            self.candidate_vertex,
+            quantize(self.anchor_parameter_start),
+            quantize(self.anchor_parameter_end),
+            quantize(self.candidate_rotation_start_radians),
+            quantize(self.candidate_rotation_end_radians),
+            "vertex",
+        )
+    }
+}
+
 impl GeometryRigidPointContactFamily {
     pub fn signature(&self) -> String {
         format!(
@@ -246,6 +279,7 @@ pub struct GeometryLibrary {
     contact_families: BTreeMap<String, GeometryContactFamily>,
     rigid_contact_families: BTreeMap<String, GeometryRigidContactFamily>,
     rigid_point_contact_families: BTreeMap<String, GeometryRigidPointContactFamily>,
+    rigid_vertex_contact_families: BTreeMap<String, GeometryRigidVertexContactFamily>,
 }
 
 impl GeometryLibrary {
@@ -258,6 +292,7 @@ impl GeometryLibrary {
         let contact_family_path = root.join("contact_families.jsonl");
         let rigid_contact_family_path = root.join("rigid_contact_families.jsonl");
         let rigid_point_contact_family_path = root.join("rigid_point_contact_families.jsonl");
+        let rigid_vertex_contact_family_path = root.join("rigid_vertex_contact_families.jsonl");
 
         let mut entries = BTreeMap::new();
         if data_path.exists() {
@@ -419,6 +454,7 @@ impl GeometryLibrary {
             contact_families,
             rigid_contact_families,
             rigid_point_contact_families: load_rigid_point_contact_families(&rigid_point_contact_family_path, &entries, catalog),
+            rigid_vertex_contact_families: load_rigid_vertex_contact_families(&rigid_vertex_contact_family_path, &entries, catalog),
         };
         library.manifest.entries = library.entries.len() as u64;
         library.write_manifest()?;
@@ -455,6 +491,48 @@ impl GeometryLibrary {
 
     pub fn rigid_point_contact_families(&self) -> impl Iterator<Item = &GeometryRigidPointContactFamily> {
         self.rigid_point_contact_families.values()
+    }
+
+    pub fn rigid_vertex_contact_families(&self) -> impl Iterator<Item = &GeometryRigidVertexContactFamily> {
+        self.rigid_vertex_contact_families.values()
+    }
+
+    pub fn insert_rigid_vertex_contact_families(
+        &mut self,
+        families: Vec<GeometryRigidVertexContactFamily>,
+    ) -> std::io::Result<usize> {
+        let mut unique = BTreeMap::new();
+        for family in families {
+            if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
+                || !family.anchor_parameter_start.is_finite()
+                || !family.anchor_parameter_end.is_finite()
+                || !family.candidate_rotation_start_radians.is_finite()
+                || !family.candidate_rotation_end_radians.is_finite()
+                || family.anchor_parameter_start > family.anchor_parameter_end
+                || self.entries.get(&family.formation_signature).is_none()
+                || family.anchor_constituent >= self.entries.get(&family.formation_signature).map(|f| f.constituents.len()).unwrap_or(0)
+            {
+                continue;
+            }
+            let signature = family.signature();
+            if !self.rigid_vertex_contact_families.contains_key(&signature) {
+                unique.insert(signature, family);
+            }
+        }
+        if unique.is_empty() {
+            return Ok(0);
+        }
+        let path = self.root.join("rigid_vertex_contact_families.jsonl");
+        let mut file = OpenOptions::new().create(true).append(true).open(path)?;
+        for family in unique.values() {
+            serde_json::to_writer(&mut file, family)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+            file.write_all(b"\n")?;
+        }
+        file.sync_data()?;
+        let added = unique.len();
+        self.rigid_vertex_contact_families.extend(unique);
+        Ok(added)
     }
 
     pub fn insert_rigid_point_contact_families(
@@ -1302,6 +1380,40 @@ fn load_rigid_point_contact_families(
     out
 }
 
+fn load_rigid_vertex_contact_families(
+    path: &Path,
+    entries: &BTreeMap<String, GeometryFormation>,
+    catalog: &[BaseResource],
+) -> BTreeMap<String, GeometryRigidVertexContactFamily> {
+    let mut out = BTreeMap::new();
+    let Ok(file) = File::open(path) else { return out; };
+    let lines = BufReader::new(file).lines().collect::<Result<Vec<_>, _>>().unwrap_or_default();
+    for (index, line) in lines.iter().enumerate() {
+        if line.trim().is_empty() { continue; }
+        let Ok(family) = serde_json::from_str::<GeometryRigidVertexContactFamily>(line) else {
+            if index + 1 == lines.len() { continue; }
+            continue;
+        };
+        if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
+            || !family.anchor_parameter_start.is_finite()
+            || !family.anchor_parameter_end.is_finite()
+            || !family.candidate_rotation_start_radians.is_finite()
+            || !family.candidate_rotation_end_radians.is_finite()
+            || family.anchor_parameter_start > family.anchor_parameter_end
+            || !entries.contains_key(&family.formation_signature)
+            || family.anchor_constituent >= entries.get(&family.formation_signature).map(|f| f.constituents.len()).unwrap_or(0)
+            || catalog.iter().all(|r| r.name != family.candidate_resource)
+        { continue; }
+        let Some(anchor_resource) = catalog.iter().find(|r| r.name == entries[&family.formation_signature].constituents[family.anchor_constituent].resource) else { continue; };
+        let Some(vertices) = anchor_resource.shape.form.polygon_vertices() else { continue; };
+        if family.anchor_edge >= vertices.len() || family.candidate_vertex >= vertices.len().max(1) {
+            continue;
+        }
+        out.insert(family.signature(), family);
+    }
+    out
+}
+
 pub fn generate_rigid_point_contact_families(
     formation: &GeometryFormation,
     candidate_resource: &BaseResource,
@@ -1355,6 +1467,79 @@ pub fn generate_rigid_point_contact_families(
                     anchor_constituent: anchor_index,
                     anchor_edge: interval.edge,
                     candidate_endpoint: endpoint,
+                    anchor_parameter_start: interval.start,
+                    anchor_parameter_end: interval.end,
+                    candidate_rotation_start_radians: start,
+                    candidate_rotation_end_radians: end,
+                };
+                unique.insert(family.signature(), family);
+            }
+        }
+    }
+    unique.into_values().collect()
+}
+
+/// Record the continuous manifold where a rigid polygon vertex touches an
+/// exposed polygon edge. The contact point may translate over the exposed
+/// edge; the candidate polygon may rotate while its selected vertex remains
+/// on the supporting line and its interior stays in the outward half-plane.
+/// No angle or position sampling is used.
+pub fn generate_rigid_vertex_contact_families(
+    formation: &GeometryFormation,
+    candidate_resource: &BaseResource,
+    catalog: &[BaseResource],
+) -> Vec<GeometryRigidVertexContactFamily> {
+    let Some(candidate_vertices) = candidate_resource.shape.form.polygon_vertices() else {
+        return Vec::new();
+    };
+    let mut unique = BTreeMap::new();
+
+    for anchor_index in 0..formation.constituents.len() {
+        let Some(anchor_resource) = catalog.iter().find(|r| r.name == formation.constituents[anchor_index].resource) else { continue; };
+        let Some(anchor_vertices) = anchor_resource.shape.form.polygon_vertices() else { continue; };
+        let exposed = exposed_polygon_edge_intervals(formation, anchor_index, catalog);
+        let placement = formation.constituents[anchor_index].placement;
+        let signed_area = anchor_vertices.iter().enumerate().map(|(i, &(x0,y0))| {
+            let (x1,y1) = anchor_vertices[(i+1)%anchor_vertices.len()];
+            x0*y1-y0*x1
+        }).sum::<f64>();
+
+        for interval in exposed {
+            let a0 = anchor_vertices[interval.edge];
+            let a1 = anchor_vertices[(interval.edge + 1) % anchor_vertices.len()];
+            let dx = a1.0-a0.0;
+            let dy = a1.1-a0.1;
+            let length = dx.hypot(dy);
+            if length <= QUANTUM { continue; }
+
+            let (nx, ny) = if signed_area >= 0.0 {
+                (dy / length, -dx / length)
+            } else {
+                (-dy / length, dx / length)
+            };
+            let world_n = (
+                nx * placement.rotation_radians.cos() - ny * placement.rotation_radians.sin(),
+                nx * placement.rotation_radians.sin() + ny * placement.rotation_radians.cos(),
+            );
+            let outward_angle = world_n.1.atan2(world_n.0);
+            for candidate_vertex in 0..candidate_vertices.len() {
+                // A convex polygon remains outside the anchor while its selected
+                // vertex is on the supporting line whenever the polygon interior
+                // direction lies in the inward half-plane. The boundary of that
+                // admissible set is therefore a +/- pi/2 interval around the
+                // outward normal, adjusted by the local vertex radial direction.
+                let vertex_angle = candidate_vertices[candidate_vertex].1
+                    .atan2(candidate_vertices[candidate_vertex].0);
+                let center = outward_angle - vertex_angle;
+                let start = center - std::f64::consts::FRAC_PI_2;
+                let end = center + std::f64::consts::FRAC_PI_2;
+                let family = GeometryRigidVertexContactFamily {
+                    schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+                    formation_signature: formation.signature.clone(),
+                    candidate_resource: candidate_resource.name.clone(),
+                    anchor_constituent: anchor_index,
+                    anchor_edge: interval.edge,
+                    candidate_vertex,
                     anchor_parameter_start: interval.start,
                     anchor_parameter_end: interval.end,
                     candidate_rotation_start_radians: start,
