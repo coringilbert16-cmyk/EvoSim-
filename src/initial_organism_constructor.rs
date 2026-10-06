@@ -437,6 +437,13 @@ fn construct_physical_organism(
     // unit loses its remaining usable endpoints.
     let mut frontier = (0..structure.units.len()).collect::<Vec<_>>();
     let mut scaffold_active = true;
+    // Full viability analysis is topology-sensitive and expensive. A new
+    // enclosed acquisition opportunity can only arise when a construction
+    // transaction closes a new cycle (more new bonds than new constituents),
+    // or when the temporary genesis scaffold is removed. Keep that as an
+    // explicit dirty bit instead of re-running cavity/interior analysis after
+    // every ordinary one-bond frontier extension.
+    let mut viability_dirty = false;
     let mut spatial_index =
         crate::construction_runtime::ConstructionSpatialIndex::new(&structure, catalog);
     let mut occupancy = ConstructionEndpointOccupancy::default();
@@ -454,14 +461,19 @@ fn construct_physical_organism(
 
     loop {
         let acquisition_candidates = available_acquisition_resources(catalog);
-        if !scaffold_active
+        if viability_dirty
+            && !scaffold_active
             && acquisition_candidates.len() >= 3
             && catalog.iter().any(|resource| resource.name == "Water")
-            && valid_construction(&structure, catalog, &acquisition_candidates).is_some()
         {
-            return Ok((structure, ledger, energy));
+            if valid_construction(&structure, catalog, &acquisition_candidates).is_some() {
+                return Ok((structure, ledger, energy));
+            }
+            viability_dirty = false;
         }
 
+        let bonds_before = structure.bonds.len();
+        let units_before = structure.units.len();
         let Some((next_ledger, next_energy, next_frontier)) =
             grow_one_step(
                 &mut structure,
@@ -491,8 +503,19 @@ fn construct_physical_organism(
         energy = next_energy;
         frontier = next_frontier;
 
+        // A one-bond extension cannot create a new closed region. A
+        // transaction that adds more bonds than constituents closes a cycle and
+        // is therefore the next point at which full viability analysis can
+        // materially change.
+        let added_bonds = structure.bonds.len().saturating_sub(bonds_before);
+        let added_units = structure.units.len().saturating_sub(units_before);
+        if added_bonds > added_units {
+            viability_dirty = true;
+        }
+
         if scaffold_active && finalize_enclosed_scaffold(&mut structure, catalog, &scaffold_ids) {
             scaffold_active = false;
+            viability_dirty = true;
             // Scaffold removal can shift unit indices. Rebuild only the derived
             // accelerators; physical IDs and realized bonds remain authoritative.
             spatial_index =
