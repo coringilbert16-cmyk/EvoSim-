@@ -15,7 +15,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
-pub const GEOMETRY_LIBRARY_SCHEMA_VERSION: u32 = 2;
+pub const GEOMETRY_LIBRARY_SCHEMA_VERSION: u32 = 1;
 const QUANTUM: f64 = 1e-9;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
