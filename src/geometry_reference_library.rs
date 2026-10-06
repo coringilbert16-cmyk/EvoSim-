@@ -1142,6 +1142,60 @@ fn rigid_boundary_segments(form: &Form) -> Vec<((f64, f64), (f64, f64))> {
     }
 }
 
+pub fn generate_rigid_contact_families(
+    formation: &GeometryFormation,
+    candidate_resource: &BaseResource,
+    catalog: &[BaseResource],
+) -> Vec<GeometryRigidContactFamily> {
+    if candidate_resource.physical_state == crate::resources::PhysicalState::Fluid {
+        return Vec::new();
+    }
+    let mut unique = BTreeMap::new();
+    for anchor_index in 0..formation.constituents.len() {
+        let Some(anchor_resource) = catalog.iter().find(|r| r.name == formation.constituents[anchor_index].resource) else { continue; };
+        let anchor_segments = rigid_boundary_segments(&anchor_resource.shape.form);
+        let exposed = if matches!(anchor_resource.shape.form, Form::Line { .. }) {
+            exposed_line_intervals(formation, anchor_index, catalog)
+        } else {
+            exposed_polygon_edge_intervals(formation, anchor_index, catalog)
+        };
+        let candidate_segments = rigid_boundary_segments(&candidate_resource.shape.form);
+        for interval in exposed {
+            let Some(&(a0, a1)) = anchor_segments.get(interval.edge) else { continue; };
+            let anchor_length = (a1.0-a0.0).hypot(a1.1-a0.1);
+            if anchor_length <= QUANTUM { continue; }
+            let anchor = formation.constituents[anchor_index].placement;
+            let world_a0 = world_point(a0, anchor);
+            let world_a1 = world_point(a1, anchor);
+            let anchor_angle = (world_a1.1-world_a0.1).atan2(world_a1.0-world_a0.0);
+            for (candidate_edge, &(c0,c1)) in candidate_segments.iter().enumerate() {
+                let candidate_length = (c1.0-c0.0).hypot(c1.1-c0.1);
+                if candidate_length <= QUANTUM { continue; }
+                let candidate_angle = (c1.1-c0.1).atan2(c1.0-c0.0);
+                for flip in [0.0, std::f64::consts::PI] {
+                    let rotation = normalize_angle(anchor_angle + flip - candidate_angle);
+                    let ratio = candidate_length / anchor_length;
+                    let family = GeometryRigidContactFamily {
+                        schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+                        formation_signature: formation.signature.clone(),
+                        candidate_resource: candidate_resource.name.clone(),
+                        anchor_constituent: anchor_index,
+                        anchor_edge: interval.edge,
+                        candidate_edge,
+                        candidate_rotation_radians: rotation,
+                        anchor_parameter_start: interval.start - ratio,
+                        anchor_parameter_end: interval.end,
+                    };
+                    if family.anchor_parameter_end >= family.anchor_parameter_start - QUANTUM {
+                        unique.insert(family.signature(), family);
+                    }
+                }
+            }
+        }
+    }
+    unique.into_values().collect()
+}
+
 pub fn generate_two_constituent_candidates(
     target: &GeometryFormation,
     candidate_resource: &BaseResource,
