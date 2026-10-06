@@ -2203,7 +2203,7 @@ mod tests {
         let mut catalog = default_catalog();
         catalog.push(BaseResource {
             name: "TestLine".into(),
-            properties: ResourceProperties {
+            properties: crate::resources::ResourceProperties {
                 mass: 1.0,
                 potential_energy: 1.0,
                 reactivity: 0.0,
