@@ -420,6 +420,29 @@ mod tests {
     }
 
     #[test]
+    fn hydrogen_exposes_exactly_two_primary_endpoints() {
+        let catalog = crate::resources::default_catalog();
+        let unit = StructuralUnit::new(
+            "Hydrogen",
+            crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        let endpoints = endpoint_indices(&unit, &catalog);
+        assert_eq!(endpoints.len(), 2);
+        assert!(endpoints.iter().all(|endpoint| matches!(
+            endpoint,
+            ConnectionEndpoint::LineEndpoint { point_index: 0 | 1 }
+        )));
+        let left = endpoint_world_point(endpoints[0], &unit, &catalog).unwrap();
+        let right = endpoint_world_point(endpoints[1], &unit, &catalog).unwrap();
+        assert_eq!((left.x, left.y), (-0.5, 0.0));
+        assert_eq!((right.x, right.y), (0.5, 0.0));
+    }
+
+    #[test]
     fn try_add_bond_rejects_repeated_connection_points_in_either_endpoint_order() {
         let catalog = crate::resources::default_catalog();
         let (mut structure, [id_a, id_b]) = test_structure();
