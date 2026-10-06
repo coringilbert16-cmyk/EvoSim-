@@ -39,6 +39,9 @@ impl GeometryContactFamily {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct GeometryRigidContactFamily { pub schema_version: u32 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct GeometryConstituent {
     pub resource: String,
     pub placement: Placement,
