@@ -306,6 +306,46 @@ fn structure_unit_endpoint_options(
     }
 }
 
+fn rotated_polygon_vertices(
+    shape: &crate::resources::Shape,
+    rotation_radians: f64,
+) -> Option<Vec<(f64, f64)>> {
+    let (sin, cos) = rotation_radians.sin_cos();
+    shape.form.polygon_vertices().map(|vertices| {
+        vertices
+            .into_iter()
+            .map(|(x, y)| (x * cos - y * sin, x * sin + y * cos))
+            .collect()
+    })
+}
+
+fn nfp_contact_class(
+    existing_shape: &crate::resources::Shape,
+    existing_rotation: f64,
+    existing_origin: (f64, f64),
+    candidate_shape: &crate::resources::Shape,
+    candidate_rotation: f64,
+    candidate_origin: (f64, f64),
+) -> Option<crate::configuration_space::ContactFeatureClass> {
+    let existing_vertices =
+        rotated_polygon_vertices(existing_shape, existing_rotation)?;
+    let candidate_vertices =
+        rotated_polygon_vertices(candidate_shape, candidate_rotation)?;
+    let boundary = crate::configuration_space::convex_minkowski_difference(
+        &existing_vertices,
+        &candidate_vertices,
+    )
+    .ok()?;
+    crate::configuration_space::boundary_feature_at_translation(
+        &boundary,
+        crate::configuration_space::Point {
+            x: candidate_origin.0 - existing_origin.0,
+            y: candidate_origin.1 - existing_origin.1,
+        },
+        crate::combine_runtime::COMBINE_CONTACT_TOLERANCE,
+    )
+}
+
 fn placement_for_joint(
     local_point: (f64, f64),
     joint: (f64, f64),
@@ -947,6 +987,24 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
             for angle in angles {
                 let candidate_origin =
                     placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
+
+                // For convex rigid polygons, configuration space is now the
+                // first geometric gate. The candidate reference-point
+                // translation must lie on the exact NFP boundary: inside means
+                // penetration, outside means separation. Feature provenance is
+                // retained so flat-to-flat contact can be ranked without
+                // prescribing topology.
+                let nfp_contact = nfp_contact_class(
+                    existing_shape,
+                    existing_unit.placement.rotation_radians,
+                    (existing_unit.placement.x, existing_unit.placement.y),
+                    candidate_shape,
+                    angle,
+                    (candidate_origin.x, candidate_origin.y),
+                );
+                if nfp_contact.is_none() {
+                    continue;
+                }
                 *nodes += 1;
 
                 // Genesis candidates are currently one-part rigid materials. Build the
