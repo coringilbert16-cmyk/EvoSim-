@@ -96,7 +96,6 @@ impl GeometryRigidPointContactFamily {
             quantize(self.anchor_parameter_end),
             quantize(self.candidate_rotation_start_radians),
             quantize(self.candidate_rotation_end_radians),
-            0,
         )
     }
 }
@@ -246,6 +245,7 @@ pub struct GeometryLibrary {
     frontier: GeometryFrontier,
     contact_families: BTreeMap<String, GeometryContactFamily>,
     rigid_contact_families: BTreeMap<String, GeometryRigidContactFamily>,
+    rigid_point_contact_families: BTreeMap<String, GeometryRigidPointContactFamily>,
 }
 
 impl GeometryLibrary {
@@ -257,6 +257,7 @@ impl GeometryLibrary {
         let frontier_path = root.join("frontier.json");
         let contact_family_path = root.join("contact_families.jsonl");
         let rigid_contact_family_path = root.join("rigid_contact_families.jsonl");
+        let rigid_point_contact_family_path = root.join("rigid_point_contact_families.jsonl");
 
         let mut entries = BTreeMap::new();
         if data_path.exists() {
@@ -417,6 +418,7 @@ impl GeometryLibrary {
             frontier,
             contact_families,
             rigid_contact_families,
+            rigid_point_contact_families: load_rigid_point_contact_families(&rigid_point_contact_family_path, &entries, catalog),
         };
         library.manifest.entries = library.entries.len() as u64;
         library.write_manifest()?;
@@ -449,6 +451,43 @@ impl GeometryLibrary {
 
     pub fn rigid_contact_families(&self) -> impl Iterator<Item = &GeometryRigidContactFamily> {
         self.rigid_contact_families.values()
+    }
+
+    pub fn rigid_point_contact_families(&self) -> impl Iterator<Item = &GeometryRigidPointContactFamily> {
+        self.rigid_point_contact_families.values()
+    }
+
+    pub fn insert_rigid_point_contact_families(
+        &mut self,
+        families: Vec<GeometryRigidPointContactFamily>,
+    ) -> std::io::Result<usize> {
+        let mut unique = BTreeMap::new();
+        for family in families {
+            if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
+                || family.candidate_endpoint > 1
+                || !family.anchor_parameter_start.is_finite()
+                || !family.anchor_parameter_end.is_finite()
+                || !family.candidate_rotation_start_radians.is_finite()
+                || !family.candidate_rotation_end_radians.is_finite()
+                || family.anchor_parameter_start > family.anchor_parameter_end
+            { continue; }
+            let signature = family.signature();
+            if !self.rigid_point_contact_families.contains_key(&signature) {
+                unique.insert(signature, family);
+            }
+        }
+        if unique.is_empty() { return Ok(0); }
+        let path = self.root.join("rigid_point_contact_families.jsonl");
+        let mut file = OpenOptions::new().create(true).append(true).open(path)?;
+        for family in unique.values() {
+            serde_json::to_writer(&mut file, family)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+            file.write_all(b"\n")?;
+        }
+        file.sync_data()?;
+        let added = unique.len();
+        self.rigid_point_contact_families.extend(unique);
+        Ok(added)
     }
 
     pub fn insert_rigid_contact_families(
@@ -1231,6 +1270,36 @@ pub fn instantiate_rigid_contact_family(
         constituent_b: candidate_index,
     });
     result.canonicalized(catalog)
+}
+
+fn load_rigid_point_contact_families(
+    path: &Path,
+    entries: &BTreeMap<String, GeometryFormation>,
+    catalog: &[BaseResource],
+) -> BTreeMap<String, GeometryRigidPointContactFamily> {
+    let mut out = BTreeMap::new();
+    let Ok(file) = File::open(path) else { return out; };
+    let lines = BufReader::new(file).lines().collect::<Result<Vec<_>, _>>().unwrap_or_default();
+    for (index, line) in lines.iter().enumerate() {
+        if line.trim().is_empty() { continue; }
+        let Ok(family) = serde_json::from_str::<GeometryRigidPointContactFamily>(line) else {
+            if index + 1 == lines.len() { continue; }
+            continue;
+        };
+        if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
+            || !family.anchor_parameter_start.is_finite()
+            || !family.anchor_parameter_end.is_finite()
+            || !family.candidate_rotation_start_radians.is_finite()
+            || !family.candidate_rotation_end_radians.is_finite()
+            || family.anchor_parameter_start > family.anchor_parameter_end
+            || !entries.contains_key(&family.formation_signature)
+            || family.anchor_constituent >= entries.get(&family.formation_signature).map(|f| f.constituents.len()).unwrap_or(0)
+            || family.candidate_endpoint > 1
+            || catalog.iter().all(|r| r.name != family.candidate_resource)
+        { continue; }
+        out.insert(family.signature(), family);
+    }
+    out
 }
 
 pub fn generate_rigid_contact_families(
