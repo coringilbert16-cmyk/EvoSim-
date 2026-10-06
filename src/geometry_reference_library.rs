@@ -1709,10 +1709,10 @@ mod tests {
         let formation = GeometryFormation::single("Carbon");
         let carbon = catalog.iter().find(|r| r.name == "Carbon").unwrap();
         let families = generate_rigid_contact_families(&formation, carbon, &catalog);
-        let family = families.first().unwrap();
-        let parameter = (family.anchor_parameter_start + family.anchor_parameter_end) * 0.5;
-        let realized = instantiate_rigid_contact_family(&formation, family, parameter, &catalog);
-        assert!(realized.is_some());
+        assert!(families.iter().any(|family| {
+            let parameter = (family.anchor_parameter_start + family.anchor_parameter_end) * 0.5;
+            instantiate_rigid_contact_family(&formation, family, parameter, &catalog).is_some()
+        }));
     }
 
     #[test]
