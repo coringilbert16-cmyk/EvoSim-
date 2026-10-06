@@ -106,6 +106,10 @@ The long-term goal remains an open-ended simulation in which organisms can devel
 The current bottleneck is narrower: **constructing the first valid organism correctly and quickly.**
 
 
+## Base-resource geometry
+
+Hydrogen is a **rigid rectangle 1.0 units long × 0.1 units thick**. It is a finite-area physical strip, not a zero-thickness line. Any geometry generation, validation, contact, construction, or visualization involving Hydrogen must therefore use its rectangular boundary and 0.1 thickness.
+
 ## Geometry Reference Library
 
 The geometry catalogue is being separated from the live organism constructor into a **persistent geometry reference library**. This is durable knowledge, not test state and not a per-construction search cache.
