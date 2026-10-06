@@ -69,6 +69,39 @@ impl GeometryRigidContactFamily {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct GeometryRigidPointContactFamily {
+    pub schema_version: u32,
+    pub formation_signature: String,
+    pub candidate_resource: String,
+    pub anchor_constituent: usize,
+    pub anchor_edge: usize,
+    pub candidate_endpoint: usize,
+    pub anchor_parameter_start: f64,
+    pub anchor_parameter_end: f64,
+    pub candidate_rotation_start_radians: f64,
+    pub candidate_rotation_end_radians: f64,
+}
+
+impl GeometryRigidPointContactFamily {
+    pub fn signature(&self) -> String {
+        format!(
+            "v{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}",
+            self.schema_version,
+            self.formation_signature,
+            self.candidate_resource,
+            self.anchor_constituent,
+            self.anchor_edge,
+            self.candidate_endpoint,
+            quantize(self.anchor_parameter_start),
+            quantize(self.anchor_parameter_end),
+            quantize(self.candidate_rotation_start_radians),
+            quantize(self.candidate_rotation_end_radians),
+            0,
+        )
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct GeometryConstituent {
     pub resource: String,
     pub placement: Placement,
