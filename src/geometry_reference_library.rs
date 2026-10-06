@@ -275,15 +275,6 @@ fn canonical_pose_candidates(formation: &GeometryFormation, catalog: &[BaseResou
             constituent.placement.y = -dx * s + dy * c;
             constituent.placement.rotation_radians =
                 normalized_angle(constituent.placement.rotation_radians - anchor_rotation);
-
-            if catalog
-                .iter()
-                .find(|r| r.name == constituent.resource)
-                .map(|r| matches!(r.shape.form, Form::Circle { .. }))
-                .unwrap_or(false)
-            {
-                constituent.placement.rotation_radians = 0.0;
-            }
         }
 
         candidates.push(candidate);
@@ -904,6 +895,30 @@ mod tests {
         assert!(validate_formation(&formation, &catalog));
         let canonical = formation.canonicalized(&catalog).unwrap();
         assert_eq!(canonical.signature, canonical.canonical_signature());
+    }
+
+    #[test]
+    fn canonicalization_preserves_non_circular_global_orientation_data() {
+        let catalog = default_catalog();
+        let formation = GeometryFormation {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            constituents: vec![
+                GeometryConstituent {
+                    resource: "Carbon".into(),
+                    placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                },
+                GeometryConstituent {
+                    resource: "Carbon".into(),
+                    placement: Placement { x: 2.0, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_2 },
+                },
+            ],
+            bonds: vec![GeometryBond { constituent_a: 0, constituent_b: 1 }],
+            signature: String::new(),
+        };
+        let canonical = formation.canonicalized(&catalog).unwrap();
+        assert!(canonical.constituents.iter().any(|c|
+            c.placement.rotation_radians.abs() > 1e-6
+        ));
     }
 
     #[test]
