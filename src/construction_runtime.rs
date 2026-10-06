@@ -1082,22 +1082,54 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
             }
 
             for angle in angles {
-                let candidate_origin =
-                    placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
+                // The NFP is now the placement source for supported rigid
+                // boundary contacts. Its feature provenance identifies the
+                // exact local boundary representatives used for the bond, and
+                // the feature midpoint directly determines the candidate
+                // origin. The older endpoint-derived placement remains only as
+                // a fallback for contacts not represented by a polygon feature.
+                let nfp_boundary = crate::configuration_space::convex_minkowski_difference(
+                    &rotated_polygon_vertices(
+                        existing_shape,
+                        existing_unit.placement.rotation_radians,
+                    )?,
+                    &rotated_polygon_vertices(candidate_shape, angle)?,
+                ).ok();
 
-                // For convex rigid polygons, configuration space is now the
-                // first geometric gate. The candidate reference-point
-                // translation must lie on the exact NFP boundary: inside means
-                // penetration, outside means separation. Feature provenance is
-                // retained so flat-to-flat contact can be ranked without
-                // prescribing topology.
+                let nfp_placement = nfp_boundary.as_ref().and_then(|boundary| {
+                    boundary.features.iter().find_map(|feature| {
+                        let (placement, feature_a, feature_b) = nfp_feature_placement(
+                            existing_shape,
+                            existing_unit.placement.rotation_radians,
+                            (existing_unit.placement.x, existing_unit.placement.y),
+                            candidate_shape,
+                            angle,
+                            feature,
+                        )?;
+                        (feature_a == endpoint_a && feature_b == endpoint_b)
+                            .then_some(placement)
+                    })
+                });
+
+                let candidate_placement = nfp_placement.unwrap_or_else(|| {
+                    placement_for_joint(
+                        (local_b.x, local_b.y),
+                        (joint.x, joint.y),
+                        angle,
+                    )
+                });
+
+                // A placement generated from the NFP is already on a legal
+                // contact feature. Keep the exact boundary test as a safety
+                // check for the fallback path and as the final configuration-
+                // space contract before expensive realization.
                 let nfp_contact = nfp_contact_class(
                     existing_shape,
                     existing_unit.placement.rotation_radians,
                     (existing_unit.placement.x, existing_unit.placement.y),
                     candidate_shape,
                     angle,
-                    (candidate_origin.x, candidate_origin.y),
+                    (candidate_placement.x, candidate_placement.y),
                 );
                 if nfp_contact.is_none() {
                     continue;
