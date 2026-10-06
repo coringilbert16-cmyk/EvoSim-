@@ -56,7 +56,11 @@ pub fn transform_polygon_vertex(
     ))
 }
 
-/// Derive and transform a rigid line endpoint using the actual line geometry.
+/// Derive and transform a primary end point of a line-like rigid shape.
+///
+/// Generic zero-thickness lines use their two geometric endpoints. Hydrogen is
+/// intentionally different: it has finite 0.1 thickness, but retains two
+/// line-like primary connection points at the centers of its two end faces.
 pub fn transform_line_endpoint(
     shape: &Shape,
     endpoint: usize,
@@ -97,10 +101,24 @@ pub fn rigid_endpoint_world_point(
     origin_y: f64,
     rotation_radians: f64,
 ) -> Option<WorldConnectionPoint> {
-    if matches!(shape.form, crate::resources::Form::Line { .. }) {
-        transform_line_endpoint(shape, vertex, origin_x, origin_y, rotation_radians)
-    } else {
-        transform_polygon_vertex(shape, vertex, origin_x, origin_y, rotation_radians)
+    match &shape.form {
+        crate::resources::Form::Line { .. } => {
+            transform_line_endpoint(shape, vertex, origin_x, origin_y, rotation_radians)
+        }
+        crate::resources::Form::Rectangle { width, .. } if vertex < 2 => {
+            let x = if vertex == 0 { -*width / 2.0 } else { *width / 2.0 };
+            let normal_x = if vertex == 0 { -1.0 } else { 1.0 };
+            Some(transform_derived_point(
+                x,
+                0.0,
+                normal_x,
+                0.0,
+                origin_x,
+                origin_y,
+                rotation_radians,
+            ))
+        }
+        _ => transform_polygon_vertex(shape, vertex, origin_x, origin_y, rotation_radians),
     }
 }
 
@@ -183,6 +201,22 @@ mod tests {
         let r = transform_line_endpoint(&shape, 1, 0.0, 0.0, 0.0).unwrap();
         assert_eq!((r.x, r.y), (1.0, 0.0));
         assert_eq!((r.normal_x, r.normal_y), (1.0, 0.0));
+    }
+
+    #[test]
+    fn hydrogen_primary_endpoints_use_end_face_centers() {
+        let shape = Shape {
+            form: Form::Rectangle {
+                width: 1.0,
+                height: 0.1,
+            },
+        };
+        let left = rigid_endpoint_world_point(&shape, 0, 0.0, 0.0, 0.0).unwrap();
+        let right = rigid_endpoint_world_point(&shape, 1, 0.0, 0.0, 0.0).unwrap();
+        assert_eq!((left.x, left.y), (-0.5, 0.0));
+        assert_eq!((right.x, right.y), (0.5, 0.0));
+        assert_eq!((left.normal_x, left.normal_y), (-1.0, 0.0));
+        assert_eq!((right.normal_x, right.normal_y), (1.0, 0.0));
     }
 
     #[test]
