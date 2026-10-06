@@ -197,6 +197,7 @@ impl GeometryRigidPointContactFamily {
             quantize(self.anchor_parameter_end),
             quantize(self.candidate_rotation_start_radians),
             quantize(self.candidate_rotation_end_radians),
+            "point",
         )
     }
 }
@@ -516,16 +517,29 @@ impl GeometryLibrary {
             GeometryFrontier::default()
         };
 
+        let fluid_boundary_families =
+            load_fluid_boundary_families(&fluid_boundary_family_path, &entries, catalog);
+        let rigid_point_contact_families = load_rigid_point_contact_families(
+            &rigid_point_contact_family_path,
+            &entries,
+            catalog,
+        );
+        let rigid_vertex_contact_families = load_rigid_vertex_contact_families(
+            &rigid_vertex_contact_family_path,
+            &entries,
+            catalog,
+        );
+
         let mut library = Self {
             root,
             entries,
             manifest,
             frontier,
             contact_families,
-            fluid_boundary_families: load_fluid_boundary_families(&fluid_boundary_family_path, &entries, catalog),
+            fluid_boundary_families,
             rigid_contact_families,
-            rigid_point_contact_families: load_rigid_point_contact_families(&rigid_point_contact_family_path, &entries, catalog),
-            rigid_vertex_contact_families: load_rigid_vertex_contact_families(&rigid_vertex_contact_family_path, &entries, catalog),
+            rigid_point_contact_families,
+            rigid_vertex_contact_families,
         };
         library.manifest.entries = library.entries.len() as u64;
         library.write_manifest()?;
