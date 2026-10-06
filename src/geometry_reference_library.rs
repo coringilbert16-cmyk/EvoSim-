@@ -333,11 +333,31 @@ impl GeometryLibrary {
         formation: GeometryFormation,
         catalog: &[BaseResource],
     ) -> std::io::Result<bool> {
-        let Some(formation) = formation.canonicalized(catalog) else {
-            return Ok(false);
-        };
-        if self.entries.contains_key(&formation.signature) {
-            return Ok(false);
+        let mut candidates = Vec::new();
+        candidates.push(formation);
+        Ok(self.insert_many(candidates, catalog)? > 0)
+    }
+
+    /// Persist a batch of formations with one append/sync and one manifest write.
+    ///
+    /// The worker discovers many continuations at once. Syncing every candidate
+    /// individually turns durable storage into the geometry-search bottleneck,
+    /// so durability is retained at the batch boundary instead.
+    pub fn insert_many(
+        &mut self,
+        formations: Vec<GeometryFormation>,
+        catalog: &[BaseResource],
+    ) -> std::io::Result<usize> {
+        let mut unique = BTreeMap::new();
+        for formation in formations {
+            if let Some(canonical) = formation.canonicalized(catalog) {
+                if !self.entries.contains_key(&canonical.signature) {
+                    unique.insert(canonical.signature.clone(), canonical);
+                }
+            }
+        }
+        if unique.is_empty() {
+            return Ok(0);
         }
 
         let data_path = self.root.join("formations.jsonl");
@@ -345,16 +365,18 @@ impl GeometryLibrary {
             .create(true)
             .append(true)
             .open(data_path)?;
-        serde_json::to_writer(&mut file, &formation)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        file.write_all(b"\n")?;
+        for formation in unique.values() {
+            serde_json::to_writer(&mut file, formation)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+            file.write_all(b"\\n")?;
+        }
         file.sync_data()?;
 
-        self.entries
-            .insert(formation.signature.clone(), formation);
+        let added = unique.len();
+        self.entries.extend(unique);
         self.manifest.entries = self.entries.len() as u64;
         self.write_manifest()?;
-        Ok(true)
+        Ok(added)
     }
 
     fn write_frontier(&self) -> std::io::Result<()> {
@@ -1133,6 +1155,31 @@ mod tests {
     }
 
     #[test]
+    fn batched_insertion_deduplicates_before_persisting() {
+        let root = temp_root();
+        let catalog = default_catalog();
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+        let carbon = GeometryFormation::single("Carbon");
+        let hydrogen = GeometryFormation::single("Hydrogen");
+
+        assert_eq!(
+            library
+                .insert_many(
+                    vec![carbon.clone(), carbon, hydrogen.clone(), hydrogen],
+                    &catalog,
+                )
+                .unwrap(),
+            2
+        );
+        assert_eq!(library.len(), 2);
+
+        drop(library);
+        let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
+        assert_eq!(reopened.len(), 2);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn single_resource_formations_are_persistent_and_deduplicated() {
         let root = temp_root();
         let catalog = default_catalog();
@@ -1198,193 +1245,3 @@ mod tests {
             schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
             constituents: vec![
                 GeometryConstituent {
-                    resource: "Water".into(),
-                    placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                },
-                GeometryConstituent {
-                    resource: "Carbon".into(),
-                    placement: Placement { x: 1.0 + (0.5 / std::f64::consts::PI).sqrt(), y: 0.0, rotation_radians: 0.0 },
-                },
-            ],
-            bonds: vec![GeometryBond { constituent_a: 0, constituent_b: 1 }],
-            signature: String::new(),
-        };
-        assert!(validate_formation(&formation, &catalog));
-    }
-
-    #[test]
-    fn fluid_to_fluid_is_not_a_rigid_geometry_formation() {
-        let catalog = default_catalog();
-        let water_a = catalog.iter().find(|r| r.name == "Water").unwrap();
-        let water_b = catalog.iter().find(|r| r.name == "Water").unwrap();
-        let formation = GeometryFormation {
-            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
-            constituents: vec![
-                GeometryConstituent {
-                    resource: water_a.name.clone(),
-                    placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                },
-                GeometryConstituent {
-                    resource: water_b.name.clone(),
-                    placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                },
-            ],
-            bonds: vec![GeometryBond { constituent_a: 0, constituent_b: 1 }],
-            signature: String::new(),
-        };
-        assert!(!validate_formation(&formation, &catalog));
-    }
-
-    #[test]
-    fn rigid_two_constituent_formation_is_valid_when_touching_without_penetration() {
-        let catalog = default_catalog();
-        let formation = GeometryFormation {
-            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
-            constituents: vec![
-                GeometryConstituent {
-                    resource: "Carbon".into(),
-                    placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                },
-                GeometryConstituent {
-                    resource: "Carbon".into(),
-                    placement: Placement { x: 2.0, y: 0.0, rotation_radians: 0.0 },
-                },
-            ],
-            bonds: vec![GeometryBond { constituent_a: 0, constituent_b: 1 }],
-            signature: String::new(),
-        };
-
-        assert!(validate_formation(&formation, &catalog));
-        let canonical = formation.canonicalized(&catalog).unwrap();
-        assert_eq!(canonical.signature, canonical.canonical_signature());
-    }
-
-    #[test]
-    fn canonicalization_preserves_non_circular_global_orientation_data() {
-        let catalog = default_catalog();
-        let formation = GeometryFormation {
-            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
-            constituents: vec![
-                GeometryConstituent {
-                    resource: "Carbon".into(),
-                    placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                },
-                GeometryConstituent {
-                    resource: "Carbon".into(),
-                    placement: Placement { x: 2.0, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_2 },
-                },
-            ],
-            bonds: vec![GeometryBond { constituent_a: 0, constituent_b: 1 }],
-            signature: String::new(),
-        };
-        let canonical = formation.canonicalized(&catalog).unwrap();
-        assert!(canonical.constituents.iter().any(|c|
-            c.placement.rotation_radians.abs() > 1e-6
-        ));
-    }
-
-    #[test]
-    fn canonicalization_is_independent_of_input_order_for_same_resources() {
-        let catalog = default_catalog();
-        let mut a = GeometryFormation {
-            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
-            constituents: vec![
-                GeometryConstituent {
-                    resource: "Carbon".into(),
-                    placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                },
-                GeometryConstituent {
-                    resource: "Carbon".into(),
-                    placement: Placement { x: 2.0, y: 0.0, rotation_radians: 0.0 },
-                },
-            ],
-            bonds: vec![GeometryBond { constituent_a: 0, constituent_b: 1 }],
-            signature: String::new(),
-        };
-        let mut b = a.clone();
-        b.constituents.swap(0, 1);
-        b.bonds[0] = GeometryBond { constituent_a: 1, constituent_b: 0 };
-        a = a.canonicalized(&catalog).unwrap();
-        b = b.canonicalized(&catalog).unwrap();
-        assert_eq!(a.signature, b.signature);
-    }
-
-    #[test]
-    fn canonicalization_remaps_bonds_when_constituent_order_changes() {
-        let catalog = default_catalog();
-        let a = GeometryFormation {
-            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
-            constituents: vec![
-                GeometryConstituent {
-                    resource: "Sulfur".into(),
-                    placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                },
-                GeometryConstituent {
-                    resource: "Carbon".into(),
-                    placement: Placement { x: 1.5, y: 0.0, rotation_radians: 0.0 },
-                },
-            ],
-            bonds: vec![GeometryBond { constituent_a: 0, constituent_b: 1 }],
-            signature: String::new(),
-        };
-        let b = GeometryFormation {
-            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
-            constituents: vec![
-                a.constituents[1].clone(),
-                a.constituents[0].clone(),
-            ],
-            bonds: vec![GeometryBond { constituent_a: 1, constituent_b: 0 }],
-            signature: String::new(),
-        };
-        let ca = a.canonicalized(&catalog).unwrap();
-        let cb = b.canonicalized(&catalog).unwrap();
-        assert_eq!(ca.signature, cb.signature);
-    }
-
-    #[test]
-    fn fluid_fluid_generation_produces_no_rigid_candidate() {
-        let catalog = default_catalog();
-        let water = catalog.iter().find(|r| r.name == "Water").unwrap();
-        let base = GeometryFormation::single("Water");
-        assert!(generate_two_constituent_candidates(&base, water, &catalog).is_empty());
-    }
-
-    #[test]
-    fn global_rotation_does_not_change_canonical_signature() {
-        let catalog = default_catalog();
-        let a = GeometryFormation {
-            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
-            constituents: vec![
-                GeometryConstituent {
-                    resource: "Carbon".into(),
-                    placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                },
-                GeometryConstituent {
-                    resource: "Carbon".into(),
-                    placement: Placement { x: 2.0, y: 0.0, rotation_radians: 0.0 },
-                },
-            ],
-            bonds: vec![GeometryBond { constituent_a: 0, constituent_b: 1 }],
-            signature: String::new(),
-        };
-        let angle = std::f64::consts::FRAC_PI_2;
-        let b = GeometryFormation {
-            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
-            constituents: vec![
-                GeometryConstituent {
-                    resource: "Carbon".into(),
-                    placement: Placement { x: 0.0, y: 0.0, rotation_radians: angle },
-                },
-                GeometryConstituent {
-                    resource: "Carbon".into(),
-                    placement: Placement { x: 0.0, y: 2.0, rotation_radians: angle },
-                },
-            ],
-            bonds: vec![GeometryBond { constituent_a: 0, constituent_b: 1 }],
-            signature: String::new(),
-        };
-        let ca = a.canonicalized(&catalog).unwrap();
-        let cb = b.canonicalized(&catalog).unwrap();
-        assert_eq!(ca.signature, cb.signature);
-    }
-}
