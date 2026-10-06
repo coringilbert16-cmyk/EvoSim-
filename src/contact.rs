@@ -319,34 +319,23 @@ fn endpoint_world_point(
         ConnectionEndpoint::Boundary { angle_radians } => {
             let (s, c) = angle_radians.sin_cos();
             let point = boundary_point_toward(shape, c, s)?;
-            let len = point.x.hypot(point.y);
-            let (nx, ny) = if len > 1e-12 {
-                (point.x / len, point.y / len)
-            } else {
-                (c, s)
-            };
             Some(crate::connection_geometry::transform_derived_point(
                 point.x,
                 point.y,
-                nx,
-                ny,
+                point.normal_x,
+                point.normal_y,
                 unit.placement.x,
                 unit.placement.y,
                 unit.placement.rotation_radians,
             ))
         }
         ConnectionEndpoint::Fluid { x, y } => {
-            let len = x.hypot(y);
-            let (nx, ny) = if len > 1e-12 {
-                (x / len, y / len)
-            } else {
-                (0.0, 0.0)
-            };
+            let point = boundary_point_toward(shape, x, y)?;
             Some(crate::connection_geometry::transform_derived_point(
-                x,
-                y,
-                nx,
-                ny,
+                point.x,
+                point.y,
+                point.normal_x,
+                point.normal_y,
                 unit.placement.x,
                 unit.placement.y,
                 unit.placement.rotation_radians,
@@ -536,6 +525,26 @@ mod tests {
                 && (b.0 - 0.5).abs() < 1e-12
                 && (b.1 - 1.0).abs() < 1e-12
         }));
+    }
+
+
+    #[test]
+    fn boundary_endpoints_preserve_physical_surface_normals() {
+        let catalog = crate::resources::default_catalog();
+        let unit = StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        let endpoint = ConnectionEndpoint::Boundary {
+            angle_radians: 0.1,
+        };
+        let point = endpoint_world_point(endpoint, &unit, &catalog).unwrap();
+        assert!(point.normal_x > 0.99);
+        assert!(point.normal_y.abs() < 1e-12);
     }
 
     #[test]
