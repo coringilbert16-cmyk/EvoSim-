@@ -195,10 +195,43 @@ fn valid_construction(
 /// rotations from actual boundary features. A successful transaction is
 /// immediately committed; a failed candidate is discarded without mutating the
 /// organism. No committed step is backtracked.
+#[derive(Default)]
+struct ConstructionEndpointOccupancy {
+    occupied: std::collections::HashSet<(usize, u64, u64, u8)>,
+}
+
+impl ConstructionEndpointOccupancy {
+    fn key(endpoint: &crate::structure::ConnectionEndpoint) -> (u64, u64, u8) {
+        match endpoint {
+            crate::structure::ConnectionEndpoint::BoundaryPoint { x, y } => {
+                (x.to_bits(), y.to_bits(), 0)
+            }
+            crate::structure::ConnectionEndpoint::Corner { point_index } => (*point_index as u64, 0, 1),
+            crate::structure::ConnectionEndpoint::LineEndpoint { point_index } => (*point_index as u64, 0, 2),
+            _ => (0, 0, 3),
+        }
+    }
+
+    fn insert_bond(&mut self, bond: &crate::structure::StructuralBond, structure: &crate::structure::OrganismStructure) {
+        for endpoint in [&bond.endpoint_a, &bond.endpoint_b] {
+            if let Some(unit_index) = structure.unit_index(endpoint.constituent_id) {
+                let (a, b, kind) = Self::key(&endpoint.endpoint);
+                self.occupied.insert((unit_index, a, b, kind));
+            }
+        }
+    }
+
+    fn is_occupied(&self, unit_index: usize, endpoint: &crate::structure::ConnectionEndpoint) -> bool {
+        let (a, b, kind) = Self::key(endpoint);
+        self.occupied.contains(&(unit_index, a, b, kind))
+    }
+}
+
 fn open_construction_indices(
     structure: &crate::structure::OrganismStructure,
     catalog: &[BaseResource],
     frontier: &[usize],
+    occupancy: &ConstructionEndpointOccupancy,
 ) -> Vec<usize> {
     // The frontier is maintained across growth steps. We only revalidate
     // indices that were already known to be capable of construction work,
@@ -208,12 +241,9 @@ fn open_construction_indices(
         .copied()
         .filter(|&index| {
             structure.units.get(index).is_some_and(|unit| {
-                !crate::construction_runtime::construction_frontier_endpoints(
-                    unit,
-                    structure,
-                    catalog,
-                )
-                .is_empty()
+                crate::construction_runtime::structure_unit_endpoint_options_for_frontier(unit, catalog)
+                    .into_iter()
+                    .any(|endpoint| !occupancy.is_occupied(index, &endpoint))
             })
         })
         .collect()
@@ -224,6 +254,7 @@ fn grow_one_step(
     catalog: &[BaseResource],
     candidates: &[(String, crate::physical_material::PhysicalMaterial)],
     frontier: &[usize],
+    occupancy: &ConstructionEndpointOccupancy,
     nodes: &mut usize,
     ledger: &EnergyLedger,
     energy: f64,
@@ -231,13 +262,14 @@ fn grow_one_step(
     // Genesis is intentionally local: only units with an unbonded physical
     // boundary endpoint can admit the next constituent. This is a frontier
     // search, not a rescan of every historical constituent.
-    let existing_indices = open_construction_indices(structure, catalog, frontier);
+    let existing_indices = open_construction_indices(structure, catalog, frontier, occupancy);
 
     // There is no preferred construction material here. Every valid rigid
     // resource is an equally eligible physical candidate; the first candidate
     // that satisfies exact geometry is committed immediately.
     for existing_index in existing_indices {
         for (_resource_name, instance) in candidates {
+            let bonds_before = structure.bonds.len();
             if let Some((
                 _indices,
                 _part_index,
@@ -255,6 +287,9 @@ fn grow_one_step(
                 Some(&spatial_index),
             ) {
                 let mut next_frontier = frontier.to_vec();
+                for bond in structure.bonds.iter().skip(bonds_before) {
+                    occupancy.insert_bond(bond, structure);
+                }
                 for index in _indices {
                     if !next_frontier.contains(&index) {
                         let radius = structure.units[index]
@@ -298,6 +333,7 @@ fn construct_physical_organism(
     let mut frontier = vec![0usize];
     let mut spatial_index =
         crate::construction_runtime::ConstructionSpatialIndex::new(&structure, catalog);
+    let mut occupancy = ConstructionEndpointOccupancy::default();
     // Physical material realizations are immutable candidate geometry during
     // genesis. Build them once rather than rebuilding the same catalog-derived
     // shapes on every frontier-growth step.
@@ -325,6 +361,7 @@ fn construct_physical_organism(
                 catalog,
                 &construction_candidates,
                 &frontier,
+                &occupancy,
                 &mut nodes,
                 &ledger,
                 energy,
