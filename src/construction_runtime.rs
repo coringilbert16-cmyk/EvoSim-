@@ -728,6 +728,12 @@ fn rigid_endpoint_edge_angles(
 
     let mut angles = Vec::new();
     let mut push_unique = |angle: f64| {
+        // NaN is used only by callers that explicitly have no developmental
+        // preferred angle. Geometry-derived candidates remain finite and are
+        // always admitted.
+        if !angle.is_finite() {
+            return;
+        }
         let normalized = normalize_construction_angle(angle);
         if !angles.iter().any(|current: &f64| {
             normalize_construction_angle(*current - normalized).abs() <= 1e-10
@@ -981,13 +987,6 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
             .and_then(|(name, _)| resource(catalog, name))
             .map(|resource| &resource.shape)
     });
-    // The translational NFP depends on the anchor/candidate orientation, not
-    // on which connection endpoint pair eventually consumes that contact feature.
-    // Cache each computed boundary so endpoint enumeration never rebuilds the
-    // same Minkowski configuration space.
-    // Build invariant NFP configuration spaces and feature mappings before
-    // endpoint-pair enumeration. The NFP depends on the two rigid geometries and
-    // orientation, not on which available endpoints eventually consume the contact.
     // The translational NFP depends on the anchor/candidate orientation,
     // not on which endpoint pair eventually consumes the contact feature.
     // Build each orientation once and retain its feature provenance.
@@ -1045,7 +1044,9 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
                     candidate_shape,
                     endpoint_b,
                     candidate_relative_rotation,
-                    0.0,
+                    // Genesis has no preferred blueprint angle. Only exact
+                    // boundary-derived orientations should enter this stream.
+                    f64::NAN,
                 ));
             }
         }
