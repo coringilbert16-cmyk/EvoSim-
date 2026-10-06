@@ -66,3 +66,8 @@ A rigid line endpoint contacting an exposed polygon edge is a genuine continuum:
 ### Continuous polygon-vertex contact families
 
 The catalogue also records the continuous rigid manifold where a vertex of a convex polygonal candidate touches an exposed edge of an existing polygonal formation. The contact point ranges over the exact exposed edge interval, while the candidate rotation ranges over the outward half-plane that keeps its interior outside the supporting solid. Concave candidates are deliberately excluded from this shortcut because their local admissible orientation set is not a single half-plane interval; they remain subject to the ordinary exact finite-contact generator until a dedicated concave contact representation exists. No sampled angles or positions are used.
+
+
+### Worker catalogue-scan cost
+
+The worker preserves breadth-first expansion without cloning and sorting the complete catalogue on every step. It selects the smallest unfinished formation by constituent count with a single scan, clones only that formation, processes all resource frontiers, and returns. This keeps catalogue growth from multiplying full-vector allocation and sort work at every worker iteration; a persistent work cursor can be added later if catalogue-scale profiling shows the remaining single scan is significant.
