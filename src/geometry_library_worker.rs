@@ -107,14 +107,6 @@ fn continuous_contact_family_exists(
         _ => return false,
     };
 
-    let Some(family) = solve_water_against_solid(
-        area,
-        water.properties.cohesion,
-        0.0,
-    ) else {
-        return false;
-    };
-
     formation.constituents.iter().any(|constituent| {
         let Some(resource) = catalog.iter().find(|resource| resource.name == constituent.resource)
         else {
@@ -125,6 +117,13 @@ fn continuous_contact_family_exists(
         }
 
         let Some(vertices) = resource.shape.form.polygon_vertices() else {
+            return false;
+        };
+        let Some(family) = solve_water_against_solid(
+            area,
+            water.properties.cohesion,
+            resource.properties.cohesion,
+        ) else {
             return false;
         };
         (0..vertices.len()).any(|edge| {
