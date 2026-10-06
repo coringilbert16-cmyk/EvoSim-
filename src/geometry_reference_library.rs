@@ -2286,7 +2286,7 @@ mod tests {
 
     #[test]
     fn exposed_line_boundary_can_be_fully_occluded() {
-        let catalog = default_catalog();
+        let catalog = catalog_with_test_line();
         let formation = GeometryFormation {
             schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
             constituents: vec![
@@ -2418,7 +2418,7 @@ mod tests {
         let families = generate_rigid_vertex_contact_families(&formation, methane, &catalog);
         assert!(!families.is_empty());
 
-        // Methane is a convex hexagon. At a vertex touching a flat boundary,
+        // Methane is a convex triangle. At a vertex touching a flat boundary,
         // the two incident edges define a 60-degree admissible rotation wedge.
         for family in families {
             let width = family.candidate_rotation_end_radians
