@@ -68,7 +68,7 @@ Reproduction is different: once an organism reproduces, creating a separate orga
 
 The geometry of the realized shapes is the final physical authority.
 
-The intended pipeline is:
+The target construction pipeline is:
 
 `live frontier → nearby geometry → configuration space → legal contact features → developmental ranking → exact placement validation → exact contact → bond transaction`
 
@@ -90,7 +90,7 @@ All other orientations are consequences of the available geometry and physical c
 
 # Configuration-space / Minkowski plan
 
-The next major constructor migration is a feature-preserving convex configuration-space implementation.
+The target architecture is a feature-preserving convex configuration-space implementation. The current branch has not completed this migration yet.
 
 For convex existing shape `A` and candidate shape `B`, translational configuration space is represented by the Minkowski construction:
 
@@ -102,7 +102,7 @@ It answers the geometric question:
 
 > Which relative translations put these two shapes into a physically meaningful contact relationship without penetration?
 
-The configuration-space boundary must preserve feature provenance. Each boundary segment should retain the physical features that generated it, such as:
+The configuration-space boundary must preserve feature provenance. Each boundary feature (segment or point, as appropriate) should retain the physical features that generated it, such as:
 
 - edge ↔ edge;
 - vertex ↔ edge;
@@ -174,7 +174,7 @@ The intended sequence is:
 
 The current `ConstructionSpatialIndex` and endpoint occupancy mechanisms are retained because they eliminate unnecessary whole-structure scans.
 
-They are transitional accelerations around the existing constructor and should ultimately support the configuration-space architecture rather than preserve the old placement-search model.
+They are derived accelerations that already support the current constructor and are intended to remain under the final configuration-space architecture. They must not become a reason to preserve the old placement-search model.
 
 Exact geometry remains authoritative at every stage.
 
@@ -302,7 +302,7 @@ Water is logically ubiquitous/unlimited but is physically instantiated only when
 
 The genome cavity is genuinely empty and is part of the organism rather than the surrounding environment.
 
-Structural membership follows bonded connectivity to the genome. Water may participate in structural/developmental tissue when physically connected according to the structural rules.
+Structural membership follows bonded connectivity to the genome. Water may participate in structural/developmental tissue when physically connected according to the structural rules: a structural water path must contain a non-water physical connection to the genome-connected structure; water does not become structural merely by forming a water-only chain.
 
 Permeability and related physical behavior should emerge from material properties and geometry rather than from special doors or resource-specific exceptions.
 
@@ -312,11 +312,11 @@ Permeability and related physical behavior should emerge from material propertie
 
 The constructor must be optimized around **bounded local geometry**, not larger search budgets.
 
-The desired hot path is approximately:
+The target hot path is approximately:
 
 `frontier → nearby geometry → convex Minkowski/configuration space → legal contact feature → one/few exact validations → bond commit`
 
-It must not become:
+It must not evolve into a permanent architecture of:
 
 `frontier → thousands of rotations → thousands of placements → whole-organism overlap scans`
 
@@ -606,9 +606,9 @@ PR #175 is the current exact-contact/construction migration branch:
 
 `sprint/exact-contact-migration`
 
-Current head at the latest audit:
+Current branch head after the README consistency audit:
 
-`b0b7496e51321807b8d0f2685756b7c38504cd82`
+`742cbc3f089474b5704a5073d89a8dd0dc0f80c1`
 
 The branch has already implemented important foundations:
 
@@ -622,13 +622,13 @@ The branch has already implemented important foundations:
 - emergent cavity direction;
 - README performance target.
 
-The branch has **not** yet completed the final configuration-space migration.
+The branch has **not** yet completed the final configuration-space migration. The configuration-space sections above describe the target architecture and implementation plan, not a claim that the migration is already present in the constructor.
 
 ## Current known blocker
 
-The latest CI compilation currently fails because the live `spatial_index` is not passed into `grow_one_step` even though the growth function now uses it.
+The latest known CI compilation failed because the live `spatial_index` was not passed into `grow_one_step` even though the growth function uses it.
 
-This is a mechanical baseline defect and is the first task before the geometry migration.
+This is a mechanical baseline defect and remains the first implementation task before the geometry migration. The README update itself does not claim that this blocker has been fixed; a new CI result must be inspected before changing this status.
 
 Do not interpret this compile failure as evidence that the architecture needs another search-budget increase.
 
