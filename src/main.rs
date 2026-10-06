@@ -16,6 +16,7 @@ mod structure;
 mod structure_authority;
 
 // Active physical geometry authority stack.
+mod capillary_geometry;
 mod cavity;
 mod connection_geometry;
 mod construction_material_selection;
