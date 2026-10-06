@@ -601,6 +601,100 @@ pub fn validate_formation(formation: &GeometryFormation, catalog: &[BaseResource
 }
 
 
+/// A polygon edge expressed as the exact exposed parameter intervals that remain
+/// available for a future contact. Parameter 0 is the first vertex and 1 is
+/// the second vertex. Coincident boundary portions belonging to another
+/// constituent are removed; point contacts do not remove an interval.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExposedEdgeInterval {
+    pub edge: usize,
+    pub start: f64,
+    pub end: f64,
+}
+
+/// Return the exposed portions of one rigid polygon's boundary.
+///
+/// This is deliberately interval-based rather than sampled. Because formation
+/// validation already rejects positive-area penetration, another rigid polygon
+/// can only occlude a boundary edge by lying on that same boundary. We therefore
+/// project exact collinear edge overlaps onto the source edge and subtract them.
+pub fn exposed_polygon_edge_intervals(
+    formation: &GeometryFormation,
+    anchor_index: usize,
+    catalog: &[BaseResource],
+) -> Vec<ExposedEdgeInterval> {
+    if anchor_index >= formation.constituents.len() {
+        return Vec::new();
+    }
+    let Some(anchor_resource) = catalog.iter().find(|r| r.name == formation.constituents[anchor_index].resource) else {
+        return Vec::new();
+    };
+    let Some(anchor_vertices) = anchor_resource.shape.form.polygon_vertices() else {
+        return Vec::new();
+    };
+    let anchor_placement = formation.constituents[anchor_index].placement;
+    let mut out = Vec::new();
+
+    for edge in 0..anchor_vertices.len() {
+        let a = world_point(anchor_vertices[edge], anchor_placement);
+        let b = world_point(anchor_vertices[(edge + 1) % anchor_vertices.len()], anchor_placement);
+        let dx = b.0 - a.0;
+        let dy = b.1 - a.1;
+        let length_sq = dx * dx + dy * dy;
+        if length_sq <= f64::EPSILON {
+            continue;
+        }
+
+        let mut covered = Vec::<(f64, f64)>::new();
+        for (other_index, other) in formation.constituents.iter().enumerate() {
+            if other_index == anchor_index {
+                continue;
+            }
+            let Some(resource) = catalog.iter().find(|r| r.name == other.resource) else { continue; };
+            if resource.physical_state == crate::resources::PhysicalState::Fluid {
+                continue;
+            }
+            let Some(vertices) = resource.shape.form.polygon_vertices() else { continue; };
+            let p = other.placement;
+            for other_edge in 0..vertices.len() {
+                let c = world_point(vertices[other_edge], p);
+                let d = world_point(vertices[(other_edge + 1) % vertices.len()], p);
+                let ex = d.0 - c.0;
+                let ey = d.1 - c.1;
+                let cross = dx * (c.1 - a.1) - dy * (c.0 - a.0);
+                let cross_end = dx * (d.1 - a.1) - dy * (d.0 - a.0);
+                if cross.abs() > 1e-9 * length_sq.sqrt() || cross_end.abs() > 1e-9 * length_sq.sqrt() {
+                    continue;
+                }
+                let t0 = ((c.0 - a.0) * dx + (c.1 - a.1) * dy) / length_sq;
+                let t1 = ((d.0 - a.0) * dx + (d.1 - a.1) * dy) / length_sq;
+                let lo = t0.min(t1).max(0.0);
+                let hi = t0.max(t1).min(1.0);
+                if hi - lo > 1e-10 {
+                    covered.push((lo, hi));
+                }
+                let _ = (ex, ey);
+            }
+        }
+
+        covered.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+        let mut cursor = 0.0;
+        for (start, end) in covered {
+            if start > cursor + 1e-10 {
+                out.push(ExposedEdgeInterval { edge, start: cursor, end: start.min(1.0) });
+            }
+            cursor = cursor.max(end);
+            if cursor >= 1.0 - 1e-10 {
+                break;
+            }
+        }
+        if cursor < 1.0 - 1e-10 {
+            out.push(ExposedEdgeInterval { edge, start: cursor, end: 1.0 });
+        }
+    }
+    out
+}
+
 /// Derive exact Water/rigid contact families from exposed polygon edges.
 pub fn generate_water_contact_families(formation: &GeometryFormation, candidate_resource: &BaseResource, catalog: &[BaseResource]) -> Vec<GeometryContactFamily> {
     if candidate_resource.name != "Water" || candidate_resource.physical_state != crate::resources::PhysicalState::Fluid { return Vec::new(); }
@@ -612,11 +706,17 @@ pub fn generate_water_contact_families(formation: &GeometryFormation, candidate_
         if resource.physical_state == crate::resources::PhysicalState::Fluid { continue; }
         let Some(vertices) = resource.shape.form.polygon_vertices() else { continue; };
         let Some(family) = solve_water_against_solid(water_area, water.properties.cohesion, resource.properties.cohesion) else { continue; };
-        for edge in 0..vertices.len() {
-            let a = vertices[edge]; let b = vertices[(edge + 1) % vertices.len()];
-            let edge_length = (b.0 - a.0).hypot(b.1 - a.1);
-            let Some(interval) = ContactTranslationInterval::from_edge_length(edge_length, family) else { continue; };
-            out.push(GeometryContactFamily { schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION, formation_signature: formation.signature.clone(), candidate_resource: candidate_resource.name.clone(), anchor_constituent: anchor_index, anchor_edge: edge, contact_angle_radians: family.contact_angle_radians, curvature_radius: family.curvature_radius, contact_length: family.contact_length, edge_parameter_start: interval.edge_start_parameter, edge_parameter_end: interval.edge_end_parameter });
+        let edge_length_cache = vertices.iter().enumerate().map(|(edge, &a)| {
+            let b = vertices[(edge + 1) % vertices.len()];
+            (edge, (b.0 - a.0).hypot(b.1 - a.1))
+        }).collect::<BTreeMap<_, _>>();
+        for interval in exposed_polygon_edge_intervals(formation, anchor_index, catalog) {
+            let Some(&edge_length) = edge_length_cache.get(&interval.edge) else { continue; };
+            let Some(contact) = ContactTranslationInterval::from_edge_length(edge_length, family) else { continue; };
+            let start = contact.edge_start_parameter.max(interval.start);
+            let end = contact.edge_end_parameter.min(interval.end);
+            if end + 1e-10 < start { continue; }
+            out.push(GeometryContactFamily { schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION, formation_signature: formation.signature.clone(), candidate_resource: candidate_resource.name.clone(), anchor_constituent: anchor_index, anchor_edge: interval.edge, contact_angle_radians: family.contact_angle_radians, curvature_radius: family.curvature_radius, contact_length: family.contact_length, edge_parameter_start: start, edge_parameter_end: end });
         }
     }
     out
