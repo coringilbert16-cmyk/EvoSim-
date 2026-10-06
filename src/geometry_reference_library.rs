@@ -2230,6 +2230,27 @@ mod tests {
     }
 
     #[test]
+    fn fluid_boundary_state_preserves_conserved_area_and_persists() {
+        let root = temp_root();
+        let catalog = default_catalog();
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+        let formation = GeometryFormation::single("Carbon");
+        let water = catalog.iter().find(|r| r.name == "Water").unwrap();
+        let states = generate_fluid_boundary_families(&formation, water, &catalog);
+        assert!(!states.is_empty());
+        assert!(states.iter().all(|state| {
+            (state.area - 0.5).abs() < 1e-12
+                && state.curvature_radius.is_finite()
+                && state.free_arc_angle_radians.is_finite()
+        }));
+        assert!(library.insert_fluid_boundary_families(states).unwrap() > 0);
+        drop(library);
+        let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
+        assert!(reopened.fluid_boundary_families().next().is_some());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn water_capillary_family_is_exact_and_persistent() {
         let root = temp_root();
         let catalog = default_catalog();
