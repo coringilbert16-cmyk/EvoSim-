@@ -86,3 +86,8 @@ The worker preserves breadth-first expansion without cloning and sorting the com
 ### First-class fluid boundary state
 
 Water contact is now also persisted as a `GeometryFluidBoundaryFamily`. Unlike the older contact record, this record carries the conserved fluid area and the complete solved capillary state needed to reconstruct its current free-boundary family: contact angle, curvature radius, free-arc angle, contact length, and exact translation interval along the exposed rigid edge. This is still a one-rigid-wall equilibrium; it is deliberately not presented as a multi-wall solution yet. The important architectural step is that deformable fluid geometry is now durable state rather than only an ephemeral contact calculation, so later multi-wall/corner solutions can compose from the same conserved-fluid representation.
+
+
+### Intrinsic rotational symmetry
+
+Formation canonicalization removes exact proper rotations that leave an individual constituent's physical geometry unchanged. Regular polygons use their exact rotational symmetry; rectangles and line segments are twofold symmetric; circles have no meaningful local rotation. This is only rotational equivalence, never reflection equivalence, so mirror-image formations remain distinct. Hydrogen remains a finite-area 1.0 × 0.1 rectangle with exactly two line-like primary structural endpoints.
