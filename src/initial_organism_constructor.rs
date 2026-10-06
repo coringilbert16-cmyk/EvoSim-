@@ -65,7 +65,7 @@ fn temporary_three_carbon_scaffold(
     let placements = vec![
         Placement { x: -spacing * 0.5, y: 0.0, rotation_radians: 0.0 },
         Placement { x:  spacing * 0.5, y: 0.0, rotation_radians: 0.0 },
-        Placement { x: 0.0, y: spacing, rotation_radians: 0.0 },
+        Placement { x: 0.0, y: 1.5 * radius, rotation_radians: 0.0 },
     ];
 
     // The scaffold is an intact temporary physical material. Its internal
