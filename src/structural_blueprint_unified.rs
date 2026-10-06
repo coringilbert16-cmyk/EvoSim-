@@ -31,8 +31,9 @@ pub struct BlueprintPlacement {
 pub struct StructuralBlueprint {
     pub elements: Vec<BlueprintElement>,
     pub connections: Vec<BlueprintConnection>,
-    /// Transient construction-only genome measurement piece. It is never
-    /// serialized, bonded, acquired, or retained in the organism structure.
+    /// Legacy blueprint-side reference for the minimum genome scale. Runtime
+    /// genesis now uses a real temporary three-Carbon physical scaffold; this
+    /// field remains only for blueprint/juvenile compatibility.
     #[serde(skip)]
     pub(crate) genome_measurement: Option<GenomeMeasurementScaffold>,
     /// Construction anchors identify where realization may begin. They are
@@ -98,12 +99,12 @@ pub struct BlueprintConnection {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct GenomeMeasurementScaffold {
-    /// Three bonded Carbon guide pieces. The guide occupies real construction
-    /// volume but has no organism units or bonds of its own.
+    /// Three Carbon reference pieces arranged as two below and one above, with
+    /// flat-to-flat contact between each neighboring pair. This blueprint-side
+    /// reference mirrors the runtime genesis scaffold geometry.
     pub(crate) placements: [BlueprintPlacement; 3],
-    /// The temporary three-carbon reference is itself a triangle: all three
-    /// Carbon pieces are internally bonded, with each edge contributing to the
-    /// reference measurement.
+    /// The three reference Carbon pieces form the triangular three-bond graph;
+    /// runtime genesis realizes this graph as physical temporary material.
     pub(crate) bonds: [(usize, usize); 3],
     /// The geometric reference is derived from the actual scaffold material,
     /// rather than being independently re-derived by cavity qualification.
