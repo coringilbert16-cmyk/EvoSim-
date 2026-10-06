@@ -62,63 +62,58 @@ fn temporary_three_carbon_scaffold(
     // All three center-to-center distances are sqrt(3) * radius, so every
     // neighboring pair meets flat-to-flat with zero penetration.
     let spacing = 3.0_f64.sqrt() * radius;
-    let placements = [
+    let placements = vec![
         Placement { x: -spacing * 0.5, y: 0.0, rotation_radians: 0.0 },
         Placement { x:  spacing * 0.5, y: 0.0, rotation_radians: 0.0 },
         Placement { x: 0.0, y: spacing, rotation_radians: 0.0 },
     ];
 
+    // The scaffold is an intact temporary physical material. Its internal
+    // bonds are restored through the normal material-restoration authority,
+    // which derives the exact physical contact endpoints from the realized
+    // geometry instead of introducing a constructor-only bond path.
+    let material = Material {
+        parts: vec![
+            (carbon.name.clone(), 1.0),
+            (carbon.name.clone(), 1.0),
+            (carbon.name.clone(), 1.0),
+        ],
+        internal_bonds: vec![
+            crate::resources::InternalBond { part_a: 0, part_b: 1 },
+            crate::resources::InternalBond { part_a: 0, part_b: 2 },
+            crate::resources::InternalBond { part_a: 1, part_b: 2 },
+        ],
+    };
+    let instance = crate::physical_material::PhysicalMaterial::realized(
+        material,
+        placements,
+        catalog,
+    )
+    .ok_or_else(|| "failed to realize three-carbon genesis scaffold".to_string())?;
+
     let mut structure = crate::structure::OrganismStructure::new();
-    let mut ids = Vec::with_capacity(3);
-    for placement in placements {
-        let mut unit = crate::structure::StructuralUnit::from_material(
-            Material::free_base(carbon.name.clone(), 1.0),
-            placement,
-        ).ok_or_else(|| "failed to create Carbon scaffold unit".to_string())?;
-        if !unit.realize_default_geometry(catalog) {
-            return Err("failed to realize Carbon scaffold geometry".into());
-        }
-        let index = structure.add_unit(unit);
-        ids.push(structure.units[index].physical_id);
+    let indices = crate::material_restoration::restore_material(
+        &mut structure,
+        &instance,
+        Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        },
+        catalog,
+    )
+    .ok_or_else(|| "failed to restore three-carbon genesis scaffold".to_string())?;
+
+    if indices.len() != 3 || structure.bonds.len() != 3 {
+        return Err("three-carbon genesis scaffold did not form three bonded pieces".into());
     }
 
-    let contacts = [
-        (0usize, 1usize, ( spacing * 0.5, 0.0), (-spacing * 0.5, 0.0)),
-        (0usize, 2usize, ( spacing * 0.25, spacing * 0.5), (0.25 * spacing, -0.5 * spacing)),
-        (1usize, 2usize, (-spacing * 0.25, spacing * 0.5), (0.25 * spacing, -0.5 * spacing)),
-    ];
-
-    for (a, b, local_a, local_b) in contacts {
-        let properties_a = structure.units[a]
-            .properties(catalog)
-            .ok_or_else(|| "invalid Carbon scaffold properties".to_string())?;
-        let properties_b = structure.units[b]
-            .properties(catalog)
-            .ok_or_else(|| "invalid Carbon scaffold properties".to_string())?;
-        let bond = crate::structure::Bond {
-            endpoint_a: crate::structure::BondEndpoint::new(
-                ids[a],
-                crate::structure::ConnectionEndpoint::BoundaryPoint {
-                    x: local_a.0,
-                    y: local_a.1,
-                },
-            ),
-            endpoint_b: crate::structure::BondEndpoint::new(
-                ids[b],
-                crate::structure::ConnectionEndpoint::BoundaryPoint {
-                    x: local_b.0,
-                    y: local_b.1,
-                },
-            ),
-            strength: crate::combine::bond_strength(properties_a, properties_b),
-            bond_energy: 0.0,
-        };
-        crate::contact::try_add_bond(&mut structure, bond, catalog)
-            .map_err(|error| format!("failed to bond Carbon genesis scaffold: {error:?}"))?;
-    }
-
-    if structure.bonds.len() != 3 {
-        return Err("Carbon genesis scaffold did not form its three bonds".into());
+    let ids = indices
+        .into_iter()
+        .filter_map(|index| structure.physical_id(index))
+        .collect::<Vec<_>>();
+    if ids.len() != 3 {
+        return Err("three-carbon genesis scaffold lost a physical constituent ID".into());
     }
     Ok((structure, ids))
 }
