@@ -1140,15 +1140,23 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
                 // contact feature. Keep the exact boundary test as a safety
                 // check for the fallback path and as the final configuration-
                 // space contract before expensive realization.
-                let nfp_contact = nfp_contact_class(
-                    existing_shape,
-                    existing_unit.placement.rotation_radians,
-                    (existing_unit.placement.x, existing_unit.placement.y),
-                    candidate_shape,
-                    angle,
-                    (candidate_placement.x, candidate_placement.y),
-                );
-                if nfp_contact.is_none() {
+                let candidate_translation = crate::configuration_space::Point {
+                    x: candidate_placement.x - existing_unit.placement.x,
+                    y: candidate_placement.y - existing_unit.placement.y,
+                };
+                let Some(boundary) = nfp_boundary else {
+                    continue;
+                };
+                // The cached NFP is already the configuration-space authority for
+                // this orientation. Do not rebuild the same Minkowski boundary
+                // merely to validate the placement a second time.
+                if crate::configuration_space::boundary_feature_at_translation(
+                    boundary,
+                    candidate_translation,
+                    crate::combine_runtime::COMBINE_CONTACT_TOLERANCE,
+                )
+                .is_none()
+                {
                     continue;
                 }
                 *nodes += 1;
