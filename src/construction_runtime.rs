@@ -1062,7 +1062,9 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
                 })
                 .collect::<Vec<_>>();
             for (_, feature_a, feature_b) in &features {
-                if !existing_endpoints.contains(feature_a) || !new_endpoints.contains(feature_b) {
+                if !existing_endpoints.contains(feature_a)
+                    || !new_endpoints.iter().any(|(_, endpoint)| endpoint == feature_b)
+                {
                     continue;
                 }
                 if let Some((_, _, _, angles)) = nfp_feature_angle_cache.iter_mut().find(
@@ -1101,7 +1103,9 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
 
     for (part_index, angle, features) in &nfp_feature_cache {
         for (placement, endpoint_a, endpoint_b) in features {
-            if !existing_endpoints.contains(endpoint_a) || !new_endpoints.contains(endpoint_b) {
+            if !existing_endpoints.contains(endpoint_a)
+                || !new_endpoints.iter().any(|(_, endpoint)| endpoint == endpoint_b)
+            {
                 continue;
             }
             candidate_stream.push((
