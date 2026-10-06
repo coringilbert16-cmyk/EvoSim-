@@ -112,14 +112,21 @@ pub struct ContactTranslationInterval {
 
 impl ContactTranslationInterval {
     pub fn from_edge_length(edge_length: f64, family: CapillaryContactFamily) -> Option<Self> {
-        if !edge_length.is_finite() || edge_length < family.contact_length - EPS {
+        if !edge_length.is_finite() || edge_length <= EPS {
+            return None;
+        }
+        if edge_length < family.contact_length - EPS {
             return None;
         }
 
-        let half = family.contact_length * 0.5;
+        // Exposed-edge intervals elsewhere in the geometry library use the
+        // normalized edge parameter t in [0, 1]. Keep this representation in
+        // the same coordinate system; returning physical lengths here would
+        // silently mix units when intersecting with an exposed interval.
+        let half_fraction = (family.contact_length * 0.5) / edge_length;
         Some(Self {
-            edge_start_parameter: half,
-            edge_end_parameter: edge_length - half,
+            edge_start_parameter: half_fraction.clamp(0.0, 1.0),
+            edge_end_parameter: (1.0 - half_fraction).clamp(0.0, 1.0),
         })
     }
 
@@ -209,7 +216,7 @@ mod tests {
         let interval =
             ContactTranslationInterval::from_edge_length(family.contact_length + 2.0, family)
                 .unwrap();
-        assert!((interval.length() - 2.0).abs() < 1e-10);
+        assert!((interval.length() - (2.0 / (family.contact_length + 2.0))).abs() < 1e-10);
     }
 
     #[test]
