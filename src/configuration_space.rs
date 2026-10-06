@@ -179,33 +179,38 @@ fn classify_boundary_feature(
 /// The translation is the candidate reference point relative to the anchor
 /// reference point. A boundary translation is exact non-penetrating contact;
 /// interior translations overlap and exterior translations are separated.
-pub(crate) fn boundary_feature_at_translation(
+pub(crate) fn boundary_feature_at_translation_ref(
     boundary: &ConvexConfigurationBoundary,
     translation: Point,
     tolerance: f64,
-) -> Option<ContactFeatureClass> {
+) -> Option<&BoundaryFeature> {
     let tolerance = tolerance.max(0.0);
-    boundary.features.iter().find_map(|feature| {
+    boundary.features.iter().find(|feature| {
         let dx = feature.end.x - feature.start.x;
         let dy = feature.end.y - feature.start.y;
         let length_sq = dx * dx + dy * dy;
         if length_sq <= EPSILON * EPSILON {
-            return None;
+            return false;
         }
         let cross = (translation.x - feature.start.x) * dy
             - (translation.y - feature.start.y) * dx;
         let dot = (translation.x - feature.start.x) * dx
             + (translation.y - feature.start.y) * dy;
         let distance = cross.abs() / length_sq.sqrt();
-        if distance <= tolerance
+        distance <= tolerance
             && dot >= -tolerance * length_sq.sqrt()
             && dot <= length_sq + tolerance * length_sq.sqrt()
-        {
-            Some(feature.class)
-        } else {
-            None
-        }
     })
+}
+
+/// Return the contact class represented by a translation on the NFP boundary.
+pub(crate) fn boundary_feature_at_translation(
+    boundary: &ConvexConfigurationBoundary,
+    translation: Point,
+    tolerance: f64,
+) -> Option<ContactFeatureClass> {
+    boundary_feature_at_translation_ref(boundary, translation, tolerance)
+        .map(|feature| feature.class)
 }
 
 
