@@ -42,6 +42,7 @@ fn process_one_frontier(
                 )
             })
         })
+        .cloned()
     else {
         return Ok(false);
     };
