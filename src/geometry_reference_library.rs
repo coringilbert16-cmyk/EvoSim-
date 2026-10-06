@@ -65,39 +65,46 @@ impl GeometryFormation {
             return None;
         }
 
-        normalize_global_pose(&mut self, catalog);
+        let candidates = canonical_pose_candidates(&self, catalog);
+        let mut best: Option<Self> = None;
+        for mut candidate in candidates {
+            let mut indexed: Vec<(usize, GeometryConstituent)> =
+                candidate.constituents.into_iter().enumerate().collect();
+            indexed.sort_by(|(_, a), (_, b)| {
+                a.resource
+                    .cmp(&b.resource)
+                    .then_with(|| quantize(a.placement.x).cmp(&quantize(b.placement.x)))
+                    .then_with(|| quantize(a.placement.y).cmp(&quantize(b.placement.y)))
+                    .then_with(|| {
+                        quantize(normalized_angle(a.placement.rotation_radians))
+                            .cmp(&quantize(normalized_angle(b.placement.rotation_radians)))
+                    })
+                });
+            candidate.constituents = indexed.iter().map(|(_, c)| c.clone()).collect();
 
-        // Sort the constituents while retaining their original indices so the
-        // bond graph follows the physical pieces rather than merely following
-        // their serialized order.
-        let mut indexed: Vec<(usize, GeometryConstituent)> =
-            self.constituents.into_iter().enumerate().collect();
-        indexed.sort_by(|(_, a), (_, b)| {
-            a.resource
-                .cmp(&b.resource)
-                .then_with(|| quantize(a.placement.x).cmp(&quantize(b.placement.x)))
-                .then_with(|| quantize(a.placement.y).cmp(&quantize(b.placement.y)))
-                .then_with(|| {
-                    quantize(normalized_angle(a.placement.rotation_radians))
-                        .cmp(&quantize(normalized_angle(b.placement.rotation_radians)))
-                })
-        });
-        self.constituents = indexed.iter().map(|(_, c)| c.clone()).collect();
+            let mut remap = vec![0usize; indexed.len()];
+            for (new_index, (old_index, _)) in indexed.iter().enumerate() {
+                remap[*old_index] = new_index;
+            }
+            for bond in &mut candidate.bonds {
+                bond.constituent_a = remap[bond.constituent_a];
+                bond.constituent_b = remap[bond.constituent_b];
+                if bond.constituent_a > bond.constituent_b {
+                    std::mem::swap(&mut bond.constituent_a, &mut bond.constituent_b);
+                }
+            }
+            candidate.bonds.sort_by_key(|b| (b.constituent_a, b.constituent_b));
+            candidate.signature = candidate.canonical_signature();
 
-        let mut remap = vec![0usize; indexed.len()];
-        for (new_index, (old_index, _)) in indexed.iter().enumerate() {
-            remap[*old_index] = new_index;
-        }
-        for bond in &mut self.bonds {
-            bond.constituent_a = remap[bond.constituent_a];
-            bond.constituent_b = remap[bond.constituent_b];
-            if bond.constituent_a > bond.constituent_b {
-                std::mem::swap(&mut bond.constituent_a, &mut bond.constituent_b);
+            if best
+                .as_ref()
+                .map(|existing| candidate.signature < existing.signature)
+                .unwrap_or(true)
+            {
+                best = Some(candidate);
             }
         }
-        self.bonds.sort_by_key(|b| (b.constituent_a, b.constituent_b));
-        self.signature = self.canonical_signature();
-        Some(self)
+        best
     }
 
     pub fn canonical_signature(&self) -> String {
@@ -251,6 +258,37 @@ impl GeometryLibrary {
         fs::rename(temp, path)?;
         Ok(())
     }
+}
+
+fn canonical_pose_candidates(formation: &GeometryFormation, catalog: &[BaseResource]) -> Vec<GeometryFormation> {
+    let mut candidates = Vec::with_capacity(formation.constituents.len().max(1));
+    for anchor_index in 0..formation.constituents.len() {
+        let anchor = &formation.constituents[anchor_index];
+        let anchor_rotation = normalized_angle(anchor.placement.rotation_radians);
+        let (s, c) = anchor_rotation.sin_cos();
+        let mut candidate = formation.clone();
+
+        for constituent in &mut candidate.constituents {
+            let dx = constituent.placement.x - anchor.placement.x;
+            let dy = constituent.placement.y - anchor.placement.y;
+            constituent.placement.x = dx * c + dy * s;
+            constituent.placement.y = -dx * s + dy * c;
+            constituent.placement.rotation_radians =
+                normalized_angle(constituent.placement.rotation_radians - anchor_rotation);
+
+            if catalog
+                .iter()
+                .find(|r| r.name == constituent.resource)
+                .map(|r| matches!(r.shape.form, Form::Circle { .. }))
+                .unwrap_or(false)
+            {
+                constituent.placement.rotation_radians = 0.0;
+            }
+        }
+
+        candidates.push(candidate);
+    }
+    candidates
 }
 
 fn resource_catalog_signature(catalog: &[BaseResource]) -> String {
@@ -866,6 +904,32 @@ mod tests {
         assert!(validate_formation(&formation, &catalog));
         let canonical = formation.canonicalized(&catalog).unwrap();
         assert_eq!(canonical.signature, canonical.canonical_signature());
+    }
+
+    #[test]
+    fn canonicalization_is_independent_of_input_order_for_same_resources() {
+        let catalog = default_catalog();
+        let mut a = GeometryFormation {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            constituents: vec![
+                GeometryConstituent {
+                    resource: "Carbon".into(),
+                    placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                },
+                GeometryConstituent {
+                    resource: "Carbon".into(),
+                    placement: Placement { x: 2.0, y: 0.0, rotation_radians: 0.0 },
+                },
+            ],
+            bonds: vec![GeometryBond { constituent_a: 0, constituent_b: 1 }],
+            signature: String::new(),
+        };
+        let mut b = a.clone();
+        b.constituents.swap(0, 1);
+        b.bonds[0] = GeometryBond { constituent_a: 1, constituent_b: 0 };
+        a = a.canonicalized(&catalog).unwrap();
+        b = b.canonicalized(&catalog).unwrap();
+        assert_eq!(a.signature, b.signature);
     }
 
     #[test]
