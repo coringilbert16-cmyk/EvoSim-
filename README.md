@@ -142,3 +142,8 @@ The worker will expand from validated formations rather than repeatedly solving 
 **Implemented:** persistent library core, canonical formation schema, independent validation, durable append-only storage, version manifest, base-resource seeding, and focused persistence/canonicalization tests.
 
 **Not yet implemented:** exhaustive 2- and 3-constituent candidate generation, durable worker frontier/progress records, the non-stop worker process, and constructor integration. Those remain separate steps so the new reference layer can be verified before it replaces the current construction search.
+
+
+### Geometry library progress
+
+The library now includes exact feature-contact generation for two-constituent rigid formations and expansion to three constituents. Two-body seeding considers every base resource against every single-resource formation, validates candidates, canonicalizes them, and persists only new formations. Three-body expansion reuses validated two-body contacts. This path does not use arbitrary angular sampling or an attempt budget. Continuous circle-to-circle contact families are intentionally not yet claimed exhaustive; they need an explicit finite feature representation before completeness can be guaranteed.
