@@ -258,6 +258,22 @@ fn rigid_construction_endpoint_options(shape: &crate::resources::Shape) -> Vec<C
     endpoints
 }
 
+pub(crate) fn construction_frontier_endpoints(
+    unit: &StructuralUnit,
+    structure: &OrganismStructure,
+    catalog: &[BaseResource],
+) -> Vec<ConnectionEndpoint> {
+    let endpoints = structure_unit_endpoint_options(unit, catalog);
+    endpoints
+        .into_iter()
+        .filter(|endpoint| {
+            !structure.bonds.iter().any(|bond| {
+                bond.touches(unit.physical_id, *endpoint)
+            })
+        })
+        .collect()
+}
+
 fn structure_unit_endpoint_options(
     unit: &StructuralUnit,
     catalog: &[BaseResource],
