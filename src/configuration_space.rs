@@ -176,6 +176,41 @@ fn classify_boundary_feature(
     }
 }
 
+/// Return the contact feature represented by a translation on the NFP boundary.
+///
+/// The translation is the candidate reference point relative to the anchor
+/// reference point. A boundary translation is exact non-penetrating contact;
+/// interior translations overlap and exterior translations are separated.
+pub(crate) fn boundary_feature_at_translation(
+    boundary: &ConvexConfigurationBoundary,
+    translation: Point,
+    tolerance: f64,
+) -> Option<ContactFeatureClass> {
+    let tolerance = tolerance.max(0.0);
+    boundary.features.iter().find_map(|feature| {
+        let dx = feature.end.x - feature.start.x;
+        let dy = feature.end.y - feature.start.y;
+        let length_sq = dx * dx + dy * dy;
+        if length_sq <= EPSILON * EPSILON {
+            return None;
+        }
+        let cross = (translation.x - feature.start.x) * dy
+            - (translation.y - feature.start.y) * dx;
+        let dot = (translation.x - feature.start.x) * dx
+            + (translation.y - feature.start.y) * dy;
+        let distance = cross.abs() / length_sq.sqrt();
+        if distance <= tolerance
+            && dot >= -tolerance * length_sq.sqrt()
+            && dot <= length_sq + tolerance * length_sq.sqrt()
+        {
+            Some(feature.class)
+        } else {
+            None
+        }
+    })
+}
+
+
 /// Build A + (-B), the translational no-fit boundary for one fixed orientation.
 pub(crate) fn convex_minkowski_difference(
     a: &[(f64, f64)],
