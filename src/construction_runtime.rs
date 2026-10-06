@@ -784,16 +784,6 @@ fn realize_next_bond_driven(
                 for angle in angles {
                     let candidate_origin =
                         placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
-                    let target_distance = (candidate_origin.x - target_world.0)
-                        .hypot(candidate_origin.y - target_world.1);
-
-                    // Do not prune solely because this pose is farther from the
-                    // declared preference than the best candidate found so far.
-                    // Physical validity is evaluated only after restoration,
-                    // penetration checks, and the shared bond admission. A farther
-                    // pose may be the first (or only) physically valid one, so
-                    // pruning here would silently turn preference into authority.
-
                     *nodes += 1;
 
                     let mut trial = structure.clone();
