@@ -412,6 +412,26 @@ mod tests {
     }
 
     #[test]
+    fn convex_nfp_merges_trapezoid_and_hexagon_edges() {
+        let trapezoid = vec![(-1.0, -0.5), (1.0, -0.5), (0.6, 0.5), (-0.6, 0.5)];
+        let hexagon = (0..6)
+            .map(|i| {
+                let angle = std::f64::consts::TAU * i as f64 / 6.0;
+                (angle.cos(), angle.sin())
+            })
+            .collect::<Vec<_>>();
+        let nfp = convex_minkowski_difference(&trapezoid, &hexagon).unwrap();
+        assert!(nfp.vertices.len() >= 3);
+        assert_eq!(nfp.vertices.len(), nfp.features.len());
+        assert!(nfp.features.iter().any(|f| f.class == ContactFeatureClass::EdgeEdge));
+        assert!(nfp.features.iter().any(|f| {
+            matches!(
+                f.class,
+                ContactFeatureClass::EdgeVertex | ContactFeatureClass::VertexEdge
+            )
+        }));
+    }
+
     fn equal_squares_have_exact_nfp_extent() {
         let nfp = convex_minkowski_difference(&square(), &square()).unwrap();
         assert_eq!(nfp.vertices.len(), 4);
