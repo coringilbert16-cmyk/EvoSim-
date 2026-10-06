@@ -326,6 +326,15 @@ pub(crate) fn placed_unit_overlaps(
         let Some(shape) = unit.shape(catalog) else {
             return true;
         };
+        // Cheap spatial rejection first. The bounding radius is only a
+        // broad-phase filter; exact penetration remains authoritative below.
+        let center_distance = (candidate.placement.x - unit.placement.x)
+            .hypot(candidate.placement.y - unit.placement.y);
+        if center_distance
+            > candidate_shape.form.bounding_radius() + shape.form.bounding_radius() + 1e-10
+        {
+            return false;
+        }
         let existing_part = crate::material_geometry::PlacedMaterialPart {
             part_index: index + 1,
             form: shape.form.clone(),
@@ -876,6 +885,25 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                 for &new_index in &indices {
                     for other_index in 0..trial.units.len() {
                         if indices.contains(&other_index) {
+                            continue;
+                        }
+                        let Some(new_shape) = trial.units[new_index].shape(catalog) else {
+                            continue;
+                        };
+                        let Some(other_shape) = trial.units[other_index].shape(catalog) else {
+                            continue;
+                        };
+                        let center_distance = (trial.units[new_index].placement.x
+                            - trial.units[other_index].placement.x)
+                            .hypot(
+                                trial.units[new_index].placement.y
+                                    - trial.units[other_index].placement.y,
+                            );
+                        if center_distance
+                            > new_shape.form.bounding_radius()
+                                + other_shape.form.bounding_radius()
+                                + crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                        {
                             continue;
                         }
                         let mut contact_cache =
