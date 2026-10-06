@@ -1338,7 +1338,7 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
                 let Some(indices) = crate::material_restoration::restore_material(
                     &mut trial,
                     new_material,
-                    candidate_origin,
+                    candidate_placement,
                     catalog,
                 ) else {
                     continue;
