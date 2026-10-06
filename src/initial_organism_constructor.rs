@@ -257,10 +257,15 @@ fn grow_one_step(
                 let mut next_frontier = frontier.to_vec();
                 for index in _indices {
                     if !next_frontier.contains(&index) {
+                        let radius = structure.units[index]
+                            .shape(catalog)
+                            .map(|shape| shape.form.bounding_radius())
+                            .unwrap_or(0.0);
                         spatial_index.insert(
                             index,
                             structure.units[index].placement.x,
                             structure.units[index].placement.y,
+                            radius,
                         );
                         next_frontier.push(index);
                     }
