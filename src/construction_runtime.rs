@@ -1222,6 +1222,38 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
             }
 
             for angle in angles {
+                if !nfp_cache.iter().any(|(cached_part, cached_angle, _)| {
+                    *cached_part == part_index
+                        && (normalize_construction_angle(*cached_angle - angle)).abs() <= 1e-10
+                }) {
+                    let boundary = match crate::configuration_space::convex_minkowski_difference(
+                        &rotated_polygon_vertices(
+                            existing_shape,
+                            existing_unit.placement.rotation_radians,
+                        ),
+                        &rotated_polygon_vertices(candidate_shape, angle),
+                    ) {
+                        Ok(boundary) => boundary,
+                        Err(_) => continue,
+                    };
+                    let features = boundary
+                        .features
+                        .iter()
+                        .filter_map(|feature| {
+                            let (placement, feature_a, feature_b) = nfp_feature_placement(
+                                existing_shape,
+                                (existing_unit.placement.x, existing_unit.placement.y),
+                                candidate_shape,
+                                angle,
+                                feature,
+                            )?;
+                            Some((placement, feature_a, feature_b))
+                        })
+                        .collect::<Vec<_>>();
+                    nfp_cache.push((part_index, angle, boundary));
+                    nfp_feature_cache.push((part_index, angle, features));
+                }
+
                 if candidate_stream.iter().any(
                     |(_, cached_a, cached_b, cached_angle, _)| {
                         *cached_a == endpoint_a
