@@ -79,6 +79,19 @@ pub(crate) fn endpoint_indices(
     let Some(shape) = unit.shape(catalog) else {
         return Vec::new();
     };
+    // Hydrogen is finite-area, but its primary structural interfaces remain
+    // line-like: exactly two points, one at the center of each longitudinal end.
+    // The 0.1 thickness belongs to collision/contact geometry, not to the
+    // primary endpoint topology.
+    if unit.material.parts.len() == 1
+        && unit.material.parts[0].0 == "Hydrogen"
+        && matches!(shape.form, Form::Rectangle { .. })
+    {
+        return (0..2)
+            .map(|i| ConnectionEndpoint::LineEndpoint { point_index: i })
+            .collect();
+    }
+
     match &shape.form {
         Form::Rectangle { .. } | Form::RegularPolygon { .. } | Form::Polygon { .. } => {
             let count = shape.form.polygon_vertices().map_or(0, |v| v.len());
