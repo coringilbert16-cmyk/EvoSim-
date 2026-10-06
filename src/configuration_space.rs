@@ -211,6 +211,27 @@ pub(crate) fn boundary_feature_at_translation(
 }
 
 
+
+/// Return one deterministic representative translation for each NFP boundary
+/// feature. These are contact locations, not a topology prescription.
+pub(crate) fn boundary_feature_representatives(
+    boundary: &ConvexConfigurationBoundary,
+) -> Vec<(Point, ContactFeatureClass)> {
+    boundary
+        .features
+        .iter()
+        .map(|feature| {
+            (
+                Point {
+                    x: (feature.start.x + feature.end.x) * 0.5,
+                    y: (feature.start.y + feature.end.y) * 0.5,
+                },
+                feature.class,
+            )
+        })
+        .collect()
+}
+
 /// Build A + (-B), the translational no-fit boundary for one fixed orientation.
 pub(crate) fn convex_minkowski_difference(
     a: &[(f64, f64)],
