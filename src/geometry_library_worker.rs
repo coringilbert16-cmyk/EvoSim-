@@ -1,5 +1,6 @@
 use crate::geometry_reference_library::{
-    expand_formation_candidates, open_default_library, GeometryFrontierState, GeometryLibrary,
+    expand_formation_candidates, open_default_library, seed_base_catalogue, GeometryFrontierState,
+    GeometryLibrary,
 };
 use crate::resources::{default_catalog, BaseResource};
 use std::thread;
@@ -10,6 +11,7 @@ const IDLE_SLEEP: Duration = Duration::from_secs(1);
 pub fn run() {
     let catalog = default_catalog();
     let mut library = open_default_library().expect("geometry library must open");
+    seed_base_catalogue(&mut library, &catalog).expect("geometry library seed must succeed");
 
     loop {
         if !process_one_frontier(&mut library, &catalog).expect("geometry worker failed") {
