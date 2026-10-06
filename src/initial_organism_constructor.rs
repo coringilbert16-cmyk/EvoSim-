@@ -44,33 +44,85 @@ fn rigid_resources<'a>(catalog: &'a [BaseResource]) -> impl Iterator<Item = &'a 
 /// deterministic way to obtain the first environmental material; it is not a
 /// construction preference. Subsequent growth considers every rigid catalog
 /// material without assigning Carbon or any other material intrinsic priority.
-fn initial_seed(
+fn temporary_three_carbon_scaffold(
     catalog: &[BaseResource],
-) -> Result<(crate::structure::OrganismStructure, usize), String> {
-    let seed = rigid_resources(catalog)
-        .next()
-        .ok_or_else(|| "catalog contains no valid rigid construction material".to_string())?;
-    let instance = realized_single_resource(seed, catalog)
-        .ok_or_else(|| format!("failed to realize initial {}", seed.name))?;
+) -> Result<(crate::structure::OrganismStructure, Vec<crate::structure::PhysicalConstituentId>), String> {
+    let carbon = catalog
+        .iter()
+        .find(|resource| resource.name == "Carbon")
+        .ok_or_else(|| "catalog has no Carbon resource".to_string())?;
+    let crate::resources::Form::RegularPolygon { sides, radius } = carbon.shape.form else {
+        return Err("genesis scaffold requires polygonal Carbon".into());
+    };
+    if sides != 6 || !radius.is_finite() || radius <= 0.0 {
+        return Err("genesis scaffold requires regular hexagonal Carbon".into());
+    }
+
+    // Two Carbon pieces form the bottom row. The third is centered above them.
+    // All three center-to-center distances are sqrt(3) * radius, so every
+    // neighboring pair meets flat-to-flat with zero penetration.
+    let spacing = 3.0_f64.sqrt() * radius;
+    let placements = [
+        Placement { x: -spacing * 0.5, y: 0.0, rotation_radians: 0.0 },
+        Placement { x:  spacing * 0.5, y: 0.0, rotation_radians: 0.0 },
+        Placement { x: 0.0, y: spacing, rotation_radians: 0.0 },
+    ];
 
     let mut structure = crate::structure::OrganismStructure::new();
-    let indices = crate::material_restoration::restore_material(
-        &mut structure,
-        &instance,
-        Placement {
-            x: 0.0,
-            y: 0.0,
-            rotation_radians: 0.0,
-        },
-        catalog,
-    )
-    .ok_or_else(|| format!("failed to restore initial {}", seed.name))?;
+    let mut ids = Vec::with_capacity(3);
+    for placement in placements {
+        let mut unit = crate::structure::StructuralUnit::from_material(
+            Material::free_base(carbon.name.clone(), 1.0),
+            placement,
+        ).ok_or_else(|| "failed to create Carbon scaffold unit".to_string())?;
+        if !unit.realize_default_geometry(catalog) {
+            return Err("failed to realize Carbon scaffold geometry".into());
+        }
+        let index = structure.add_unit(unit);
+        ids.push(structure.units[index].physical_id);
+    }
 
-    let index = *indices
-        .first()
-        .ok_or_else(|| "initial physical material restored no constituent".to_string())?;
-    Ok((structure, index))
+    let contacts = [
+        (0usize, 1usize, ( spacing * 0.5, 0.0), (-spacing * 0.5, 0.0)),
+        (0usize, 2usize, ( spacing * 0.25, spacing * 0.5), (0.25 * spacing, -0.5 * spacing)),
+        (1usize, 2usize, (-spacing * 0.25, spacing * 0.5), (-0.25 * spacing, -0.5 * spacing)),
+    ];
+
+    for (a, b, local_a, local_b) in contacts {
+        let properties_a = structure.units[a]
+            .properties(catalog)
+            .ok_or_else(|| "invalid Carbon scaffold properties".to_string())?;
+        let properties_b = structure.units[b]
+            .properties(catalog)
+            .ok_or_else(|| "invalid Carbon scaffold properties".to_string())?;
+        let bond = crate::structure::Bond {
+            endpoint_a: crate::structure::BondEndpoint::new(
+                ids[a],
+                crate::structure::ConnectionEndpoint::BoundaryPoint {
+                    x: local_a.0,
+                    y: local_a.1,
+                },
+            ),
+            endpoint_b: crate::structure::BondEndpoint::new(
+                ids[b],
+                crate::structure::ConnectionEndpoint::BoundaryPoint {
+                    x: local_b.0,
+                    y: local_b.1,
+                },
+            ),
+            strength: crate::combine::bond_strength(properties_a, properties_b),
+            bond_energy: 0.0,
+        };
+        crate::contact::try_add_bond(&mut structure, bond, catalog)
+            .map_err(|error| format!("failed to bond Carbon genesis scaffold: {error:?}"))?;
+    }
+
+    if structure.bonds.len() != 3 {
+        return Err("Carbon genesis scaffold did not form its three bonds".into());
+    }
+    Ok((structure, ids))
 }
+
 
 fn placement_fits_resource(
     resource: &BaseResource,
@@ -332,14 +384,14 @@ fn grow_one_step(
 fn construct_physical_organism(
     catalog: &[BaseResource],
 ) -> Result<(crate::structure::OrganismStructure, EnergyLedger, f64), String> {
-    let (mut structure, _seed_index) = initial_seed(catalog)?;
+    let (mut structure, scaffold_ids) = temporary_three_carbon_scaffold(catalog)?;
     let mut ledger = EnergyLedger::default();
     let mut energy = CONSTRUCTION_ENERGY;
     let mut nodes = 0usize;
     // Only the live construction frontier is revisited. It grows monotonically
     // as new physical constituents are committed and is pruned lazily when a
     // unit loses its remaining usable endpoints.
-    let mut frontier = vec![0usize];
+    let mut frontier = (0..structure.units.len()).collect::<Vec<_>>();
     let mut spatial_index =
         crate::construction_runtime::ConstructionSpatialIndex::new(&structure, catalog);
     let mut occupancy = ConstructionEndpointOccupancy::default();
