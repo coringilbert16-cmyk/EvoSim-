@@ -542,6 +542,48 @@ mod tests {
     use super::*;
 
     #[test]
+    fn genesis_scaffold_is_three_non_overlapping_hexagons_with_two_bonds_each() {
+        let catalog = crate::resources::default_catalog();
+        let (structure, ids) =
+            temporary_three_carbon_scaffold(&catalog).expect("three-carbon scaffold should form");
+        assert_eq!(structure.units.len(), 3);
+        assert_eq!(structure.bonds.len(), 3);
+        assert_eq!(ids.len(), 3);
+
+        for id in &ids {
+            let degree = structure
+                .bonds
+                .iter()
+                .filter(|bond| {
+                    bond.endpoint_a.constituent_id == *id || bond.endpoint_b.constituent_id == *id
+                })
+                .count();
+            assert_eq!(degree, 2);
+        }
+
+        for left in 0..structure.units.len() {
+            for right in (left + 1)..structure.units.len() {
+                let left_shape = structure.units[left].shape(&catalog).unwrap();
+                let right_shape = structure.units[right].shape(&catalog).unwrap();
+                let a = crate::material_geometry::PlacedMaterialPart {
+                    part_index: left,
+                    form: left_shape.form.clone(),
+                    placement: structure.units[left].placement,
+                };
+                let b = crate::material_geometry::PlacedMaterialPart {
+                    part_index: right,
+                    form: right_shape.form.clone(),
+                    placement: structure.units[right].placement,
+                };
+                assert!(
+                    !crate::material_geometry::placed_forms_penetrate(&a, &b, 0.0),
+                    "genesis scaffold pieces must meet without overlap"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn blueprint_free_constructor_produces_a_valid_organism() {
         let catalog = crate::resources::default_catalog();
         let result = construct_valid(&catalog).expect("constructor should find a valid organism");
