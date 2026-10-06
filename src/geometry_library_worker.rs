@@ -71,20 +71,16 @@ fn process_one_frontier(
             )?;
 
             if resource.name == "Water" {
-                // Water is both a real library constituent and a fluid-contact
-                // family. Record its exact contact/boundary families first,
-                // then run the normal expansion path as well. The expansion
-                // routine itself rejects fluid+fluid combinations, so this
-                // does not create Water-Water formations.
+                // Every currently supported Water/rigid case is represented
+                // symbolically as an exact capillary contact family. If no
+                // family exists, the current boundary geometry has no valid
+                // Water contact; it is exhausted rather than left in a
+                // permanently "pending" state.
                 let families = generate_water_contact_families(&formation, resource, catalog);
                 library.insert_contact_families(families)?;
                 let boundary_states =
                     generate_fluid_boundary_families(&formation, resource, catalog);
                 library.insert_fluid_boundary_families(boundary_states)?;
-
-                let candidates = expand_formation_candidates(&formation, resource, catalog);
-                library.insert_many(candidates, catalog)?;
-
                 library.set_frontier_state(
                     formation.signature.clone(),
                     resource.name.clone(),
@@ -119,4 +115,3 @@ fn process_one_frontier(
 
     Ok(true)
 }
-
