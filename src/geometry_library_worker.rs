@@ -1,4 +1,3 @@
-use crate::capillary_geometry::solve_water_against_solid;
 use crate::geometry_reference_library::{
     expand_formation_candidates, generate_water_contact_families, open_default_library,
     seed_base_catalogue, GeometryFrontierState, GeometryLibrary,
@@ -68,7 +67,7 @@ fn process_one_frontier(
                     resource.name.clone(),
                     GeometryFrontierState::Exhausted,
                 )?;
-                return Ok(true);
+                continue;
             }
 
             let candidates = expand_formation_candidates(&formation, resource, catalog);
@@ -92,56 +91,3 @@ fn process_one_frontier(
     Ok(false)
 }
 
-
-fn continuous_contact_family_exists(
-    formation: &crate::geometry_reference_library::GeometryFormation,
-    candidate: &BaseResource,
-    catalog: &[BaseResource],
-) -> bool {
-    // A fluid circle is no longer treated as an unexplained infinite search.
-    // Its continuous placement family is now recognized through the exact
-    // capillary solution. The worker still defers persistence of that family
-    // until the boundary-feature representation can carry the solution.
-    if candidate.name != "Water"
-        || candidate.physical_state != crate::resources::PhysicalState::Fluid
-    {
-        return false;
-    }
-
-    let Some(water) = catalog.iter().find(|resource| resource.name == "Water") else {
-        return false;
-    };
-
-    let area = match water.shape.form {
-        crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-        crate::resources::Form::Fluid { nominal_area, .. } => nominal_area,
-        _ => return false,
-    };
-
-    formation.constituents.iter().any(|constituent| {
-        let Some(resource) = catalog.iter().find(|resource| resource.name == constituent.resource)
-        else {
-            return false;
-        };
-        if resource.physical_state == crate::resources::PhysicalState::Fluid {
-            return false;
-        }
-
-        let Some(vertices) = resource.shape.form.polygon_vertices() else {
-            return false;
-        };
-        let Some(family) = solve_water_against_solid(
-            area,
-            water.properties.cohesion,
-            resource.properties.cohesion,
-        ) else {
-            return false;
-        };
-        (0..vertices.len()).any(|edge| {
-            let a = vertices[edge];
-            let b = vertices[(edge + 1) % vertices.len()];
-            let edge_length = (b.0 - a.0).hypot(b.1 - a.1);
-            edge_length + 1e-12 >= family.contact_length
-        })
-    })
-}
