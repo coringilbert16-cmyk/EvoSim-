@@ -314,6 +314,7 @@ fn placement_for_joint(
 
 pub(crate) struct ConstructionSpatialIndex {
     cell_size: f64,
+    max_radius: f64,
     cells: std::collections::HashMap<(i64, i64), Vec<usize>>,
 }
 
@@ -326,6 +327,7 @@ impl ConstructionSpatialIndex {
             .fold(1.0_f64, f64::max);
         let mut index = Self {
             cell_size: (max_radius * 2.0).max(1.0),
+            max_radius,
             cells: std::collections::HashMap::new(),
         };
         for (unit_index, unit) in structure.units.iter().enumerate() {
@@ -400,12 +402,7 @@ pub(crate) fn placed_unit_overlaps_indexed(
         .map(|index| index.nearby_indices(
             candidate.placement.x,
             candidate.placement.y,
-            candidate_radius
-                + structure
-                    .units
-                    .iter()
-                    .filter_map(|unit| unit.shape(catalog).map(|shape| shape.form.bounding_radius()))
-                    .fold(candidate_radius, f64::max),
+            candidate_radius + self.max_radius,
         ));
     let indices = nearby.unwrap_or_else(|| (0..structure.units.len()).collect());
     indices.into_iter().any(|index| {
