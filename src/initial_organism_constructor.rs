@@ -244,7 +244,7 @@ fn grow_one_step(
                 _attempt,
                 trial_ledger,
                 trial_energy,
-            )) = crate::construction_runtime::try_attach_physical_material_bond_driven(
+            )) = crate::construction_runtime::try_attach_physical_material_bond_driven_indexed(
                 structure,
                 existing_index,
                 instance,
@@ -252,10 +252,16 @@ fn grow_one_step(
                 nodes,
                 ledger,
                 energy,
+                Some(&spatial_index),
             ) {
                 let mut next_frontier = frontier.to_vec();
                 for index in _indices {
                     if !next_frontier.contains(&index) {
+                        spatial_index.insert(
+                            index,
+                            structure.units[index].placement.x,
+                            structure.units[index].placement.y,
+                        );
                         next_frontier.push(index);
                     }
                 }
@@ -285,6 +291,8 @@ fn construct_physical_organism(
     // as new physical constituents are committed and is pruned lazily when a
     // unit loses its remaining usable endpoints.
     let mut frontier = vec![0usize];
+    let mut spatial_index =
+        crate::construction_runtime::ConstructionSpatialIndex::new(&structure, catalog);
     // Physical material realizations are immutable candidate geometry during
     // genesis. Build them once rather than rebuilding the same catalog-derived
     // shapes on every frontier-growth step.
