@@ -374,6 +374,45 @@ impl GeometryLibrary {
         self.contact_families.values()
     }
 
+    pub fn rigid_contact_families(&self) -> impl Iterator<Item = &GeometryRigidContactFamily> {
+        self.rigid_contact_families.values()
+    }
+
+    pub fn insert_rigid_contact_families(
+        &mut self,
+        families: Vec<GeometryRigidContactFamily>,
+    ) -> std::io::Result<usize> {
+        let mut unique = BTreeMap::new();
+        for family in families {
+            if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
+                || !family.candidate_rotation_radians.is_finite()
+                || !family.anchor_parameter_start.is_finite()
+                || !family.anchor_parameter_end.is_finite()
+                || family.anchor_parameter_start > family.anchor_parameter_end
+            {
+                continue;
+            }
+            let signature = family.signature();
+            if !self.rigid_contact_families.contains_key(&signature) {
+                unique.insert(signature, family);
+            }
+        }
+        if unique.is_empty() {
+            return Ok(0);
+        }
+        let path = self.root.join("rigid_contact_families.jsonl");
+        let mut file = OpenOptions::new().create(true).append(true).open(path)?;
+        for family in unique.values() {
+            serde_json::to_writer(&mut file, family)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+            file.write_all(b"\n")?;
+        }
+        file.sync_data()?;
+        let added = unique.len();
+        self.rigid_contact_families.extend(unique);
+        Ok(added)
+    }
+
     pub fn insert_contact_family(&mut self, family: GeometryContactFamily) -> std::io::Result<bool> {
         if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION || !family.contact_angle_radians.is_finite() || !family.curvature_radius.is_finite() || !family.contact_length.is_finite() || !family.edge_parameter_start.is_finite() || !family.edge_parameter_end.is_finite() || family.edge_parameter_end < family.edge_parameter_start { return Ok(false); }
         let signature = family.signature();
