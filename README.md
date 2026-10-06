@@ -108,7 +108,7 @@ The current bottleneck is narrower: **constructing the first valid organism corr
 
 ## Base-resource geometry
 
-Hydrogen is a **rigid rectangle 1.0 units long × 0.1 units thick**. It is a finite-area physical strip, not a zero-thickness line. Any geometry generation, validation, contact, construction, or visualization involving Hydrogen must therefore use its rectangular boundary and 0.1 thickness.
+Hydrogen is a **rigid rectangle 1.0 units long × 0.1 units thick**. It is a finite-area physical strip, not a zero-thickness line. Its two primary structural contact points remain at the centers of the two longitudinal end faces, preserving line-like endpoint topology. Any geometry generation, validation, physical contact, construction, or visualization involving Hydrogen must therefore use its rectangular boundary and 0.1 thickness while preserving those two primary endpoints.
 
 ## Geometry Reference Library
 
