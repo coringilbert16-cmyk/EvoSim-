@@ -1025,21 +1025,17 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
     // on which connection endpoint pair eventually consumes that contact feature.
     // Cache each computed boundary so endpoint enumeration never rebuilds the
     // same Minkowski configuration space.
-    let mut nfp_cache: Vec<(
-        f64,
-        crate::configuration_space::ConvexConfigurationBoundary,
-    )> = Vec::new();
-    // Cache feature-derived endpoint mappings so endpoint-pair enumeration
-    // never rescans the same NFP boundary.
+    // Build invariant NFP configuration spaces and feature mappings before
+    // endpoint-pair enumeration. The NFP depends on the two rigid geometries and
+    // orientation, not on which available endpoints eventually consume the contact.
+    let mut nfp_cache: Vec<(usize, f64, crate::configuration_space::ConvexConfigurationBoundary)> = Vec::new();
     let mut nfp_feature_cache: Vec<(
+        usize,
         f64,
         Vec<(Placement, ConnectionEndpoint, ConnectionEndpoint)>,
     )> = Vec::new();
 
-    // Edge-alignment rotations depend only on the two rigid shapes and their
-    // orientations, not on which endpoint pair eventually consumes the contact.
-    // Compute that invariant set once per material part; endpoint-specific
-    // point/corner alignments remain in the local fallback path below.
+    // Edge-alignment rotations are likewise invariant across endpoint pairs.
     let mut edge_alignment_cache: Vec<(usize, Vec<f64>)> = Vec::new();
     for part_index in 0..new_material.material.parts.len() {
         let candidate_shape = if one_part {
@@ -1061,21 +1057,43 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
             .and_then(|placements| placements.get(part_index))
             .map(|placement| placement.rotation_radians)
             .unwrap_or(0.0);
-        let Some(existing_vertices) = existing_shape.form.polygon_vertices() else {
-            continue;
-        };
         let Some(candidate_vertices) = candidate_shape.form.polygon_vertices() else {
             continue;
         };
-        edge_alignment_cache.push((
-            part_index,
-            crate::configuration_space::edge_alignment_rotations(
-                &existing_vertices,
-                existing_unit.placement.rotation_radians,
-                &candidate_vertices,
-                candidate_relative_rotation,
-            ),
-        ));
+        let angles = crate::configuration_space::edge_alignment_rotations(
+            &existing_vertices,
+            existing_unit.placement.rotation_radians,
+            &candidate_vertices,
+            candidate_relative_rotation,
+        );
+        edge_alignment_cache.push((part_index, angles.clone()));
+
+        for angle in angles {
+            let boundary = crate::configuration_space::convex_minkowski_difference(
+                &rotated_polygon_vertices(
+                    existing_shape,
+                    existing_unit.placement.rotation_radians,
+                )?,
+                &rotated_polygon_vertices(candidate_shape, angle)?,
+            )
+            .ok()?;
+            let features = boundary
+                .features
+                .iter()
+                .filter_map(|feature| {
+                    let (placement, feature_a, feature_b) = nfp_feature_placement(
+                        existing_shape,
+                        (existing_unit.placement.x, existing_unit.placement.y),
+                        candidate_shape,
+                        angle,
+                        feature,
+                    )?;
+                    Some((placement, feature_a, feature_b))
+                })
+                .collect::<Vec<_>>();
+            nfp_cache.push((part_index, angle, boundary));
+            nfp_feature_cache.push((part_index, angle, features));
+        }
     }
 
     for endpoint_a in existing_endpoints {
@@ -1140,54 +1158,28 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
                 // the feature midpoint directly determines the candidate
                 // origin. The older endpoint-derived placement remains only as
                 // a fallback for contacts not represented by a polygon feature.
-                let nfp_boundary = if let Some((_, boundary)) = nfp_cache.iter().find(|(cached_angle, _)| {
-                    (normalize_construction_angle(*cached_angle - angle)).abs() <= 1e-10
-                }) {
-                    Some(boundary)
-                } else {
-                    let boundary = crate::configuration_space::convex_minkowski_difference(
-                        &rotated_polygon_vertices(
-                            existing_shape,
-                            existing_unit.placement.rotation_radians,
-                        )?,
-                        &rotated_polygon_vertices(candidate_shape, angle)?,
-                    ).ok()?;
-                    nfp_cache.push((angle, boundary));
-                    nfp_cache.last().map(|(_, boundary)| boundary)
-                };
+                let nfp_boundary = nfp_cache
+                    .iter()
+                    .find(|(cached_part, cached_angle, _)| {
+                        *cached_part == part_index
+                            && (normalize_construction_angle(*cached_angle - angle)).abs()
+                                <= 1e-10
+                    })
+                    .map(|(_, _, boundary)| boundary);
 
-                let nfp_feature = nfp_boundary.and_then(|boundary| {
-                    if !nfp_feature_cache.iter().any(|(cached_angle, _)| {
-                        (normalize_construction_angle(*cached_angle - angle)).abs() <= 1e-10
-                    }) {
-                        let features = boundary
-                            .features
-                            .iter()
-                            .filter_map(|feature| {
-                                let (placement, feature_a, feature_b) = nfp_feature_placement(
-                                    existing_shape,
-                                    (existing_unit.placement.x, existing_unit.placement.y),
-                                    candidate_shape,
-                                    angle,
-                                    feature,
-                                )?;
-                                Some((placement, feature_a, feature_b))
-                            })
-                            .collect::<Vec<_>>();
-                        nfp_feature_cache.push((angle, features));
-                    }
-                    nfp_feature_cache
-                        .iter()
-                        .find(|(cached_angle, _)| {
-                            (normalize_construction_angle(*cached_angle - angle)).abs() <= 1e-10
+                let nfp_feature = nfp_feature_cache
+                    .iter()
+                    .find(|(cached_part, cached_angle, _)| {
+                        *cached_part == part_index
+                            && (normalize_construction_angle(*cached_angle - angle)).abs()
+                                <= 1e-10
+                    })
+                    .and_then(|(_, _, features)| {
+                        features.iter().find_map(|(placement, feature_a, feature_b)| {
+                            (*feature_a == endpoint_a && *feature_b == endpoint_b)
+                                .then_some(*placement)
                         })
-                        .and_then(|(_, features)| {
-                            features.iter().find_map(|(placement, feature_a, feature_b)| {
-                                (*feature_a == endpoint_a && *feature_b == endpoint_b)
-                                    .then_some(*placement)
-                            })
-                        })
-                });
+                    });
 
                 let candidate_placement = nfp_feature
                     .as_ref()
