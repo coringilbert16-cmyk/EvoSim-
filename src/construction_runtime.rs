@@ -515,6 +515,66 @@ fn local_endpoint_geometry(
     }
 }
 
+fn rigid_endpoint_edge_angles(
+    shape: &crate::resources::Shape,
+    endpoint: ConnectionEndpoint,
+) -> Vec<f64> {
+    let Some(vertices) = shape.form.polygon_vertices() else {
+        return Vec::new();
+    };
+    if vertices.len() < 2 {
+        return Vec::new();
+    }
+
+    let mut angles = Vec::new();
+    let mut push_unique = |angle: f64| {
+        let normalized = normalize_construction_angle(angle);
+        if !angles.iter().any(|current: &f64| {
+            normalize_construction_angle(*current - normalized).abs() <= 1e-10
+        }) {
+            angles.push(normalized);
+        }
+    };
+
+    match endpoint {
+        ConnectionEndpoint::Corner { point_index } => {
+            if point_index >= vertices.len() {
+                return Vec::new();
+            }
+            let previous = vertices[(point_index + vertices.len() - 1) % vertices.len()];
+            let here = vertices[point_index];
+            let next = vertices[(point_index + 1) % vertices.len()];
+            for (a, b) in [(previous, here), (here, next)] {
+                let dx = b.0 - a.0;
+                let dy = b.1 - a.1;
+                if dx.hypot(dy) > 1e-12 {
+                    push_unique(dy.atan2(dx));
+                }
+            }
+        }
+        ConnectionEndpoint::BoundaryPoint { x, y } => {
+            for i in 0..vertices.len() {
+                let a = vertices[i];
+                let b = vertices[(i + 1) % vertices.len()];
+                let dx = b.0 - a.0;
+                let dy = b.1 - a.1;
+                let length_sq = dx * dx + dy * dy;
+                if length_sq <= 1e-24 {
+                    continue;
+                }
+                let cross = (x - a.0) * dy - (y - a.1) * dx;
+                let dot = (x - a.0) * dx + (y - a.1) * dy;
+                if cross.abs() <= 1e-9 && dot >= -1e-9 && dot <= length_sq + 1e-9 {
+                    push_unique(dy.atan2(dx));
+                }
+            }
+        }
+        _ => {}
+    }
+
+    angles
+}
+
 fn construction_angle_candidates(
     existing_shape: &crate::resources::Shape,
     existing_endpoint: ConnectionEndpoint,
@@ -550,6 +610,30 @@ fn construction_angle_candidates(
         push_unique(
             existing_angle + std::f64::consts::PI - candidate_angle - candidate_relative_rotation,
         );
+    }
+
+    // A corner touching an edge is not determined by the corner's bisector
+    // alone. Exact incident-edge alignments provide finite, geometry-derived
+    // placements for corner-to-edge and edge-to-edge contact without angular
+    // sampling or an arbitrary placement grid.
+    let existing_edges = rigid_endpoint_edge_angles(existing_shape, existing_endpoint);
+    let candidate_edges = rigid_endpoint_edge_angles(candidate_shape, candidate_endpoint);
+    if !existing_edges.is_empty() && !candidate_edges.is_empty() {
+        for existing_edge in &existing_edges {
+            for candidate_edge in &candidate_edges {
+                push_unique(
+                    existing_edge + existing_rotation
+                        - candidate_edge
+                        - candidate_relative_rotation,
+                );
+                push_unique(
+                    existing_edge + existing_rotation
+                        + std::f64::consts::PI
+                        - candidate_edge
+                        - candidate_relative_rotation,
+                );
+            }
+        }
     }
 
     match (existing_endpoint, candidate_endpoint) {
