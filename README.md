@@ -136,13 +136,13 @@ The first implementation provides the persistent store, schema/versioning, canon
 
 The next layer is the non-stop catalogue worker. It will load the persistent library, select an unexplored formation/frontier, generate exact geometry candidates, validate and canonicalize them, append only new formations, and durably record progress so it can resume after interruption. It will not use the constructor's old brute-force placement loop or an arbitrary attempt budget.
 
-The worker will expand from validated formations rather than repeatedly solving each composite from scratch. This makes the geometry library the long-lived reference layer that the constructor can eventually query instead of rediscovering the same geometry during every organism construction.
+The worker now expands from validated formations rather than repeatedly solving each composite from scratch. It persists a frontier record for every formation/resource expansion, resumes unfinished work after restart, and idles rather than hot-spinning when no work is currently available. It can be started with `cargo run -- --geometry-worker`. This makes the geometry library the long-lived reference layer that the constructor can eventually query instead of rediscovering the same geometry during every organism construction.
 
 ### Current implementation milestone
 
 **Implemented:** persistent library core, canonical formation schema, independent validation, durable append-only storage, version manifest, base-resource seeding, and focused persistence/canonicalization tests.
 
-**Not yet implemented:** exhaustive completion of all 2- and 3-constituent geometry classes, durable worker frontier/progress records, the non-stop worker process, and constructor integration. Exact rigid feature-contact generation is implemented for the current finite polygon/line feature model, but continuous contact families are not yet claimed exhaustive.
+**Not yet implemented:** proof of exhaustive completion for continuous contact families, constructor integration, and the final completeness audit of symmetry reduction. The non-stop worker process and durable frontier/progress records are now implemented; its general expansion path can grow validated formations through 20 constituents. Exact rigid feature-contact generation is implemented for the current finite polygon/line feature model, but continuous contact families are not yet claimed exhaustive.
 
 
 ### Geometry library progress
