@@ -247,13 +247,20 @@ fn rigid_construction_endpoint_options(shape: &crate::resources::Shape) -> Vec<C
     };
 
     let mut endpoints = Vec::with_capacity(vertices.len() * 2);
+
+    // Genesis defaults to face-to-face construction. Edge midpoints are the
+    // physical representatives of rigid faces, so try every face before
+    // considering corner contacts. This is a geometric ordering rule, not a
+    // material or topology preference.
     for point_index in 0..vertices.len() {
-        endpoints.push(ConnectionEndpoint::Corner { point_index });
         let next = vertices[(point_index + 1) % vertices.len()];
         endpoints.push(ConnectionEndpoint::BoundaryPoint {
             x: (vertices[point_index].0 + next.0) * 0.5,
             y: (vertices[point_index].1 + next.1) * 0.5,
         });
+    }
+    for point_index in 0..vertices.len() {
+        endpoints.push(ConnectionEndpoint::Corner { point_index });
     }
     endpoints
 }
@@ -549,6 +556,26 @@ fn rigid_endpoint_edge_angles(
     };
     if vertices.len() < 2 {
         return Vec::new();
+    }
+
+    // For the normal genesis case, flat-to-flat is a single exact
+    // orientation. Do not manufacture a larger angular search space.
+    if matches!(existing_endpoint, ConnectionEndpoint::BoundaryPoint { .. })
+        && matches!(candidate_endpoint, ConnectionEndpoint::BoundaryPoint { .. })
+    {
+        if let (Some(existing), Some(candidate)) = (
+            local_endpoint_geometry(existing_shape, existing_endpoint),
+            local_endpoint_geometry(candidate_shape, candidate_endpoint),
+        ) {
+            let existing_angle = existing.3.atan2(existing.2) + existing_rotation;
+            let candidate_angle = candidate.3.atan2(candidate.2);
+            return vec![normalize_construction_angle(
+                existing_angle
+                    + std::f64::consts::PI
+                    - candidate_angle
+                    - candidate_relative_rotation,
+            )];
+        }
     }
 
     let mut angles = Vec::new();
