@@ -1072,7 +1072,7 @@ fn realize_next_bond_driven(
                         continue;
                     };
 
-                    let Some(attempt) = crate::combine_runtime::form_selected_bond(
+                    let Some(mut attempt) = crate::combine_runtime::form_selected_bond(
                         &mut trial,
                         existing_index,
                         new_unit_index,
@@ -1086,7 +1086,83 @@ fn realize_next_bond_driven(
                         continue;
                     };
 
-                    // Only the bond that selected this forward step constrains
+                    // The placement is now evaluated as one physical bonding
+                    // event. Discover every exact contact created by the new
+                    // constituent against the already-realized graph, then
+                    // admit qualifying bonds in descending investment order.
+                    // Endpoint availability is revalidated after every commit.
+                    let mut additional_candidates = Vec::new();
+                    for &new_index in &indices {
+                        for other_index in 0..trial.units.len() {
+                            if indices.contains(&other_index) {
+                                continue;
+                            }
+                            let mut contact_cache =
+                                crate::contact::ConnectionCompatibilityCache::new();
+                            for contact in crate::contact::connection_pair_candidates_cached(
+                                &trial,
+                                other_index,
+                                new_index,
+                                catalog,
+                                &mut contact_cache,
+                            )
+                            .into_iter()
+                            .filter(|contact| {
+                                contact.distance
+                                    <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                                    && contact.available_a
+                                    && contact.available_b
+                            }) {
+                                let Some((_, _, _, investment, _)) =
+                                    crate::combine_runtime::selected_candidate_evaluation(
+                                        &trial,
+                                        other_index,
+                                        new_index,
+                                        contact,
+                                        catalog,
+                                    )
+                                else {
+                                    continue;
+                                };
+                                additional_candidates.push((
+                                    investment,
+                                    other_index,
+                                    new_index,
+                                    contact,
+                                ));
+                            }
+                        }
+                    }
+                    additional_candidates.sort_by(|a, b| {
+                        b.0.partial_cmp(&a.0)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    });
+
+                    for (investment, bond_a, bond_b, contact) in additional_candidates {
+                        let mut additional_cache =
+                            crate::contact::ConnectionCompatibilityCache::new();
+                        let Some(additional_attempt) = crate::combine_runtime::form_selected_bond(
+                            &mut trial,
+                            bond_a,
+                            bond_b,
+                            contact,
+                            investment,
+                            catalog,
+                            &mut additional_cache,
+                            &mut trial_ledger,
+                            &mut trial_energy,
+                        ) else {
+                            continue;
+                        };
+                        attempt.work_cost += additional_attempt.work_cost;
+                    }
+
+                    // Every bond admitted above belongs to this placement event.
+                    // There is no later closure phase and no special closure bond.
+                    // Any contact that existed when this constituent was placed
+                    // was considered here, and committed bonds are permanent.
+
+                    if best_candidate
                     // placement. A second blueprint edge to an already-realized
                     // neighbor is still an unformed future bond from the
                     // constructor's perspective. It is resolved later by the
@@ -1220,7 +1296,6 @@ fn construct_blueprint_bond_driven_internal(
     let mut total_heat = 0.0;
     let mut nodes = 0usize;
     let mut reserved_storage_indices = Vec::<usize>::new();
-    let mut closed_connections = vec![false; blueprint.connections.len()];
 
     let mut anchor_storage_index = None;
     let anchor_instance = if let Some(storage) = available_materials.as_deref_mut() {
@@ -1436,18 +1511,6 @@ fn construct_blueprint_bond_driven_internal(
                     if storage_index != usize::MAX {
                         reserved_storage_indices.push(storage_index);
                     }
-                    // This successful construction step created the physical
-                    // bond for the prescribed edge that selected this neighbor.
-                    // Record that edge now; later closure work only handles
-                    // edges that were not already realized by a forward bond.
-                    for (connection_index, connection) in blueprint.connections.iter().enumerate() {
-                        if (connection.element_a == index && connection.element_b == neighbor)
-                            || (connection.element_a == neighbor && connection.element_b == index)
-                        {
-                            closed_connections[connection_index] = true;
-                            break;
-                        }
-                    }
                     attached = true;
 
                     // The cavity is a construction milestone, not merely a
@@ -1473,132 +1536,8 @@ fn construct_blueprint_bond_driven_internal(
         }
     }
 
-    // All elements now have permanent physical poses. Any blueprint bonds
-    // between already-realized elements are completed as ordinary, single-bond
-    // construction steps. This is not future lookahead: the endpoints and
-    // geometry already exist, and a failed closure never moves or undoes a
-    // committed bond.
-    while closed_connections.iter().any(|closed| !closed) {
-        let mut progressed = false;
-        let mut failed_diagnostic = None;
-        for (connection_index, connection) in blueprint.connections.iter().enumerate() {
-            if closed_connections[connection_index] {
-                continue;
-            }
-            let Some(units_a) = realized_units[connection.element_a].as_ref() else {
-                continue;
-            };
-            let Some(units_b) = realized_units[connection.element_b].as_ref() else {
-                continue;
-            };
-            'unit_pairs: for &unit_a in units_a {
-                for &unit_b in units_b {
-                    if unit_a == unit_b {
-                        continue;
-                    }
-                    let candidates = crate::contact::connection_pair_candidates_cached(
-                        &structure,
-                        unit_a,
-                        unit_b,
-                        catalog,
-                        &mut crate::contact::ConnectionCompatibilityCache::new(),
-                    );
-                    let total_candidates = candidates.len();
-                    let mut contact_candidates = 0usize;
-                    let mut evaluated_candidates = 0usize;
-                    let mut rejected_by_bond_admission = 0usize;
-                    for candidate in candidates.into_iter().filter(|candidate| {
-                        candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                            && candidate.available_a
-                            && candidate.available_b
-                    }) {
-                        contact_candidates += 1;
-                        let Some((_, _, _, investment, _)) =
-                            crate::combine_runtime::selected_candidate_evaluation(
-                                &structure, unit_a, unit_b, candidate, catalog,
-                            )
-                        else {
-                            continue;
-                        };
-                        evaluated_candidates += 1;
-
-                        let mut trial_structure = structure.clone();
-                        let mut trial_ledger = construction_ledger;
-                        let mut trial_energy = remaining_energy;
-                        let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
-                        let Some(attempt) = crate::combine_runtime::form_selected_bond(
-                            &mut trial_structure,
-                            unit_a,
-                            unit_b,
-                            candidate,
-                            investment,
-                            catalog,
-                            &mut bond_cache,
-                            &mut trial_ledger,
-                            &mut trial_energy,
-                        ) else {
-                            rejected_by_bond_admission += 1;
-                            continue;
-                        };
-
-                        structure = trial_structure;
-                        construction_ledger = trial_ledger;
-                        remaining_energy = trial_energy;
-                        total_heat += attempt.work_cost;
-                        closed_connections[connection_index] = true;
-                        progressed = true;
-
-                        // Closure bonds are evaluated only after both
-                        // endpoints already exist. If this committed bond
-                        // creates the qualifying cavity, that is the exact
-                        // end of the genome-construction phase.
-                        if stop_at_genome
-                            && crate::cavity::analyze_genome_cavity(&structure, catalog)?.is_some()
-                        {
-                            return Ok((structure, total_heat));
-                        }
-
-                        break 'unit_pairs;
-                    }
-
-                    if total_candidates > 0
-                        || contact_candidates > 0
-                        || evaluated_candidates > 0
-                        || rejected_by_bond_admission > 0
-                    {
-                        failed_diagnostic = Some((
-                            connection_index,
-                            connection.element_a,
-                            connection.element_b,
-                            total_candidates,
-                            contact_candidates,
-                            evaluated_candidates,
-                            rejected_by_bond_admission,
-                        ));
-                    }
-                }
-            }
-            if progressed {
-                break;
-            }
-            if let Some((
-                connection_index,
-                element_a,
-                element_b,
-                total_candidates,
-                contact_candidates,
-                evaluated_candidates,
-                rejected_by_bond_admission,
-            )) = failed_diagnostic
-            {
-                return Err(format!(
-                    "construction closure failed: connection={connection_index} elements=({element_a},{element_b}) candidates={total_candidates} contacts={contact_candidates} evaluated={evaluated_candidates} rejected={rejected_by_bond_admission}"
-                ));
-            }
-            return Err("construction closure made no progress".to_string());
-        }
-    }
-
+    // All committed contacts were resolved when the corresponding constituent
+    // was placed. There is deliberately no separate closure phase.
     Ok((structure, total_heat))
 }
 #[test]
