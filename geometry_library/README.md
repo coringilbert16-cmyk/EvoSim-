@@ -72,6 +72,8 @@ This is deliberately a continuum representation, not a claim that every paramete
 
 A rigid line endpoint contacting an exposed polygon edge is a genuine continuum: the contact point may move anywhere along the exposed edge, while the line may rotate through the outward half-plane without entering the solid. The library records that two-parameter family symbolically (edge parameter plus orientation interval) rather than sampling angles or positions. Full formation validation remains authoritative when a member of the family is instantiated.
 
+A rigid line can also accept the endpoint of another line anywhere along its exposed segment. That endpoint-to-interior family is recorded exactly with the exposed line parameter interval and the candidate's full `0..2π` orientation range; no angular sampling is used.
+
 
 ### Continuous polygon-vertex contact families
 
