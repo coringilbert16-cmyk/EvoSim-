@@ -1024,6 +1024,35 @@ mod tests {
 
 
     #[test]
+    fn isolated_rigid_boundary_is_fully_exposed() {
+        let catalog = default_catalog();
+        let formation = GeometryFormation::single("Carbon");
+        let intervals = exposed_polygon_edge_intervals(&formation, 0, &catalog);
+        assert_eq!(intervals.len(), 6);
+        assert!(intervals.iter().all(|interval| {
+            (interval.start - 0.0).abs() <= 1e-12 && (interval.end - 1.0).abs() <= 1e-12
+        }));
+    }
+
+    #[test]
+    fn face_to_face_bond_removes_the_shared_edge_from_exposure() {
+        let catalog = default_catalog();
+        let carbon = catalog.iter().find(|r| r.name == "Carbon").unwrap();
+        let base = GeometryFormation::single("Carbon");
+        let candidates = generate_two_constituent_candidates(&base, carbon, &catalog);
+        let formation = candidates
+            .into_iter()
+            .find(|formation| {
+                let intervals = exposed_polygon_edge_intervals(formation, 0, &catalog);
+                intervals.len() == 5
+            })
+            .expect("exact face-to-face carbon contact should expose five of six edges");
+        let intervals = exposed_polygon_edge_intervals(&formation, 0, &catalog);
+        assert_eq!(intervals.len(), 5);
+        assert!(intervals.iter().all(|interval| interval.end > interval.start));
+    }
+
+    #[test]
     fn water_capillary_family_is_exact_and_persistent() {
         let root = temp_root();
         let catalog = default_catalog();
