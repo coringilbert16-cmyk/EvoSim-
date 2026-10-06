@@ -771,7 +771,7 @@ fn construction_angle_candidates(
 }
 
 pub(crate) fn try_attach_physical_material_bond_driven(
-    structure: &OrganismStructure,
+    structure: &mut OrganismStructure,
     existing_index: usize,
     new_material: &crate::physical_material::PhysicalMaterial,
     catalog: &[BaseResource],
@@ -779,7 +779,6 @@ pub(crate) fn try_attach_physical_material_bond_driven(
     ledger: &EnergyLedger,
     available_energy: f64,
 ) -> Option<(
-    OrganismStructure,
     Vec<usize>,
     usize,
     crate::combine_runtime::CombineAttempt,
@@ -859,15 +858,17 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                         continue;
                     }
 
-                    let mut trial = structure.clone();
-                    let new_unit_index = trial.add_unit(candidate_unit);
+                    // The construction state is now the single authoritative mutable
+                    // organism. Candidate geometry has already passed all rejection tests, so
+                    // commit it directly instead of cloning the entire graph.
+                    let new_unit_index = structure.add_unit(candidate_unit);
                     let indices = vec![new_unit_index];
                     let mut trial_ledger = *ledger;
                     let mut trial_energy = available_energy;
                     let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
 
                     let Some(candidate) = crate::contact::candidate_for_endpoints(
-                        &trial,
+                        structure,
                         existing_index,
                         new_unit_index,
                         endpoint_a,
@@ -879,23 +880,28 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                             && candidate.available_a
                             && candidate.available_b
                     }) else {
+                        // This should be unreachable after the exact endpoint and overlap
+                        // validation above. Keep the failure explicit rather than introducing
+                        // speculative whole-graph rollback.
+                        structure.units.pop();
                         continue;
                     };
 
                     let Some((_, _, _, investment, _)) =
                         crate::combine_runtime::selected_candidate_evaluation(
-                            &trial,
+                            structure,
                             existing_index,
                             new_unit_index,
                             candidate,
                             catalog,
                         )
                     else {
+                        structure.units.pop();
                         continue;
                     };
 
                     let Some(mut attempt) = crate::combine_runtime::form_selected_bond(
-                        &mut trial,
+                        structure,
                         existing_index,
                         new_unit_index,
                         candidate,
@@ -905,6 +911,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                         &mut trial_ledger,
                         &mut trial_energy,
                     ) else {
+                        structure.units.pop();
                         continue;
                     };
 
@@ -914,8 +921,8 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     let mut additional_candidates = Vec::new();
                     let mut local_contact_indices = Vec::with_capacity(8);
                     local_contact_indices.push(existing_index);
-                    let anchor_id = trial.units[existing_index].physical_id;
-                    for bond in &trial.bonds {
+                    let anchor_id = structure.units[existing_index].physical_id;
+                    for bond in &structure.bonds {
                         let neighbor_id = if bond.endpoint_a.constituent_id == anchor_id {
                             Some(bond.endpoint_b.constituent_id)
                         } else if bond.endpoint_b.constituent_id == anchor_id {
@@ -924,7 +931,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                             None
                         };
                         if let Some(neighbor_id) = neighbor_id {
-                            if let Some(neighbor_index) = trial.unit_index(neighbor_id) {
+                            if let Some(neighbor_index) = structure.unit_index(neighbor_id) {
                                 if !local_contact_indices.contains(&neighbor_index) {
                                     local_contact_indices.push(neighbor_index);
                                 }
@@ -935,14 +942,14 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                         if other_index == new_unit_index {
                             continue;
                         }
-                        let Some(new_shape) = trial.units[new_unit_index].shape(catalog) else {
+                        let Some(new_shape) = structure.units[new_unit_index].shape(catalog) else {
                             continue;
                         };
-                        let Some(other_shape) = trial.units[other_index].shape(catalog) else {
+                        let Some(other_shape) = structure.units[other_index].shape(catalog) else {
                             continue;
                         };
-                        let center_distance = (trial.units[new_unit_index].placement.x
-                            - trial.units[other_index].placement.x)
+                        let center_distance = (structure.units[new_unit_index].placement.x
+                            - structure.units[other_index].placement.x)
                             .hypot(
                                 trial.units[new_unit_index].placement.y
                                     - trial.units[other_index].placement.y,
@@ -957,7 +964,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                         let mut contact_cache =
                             crate::contact::ConnectionCompatibilityCache::new();
                         for contact in crate::contact::connection_pair_candidates_cached(
-                            &trial,
+                            structure,
                             other_index,
                             new_unit_index,
                             catalog,
@@ -972,7 +979,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                         }) {
                             let Some((_, _, _, investment, _)) =
                                 crate::combine_runtime::selected_candidate_evaluation(
-                                    &trial,
+                                    structure,
                                     other_index,
                                     new_unit_index,
                                     contact,
@@ -997,7 +1004,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                         let mut additional_cache =
                             crate::contact::ConnectionCompatibilityCache::new();
                         let Some(additional_attempt) = crate::combine_runtime::form_selected_bond(
-                            &mut trial,
+                            structure,
                             bond_a,
                             bond_b,
                             contact,
@@ -1013,7 +1020,6 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     }
 
                     return Some((
-                        trial,
                         indices,
                         part_index,
                         attempt,
@@ -1206,8 +1212,8 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     attempt.work_cost += additional_attempt.work_cost;
                 }
 
+                *structure = trial;
                 return Some((
-                    trial,
                     indices,
                     part_index,
                     attempt,
