@@ -61,3 +61,8 @@ This is deliberately a continuum representation, not a claim that every paramete
 ### Continuous point-contact families
 
 A rigid line endpoint contacting an exposed polygon edge is a genuine continuum: the contact point may move anywhere along the exposed edge, while the line may rotate through the outward half-plane without entering the solid. The library records that two-parameter family symbolically (edge parameter plus orientation interval) rather than sampling angles or positions. Full formation validation remains authoritative when a member of the family is instantiated.
+
+
+### Continuous polygon-vertex contact families
+
+The catalogue also records the continuous rigid manifold where a vertex of a convex polygonal candidate touches an exposed edge of an existing polygonal formation. The contact point ranges over the exact exposed edge interval, while the candidate rotation ranges over the outward half-plane that keeps its interior outside the supporting solid. Concave candidates are deliberately excluded from this shortcut because their local admissible orientation set is not a single half-plane interval; they remain subject to the ordinary exact finite-contact generator until a dedicated concave contact representation exists. No sampled angles or positions are used.
