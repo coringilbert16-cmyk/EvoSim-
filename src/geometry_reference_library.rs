@@ -1880,6 +1880,35 @@ pub fn generate_two_constituent_candidates(
         }
     }
 
+    if let (Form::Line { length: target_length }, Form::Line { length: candidate_length }) =
+        (&target_resource.shape.form, &candidate_resource.shape.form)
+    {
+        let target_half = *target_length / 2.0;
+        let candidate_half = *candidate_length / 2.0;
+        let target_endpoints = [(-target_half, 0.0), (target_half, 0.0)];
+        let candidate_endpoints = [(-candidate_half, 0.0), (candidate_half, 0.0)];
+        let target_angle = target_placement.rotation_radians;
+
+        // Exact endpoint-to-endpoint line contacts. This supplies finite
+        // representatives for the rigid line-line contact space; the
+        // continuous contact family remains represented by the library's
+        // rigid-contact records rather than angular sampling.
+        for target_endpoint in target_endpoints {
+            let (tx, ty) = world_point(target_endpoint, target_placement);
+            for candidate_endpoint in candidate_endpoints {
+                for flip in [0.0, std::f64::consts::PI] {
+                    let rotation = normalize_angle(target_angle + flip);
+                    let (cx, cy) = rotated_point(candidate_endpoint, rotation);
+                    push_candidate(&mut out, target, candidate_resource, Placement {
+                        x: tx - cx,
+                        y: ty - cy,
+                        rotation_radians: rotation,
+                    }, catalog);
+                }
+            }
+        }
+    }
+
     let mut unique = BTreeMap::new();
     for formation in out {
         if let Some(canonical) = formation.canonicalized(catalog) {
@@ -2206,6 +2235,20 @@ mod tests {
         let intervals = exposed_polygon_edge_intervals(&formation, 0, &catalog);
         assert_eq!(intervals.len(), 5);
         assert!(intervals.iter().all(|interval| interval.end > interval.start));
+    }
+
+    #[test]
+    fn line_line_candidates_include_endpoint_contact() {
+        let catalog = default_catalog();
+        let hydrogen = catalog.iter().find(|r| r.name == "Hydrogen").unwrap();
+        let base = GeometryFormation::single("Hydrogen");
+        let candidates = generate_two_constituent_candidates(&base, hydrogen, &catalog);
+        assert!(!candidates.is_empty());
+        assert!(candidates.iter().all(|formation| {
+            formation.constituents.len() == 2
+                && formation.bonds.len() == 1
+                && validate_formation(formation, &catalog)
+        }));
     }
 
     #[test]
