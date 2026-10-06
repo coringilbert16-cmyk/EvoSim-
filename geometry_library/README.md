@@ -18,7 +18,7 @@ Fluid geometry is not exhaustively enumerated as sampled circle placements.
 
 For the first exact fluid case, EvoSim uses the zero-gravity Young–Laplace model in 2-D. A constant-pressure, constant-surface-tension free interface has constant curvature, so the free boundary is a circular arc. A conserved fluid area and a solid/fluid contact angle therefore determine the equilibrium radius analytically.
 
-The persistent library should eventually store **contact families and boundary constraints** for fluid formations rather than millions of sampled placements. A translation interval along a compatible rigid edge is a continuous degree of freedom and is represented symbolically.
+The persistent library should eventually store **contact families and boundary constraints** for fluid formations rather than millions of sampled placements. A translation interval along a compatible rigid edge is a continuous degree of freedom and is represented symbolically. Edge intervals use the same normalized parameter `t ∈ [0, 1]` as the library's exposed-boundary intervals; physical edge lengths are converted to that parameter space before intersections are performed.
 
 `src/capillary_geometry.rs` currently implements the exact flat-boundary equilibrium used by both polygon edges and rigid line segments:
 
