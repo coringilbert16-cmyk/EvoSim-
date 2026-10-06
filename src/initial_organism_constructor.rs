@@ -159,6 +159,13 @@ fn valid_construction(
     catalog: &[BaseResource],
     acquisition_candidates: &[&BaseResource],
 ) -> Option<Vec<(String, Placement)>> {
+    // A qualifying cavity requires a closed cycle in the connected physical
+    // boundary. Before bonds can reach the unit count there is therefore no
+    // possible enclosed region to analyze. Keep the expensive global cavity
+    // analysis out of the early frontier-growth loop.
+    if structure.bonds.len() < structure.units.len() {
+        return None;
+    }
     let cavity = crate::cavity::analyze_genome_cavity(structure, catalog)
         .ok()
         .flatten()?;
@@ -214,6 +221,7 @@ fn open_construction_indices(
 fn grow_one_step(
     structure: &crate::structure::OrganismStructure,
     catalog: &[BaseResource],
+    candidates: &[(String, crate::physical_material::PhysicalMaterial)],
     nodes: &mut usize,
     ledger: &EnergyLedger,
     energy: f64,
@@ -230,17 +238,8 @@ fn grow_one_step(
     // There is no preferred construction material here. Every valid rigid
     // resource is an equally eligible physical candidate; the first candidate
     // that satisfies exact geometry is committed immediately.
-    let candidates = rigid_resources(catalog)
-        .filter_map(|resource| {
-            Some((
-                resource.name.clone(),
-                realized_single_resource(resource, catalog)?,
-            ))
-        })
-        .collect::<Vec<_>>();
-
     for existing_index in existing_indices {
-        for (_resource_name, instance) in &candidates {
+        for (_resource_name, instance) in candidates {
             if let Some((
                 trial,
                 _indices,
@@ -279,6 +278,17 @@ fn construct_physical_organism(
     let mut ledger = EnergyLedger::default();
     let mut energy = CONSTRUCTION_ENERGY;
     let mut nodes = 0usize;
+    // Physical material realizations are immutable candidate geometry during
+    // genesis. Build them once rather than rebuilding the same catalog-derived
+    // shapes on every frontier-growth step.
+    let construction_candidates = rigid_resources(catalog)
+        .filter_map(|resource| {
+            Some((
+                resource.name.clone(),
+                realized_single_resource(resource, catalog)?,
+            ))
+        })
+        .collect::<Vec<_>>();
 
     loop {
         let acquisition_candidates = available_acquisition_resources(catalog);
@@ -290,7 +300,14 @@ fn construct_physical_organism(
         }
 
         let Some((next_structure, next_ledger, next_energy)) =
-            grow_one_step(&structure, catalog, &mut nodes, &ledger, energy)
+            grow_one_step(
+                &structure,
+                catalog,
+                &construction_candidates,
+                &mut nodes,
+                &ledger,
+                energy,
+            )
         else {
             let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)
                 .ok()
