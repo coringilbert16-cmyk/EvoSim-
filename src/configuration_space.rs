@@ -317,17 +317,43 @@ pub(crate) fn convex_minkowski_difference(
 
     while i < a_edges.len() || j < b_edges.len() {
         vertices.push(current);
+
         let parallel = i < a_edges.len()
             && j < b_edges.len()
             && edge_cross(a_edges[i], b_edges[j]).abs()
-                <= EPSILON * (a_edges[i].x.hypot(a_edges[i].y)
-                    * b_edges[j].x.hypot(b_edges[j].y))
-                    .max(1.0);
+                <= EPSILON
+                    * (a_edges[i].x.hypot(a_edges[i].y)
+                        * b_edges[j].x.hypot(b_edges[j].y))
+                        .max(1.0);
 
-        if j == b_edges.len()
-            || (i < a_edges.len() && (parallel || edge_cross(a_edges[i], b_edges[j]) > 0.0))
+        if parallel {
+            let start = current;
+            let ai = i;
+            let bj = j;
+            current = Point {
+                x: current.x + a_edges[i].x + b_edges[j].x,
+                y: current.y + a_edges[i].y + b_edges[j].y,
+            };
+            features.push(BoundaryFeature {
+                start,
+                end: current,
+                a: FeatureRef {
+                    kind: BoundaryFeatureKind::Edge,
+                    index: (a_start + ai) % a.len(),
+                },
+                b: FeatureRef {
+                    kind: BoundaryFeatureKind::Edge,
+                    index: (b_start + bj) % b_negated.len(),
+                },
+                class: ContactFeatureClass::EdgeEdge,
+            });
+            i += 1;
+            j += 1;
+        } else if j == b_edges.len()
+            || (i < a_edges.len() && edge_cross(a_edges[i], b_edges[j]) > 0.0)
         {
             let start = current;
+            let ai = i;
             current = Point {
                 x: current.x + a_edges[i].x,
                 y: current.y + a_edges[i].y,
@@ -337,27 +363,18 @@ pub(crate) fn convex_minkowski_difference(
                 end: current,
                 a: FeatureRef {
                     kind: BoundaryFeatureKind::Edge,
-                    index: (a_start + i) % a.len(),
+                    index: (a_start + ai) % a.len(),
                 },
                 b: FeatureRef {
                     kind: BoundaryFeatureKind::Vertex,
                     index: (b_start + j) % b_negated.len(),
                 },
-                class: if parallel {
-                    i += 1;
-                    j += 1;
-                    current = Point {
-                        x: current.x + b_edges[j - 1].x,
-                        y: current.y + b_edges[j - 1].y,
-                    };
-                    ContactFeatureClass::EdgeEdge
-                } else {
-                    i += 1;
-                    ContactFeatureClass::EdgeVertex
-                },
+                class: ContactFeatureClass::EdgeVertex,
             });
+            i += 1;
         } else {
             let start = current;
+            let bj = j;
             current = Point {
                 x: current.x + b_edges[j].x,
                 y: current.y + b_edges[j].y,
@@ -371,7 +388,7 @@ pub(crate) fn convex_minkowski_difference(
                 },
                 b: FeatureRef {
                     kind: BoundaryFeatureKind::Edge,
-                    index: (b_start + j) % b_negated.len(),
+                    index: (b_start + bj) % b_negated.len(),
                 },
                 class: ContactFeatureClass::VertexEdge,
             });
