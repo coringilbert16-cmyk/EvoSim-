@@ -187,19 +187,51 @@ enum NextConstructionResourceStatus {
 
 pub(crate) fn construction_material_need_pressure(
     construction: &ReproductiveConstruction,
-    _catalog: &[crate::resources::BaseResource],
+    catalog: &[crate::resources::BaseResource],
 ) -> f64 {
-    // Construction has no preferred material. Pressure only reflects whether
-    // there is currently any realized physical material available to continue.
-    if crate::construction_material_selection::available_construction_materials(
+    let blueprint = &construction.child_genome.developmental_blueprint;
+    let x = construction.developmental_origin.x;
+    let y = construction.developmental_origin.y;
+    let preferred = blueprint
+        .material_preferences
+        .iter()
+        .max_by(|a, b| {
+            a.evaluate(x, y)
+                .partial_cmp(&b.evaluate(x, y))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|field| field.resource_name.as_str());
+    let Some(preferred) = preferred else {
+        return 1.0;
+    };
+    match crate::construction_material_selection::select_construction_material(
         &construction.committed_material,
-    )
-    .is_empty()
-    {
-        1.0
-    } else {
-        0.0
+        preferred,
+        catalog,
+    ) {
+        Ok(crate::construction_material_selection::ConstructionMaterialDecision::Need {
+            ..
+        }) => 1.0,
+        Ok(crate::construction_material_selection::ConstructionMaterialDecision::Selected {
+            ..
+        }) => 0.0,
+        Err(_) => 1.0,
     }
+}
+
+fn construction_preferred_resource(child: &Organism) -> Option<&str> {
+    let blueprint = &child.genome.developmental_blueprint;
+    blueprint
+        .material_preferences
+        .iter()
+        .max_by(|a, b| {
+            a.evaluate(child.developmental_origin.x, child.developmental_origin.y)
+                .partial_cmp(
+                    &b.evaluate(child.developmental_origin.x, child.developmental_origin.y),
+                )
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|field| field.resource_name.as_str())
 }
 
 fn try_child_construction(
@@ -209,16 +241,30 @@ fn try_child_construction(
     ledger: &EnergyLedger,
     _context: Option<DevelopmentalContext<'_>>,
 ) -> Option<(Organism, EnergyLedger, Option<usize>)> {
+    let preferred = construction_preferred_resource(child)?;
     let mut nodes = 0usize;
 
-    for (storage_index, _) in crate::construction_material_selection::available_construction_materials(
-        &child.stored_material,
-    ) {
+    let child_candidates =
+        crate::construction_material_selection::rank_available_construction_materials(
+            &child.stored_material,
+            preferred,
+            &environment.catalog,
+        )
+        .ok()?
+        .into_iter()
+        .filter(|(_, _, score)| {
+            *score >= crate::construction_material_selection::MIN_CONSTRUCTION_MATERIAL_MATCH
+        });
+
+    for (storage_index, _, _) in child_candidates {
         let crate::material_storage::StoredMaterial::Physical(instance) =
-            child.stored_material.entries.get(storage_index)?;
+            child.stored_material.entries.get(storage_index)?
+        else {
+            continue;
+        };
 
         for existing_index in 0..child.structure.units.len() {
-            let candidate_ledger = *ledger;
+            let mut candidate_ledger = *ledger;
             let Some((
                 trial_structure,
                 _indices,
@@ -247,14 +293,27 @@ fn try_child_construction(
         }
     }
 
-    for (parent_index, _) in crate::construction_material_selection::available_construction_materials(
-        parent_storage,
-    ) {
+    let parent_candidates =
+        crate::construction_material_selection::rank_available_construction_materials(
+            parent_storage,
+            preferred,
+            &environment.catalog,
+        )
+        .ok()?
+        .into_iter()
+        .filter(|(_, _, score)| {
+            *score >= crate::construction_material_selection::MIN_CONSTRUCTION_MATERIAL_MATCH
+        });
+
+    for (parent_index, _, _) in parent_candidates {
         let crate::material_storage::StoredMaterial::Physical(instance) =
-            parent_storage.entries.get(parent_index)?;
+            parent_storage.entries.get(parent_index)?
+        else {
+            continue;
+        };
 
         for existing_index in 0..child.structure.units.len() {
-            let candidate_ledger = *ledger;
+            let mut candidate_ledger = *ledger;
             let Some((
                 trial_structure,
                 _indices,
@@ -292,17 +351,25 @@ fn next_construction_resource_status(
     ledger: &EnergyLedger,
     context: Option<DevelopmentalContext<'_>>,
 ) -> NextConstructionResourceStatus {
-    let has_physical_material =
-        !crate::construction_material_selection::available_construction_materials(
-            &child.stored_material,
-        )
-        .is_empty()
-        || !crate::construction_material_selection::available_construction_materials(
-            parent_storage,
-        )
-        .is_empty();
-
-    if !has_physical_material {
+    let preferred = construction_preferred_resource(child);
+    let has_acceptable_physical_material = preferred.is_some_and(|preferred| {
+        let acceptable = |storage: &MaterialStorage| {
+            crate::construction_material_selection::select_construction_material(
+                storage,
+                preferred,
+                &environment.catalog,
+            )
+            .map(|decision| {
+                matches!(
+                    decision,
+                    crate::construction_material_selection::ConstructionMaterialDecision::Selected { .. }
+                )
+            })
+            .unwrap_or(false)
+        };
+        acceptable(&child.stored_material) || acceptable(parent_storage)
+    });
+    if !has_acceptable_physical_material {
         return NextConstructionResourceStatus::Missing;
     }
 
