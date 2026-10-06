@@ -188,6 +188,29 @@ fn valid_construction(
 /// rotations from actual boundary features. A successful transaction is
 /// immediately committed; a failed candidate is discarded without mutating the
 /// organism. No committed step is backtracked.
+fn open_construction_indices(
+    structure: &crate::structure::OrganismStructure,
+    catalog: &[BaseResource],
+) -> Vec<usize> {
+    // A unit is a live construction frontier only while it exposes at least
+    // one physical endpoint that has not already been consumed by a bond.
+    // Fully surrounded units therefore leave the search immediately instead
+    // of being reconsidered on every later growth step.
+    structure
+        .units
+        .iter()
+        .enumerate()
+        .filter_map(|(index, unit)| {
+            let endpoints = crate::construction_runtime::construction_frontier_endpoints(
+                unit,
+                structure,
+                catalog,
+            );
+            (!endpoints.is_empty()).then_some(index)
+        })
+        .collect()
+}
+
 fn grow_one_step(
     structure: &crate::structure::OrganismStructure,
     catalog: &[BaseResource],
@@ -199,10 +222,14 @@ fn grow_one_step(
     EnergyLedger,
     f64,
 )> {
-    let existing_indices = (0..structure.units.len()).collect::<Vec<_>>();
+    // Genesis is intentionally local: only units with an unbonded physical
+    // boundary endpoint can admit the next constituent. This is a frontier
+    // search, not a rescan of every historical constituent.
+    let existing_indices = open_construction_indices(structure, catalog);
 
     // There is no preferred construction material here. Every valid rigid
-    // resource is considered as an equally eligible physical candidate.
+    // resource is an equally eligible physical candidate; the first candidate
+    // that satisfies exact geometry is committed immediately.
     let candidates = rigid_resources(catalog)
         .filter_map(|resource| {
             Some((
