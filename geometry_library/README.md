@@ -15,7 +15,7 @@ The source-of-truth implementation is src/geometry_reference_library.rs.
 - The generic line-segment geometry vocabulary remains available for mathematical/rigid line shapes that are explicitly defined as lines; it does not describe Hydrogen.
 
 
-The current rigid-boundary vocabulary is exact polygon edges and rigid line segments. Water can form symbolic capillary contact families against either boundary type; no angular or positional sampling is used.
+The current rigid-boundary vocabulary is exact polygon edges and rigid line segments. Runtime rigid surface-contact candidate generation also derives boundary contacts from exact edge intersections and endpoint-to-edge projections; it does not sample angles. Water can form symbolic capillary contact families against either boundary type; no angular or positional sampling is used.
 
 
 ## Fluid geometry: capillary equilibrium
