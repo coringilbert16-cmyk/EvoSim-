@@ -232,6 +232,48 @@ pub(crate) fn boundary_feature_representatives(
         .collect()
 }
 
+
+/// Generate finite candidate rotations from parallel convex boundary edges.
+/// This exposes the orientation component of the NFP contact geometry without
+/// introducing an angular sampling grid.
+pub(crate) fn edge_alignment_rotations(
+    existing_vertices: &[(f64, f64)],
+    existing_rotation: f64,
+    candidate_vertices: &[(f64, f64)],
+    candidate_relative_rotation: f64,
+) -> Vec<f64> {
+    let existing = match convex_vertices(existing_vertices) {
+        Ok(v) => v,
+        Err(_) => return Vec::new(),
+    };
+    let candidate = match convex_vertices(candidate_vertices) {
+        Ok(v) => v,
+        Err(_) => return Vec::new(),
+    };
+    let mut rotations = Vec::new();
+    for i in 0..existing.len() {
+        let a = existing[i];
+        let b = existing[(i + 1) % existing.len()];
+        let ea = (b.y - a.y).atan2(b.x - a.x) + existing_rotation;
+        for j in 0..candidate.len() {
+            let c = candidate[j];
+            let d = candidate[(j + 1) % candidate.len()];
+            let eb = (d.y - c.y).atan2(d.x - c.x) + candidate_relative_rotation;
+            for offset in [0.0, std::f64::consts::PI] {
+                let angle = ea + offset - eb;
+                if !rotations.iter().any(|r: &f64| {
+                    let mut delta = (*r - angle).rem_euclid(std::f64::consts::TAU);
+                    if delta > std::f64::consts::PI { delta -= std::f64::consts::TAU; }
+                    delta.abs() <= EPSILON
+                }) {
+                    rotations.push(angle);
+                }
+            }
+        }
+    }
+    rotations
+}
+
 /// Build A + (-B), the translational no-fit boundary for one fixed orientation.
 pub(crate) fn convex_minkowski_difference(
     a: &[(f64, f64)],
