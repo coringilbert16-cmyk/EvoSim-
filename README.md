@@ -4,7 +4,7 @@ EvoSim is an open-ended evolutionary organism simulation. The organism is built 
 
 ## Current construction architecture
 
-The initial-organism constructor is being migrated to the final physical construction model.
+The initial-organism constructor now uses the local physical construction model.
 
 The intended constructor is **free-form and cavity-driven**:
 
@@ -13,8 +13,7 @@ The intended constructor is **free-form and cavity-driven**:
 - rigid constituents have no preferred material; each shape naturally participates in the exact contacts its geometry permits;
 - the resulting topology and silhouette are consequences of local physical placement and contact, not a prescribed body plan;
 - the genome is a qualifying empty cavity discovered from the realized physical graph;
-- the temporary three-Carbon measurement scaffold is only a measurement/qualification reference and is not part of the organism;
-- once the cavity qualifies, the constructor moves on and builds the remainder of the organism;
+- once a qualifying cavity emerges, the constructor continues local growth until the ordinary initial viability contract is satisfied;
 - additional structure is added only through locally valid physical contacts;
 - a qualifying cavity may have any number of boundary constituents permitted by the geometry; no number such as 10 is biologically significant.
 
@@ -42,7 +41,7 @@ The only construction invariant beyond physical validity is connectivity: a newl
 
 Genome formation is a real construction milestone, not a post-build assertion.
 
-The qualifying cavity is determined from the realized geometry and bond graph. The current three-Carbon scaffold provides the minimum-area measurement reference used to decide whether an empty region qualifies. It is not stored as genome material and does not prescribe the eventual genome boundary.
+The qualifying cavity is determined from the realized geometry and bond graph. The cavity analyzer independently decides whether an empty region qualifies; the constructor does not create or name a predefined genome core.
 
 After qualification:
 
@@ -65,6 +64,8 @@ The first organism must establish:
 The acquisition requirement is binary per selected resource: each selected resource must be physically acquirable. The constructor does not require a particular resource trio, fixed body size, or predefined piece count.
 
 If construction later requires a resource that is temporarily unavailable, the intended behavior is to wait and resume from the same committed graph when material becomes available. Resource waiting is a construction state, not a reason to backtrack or block the simulation.
+
+Genesis begins with one available rigid physical constituent only to instantiate the first cell. That initial choice is not a biological material preference. Every subsequent rigid material is an equally eligible construction candidate; inherited material similarity is used only when a developmental preference actually exists.
 
 ## Geometry authority
 
