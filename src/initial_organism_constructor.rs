@@ -254,7 +254,7 @@ fn grow_one_step(
     catalog: &[BaseResource],
     candidates: &[(String, crate::physical_material::PhysicalMaterial)],
     frontier: &[usize],
-    occupancy: &ConstructionEndpointOccupancy,
+    occupancy: &mut ConstructionEndpointOccupancy,
     spatial_index: &mut crate::construction_runtime::ConstructionSpatialIndex,
     nodes: &mut usize,
     ledger: &EnergyLedger,

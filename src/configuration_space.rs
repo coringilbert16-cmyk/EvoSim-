@@ -194,8 +194,7 @@ pub(crate) fn convex_minkowski_difference(
 
     let vertices = convex_hull(sums);
     if vertices.len() < 3 { return Err(ConfigurationSpaceError::DegeneratePolygon); }
-    let features = vertices.iter().enumerate().map(|i| {
-        let start = vertices[i];
+    let features = vertices.iter().enumerate().map(|(i, &start)| {
         let end = vertices[(i + 1) % vertices.len()];
         classify_boundary_feature(start, end, &a, &b_negated)
     }).collect();
