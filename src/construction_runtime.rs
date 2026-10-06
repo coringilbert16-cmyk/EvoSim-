@@ -281,6 +281,13 @@ pub(crate) fn construction_frontier_endpoints(
         .collect()
 }
 
+pub(crate) fn structure_unit_endpoint_options_for_frontier(
+    unit: &StructuralUnit,
+    catalog: &[BaseResource],
+) -> Vec<ConnectionEndpoint> {
+    structure_unit_endpoint_options(unit, catalog)
+}
+
 fn structure_unit_endpoint_options(
     unit: &StructuralUnit,
     catalog: &[BaseResource],
