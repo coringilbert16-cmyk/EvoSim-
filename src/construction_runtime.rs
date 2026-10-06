@@ -996,6 +996,7 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
     let mut nfp_feature_cache: Vec<(
         usize,
         f64,
+        usize,
         Vec<(Placement, ConnectionEndpoint, ConnectionEndpoint)>,
     )> = Vec::new();
 
@@ -1078,8 +1079,9 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
                     Some((placement, feature_a, feature_b))
                 })
                 .collect::<Vec<_>>();
+            let boundary_index = nfp_cache.len();
             nfp_cache.push((part_index, angle, boundary));
-            nfp_feature_cache.push((part_index, angle, features));
+            nfp_feature_cache.push((part_index, angle, boundary_index, features));
         }
     }
 
@@ -1089,13 +1091,14 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
     // second placement-generation path.
     let mut candidate_stream: Vec<(
         usize,
+        usize,
         ConnectionEndpoint,
         ConnectionEndpoint,
         f64,
         Placement,
     )> = Vec::new();
 
-    for (part_index, angle, features) in &nfp_feature_cache {
+    for (part_index, angle, boundary_index, features) in &nfp_feature_cache {
         for (placement, endpoint_a, endpoint_b) in features {
             if !existing_endpoints.contains(endpoint_a)
                 || !new_endpoints.iter().any(|(_, endpoint)| endpoint == endpoint_b)
@@ -1104,6 +1107,7 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
             }
             candidate_stream.push((
                 *part_index,
+                *boundary_index,
                 *endpoint_a,
                 *endpoint_b,
                 *angle,
@@ -1117,7 +1121,7 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
     // finite legal-contact candidates. A failed stream means this frontier
     // endpoint/material combination is not usable; the caller may try another.
 
-    for (part_index, endpoint_a, endpoint_b, angle, candidate_placement) in candidate_stream {
+    for (part_index, boundary_index, endpoint_a, endpoint_b, angle, candidate_placement) in candidate_stream {
         let candidate_shape = if one_part {
             one_part_geometry.flatten()
         } else {
@@ -1131,16 +1135,14 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
         let Some(candidate_shape) = candidate_shape else {
             continue;
         };
-        let Some(boundary) = nfp_cache
-            .iter()
-            .find(|(cached_part, cached_angle, _)| {
-                *cached_part == part_index
-                    && (normalize_construction_angle(*cached_angle - angle)).abs() <= 1e-10
-            })
-            .map(|(_, _, boundary)| boundary)
-        else {
+        let Some((cached_part, cached_angle, boundary)) = nfp_cache.get(boundary_index) else {
             continue;
         };
+        if *cached_part != part_index
+            || normalize_construction_angle(*cached_angle - angle).abs() > 1e-10
+        {
+            continue;
+        }
 
         // A placement generated from the NFP is already on a legal contact
         // feature. Keep the exact boundary test as the final configuration-
