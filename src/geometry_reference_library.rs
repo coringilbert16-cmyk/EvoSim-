@@ -1533,11 +1533,11 @@ pub fn generate_rigid_vertex_contact_families(
                 // direction lies in the inward half-plane. The boundary of that
                 // admissible set is therefore a +/- pi/2 interval around the
                 // outward normal, adjusted by the local vertex radial direction.
-                let vertex_angle = candidate_vertices[candidate_vertex].1
-                    .atan2(candidate_vertices[candidate_vertex].0);
-                let center = outward_angle - vertex_angle;
-                let start = center - std::f64::consts::FRAC_PI_2;
-                let end = center + std::f64::consts::FRAC_PI_2;
+                let Some((start, end)) =
+                    exact_vertex_rotation_interval(&candidate_vertices, candidate_vertex, outward_angle)
+                else {
+                    continue;
+                };
                 let family = GeometryRigidVertexContactFamily {
                     schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
                     formation_signature: formation.signature.clone(),
@@ -1774,6 +1774,58 @@ fn edge_angle(a: (f64, f64), b: (f64, f64)) -> Option<f64> {
 
 fn edge_angle_world(a: (f64, f64), b: (f64, f64), rotation: f64) -> Option<f64> {
     Some(normalize_angle(edge_angle(a, b)? + rotation))
+}
+
+fn exact_vertex_rotation_interval(
+    vertices: &[(f64, f64)],
+    vertex_index: usize,
+    outward_angle: f64,
+) -> Option<(f64, f64)> {
+    if vertices.len() < 3 || vertex_index >= vertices.len() {
+        return None;
+    }
+
+    // Every other vertex must remain in the anchor's outward half-plane.
+    // Intersect the resulting exact angular half-plane constraints.
+    let selected = vertices[vertex_index];
+    let mut lo = -std::f64::consts::PI;
+    let mut hi = std::f64::consts::PI;
+
+    for (index, point) in vertices.iter().enumerate() {
+        if index == vertex_index {
+            continue;
+        }
+        let dx = point.0 - selected.0;
+        let dy = point.1 - selected.1;
+        if dx.hypot(dy) <= QUANTUM {
+            return None;
+        }
+
+        let center = normalize_angle(outward_angle - dy.atan2(dx));
+        let a = center - std::f64::consts::FRAC_PI_2;
+        let b = center + std::f64::consts::FRAC_PI_2;
+
+        // Choose the equivalent half-circle whose center is closest to the
+        // current interval. For a convex polygon the intersection is a single
+        // interval; wrapping is handled by testing the two equivalent shifts.
+        let mut best: Option<(f64, f64)> = None;
+        for shift in [-std::f64::consts::TAU, 0.0, std::f64::consts::TAU] {
+            let start = (a + shift).max(lo);
+            let end = (b + shift).min(hi);
+            if end - start > QUANTUM
+                && best.map(|(_, old_end)| end > old_end).unwrap_or(true)
+            {
+                best = Some((start, end));
+            }
+        }
+        let Some((next_lo, next_hi)) = best else {
+            return None;
+        };
+        lo = next_lo;
+        hi = next_hi;
+    }
+
+    (hi - lo > QUANTUM).then_some((lo, hi))
 }
 
 fn is_convex_polygon(vertices: &[(f64, f64)]) -> bool {
