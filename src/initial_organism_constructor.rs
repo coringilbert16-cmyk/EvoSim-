@@ -463,7 +463,8 @@ fn construct_physical_organism(
 
     loop {
         let acquisition_candidates = available_acquisition_resources(catalog);
-        if acquisition_candidates.len() >= 3
+        if !scaffold_active
+            && acquisition_candidates.len() >= 3
             && catalog.iter().any(|resource| resource.name == "Water")
             && valid_construction(&structure, catalog, &acquisition_candidates).is_some()
         {
