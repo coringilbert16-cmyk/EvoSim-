@@ -786,14 +786,14 @@ pub(crate) fn try_attach_physical_material_bond_driven(
     f64,
 )> {
     let existing_unit = structure.units.get(existing_index)?.clone();
-    let existing_endpoints = structure_unit_endpoint_options(existing_unit, catalog);
+    let existing_endpoints = structure_unit_endpoint_options(&existing_unit, catalog);
     let new_endpoints = physical_material_endpoint_options(new_material, catalog);
     if existing_endpoints.is_empty() || new_endpoints.is_empty() {
         return None;
     }
 
     for endpoint_a in existing_endpoints {
-        let joint = endpoint_a.world_point(existing_unit, catalog)?;
+        let joint = endpoint_a.world_point(&existing_unit, catalog)?;
         for (part_index, endpoint_b) in new_endpoints.iter().copied() {
             let local_b = physical_material_endpoint_local_point(
                 new_material,
