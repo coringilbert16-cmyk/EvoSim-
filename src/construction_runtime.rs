@@ -469,8 +469,9 @@ fn construction_angle_candidates(
         }
     };
 
-    push_unique(ideal_angle);
-
+    // Developmental geometry has priority over the declared pose.
+    // Face/edge alignments are exact consequences of the actual boundaries;
+    // the blueprint angle is only the final preference fallback.
     match (existing_endpoint, candidate_endpoint) {
         (
             ConnectionEndpoint::Corner {
@@ -547,13 +548,9 @@ fn construction_angle_candidates(
         _ => {}
     }
 
-    // Exact boundary alignments cover common packing: like-shape stacking and
-    // fitting rigid pieces against convex or concave corners. Keep a coarse
-    // fallback for irregular cases without returning to a 360-step sweep.
-    const COARSE_SAMPLES: usize = 24;
-    for step in 0..COARSE_SAMPLES {
-        push_unique(ideal_angle + std::f64::consts::TAU * step as f64 / COARSE_SAMPLES as f64);
-    }
+    // If no exact boundary alignment was available, the declared pose is
+    // still a preference. Do not manufacture arbitrary angular samples.
+    push_unique(ideal_angle);
     angles
 }
 
@@ -728,15 +725,7 @@ fn realize_next_bond_driven(
         return None;
     }
 
-    let mut best_candidate: Option<(
-        f64,
-        OrganismStructure,
-        Vec<usize>,
-        usize,
-        crate::combine_runtime::CombineAttempt,
-        EnergyLedger,
-        f64,
-    )> = None;
+
 
     for existing_index in existing_indices {
         let existing_unit = structure.units.get(existing_index)?;
@@ -885,37 +874,23 @@ fn realize_next_bond_driven(
                         continue;
                     };
 
-                    if best_candidate
-                        .as_ref()
-                        .is_none_or(|current| target_distance < current.0)
-                    {
-                        best_candidate = Some((
-                            target_distance,
-                            trial,
-                            indices,
-                            part_index,
-                            attempt,
-                            trial_ledger,
-                            trial_energy,
-                        ));
-                    }
+                    // The first exact, physically admissible continuation wins.
+                    // Construction is forward-only: do not continue searching for a
+                    // "better" pose after a permanent bond can already be formed.
+                    return Some((
+                        trial,
+                        indices,
+                        part_index,
+                        attempt,
+                        trial_ledger,
+                        trial_energy,
+                    ));
                 }
             }
         }
     }
 
-    best_candidate.map(
-        |(_, trial, indices, part_index, attempt, trial_ledger, trial_energy)| {
-            (
-                trial,
-                indices,
-                part_index,
-                attempt,
-                trial_ledger,
-                trial_energy,
-            )
-        },
-    )
+    None
 }
 
 /// Bond-driven construction is forward-only. Once a bond is formed it is
