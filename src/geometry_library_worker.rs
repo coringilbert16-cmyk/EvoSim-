@@ -33,7 +33,7 @@ fn process_one_frontier(
     let Some(formation) = library
         .formations()
         .filter(|formation| formation.constituents.len() < 20)
-        .find(|formation| {
+        .filter(|formation| {
             catalog.iter().any(|resource| {
                 !matches!(
                     library.frontier().records.get(&format!("{}|{}", formation.signature, resource.name)).map(|record| &record.state),
@@ -41,6 +41,11 @@ fn process_one_frontier(
                         | Some(GeometryFrontierState::ContinuousFamilyPending)
                 )
             })
+        })
+        .min_by(|a, b| {
+            a.constituents.len()
+                .cmp(&b.constituents.len())
+                .then_with(|| a.signature.cmp(&b.signature))
         })
         .cloned()
     else {
