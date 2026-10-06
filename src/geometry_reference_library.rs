@@ -32,6 +32,42 @@ pub struct GeometryContactFamily {
     pub edge_parameter_end: f64,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct GeometryFluidBoundaryFamily {
+    pub schema_version: u32,
+    pub formation_signature: String,
+    pub fluid_resource: String,
+    pub anchor_constituent: usize,
+    pub anchor_edge: usize,
+    pub area: f64,
+    pub contact_angle_radians: f64,
+    pub curvature_radius: f64,
+    pub free_arc_angle_radians: f64,
+    pub contact_length: f64,
+    pub edge_parameter_start: f64,
+    pub edge_parameter_end: f64,
+}
+
+impl GeometryFluidBoundaryFamily {
+    pub fn signature(&self) -> String {
+        format!(
+            "v{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}",
+            self.schema_version,
+            self.formation_signature,
+            self.fluid_resource,
+            self.anchor_constituent,
+            self.anchor_edge,
+            quantize(self.area),
+            quantize(self.contact_angle_radians),
+            quantize(self.curvature_radius),
+            quantize(self.free_arc_angle_radians),
+            quantize(self.edge_parameter_start),
+            quantize(self.edge_parameter_end),
+            quantize(self.contact_length),
+        )
+    }
+}
+
 impl GeometryContactFamily {
     pub fn signature(&self) -> String {
         format!("v{}|{}|{}|{}|{}|{}|{}|{}|{}", self.schema_version, self.formation_signature, self.candidate_resource, self.anchor_constituent, self.anchor_edge, quantize(self.contact_angle_radians), quantize(self.curvature_radius), quantize(self.edge_parameter_start), quantize(self.edge_parameter_end))
@@ -277,6 +313,7 @@ pub struct GeometryLibrary {
     manifest: GeometryLibraryManifest,
     frontier: GeometryFrontier,
     contact_families: BTreeMap<String, GeometryContactFamily>,
+    fluid_boundary_families: BTreeMap<String, GeometryFluidBoundaryFamily>,
     rigid_contact_families: BTreeMap<String, GeometryRigidContactFamily>,
     rigid_point_contact_families: BTreeMap<String, GeometryRigidPointContactFamily>,
     rigid_vertex_contact_families: BTreeMap<String, GeometryRigidVertexContactFamily>,
@@ -290,6 +327,7 @@ impl GeometryLibrary {
         let manifest_path = root.join("manifest.json");
         let frontier_path = root.join("frontier.json");
         let contact_family_path = root.join("contact_families.jsonl");
+        let fluid_boundary_family_path = root.join("fluid_boundary_families.jsonl");
         let rigid_contact_family_path = root.join("rigid_contact_families.jsonl");
         let rigid_point_contact_family_path = root.join("rigid_point_contact_families.jsonl");
         let rigid_vertex_contact_family_path = root.join("rigid_vertex_contact_families.jsonl");
@@ -452,6 +490,7 @@ impl GeometryLibrary {
             manifest,
             frontier,
             contact_families,
+            fluid_boundary_families: load_fluid_boundary_families(&fluid_boundary_family_path, &entries, catalog),
             rigid_contact_families,
             rigid_point_contact_families: load_rigid_point_contact_families(&rigid_point_contact_family_path, &entries, catalog),
             rigid_vertex_contact_families: load_rigid_vertex_contact_families(&rigid_vertex_contact_family_path, &entries, catalog),
@@ -484,6 +523,11 @@ impl GeometryLibrary {
     pub fn contact_families(&self) -> impl Iterator<Item = &GeometryContactFamily> {
         self.contact_families.values()
     }
+
+    pub fn fluid_boundary_families(&self) -> impl Iterator<Item = &GeometryFluidBoundaryFamily> {
+        self.fluid_boundary_families.values()
+    }
+
 
     pub fn rigid_contact_families(&self) -> impl Iterator<Item = &GeometryRigidContactFamily> {
         self.rigid_contact_families.values()
