@@ -647,6 +647,47 @@ impl GeometryLibrary {
         Ok(added)
     }
 
+    pub fn insert_fluid_boundary_families(
+        &mut self,
+        families: Vec<GeometryFluidBoundaryFamily>,
+    ) -> std::io::Result<usize> {
+        let mut unique = BTreeMap::new();
+        for family in families {
+            if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
+                || !family.area.is_finite()
+                || family.area <= 0.0
+                || !family.contact_angle_radians.is_finite()
+                || !family.curvature_radius.is_finite()
+                || !family.free_arc_angle_radians.is_finite()
+                || !family.contact_length.is_finite()
+                || !family.edge_parameter_start.is_finite()
+                || !family.edge_parameter_end.is_finite()
+                || family.edge_parameter_start < 0.0
+                || family.edge_parameter_end > 1.0
+                || family.edge_parameter_end < family.edge_parameter_start
+                || !self.entries.contains_key(&family.formation_signature)
+            {
+                continue;
+            }
+            unique.insert(family.signature(), family);
+        }
+        unique.retain(|key, _| !self.fluid_boundary_families.contains_key(key));
+        if unique.is_empty() {
+            return Ok(0);
+        }
+        let path = self.root.join("fluid_boundary_families.jsonl");
+        let mut file = OpenOptions::new().create(true).append(true).open(path)?;
+        for family in unique.values() {
+            serde_json::to_writer(&mut file, family)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+            file.write_all(b"\n")?;
+        }
+        file.sync_data()?;
+        let added = unique.len();
+        self.fluid_boundary_families.extend(unique);
+        Ok(added)
+    }
+
     pub fn insert_contact_family(&mut self, family: GeometryContactFamily) -> std::io::Result<bool> {
         if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION || !family.contact_angle_radians.is_finite() || !family.curvature_radius.is_finite() || !family.contact_length.is_finite() || !family.edge_parameter_start.is_finite() || !family.edge_parameter_end.is_finite() || family.edge_parameter_end < family.edge_parameter_start { return Ok(false); }
         let signature = family.signature();
@@ -1113,6 +1154,43 @@ pub fn exposed_polygon_edge_intervals(
 /// Polygon edges use exact collinear interval subtraction. A rigid line is
 /// represented as one boundary segment. Water therefore does not need a
 /// special sampled placement for either supported rigid boundary primitive.
+fn load_fluid_boundary_families(
+    path: &Path,
+    entries: &BTreeMap<String, GeometryFormation>,
+    catalog: &[BaseResource],
+) -> BTreeMap<String, GeometryFluidBoundaryFamily> {
+    let mut out = BTreeMap::new();
+    let Ok(file) = File::open(path) else { return out; };
+    let lines = BufReader::new(file).lines().collect::<Result<Vec<_>, _>>().unwrap_or_default();
+    for (index, line) in lines.iter().enumerate() {
+        if line.trim().is_empty() { continue; }
+        let Ok(family) = serde_json::from_str::<GeometryFluidBoundaryFamily>(line) else {
+            if index + 1 == lines.len() { continue; }
+            continue;
+        };
+        if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
+            || !family.area.is_finite()
+            || family.area <= 0.0
+            || !family.contact_angle_radians.is_finite()
+            || !family.curvature_radius.is_finite()
+            || !family.free_arc_angle_radians.is_finite()
+            || !family.contact_length.is_finite()
+            || !family.edge_parameter_start.is_finite()
+            || !family.edge_parameter_end.is_finite()
+            || family.edge_parameter_start < 0.0
+            || family.edge_parameter_end > 1.0
+            || family.edge_parameter_end < family.edge_parameter_start
+            || !entries.contains_key(&family.formation_signature)
+            || family.anchor_constituent >= entries.get(&family.formation_signature).map(|f| f.constituents.len()).unwrap_or(0)
+            || catalog.iter().all(|r| r.name != family.fluid_resource)
+        {
+            continue;
+        }
+        out.insert(family.signature(), family);
+    }
+    out
+}
+
 pub fn generate_water_contact_families(
     formation: &GeometryFormation,
     candidate_resource: &BaseResource,
