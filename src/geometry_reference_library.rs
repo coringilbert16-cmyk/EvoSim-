@@ -5,7 +5,7 @@
 //! the production catalogue lives outside `target/` and survives test runs and
 //! process restarts.
 
-use crate::material_geometry::{placed_forms_overlap, placed_forms_penetrate, PlacedMaterialPart};
+use crate::material_geometry::{placed_forms_penetrate, placed_forms_rigid_contact, PlacedMaterialPart};
 use crate::resources::{default_catalog, BaseResource, Form};
 use crate::structure::Placement;
 use serde::{Deserialize, Serialize};
@@ -430,7 +430,7 @@ pub fn validate_formation(formation: &GeometryFormation, catalog: &[BaseResource
         {
             continue;
         }
-        if !placed_forms_overlap(a, b, 1e-9) {
+        if !placed_forms_rigid_contact(a, b, 1e-9) {
             return false;
         }
     }
@@ -771,6 +771,27 @@ mod tests {
                 GeometryConstituent {
                     resource: "Carbon".into(),
                     placement: Placement { x: 10.0, y: 0.0, rotation_radians: 0.0 },
+                },
+            ],
+            bonds: vec![GeometryBond { constituent_a: 0, constituent_b: 1 }],
+            signature: String::new(),
+        };
+        assert!(!validate_formation(&formation, &catalog));
+    }
+
+    #[test]
+    fn declared_bond_rejects_penetrating_constituents() {
+        let catalog = default_catalog();
+        let formation = GeometryFormation {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            constituents: vec![
+                GeometryConstituent {
+                    resource: "Carbon".into(),
+                    placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                },
+                GeometryConstituent {
+                    resource: "Carbon".into(),
+                    placement: Placement { x: 1.0, y: 0.0, rotation_radians: 0.0 },
                 },
             ],
             bonds: vec![GeometryBond { constituent_a: 0, constituent_b: 1 }],
