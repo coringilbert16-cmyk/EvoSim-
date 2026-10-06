@@ -152,7 +152,7 @@ The library now includes exact feature-contact generation for two-constituent ri
 
 ## Geometry Library Visualizer
 
-The geometry library now has a dedicated read-only browser microscope. It reads the persistent catalogue without participating in generation or modifying library state.
+The geometry library now has a dedicated read-only browser microscope. It reads the persistent catalogue without participating in generation or modifying library state. The browser refreshes its catalogue view every five seconds so formations Bob records while the viewer is open become visible without giving the viewer any write or generation authority.
 
 Run it with:
 
