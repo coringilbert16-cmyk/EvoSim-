@@ -2199,6 +2199,24 @@ mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    fn catalog_with_test_line() -> Vec<BaseResource> {
+        let mut catalog = default_catalog();
+        catalog.push(BaseResource {
+            name: "TestLine".into(),
+            properties: ResourceProperties {
+                mass: 1.0,
+                potential_energy: 1.0,
+                reactivity: 0.0,
+                cohesion: 0.5,
+            },
+            physical_state: crate::resources::PhysicalState::Rigid,
+            shape: crate::resources::Shape {
+                form: Form::Line { length: 1.0 },
+            },
+        });
+        catalog
+    }
+
     fn temp_root() -> PathBuf {
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -2239,10 +2257,10 @@ mod tests {
 
     #[test]
     fn line_line_candidates_include_endpoint_contact() {
-        let catalog = default_catalog();
-        let hydrogen = catalog.iter().find(|r| r.name == "Hydrogen").unwrap();
-        let base = GeometryFormation::single("Hydrogen");
-        let candidates = generate_two_constituent_candidates(&base, hydrogen, &catalog);
+        let catalog = catalog_with_test_line();
+        let line = catalog.iter().find(|r| r.name == "TestLine").unwrap();
+        let base = GeometryFormation::single("TestLine");
+        let candidates = generate_two_constituent_candidates(&base, line, &catalog);
         assert!(!candidates.is_empty());
         assert!(candidates.iter().all(|formation| {
             formation.constituents.len() == 2
@@ -2253,8 +2271,8 @@ mod tests {
 
     #[test]
     fn water_capillary_family_supports_rigid_line_boundaries() {
-        let catalog = default_catalog();
-        let formation = GeometryFormation::single("Hydrogen");
+        let catalog = catalog_with_test_line();
+        let formation = GeometryFormation::single("TestLine");
         let water = catalog.iter().find(|r| r.name == "Water").unwrap();
         let families = generate_water_contact_families(&formation, water, &catalog);
         assert!(!families.is_empty());
@@ -2273,15 +2291,15 @@ mod tests {
             schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
             constituents: vec![
                 GeometryConstituent {
-                    resource: "Hydrogen".into(),
+                    resource: "TestLine".into(),
                     placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
                 },
                 GeometryConstituent {
-                    resource: "Hydrogen".into(),
+                    resource: "TestLine".into(),
                     placement: Placement { x: -0.25, y: 0.0, rotation_radians: 0.0 },
                 },
                 GeometryConstituent {
-                    resource: "Hydrogen".into(),
+                    resource: "TestLine".into(),
                     placement: Placement { x: 0.25, y: 0.0, rotation_radians: 0.0 },
                 },
             ],
