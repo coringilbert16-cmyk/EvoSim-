@@ -92,7 +92,7 @@ The genome cavity is genuinely empty and is part of the organism rather than the
 
 A developmental blueprint may eventually provide inherited spatial and material preferences, but it is never authoritative topology.
 
-The physical constructor does not use material preferences to rank or select constituents. Developmental preferences may influence other inherited behavior, but physical construction remains material-neutral. It must not:
+The physical constructor has no hard-coded intrinsic material preference. When an inherited developmental material preference exists, material similarity may rank available physical constituents and enforce the minimum similarity threshold; geometry then determines whether the selected candidate can actually be placed and bonded. Material identity is therefore not globally preferred, and the constructor must not:
 
 - require future blueprint edges to be realized;
 - force a prescribed number of constituents;
