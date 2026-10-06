@@ -85,7 +85,7 @@ fn temporary_three_carbon_scaffold(
     let contacts = [
         (0usize, 1usize, ( spacing * 0.5, 0.0), (-spacing * 0.5, 0.0)),
         (0usize, 2usize, ( spacing * 0.25, spacing * 0.5), (0.25 * spacing, -0.5 * spacing)),
-        (1usize, 2usize, (-spacing * 0.25, spacing * 0.5), (-0.25 * spacing, -0.5 * spacing)),
+        (1usize, 2usize, (-spacing * 0.25, spacing * 0.5), (0.25 * spacing, -0.5 * spacing)),
     ];
 
     for (a, b, local_a, local_b) in contacts {
