@@ -319,35 +319,8 @@ fn rotated_polygon_vertices(
     })
 }
 
-fn nfp_contact_class(
-    existing_shape: &crate::resources::Shape,
-    existing_origin: (f64, f64),
-    candidate_shape: &crate::resources::Shape,
-    candidate_rotation: f64,
-    candidate_origin: (f64, f64),
-) -> Option<crate::configuration_space::ContactFeatureClass> {
-    let existing_vertices =
-        rotated_polygon_vertices(existing_shape, existing_rotation)?;
-    let candidate_vertices =
-        rotated_polygon_vertices(candidate_shape, candidate_rotation)?;
-    let boundary = crate::configuration_space::convex_minkowski_difference(
-        &existing_vertices,
-        &candidate_vertices,
-    )
-    .ok()?;
-    crate::configuration_space::boundary_feature_at_translation(
-        &boundary,
-        crate::configuration_space::Point {
-            x: candidate_origin.0 - existing_origin.0,
-            y: candidate_origin.1 - existing_origin.1,
-        },
-        crate::combine_runtime::COMBINE_CONTACT_TOLERANCE,
-    )
-}
-
 fn nfp_feature_placement(
     existing_shape: &crate::resources::Shape,
-    existing_rotation: f64,
     existing_origin: (f64, f64),
     candidate_shape: &crate::resources::Shape,
     candidate_rotation: f64,
@@ -359,23 +332,6 @@ fn nfp_feature_placement(
 )> {
     let existing_vertices = existing_shape.form.polygon_vertices()?;
     let candidate_vertices = candidate_shape.form.polygon_vertices()?;
-
-    let local_feature_point = |vertices: &[(f64, f64)],
-                               feature: crate::configuration_space::FeatureRef,
-                               negated: bool|
-     -> Option<(f64, f64)> {
-        let point = match feature.kind {
-            crate::configuration_space::BoundaryFeatureKind::Vertex => {
-                *vertices.get(feature.index)?
-            }
-            crate::configuration_space::BoundaryFeatureKind::Edge => {
-                let a = *vertices.get(feature.index)?;
-                let b = *vertices.get((feature.index + 1) % vertices.len())?;
-                ((a.0 + b.0) * 0.5, (a.1 + b.1) * 0.5)
-            }
-        };
-        Some(if negated { (-point.0, -point.1) } else { point })
-    };
 
     let translation = (
         feature.start.x + (feature.end.x - feature.start.x) * 0.5,
@@ -1083,12 +1039,12 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
         edge_alignment_cache.push((part_index, angles.clone()));
 
         for angle in angles {
+            let existing_rotated_vertices =
+                rotated_polygon_vertices(existing_shape, existing_unit.placement.rotation_radians)?;
+            let candidate_rotated_vertices = rotated_polygon_vertices(candidate_shape, angle)?;
             let boundary = crate::configuration_space::convex_minkowski_difference(
-                &rotated_polygon_vertices(
-                    existing_shape,
-                    existing_unit.placement.rotation_radians,
-                )?,
-                &rotated_polygon_vertices(candidate_shape, angle)?,
+                &existing_rotated_vertices,
+                &candidate_rotated_vertices,
             )
             .ok()?;
             let features = boundary
@@ -1230,12 +1186,18 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
                     *cached_part == part_index
                         && (normalize_construction_angle(*cached_angle - angle)).abs() <= 1e-10
                 }) {
+                    let existing_rotated_vertices =
+                        match rotated_polygon_vertices(existing_shape, existing_unit.placement.rotation_radians) {
+                            Some(vertices) => vertices,
+                            None => continue,
+                        };
+                    let candidate_rotated_vertices = match rotated_polygon_vertices(candidate_shape, angle) {
+                        Some(vertices) => vertices,
+                        None => continue,
+                    };
                     let boundary = match crate::configuration_space::convex_minkowski_difference(
-                        &rotated_polygon_vertices(
-                            existing_shape,
-                            existing_unit.placement.rotation_radians,
-                        ),
-                        &rotated_polygon_vertices(candidate_shape, angle),
+                        &existing_rotated_vertices,
+                        &candidate_rotated_vertices,
                     ) {
                         Ok(boundary) => boundary,
                         Err(_) => continue,
@@ -2424,9 +2386,12 @@ pub(crate) fn try_attach_physical_material_bond_driven(
     EnergyLedger,
     f64,
 )> {
+    let existing_unit = structure.units.get(existing_index)?;
+    let available_existing_endpoints = structure_unit_endpoint_options(&existing_unit, catalog);
     try_attach_physical_material_bond_driven_indexed(
         structure,
         existing_index,
+        &available_existing_endpoints,
         new_material,
         catalog,
         nodes,
