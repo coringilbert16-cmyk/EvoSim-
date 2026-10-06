@@ -1,20 +1,16 @@
-//! Deterministic physical construction baseline for the first valid organism.
+//! Forward-only initial-organism construction from local physical geometry.
 //!
-//! The current baseline has no developmental blueprint or target topology. It
-//! uses a temporary deterministic Carbon scaffold only to prove the physical
-//! construction, genome-cavity, and acquisition contracts. The final constructor
-//! will replace this fixed scaffold with local free-form construction while
-//! retaining the same physical bond authority.
+//! Genesis deliberately has no fixed ring, spiral, lattice, material identity,
+//! piece count, or target silhouette. One physical rigid constituent provides
+//! the initial cell material; every later constituent is positioned only by
+//! exact contacts with the already-realized structure. Once committed, a
+//! placement and its bonds are never rolled back.
 
 use crate::resources::{BaseResource, Material, PhysicalState};
 use crate::state::EnergyLedger;
 use crate::structure::Placement;
 
 const CONSTRUCTION_ENERGY: f64 = 1.0e12;
-const INNER_RING_RADIUS: i32 = 3;
-const OUTER_RING_RADIUS: i32 = 5;
-const SPOKE_RADIUS: i32 = 4;
-const SQRT_3: f64 = 1.7320508075688772935;
 
 #[derive(Clone, Debug)]
 pub(crate) struct ValidConstruction {
@@ -23,48 +19,12 @@ pub(crate) struct ValidConstruction {
     pub acquired_resource_placements: Vec<(String, Placement)>,
 }
 
-/// Axial hex coordinates are used only as a deterministic geometric
-/// construction recipe. They are not a biological blueprint: every unit is
-/// still instantiated and every connection is admitted through the normal
-/// physical bond transaction.
-fn axial_to_world(q: i32, r: i32) -> (f64, f64) {
-    // Carbon's catalog hexagon has a vertex on the +x axis. These axial
-    // basis vectors therefore match the actual tessellation of that shape.
-    (
-        1.5 * q as f64,
-        (SQRT_3 * 0.5) * q as f64 + SQRT_3 * r as f64,
-    )
-}
-
-fn hex_ring(radius: i32) -> Vec<(i32, i32)> {
-    if radius <= 0 {
-        return Vec::new();
-    }
-    let directions = [(1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1)];
-    // Start one axial step away from the center so the generated ring is
-    // a true radius-n hex ring rather than passing through (0, 0).
-    let mut q = -radius;
-    let mut r = radius;
-    let mut result = Vec::with_capacity((radius * 6) as usize);
-    for (dq, dr) in directions {
-        for _ in 0..radius {
-            result.push((q, r));
-            q += dq;
-            r += dr;
-        }
-    }
-    result
-}
-
-fn add_unit(
-    structure: &mut crate::structure::OrganismStructure,
+fn realized_single_resource(
     resource: &BaseResource,
-    center: (f64, f64),
     catalog: &[BaseResource],
-) -> Result<usize, String> {
-    let material = Material::free_base(resource.name.clone(), 1.0);
-    let instance = crate::physical_material::PhysicalMaterial::realized(
-        material,
+) -> Option<crate::physical_material::PhysicalMaterial> {
+    crate::physical_material::PhysicalMaterial::realized(
+        Material::free_base(resource.name.clone(), 1.0),
         vec![Placement {
             x: 0.0,
             y: 0.0,
@@ -72,330 +32,44 @@ fn add_unit(
         }],
         catalog,
     )
-    .ok_or_else(|| format!("failed to realize construction unit {}", resource.name))?;
+}
+
+fn rigid_resources<'a>(catalog: &'a [BaseResource]) -> impl Iterator<Item = &'a BaseResource> {
+    catalog.iter().filter(|resource| {
+        resource.physical_state == PhysicalState::Rigid && resource.shape.is_valid()
+    })
+}
+
+/// Start from one real physical constituent. Catalog order is only a
+/// deterministic way to obtain the first environmental material; it is not a
+/// construction preference. Subsequent growth considers every rigid catalog
+/// material without assigning Carbon or any other material intrinsic priority.
+fn initial_seed(
+    catalog: &[BaseResource],
+) -> Result<(crate::structure::OrganismStructure, usize), String> {
+    let seed = rigid_resources(catalog)
+        .next()
+        .ok_or_else(|| "catalog contains no valid rigid construction material".to_string())?;
+    let instance = realized_single_resource(seed, catalog)
+        .ok_or_else(|| format!("failed to realize initial {}", seed.name))?;
+
+    let mut structure = crate::structure::OrganismStructure::new();
     let indices = crate::material_restoration::restore_material(
-        structure,
+        &mut structure,
         &instance,
         Placement {
-            x: center.0,
-            y: center.1,
+            x: 0.0,
+            y: 0.0,
             rotation_radians: 0.0,
         },
         catalog,
     )
-    .ok_or_else(|| format!("failed to restore construction unit {}", resource.name))?;
-    indices.first().copied().ok_or_else(|| {
-        format!(
-            "construction unit {} restored no physical constituent",
-            resource.name
-        )
-    })
-}
+    .ok_or_else(|| format!("failed to restore initial {}", seed.name))?;
 
-fn bond_units(
-    structure: &mut crate::structure::OrganismStructure,
-    unit_a: usize,
-    unit_b: usize,
-    catalog: &[BaseResource],
-    ledger: &mut EnergyLedger,
-    energy: &mut f64,
-) -> Result<(), String> {
-    let mut bonded = false;
-    let mut used_a = Vec::new();
-    let mut used_b = Vec::new();
-
-    // A shared wall segment is sealed by at most two endpoint bonds. Recompute
-    // the physical candidate graph after each commit so endpoint availability
-    // cannot become stale after the first permanent bond.
-    for _ in 0..2 {
-        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-        let candidates = crate::contact::connection_pair_candidates_cached(
-            structure, unit_a, unit_b, catalog, &mut cache,
-        )
-        .into_iter()
-        .filter(|candidate| {
-            candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                && candidate.available_a
-                && candidate.available_b
-        })
-        .filter(|candidate| {
-            let Some((_, _, _, investment, _)) =
-                crate::combine_runtime::selected_candidate_evaluation(
-                    structure,
-                    unit_a,
-                    unit_b,
-                    *candidate,
-                    catalog,
-                )
-            else {
-                return false;
-            };
-            let (Some(id_a), Some(id_b)) = (
-                structure.physical_id(unit_a),
-                structure.physical_id(unit_b),
-            ) else {
-                return false;
-            };
-            let (Some(a), Some(b)) = (
-                structure.units.get(unit_a).and_then(|unit| unit.properties(catalog)),
-                structure.units.get(unit_b).and_then(|unit| unit.properties(catalog)),
-            ) else {
-                return false;
-            };
-            let strength = crate::combine::bond_strength(a, b);
-            let bond = crate::structure::Bond {
-                endpoint_a: crate::structure::BondEndpoint::new(
-                    id_a,
-                    candidate.endpoint_a,
-                ),
-                endpoint_b: crate::structure::BondEndpoint::new(
-                    id_b,
-                    candidate.endpoint_b,
-                ),
-                strength,
-                bond_energy: investment,
-            };
-            structure.is_valid_bond(&bond, catalog)
-        })
-        .collect::<Vec<_>>();
-
-        let candidate = candidates
-            .iter()
-            .filter(|candidate| {
-                matches!(
-                    candidate.endpoint_a,
-                    crate::structure::ConnectionEndpoint::Corner { .. }
-                ) && matches!(
-                    candidate.endpoint_b,
-                    crate::structure::ConnectionEndpoint::Corner { .. }
-                ) && !used_a.contains(&candidate.endpoint_a)
-                    && !used_b.contains(&candidate.endpoint_b)
-            })
-            .min_by(|a, b| {
-                a.distance
-                    .partial_cmp(&b.distance)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .cloned()
-            .or_else(|| {
-                if bonded {
-                    None
-                } else {
-                    candidates.into_iter().max_by(|a, b| {
-                        a.distance
-                            .partial_cmp(&b.distance)
-                            .unwrap_or(std::cmp::Ordering::Equal)
-                    })
-                }
-            });
-
-        let Some(candidate) = candidate else {
-            if bonded {
-                break;
-            }
-            return Err(format!(
-                "no physical contact between construction units {unit_a} and {unit_b}"
-            ));
-        };
-
-        let endpoint_a = candidate.endpoint_a.clone();
-        let endpoint_b = candidate.endpoint_b.clone();
-        let (_, _, _, investment, _) = crate::combine_runtime::selected_candidate_evaluation(
-            structure, unit_a, unit_b, candidate, catalog,
-        )
-        .ok_or_else(|| format!("physical bond candidate {unit_a}-{unit_b} failed evaluation"))?;
-
-        // Recompute candidates on the next iteration after this transaction
-        // changes endpoint availability.
-        crate::combine_runtime::form_selected_bond(
-            structure, unit_a, unit_b, candidate, investment, catalog, &mut cache, ledger, energy,
-        )
-        .ok_or_else(|| format!("physical bond transaction {unit_a}-{unit_b} failed"))?;
-
-        used_a.push(endpoint_a);
-        used_b.push(endpoint_b);
-        bonded = true;
-    }
-
-    Ok(())
-}
-
-/// Place the fixed geometric scaffold directly, while using the ordinary
-/// physical bond transaction for every permanent connection. There is no
-/// speculative placement search and no recursive body-plan search.
-fn construct_scaffold(
-    catalog: &[BaseResource],
-) -> Result<(crate::structure::OrganismStructure, EnergyLedger, f64), String> {
-    let carbon = catalog
-        .iter()
-        .find(|resource| {
-            resource.name == "Carbon"
-                && resource.physical_state == PhysicalState::Rigid
-                && resource.shape.is_valid()
-        })
-        .ok_or_else(|| "catalog lacks valid rigid Carbon geometry".to_string())?;
-
-    let mut structure = crate::structure::OrganismStructure::new();
-    let mut ledger = EnergyLedger::default();
-    let mut energy = CONSTRUCTION_ENERGY;
-
-    // The inner ring closes the genome cavity. Its radius is deliberately large
-    // enough that the realized enclosed area exceeds the three-Carbon minimum
-    // reference; a radius-two ring leaves only a one-Carbon-scale central void.
-    let inner = hex_ring(INNER_RING_RADIUS);
-    let mut inner_indices = Vec::with_capacity(inner.len());
-    for coordinate in inner {
-        inner_indices.push(add_unit(
-            &mut structure,
-            carbon,
-            axial_to_world(coordinate.0, coordinate.1),
-            catalog,
-        )?);
-    }
-    for i in 0..inner_indices.len() {
-        bond_units(
-            &mut structure,
-            inner_indices[i],
-            inner_indices[(i + 1) % inner_indices.len()],
-            catalog,
-            &mut ledger,
-            &mut energy,
-        )?;
-    }
-
-    // The genome is a construction milestone, not a post-hoc property of the
-    // completed scaffold. Nothing outside this ring is needed to qualify it.
-    let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)
-        .map_err(|error| format!("genome cavity analysis failed: {error}"))?
-        .filter(|cavity| cavity.qualifies())
-        .ok_or_else(|| {
-            let pair_counts = (0..inner_indices.len())
-                .map(|i| {
-                    let a = structure.units[inner_indices[i]].physical_id;
-                    let b = structure.units[inner_indices[(i + 1) % inner_indices.len()]].physical_id;
-                    structure
-                        .bonds
-                        .iter()
-                        .filter(|bond| {
-                            (bond.endpoint_a.constituent_id == a
-                                && bond.endpoint_b.constituent_id == b)
-                                || (bond.endpoint_a.constituent_id == b
-                                    && bond.endpoint_b.constituent_id == a)
-                        })
-                        .count()
-                })
-                .collect::<Vec<_>>();
-            let regions =
-                crate::interior_geometry::find_enclosed_regions(&structure, catalog);
-            let max_region_area = regions
-                .iter()
-                .map(|region| region.area)
-                .fold(0.0_f64, f64::max);
-            let first_a = structure.units[inner_indices[0]].physical_id;
-            let first_b = structure.units[inner_indices[1]].physical_id;
-            let first_pair_bonds = structure
-                .bonds
-                .iter()
-                .filter(|bond| {
-                    (bond.endpoint_a.constituent_id == first_a
-                        && bond.endpoint_b.constituent_id == first_b)
-                        || (bond.endpoint_a.constituent_id == first_b
-                            && bond.endpoint_b.constituent_id == first_a)
-                })
-                .map(|bond| (bond.endpoint_a.location, bond.endpoint_b.location))
-                .collect::<Vec<_>>();
-            format!(
-                "inner construction phase did not produce a qualifying genome cavity: bonds={}, pair_counts={pair_counts:?}, enclosed_regions={}, max_region_area={max_region_area}, first_pair_bonds={first_pair_bonds:?}",
-                structure.bonds.len(),
-                regions.len()
-            )
-        })?;
-    if cavity.boundary_units.is_empty() {
-        return Err("qualifying genome cavity has no physical boundary".into());
-    }
-
-    // Build six radial supports one ring outside the cavity boundary. They remain
-    // part of the structural path from the genome boundary to the outer boundary.
-    let mut spokes = Vec::with_capacity(6);
-    let spoke_coordinates = hex_ring(SPOKE_RADIUS);
-    let outer_coordinates = hex_ring(OUTER_RING_RADIUS);
-    for side in 0..6 {
-        let coordinate = spoke_coordinates[side * SPOKE_RADIUS as usize];
-        let index = add_unit(
-            &mut structure,
-            carbon,
-            axial_to_world(coordinate.0, coordinate.1),
-            catalog,
-        )?;
-        let inner_position = side * INNER_RING_RADIUS as usize;
-        bond_units(
-            &mut structure,
-            index,
-            inner_indices[inner_position],
-            catalog,
-            &mut ledger,
-            &mut energy,
-        )?;
-        spokes.push(index);
-    }
-
-    // Grow the outer ring from the spokes. Every new unit is attached before
-    // the next one is created; the final six closure bonds are ordinary
-    // forward construction transactions between already realized units.
-    let mut outer_indices = Vec::with_capacity(outer_coordinates.len());
-    for (i, coordinate) in outer_coordinates.iter().enumerate() {
-        let index = add_unit(
-            &mut structure,
-            carbon,
-            axial_to_world(coordinate.0, coordinate.1),
-            catalog,
-        )?;
-        if i == 0 {
-            bond_units(
-                &mut structure,
-                index,
-                spokes[0],
-                catalog,
-                &mut ledger,
-                &mut energy,
-            )?;
-        } else {
-            bond_units(
-                &mut structure,
-                index,
-                outer_indices[i - 1],
-                catalog,
-                &mut ledger,
-                &mut energy,
-            )?;
-        }
-        outer_indices.push(index);
-    }
-    bond_units(
-        &mut structure,
-        outer_indices[0],
-        outer_indices[outer_indices.len() - 1],
-        catalog,
-        &mut ledger,
-        &mut energy,
-    )?;
-
-    // Connect the remaining spokes to the outer boundary. The exact radial
-    // correspondence is selected from the physical contact graph rather than
-    // by inventing a special construction bond.
-    for side in 1..6 {
-        let outer_coordinate = side * OUTER_RING_RADIUS as usize;
-        bond_units(
-            &mut structure,
-            spokes[side],
-            outer_indices[outer_coordinate],
-            catalog,
-            &mut ledger,
-            &mut energy,
-        )?;
-    }
-
-    Ok((structure, ledger, energy))
+    let index = *indices
+        .first()
+        .ok_or_else(|| "initial physical material restored no constituent".to_string())?;
+    Ok((structure, index))
 }
 
 fn placement_fits_resource(
@@ -403,15 +77,16 @@ fn placement_fits_resource(
     region: &crate::interior_geometry::EnclosedRegion,
     catalog: &[BaseResource],
 ) -> Option<Placement> {
-    // The scaffold deliberately creates broad accessible chambers. Test the
-    // region's own sample point first, then a small deterministic set of
-    // nearby points. This is a bounded geometric check, not a raster search.
+    // Acquisition placement is a physical containment check, not a body-plan
+    // coordinate. Try the region's own sample point and the center-biased
+    // alternatives already implied by the region geometry.
     let points = [
         region.sample_point,
         (region.sample_point.0 * 0.75, region.sample_point.1 * 0.75),
         (region.sample_point.0 * 0.5, region.sample_point.1 * 0.5),
         (region.sample_point.0 * 1.25, region.sample_point.1 * 1.25),
     ];
+
     for &(x, y) in &points {
         if !region.contains_point(x, y) {
             continue;
@@ -506,6 +181,108 @@ fn valid_construction(
     Some(acquired)
 }
 
+/// Grow one constituent at a time from the current realized boundary.
+///
+/// The constructor does not generate a target topology. Each candidate material
+/// is tried through the exact physical attachment path, which derives valid
+/// rotations from actual boundary features. A successful transaction is
+/// immediately committed; a failed candidate is discarded without mutating the
+/// organism. No committed step is backtracked.
+fn grow_one_step(
+    structure: &crate::structure::OrganismStructure,
+    catalog: &[BaseResource],
+    nodes: &mut usize,
+    ledger: &EnergyLedger,
+    energy: f64,
+) -> Option<(
+    crate::structure::OrganismStructure,
+    EnergyLedger,
+    f64,
+)> {
+    let existing_indices = (0..structure.units.len()).collect::<Vec<_>>();
+
+    // There is no preferred construction material here. Every valid rigid
+    // resource is considered as an equally eligible physical candidate.
+    let candidates = rigid_resources(catalog)
+        .filter_map(|resource| {
+            Some((
+                resource.name.clone(),
+                realized_single_resource(resource, catalog)?,
+            ))
+        })
+        .collect::<Vec<_>>();
+
+    for existing_index in existing_indices {
+        for (_resource_name, instance) in &candidates {
+            if let Some((
+                trial,
+                _indices,
+                _part_index,
+                _attempt,
+                trial_ledger,
+                trial_energy,
+            )) = crate::construction_runtime::try_attach_physical_material_bond_driven(
+                structure,
+                existing_index,
+                instance,
+                catalog,
+                nodes,
+                ledger,
+                energy,
+            ) {
+                return Some((trial, trial_ledger, trial_energy));
+            }
+        }
+    }
+
+    None
+}
+
+/// Construct the first viable organism by local physical growth.
+///
+/// The cavity analyzer remains independent: a cavity qualifies because the
+/// realized geometry satisfies the genome rules, not because this constructor
+/// declares a particular region to be the genome. Growth continues after the
+/// first qualifying cavity until the ordinary initial viability contract is
+/// satisfied.
+fn construct_physical_organism(
+    catalog: &[BaseResource],
+) -> Result<(crate::structure::OrganismStructure, EnergyLedger, f64), String> {
+    let (mut structure, _seed_index) = initial_seed(catalog)?;
+    let mut ledger = EnergyLedger::default();
+    let mut energy = CONSTRUCTION_ENERGY;
+    let mut nodes = 0usize;
+
+    loop {
+        let acquisition_candidates = available_acquisition_resources(catalog);
+        if acquisition_candidates.len() >= 3
+            && catalog.iter().any(|resource| resource.name == "Water")
+            && valid_construction(&structure, catalog, &acquisition_candidates).is_some()
+        {
+            return Ok((structure, ledger, energy));
+        }
+
+        let Some((next_structure, next_ledger, next_energy)) =
+            grow_one_step(&structure, catalog, &mut nodes, &ledger, energy)
+        else {
+            let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)
+                .ok()
+                .flatten()
+                .is_some_and(|cavity| cavity.qualifies());
+            return Err(format!(
+                "forward physical construction reached a state with no valid local growth step: units={}, bonds={}, genome_cavity={}, placement_nodes={nodes}",
+                structure.units.len(),
+                structure.bonds.len(),
+                cavity
+            ));
+        };
+
+        structure = next_structure;
+        ledger = next_ledger;
+        energy = next_energy;
+    }
+}
+
 pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruction, String> {
     let acquisition_candidates = available_acquisition_resources(catalog);
     if acquisition_candidates.len() < 3 {
@@ -515,10 +292,10 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
         return Err("catalog does not contain Water".into());
     }
 
-    let (structure, _ledger, energy) = construct_scaffold(catalog)?;
+    let (structure, _ledger, energy) = construct_physical_organism(catalog)?;
     let acquired_resource_placements =
         valid_construction(&structure, catalog, &acquisition_candidates).ok_or_else(|| {
-            "deterministic construction scaffold did not satisfy viability".to_string()
+            "forward physical construction did not satisfy initial viability".to_string()
         })?;
 
     Ok(ValidConstruction {
