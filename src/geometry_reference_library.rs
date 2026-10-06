@@ -2301,6 +2301,23 @@ mod tests {
     }
 
     #[test]
+    fn convex_vertex_rotation_interval_matches_hexagonal_wedge() {
+        let catalog = default_catalog();
+        let formation = GeometryFormation::single("Carbon");
+        let methane = catalog.iter().find(|r| r.name == "Methane").unwrap();
+        let families = generate_rigid_vertex_contact_families(&formation, methane, &catalog);
+        assert!(!families.is_empty());
+
+        // Methane is a convex hexagon. At a vertex touching a flat boundary,
+        // the two incident edges define a 60-degree admissible rotation wedge.
+        for family in families {
+            let width = family.candidate_rotation_end_radians
+                - family.candidate_rotation_start_radians;
+            assert!((width - std::f64::consts::PI / 3.0).abs() < 1e-10);
+        }
+    }
+
+    #[test]
     fn concave_polygon_vertex_contact_is_not_claimed_by_convex_manifold() {
         let catalog = default_catalog();
         let formation = GeometryFormation::single("Carbon");
