@@ -1,7 +1,7 @@
 use crate::capillary_geometry::solve_water_against_solid;
 use crate::geometry_reference_library::{
-    expand_formation_candidates, open_default_library, seed_base_catalogue, GeometryFrontierState,
-    GeometryLibrary,
+    expand_formation_candidates, generate_water_contact_families, open_default_library,
+    seed_base_catalogue, GeometryFrontierState, GeometryLibrary,
 };
 use crate::resources::{default_catalog, BaseResource};
 use std::thread;
@@ -54,6 +54,21 @@ fn process_one_frontier(
                 resource.name.clone(),
                 GeometryFrontierState::InProgress,
             )?;
+
+            if resource.name == "Water" {
+                let families = generate_water_contact_families(&formation, resource, catalog);
+                if !families.is_empty() {
+                    for family in families {
+                        library.insert_contact_family(family)?;
+                    }
+                    library.set_frontier_state(
+                        formation.signature.clone(),
+                        resource.name.clone(),
+                        GeometryFrontierState::Exhausted,
+                    )?;
+                    return Ok(true);
+                }
+            }
 
             if continuous_contact_family_exists(&formation, resource) {
                 library.set_frontier_state(
