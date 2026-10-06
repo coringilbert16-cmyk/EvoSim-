@@ -49,3 +49,6 @@ The worker batches each formation-expansion result before syncing it to disk. Ca
 ### Worker frontier semantics
 
 A formation's seven resource frontiers are processed as one durable pass. Water is recorded as symbolic capillary families (or exhausted when no supported rigid boundary can accept the nominal water volume), while rigid candidates are expanded and batch-persisted. Restarted workers resume any frontier not marked `Exhausted`; an interrupted final JSON record is ignored as a truncated append tail rather than destroying the durable catalogue.
+
+
+The library's continuous-contact model is being expanded with exact symbolic rigid boundary families; no sampled geometry is used.
