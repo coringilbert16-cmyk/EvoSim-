@@ -104,3 +104,41 @@ Do not redesign the constructor in response to a downstream failure until the un
 The long-term goal remains an open-ended simulation in which organisms can develop structure, acquire resources, sense their environment, reproduce, form niches, and potentially evolve multicellular cooperation from the same general physical and behavioral mechanisms.
 
 The current bottleneck is narrower: **constructing the first valid organism correctly and quickly.**
+
+
+## Geometry Reference Library
+
+The geometry catalogue is being separated from the live organism constructor into a **persistent geometry reference library**. This is durable knowledge, not test state and not a per-construction search cache.
+
+The intended catalogue grows exhaustively from the smallest physical formations upward:
+
+1. record every valid single-resource geometry;
+2. enumerate every physically valid two-constituent combination, including repeated resources;
+3. derive every valid three-constituent formation from the validated smaller formations;
+4. continue the same physically reachable expansion through larger composites, eventually up to 20 constituent resources;
+5. canonicalize equivalent formations so the library stores each physical geometry once;
+6. preserve the library across tests, process restarts, and constructor runs.
+
+The first implementation provides the persistent store, schema/versioning, canonical formation representation, independent geometry validation, durable JSONL storage, and base-resource seeding. The store lives outside target/ and therefore is not reset by normal Rust builds or test cleanup.
+
+### Library rules
+
+- The library is **knowledge**, not authority for the live organism state. A constructor may later use it as a read-only source of known-valid continuations, but committed simulation bonds still go through the normal physical transaction.
+- Validation is independent of discovery. A formation is stored only after resource/shape validity, bond topology, connectivity, and non-penetration checks succeed.
+- Global translation and rigid rotation are canonicalized. Reflections are **not** collapsed: a mirror image is a distinct physical formation unless the geometry itself makes it identical.
+- Repeated constituents are allowed. “20 constituents” means twenty physical pieces; it does not mean twenty distinct resource types.
+- Water remains a real resource. Fluid formations without a finite boundary are represented without inventing rigid collision geometry; their context-fitting realization remains a separate physical-field concern.
+- Floating-point coordinates are represented in canonical signatures with a fixed geometric quantization tolerance. The geometry schema and resource-shape catalogue are versioned so stale geometry cannot silently become current knowledge.
+- Tests use isolated temporary library roots. They must never mutate the persistent production catalogue.
+
+### Worker direction
+
+The next layer is the non-stop catalogue worker. It will load the persistent library, select an unexplored formation/frontier, generate exact geometry candidates, validate and canonicalize them, append only new formations, and durably record progress so it can resume after interruption. It will not use the constructor's old brute-force placement loop or an arbitrary attempt budget.
+
+The worker will expand from validated formations rather than repeatedly solving each composite from scratch. This makes the geometry library the long-lived reference layer that the constructor can eventually query instead of rediscovering the same geometry during every organism construction.
+
+### Current implementation milestone
+
+**Implemented:** persistent library core, canonical formation schema, independent validation, durable append-only storage, version manifest, base-resource seeding, and focused persistence/canonicalization tests.
+
+**Not yet implemented:** exhaustive 2- and 3-constituent candidate generation, durable worker frontier/progress records, the non-stop worker process, and constructor integration. Those remain separate steps so the new reference layer can be verified before it replaces the current construction search.
