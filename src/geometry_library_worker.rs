@@ -85,26 +85,35 @@ fn continuous_contact_family_exists(
     formation: &crate::geometry_reference_library::GeometryFormation,
     candidate: &BaseResource,
 ) -> bool {
-    if formation.constituents.len() != 1 {
-        return false;
-    }
-    let target = &formation.constituents[0];
+    let catalog = default_catalog();
     let is_circle = |resource: &BaseResource| {
         matches!(resource.shape.form, crate::resources::Form::Circle { .. })
     };
-    let target_resource = default_catalog()
-        .into_iter()
-        .find(|resource| resource.name == target.resource);
-    let Some(target_resource) = target_resource else {
-        return false;
-    };
-    if !is_circle(&target_resource) && !is_circle(candidate) {
-        return false;
-    }
-    if target_resource.physical_state == crate::resources::PhysicalState::Fluid
-        && candidate.physical_state == crate::resources::PhysicalState::Fluid
+    let candidate_is_circle = is_circle(candidate);
+    if !candidate_is_circle
+        && !formation.constituents.iter().any(|constituent| {
+            catalog.iter()
+                .find(|resource| resource.name == constituent.resource)
+                .map(is_circle)
+                .unwrap_or(false)
+        })
     {
         return false;
     }
-    true
+
+    if candidate_is_circle {
+        return formation.constituents.iter().any(|constituent| {
+            catalog.iter()
+                .find(|resource| resource.name == constituent.resource)
+                .map(|resource| resource.physical_state != crate::resources::PhysicalState::Fluid)
+                .unwrap_or(false)
+        });
+    }
+
+    formation.constituents.iter().any(|constituent| {
+        catalog.iter()
+            .find(|resource| resource.name == constituent.resource)
+            .map(|resource| is_circle(resource))
+            .unwrap_or(false)
+    })
 }
