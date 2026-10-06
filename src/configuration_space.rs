@@ -260,6 +260,27 @@ mod tests {
     }
 
     #[test]
+    fn translation_on_nfp_boundary_is_contact() {
+        let nfp = convex_minkowski_difference(&square(), &square()).unwrap();
+        assert_eq!(
+            boundary_feature_at_translation(
+                &nfp,
+                Point { x: 2.0, y: 0.0 },
+                1e-9,
+            ),
+            Some(ContactFeatureClass::EdgeEdge)
+        );
+        assert_eq!(
+            boundary_feature_at_translation(
+                &nfp,
+                Point { x: 0.0, y: 0.0 },
+                1e-9,
+            ),
+            None
+        );
+    }
+
+    #[test]
     fn reversed_convex_input_is_normalized() {
         let mut reversed = square();
         reversed.reverse();
