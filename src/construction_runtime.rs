@@ -312,11 +312,80 @@ fn placement_for_joint(
     }
 }
 
+pub(crate) struct ConstructionSpatialIndex {
+    cell_size: f64,
+    cells: std::collections::HashMap<(i64, i64), Vec<usize>>,
+}
+
+impl ConstructionSpatialIndex {
+    pub(crate) fn new(structure: &OrganismStructure, catalog: &[BaseResource]) -> Self {
+        let max_radius = structure
+            .units
+            .iter()
+            .filter_map(|unit| unit.shape(catalog).map(|shape| shape.form.bounding_radius()))
+            .fold(1.0_f64, f64::max);
+        let mut index = Self {
+            cell_size: (max_radius * 2.0).max(1.0),
+            cells: std::collections::HashMap::new(),
+        };
+        for (unit_index, unit) in structure.units.iter().enumerate() {
+            index.insert(unit_index, unit.placement.x, unit.placement.y);
+        }
+        index
+    }
+
+    fn cell(&self, x: f64, y: f64) -> (i64, i64) {
+        (
+            (x / self.cell_size).floor() as i64,
+            (y / self.cell_size).floor() as i64,
+        )
+    }
+
+    pub(crate) fn insert(&mut self, unit_index: usize, x: f64, y: f64) {
+        self.cells
+            .entry(self.cell(x, y))
+            .or_default()
+            .push(unit_index);
+    }
+
+    fn nearby_indices(&self, x: f64, y: f64, radius: f64) -> Vec<usize> {
+        let min_x = ((x - radius) / self.cell_size).floor() as i64;
+        let max_x = ((x + radius) / self.cell_size).floor() as i64;
+        let min_y = ((y - radius) / self.cell_size).floor() as i64;
+        let max_y = ((y + radius) / self.cell_size).floor() as i64;
+        let mut indices = Vec::new();
+        for cell_x in min_x..=max_x {
+            for cell_y in min_y..=max_y {
+                if let Some(cell) = self.cells.get(&(cell_x, cell_y)) {
+                    indices.extend(cell.iter().copied());
+                }
+            }
+        }
+        indices
+    }
+}
+
 pub(crate) fn placed_unit_overlaps(
     structure: &OrganismStructure,
     candidate: &StructuralUnit,
     ignored_units: &[usize],
     catalog: &[BaseResource],
+) -> bool {
+    placed_unit_overlaps_indexed(
+        structure,
+        candidate,
+        ignored_units,
+        catalog,
+        None,
+    )
+}
+
+pub(crate) fn placed_unit_overlaps_indexed(
+    structure: &OrganismStructure,
+    candidate: &StructuralUnit,
+    ignored_units: &[usize],
+    catalog: &[BaseResource],
+    spatial_index: Option<&ConstructionSpatialIndex>,
 ) -> bool {
     let Some(candidate_shape) = candidate.shape(catalog) else {
         return true;
@@ -326,7 +395,23 @@ pub(crate) fn placed_unit_overlaps(
         form: candidate_shape.form.clone(),
         placement: candidate.placement,
     };
-    structure.units.iter().enumerate().any(|(index, unit)| {
+    let candidate_radius = candidate_shape.form.bounding_radius();
+    let nearby = spatial_index
+        .map(|index| index.nearby_indices(
+            candidate.placement.x,
+            candidate.placement.y,
+            candidate_radius
+                + structure
+                    .units
+                    .iter()
+                    .filter_map(|unit| unit.shape(catalog).map(|shape| shape.form.bounding_radius()))
+                    .fold(candidate_radius, f64::max),
+        ));
+    let indices = nearby.unwrap_or_else(|| (0..structure.units.len()).collect());
+    indices.into_iter().any(|index| {
+        let Some(unit) = structure.units.get(index) else {
+            return false;
+        };
         if ignored_units.contains(&index) {
             return false;
         }
@@ -770,7 +855,7 @@ fn construction_angle_candidates(
     angles
 }
 
-pub(crate) fn try_attach_physical_material_bond_driven(
+pub(crate) fn try_attach_physical_material_bond_driven_indexed(
     structure: &mut OrganismStructure,
     existing_index: usize,
     new_material: &crate::physical_material::PhysicalMaterial,
@@ -778,6 +863,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
     nodes: &mut usize,
     ledger: &EnergyLedger,
     available_energy: f64,
+    spatial_index: Option<&ConstructionSpatialIndex>,
 ) -> Option<(
     Vec<usize>,
     usize,
@@ -853,7 +939,13 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                         continue;
                     };
                     if !candidate_unit.realize_default_geometry(catalog)
-                        || placed_unit_overlaps(structure, &candidate_unit, &[], catalog)
+                        || placed_unit_overlaps_indexed(
+                        structure,
+                        &candidate_unit,
+                        &[],
+                        catalog,
+                        spatial_index,
+                    )
                     {
                         continue;
                     }
@@ -1900,6 +1992,34 @@ fn construct_blueprint_bond_driven_internal(
     // was placed. There is deliberately no separate closure phase.
     Ok((structure, total_heat))
 }
+
+pub(crate) fn try_attach_physical_material_bond_driven(
+    structure: &mut OrganismStructure,
+    existing_index: usize,
+    new_material: &crate::physical_material::PhysicalMaterial,
+    catalog: &[BaseResource],
+    nodes: &mut usize,
+    ledger: &EnergyLedger,
+    available_energy: f64,
+) -> Option<(
+    Vec<usize>,
+    usize,
+    crate::combine_runtime::CombineAttempt,
+    EnergyLedger,
+    f64,
+)> {
+    try_attach_physical_material_bond_driven_indexed(
+        structure,
+        existing_index,
+        new_material,
+        catalog,
+        nodes,
+        ledger,
+        available_energy,
+        None,
+    )
+}
+
 #[test]
 fn construction_endpoint_options_include_exact_edge_midpoints() {
     let catalog = crate::resources::default_catalog();
