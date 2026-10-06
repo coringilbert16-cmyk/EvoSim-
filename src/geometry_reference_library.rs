@@ -1302,6 +1302,71 @@ fn load_rigid_point_contact_families(
     out
 }
 
+pub fn generate_rigid_point_contact_families(
+    formation: &GeometryFormation,
+    candidate_resource: &BaseResource,
+    catalog: &[BaseResource],
+) -> Vec<GeometryRigidPointContactFamily> {
+    let Form::Line { .. } = candidate_resource.shape.form else {
+        return Vec::new();
+    };
+    let mut unique = BTreeMap::new();
+
+    for anchor_index in 0..formation.constituents.len() {
+        let Some(anchor_resource) = catalog.iter().find(|r| r.name == formation.constituents[anchor_index].resource) else { continue; };
+        let Some(vertices) = anchor_resource.shape.form.polygon_vertices() else { continue; };
+        let exposed = exposed_polygon_edge_intervals(formation, anchor_index, catalog);
+        let placement = formation.constituents[anchor_index].placement;
+        let signed_area = vertices.iter().enumerate().map(|(i, &(x0,y0))| {
+            let (x1,y1) = vertices[(i+1)%vertices.len()];
+            x0*y1-y0*x1
+        }).sum::<f64>();
+
+        for interval in exposed {
+            let Some(&a0) = vertices.get(interval.edge) else { continue; };
+            let a1 = vertices[(interval.edge + 1) % vertices.len()];
+            let dx = a1.0-a0.0;
+            let dy = a1.1-a0.1;
+            let length = dx.hypot(dy);
+            if length <= QUANTUM { continue; }
+
+            // For a CCW polygon the outward normal is the right-hand normal;
+            // for CW it is the left-hand normal.
+            let (nx, ny) = if signed_area >= 0.0 {
+                (dy / length, -dx / length)
+            } else {
+                (-dy / length, dx / length)
+            };
+            let world_n = (
+                nx * placement.rotation_radians.cos() - ny * placement.rotation_radians.sin(),
+                nx * placement.rotation_radians.sin() + ny * placement.rotation_radians.cos(),
+            );
+            let outward_angle = world_n.1.atan2(world_n.0);
+
+            for endpoint in 0..2 {
+                let local_interior_angle = if endpoint == 0 { 0.0 } else { std::f64::consts::PI };
+                let center = outward_angle - local_interior_angle;
+                let start = center - std::f64::consts::FRAC_PI_2;
+                let end = center + std::f64::consts::FRAC_PI_2;
+                let family = GeometryRigidPointContactFamily {
+                    schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+                    formation_signature: formation.signature.clone(),
+                    candidate_resource: candidate_resource.name.clone(),
+                    anchor_constituent: anchor_index,
+                    anchor_edge: interval.edge,
+                    candidate_endpoint: endpoint,
+                    anchor_parameter_start: interval.start,
+                    anchor_parameter_end: interval.end,
+                    candidate_rotation_start_radians: start,
+                    candidate_rotation_end_radians: end,
+                };
+                unique.insert(family.signature(), family);
+            }
+        }
+    }
+    unique.into_values().collect()
+}
+
 pub fn generate_rigid_contact_families(
     formation: &GeometryFormation,
     candidate_resource: &BaseResource,
