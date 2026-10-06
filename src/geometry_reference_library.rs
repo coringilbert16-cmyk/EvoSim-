@@ -5,7 +5,7 @@
 //! the production catalogue lives outside `target/` and survives test runs and
 //! process restarts.
 
-use crate::material_geometry::{placed_forms_penetrate, PlacedMaterialPart};
+use crate::material_geometry::{placed_forms_overlap, placed_forms_penetrate, PlacedMaterialPart};
 use crate::resources::{default_catalog, BaseResource, Form};
 use crate::structure::Placement;
 use serde::{Deserialize, Serialize};
@@ -430,6 +430,22 @@ pub fn validate_formation(formation: &GeometryFormation, catalog: &[BaseResource
         });
     }
 
+    // A declared rigid bond must correspond to actual realized boundary
+    // contact. The graph is not allowed to invent a connection between
+    // separated constituents.
+    for bond in &formation.bonds {
+        let a = &parts[bond.constituent_a];
+        let b = &parts[bond.constituent_b];
+        if matches!(a.form, Form::Fluid { boundary: None, .. })
+            || matches!(b.form, Form::Fluid { boundary: None, .. })
+        {
+            continue;
+        }
+        if !placed_forms_overlap(a, b, 1e-9) {
+            return false;
+        }
+    }
+
     for i in 0..parts.len() {
         for j in (i + 1)..parts.len() {
             // Fluids with no explicit boundary have no finite collision surface;
@@ -743,6 +759,48 @@ mod tests {
         assert_eq!(reopened.len(), catalog.len());
 
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn declared_bond_requires_physical_contact() {
+        let catalog = default_catalog();
+        let formation = GeometryFormation {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            constituents: vec![
+                GeometryConstituent {
+                    resource: "Carbon".into(),
+                    placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                },
+                GeometryConstituent {
+                    resource: "Carbon".into(),
+                    placement: Placement { x: 10.0, y: 0.0, rotation_radians: 0.0 },
+                },
+            ],
+            bonds: vec![GeometryBond { constituent_a: 0, constituent_b: 1 }],
+            signature: String::new(),
+        };
+        assert!(!validate_formation(&formation, &catalog));
+    }
+
+    #[test]
+    fn touching_bonded_fluids_can_be_valid_against_a_rigid_boundary() {
+        let catalog = default_catalog();
+        let formation = GeometryFormation {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            constituents: vec![
+                GeometryConstituent {
+                    resource: "Water".into(),
+                    placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                },
+                GeometryConstituent {
+                    resource: "Carbon".into(),
+                    placement: Placement { x: 1.0 + (0.5 / std::f64::consts::PI).sqrt(), y: 0.0, rotation_radians: 0.0 },
+                },
+            ],
+            bonds: vec![GeometryBond { constituent_a: 0, constituent_b: 1 }],
+            signature: String::new(),
+        };
+        assert!(validate_formation(&formation, &catalog));
     }
 
     #[test]
