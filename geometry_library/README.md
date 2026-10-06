@@ -57,3 +57,7 @@ The library's continuous-contact model is being expanded with exact symbolic rig
 Rigid edge-to-edge contact is also continuous: after the boundary directions are aligned, one body can translate along the shared boundary while maintaining contact. The library now records this degree of freedom as a symbolic GeometryRigidContactFamily with exact edge identifiers, relative rotation, and the complete boundary-overlap parameter interval. A family can be instantiated at a chosen parameter without angular search; the normal formation validator remains authoritative for the resulting complete structure.
 
 This is deliberately a continuum representation, not a claim that every parameter value is automatically valid inside an already-complex formation. The family describes the exact local contact manifold; instantiation performs the full collision/contact validation.
+
+### Continuous point-contact families
+
+A rigid line endpoint contacting an exposed polygon edge is a genuine continuum: the contact point may move anywhere along the exposed edge, while the line may rotate through the outward half-plane without entering the solid. The library records that two-parameter family symbolically (edge parameter plus orientation interval) rather than sampling angles or positions. Full formation validation remains authoritative when a member of the family is instantiated.
