@@ -66,23 +66,12 @@ impl GeometryFormation {
         }
 
         normalize_global_pose(&mut self, catalog);
-        self.constituents.sort_by(|a, b| {
-            a.resource
-                .cmp(&b.resource)
-                .then_with(|| quantize(a.placement.x).cmp(&quantize(b.placement.x)))
-                .then_with(|| quantize(a.placement.y).cmp(&quantize(b.placement.y)))
-                .then_with(|| {
-                    quantize(normalized_angle(a.placement.rotation_radians))
-                        .cmp(&quantize(normalized_angle(b.placement.rotation_radians)))
-                })
-        });
 
-        // Rebuild through the sorted constituents using the original identities.
-        // We cannot safely infer identity from equal values, so canonicalization
-        // uses a second deterministic pass over the original formation.
-        let original = self.constituents.clone();
+        // Sort the constituents while retaining their original indices so the
+        // bond graph follows the physical pieces rather than merely following
+        // their serialized order.
         let mut indexed: Vec<(usize, GeometryConstituent)> =
-            original.into_iter().enumerate().collect();
+            self.constituents.into_iter().enumerate().collect();
         indexed.sort_by(|(_, a), (_, b)| {
             a.resource
                 .cmp(&b.resource)
@@ -474,6 +463,14 @@ pub fn generate_two_constituent_candidates(
     let Some(target_resource) = catalog.iter().find(|r| r.name == target.constituents[0].resource) else {
         return Vec::new();
     };
+
+    // Fluid + fluid is volume accumulation, not a new rigid formation. There
+    // is therefore no second constituent geometry to enumerate here.
+    if target_resource.physical_state == crate::resources::PhysicalState::Fluid
+        && candidate_resource.physical_state == crate::resources::PhysicalState::Fluid
+    {
+        return Vec::new();
+    }
     let target_placement = target.constituents[0].placement;
     let mut out = Vec::new();
     let target_vertices = target_resource.shape.form.polygon_vertices();
@@ -848,6 +845,46 @@ mod tests {
         assert!(validate_formation(&formation, &catalog));
         let canonical = formation.canonicalized(&catalog).unwrap();
         assert_eq!(canonical.signature, canonical.canonical_signature());
+    }
+
+    #[test]
+    fn canonicalization_remaps_bonds_when_constituent_order_changes() {
+        let catalog = default_catalog();
+        let a = GeometryFormation {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            constituents: vec![
+                GeometryConstituent {
+                    resource: "Sulfur".into(),
+                    placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                },
+                GeometryConstituent {
+                    resource: "Carbon".into(),
+                    placement: Placement { x: 1.5, y: 0.0, rotation_radians: 0.0 },
+                },
+            ],
+            bonds: vec![GeometryBond { constituent_a: 0, constituent_b: 1 }],
+            signature: String::new(),
+        };
+        let b = GeometryFormation {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            constituents: vec![
+                a.constituents[1].clone(),
+                a.constituents[0].clone(),
+            ],
+            bonds: vec![GeometryBond { constituent_a: 1, constituent_b: 0 }],
+            signature: String::new(),
+        };
+        let ca = a.canonicalized(&catalog).unwrap();
+        let cb = b.canonicalized(&catalog).unwrap();
+        assert_eq!(ca.signature, cb.signature);
+    }
+
+    #[test]
+    fn fluid_fluid_generation_produces_no_rigid_candidate() {
+        let catalog = default_catalog();
+        let water = catalog.iter().find(|r| r.name == "Water").unwrap();
+        let base = GeometryFormation::single("Water");
+        assert!(generate_two_constituent_candidates(&base, water, &catalog).is_empty());
     }
 
     #[test]
