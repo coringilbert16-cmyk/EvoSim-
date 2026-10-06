@@ -220,6 +220,10 @@ impl GeometryLibrary {
         self.entries.get(signature)
     }
 
+    pub fn formations(&self) -> impl Iterator<Item = &GeometryFormation> {
+        self.entries.values()
+    }
+
     pub fn insert(
         &mut self,
         formation: GeometryFormation,
@@ -478,8 +482,8 @@ pub fn generate_two_constituent_candidates(
         }
     }
 
-    if let Form::Line { length } = candidate_resource.shape.form {
-        let half = length / 2.0;
+    if let Form::Line { length } = &candidate_resource.shape.form {
+        let half = *length / 2.0;
         let endpoints = [(-half, 0.0), (half, 0.0)];
         if let Some(tv) = target_vertices {
             for ti in 0..tv.len() {
@@ -597,6 +601,46 @@ fn compose_placements(parent: Placement, local: Placement) -> Placement {
     }
 }
 
+
+pub fn seed_two_constituent_catalogue(
+    library: &mut GeometryLibrary,
+    catalog: &[BaseResource],
+) -> std::io::Result<usize> {
+    let singles: Vec<_> = catalog
+        .iter()
+        .map(|resource| GeometryFormation::single(resource.name.clone()))
+        .collect();
+    let mut added = 0;
+    for target in singles {
+        for resource in catalog {
+            for candidate in generate_two_constituent_candidates(&target, resource, catalog) {
+                if library.insert(candidate, catalog)? { added += 1; }
+            }
+        }
+    }
+    Ok(added)
+}
+
+pub fn seed_three_constituent_catalogue(
+    library: &mut GeometryLibrary,
+    catalog: &[BaseResource],
+) -> std::io::Result<usize> {
+    let two: Vec<_> = library
+        .formations()
+        .filter(|formation| formation.constituents.len() == 2)
+        .cloned()
+        .collect();
+    let mut added = 0;
+    for formation in two {
+        for resource in catalog {
+            for candidate in expand_three_constituent_candidates(&formation, resource, catalog) {
+                if library.insert(candidate, catalog)? { added += 1; }
+            }
+        }
+    }
+    Ok(added)
+}
+
 pub fn seed_base_catalogue(
     library: &mut GeometryLibrary,
     catalog: &[BaseResource],
@@ -649,6 +693,21 @@ mod tests {
         let three = expand_three_constituent_candidates(&two[0], carbon, &catalog);
         assert!(!three.is_empty());
         assert!(three.iter().all(|f| f.constituents.len() == 3 && validate_formation(f, &catalog)));
+    }
+
+
+    #[test]
+    fn two_resource_catalogue_seeding_is_deduplicated() {
+        let root = temp_root();
+        let catalog = default_catalog();
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+        seed_base_catalogue(&mut library, &catalog).unwrap();
+        let added = seed_two_constituent_catalogue(&mut library, &catalog).unwrap();
+        assert!(added > 0);
+        let count = library.len();
+        assert_eq!(seed_two_constituent_catalogue(&mut library, &catalog).unwrap(), 0);
+        assert_eq!(library.len(), count);
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
