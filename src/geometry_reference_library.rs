@@ -1568,6 +1568,23 @@ mod tests {
     }
 
     #[test]
+    fn rigid_contact_families_are_persistent() {
+        let root = temp_root();
+        let catalog = default_catalog();
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+        let formation = GeometryFormation::single("Carbon");
+        let carbon = catalog.iter().find(|r| r.name == "Carbon").unwrap();
+        let families = generate_rigid_contact_families(&formation, carbon, &catalog);
+        assert!(!families.is_empty());
+        let count = library.insert_rigid_contact_families(families).unwrap();
+        assert!(count > 0);
+        drop(library);
+        let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
+        assert!(reopened.rigid_contact_families().next().is_some());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn water_capillary_family_is_exact_and_persistent() {
         let root = temp_root();
         let catalog = default_catalog();
