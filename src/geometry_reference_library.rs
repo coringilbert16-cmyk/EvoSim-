@@ -1310,6 +1310,51 @@ mod tests {
     }
 
     #[test]
+    fn water_capillary_family_supports_rigid_line_boundaries() {
+        let catalog = default_catalog();
+        let formation = GeometryFormation::single("Hydrogen");
+        let water = catalog.iter().find(|r| r.name == "Water").unwrap();
+        let families = generate_water_contact_families(&formation, water, &catalog);
+        assert!(!families.is_empty());
+        assert!(families.iter().all(|family| {
+            family.anchor_edge == 0
+                && family.edge_parameter_end >= family.edge_parameter_start
+                && family.edge_parameter_start >= 0.0
+                && family.edge_parameter_end <= 1.0
+        }));
+    }
+
+    #[test]
+    fn exposed_line_boundary_preserves_disconnected_intervals() {
+        let catalog = default_catalog();
+        let formation = GeometryFormation {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            constituents: vec![
+                GeometryConstituent {
+                    resource: "Hydrogen".into(),
+                    placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                },
+                GeometryConstituent {
+                    resource: "Hydrogen".into(),
+                    placement: Placement { x: -0.25, y: 0.0, rotation_radians: 0.0 },
+                },
+                GeometryConstituent {
+                    resource: "Hydrogen".into(),
+                    placement: Placement { x: 0.25, y: 0.0, rotation_radians: 0.0 },
+                },
+            ],
+            bonds: vec![
+                GeometryBond { constituent_a: 0, constituent_b: 1 },
+                GeometryBond { constituent_a: 0, constituent_b: 2 },
+            ],
+            signature: String::new(),
+        };
+        assert!(validate_formation(&formation, &catalog));
+        let intervals = exposed_line_intervals(&formation, 0, &catalog);
+        assert_eq!(intervals.len(), 0);
+    }
+
+    #[test]
     fn water_capillary_family_is_exact_and_persistent() {
         let root = temp_root();
         let catalog = default_catalog();
