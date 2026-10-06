@@ -18,6 +18,7 @@ The intended constructor is **free-form and cavity-driven**:
 - a qualifying cavity may have any number of boundary constituents permitted by the geometry; no number such as 10 is biologically significant.
 
 The constructor is forward-only. A committed physical bond is permanent. There is no global future-body search and no backtracking to repair an earlier construction decision. A placement is a physical preference, not an instruction that the final graph must reproduce.
+Genesis search is frontier-local: only currently exposed, unbonded physical endpoints are construction anchors, and broad-phase geometry rejects distant candidates before exact contact/penetration work. This is a structural performance rule, not an arbitrary attempt budget; constructor realization should remain comfortably below the one-minute requirement.
 
 ## Unified bonding rule
 
