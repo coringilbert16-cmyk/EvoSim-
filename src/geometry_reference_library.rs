@@ -361,6 +361,24 @@ pub fn validate_formation(formation: &GeometryFormation, catalog: &[BaseResource
         {
             return false;
         }
+
+        // Fluid-to-fluid combination is not a rigid geometric connection.
+        // It produces the same fluid shape with greater volume instead of a
+        // second bonded constituent, so the reference library must never
+        // encode two fluid constituents as a rigidly bonded formation.
+        let resource_a = catalog
+            .iter()
+            .find(|resource| resource.name == formation.constituents[bond.constituent_a].resource)
+            .unwrap();
+        let resource_b = catalog
+            .iter()
+            .find(|resource| resource.name == formation.constituents[bond.constituent_b].resource)
+            .unwrap();
+        if resource_a.physical_state == crate::resources::PhysicalState::Fluid
+            && resource_b.physical_state == crate::resources::PhysicalState::Fluid
+        {
+            return false;
+        }
     }
 
     let mut seen = BTreeMap::new();
@@ -725,6 +743,29 @@ mod tests {
         assert_eq!(reopened.len(), catalog.len());
 
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn fluid_to_fluid_is_not_a_rigid_geometry_formation() {
+        let catalog = default_catalog();
+        let water_a = catalog.iter().find(|r| r.name == "Water").unwrap();
+        let water_b = catalog.iter().find(|r| r.name == "Water").unwrap();
+        let formation = GeometryFormation {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            constituents: vec![
+                GeometryConstituent {
+                    resource: water_a.name.clone(),
+                    placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                },
+                GeometryConstituent {
+                    resource: water_b.name.clone(),
+                    placement: Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                },
+            ],
+            bonds: vec![GeometryBond { constituent_a: 0, constituent_b: 1 }],
+            signature: String::new(),
+        };
+        assert!(!validate_formation(&formation, &catalog));
     }
 
     #[test]
