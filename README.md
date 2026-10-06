@@ -128,6 +128,7 @@ The first implementation provides the persistent store, schema/versioning, canon
 - Global translation and rigid rotation are canonicalized. Reflections are **not** collapsed: a mirror image is a distinct physical formation unless the geometry itself makes it identical.
 - Repeated constituents are allowed. “20 constituents” means twenty physical pieces; it does not mean twenty distinct resource types.
 - Water remains a real resource. Fluid formations without a finite boundary are represented without inventing rigid collision geometry; their context-fitting realization remains a separate physical-field concern.
+- Fluid-to-fluid contact is not a rigid bond. Combining fluid with the same fluid produces the same fluid shape with greater volume; the geometry library must not represent that operation as two bonded fluid constituents.
 - Floating-point coordinates are represented in canonical signatures with a fixed geometric quantization tolerance. The geometry schema and resource-shape catalogue are versioned so stale geometry cannot silently become current knowledge.
 - Tests use isolated temporary library roots. They must never mutate the persistent production catalogue.
 
@@ -141,9 +142,9 @@ The worker will expand from validated formations rather than repeatedly solving 
 
 **Implemented:** persistent library core, canonical formation schema, independent validation, durable append-only storage, version manifest, base-resource seeding, and focused persistence/canonicalization tests.
 
-**Not yet implemented:** exhaustive 2- and 3-constituent candidate generation, durable worker frontier/progress records, the non-stop worker process, and constructor integration. Those remain separate steps so the new reference layer can be verified before it replaces the current construction search.
+**Not yet implemented:** exhaustive completion of all 2- and 3-constituent geometry classes, durable worker frontier/progress records, the non-stop worker process, and constructor integration. Exact rigid feature-contact generation is implemented for the current finite polygon/line feature model, but continuous contact families are not yet claimed exhaustive.
 
 
 ### Geometry library progress
 
-The library now includes exact feature-contact generation for two-constituent rigid formations and expansion to three constituents. Two-body seeding considers every base resource against every single-resource formation, validates candidates, canonicalizes them, and persists only new formations. Three-body expansion reuses validated two-body contacts. This path does not use arbitrary angular sampling or an attempt budget. Continuous circle-to-circle contact families are intentionally not yet claimed exhaustive; they need an explicit finite feature representation before completeness can be guaranteed.
+The library now includes exact feature-contact generation for two-constituent rigid formations and expansion to three constituents. Two-body seeding considers every base resource against every single-resource formation, validates candidates, canonicalizes them, and persists only new formations. Three-body expansion reuses validated two-body contacts. Every declared rigid bond must correspond to actual physical boundary contact. Fluid-to-fluid combinations are deliberately not represented as rigid bonds because they merge into the same fluid geometry with increased volume. This path does not use arbitrary angular sampling or an attempt budget. Continuous contact families are intentionally not yet claimed exhaustive; they need an explicit finite feature representation before completeness can be guaranteed.
