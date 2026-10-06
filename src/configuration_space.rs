@@ -426,6 +426,13 @@ mod tests {
     }
 
     #[test]
+    fn convex_nfp_has_linear_edge_count() {
+        let nfp = convex_minkowski_difference(&square(), &square()).unwrap();
+        assert!(nfp.vertices.len() <= 8);
+        assert_eq!(nfp.vertices.len(), nfp.features.len());
+    }
+
+    #[test]
     fn translation_on_nfp_boundary_is_contact() {
         let nfp = convex_minkowski_difference(&square(), &square()).unwrap();
         assert_eq!(
