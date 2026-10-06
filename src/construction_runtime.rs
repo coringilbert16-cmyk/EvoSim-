@@ -1636,6 +1636,32 @@ fn construction_angle_candidates_use_exact_boundary_normals_without_sampling() {
     assert!(angles.len() <= 2);
 }
 
+#[test]
+fn construction_angle_candidates_include_exact_corner_edge_alignment() {
+    let catalog = crate::resources::default_catalog();
+    let shape = catalog
+        .iter()
+        .find(|resource| resource.name == "Carbon")
+        .map(|resource| resource.shape.clone())
+        .unwrap();
+    let vertices = shape.form.polygon_vertices().unwrap();
+    let boundary = ConnectionEndpoint::BoundaryPoint {
+        x: (vertices[0].0 + vertices[1].0) * 0.5,
+        y: (vertices[0].1 + vertices[1].1) * 0.5,
+    };
+    let angles = construction_angle_candidates(
+        &shape,
+        boundary,
+        0.0,
+        &shape,
+        ConnectionEndpoint::Corner { point_index: 0 },
+        0.0,
+        0.37,
+    );
+    assert!(angles.iter().any(|angle| (*angle - 0.37).abs() < 1e-10));
+    assert!(angles.len() > 2);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
