@@ -198,22 +198,23 @@ fn valid_construction(
 fn open_construction_indices(
     structure: &crate::structure::OrganismStructure,
     catalog: &[BaseResource],
+    frontier: &[usize],
 ) -> Vec<usize> {
-    // A unit is a live construction frontier only while it exposes at least
-    // one physical endpoint that has not already been consumed by a bond.
-    // Fully surrounded units therefore leave the search immediately instead
-    // of being reconsidered on every later growth step.
-    structure
-        .units
+    // The frontier is maintained across growth steps. We only revalidate
+    // indices that were already known to be capable of construction work,
+    // plus the newly-created units added by the previous transaction.
+    frontier
         .iter()
-        .enumerate()
-        .filter_map(|(index, unit)| {
-            let endpoints = crate::construction_runtime::construction_frontier_endpoints(
-                unit,
-                structure,
-                catalog,
-            );
-            (!endpoints.is_empty()).then_some(index)
+        .copied()
+        .filter(|&index| {
+            structure.units.get(index).is_some_and(|unit| {
+                !crate::construction_runtime::construction_frontier_endpoints(
+                    unit,
+                    structure,
+                    catalog,
+                )
+                .is_empty()
+            })
         })
         .collect()
 }
@@ -222,6 +223,7 @@ fn grow_one_step(
     structure: &crate::structure::OrganismStructure,
     catalog: &[BaseResource],
     candidates: &[(String, crate::physical_material::PhysicalMaterial)],
+    frontier: &[usize],
     nodes: &mut usize,
     ledger: &EnergyLedger,
     energy: f64,
@@ -229,11 +231,12 @@ fn grow_one_step(
     crate::structure::OrganismStructure,
     EnergyLedger,
     f64,
+    Vec<usize>,
 )> {
     // Genesis is intentionally local: only units with an unbonded physical
     // boundary endpoint can admit the next constituent. This is a frontier
     // search, not a rescan of every historical constituent.
-    let existing_indices = open_construction_indices(structure, catalog);
+    let existing_indices = open_construction_indices(structure, catalog, frontier);
 
     // There is no preferred construction material here. Every valid rigid
     // resource is an equally eligible physical candidate; the first candidate
@@ -256,7 +259,13 @@ fn grow_one_step(
                 ledger,
                 energy,
             ) {
-                return Some((trial, trial_ledger, trial_energy));
+                let mut next_frontier = frontier.to_vec();
+                for index in _indices {
+                    if !next_frontier.contains(&index) {
+                        next_frontier.push(index);
+                    }
+                }
+                return Some((trial, trial_ledger, trial_energy, next_frontier));
             }
         }
     }
@@ -278,6 +287,10 @@ fn construct_physical_organism(
     let mut ledger = EnergyLedger::default();
     let mut energy = CONSTRUCTION_ENERGY;
     let mut nodes = 0usize;
+    // Only the live construction frontier is revisited. It grows monotonically
+    // as new physical constituents are committed and is pruned lazily when a
+    // unit loses its remaining usable endpoints.
+    let mut frontier = vec![0usize];
     // Physical material realizations are immutable candidate geometry during
     // genesis. Build them once rather than rebuilding the same catalog-derived
     // shapes on every frontier-growth step.
@@ -299,11 +312,12 @@ fn construct_physical_organism(
             return Ok((structure, ledger, energy));
         }
 
-        let Some((next_structure, next_ledger, next_energy)) =
+        let Some((next_structure, next_ledger, next_energy, next_frontier)) =
             grow_one_step(
                 &structure,
                 catalog,
                 &construction_candidates,
+                &frontier,
                 &mut nodes,
                 &ledger,
                 energy,
@@ -324,6 +338,7 @@ fn construct_physical_organism(
         structure = next_structure;
         ledger = next_ledger;
         energy = next_energy;
+        frontier = next_frontier;
     }
 }
 
