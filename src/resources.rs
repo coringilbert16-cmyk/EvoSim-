@@ -563,8 +563,13 @@ pub fn default_catalog() -> Vec<BaseResource> {
                 cohesion: 0.05,
             },
             physical_state: PhysicalState::Rigid,
+            // Hydrogen is a finite-area rigid strip: 1.0 long and 0.1 thick.
+            // It is intentionally not represented as a zero-thickness line.
             shape: Shape {
-                form: Form::Line { length: 1.0 },
+                form: Form::Rectangle {
+                    width: 1.0,
+                    height: 0.1,
+                },
             },
         },
         BaseResource {
@@ -744,7 +749,11 @@ mod shape_tests {
     fn locked_resource_geometry_assignments_are_correct() {
         let catalog = default_catalog();
         let find = |name: &str| catalog.iter().find(|r| r.name == name).unwrap();
-        assert!(matches!(find("Hydrogen").shape.form, Form::Line { .. }));
+        assert!(matches!(
+            find("Hydrogen").shape.form,
+            Form::Rectangle { width, height }
+                if (width - 1.0).abs() < 1e-12 && (height - 0.1).abs() < 1e-12
+        ));
         assert!(matches!(
             find("Carbon").shape.form,
             Form::RegularPolygon { sides: 6, .. }
@@ -797,7 +806,11 @@ mod shape_tests {
         }
 
         let hydrogen = find("Hydrogen").shape.form.clone();
-        assert!(matches!(hydrogen, Form::Line { length } if (length - 1.0).abs() < 1e-12));
+        assert!(matches!(
+            hydrogen,
+            Form::Rectangle { width, height }
+                if (width - 1.0).abs() < 1e-12 && (height - 0.1).abs() < 1e-12
+        ));
 
         let nitrogen = find("Nitrogen").shape.form.polygon_vertices().unwrap();
         for i in 0..nitrogen.len() {
