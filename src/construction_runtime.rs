@@ -1009,6 +1009,10 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
         return None;
     };
     let one_part = new_material.material.parts.len() == 1;
+    let Some(existing_vertices) = existing_shape.form.polygon_vertices() else {
+        return None;
+    };
+    let existing_vertices = existing_vertices.to_vec();
     let one_part_geometry = one_part.then(|| {
         new_material
             .material
@@ -1107,9 +1111,6 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
                 .and_then(|placements| placements.get(part_index))
                 .map(|placement| placement.rotation_radians)
                 .unwrap_or(0.0);
-            let Some(existing_vertices) = existing_shape.form.polygon_vertices() else {
-                continue;
-            };
             let Some(candidate_vertices) = candidate_shape.form.polygon_vertices() else {
                 continue;
             };
