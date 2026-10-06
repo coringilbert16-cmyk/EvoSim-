@@ -21,6 +21,25 @@ pub fn run() {
     }
 }
 
+/// Process exactly one durable frontier pass and exit.
+///
+/// This is the safe smoke-test entry point: it exercises the same persistent
+/// store, seeding, candidate generation, validation, and frontier writes as the
+/// continuous worker without starting an unbounded process.
+pub fn run_once() -> std::io::Result<bool> {
+    let catalog = default_catalog();
+    let mut library = open_default_library()?;
+    let seeded = seed_base_catalogue(&mut library, &catalog)?;
+    let processed = process_one_frontier(&mut library, &catalog)?;
+    eprintln!(
+        "geometry worker once: formations={}, seeded={}, processed={}",
+        library.len(),
+        seeded,
+        processed
+    );
+    Ok(processed)
+}
+
 fn process_one_frontier(
     library: &mut GeometryLibrary,
     catalog: &[BaseResource],
