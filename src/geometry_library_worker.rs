@@ -1,7 +1,7 @@
 use crate::geometry_reference_library::{
-    default_catalog, expand_formation_candidates, open_default_library, GeometryFrontierState,
-    GeometryLibrary,
+    expand_formation_candidates, open_default_library, GeometryFrontierState, GeometryLibrary,
 };
+use crate::resources::{default_catalog, BaseResource};
 use std::thread;
 use std::time::Duration;
 
@@ -20,7 +20,7 @@ pub fn run() {
 
 fn process_one_frontier(
     library: &mut GeometryLibrary,
-    catalog: &[crate::resources::BaseResource],
+    catalog: &[BaseResource],
 ) -> std::io::Result<bool> {
     let mut formations: Vec<_> = library
         .formations()
