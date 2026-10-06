@@ -1,5 +1,6 @@
 use crate::geometry_reference_library::{
-    expand_formation_candidates, generate_rigid_contact_families, generate_rigid_point_contact_families, generate_water_contact_families, open_default_library,
+    expand_formation_candidates, generate_rigid_contact_families, generate_rigid_point_contact_families,
+    generate_rigid_vertex_contact_families, generate_water_contact_families, open_default_library,
     seed_base_catalogue, GeometryFrontierState, GeometryLibrary,
 };
 use crate::resources::{default_catalog, BaseResource};
@@ -75,6 +76,9 @@ fn process_one_frontier(
 
             let point_families = generate_rigid_point_contact_families(&formation, resource, catalog);
             library.insert_rigid_point_contact_families(point_families)?;
+
+            let vertex_families = generate_rigid_vertex_contact_families(&formation, resource, catalog);
+            library.insert_rigid_vertex_contact_families(vertex_families)?;
 
             let candidates = expand_formation_candidates(&formation, resource, catalog);
             library.insert_many(candidates, catalog)?;
