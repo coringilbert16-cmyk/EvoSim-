@@ -1113,7 +1113,7 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
                     nfp_cache.last().map(|(_, boundary)| boundary)
                 };
 
-                let nfp_placement = nfp_boundary.and_then(|boundary| {
+                let nfp_feature = nfp_boundary.and_then(|boundary| {
                     boundary.features.iter().find_map(|feature| {
                         let (placement, feature_a, feature_b) = nfp_feature_placement(
                             existing_shape,
@@ -1124,17 +1124,20 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
                             feature,
                         )?;
                         (feature_a == endpoint_a && feature_b == endpoint_b)
-                            .then_some(placement)
+                            .then_some((placement, feature))
                     })
                 });
 
-                let candidate_placement = nfp_placement.unwrap_or_else(|| {
-                    placement_for_joint(
-                        (local_b.x, local_b.y),
-                        (joint.x, joint.y),
-                        angle,
-                    )
-                });
+                let candidate_placement = nfp_feature
+                    .as_ref()
+                    .map(|(placement, _)| *placement)
+                    .unwrap_or_else(|| {
+                        placement_for_joint(
+                            (local_b.x, local_b.y),
+                            (joint.x, joint.y),
+                            angle,
+                        )
+                    });
 
                 // A placement generated from the NFP is already on a legal
                 // contact feature. Keep the exact boundary test as a safety
@@ -1150,7 +1153,7 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
                 // The cached NFP is already the configuration-space authority for
                 // this orientation. Do not rebuild the same Minkowski boundary
                 // merely to validate the placement a second time.
-                if crate::configuration_space::boundary_feature_at_translation(
+                if crate::configuration_space::boundary_feature_at_translation_ref(
                     boundary,
                     candidate_translation,
                     crate::combine_runtime::COMBINE_CONTACT_TOLERANCE,
