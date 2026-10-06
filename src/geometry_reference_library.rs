@@ -1405,8 +1405,10 @@ fn load_rigid_vertex_contact_families(
             || catalog.iter().all(|r| r.name != family.candidate_resource)
         { continue; }
         let Some(anchor_resource) = catalog.iter().find(|r| r.name == entries[&family.formation_signature].constituents[family.anchor_constituent].resource) else { continue; };
-        let Some(vertices) = anchor_resource.shape.form.polygon_vertices() else { continue; };
-        if family.anchor_edge >= vertices.len() || family.candidate_vertex >= vertices.len().max(1) {
+        let Some(anchor_vertices) = anchor_resource.shape.form.polygon_vertices() else { continue; };
+        let Some(candidate_resource) = catalog.iter().find(|r| r.name == family.candidate_resource) else { continue; };
+        let Some(candidate_vertices) = candidate_resource.shape.form.polygon_vertices() else { continue; };
+        if family.anchor_edge >= anchor_vertices.len() || family.candidate_vertex >= candidate_vertices.len() {
             continue;
         }
         out.insert(family.signature(), family);
@@ -1492,6 +1494,9 @@ pub fn generate_rigid_vertex_contact_families(
     let Some(candidate_vertices) = candidate_resource.shape.form.polygon_vertices() else {
         return Vec::new();
     };
+    if !is_convex_polygon(&candidate_vertices) {
+        return Vec::new();
+    }
     let mut unique = BTreeMap::new();
 
     for anchor_index in 0..formation.constituents.len() {
@@ -1769,6 +1774,28 @@ fn edge_angle(a: (f64, f64), b: (f64, f64)) -> Option<f64> {
 
 fn edge_angle_world(a: (f64, f64), b: (f64, f64), rotation: f64) -> Option<f64> {
     Some(normalize_angle(edge_angle(a, b)? + rotation))
+}
+
+fn is_convex_polygon(vertices: &[(f64, f64)]) -> bool {
+    if vertices.len() < 3 {
+        return false;
+    }
+    let mut sign = 0.0;
+    for i in 0..vertices.len() {
+        let a = vertices[i];
+        let b = vertices[(i + 1) % vertices.len()];
+        let c = vertices[(i + 2) % vertices.len()];
+        let cross = (b.0 - a.0) * (c.1 - b.1) - (b.1 - a.1) * (c.0 - b.0);
+        if cross.abs() <= QUANTUM {
+            continue;
+        }
+        if sign == 0.0 {
+            sign = cross.signum();
+        } else if cross.signum() != sign {
+            return false;
+        }
+    }
+    sign != 0.0
 }
 
 fn normalize_angle(angle: f64) -> f64 {
