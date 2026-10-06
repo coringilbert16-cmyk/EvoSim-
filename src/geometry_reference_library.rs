@@ -267,6 +267,17 @@ impl GeometryFormation {
                 });
             candidate.constituents = indexed.iter().map(|(_, c)| c.clone()).collect();
 
+            // Reduce each constituent's local rotation by the exact proper
+            // rotational symmetry of its physical shape. This removes only
+            // rotations that leave the shape itself unchanged; reflections
+            // remain distinct formations.
+            for constituent in &mut candidate.constituents {
+                if let Some(resource) = catalog.iter().find(|r| r.name == constituent.resource) {
+                    constituent.placement.rotation_radians =
+                        canonical_shape_rotation(&resource.shape.form, constituent.placement.rotation_radians);
+                }
+            }
+
             let mut remap = vec![0usize; indexed.len()];
             for (new_index, (old_index, _)) in indexed.iter().enumerate() {
                 remap[*old_index] = new_index;
@@ -920,6 +931,46 @@ fn normalized_angle(angle: f64) -> f64 {
     (angle + std::f64::consts::PI)
         .rem_euclid(std::f64::consts::TAU)
         - std::f64::consts::PI
+}
+
+fn canonical_shape_rotation(form: &Form, angle: f64) -> f64 {
+    let angle = normalized_angle(angle);
+    let period = match form {
+        Form::Circle { .. } => return 0.0,
+        Form::Rectangle { .. } => std::f64::consts::PI,
+        Form::RegularPolygon { sides, .. } => std::f64::consts::TAU / (*sides as f64),
+        Form::Polygon { vertices } => rotational_symmetry_period(vertices),
+        Form::Line { .. } => std::f64::consts::TAU,
+        Form::Fluid { boundary, .. } => boundary.as_deref()
+            .map(rotational_symmetry_period)
+            .unwrap_or(std::f64::consts::TAU),
+    };
+    if period >= std::f64::consts::TAU - 1e-12 { return angle; }
+    normalized_angle((angle / period).round() * period)
+}
+
+fn rotational_symmetry_period(vertices: &[(f64, f64)]) -> f64 {
+    if vertices.len() < 3 { return std::f64::consts::TAU; }
+    let n = vertices.len() as f64;
+    let center = vertices.iter().fold((0.0, 0.0), |(x, y), (vx, vy)| (x + vx, y + vy));
+    let center = (center.0 / n, center.1 / n);
+    let points: Vec<(f64, f64)> = vertices.iter().map(|(x, y)| (x - center.0, y - center.1)).collect();
+    let first = points[0];
+    if first.0.hypot(first.1) <= 1e-12 { return std::f64::consts::TAU; }
+    let first_angle = first.1.atan2(first.0);
+    let tol = 1e-9;
+    for shift in 1..vertices.len() {
+        let target = points[shift];
+        let rotation = normalized_angle(target.1.atan2(target.0) - first_angle);
+        let (sin, cos) = rotation.sin_cos();
+        if points.iter().all(|p| {
+            let rotated = (p.0 * cos - p.1 * sin, p.0 * sin + p.1 * cos);
+            points.iter().any(|q| (rotated.0 - q.0).hypot(rotated.1 - q.1) <= tol)
+        }) {
+            return rotation.abs();
+        }
+    }
+    std::f64::consts::TAU
 }
 
 fn normalize_global_pose(formation: &mut GeometryFormation, catalog: &[BaseResource]) {
@@ -2206,6 +2257,16 @@ pub fn seed_base_catalogue(
 pub fn open_default_library() -> std::io::Result<GeometryLibrary> {
     let catalog = default_catalog();
     GeometryLibrary::open("geometry_library/data", &catalog)
+}
+
+#[test]
+fn canonicalization_collapses_intrinsic_rotation() {
+    let catalog = default_catalog();
+    let base = GeometryFormation::single("Carbon");
+    let mut rotated = base.clone();
+    rotated.constituents[0].placement.rotation_radians = std::f64::consts::PI / 3.0;
+    assert_eq!(base.canonicalized(&catalog).unwrap().signature,
+               rotated.canonicalized(&catalog).unwrap().signature);
 }
 
 #[cfg(test)]
