@@ -328,6 +328,37 @@ impl GeometryLibrary {
             }
         }
 
+        let mut rigid_contact_families = BTreeMap::new();
+        if rigid_contact_family_path.exists() {
+            let file = File::open(&rigid_contact_family_path)?;
+            for line in BufReader::new(file).lines() {
+                let line = line?;
+                if line.trim().is_empty() {
+                    continue;
+                }
+                let family: GeometryRigidContactFamily = match serde_json::from_str(&line) {
+                    Ok(value) => value,
+                    Err(_) => continue,
+                };
+                if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
+                    || !family.candidate_rotation_radians.is_finite()
+                    || !family.anchor_parameter_start.is_finite()
+                    || !family.anchor_parameter_end.is_finite()
+                    || family.anchor_parameter_start > family.anchor_parameter_end
+                    || !entries.contains_key(&family.formation_signature)
+                    || family.anchor_constituent
+                        >= entries
+                            .get(&family.formation_signature)
+                            .map(|formation| formation.constituents.len())
+                            .unwrap_or(0)
+                    || catalog.iter().all(|resource| resource.name != family.candidate_resource)
+                {
+                    continue;
+                }
+                rigid_contact_families.insert(family.signature(), family);
+            }
+        }
+
         let frontier = if frontier_path.exists() {
             let bytes = fs::read(&frontier_path)?;
             serde_json::from_slice(&bytes).map_err(|e| {
@@ -343,7 +374,7 @@ impl GeometryLibrary {
             manifest,
             frontier,
             contact_families,
-            rigid_contact_families: BTreeMap::new(),
+            rigid_contact_families,
         };
         library.manifest.entries = library.entries.len() as u64;
         library.write_manifest()?;
