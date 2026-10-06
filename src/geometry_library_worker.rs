@@ -58,9 +58,7 @@ fn process_one_frontier(
             if resource.name == "Water" {
                 let families = generate_water_contact_families(&formation, resource, catalog);
                 if !families.is_empty() {
-                    for family in families {
-                        library.insert_contact_family(family)?;
-                    }
+                    library.insert_contact_families(families)?;
                     library.set_frontier_state(
                         formation.signature.clone(),
                         resource.name.clone(),
