@@ -51,17 +51,23 @@ Work proceeds in this order:
    - The construction runtime now has an explicit genome-phase entry point.
    - It checks the realized physical graph immediately after committed construction/closure bonds.
    - When the cavity qualifies, that phase returns immediately instead of treating the cavity as a post-build assertion.
-   - The current baseline still uses the temporary blueprint to reach that milestone; it does not yet provide the final free-form topology.
-3. **Build the remainder locally.**
+   - The current baseline still uses the temporary blueprint/scaffold to reach that milestone; it does not yet provide the final free-form topology.
+3. **Make bond-driven construction local and first-valid.**
+   - Exact boundary geometry is considered before declared blueprint pose.
+   - Face/edge alignment is preferred over arbitrary angular sampling.
+   - Once a physically valid continuation is found, it is committed immediately; the constructor does not continue searching for a "best" placement.
+   - No arbitrary angular sweep, candidate cap, timeout, or backtracking is used to control runtime.
+   - The remaining endpoint-pair search is transitional machinery and is the next target for replacement with direct frontier-feature construction.
+4. **Build the remainder locally.**
    - Replace the temporary fixed scaffold with the intended free-form constructive mechanism.
    - Select only from geometrically valid local continuations.
    - Commit bonds immediately; no global search or backtracking.
-4. **Verify acquisition.**
+5. **Verify acquisition.**
    - Water plus any three additional resources must each be physically acquirable.
-5. **Integrate waiting behavior where required.**
+6. **Integrate waiting behavior where required.**
    - Resource shortage becomes a pending construction state rather than constructor failure or a simulation-thread block.
    - This is not yet part of the current catalog-backed genesis constructor.
-6. **Only then broaden validation.**
+7. **Only then broaden validation.**
    - Classify downstream failures by contract.
    - Migrate tests that still encode retired assumptions.
    - Run broader simulation/lifecycle validation after the construction layer is stable.
