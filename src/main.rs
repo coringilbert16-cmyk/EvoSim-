@@ -97,6 +97,11 @@ async fn main() {
         return;
     }
 
+    if std::env::args().nth(1).as_deref() == Some("--geometry-worker-once") {
+        geometry_library_worker::run_once().expect("geometry worker smoke test failed");
+        return;
+    }
+
     if std::env::args().nth(1).as_deref() == Some("--geometry-worker") {
         geometry_library_worker::run();
         return;
