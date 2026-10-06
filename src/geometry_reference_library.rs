@@ -1263,15 +1263,13 @@ pub fn seed_two_constituent_catalogue(
         .iter()
         .map(|resource| GeometryFormation::single(resource.name.clone()))
         .collect();
-    let mut added = 0;
+    let mut candidates = Vec::new();
     for target in singles {
         for resource in catalog {
-            for candidate in generate_two_constituent_candidates(&target, resource, catalog) {
-                if library.insert(candidate, catalog)? { added += 1; }
-            }
+            candidates.extend(generate_two_constituent_candidates(&target, resource, catalog));
         }
     }
-    Ok(added)
+    library.insert_many(candidates, catalog)
 }
 
 pub fn seed_three_constituent_catalogue(
@@ -1283,15 +1281,13 @@ pub fn seed_three_constituent_catalogue(
         .filter(|formation| formation.constituents.len() == 2)
         .cloned()
         .collect();
-    let mut added = 0;
+    let mut candidates = Vec::new();
     for formation in two {
         for resource in catalog {
-            for candidate in expand_three_constituent_candidates(&formation, resource, catalog) {
-                if library.insert(candidate, catalog)? { added += 1; }
-            }
+            candidates.extend(expand_three_constituent_candidates(&formation, resource, catalog));
         }
     }
-    Ok(added)
+    library.insert_many(candidates, catalog)
 }
 
 pub fn seed_base_catalogue(
