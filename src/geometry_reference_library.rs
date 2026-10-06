@@ -1941,11 +1941,18 @@ fn exact_vertex_rotation_interval(
         return None;
     }
 
-    // Every other vertex must remain in the anchor's outward half-plane.
-    // Intersect the resulting exact angular half-plane constraints.
+    // A selected candidate vertex is placed on the anchor supporting line.
+    // The candidate must remain entirely in the anchor's outward half-plane
+    // (touching the line is allowed). For every vector v from the selected
+    // vertex to another candidate vertex, this is exactly:
+    //
+    //     dot(R(theta) v, outward_normal) <= 0
+    //
+    // Each constraint is therefore one exact semicircle of admissible
+    // rotations. We intersect those semicircles on one unwrapped 2*pi sheet.
+    // No angular sampling is involved.
     let selected = vertices[vertex_index];
-    let mut lo = -std::f64::consts::PI;
-    let mut hi = std::f64::consts::PI;
+    let mut centers = Vec::with_capacity(vertices.len() - 1);
 
     for (index, point) in vertices.iter().enumerate() {
         if index == vertex_index {
@@ -1957,26 +1964,26 @@ fn exact_vertex_rotation_interval(
             return None;
         }
 
-        let center = normalize_angle(outward_angle - dy.atan2(dx));
-        let a = center - std::f64::consts::FRAC_PI_2;
-        let b = center + std::f64::consts::FRAC_PI_2;
+        // dot <= 0 means the rotated vector is at least 90 degrees away
+        // from the outward normal. The center of that admissible semicircle
+        // is pi past the vector direction.
+        centers.push(outward_angle - dy.atan2(dx) + std::f64::consts::PI);
+    }
 
-        // Choose the equivalent half-circle whose center is closest to the
-        // current interval. For a convex polygon the intersection is a single
-        // interval; wrapping is handled by testing the two equivalent shifts.
-        let mut best: Option<(f64, f64)> = None;
-        for shift in [-std::f64::consts::TAU, 0.0, std::f64::consts::TAU] {
-            let start = (a + shift).max(lo);
-            let end = (b + shift).min(hi);
-            if end - start > QUANTUM
-                && best.map(|(_, old_end)| end > old_end).unwrap_or(true)
-            {
-                best = Some((start, end));
-            }
-        }
-        let Some((next_lo, next_hi)) = best else {
+    let reference = centers[0];
+    let mut lo = reference - std::f64::consts::FRAC_PI_2;
+    let mut hi = reference + std::f64::consts::FRAC_PI_2;
+
+    for center in centers.into_iter().skip(1) {
+        // Choose the equivalent copy whose center is nearest the current
+        // interval. This unwraps all constraints onto the same real line.
+        let shift = ((reference - center) / std::f64::consts::TAU).round();
+        let center = center + shift * std::f64::consts::TAU;
+        let next_lo = (center - std::f64::consts::FRAC_PI_2).max(lo);
+        let next_hi = (center + std::f64::consts::FRAC_PI_2).min(hi);
+        if next_hi - next_lo <= QUANTUM {
             return None;
-        };
+        }
         lo = next_lo;
         hi = next_hi;
     }
