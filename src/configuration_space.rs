@@ -91,36 +91,34 @@ fn convex_vertices(vertices: &[(f64, f64)]) -> Result<Vec<Point>, ConfigurationS
     Ok(vertices)
 }
 
-fn convex_hull(mut points: Vec<Point>) -> Vec<Point> {
-    points.sort_by(|a, b| {
-        a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| a.y.partial_cmp(&b.y).unwrap_or(std::cmp::Ordering::Equal))
-    });
-    points.dedup_by(|a, b| (a.x - b.x).hypot(a.y - b.y) <= EPSILON);
-    if points.len() <= 2 { return points; }
+fn lowest_vertex_index(vertices: &[Point]) -> usize {
+    vertices
+        .iter()
+        .enumerate()
+        .min_by(|(_, a), (_, b)| {
+            a.y.partial_cmp(&b.y)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal))
+        })
+        .map(|(index, _)| index)
+        .unwrap_or(0)
+}
 
-    fn turn(a: Point, b: Point, c: Point) -> f64 {
-        (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
-    }
+fn cyclic_edges(vertices: &[Point]) -> Vec<Point> {
+    (0..vertices.len())
+        .map(|i| {
+            let a = vertices[i];
+            let b = vertices[(i + 1) % vertices.len()];
+            Point {
+                x: b.x - a.x,
+                y: b.y - a.y,
+            }
+        })
+        .collect()
+}
 
-    let mut lower = Vec::new();
-    for p in &points {
-        while lower.len() >= 2 && turn(lower[lower.len()-2], lower[lower.len()-1], *p) <= EPSILON {
-            lower.pop();
-        }
-        lower.push(*p);
-    }
-    let mut upper = Vec::new();
-    for p in points.iter().rev() {
-        while upper.len() >= 2 && turn(upper[upper.len()-2], upper[upper.len()-1], *p) <= EPSILON {
-            upper.pop();
-        }
-        upper.push(*p);
-    }
-    lower.pop();
-    upper.pop();
-    lower.extend(upper);
-    lower
+fn edge_cross(a: Point, b: Point) -> f64 {
+    a.x * b.y - a.y * b.x
 }
 
 fn edge_parallel(a: Point, b: Point, c: Point, d: Point) -> bool {
@@ -281,21 +279,109 @@ pub(crate) fn convex_minkowski_difference(
 ) -> Result<ConvexConfigurationBoundary, ConfigurationSpaceError> {
     let a = convex_vertices(a)?;
     let b = convex_vertices(b)?;
-    let b_negated = b.iter().map(|p| Point { x: -p.x, y: -p.y }).collect::<Vec<_>>();
+    let b_negated = b
+        .iter()
+        .map(|p| Point { x: -p.x, y: -p.y })
+        .collect::<Vec<_>>();
 
-    let mut sums = Vec::with_capacity(a.len() * b.len());
-    for pa in &a {
-        for pb in &b_negated {
-            sums.push(Point { x: pa.x + pb.x, y: pa.y + pb.y });
+    // Both inputs are convex and CCW. Rotating each to its lowest (y, then x)
+    // vertex orders its edge vectors by polar angle, so their Minkowski sum
+    // can be constructed by a linear merge instead of pairwise sums + hull.
+    let a_start = lowest_vertex_index(&a);
+    let b_start = lowest_vertex_index(&b_negated);
+    let a = a
+        .iter()
+        .cycle()
+        .skip(a_start)
+        .take(a.len())
+        .copied()
+        .collect::<Vec<_>>();
+    let b_negated = b_negated
+        .iter()
+        .cycle()
+        .skip(b_start)
+        .take(b_negated.len())
+        .copied()
+        .collect::<Vec<_>>();
+    let a_edges = cyclic_edges(&a);
+    let b_edges = cyclic_edges(&b_negated);
+
+    let mut vertices = Vec::with_capacity(a.len() + b_negated.len());
+    let mut features = Vec::with_capacity(a.len() + b_negated.len());
+    let mut i = 0;
+    let mut j = 0;
+    let mut current = Point {
+        x: a[0].x + b_negated[0].x,
+        y: a[0].y + b_negated[0].y,
+    };
+
+    while i < a_edges.len() || j < b_edges.len() {
+        vertices.push(current);
+        let parallel = i < a_edges.len()
+            && j < b_edges.len()
+            && edge_cross(a_edges[i], b_edges[j]).abs()
+                <= EPSILON * (a_edges[i].x.hypot(a_edges[i].y)
+                    * b_edges[j].x.hypot(b_edges[j].y))
+                    .max(1.0);
+
+        if j == b_edges.len()
+            || (i < a_edges.len() && (parallel || edge_cross(a_edges[i], b_edges[j]) > 0.0))
+        {
+            let start = current;
+            current = Point {
+                x: current.x + a_edges[i].x,
+                y: current.y + a_edges[i].y,
+            };
+            features.push(BoundaryFeature {
+                start,
+                end: current,
+                a: FeatureRef {
+                    kind: BoundaryFeatureKind::Edge,
+                    index: (a_start + i) % a.len(),
+                },
+                b: FeatureRef {
+                    kind: BoundaryFeatureKind::Vertex,
+                    index: (b_start + j) % b_negated.len(),
+                },
+                class: if parallel {
+                    i += 1;
+                    j += 1;
+                    current = Point {
+                        x: current.x + b_edges[j - 1].x,
+                        y: current.y + b_edges[j - 1].y,
+                    };
+                    ContactFeatureClass::EdgeEdge
+                } else {
+                    i += 1;
+                    ContactFeatureClass::EdgeVertex
+                },
+            });
+        } else {
+            let start = current;
+            current = Point {
+                x: current.x + b_edges[j].x,
+                y: current.y + b_edges[j].y,
+            };
+            features.push(BoundaryFeature {
+                start,
+                end: current,
+                a: FeatureRef {
+                    kind: BoundaryFeatureKind::Vertex,
+                    index: (a_start + i) % a.len(),
+                },
+                b: FeatureRef {
+                    kind: BoundaryFeatureKind::Edge,
+                    index: (b_start + j) % b_negated.len(),
+                },
+                class: ContactFeatureClass::VertexEdge,
+            });
+            j += 1;
         }
     }
 
-    let vertices = convex_hull(sums);
-    if vertices.len() < 3 { return Err(ConfigurationSpaceError::DegeneratePolygon); }
-    let features = vertices.iter().enumerate().map(|(i, &start)| {
-        let end = vertices[(i + 1) % vertices.len()];
-        classify_boundary_feature(start, end, &a, &b_negated)
-    }).collect();
+    if vertices.len() < 3 || features.len() != vertices.len() {
+        return Err(ConfigurationSpaceError::DegeneratePolygon);
+    }
 
     Ok(ConvexConfigurationBoundary { vertices, features })
 }
