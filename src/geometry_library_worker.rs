@@ -70,7 +70,7 @@ fn process_one_frontier(
                 }
             }
 
-            if continuous_contact_family_exists(&formation, resource) {
+            if continuous_contact_family_exists(&formation, resource, catalog) {
                 library.set_frontier_state(
                     formation.signature.clone(),
                     resource.name.clone(),
@@ -80,9 +80,7 @@ fn process_one_frontier(
             }
 
             let candidates = expand_formation_candidates(&formation, resource, catalog);
-            for candidate in candidates {
-                library.insert(candidate, catalog)?;
-            }
+            library.insert_many(candidates, catalog)?;
 
             library.set_frontier_state(
                 formation.signature.clone(),
@@ -100,6 +98,7 @@ fn process_one_frontier(
 fn continuous_contact_family_exists(
     formation: &crate::geometry_reference_library::GeometryFormation,
     candidate: &BaseResource,
+    catalog: &[BaseResource],
 ) -> bool {
     // A fluid circle is no longer treated as an unexplained infinite search.
     // Its continuous placement family is now recognized through the exact
@@ -111,7 +110,6 @@ fn continuous_contact_family_exists(
         return false;
     }
 
-    let catalog = default_catalog();
     let Some(water) = catalog.iter().find(|resource| resource.name == "Water") else {
         return false;
     };
