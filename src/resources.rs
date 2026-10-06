@@ -324,6 +324,8 @@ impl Material {
             parts: vec![(name.into(), amount)],
             internal_bonds: Vec::new(),
         }
+    }
+
     pub fn with_internal_bonds(
         parts: Vec<(String, f64)>,
         bonds: &[(usize, usize)],
@@ -335,8 +337,6 @@ impl Material {
                 .map(|&(part_a, part_b)| InternalBond { part_a, part_b })
                 .collect(),
         }
-    }
-
     }
 
     pub fn is_valid(&self) -> bool {
