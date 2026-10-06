@@ -9,6 +9,12 @@ This directory is the persistent home for generated geometry knowledge.
 
 The source-of-truth implementation is src/geometry_reference_library.rs.
 
+### Locked base-resource geometry
+
+- **Hydrogen:** rigid rectangle, **1.0 units long × 0.1 units thick**. Hydrogen has finite area and must never be treated as a zero-thickness line segment.
+- The generic line-segment geometry vocabulary remains available for mathematical/rigid line shapes that are explicitly defined as lines; it does not describe Hydrogen.
+
+
 The current rigid-boundary vocabulary is exact polygon edges and rigid line segments. Water can form symbolic capillary contact families against either boundary type; no angular or positional sampling is used.
 
 
