@@ -2292,6 +2292,21 @@ mod tests {
     }
 
     #[test]
+    fn inconsistent_fluid_boundary_state_is_rejected_before_persistence() {
+        let root = temp_root();
+        let catalog = default_catalog();
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+        let formation = GeometryFormation::single("Carbon");
+        let water = catalog.iter().find(|r| r.name == "Water").unwrap();
+        let mut states = generate_fluid_boundary_families(&formation, water, &catalog);
+        assert!(!states.is_empty());
+        states[0].curvature_radius *= 2.0;
+        assert_eq!(library.insert_fluid_boundary_families(states).unwrap(), 0);
+        assert_eq!(library.fluid_boundary_families().count(), 0);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn water_capillary_family_is_exact_and_persistent() {
         let root = temp_root();
         let catalog = default_catalog();
