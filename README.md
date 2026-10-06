@@ -154,6 +154,10 @@ The worker now expands from validated formations rather than repeatedly solving 
 The library now includes exact feature-contact generation for two-constituent rigid formations and expansion to three constituents. Two-body seeding considers every base resource against every single-resource formation, validates candidates, canonicalizes them, and persists only new formations. Three-body expansion reuses validated two-body contacts. Every declared rigid bond must correspond to actual physical boundary contact without positive-area/interior penetration. Fluid-to-fluid combinations are deliberately not represented as rigid bonds because they merge into the same fluid geometry with increased volume. This path does not use arbitrary angular sampling or an attempt budget. Continuous contact families are intentionally not yet claimed exhaustive; they need an explicit finite feature representation before completeness can be guaranteed.
 
 
+### Geometry canonicalization
+
+The geometry library removes redundant local rotations that leave a constituent's physical shape unchanged. Regular polygons use their exact rotational symmetry, rectangles and line segments use their twofold symmetry, and circles have no meaningful local rotation. This is a proper-rotation equivalence only: mirror-image formations remain distinct. Hydrogen remains a 1.0 × 0.1 finite-area rectangle while retaining its two line-like primary endpoints.
+
 ## Geometry Library Visualizer
 
 The geometry library now has a dedicated read-only browser microscope. It reads the persistent catalogue without participating in generation or modifying library state. The browser refreshes only the catalogue list every five seconds so newly recorded formations become visible; an already selected formation is not re-read or changed.
