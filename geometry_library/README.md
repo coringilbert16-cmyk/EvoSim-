@@ -71,3 +71,8 @@ The catalogue also records the continuous rigid manifold where a vertex of a con
 ### Worker catalogue-scan cost
 
 The worker preserves breadth-first expansion without cloning and sorting the complete catalogue on every step. It selects the smallest unfinished formation by constituent count with a single scan, clones only that formation, processes all resource frontiers, and returns. This keeps catalogue growth from multiplying full-vector allocation and sort work at every worker iteration; a persistent work cursor can be added later if catalogue-scale profiling shows the remaining single scan is significant.
+
+
+### First-class fluid boundary state
+
+Water contact is now also persisted as a `GeometryFluidBoundaryFamily`. Unlike the older contact record, this record carries the conserved fluid area and the complete solved capillary state needed to reconstruct its current free-boundary family: contact angle, curvature radius, free-arc angle, contact length, and exact translation interval along the exposed rigid edge. This is still a one-rigid-wall equilibrium; it is deliberately not presented as a multi-wall solution yet. The important architectural step is that deformable fluid geometry is now durable state rather than only an ephemeral contact calculation, so later multi-wall/corner solutions can compose from the same conserved-fluid representation.
