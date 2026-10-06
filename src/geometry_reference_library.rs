@@ -5,6 +5,7 @@
 //! the production catalogue lives outside `target/` and survives test runs and
 //! process restarts.
 
+use crate::capillary_geometry::{solve_water_against_solid, ContactTranslationInterval};
 use crate::material_geometry::{placed_forms_penetrate, placed_forms_rigid_contact, PlacedMaterialPart};
 use crate::resources::{default_catalog, BaseResource, Form};
 use crate::structure::Placement;
@@ -16,6 +17,26 @@ use std::path::{Path, PathBuf};
 
 pub const GEOMETRY_LIBRARY_SCHEMA_VERSION: u32 = 1;
 const QUANTUM: f64 = 1e-9;
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct GeometryContactFamily {
+    pub schema_version: u32,
+    pub formation_signature: String,
+    pub candidate_resource: String,
+    pub anchor_constituent: usize,
+    pub anchor_edge: usize,
+    pub contact_angle_radians: f64,
+    pub curvature_radius: f64,
+    pub contact_length: f64,
+    pub edge_parameter_start: f64,
+    pub edge_parameter_end: f64,
+}
+
+impl GeometryContactFamily {
+    pub fn signature(&self) -> String {
+        format!("v{}|{}|{}|{}|{}|{}|{}|{}|{}", self.schema_version, self.formation_signature, self.candidate_resource, self.anchor_constituent, self.anchor_edge, quantize(self.contact_angle_radians), quantize(self.curvature_radius), quantize(self.edge_parameter_start), quantize(self.edge_parameter_end))
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct GeometryConstituent {
@@ -160,6 +181,7 @@ pub struct GeometryLibrary {
     entries: BTreeMap<String, GeometryFormation>,
     manifest: GeometryLibraryManifest,
     frontier: GeometryFrontier,
+    contact_families: BTreeMap<String, GeometryContactFamily>,
 }
 
 impl GeometryLibrary {
@@ -169,6 +191,7 @@ impl GeometryLibrary {
         let data_path = root.join("formations.jsonl");
         let manifest_path = root.join("manifest.json");
         let frontier_path = root.join("frontier.json");
+        let contact_family_path = root.join("contact_families.jsonl");
 
         let mut entries = BTreeMap::new();
         if data_path.exists() {
@@ -216,6 +239,17 @@ impl GeometryLibrary {
             ));
         }
 
+        let mut contact_families = BTreeMap::new();
+        if contact_family_path.exists() {
+            let file = File::open(&contact_family_path)?;
+            for line in BufReader::new(file).lines() {
+                let line = line?;
+                if line.trim().is_empty() { continue; }
+                let family: GeometryContactFamily = serde_json::from_str(&line).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+                if family.schema_version == GEOMETRY_LIBRARY_SCHEMA_VERSION { contact_families.insert(family.signature(), family); }
+            }
+        }
+
         let frontier = if frontier_path.exists() {
             let bytes = fs::read(&frontier_path)?;
             serde_json::from_slice(&bytes).map_err(|e| {
@@ -230,6 +264,7 @@ impl GeometryLibrary {
             entries,
             manifest,
             frontier,
+            contact_families,
         };
         library.manifest.entries = library.entries.len() as u64;
         library.write_manifest()?;
@@ -254,6 +289,23 @@ impl GeometryLibrary {
 
     pub fn frontier(&self) -> &GeometryFrontier {
         &self.frontier
+    }
+
+    pub fn contact_families(&self) -> impl Iterator<Item = &GeometryContactFamily> {
+        self.contact_families.values()
+    }
+
+    pub fn insert_contact_family(&mut self, family: GeometryContactFamily) -> std::io::Result<bool> {
+        if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION || !family.contact_angle_radians.is_finite() || !family.curvature_radius.is_finite() || !family.contact_length.is_finite() || !family.edge_parameter_start.is_finite() || !family.edge_parameter_end.is_finite() || family.edge_parameter_end < family.edge_parameter_start { return Ok(false); }
+        let signature = family.signature();
+        if self.contact_families.contains_key(&signature) { return Ok(false); }
+        let path = self.root.join("contact_families.jsonl");
+        let mut file = OpenOptions::new().create(true).append(true).open(path)?;
+        serde_json::to_writer(&mut file, &family).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        file.write_all(b"\\n")?;
+        file.sync_data()?;
+        self.contact_families.insert(signature, family);
+        Ok(true)
     }
 
     pub fn set_frontier_state(
@@ -548,6 +600,27 @@ pub fn validate_formation(formation: &GeometryFormation, catalog: &[BaseResource
     true
 }
 
+
+/// Derive exact Water/rigid contact families from exposed polygon edges.
+pub fn generate_water_contact_families(formation: &GeometryFormation, candidate_resource: &BaseResource, catalog: &[BaseResource]) -> Vec<GeometryContactFamily> {
+    if candidate_resource.name != "Water" || candidate_resource.physical_state != crate::resources::PhysicalState::Fluid { return Vec::new(); }
+    let Some(water) = catalog.iter().find(|r| r.name == "Water") else { return Vec::new(); };
+    let water_area = match water.shape.form { Form::Circle { radius } => std::f64::consts::PI * radius * radius, Form::Fluid { nominal_area, .. } => nominal_area, _ => return Vec::new() };
+    let mut out = Vec::new();
+    for (anchor_index, constituent) in formation.constituents.iter().enumerate() {
+        let Some(resource) = catalog.iter().find(|r| r.name == constituent.resource) else { continue; };
+        if resource.physical_state == crate::resources::PhysicalState::Fluid { continue; }
+        let Some(vertices) = resource.shape.form.polygon_vertices() else { continue; };
+        let Some(family) = solve_water_against_solid(water_area, water.properties.cohesion, resource.properties.cohesion) else { continue; };
+        for edge in 0..vertices.len() {
+            let a = vertices[edge]; let b = vertices[(edge + 1) % vertices.len()];
+            let edge_length = (b.0 - a.0).hypot(b.1 - a.1);
+            let Some(interval) = ContactTranslationInterval::from_edge_length(edge_length, family) else { continue; };
+            out.push(GeometryContactFamily { schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION, formation_signature: formation.signature.clone(), candidate_resource: candidate_resource.name.clone(), anchor_constituent: anchor_index, anchor_edge: edge, contact_angle_radians: family.contact_angle_radians, curvature_radius: family.curvature_radius, contact_length: family.contact_length, edge_parameter_start: interval.edge_start_parameter, edge_parameter_end: interval.edge_end_parameter });
+        }
+    }
+    out
+}
 
 pub fn generate_two_constituent_candidates(
     target: &GeometryFormation,
