@@ -839,6 +839,191 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                     placement_for_joint((local_b.x, local_b.y), (joint.x, joint.y), angle);
                 *nodes += 1;
 
+                // Genesis candidates are currently one-part rigid materials. Build the
+                // candidate unit directly and reject geometric penetration against the
+                // realized structure before cloning anything. The old path cloned the
+                // entire graph and then restored the same one-part material for every
+                // rejected angle; that made failed geometry candidates disproportionately
+                // expensive.
+                if new_material.material.parts.len() == 1 {
+                    let (name, amount) = new_material.material.parts.first()?;
+                    let Some(mut candidate_unit) = StructuralUnit::from_material(
+                        crate::resources::Material::free_base(name.clone(), *amount),
+                        candidate_origin,
+                    ) else {
+                        continue;
+                    };
+                    if !candidate_unit.realize_default_geometry(catalog)
+                        || placed_unit_overlaps(structure, &candidate_unit, &[], catalog)
+                    {
+                        continue;
+                    }
+
+                    let mut trial = structure.clone();
+                    let new_unit_index = trial.add_unit(candidate_unit);
+                    let indices = vec![new_unit_index];
+                    let mut trial_ledger = *ledger;
+                    let mut trial_energy = available_energy;
+                    let mut bond_cache = crate::contact::ConnectionCompatibilityCache::new();
+
+                    let Some(candidate) = crate::contact::candidate_for_endpoints(
+                        &trial,
+                        existing_index,
+                        new_unit_index,
+                        endpoint_a,
+                        endpoint_b,
+                        catalog,
+                    )
+                    .filter(|candidate| {
+                        candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                            && candidate.available_a
+                            && candidate.available_b
+                    }) else {
+                        continue;
+                    };
+
+                    let Some((_, _, _, investment, _)) =
+                        crate::combine_runtime::selected_candidate_evaluation(
+                            &trial,
+                            existing_index,
+                            new_unit_index,
+                            candidate,
+                            catalog,
+                        )
+                    else {
+                        continue;
+                    };
+
+                    let Some(mut attempt) = crate::combine_runtime::form_selected_bond(
+                        &mut trial,
+                        existing_index,
+                        new_unit_index,
+                        candidate,
+                        investment,
+                        catalog,
+                        &mut bond_cache,
+                        &mut trial_ledger,
+                        &mut trial_energy,
+                    ) else {
+                        continue;
+                    };
+
+                    // The one-part fast path has the same transaction authority as
+                    // ordinary construction; only candidate material realization is
+                    // moved ahead of the expensive graph clone.
+                    let mut additional_candidates = Vec::new();
+                    let mut local_contact_indices = Vec::with_capacity(8);
+                    local_contact_indices.push(existing_index);
+                    let anchor_id = trial.units[existing_index].physical_id;
+                    for bond in &trial.bonds {
+                        let neighbor_id = if bond.endpoint_a.constituent_id == anchor_id {
+                            Some(bond.endpoint_b.constituent_id)
+                        } else if bond.endpoint_b.constituent_id == anchor_id {
+                            Some(bond.endpoint_a.constituent_id)
+                        } else {
+                            None
+                        };
+                        if let Some(neighbor_id) = neighbor_id {
+                            if let Some(neighbor_index) = trial.unit_index(neighbor_id) {
+                                if !local_contact_indices.contains(&neighbor_index) {
+                                    local_contact_indices.push(neighbor_index);
+                                }
+                            }
+                        }
+                    }
+                    for &other_index in &local_contact_indices {
+                        if other_index == new_unit_index {
+                            continue;
+                        }
+                        let Some(new_shape) = trial.units[new_unit_index].shape(catalog) else {
+                            continue;
+                        };
+                        let Some(other_shape) = trial.units[other_index].shape(catalog) else {
+                            continue;
+                        };
+                        let center_distance = (trial.units[new_unit_index].placement.x
+                            - trial.units[other_index].placement.x)
+                            .hypot(
+                                trial.units[new_unit_index].placement.y
+                                    - trial.units[other_index].placement.y,
+                            );
+                        if center_distance
+                            > new_shape.form.bounding_radius()
+                                + other_shape.form.bounding_radius()
+                                + crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                        {
+                            continue;
+                        }
+                        let mut contact_cache =
+                            crate::contact::ConnectionCompatibilityCache::new();
+                        for contact in crate::contact::connection_pair_candidates_cached(
+                            &trial,
+                            other_index,
+                            new_unit_index,
+                            catalog,
+                            &mut contact_cache,
+                        )
+                        .into_iter()
+                        .filter(|contact| {
+                            contact.distance
+                                <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                                && contact.available_a
+                                && contact.available_b
+                        }) {
+                            let Some((_, _, _, investment, _)) =
+                                crate::combine_runtime::selected_candidate_evaluation(
+                                    &trial,
+                                    other_index,
+                                    new_unit_index,
+                                    contact,
+                                    catalog,
+                                )
+                            else {
+                                continue;
+                            };
+                            additional_candidates.push((
+                                investment,
+                                other_index,
+                                new_unit_index,
+                                contact,
+                            ));
+                        }
+                    }
+                    additional_candidates.sort_by(|a, b| {
+                        b.0.partial_cmp(&a.0)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    });
+                    for (investment, bond_a, bond_b, contact) in additional_candidates {
+                        let mut additional_cache =
+                            crate::contact::ConnectionCompatibilityCache::new();
+                        let Some(additional_attempt) = crate::combine_runtime::form_selected_bond(
+                            &mut trial,
+                            bond_a,
+                            bond_b,
+                            contact,
+                            investment,
+                            catalog,
+                            &mut additional_cache,
+                            &mut trial_ledger,
+                            &mut trial_energy,
+                        ) else {
+                            continue;
+                        };
+                        attempt.work_cost += additional_attempt.work_cost;
+                    }
+
+                    return Some((
+                        trial,
+                        indices,
+                        part_index,
+                        attempt,
+                        trial_ledger,
+                        trial_energy,
+                    ));
+                }
+
+                // Preserve the existing general path for future composite physical
+                // materials. It remains correct but is not on the hot genesis path.
                 let mut trial = structure.clone();
                 let Some(indices) = crate::material_restoration::restore_material(
                     &mut trial,
