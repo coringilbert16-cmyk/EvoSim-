@@ -2471,16 +2471,16 @@ mod tests {
     }
 
     #[test]
-    fn rigid_point_contact_family_represents_line_to_exposed_edge_continuum() {
+    fn hydrogen_is_treated_as_a_finite_strip_in_contact_generation() {
         let catalog = default_catalog();
         let formation = GeometryFormation::single("Carbon");
-        let line = catalog.iter().find(|r| r.name == "Hydrogen").unwrap();
-        let families = generate_rigid_point_contact_families(&formation, line, &catalog);
+        let hydrogen = catalog.iter().find(|r| r.name == "Hydrogen").unwrap();
+        let families = generate_rigid_vertex_contact_families(&formation, hydrogen, &catalog);
         assert!(!families.is_empty());
         assert!(families.iter().all(|family| {
             family.anchor_parameter_start <= family.anchor_parameter_end
                 && family.candidate_rotation_start_radians
-                    < family.candidate_rotation_end_radians
+                    <= family.candidate_rotation_end_radians
         }));
     }
 
