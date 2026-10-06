@@ -134,11 +134,31 @@ pub struct GeometryLibraryManifest {
     pub entries: u64,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum GeometryFrontierState {
+    Unexplored,
+    InProgress,
+    Exhausted,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GeometryFrontierRecord {
+    pub formation_signature: String,
+    pub candidate_resource: String,
+    pub state: GeometryFrontierState,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct GeometryFrontier {
+    pub records: BTreeMap<String, GeometryFrontierRecord>,
+}
+
 #[derive(Debug)]
 pub struct GeometryLibrary {
     root: PathBuf,
     entries: BTreeMap<String, GeometryFormation>,
     manifest: GeometryLibraryManifest,
+    frontier: GeometryFrontier,
 }
 
 impl GeometryLibrary {
@@ -147,6 +167,7 @@ impl GeometryLibrary {
         fs::create_dir_all(&root)?;
         let data_path = root.join("formations.jsonl");
         let manifest_path = root.join("manifest.json");
+        let frontier_path = root.join("frontier.json");
 
         let mut entries = BTreeMap::new();
         if data_path.exists() {
@@ -194,10 +215,20 @@ impl GeometryLibrary {
             ));
         }
 
+        let frontier = if frontier_path.exists() {
+            let bytes = fs::read(&frontier_path)?;
+            serde_json::from_slice(&bytes).map_err(|e| {
+                std::io::Error::new(std::io::ErrorKind::InvalidData, e)
+            })?
+        } else {
+            GeometryFrontier::default()
+        };
+
         let mut library = Self {
             root,
             entries,
             manifest,
+            frontier,
         };
         library.manifest.entries = library.entries.len() as u64;
         library.write_manifest()?;
@@ -218,6 +249,30 @@ impl GeometryLibrary {
 
     pub fn formations(&self) -> impl Iterator<Item = &GeometryFormation> {
         self.entries.values()
+    }
+
+    pub fn frontier(&self) -> &GeometryFrontier {
+        &self.frontier
+    }
+
+    pub fn set_frontier_state(
+        &mut self,
+        formation_signature: impl Into<String>,
+        candidate_resource: impl Into<String>,
+        state: GeometryFrontierState,
+    ) -> std::io::Result<()> {
+        let formation_signature = formation_signature.into();
+        let candidate_resource = candidate_resource.into();
+        let key = format!("{formation_signature}|{candidate_resource}");
+        self.frontier.records.insert(
+            key,
+            GeometryFrontierRecord {
+                formation_signature,
+                candidate_resource,
+                state,
+            },
+        );
+        self.write_frontier()
     }
 
     pub fn insert(
@@ -247,6 +302,16 @@ impl GeometryLibrary {
         self.manifest.entries = self.entries.len() as u64;
         self.write_manifest()?;
         Ok(true)
+    }
+
+    fn write_frontier(&self) -> std::io::Result<()> {
+        let path = self.root.join("frontier.json");
+        let temp = self.root.join("frontier.json.tmp");
+        let bytes = serde_json::to_vec_pretty(&self.frontier)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        fs::write(&temp, bytes)?;
+        fs::rename(temp, path)?;
+        Ok(())
     }
 
     fn write_manifest(&self) -> std::io::Result<()> {
@@ -732,6 +797,29 @@ mod tests {
         std::env::temp_dir().join(format!("evosim-geometry-library-{nonce}"))
     }
 
+
+    #[test]
+    fn frontier_state_persists_across_reopen() {
+        let root = temp_root();
+        let catalog = default_catalog();
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+        library
+            .set_frontier_state(
+                "formation-a",
+                "Carbon",
+                GeometryFrontierState::Exhausted,
+            )
+            .unwrap();
+        drop(library);
+
+        let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
+        let key = "formation-a|Carbon";
+        assert_eq!(
+            reopened.frontier().records.get(key).map(|r| &r.state),
+            Some(&GeometryFrontierState::Exhausted)
+        );
+        let _ = fs::remove_dir_all(root);
+    }
 
     #[test]
     fn two_constituent_generator_finds_exact_carbon_contacts() {
