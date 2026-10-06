@@ -979,6 +979,8 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
         return None;
     };
     let existing_vertices = existing_vertices.to_vec();
+    let existing_rotated_vertices =
+        rotated_polygon_vertices(existing_shape, existing_unit.placement.rotation_radians)?;
     let one_part_geometry = one_part.then(|| {
         new_material
             .material
@@ -1056,8 +1058,6 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
         });
 
         for angle in candidate_angles {
-            let existing_rotated_vertices =
-                rotated_polygon_vertices(existing_shape, existing_unit.placement.rotation_radians)?;
             let candidate_rotated_vertices = rotated_polygon_vertices(candidate_shape, angle)?;
             let boundary = crate::configuration_space::convex_minkowski_difference(
                 &existing_rotated_vertices,
