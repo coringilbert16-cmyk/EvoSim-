@@ -381,6 +381,59 @@ fn grow_one_step(
 /// declares a particular region to be the genome. Growth continues after the
 /// first qualifying cavity until the ordinary initial viability contract is
 /// satisfied.
+fn finalize_enclosed_scaffold(
+    structure: &mut crate::structure::OrganismStructure,
+    catalog: &[BaseResource],
+    scaffold_ids: &[crate::structure::PhysicalConstituentId],
+) -> bool {
+    if scaffold_ids.is_empty() {
+        return false;
+    }
+
+    // Removing the temporary scaffold must leave an actual cyclic surrounding
+    // structure before we pay for full interior-geometry analysis.
+    let scaffold_set = scaffold_ids.iter().copied().collect::<std::collections::HashSet<_>>();
+    let remaining_units = structure
+        .units
+        .iter()
+        .filter(|unit| !scaffold_set.contains(&unit.physical_id))
+        .count();
+    let remaining_bonds = structure
+        .bonds
+        .iter()
+        .filter(|bond| {
+            !scaffold_set.contains(&bond.endpoint_a.constituent_id)
+                && !scaffold_set.contains(&bond.endpoint_b.constituent_id)
+        })
+        .count();
+    if remaining_bonds < remaining_units || remaining_units < 3 {
+        return false;
+    }
+
+    let mut without_scaffold = structure.clone();
+    without_scaffold.remove_units_by_physical_ids(scaffold_ids);
+    let Some(cavity) = crate::cavity::analyze_genome_cavity(&without_scaffold, catalog)
+        .ok()
+        .flatten()
+        .filter(|cavity| cavity.qualifies())
+    else {
+        return false;
+    };
+
+    let genome_ids = cavity
+        .boundary_units
+        .iter()
+        .filter_map(|&index| without_scaffold.physical_id(index))
+        .collect::<Vec<_>>();
+    if genome_ids.is_empty() {
+        return false;
+    }
+
+    structure.remove_units_by_physical_ids(scaffold_ids);
+    structure.set_genome_constituent_ids(genome_ids);
+    true
+}
+
 fn construct_physical_organism(
     catalog: &[BaseResource],
 ) -> Result<(crate::structure::OrganismStructure, EnergyLedger, f64), String> {
@@ -392,6 +445,7 @@ fn construct_physical_organism(
     // as new physical constituents are committed and is pruned lazily when a
     // unit loses its remaining usable endpoints.
     let mut frontier = (0..structure.units.len()).collect::<Vec<_>>();
+    let mut scaffold_active = true;
     let mut spatial_index =
         crate::construction_runtime::ConstructionSpatialIndex::new(&structure, catalog);
     let mut occupancy = ConstructionEndpointOccupancy::default();
@@ -444,6 +498,19 @@ fn construct_physical_organism(
         ledger = next_ledger;
         energy = next_energy;
         frontier = next_frontier;
+
+        if scaffold_active && finalize_enclosed_scaffold(&mut structure, catalog, &scaffold_ids) {
+            scaffold_active = false;
+            // Scaffold removal can shift unit indices. Rebuild only the derived
+            // accelerators; physical IDs and realized bonds remain authoritative.
+            spatial_index =
+                crate::construction_runtime::ConstructionSpatialIndex::new(&structure, catalog);
+            occupancy = ConstructionEndpointOccupancy::default();
+            for bond in &structure.bonds {
+                occupancy.insert_bond(bond, &structure);
+            }
+            frontier = (0..structure.units.len()).collect();
+        }
     }
 }
 
