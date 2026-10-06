@@ -77,18 +77,6 @@ impl GeometryFormation {
                 })
         });
 
-        // Re-index bonds after constituent canonical ordering.
-        let mut old_to_new = BTreeMap::new();
-        for (new_index, constituent) in self.constituents.iter().enumerate() {
-            // The same resource can occur more than once. The stable ordering
-            // above makes this mapping deterministic only when positions differ;
-            // duplicate coincident constituents are rejected by validation.
-            old_to_new.insert(
-                constituent_identity_key(constituent),
-                new_index,
-            );
-        }
-
         // Rebuild through the sorted constituents using the original identities.
         // We cannot safely infer identity from equal values, so canonicalization
         // uses a second deterministic pass over the original formation.
@@ -281,16 +269,6 @@ fn resource_catalog_signature(catalog: &[BaseResource]) -> String {
         out.push(';');
     }
     out
-}
-
-fn constituent_identity_key(c: &GeometryConstituent) -> String {
-    format!(
-        "{}:{}:{}:{}",
-        c.resource,
-        quantize(c.placement.x),
-        quantize(c.placement.y),
-        quantize(c.placement.rotation_radians)
-    )
 }
 
 fn quantize(value: f64) -> i64 {
