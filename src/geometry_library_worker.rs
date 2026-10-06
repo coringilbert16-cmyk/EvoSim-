@@ -79,6 +79,12 @@ fn process_one_frontier(
                 resource.name.clone(),
                 GeometryFrontierState::Exhausted,
             )?;
+        }
+
+        // All resource frontiers for this formation were handled in one pass.
+        // The next worker pass advances to the next formation rather than
+        // rebuilding and rescanning this same seven-resource row.
+        if formation.constituents.len() < 20 {
             return Ok(true);
         }
     }
