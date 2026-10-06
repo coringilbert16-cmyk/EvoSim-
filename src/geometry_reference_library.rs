@@ -1191,6 +1191,40 @@ fn load_fluid_boundary_families(
     out
 }
 
+pub fn generate_fluid_boundary_families(
+    formation: &GeometryFormation,
+    fluid_resource: &BaseResource,
+    catalog: &[BaseResource],
+) -> Vec<GeometryFluidBoundaryFamily> {
+    if fluid_resource.physical_state != crate::resources::PhysicalState::Fluid {
+        return Vec::new();
+    }
+    let area = match &fluid_resource.shape.form {
+        Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+        Form::Fluid { nominal_area, .. } => *nominal_area,
+        _ => return Vec::new(),
+    };
+
+    generate_water_contact_families(formation, fluid_resource, catalog)
+        .into_iter()
+        .map(|family| GeometryFluidBoundaryFamily {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            formation_signature: family.formation_signature,
+            fluid_resource: family.candidate_resource,
+            anchor_constituent: family.anchor_constituent,
+            anchor_edge: family.anchor_edge,
+            area,
+            contact_angle_radians: family.contact_angle_radians,
+            curvature_radius: family.curvature_radius,
+            free_arc_angle_radians: 2.0
+                * (std::f64::consts::PI - family.contact_angle_radians),
+            contact_length: family.contact_length,
+            edge_parameter_start: family.edge_parameter_start,
+            edge_parameter_end: family.edge_parameter_end,
+        })
+        .collect()
+}
+
 pub fn generate_water_contact_families(
     formation: &GeometryFormation,
     candidate_resource: &BaseResource,
