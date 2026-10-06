@@ -1151,6 +1151,55 @@ fn rigid_boundary_segments(form: &Form) -> Vec<((f64, f64), (f64, f64))> {
     }
 }
 
+pub fn instantiate_rigid_contact_family(
+    formation: &GeometryFormation,
+    family: &GeometryRigidContactFamily,
+    anchor_parameter: f64,
+    catalog: &[BaseResource],
+) -> Option<GeometryFormation> {
+    if anchor_parameter < family.anchor_parameter_start - QUANTUM
+        || anchor_parameter > family.anchor_parameter_end + QUANTUM
+        || family.anchor_constituent >= formation.constituents.len()
+    {
+        return None;
+    }
+    let anchor_resource = catalog
+        .iter()
+        .find(|resource| resource.name == formation.constituents[family.anchor_constituent].resource)?;
+    let anchor_segments = rigid_boundary_segments(&anchor_resource.shape.form);
+    let (a0, a1) = *anchor_segments.get(family.anchor_edge)?;
+    let candidate_resource = catalog
+        .iter()
+        .find(|resource| resource.name == family.candidate_resource)?;
+    let candidate_segments = rigid_boundary_segments(&candidate_resource.shape.form);
+    let (c0, _) = *candidate_segments.get(family.candidate_edge)?;
+    let anchor = formation.constituents[family.anchor_constituent].placement;
+    let world_a0 = world_point(a0, anchor);
+    let world_a1 = world_point(a1, anchor);
+    let contact_point = (
+        world_a0.0 + (world_a1.0 - world_a0.0) * anchor_parameter,
+        world_a0.1 + (world_a1.1 - world_a0.1) * anchor_parameter,
+    );
+    let rotated_c0 = rotated_point(c0, family.candidate_rotation_radians);
+    let placement = Placement {
+        x: contact_point.0 - rotated_c0.0,
+        y: contact_point.1 - rotated_c0.1,
+        rotation_radians: family.candidate_rotation_radians,
+    };
+
+    let mut result = formation.clone();
+    let candidate_index = result.constituents.len();
+    result.constituents.push(GeometryConstituent {
+        resource: family.candidate_resource.clone(),
+        placement,
+    });
+    result.bonds.push(GeometryBond {
+        constituent_a: family.anchor_constituent,
+        constituent_b: candidate_index,
+    });
+    result.canonicalized(catalog)
+}
+
 pub fn generate_rigid_contact_families(
     formation: &GeometryFormation,
     candidate_resource: &BaseResource,
