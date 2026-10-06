@@ -985,6 +985,7 @@ fn construction_angle_candidates(
 pub(crate) fn try_attach_physical_material_bond_driven_indexed(
     structure: &mut OrganismStructure,
     existing_index: usize,
+    available_existing_endpoints: &[ConnectionEndpoint],
     new_material: &crate::physical_material::PhysicalMaterial,
     catalog: &[BaseResource],
     nodes: &mut usize,
@@ -999,7 +1000,10 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
     f64,
 )> {
     let existing_unit = structure.units.get(existing_index)?.clone();
-    let existing_endpoints = structure_unit_endpoint_options(&existing_unit, catalog);
+    let existing_endpoints = structure_unit_endpoint_options(&existing_unit, catalog)
+        .into_iter()
+        .filter(|endpoint| available_existing_endpoints.contains(endpoint))
+        .collect::<Vec<_>>();
     let new_endpoints = physical_material_endpoint_options(new_material, catalog);
     if existing_endpoints.is_empty() || new_endpoints.is_empty() {
         return None;
