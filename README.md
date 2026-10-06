@@ -136,7 +136,7 @@ The first implementation provides the persistent store, schema/versioning, canon
 
 The next layer is the non-stop catalogue worker. It will load the persistent library, select an unexplored formation/frontier, generate exact geometry candidates, validate and canonicalize them, append only new formations, and durably record progress so it can resume after interruption. It will not use the constructor's old brute-force placement loop or an arbitrary attempt budget.
 
-The worker now expands from validated formations rather than repeatedly solving each composite from scratch. It persists a frontier record for every formation/resource expansion, resumes unfinished work after restart, and idles rather than hot-spinning when no work is currently available. It can be started with `cargo run -- --geometry-worker`. This makes the geometry library the long-lived reference layer that the constructor can eventually query instead of rediscovering the same geometry during every organism construction.
+The worker now expands from validated formations rather than repeatedly solving each composite from scratch. It persists a frontier record for every formation/resource expansion, resumes unfinished work after restart, and idles rather than hot-spinning when no work is currently available. It can be started with `cargo run -- --geometry-worker`. Continuous contact families are recorded as `ContinuousFamilyPending` rather than falsely marked exhausted; this is currently relevant to circle-to-rigid contacts such as Water. This makes the geometry library the long-lived reference layer that the constructor can eventually query instead of rediscovering the same geometry during every organism construction.
 
 ### Current implementation milestone
 
