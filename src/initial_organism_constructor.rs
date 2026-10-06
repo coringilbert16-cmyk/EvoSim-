@@ -220,19 +220,14 @@ fn open_construction_indices(
 }
 
 fn grow_one_step(
-    structure: &crate::structure::OrganismStructure,
+    structure: &mut crate::structure::OrganismStructure,
     catalog: &[BaseResource],
     candidates: &[(String, crate::physical_material::PhysicalMaterial)],
     frontier: &[usize],
     nodes: &mut usize,
     ledger: &EnergyLedger,
     energy: f64,
-) -> Option<(
-    crate::structure::OrganismStructure,
-    EnergyLedger,
-    f64,
-    Vec<usize>,
-)> {
+) -> Option<(EnergyLedger, f64, Vec<usize>)> {
     // Genesis is intentionally local: only units with an unbonded physical
     // boundary endpoint can admit the next constituent. This is a frontier
     // search, not a rescan of every historical constituent.
@@ -244,7 +239,6 @@ fn grow_one_step(
     for existing_index in existing_indices {
         for (_resource_name, instance) in candidates {
             if let Some((
-                trial,
                 _indices,
                 _part_index,
                 _attempt,
@@ -265,7 +259,7 @@ fn grow_one_step(
                         next_frontier.push(index);
                     }
                 }
-                return Some((trial, trial_ledger, trial_energy, next_frontier));
+                return Some((trial_ledger, trial_energy, next_frontier));
             }
         }
     }
@@ -312,9 +306,9 @@ fn construct_physical_organism(
             return Ok((structure, ledger, energy));
         }
 
-        let Some((next_structure, next_ledger, next_energy, next_frontier)) =
+        let Some((next_ledger, next_energy, next_frontier)) =
             grow_one_step(
-                &structure,
+                &mut structure,
                 catalog,
                 &construction_candidates,
                 &frontier,
@@ -335,7 +329,6 @@ fn construct_physical_organism(
             ));
         };
 
-        structure = next_structure;
         ledger = next_ledger;
         energy = next_energy;
         frontier = next_frontier;
