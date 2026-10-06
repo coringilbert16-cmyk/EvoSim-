@@ -196,16 +196,30 @@ impl GeometryLibrary {
         let mut entries = BTreeMap::new();
         if data_path.exists() {
             let file = File::open(&data_path)?;
-            for line in BufReader::new(file).lines() {
-                let line = line?;
+            let lines: Vec<String> = BufReader::new(file).lines().collect::<Result<_, _>>()?;
+            for (line_index, line) in lines.iter().enumerate() {
                 if line.trim().is_empty() {
                     continue;
                 }
-                let formation: GeometryFormation = serde_json::from_str(&line).map_err(|e| {
-                    std::io::Error::new(std::io::ErrorKind::InvalidData, e)
-                })?;
+                let formation: GeometryFormation = match serde_json::from_str(line) {
+                    Ok(value) => value,
+                    Err(error) if line_index + 1 == lines.len() => {
+                        // An interrupted final append can leave a truncated
+                        // JSON record. Earlier durable records remain valid;
+                        // ignore only the incomplete tail so restart can resume.
+                        let _ = error;
+                        continue;
+                    }
+                    Err(error) => {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            error,
+                        ));
+                    }
+                };
                 if formation.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
                     || !validate_formation(&formation, catalog)
+                    || formation.signature != formation.canonical_signature()
                 {
                     continue;
                 }
@@ -242,11 +256,43 @@ impl GeometryLibrary {
         let mut contact_families = BTreeMap::new();
         if contact_family_path.exists() {
             let file = File::open(&contact_family_path)?;
-            for line in BufReader::new(file).lines() {
-                let line = line?;
-                if line.trim().is_empty() { continue; }
-                let family: GeometryContactFamily = serde_json::from_str(&line).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-                if family.schema_version == GEOMETRY_LIBRARY_SCHEMA_VERSION { contact_families.insert(family.signature(), family); }
+            let lines: Vec<String> = BufReader::new(file).lines().collect::<Result<_, _>>()?;
+            for (line_index, line) in lines.iter().enumerate() {
+                if line.trim().is_empty() {
+                    continue;
+                }
+                let family: GeometryContactFamily = match serde_json::from_str(line) {
+                    Ok(value) => value,
+                    Err(error) if line_index + 1 == lines.len() => {
+                        let _ = error;
+                        continue;
+                    }
+                    Err(error) => {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            error,
+                        ));
+                    }
+                };
+                if family.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
+                    || !family.contact_angle_radians.is_finite()
+                    || !family.curvature_radius.is_finite()
+                    || !family.contact_length.is_finite()
+                    || !family.edge_parameter_start.is_finite()
+                    || !family.edge_parameter_end.is_finite()
+                    || family.edge_parameter_start < 0.0
+                    || family.edge_parameter_end > 1.0
+                    || family.edge_parameter_end < family.edge_parameter_start
+                    || !entries.contains_key(&family.formation_signature)
+                    || catalog.iter().all(|resource| resource.name != family.candidate_resource)
+                    || family.anchor_constituent >= entries
+                        .get(&family.formation_signature)
+                        .map(|formation| formation.constituents.len())
+                        .unwrap_or(0)
+                {
+                    continue;
+                }
+                contact_families.insert(family.signature(), family);
             }
         }
 
