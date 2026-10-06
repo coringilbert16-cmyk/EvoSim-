@@ -2042,6 +2042,37 @@ mod tests {
     }
 
     #[test]
+    fn convex_polygon_vertex_contact_is_continuous_and_persistent() {
+        let root = temp_root();
+        let catalog = default_catalog();
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+        let formation = GeometryFormation::single("Carbon");
+        let methane = catalog.iter().find(|r| r.name == "Methane").unwrap();
+        let families = generate_rigid_vertex_contact_families(&formation, methane, &catalog);
+        assert!(!families.is_empty());
+        assert!(families.iter().all(|family| {
+            family.anchor_parameter_start >= 0.0
+                && family.anchor_parameter_end <= 1.0
+                && family.anchor_parameter_end >= family.anchor_parameter_start
+                && family.candidate_rotation_end_radians > family.candidate_rotation_start_radians
+        }));
+        let count = library.insert_rigid_vertex_contact_families(families).unwrap();
+        assert!(count > 0);
+        drop(library);
+        let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
+        assert!(reopened.rigid_vertex_contact_families().next().is_some());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn concave_polygon_vertex_contact_is_not_claimed_by_convex_manifold() {
+        let catalog = default_catalog();
+        let formation = GeometryFormation::single("Carbon");
+        let phosphorus = catalog.iter().find(|r| r.name == "Phosphorus").unwrap();
+        assert!(generate_rigid_vertex_contact_families(&formation, phosphorus, &catalog).is_empty());
+    }
+
+    #[test]
     fn interrupted_final_json_record_does_not_destroy_durable_library() {
         let root = temp_root();
         let catalog = default_catalog();
