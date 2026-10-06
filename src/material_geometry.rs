@@ -162,6 +162,60 @@ pub fn placed_forms_boundary_contact(
     false
 }
 
+/// Returns true only when two material parts meet at their physical boundary
+/// without positive-area/interior penetration. This is the predicate used for
+/// declaring a rigid geometry bond. It is intentionally stricter than
+/// placed_forms_overlap, which also returns true for penetrating geometry.
+///
+/// An explicit fluid boundary is treated as the physical boundary of the
+/// fluid for this purpose; an unbounded fluid has no finite rigid boundary.
+pub fn placed_forms_rigid_contact(
+    a: &PlacedMaterialPart,
+    b: &PlacedMaterialPart,
+    tolerance: f64,
+) -> bool {
+    if matches!(a.form, Form::Fluid { boundary: None, .. })
+        || matches!(b.form, Form::Fluid { boundary: None, .. })
+    {
+        return false;
+    }
+
+    if !matches!(a.form, Form::Fluid { .. }) && !matches!(b.form, Form::Fluid { .. }) {
+        return placed_forms_overlap(a, b, tolerance)
+            && !placed_forms_penetrate(a, b, tolerance);
+    }
+
+    fn fluid_boundary_part(part: &PlacedMaterialPart) -> Option<PlacedMaterialPart> {
+        let Form::Fluid {
+            boundary: Some(vertices),
+            ..
+        } = &part.form
+        else {
+            return None;
+        };
+        Some(PlacedMaterialPart {
+            part_index: part.part_index,
+            form: Form::Polygon {
+                vertices: vertices.clone(),
+            },
+            placement: part.placement,
+        })
+    }
+
+    let boundary = if matches!(a.form, Form::Fluid { .. }) {
+        fluid_boundary_part(a)
+    } else {
+        fluid_boundary_part(b)
+    };
+    let Some(boundary) = boundary else {
+        return false;
+    };
+    let other = if matches!(a.form, Form::Fluid { .. }) { b } else { a };
+
+    placed_forms_overlap(&boundary, other, tolerance)
+        && !placed_forms_penetrate(&boundary, other, tolerance)
+}
+
 pub fn placed_forms_penetrate(
     a: &PlacedMaterialPart,
     b: &PlacedMaterialPart,
@@ -451,6 +505,44 @@ mod tests {
             },
         }
     }
+    #[test]
+    fn rigid_contact_rejects_penetrating_rigid_forms() {
+        let a = part(
+            Form::Rectangle { width: 2.0, height: 2.0 },
+            0.0,
+            0.0,
+            0.0,
+        );
+        let b = part(
+            Form::Rectangle { width: 2.0, height: 2.0 },
+            1.0,
+            0.0,
+            0.0,
+        );
+        assert!(placed_forms_overlap(&a, &b, 0.0));
+        assert!(placed_forms_penetrate(&a, &b, 0.0));
+        assert!(!placed_forms_rigid_contact(&a, &b, 0.0));
+    }
+
+    #[test]
+    fn rigid_contact_accepts_boundary_touch_without_penetration() {
+        let a = part(
+            Form::Rectangle { width: 2.0, height: 2.0 },
+            0.0,
+            0.0,
+            0.0,
+        );
+        let b = part(
+            Form::Rectangle { width: 2.0, height: 2.0 },
+            2.0,
+            0.0,
+            0.0,
+        );
+        assert!(placed_forms_overlap(&a, &b, 0.0));
+        assert!(!placed_forms_penetrate(&a, &b, 0.0));
+        assert!(placed_forms_rigid_contact(&a, &b, 0.0));
+    }
+
     #[test]
     fn geometry_preserves_material_part_identity_and_placement() {
         let c = default_catalog();
