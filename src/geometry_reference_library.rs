@@ -943,7 +943,7 @@ fn exposed_line_intervals(
                     let c = world_point(vertices[edge], other.placement);
                     let d = world_point(vertices[(edge + 1) % vertices.len()], other.placement);
                     let cross_c = dx * (c.1 - anchor_start.1) - dy * (c.0 - anchor_start.0);
-                    let cross_d = dx * (d.1 - anchor_start.1) - dy * (d.0 - anchor_start.1);
+                    let cross_d = dx * (d.1 - anchor_start.1) - dy * (d.0 - anchor_start.0);
                     if cross_c.abs() > 1e-9 * length_sq.sqrt()
                         || cross_d.abs() > 1e-9 * length_sq.sqrt()
                     {
