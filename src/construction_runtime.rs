@@ -1034,6 +1034,16 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
         f64,
         Vec<(Placement, ConnectionEndpoint, ConnectionEndpoint)>,
     )> = Vec::new();
+    // Preferred NFP angles are indexed by endpoint pair so the first candidate
+    // considered for a pair is the contact geometry that the configuration
+    // space actually derived. This is an interim ordering step toward making
+    // NFP features the primary candidate stream.
+    let mut nfp_feature_angle_cache: Vec<(
+        usize,
+        ConnectionEndpoint,
+        ConnectionEndpoint,
+        Vec<f64>,
+    )> = Vec::new();
 
     // Edge-alignment rotations are likewise invariant across endpoint pairs.
     let mut edge_alignment_cache: Vec<(usize, Vec<f64>)> = Vec::new();
@@ -1091,6 +1101,24 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
                     Some((placement, feature_a, feature_b))
                 })
                 .collect::<Vec<_>>();
+            for (_, feature_a, feature_b) in &features {
+                if let Some((_, _, _, angles)) = nfp_feature_angle_cache.iter_mut().find(
+                    |(cached_part, cached_a, cached_b, _)| {
+                        *cached_part == part_index
+                            && *cached_a == *feature_a
+                            && *cached_b == *feature_b
+                    },
+                ) {
+                    angles.push(angle);
+                } else {
+                    nfp_feature_angle_cache.push((
+                        part_index,
+                        *feature_a,
+                        *feature_b,
+                        vec![angle],
+                    ));
+                }
+            }
             nfp_cache.push((part_index, angle, boundary));
             nfp_feature_cache.push((part_index, angle, features));
         }
@@ -1132,11 +1160,28 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
             let Some(candidate_vertices) = candidate_shape.form.polygon_vertices() else {
                 continue;
             };
-            let mut angles = edge_alignment_cache
+            let mut angles = nfp_feature_angle_cache
+                .iter()
+                .find(|(cached_part, cached_a, cached_b, _)| {
+                    *cached_part == part_index
+                        && *cached_a == endpoint_a
+                        && *cached_b == endpoint_b
+                })
+                .map(|(_, _, _, angles)| angles.clone())
+                .unwrap_or_default();
+            for angle in edge_alignment_cache
                 .iter()
                 .find(|(cached_part, _)| *cached_part == part_index)
-                .map(|(_, angles)| angles.clone())
-                .unwrap_or_default();
+                .map(|(_, angles)| angles.iter().copied())
+                .into_iter()
+                .flatten()
+            {
+                if !angles.iter().any(|current|
+                    (normalize_construction_angle(*current - angle)).abs() <= 1e-10
+                ) {
+                    angles.push(angle);
+                }
+            }
             // Preserve point-contact geometry for endpoint classes that do not
             // expose an edge-edge NFP segment. These remain exact
             // feature-derived alignments rather than angular sampling.
