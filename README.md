@@ -152,7 +152,7 @@ The library now includes exact feature-contact generation for two-constituent ri
 
 ## Geometry Library Visualizer
 
-The geometry library now has a dedicated read-only browser microscope. It reads the persistent catalogue without participating in generation or modifying library state. The browser refreshes its catalogue view every five seconds so formations Bob records while the viewer is open become visible without giving the viewer any write or generation authority.
+The geometry library now has a dedicated read-only browser microscope. It reads the persistent catalogue without participating in generation or modifying library state. The browser refreshes only the catalogue list every five seconds so newly recorded formations become visible; an already selected formation is not re-read or changed.
 
 Run it with:
 
@@ -167,4 +167,4 @@ Then open http://localhost:3001/geometry. The viewer supports:
 - inspecting persisted rigid, point-contact, vertex-contact, and fluid contact families;
 - zooming and panning the stored formation without changing it.
 
-The visualizer is deliberately separate from the catalogue worker and the live organism constructor. It is a verification microscope: it displays library knowledge as stored and does not generate candidates, alter formations, or substitute visual geometry for the library's authoritative validation.
+The visualizer is deliberately separate from the catalogue worker and the live organism constructor. It is a verification microscope: once a formation is selected, it displays that recorded formation as a static view and does not re-read, regenerate, alter, or reinterpret it. Only newly added library entries are discovered by the periodic catalogue refresh.
