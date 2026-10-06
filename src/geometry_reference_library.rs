@@ -802,27 +802,23 @@ pub fn generate_water_contact_families(
                 else {
                     continue;
                 };
-                let (start, end) = exposed_line_interval(formation, anchor_index, catalog)
-                    .map(|interval| {
-                        (
-                            contact.edge_start_parameter.max(interval.start),
-                            contact.edge_end_parameter.min(interval.end),
-                        )
-                    })
-                    .unwrap_or((contact.edge_start_parameter, contact.edge_end_parameter));
-                if end + 1e-10 >= start {
-                    out.push(GeometryContactFamily {
-                        schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
-                        formation_signature: formation.signature.clone(),
-                        candidate_resource: candidate_resource.name.clone(),
-                        anchor_constituent: anchor_index,
-                        anchor_edge: 0,
-                        contact_angle_radians: family.contact_angle_radians,
-                        curvature_radius: family.curvature_radius,
-                        contact_length: family.contact_length,
-                        edge_parameter_start: start,
-                        edge_parameter_end: end,
-                    });
+                for interval in exposed_line_intervals(formation, anchor_index, catalog) {
+                    let start = contact.edge_start_parameter.max(interval.start);
+                    let end = contact.edge_end_parameter.min(interval.end);
+                    if end + 1e-10 >= start {
+                        out.push(GeometryContactFamily {
+                            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+                            formation_signature: formation.signature.clone(),
+                            candidate_resource: candidate_resource.name.clone(),
+                            anchor_constituent: anchor_index,
+                            anchor_edge: 0,
+                            contact_angle_radians: family.contact_angle_radians,
+                            curvature_radius: family.curvature_radius,
+                            contact_length: family.contact_length,
+                            edge_parameter_start: start,
+                            edge_parameter_end: end,
+                        });
+                    }
                 }
             }
             _ => {
@@ -871,15 +867,19 @@ pub fn generate_water_contact_families(
     out
 }
 
-fn exposed_line_interval(
+fn exposed_line_intervals(
     formation: &GeometryFormation,
     anchor_index: usize,
     catalog: &[BaseResource],
-) -> Option<ExposedEdgeInterval> {
-    let anchor = formation.constituents.get(anchor_index)?;
-    let resource = catalog.iter().find(|r| r.name == anchor.resource)?;
+) -> Vec<ExposedEdgeInterval> {
+    let Some(anchor) = formation.constituents.get(anchor_index) else {
+        return Vec::new();
+    };
+    let Some(resource) = catalog.iter().find(|r| r.name == anchor.resource) else {
+        return Vec::new();
+    };
     let Form::Line { length } = resource.shape.form else {
-        return None;
+        return Vec::new();
     };
     let half = length * 0.5;
     let anchor_start = (
@@ -894,7 +894,7 @@ fn exposed_line_interval(
     let dy = anchor_end.1 - anchor_start.1;
     let length_sq = dx * dx + dy * dy;
     if length_sq <= f64::EPSILON {
-        return None;
+        return Vec::new();
     }
 
     let mut covered = Vec::new();
@@ -943,7 +943,7 @@ fn exposed_line_interval(
                     let c = world_point(vertices[edge], other.placement);
                     let d = world_point(vertices[(edge + 1) % vertices.len()], other.placement);
                     let cross_c = dx * (c.1 - anchor_start.1) - dy * (c.0 - anchor_start.0);
-                    let cross_d = dx * (d.1 - anchor_start.1) - dy * (d.0 - anchor_start.0);
+                    let cross_d = dx * (d.1 - anchor_start.1) - dy * (d.0 - anchor_start.1);
                     if cross_c.abs() > 1e-9 * length_sq.sqrt()
                         || cross_d.abs() > 1e-9 * length_sq.sqrt()
                     {
@@ -962,31 +962,22 @@ fn exposed_line_interval(
     }
 
     covered.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    let mut out = Vec::new();
     let mut cursor = 0.0;
     for (start, end) in covered {
         if start > cursor + 1e-10 {
-            return Some(ExposedEdgeInterval {
-                edge: 0,
-                start: cursor,
-                end: start.min(1.0),
-            });
+            out.push(ExposedEdgeInterval { edge: 0, start: cursor, end: start.min(1.0) });
         }
         cursor = cursor.max(end);
         if cursor >= 1.0 - 1e-10 {
-            return None;
+            return out;
         }
     }
     if cursor < 1.0 - 1e-10 {
-        Some(ExposedEdgeInterval {
-            edge: 0,
-            start: cursor,
-            end: 1.0,
-        })
-    } else {
-        None
+        out.push(ExposedEdgeInterval { edge: 0, start: cursor, end: 1.0 });
     }
+    out
 }
-
 
 pub fn generate_two_constituent_candidates(
     target: &GeometryFormation,
