@@ -1325,7 +1325,7 @@ mod tests {
     }
 
     #[test]
-    fn exposed_line_boundary_preserves_disconnected_intervals() {
+    fn exposed_line_boundary_can_be_fully_occluded() {
         let catalog = default_catalog();
         let formation = GeometryFormation {
             schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
