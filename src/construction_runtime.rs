@@ -378,8 +378,6 @@ fn nfp_feature_placement(
         Some(if negated { (-point.0, -point.1) } else { point })
     };
 
-    let existing_local = local_feature_point(&existing_vertices, feature.a, false)?;
-    let candidate_local = local_feature_point(&candidate_vertices, feature.b, true)?;
     let translation = (
         feature.start.x + (feature.end.x - feature.start.x) * 0.5,
         feature.start.y + (feature.end.y - feature.start.y) * 0.5,
@@ -419,10 +417,9 @@ fn nfp_feature_placement(
     let endpoint_a = endpoint_for_feature(&existing_vertices, feature.a)?;
     let endpoint_b = endpoint_for_feature(&candidate_vertices, feature.b)?;
 
-    // The NFP feature midpoint is exactly the difference of the corresponding
-    // source-feature representatives. Keep this assertion implicit in the
-    // construction path: the resulting endpoints meet at the same world point.
-    let _ = (existing_local, candidate_local, existing_rotation);
+    // The feature midpoint is the translational representative of this legal
+    // contact feature. Exact physical contact remains the final authority.
+    let _ = existing_rotation;
     Some((placement, endpoint_a, endpoint_b))
 }
 
