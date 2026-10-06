@@ -1683,6 +1683,33 @@ pub fn generate_rigid_point_contact_families(
 
     for anchor_index in 0..formation.constituents.len() {
         let Some(anchor_resource) = catalog.iter().find(|r| r.name == formation.constituents[anchor_index].resource) else { continue; };
+
+        // A zero-thickness line can accept a candidate line endpoint at any
+        // exposed point along its segment. Unlike a polygon edge, there is no
+        // positive-area interior to avoid, so the candidate endpoint has the
+        // full exact 2*pi orientation family.
+        if matches!(anchor_resource.shape.form, Form::Line { .. }) {
+            let exposed = exposed_line_intervals(formation, anchor_index, catalog);
+            for interval in exposed {
+                for endpoint in 0..2 {
+                    let family = GeometryRigidPointContactFamily {
+                        schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+                        formation_signature: formation.signature.clone(),
+                        candidate_resource: candidate_resource.name.clone(),
+                        anchor_constituent: anchor_index,
+                        anchor_edge: interval.edge,
+                        candidate_endpoint: endpoint,
+                        anchor_parameter_start: interval.start,
+                        anchor_parameter_end: interval.end,
+                        candidate_rotation_start_radians: 0.0,
+                        candidate_rotation_end_radians: std::f64::consts::TAU,
+                    };
+                    unique.insert(family.signature(), family);
+                }
+            }
+            continue;
+        }
+
         let Some(vertices) = anchor_resource.shape.form.polygon_vertices() else { continue; };
         let exposed = exposed_polygon_edge_intervals(formation, anchor_index, catalog);
         let placement = formation.constituents[anchor_index].placement;
@@ -1734,6 +1761,38 @@ pub fn generate_rigid_point_contact_families(
         }
     }
     unique.into_values().collect()
+}
+
+#[cfg(test)]
+mod point_contact_family_tests {
+    use super::*;
+
+    #[test]
+    fn line_anchor_exposes_endpoint_to_interior_contact_family() {
+        let catalog = default_catalog();
+        let formation = GeometryFormation::single("Hydrogen");
+        let line = catalog.iter().find(|r| r.name == "Hydrogen").unwrap();
+        assert!(matches!(line.shape.form, Form::Rectangle { .. }));
+
+        let mut test_catalog = catalog.clone();
+        test_catalog.push(BaseResource {
+            name: "TestLine".to_string(),
+            physical_state: crate::resources::PhysicalState::Rigid,
+            shape: Shape { form: Form::Line { length: 2.0 } },
+            properties: line.properties.clone(),
+        });
+
+        let line_formation = GeometryFormation::single("TestLine");
+        let candidate = test_catalog.iter().find(|r| r.name == "TestLine").unwrap();
+        let families = generate_rigid_point_contact_families(&line_formation, candidate, &test_catalog);
+        assert!(families.iter().any(|family| {
+            family.candidate_resource == "TestLine"
+                && family.anchor_parameter_start == 0.0
+                && family.anchor_parameter_end == 1.0
+                && family.candidate_rotation_start_radians == 0.0
+                && (family.candidate_rotation_end_radians - std::f64::consts::TAU).abs() < 1e-12
+        }));
+    }
 }
 
 /// Record the continuous manifold where a rigid polygon vertex touches an
