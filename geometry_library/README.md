@@ -52,3 +52,8 @@ A formation's seven resource frontiers are processed as one durable pass. Water 
 
 
 The library's continuous-contact model is being expanded with exact symbolic rigid boundary families; no sampled geometry is used.
+### Rigid continuous contact families
+
+Rigid edge-to-edge contact is also continuous: after the boundary directions are aligned, one body can translate along the shared boundary while maintaining contact. The library now records this degree of freedom as a symbolic GeometryRigidContactFamily with exact edge identifiers, relative rotation, and the complete boundary-overlap parameter interval. A family can be instantiated at a chosen parameter without angular search; the normal formation validator remains authoritative for the resulting complete structure.
+
+This is deliberately a continuum representation, not a claim that every parameter value is automatically valid inside an already-complex formation. The family describes the exact local contact manifold; instantiation performs the full collision/contact validation.
