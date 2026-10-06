@@ -924,6 +924,26 @@ mod tests {
 
 
     #[test]
+    fn water_capillary_family_is_exact_and_persistent() {
+        let root = temp_root();
+        let catalog = default_catalog();
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+        let carbon = GeometryFormation::single("Carbon");
+        let water = catalog.iter().find(|r| r.name == "Water").unwrap();
+        let families = generate_water_contact_families(&carbon, water, &catalog);
+        assert!(!families.is_empty());
+        assert!(families.iter().all(|family| family.edge_parameter_end >= family.edge_parameter_start));
+        for family in families {
+            assert!(library.insert_contact_family(family).unwrap());
+        }
+        assert!(!library.contact_families().collect::<Vec<_>>().is_empty());
+        drop(library);
+        let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
+        assert!(!reopened.contact_families().collect::<Vec<_>>().is_empty());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn frontier_state_persists_across_reopen() {
         let root = temp_root();
         let catalog = default_catalog();
