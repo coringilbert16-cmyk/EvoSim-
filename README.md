@@ -222,15 +222,25 @@ The genome is an **emergent physical cavity**.
 
 The constructor does not begin with a predefined genome core. A cavity qualifies as the genome only when the realized physical geometry and bond graph satisfy the cavity qualification rules.
 
-The temporary three-Carbon measurement scaffold remains a development/measurement authority for the minimum genome scale. It is not a permanent runtime body plan.
+Genesis uses a temporary physical three-Carbon scaffold to create the first construction reference.
 
-The scaffold consists of the minimum reference arrangement needed to establish the qualifying cavity area. Once the cavity is realized, it does not impose the final number, material, topology, or shape of the organism.
+The scaffold is exactly three regular Carbon hexagons:
 
-The constructor should stop the first construction phase at the milestone:
+- two Carbon pieces form the bottom row;
+- one Carbon piece is centered above them;
+- each pair meets flat-to-flat;
+- each Carbon piece has two scaffold bonds;
+- the three pieces therefore form a three-bond triangular graph without physical overlap.
 
-`cavity qualifies as genome`
+This is runtime genesis machinery, not the mature organism. Construction grows outward from the scaffold using the normal exact-contact rules. When the surrounding structure has physically enclosed the scaffold, the three temporary Carbon constituents are removed. The resulting empty physical region is then analyzed as the actual genome cavity.
 
-It then continues forward only as far as needed to establish initial viability.
+The scaffold therefore establishes minimum genome scale without becoming a permanent Carbon core, fixed topology, fixed silhouette, or required body plan.
+
+The first construction phase ends at the milestone:
+
+`scaffold enclosed → scaffold removed → cavity qualifies as genome`
+
+Only after that transition does normal initial-viability construction continue.
 
 The genome is therefore capable of evolving with the organism's realized structure rather than being permanently tied to a fixed Carbon core.
 
