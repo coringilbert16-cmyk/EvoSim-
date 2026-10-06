@@ -1163,15 +1163,6 @@ fn realize_next_bond_driven(
                     // was considered here, and committed bonds are permanent.
 
                     if best_candidate
-                    // placement. A second blueprint edge to an already-realized
-                    // neighbor is still an unformed future bond from the
-                    // constructor's perspective. It is resolved later by the
-                    // ordinary closure pass, after all participating physical
-                    // units have permanent poses. This keeps construction truly
-                    // forward-only and allows a cycle's final element to close
-                    // without requiring one placement to solve two bonds at once.
-
-                    if best_candidate
                         .as_ref()
                         .is_none_or(|current| target_distance < current.0)
                     {
