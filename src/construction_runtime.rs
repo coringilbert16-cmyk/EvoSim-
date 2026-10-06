@@ -402,7 +402,7 @@ pub(crate) fn placed_unit_overlaps_indexed(
         .map(|index| index.nearby_indices(
             candidate.placement.x,
             candidate.placement.y,
-            candidate_radius + self.max_radius,
+            candidate_radius + index.max_radius,
         ));
     let indices = nearby.unwrap_or_else(|| (0..structure.units.len()).collect());
     indices.into_iter().any(|index| {
