@@ -72,18 +72,14 @@ fn temporary_three_carbon_scaffold(
     // bonds are restored through the normal material-restoration authority,
     // which derives the exact physical contact endpoints from the realized
     // geometry instead of introducing a constructor-only bond path.
-    let material = Material {
-        parts: vec![
+    let material = Material::with_internal_bonds(
+        vec![
             (carbon.name.clone(), 1.0),
             (carbon.name.clone(), 1.0),
             (carbon.name.clone(), 1.0),
         ],
-        internal_bonds: vec![
-            crate::resources::InternalBond { part_a: 0, part_b: 1 },
-            crate::resources::InternalBond { part_a: 0, part_b: 2 },
-            crate::resources::InternalBond { part_a: 1, part_b: 2 },
-        ],
-    };
+        &[(0, 1), (0, 2), (1, 2)],
+    );
     let instance = crate::physical_material::PhysicalMaterial::realized(
         material,
         placements,
