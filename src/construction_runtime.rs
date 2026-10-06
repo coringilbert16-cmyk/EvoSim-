@@ -882,8 +882,34 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                 // close a cavity when the geometry produces a multi-contact
                 // placement; there is no separate closure phase.
                 let mut additional_candidates = Vec::new();
+
+                // The placement is generated from an endpoint on the anchor.
+                // Restrict closure discovery to the anchor's bonded neighborhood
+                // instead of rescanning every historical constituent. Exact
+                // geometry below remains authoritative; this only narrows the
+                // already-realized constituents considered for local closure.
+                let mut local_contact_indices = Vec::with_capacity(8);
+                local_contact_indices.push(existing_index);
+                let anchor_id = trial.units[existing_index].physical_id;
+                for bond in &trial.bonds {
+                    let neighbor_id = if bond.endpoint_a.constituent_id == anchor_id {
+                        Some(bond.endpoint_b.constituent_id)
+                    } else if bond.endpoint_b.constituent_id == anchor_id {
+                        Some(bond.endpoint_a.constituent_id)
+                    } else {
+                        None
+                    };
+                    if let Some(neighbor_id) = neighbor_id {
+                        if let Some(neighbor_index) = trial.unit_index(neighbor_id) {
+                            if !local_contact_indices.contains(&neighbor_index) {
+                                local_contact_indices.push(neighbor_index);
+                            }
+                        }
+                    }
+                }
+
                 for &new_index in &indices {
-                    for other_index in 0..trial.units.len() {
+                    for other_index in local_contact_indices.iter().copied() {
                         if indices.contains(&other_index) {
                             continue;
                         }
