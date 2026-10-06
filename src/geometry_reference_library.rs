@@ -426,6 +426,177 @@ pub fn validate_formation(formation: &GeometryFormation, catalog: &[BaseResource
     true
 }
 
+
+pub fn generate_two_constituent_candidates(
+    target: &GeometryFormation,
+    candidate_resource: &BaseResource,
+    catalog: &[BaseResource],
+) -> Vec<GeometryFormation> {
+    if target.constituents.len() != 1 { return Vec::new(); }
+    let Some(target_resource) = catalog.iter().find(|r| r.name == target.constituents[0].resource) else {
+        return Vec::new();
+    };
+    let target_placement = target.constituents[0].placement;
+    let mut out = Vec::new();
+    let target_vertices = target_resource.shape.form.polygon_vertices();
+    let candidate_vertices = candidate_resource.shape.form.polygon_vertices();
+
+    if let (Some(tv), Some(cv)) = (&target_vertices, &candidate_vertices) {
+        for ti in 0..tv.len() {
+            for ci in 0..cv.len() {
+                for rotation in crate::rigid_boundary::corner_alignment_rotations(
+                    &candidate_resource.shape, ci, &target_resource.shape, ti,
+                    target_placement.rotation_radians,
+                ) {
+                    let (tx, ty) = crate::rigid_boundary::world_vertex(
+                        &target_resource.shape, ti, target_placement).unwrap();
+                    let (cx, cy) = rotated_point(cv[ci], rotation);
+                    push_candidate(&mut out, target, candidate_resource, Placement {
+                        x: tx - cx, y: ty - cy, rotation_radians: rotation,
+                    }, catalog);
+                }
+            }
+        }
+
+        // Exact flat-to-flat contacts: align boundary edges and coincide one
+        // endpoint. No angular sampling is used.
+        for te in 0..tv.len() {
+            let tn = (te + 1) % tv.len();
+            for ce in 0..cv.len() {
+                let cn = (ce + 1) % cv.len();
+                let Some(ta) = edge_angle_world(tv[te], tv[tn], target_placement.rotation_radians) else { continue };
+                let Some(ca) = edge_angle(cv[ce], cv[cn]) else { continue };
+                for flip in [0.0, std::f64::consts::PI] {
+                    let rotation = normalize_angle(ta + flip - ca);
+                    let (tx, ty) = world_point(tv[te], target_placement);
+                    let (cx, cy) = rotated_point(cv[ce], rotation);
+                    push_candidate(&mut out, target, candidate_resource, Placement {
+                        x: tx - cx, y: ty - cy, rotation_radians: rotation,
+                    }, catalog);
+                }
+            }
+        }
+    }
+
+    if let Form::Line { length } = candidate_resource.shape.form {
+        let half = length / 2.0;
+        let endpoints = [(-half, 0.0), (half, 0.0)];
+        if let Some(tv) = target_vertices {
+            for ti in 0..tv.len() {
+                for endpoint in 0..2 {
+                    for rotation in crate::rigid_boundary::line_endpoint_alignment_rotations(
+                        endpoint, 0, target_placement.rotation_radians,
+                    ) {
+                        let (tx, ty) = world_point(tv[ti], target_placement);
+                        let (cx, cy) = rotated_point(endpoints[endpoint], rotation);
+                        push_candidate(&mut out, target, candidate_resource, Placement {
+                            x: tx - cx, y: ty - cy, rotation_radians: rotation,
+                        }, catalog);
+                    }
+                }
+            }
+        }
+    }
+
+    let mut unique = BTreeMap::new();
+    for formation in out {
+        if let Some(canonical) = formation.canonicalized(catalog) {
+            unique.insert(canonical.signature.clone(), canonical);
+        }
+    }
+    unique.into_values().collect()
+}
+
+pub fn expand_three_constituent_candidates(
+    two_constituent: &GeometryFormation,
+    candidate_resource: &BaseResource,
+    catalog: &[BaseResource],
+) -> Vec<GeometryFormation> {
+    if two_constituent.constituents.len() != 2 { return Vec::new(); }
+    let mut out = Vec::new();
+    for anchor_index in 0..2 {
+        let anchor = &two_constituent.constituents[anchor_index];
+        let anchor_formation = GeometryFormation {
+            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+            constituents: vec![anchor.clone()],
+            bonds: Vec::new(),
+            signature: String::new(),
+        };
+        for pair in generate_two_constituent_candidates(&anchor_formation, candidate_resource, catalog) {
+            let world = compose_placements(anchor.placement, pair.constituents[1].placement);
+            let mut formation = two_constituent.clone();
+            formation.constituents.push(GeometryConstituent {
+                resource: candidate_resource.name.clone(),
+                placement: world,
+            });
+            formation.bonds.push(GeometryBond {
+                constituent_a: anchor_index,
+                constituent_b: 2,
+            });
+            if validate_formation(&formation, catalog) { out.push(formation); }
+        }
+    }
+    let mut unique = BTreeMap::new();
+    for formation in out {
+        if let Some(canonical) = formation.canonicalized(catalog) {
+            unique.insert(canonical.signature.clone(), canonical);
+        }
+    }
+    unique.into_values().collect()
+}
+
+fn push_candidate(
+    out: &mut Vec<GeometryFormation>,
+    target: &GeometryFormation,
+    resource: &BaseResource,
+    placement: Placement,
+    catalog: &[BaseResource],
+) {
+    let formation = GeometryFormation {
+        schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+        constituents: vec![
+            target.constituents[0].clone(),
+            GeometryConstituent { resource: resource.name.clone(), placement },
+        ],
+        bonds: vec![GeometryBond { constituent_a: 0, constituent_b: 1 }],
+        signature: String::new(),
+    };
+    if validate_formation(&formation, catalog) { out.push(formation); }
+}
+
+fn rotated_point(point: (f64, f64), rotation: f64) -> (f64, f64) {
+    let (s, c) = rotation.sin_cos();
+    (point.0 * c - point.1 * s, point.0 * s + point.1 * c)
+}
+
+fn world_point(point: (f64, f64), placement: Placement) -> (f64, f64) {
+    let (x, y) = rotated_point(point, placement.rotation_radians);
+    (placement.x + x, placement.y + y)
+}
+
+fn edge_angle(a: (f64, f64), b: (f64, f64)) -> Option<f64> {
+    let dx = b.0 - a.0;
+    let dy = b.1 - a.1;
+    if dx.hypot(dy) <= f64::EPSILON { None } else { Some(dy.atan2(dx)) }
+}
+
+fn edge_angle_world(a: (f64, f64), b: (f64, f64), rotation: f64) -> Option<f64> {
+    Some(normalize_angle(edge_angle(a, b)? + rotation))
+}
+
+fn normalize_angle(angle: f64) -> f64 {
+    (angle + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI
+}
+
+fn compose_placements(parent: Placement, local: Placement) -> Placement {
+    let (x, y) = rotated_point((local.x, local.y), parent.rotation_radians);
+    Placement {
+        x: parent.x + x,
+        y: parent.y + y,
+        rotation_radians: normalize_angle(parent.rotation_radians + local.rotation_radians),
+    }
+}
+
 pub fn seed_base_catalogue(
     library: &mut GeometryLibrary,
     catalog: &[BaseResource],
@@ -455,6 +626,29 @@ mod tests {
             .unwrap()
             .as_nanos();
         std::env::temp_dir().join(format!("evosim-geometry-library-{nonce}"))
+    }
+
+
+    #[test]
+    fn two_constituent_generator_finds_exact_carbon_contacts() {
+        let catalog = default_catalog();
+        let base = GeometryFormation::single("Carbon");
+        let carbon = catalog.iter().find(|r| r.name == "Carbon").unwrap();
+        let candidates = generate_two_constituent_candidates(&base, carbon, &catalog);
+        assert!(!candidates.is_empty());
+        assert!(candidates.iter().all(|f| validate_formation(f, &catalog)));
+    }
+
+    #[test]
+    fn three_constituent_expansion_stays_physically_valid() {
+        let catalog = default_catalog();
+        let base = GeometryFormation::single("Carbon");
+        let carbon = catalog.iter().find(|r| r.name == "Carbon").unwrap();
+        let two = generate_two_constituent_candidates(&base, carbon, &catalog);
+        assert!(!two.is_empty());
+        let three = expand_three_constituent_candidates(&two[0], carbon, &catalog);
+        assert!(!three.is_empty());
+        assert!(three.iter().all(|f| f.constituents.len() == 3 && validate_formation(f, &catalog)));
     }
 
     #[test]
