@@ -756,32 +756,237 @@ pub fn exposed_polygon_edge_intervals(
     out
 }
 
-/// Derive exact Water/rigid contact families from exposed polygon edges.
-pub fn generate_water_contact_families(formation: &GeometryFormation, candidate_resource: &BaseResource, catalog: &[BaseResource]) -> Vec<GeometryContactFamily> {
-    if candidate_resource.name != "Water" || candidate_resource.physical_state != crate::resources::PhysicalState::Fluid { return Vec::new(); }
-    let Some(water) = catalog.iter().find(|r| r.name == "Water") else { return Vec::new(); };
-    let water_area = match water.shape.form { Form::Circle { radius } => std::f64::consts::PI * radius * radius, Form::Fluid { nominal_area, .. } => nominal_area, _ => return Vec::new() };
+/// Derive exact Water/rigid contact families from exposed rigid boundary features.
+///
+/// Polygon edges use exact collinear interval subtraction. A rigid line is
+/// represented as one boundary segment. Water therefore does not need a
+/// special sampled placement for either supported rigid boundary primitive.
+pub fn generate_water_contact_families(
+    formation: &GeometryFormation,
+    candidate_resource: &BaseResource,
+    catalog: &[BaseResource],
+) -> Vec<GeometryContactFamily> {
+    if candidate_resource.name != "Water"
+        || candidate_resource.physical_state != crate::resources::PhysicalState::Fluid
+    {
+        return Vec::new();
+    }
+    let Some(water) = catalog.iter().find(|r| r.name == "Water") else {
+        return Vec::new();
+    };
+    let water_area = match water.shape.form {
+        Form::Circle { radius } => std::f64::consts::PI * radius * radius,
+        Form::Fluid { nominal_area, .. } => nominal_area,
+        _ => return Vec::new(),
+    };
+
     let mut out = Vec::new();
     for (anchor_index, constituent) in formation.constituents.iter().enumerate() {
-        let Some(resource) = catalog.iter().find(|r| r.name == constituent.resource) else { continue; };
-        if resource.physical_state == crate::resources::PhysicalState::Fluid { continue; }
-        let Some(vertices) = resource.shape.form.polygon_vertices() else { continue; };
-        let Some(family) = solve_water_against_solid(water_area, water.properties.cohesion, resource.properties.cohesion) else { continue; };
-        let edge_length_cache = vertices.iter().enumerate().map(|(edge, &a)| {
-            let b = vertices[(edge + 1) % vertices.len()];
-            (edge, (b.0 - a.0).hypot(b.1 - a.1))
-        }).collect::<BTreeMap<_, _>>();
-        for interval in exposed_polygon_edge_intervals(formation, anchor_index, catalog) {
-            let Some(&edge_length) = edge_length_cache.get(&interval.edge) else { continue; };
-            let Some(contact) = ContactTranslationInterval::from_edge_length(edge_length, family) else { continue; };
-            let start = contact.edge_start_parameter.max(interval.start);
-            let end = contact.edge_end_parameter.min(interval.end);
-            if end + 1e-10 < start { continue; }
-            out.push(GeometryContactFamily { schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION, formation_signature: formation.signature.clone(), candidate_resource: candidate_resource.name.clone(), anchor_constituent: anchor_index, anchor_edge: interval.edge, contact_angle_radians: family.contact_angle_radians, curvature_radius: family.curvature_radius, contact_length: family.contact_length, edge_parameter_start: start, edge_parameter_end: end });
+        let Some(resource) = catalog.iter().find(|r| r.name == constituent.resource) else {
+            continue;
+        };
+        if resource.physical_state == crate::resources::PhysicalState::Fluid {
+            continue;
+        }
+        let Some(family) = solve_water_against_solid(
+            water_area,
+            water.properties.cohesion,
+            resource.properties.cohesion,
+        ) else {
+            continue;
+        };
+
+        match &resource.shape.form {
+            Form::Line { length } => {
+                let Some(contact) = ContactTranslationInterval::from_edge_length(*length, family)
+                else {
+                    continue;
+                };
+                let (start, end) = exposed_line_interval(formation, anchor_index, catalog)
+                    .map(|interval| {
+                        (
+                            contact.edge_start_parameter.max(interval.start),
+                            contact.edge_end_parameter.min(interval.end),
+                        )
+                    })
+                    .unwrap_or((contact.edge_start_parameter, contact.edge_end_parameter));
+                if end + 1e-10 >= start {
+                    out.push(GeometryContactFamily {
+                        schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+                        formation_signature: formation.signature.clone(),
+                        candidate_resource: candidate_resource.name.clone(),
+                        anchor_constituent: anchor_index,
+                        anchor_edge: 0,
+                        contact_angle_radians: family.contact_angle_radians,
+                        curvature_radius: family.curvature_radius,
+                        contact_length: family.contact_length,
+                        edge_parameter_start: start,
+                        edge_parameter_end: end,
+                    });
+                }
+            }
+            _ => {
+                let Some(vertices) = resource.shape.form.polygon_vertices() else {
+                    continue;
+                };
+                let edge_length_cache = vertices
+                    .iter()
+                    .enumerate()
+                    .map(|(edge, &a)| {
+                        let b = vertices[(edge + 1) % vertices.len()];
+                        (edge, (b.0 - a.0).hypot(b.1 - a.1))
+                    })
+                    .collect::<BTreeMap<_, _>>();
+
+                for interval in exposed_polygon_edge_intervals(formation, anchor_index, catalog) {
+                    let Some(&edge_length) = edge_length_cache.get(&interval.edge) else {
+                        continue;
+                    };
+                    let Some(contact) =
+                        ContactTranslationInterval::from_edge_length(edge_length, family)
+                    else {
+                        continue;
+                    };
+                    let start = contact.edge_start_parameter.max(interval.start);
+                    let end = contact.edge_end_parameter.min(interval.end);
+                    if end + 1e-10 < start {
+                        continue;
+                    }
+                    out.push(GeometryContactFamily {
+                        schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
+                        formation_signature: formation.signature.clone(),
+                        candidate_resource: candidate_resource.name.clone(),
+                        anchor_constituent: anchor_index,
+                        anchor_edge: interval.edge,
+                        contact_angle_radians: family.contact_angle_radians,
+                        curvature_radius: family.curvature_radius,
+                        contact_length: family.contact_length,
+                        edge_parameter_start: start,
+                        edge_parameter_end: end,
+                    });
+                }
+            }
         }
     }
     out
 }
+
+fn exposed_line_interval(
+    formation: &GeometryFormation,
+    anchor_index: usize,
+    catalog: &[BaseResource],
+) -> Option<ExposedEdgeInterval> {
+    let anchor = formation.constituents.get(anchor_index)?;
+    let resource = catalog.iter().find(|r| r.name == anchor.resource)?;
+    let Form::Line { length } = resource.shape.form else {
+        return None;
+    };
+    let half = length * 0.5;
+    let anchor_start = (
+        anchor.placement.x - half * anchor.placement.rotation_radians.cos(),
+        anchor.placement.y - half * anchor.placement.rotation_radians.sin(),
+    );
+    let anchor_end = (
+        anchor.placement.x + half * anchor.placement.rotation_radians.cos(),
+        anchor.placement.y + half * anchor.placement.rotation_radians.sin(),
+    );
+    let dx = anchor_end.0 - anchor_start.0;
+    let dy = anchor_end.1 - anchor_start.1;
+    let length_sq = dx * dx + dy * dy;
+    if length_sq <= f64::EPSILON {
+        return None;
+    }
+
+    let mut covered = Vec::new();
+    for (other_index, other) in formation.constituents.iter().enumerate() {
+        if other_index == anchor_index {
+            continue;
+        }
+        let Some(other_resource) = catalog.iter().find(|r| r.name == other.resource) else {
+            continue;
+        };
+        if other_resource.physical_state == crate::resources::PhysicalState::Fluid {
+            continue;
+        }
+
+        match &other_resource.shape.form {
+            Form::Line { length: other_length } => {
+                let half_other = *other_length * 0.5;
+                let c = (
+                    other.placement.x - half_other * other.placement.rotation_radians.cos(),
+                    other.placement.y - half_other * other.placement.rotation_radians.sin(),
+                );
+                let d = (
+                    other.placement.x + half_other * other.placement.rotation_radians.cos(),
+                    other.placement.y + half_other * other.placement.rotation_radians.sin(),
+                );
+                let cross_c = dx * (c.1 - anchor_start.1) - dy * (c.0 - anchor_start.0);
+                let cross_d = dx * (d.1 - anchor_start.1) - dy * (d.0 - anchor_start.0);
+                if cross_c.abs() > 1e-9 * length_sq.sqrt()
+                    || cross_d.abs() > 1e-9 * length_sq.sqrt()
+                {
+                    continue;
+                }
+                let t0 = ((c.0 - anchor_start.0) * dx + (c.1 - anchor_start.1) * dy) / length_sq;
+                let t1 = ((d.0 - anchor_start.0) * dx + (d.1 - anchor_start.1) * dy) / length_sq;
+                let lo = t0.min(t1).max(0.0);
+                let hi = t0.max(t1).min(1.0);
+                if hi - lo > 1e-10 {
+                    covered.push((lo, hi));
+                }
+            }
+            _ => {
+                let Some(vertices) = other_resource.shape.form.polygon_vertices() else {
+                    continue;
+                };
+                for edge in 0..vertices.len() {
+                    let c = world_point(vertices[edge], other.placement);
+                    let d = world_point(vertices[(edge + 1) % vertices.len()], other.placement);
+                    let cross_c = dx * (c.1 - anchor_start.1) - dy * (c.0 - anchor_start.0);
+                    let cross_d = dx * (d.1 - anchor_start.1) - dy * (d.0 - anchor_start.0);
+                    if cross_c.abs() > 1e-9 * length_sq.sqrt()
+                        || cross_d.abs() > 1e-9 * length_sq.sqrt()
+                    {
+                        continue;
+                    }
+                    let t0 = ((c.0 - anchor_start.0) * dx + (c.1 - anchor_start.1) * dy) / length_sq;
+                    let t1 = ((d.0 - anchor_start.0) * dx + (d.1 - anchor_start.1) * dy) / length_sq;
+                    let lo = t0.min(t1).max(0.0);
+                    let hi = t0.max(t1).min(1.0);
+                    if hi - lo > 1e-10 {
+                        covered.push((lo, hi));
+                    }
+                }
+            }
+        }
+    }
+
+    covered.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    let mut cursor = 0.0;
+    for (start, end) in covered {
+        if start > cursor + 1e-10 {
+            return Some(ExposedEdgeInterval {
+                edge: 0,
+                start: cursor,
+                end: start.min(1.0),
+            });
+        }
+        cursor = cursor.max(end);
+        if cursor >= 1.0 - 1e-10 {
+            return None;
+        }
+    }
+    if cursor < 1.0 - 1e-10 {
+        Some(ExposedEdgeInterval {
+            edge: 0,
+            start: cursor,
+            end: 1.0,
+        })
+    } else {
+        None
+    }
+}
+
 
 pub fn generate_two_constituent_candidates(
     target: &GeometryFormation,
