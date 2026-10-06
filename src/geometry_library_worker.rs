@@ -25,19 +25,28 @@ fn process_one_frontier(
     library: &mut GeometryLibrary,
     catalog: &[BaseResource],
 ) -> std::io::Result<bool> {
-    let mut formations: Vec<_> = library
+    // The library is already held in a BTreeMap keyed by canonical
+    // signature. Do not clone and sort the entire catalogue on every worker
+    // step; that turns catalogue growth itself into the hot path. We only
+    // borrow the first formation with unfinished resource frontiers, process
+    // its complete seven-resource row, then return so the next pass advances.
+    let Some(formation) = library
         .formations()
         .filter(|formation| formation.constituents.len() < 20)
-        .cloned()
-        .collect();
-    formations.sort_by(|a, b| {
-        a.constituents
-            .len()
-            .cmp(&b.constituents.len())
-            .then_with(|| a.signature.cmp(&b.signature))
-    });
+        .find(|formation| {
+            catalog.iter().any(|resource| {
+                !matches!(
+                    library.frontier().records.get(&format!("{}|{}", formation.signature, resource.name)).map(|record| &record.state),
+                    Some(GeometryFrontierState::Exhausted)
+                        | Some(GeometryFrontierState::ContinuousFamilyPending)
+                )
+            })
+        })
+    else {
+        return Ok(false);
+    };
 
-    for formation in formations {
+    {
         for resource in catalog {
             let key = format!("{}|{}", formation.signature, resource.name);
             let state = library.frontier().records.get(&key).map(|record| &record.state);
@@ -93,11 +102,8 @@ fn process_one_frontier(
         // All resource frontiers for this formation were handled in one pass.
         // The next worker pass advances to the next formation rather than
         // rebuilding and rescanning this same seven-resource row.
-        if formation.constituents.len() < 20 {
-            return Ok(true);
-        }
     }
 
-    Ok(false)
+    Ok(true)
 }
 
