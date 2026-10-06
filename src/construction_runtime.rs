@@ -890,6 +890,18 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
         return None;
     }
 
+    let Some(existing_shape) = existing_unit.shape(catalog) else {
+        return None;
+    };
+    let one_part = new_material.material.parts.len() == 1;
+    let one_part_geometry = one_part.then(|| {
+        new_material
+            .material
+            .parts
+            .first()
+            .and_then(|(name, _)| resource(catalog, name))
+            .map(|resource| &resource.shape)
+    });
     for endpoint_a in existing_endpoints {
         let joint = endpoint_a.world_point(&existing_unit, catalog)?;
         for (part_index, endpoint_b) in new_endpoints.iter().copied() {
@@ -900,16 +912,17 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
                 catalog,
             )?;
 
-            let Some(existing_shape) = existing_unit.shape(catalog) else {
-                continue;
+            let candidate_shape = if one_part {
+                one_part_geometry.flatten()
+            } else {
+                new_material
+                    .material
+                    .parts
+                    .get(part_index)
+                    .and_then(|(name, _)| resource(catalog, name))
+                    .map(|resource| &resource.shape)
             };
-            let Some(candidate_shape) = new_material
-                .material
-                .parts
-                .get(part_index)
-                .and_then(|(name, _)| resource(catalog, name))
-                .map(|resource| &resource.shape)
-            else {
+            let Some(candidate_shape) = candidate_shape else {
                 continue;
             };
 
@@ -942,7 +955,7 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
                 // entire graph and then restored the same one-part material for every
                 // rejected angle; that made failed geometry candidates disproportionately
                 // expensive.
-                if new_material.material.parts.len() == 1 {
+                if one_part {
                     let (name, amount) = new_material.material.parts.first()?;
                     let Some(mut candidate_unit) = StructuralUnit::from_material(
                         crate::resources::Material::free_base(name.clone(), *amount),
