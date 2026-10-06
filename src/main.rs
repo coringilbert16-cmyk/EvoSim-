@@ -22,6 +22,7 @@ mod connection_geometry;
 mod construction_material_selection;
 mod geometry_reference_library;
 mod geometry_library_worker;
+mod geometry_server;
 mod construction_runtime;
 mod contact;
 mod initial_organism_constructor;
@@ -98,6 +99,11 @@ async fn main() {
 
     if std::env::args().nth(1).as_deref() == Some("--geometry-worker") {
         geometry_library_worker::run();
+        return;
+    }
+
+    if std::env::args().nth(1).as_deref() == Some("--geometry-viewer") {
+        geometry_server::run().await;
         return;
     }
 
