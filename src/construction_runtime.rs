@@ -1146,7 +1146,7 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
                     let (name, amount) = new_material.material.parts.first()?;
                     let Some(mut candidate_unit) = StructuralUnit::from_material(
                         crate::resources::Material::free_base(name.clone(), *amount),
-                        candidate_origin,
+                        candidate_placement,
                     ) else {
                         continue;
                     };
