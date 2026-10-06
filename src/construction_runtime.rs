@@ -321,7 +321,6 @@ fn rotated_polygon_vertices(
 
 fn nfp_contact_class(
     existing_shape: &crate::resources::Shape,
-    existing_rotation: f64,
     existing_origin: (f64, f64),
     candidate_shape: &crate::resources::Shape,
     candidate_rotation: f64,
@@ -419,7 +418,6 @@ fn nfp_feature_placement(
 
     // The feature midpoint is the translational representative of this legal
     // contact feature. Exact physical contact remains the final authority.
-    let _ = existing_rotation;
     Some((placement, endpoint_a, endpoint_b))
 }
 
@@ -1114,7 +1112,6 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
                     boundary.features.iter().find_map(|feature| {
                         let (placement, feature_a, feature_b) = nfp_feature_placement(
                             existing_shape,
-                            existing_unit.placement.rotation_radians,
                             (existing_unit.placement.x, existing_unit.placement.y),
                             candidate_shape,
                             angle,
