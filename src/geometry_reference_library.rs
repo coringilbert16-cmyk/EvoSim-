@@ -1629,6 +1629,19 @@ mod tests {
     }
 
     #[test]
+    fn rigid_contact_family_represents_continuous_edge_overlap() {
+        let catalog = default_catalog();
+        let formation = GeometryFormation::single("Carbon");
+        let carbon = catalog.iter().find(|r| r.name == "Carbon").unwrap();
+        let families = generate_rigid_contact_families(&formation, carbon, &catalog);
+        assert!(!families.is_empty());
+        assert!(families.iter().all(|family| {
+            family.anchor_parameter_end >= family.anchor_parameter_start
+                && family.candidate_rotation_radians.is_finite()
+        }));
+    }
+
+    #[test]
     fn two_constituent_generator_finds_exact_carbon_contacts() {
         let catalog = default_catalog();
         let base = GeometryFormation::single("Carbon");
