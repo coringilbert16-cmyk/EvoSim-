@@ -1124,16 +1124,34 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
         }
     }
 
-    for endpoint_a in existing_endpoints {
-        let joint = endpoint_a.world_point(&existing_unit, catalog)?;
-        for (part_index, endpoint_b) in new_endpoints.iter().copied() {
-            let local_b = physical_material_endpoint_local_point(
-                new_material,
-                part_index,
-                endpoint_b,
-                catalog,
-            )?;
+    // The NFP feature stream is now the primary candidate source. Each
+    // legal configuration-space feature already identifies both physical
+    // endpoints and the candidate placement, so endpoint-pair enumeration is
+    // no longer the driver for these candidates.
+    let mut candidate_stream: Vec<(
+        usize,
+        ConnectionEndpoint,
+        ConnectionEndpoint,
+        f64,
+        Placement,
+    )> = Vec::new();
 
+    for (part_index, angle, features) in &nfp_feature_cache {
+        for (placement, endpoint_a, endpoint_b) in features {
+            candidate_stream.push((
+                *part_index,
+                *endpoint_a,
+                *endpoint_b,
+                *angle,
+                *placement,
+            ));
+        }
+    }
+
+    // Keep the existing exact geometry-derived path as a fallback for contact
+    // types or endpoint combinations not represented by the NFP feature map.
+    for endpoint_a in existing_endpoints.iter().copied() {
+        for (part_index, endpoint_b) in new_endpoints.iter().copied() {
             let candidate_shape = if one_part {
                 one_part_geometry.flatten()
             } else {
@@ -1147,19 +1165,24 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
             let Some(candidate_shape) = candidate_shape else {
                 continue;
             };
-
-            // Genesis has no developmental pose preference. The angle set is
-            // therefore derived entirely from exact rigid boundary features;
-            // the zero value is only the neutral seed for the analytic helper.
             let candidate_relative_rotation = new_material
                 .placements
                 .as_ref()
                 .and_then(|placements| placements.get(part_index))
                 .map(|placement| placement.rotation_radians)
                 .unwrap_or(0.0);
-            let Some(candidate_vertices) = candidate_shape.form.polygon_vertices() else {
+            let Some(local_b) = physical_material_endpoint_local_point(
+                new_material,
+                part_index,
+                endpoint_b,
+                catalog,
+            ) else {
                 continue;
             };
+            let Some(joint) = endpoint_a.world_point(&existing_unit, catalog) else {
+                continue;
+            };
+
             let mut angles = nfp_feature_angle_cache
                 .iter()
                 .find(|(cached_part, cached_a, cached_b, _)| {
@@ -1182,12 +1205,14 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
                     angles.push(angle);
                 }
             }
-            // Preserve point-contact geometry for endpoint classes that do not
-            // expose an edge-edge NFP segment. These remain exact
-            // feature-derived alignments rather than angular sampling.
             for angle in construction_angle_candidates(
-                existing_shape, endpoint_a, existing_unit.placement.rotation_radians,
-                candidate_shape, endpoint_b, candidate_relative_rotation, 0.0,
+                existing_shape,
+                endpoint_a,
+                existing_unit.placement.rotation_radians,
+                candidate_shape,
+                endpoint_b,
+                candidate_relative_rotation,
+                0.0,
             ) {
                 if !angles.iter().any(|current|
                     (normalize_construction_angle(*current - angle)).abs() <= 1e-10
@@ -1197,100 +1222,89 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
             }
 
             for angle in angles {
-                // The NFP is now the placement source for supported rigid
-                // boundary contacts. Its feature provenance identifies the
-                // exact local boundary representatives used for the bond, and
-                // the feature midpoint directly determines the candidate
-                // origin. The older endpoint-derived placement remains only as
-                // a fallback for contacts not represented by a polygon feature.
-                if !nfp_cache.iter().any(|(cached_part, cached_angle, _)| {
-                    *cached_part == part_index
-                        && (normalize_construction_angle(*cached_angle - angle)).abs() <= 1e-10
-                }) {
-                    let boundary = crate::configuration_space::convex_minkowski_difference(
-                        &rotated_polygon_vertices(
-                            existing_shape,
-                            existing_unit.placement.rotation_radians,
-                        )?,
-                        &rotated_polygon_vertices(candidate_shape, angle)?,
-                    )
-                    .ok()?;
-                    let features = boundary
-                        .features
+                if candidate_stream.iter().any(
+                    |(_, cached_a, cached_b, cached_angle, _)| {
+                        *cached_a == endpoint_a
+                            && *cached_b == endpoint_b
+                            && (normalize_construction_angle(*cached_angle - angle)).abs()
+                                <= 1e-10
+                    },
+                ) {
+                    continue;
+                }
+                let placement = if let Some((_, _, features)) = nfp_feature_cache.iter().find(
+                    |(cached_part, cached_angle, _)| {
+                        *cached_part == part_index
+                            && (normalize_construction_angle(*cached_angle - angle)).abs()
+                                <= 1e-10
+                    },
+                ) {
+                    features
                         .iter()
-                        .filter_map(|feature| {
-                            let (placement, feature_a, feature_b) = nfp_feature_placement(
-                                existing_shape,
-                                (existing_unit.placement.x, existing_unit.placement.y),
-                                candidate_shape,
-                                angle,
-                                feature,
-                            )?;
-                            Some((placement, feature_a, feature_b))
-                        })
-                        .collect::<Vec<_>>();
-                    nfp_cache.push((part_index, angle, boundary));
-                    nfp_feature_cache.push((part_index, angle, features));
-                }
-
-                let nfp_boundary = nfp_cache
-                    .iter()
-                    .find(|(cached_part, cached_angle, _)| {
-                        *cached_part == part_index
-                            && (normalize_construction_angle(*cached_angle - angle)).abs()
-                                <= 1e-10
-                    })
-                    .map(|(_, _, boundary)| boundary);
-
-                let nfp_feature = nfp_feature_cache
-                    .iter()
-                    .find(|(cached_part, cached_angle, _)| {
-                        *cached_part == part_index
-                            && (normalize_construction_angle(*cached_angle - angle)).abs()
-                                <= 1e-10
-                    })
-                    .and_then(|(_, _, features)| {
-                        features.iter().find_map(|(placement, feature_a, feature_b)| {
+                        .find_map(|(candidate, feature_a, feature_b)| {
                             (*feature_a == endpoint_a && *feature_b == endpoint_b)
-                                .then_some(*placement)
+                                .then_some(*candidate)
                         })
-                    });
-
-                let candidate_placement = nfp_feature
-                    .as_ref()
-                    .map(|(placement, _)| *placement)
-                    .unwrap_or_else(|| {
-                        placement_for_joint(
-                            (local_b.x, local_b.y),
-                            (joint.x, joint.y),
-                            angle,
-                        )
-                    });
-
-                // A placement generated from the NFP is already on a legal
-                // contact feature. Keep the exact boundary test as a safety
-                // check for the fallback path and as the final configuration-
-                // space contract before expensive realization.
-                let candidate_translation = crate::configuration_space::Point {
-                    x: candidate_placement.x - existing_unit.placement.x,
-                    y: candidate_placement.y - existing_unit.placement.y,
+                        .unwrap_or_else(|| {
+                            placement_for_joint(
+                                (local_b.x, local_b.y),
+                                (joint.x, joint.y),
+                                angle,
+                            )
+                        })
+                } else {
+                    placement_for_joint(
+                        (local_b.x, local_b.y),
+                        (joint.x, joint.y),
+                        angle,
+                    )
                 };
-                let Some(boundary) = nfp_boundary else {
-                    continue;
-                };
-                // The cached NFP is already the configuration-space authority for
-                // this orientation. Do not rebuild the same Minkowski boundary
-                // merely to validate the placement a second time.
-                if crate::configuration_space::boundary_feature_at_translation_ref(
-                    boundary,
-                    candidate_translation,
-                    crate::combine_runtime::COMBINE_CONTACT_TOLERANCE,
-                )
-                .is_none()
-                {
-                    continue;
-                }
-                *nodes += 1;
+                candidate_stream.push((part_index, endpoint_a, endpoint_b, angle, placement));
+            }
+        }
+    }
+
+    for (part_index, endpoint_a, endpoint_b, angle, candidate_placement) in candidate_stream {
+        let candidate_shape = if one_part {
+            one_part_geometry.flatten()
+        } else {
+            new_material
+                .material
+                .parts
+                .get(part_index)
+                .and_then(|(name, _)| resource(catalog, name))
+                .map(|resource| &resource.shape)
+        };
+        let Some(candidate_shape) = candidate_shape else {
+            continue;
+        };
+        let Some(boundary) = nfp_cache
+            .iter()
+            .find(|(cached_part, cached_angle, _)| {
+                *cached_part == part_index
+                    && (normalize_construction_angle(*cached_angle - angle)).abs() <= 1e-10
+            })
+            .map(|(_, _, boundary)| boundary)
+        else {
+            continue;
+        };
+
+        // A placement generated from the NFP is already on a legal contact
+        // feature. Keep the exact boundary test as the final configuration-
+        // space contract before expensive realization.
+        let candidate_translation = crate::configuration_space::Point {
+            x: candidate_placement.x - existing_unit.placement.x,
+            y: candidate_placement.y - existing_unit.placement.y,
+        };
+        if crate::configuration_space::boundary_feature_at_translation_ref(
+            boundary,
+            candidate_translation,
+            crate::combine_runtime::COMBINE_CONTACT_TOLERANCE,
+        )
+        .is_none()
+        {
+            continue;
+        }
 
                 // Genesis candidates are currently one-part rigid materials. Build the
                 // candidate unit directly and reject geometric penetration against the
