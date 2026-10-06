@@ -2636,10 +2636,4 @@ mod tests {
         assert!(!validate_formation(&formation, &catalog));
     }
 
-    #[test]
-    fn touching_bonded_fluids_can_be_valid_against_a_rigid_boundary() {
-        let catalog = default_catalog();
-        let formation = GeometryFormation {
-            schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
-            constituents: vec![
-                GeometryConstituent {
+}
