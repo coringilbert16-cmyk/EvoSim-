@@ -1766,6 +1766,7 @@ pub fn generate_rigid_point_contact_families(
 #[cfg(test)]
 mod point_contact_family_tests {
     use super::*;
+    use crate::resources::Shape;
 
     #[test]
     fn line_anchor_exposes_endpoint_to_interior_contact_family() {
