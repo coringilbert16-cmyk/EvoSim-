@@ -60,6 +60,8 @@ A successful construction step must:
 
 Committed bonds are permanent. Normal forward construction does not clone the organism graph, perform a global future-body search, or backtrack to repair an earlier decision.
 
+Full cavity/interior/acquisition viability analysis is also event-driven rather than executed after every frontier extension. Ordinary one-bond extensions do not create a new cycle, so they do not trigger another global viability pass. A transaction that closes a new cycle, or removal of the temporary genesis scaffold, marks viability dirty and permits the next full viability check.
+
 Reproduction is different: once an organism reproduces, creating a separate organism is biologically meaningful and may use a separate construction state.
 
 ---
@@ -90,7 +92,7 @@ All other orientations are consequences of the available geometry and physical c
 
 # Configuration-space / Minkowski plan
 
-The target architecture is a feature-preserving convex configuration-space implementation. The migration has now begun: the constructor generates rigid placement candidates from convex NFP contact features when their feature representatives correspond to available construction endpoints. The NFP therefore supplies both legal contact geometry and, for supported feature pairs, the candidate placement itself. Older finite geometry-derived orientations and endpoint-derived placement remain only as fallbacks for contacts not yet represented by the NFP feature path. The NFP is not yet the sole source of all placement candidates.
+The target architecture is a feature-preserving convex configuration-space implementation. The constructor now uses the convex NFP feature stream as the sole rigid placement source. Exact geometry-derived orientation candidates (parallel-edge and incident-edge alignments) determine which finite orientation states are evaluated; the resulting NFP boundary supplies the legal contact feature and candidate placement. The legacy endpoint-pair placement fallback has been removed from the genesis hot path. If an NFP-derived candidate is unavailable for a frontier/material combination, that combination is rejected and construction advances to another valid frontier/material choice rather than launching a second exhaustive placement search.
 
 For convex existing shape `A` and candidate shape `B`, translational configuration space is represented by the Minkowski construction:
 
