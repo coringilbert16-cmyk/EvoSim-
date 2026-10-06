@@ -969,20 +969,31 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
             // Genesis has no developmental pose preference. The angle set is
             // therefore derived entirely from exact rigid boundary features;
             // the zero value is only the neutral seed for the analytic helper.
-            let angles = construction_angle_candidates(
-                existing_shape,
-                endpoint_a,
+            let candidate_relative_rotation = new_material
+                .placements
+                .as_ref()
+                .and_then(|placements| placements.get(part_index))
+                .map(|placement| placement.rotation_radians)
+                .unwrap_or(0.0);
+            let mut angles = crate::configuration_space::edge_alignment_rotations(
+                &existing_shape.form.polygon_vertices(),
                 existing_unit.placement.rotation_radians,
-                candidate_shape,
-                endpoint_b,
-                new_material
-                    .placements
-                    .as_ref()
-                    .and_then(|placements| placements.get(part_index))
-                    .map(|placement| placement.rotation_radians)
-                    .unwrap_or(0.0),
-                0.0,
+                &candidate_shape.form.polygon_vertices(),
+                candidate_relative_rotation,
             );
+            // Preserve point-contact geometry for endpoint classes that do not
+            // expose an edge-edge NFP segment. These remain exact
+            // feature-derived alignments rather than angular sampling.
+            for angle in construction_angle_candidates(
+                existing_shape, endpoint_a, existing_unit.placement.rotation_radians,
+                candidate_shape, endpoint_b, candidate_relative_rotation, 0.0,
+            ) {
+                if !angles.iter().any(|current|
+                    (normalize_construction_angle(*current - angle)).abs() <= 1e-10
+                ) {
+                    angles.push(angle);
+                }
+            }
 
             for angle in angles {
                 let candidate_origin =
