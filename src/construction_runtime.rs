@@ -1726,7 +1726,6 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
                     trial_ledger,
                     trial_energy,
                 ));
-            }
         }
     }
 
