@@ -1026,6 +1026,48 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
         crate::configuration_space::ConvexConfigurationBoundary,
     )> = Vec::new();
 
+    // Edge-alignment rotations depend only on the two rigid shapes and their
+    // orientations, not on which endpoint pair eventually consumes the contact.
+    // Compute that invariant set once per material part; endpoint-specific
+    // point/corner alignments remain in the local fallback path below.
+    let mut edge_alignment_cache: Vec<(usize, Vec<f64>)> = Vec::new();
+    for part_index in 0..new_material.material.parts.len() {
+        let candidate_shape = if one_part {
+            one_part_geometry.flatten()
+        } else {
+            new_material
+                .material
+                .parts
+                .get(part_index)
+                .and_then(|(name, _)| resource(catalog, name))
+                .map(|resource| &resource.shape)
+        };
+        let Some(candidate_shape) = candidate_shape else {
+            continue;
+        };
+        let candidate_relative_rotation = new_material
+            .placements
+            .as_ref()
+            .and_then(|placements| placements.get(part_index))
+            .map(|placement| placement.rotation_radians)
+            .unwrap_or(0.0);
+        let Some(existing_vertices) = existing_shape.form.polygon_vertices() else {
+            continue;
+        };
+        let Some(candidate_vertices) = candidate_shape.form.polygon_vertices() else {
+            continue;
+        };
+        edge_alignment_cache.push((
+            part_index,
+            crate::configuration_space::edge_alignment_rotations(
+                &existing_vertices,
+                existing_unit.placement.rotation_radians,
+                &candidate_vertices,
+                candidate_relative_rotation,
+            ),
+        ));
+    }
+
     for endpoint_a in existing_endpoints {
         let joint = endpoint_a.world_point(&existing_unit, catalog)?;
         for (part_index, endpoint_b) in new_endpoints.iter().copied() {
@@ -1065,12 +1107,11 @@ pub(crate) fn try_attach_physical_material_bond_driven_indexed(
             let Some(candidate_vertices) = candidate_shape.form.polygon_vertices() else {
                 continue;
             };
-            let mut angles = crate::configuration_space::edge_alignment_rotations(
-                &existing_vertices,
-                existing_unit.placement.rotation_radians,
-                &candidate_vertices,
-                candidate_relative_rotation,
-            );
+            let mut angles = edge_alignment_cache
+                .iter()
+                .find(|(cached_part, _)| *cached_part == part_index)
+                .map(|(_, angles)| angles.clone())
+                .unwrap_or_default();
             // Preserve point-contact geometry for endpoint classes that do not
             // expose an edge-edge NFP segment. These remain exact
             // feature-derived alignments rather than angular sampling.
