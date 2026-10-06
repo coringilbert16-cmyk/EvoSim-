@@ -212,10 +212,10 @@ impl ConstructionEndpointOccupancy {
         }
     }
 
-    fn insert_bond(&mut self, bond: &crate::structure::StructuralBond, structure: &crate::structure::OrganismStructure) {
+    fn insert_bond(&mut self, bond: &crate::structure::Bond, structure: &crate::structure::OrganismStructure) {
         for endpoint in [&bond.endpoint_a, &bond.endpoint_b] {
             if let Some(unit_index) = structure.unit_index(endpoint.constituent_id) {
-                let (a, b, kind) = Self::key(&endpoint.endpoint);
+                let (a, b, kind) = Self::key(&endpoint.location);
                 self.occupied.insert((unit_index, a, b, kind));
             }
         }
