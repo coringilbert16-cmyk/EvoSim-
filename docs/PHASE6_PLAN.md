@@ -27,10 +27,10 @@ The physical graph remains authoritative for realized structure.
 - Preferred developmental mass is derived from size preference using the approved logarithmic mapping.
 - Size-preference mutation is bell-shaped around the parent's value and bounded to [0, 1].
 - Preferred developmental mass is soft intent; actual mass remains derived from realized physical structure.
-- The current `adult_mass()` API is retained only as an implementation-facing derived preferred-mass accessor; it is not an independent genome authority.
+- The current `preferred_mass()` is the implementation-facing derived preferred-mass accessor; it is not an independent genome authority.
 - The numerical mass bounds used by the current mapping are explicitly **experimental**.
-- Removed the discrete size/count ladder and canonical juvenile-count authority.
-- Preserved the confirmed-good juvenile seed only as a physically validated solver starting realization, not as a genome body-plan rule.
+- Removed the discrete size/count ladder and canonical lifecycle count authority.
+- Preserved the confirmed-good construction seed only as a physically validated solver starting realization, not as a genome body-plan rule.
 - Connectivity is implemented as a developmental preference and physical-opportunity measurement; its numerical neighborhood coefficient remains experimental.
 - The confirmed original seed realization survives only as a non-inherited construction/scale calibration baseline.
 
