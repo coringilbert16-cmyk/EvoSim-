@@ -814,7 +814,7 @@ mod tests {
             needs_space: false,
         };
         assert!(preferred > 0.0);
-        assert!(!juvenile_scale_reached(&construction, &catalog));
+        assert!(!budding_scale_reached_with_reference(&construction, &catalog, None));
     }
 
     #[test]
@@ -851,8 +851,7 @@ mod tests {
     fn developing_offspring_receives_persistent_energy_from_parent() {
         let mut simulation = Simulation::new(11, 20.0);
         let mut parent = simulation.organisms.remove(0);
-        parent.development_stage = DevelopmentStage::Adult;
-        let mut ledger = EnergyLedger::default();
+                let mut ledger = EnergyLedger::default();
         assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
         assert!(begin_reproduction(
             &mut parent,
@@ -883,8 +882,7 @@ mod tests {
     fn crossing_parent_boundary_does_not_detach_while_contact_remains() {
         let mut simulation = Simulation::new(17, 20.0);
         let mut parent = simulation.organisms.remove(0);
-        parent.development_stage = DevelopmentStage::Adult;
-        let mut ledger = EnergyLedger::default();
+                let mut ledger = EnergyLedger::default();
         assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
         assert!(begin_reproduction(
             &mut parent,
@@ -927,8 +925,7 @@ mod tests {
     fn fully_outside_parent_boundary_is_detached() {
         let mut simulation = Simulation::new(23, 20.0);
         let mut parent = simulation.organisms.remove(0);
-        parent.development_stage = DevelopmentStage::Adult;
-        let mut ledger = EnergyLedger::default();
+                let mut ledger = EnergyLedger::default();
         assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
         assert!(begin_reproduction(
             &mut parent,
@@ -955,8 +952,7 @@ mod tests {
     fn loss_of_parent_contact_is_detachment() {
         let mut simulation = Simulation::new(29, 20.0);
         let mut parent = simulation.organisms.remove(0);
-        parent.development_stage = DevelopmentStage::Adult;
-        let mut ledger = EnergyLedger::default();
+                let mut ledger = EnergyLedger::default();
         assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
         assert!(begin_reproduction(
             &mut parent,
@@ -982,8 +978,7 @@ mod tests {
     fn construction_waits_when_all_physical_inventory_is_exhausted() {
         let mut simulation = Simulation::new(31, 20.0);
         let mut parent = simulation.organisms.remove(0);
-        parent.development_stage = DevelopmentStage::Adult;
-        let mut ledger = EnergyLedger::default();
+                let mut ledger = EnergyLedger::default();
 
         assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
         assert!(begin_reproduction(
@@ -1024,8 +1019,7 @@ mod tests {
     fn waiting_construction_resumes_from_same_graph_when_material_arrives() {
         let mut simulation = Simulation::new(37, 20.0);
         let mut parent = simulation.organisms.remove(0);
-        parent.development_stage = DevelopmentStage::Adult;
-        let mut ledger = EnergyLedger::default();
+                let mut ledger = EnergyLedger::default();
 
         assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
         assert!(begin_reproduction(
