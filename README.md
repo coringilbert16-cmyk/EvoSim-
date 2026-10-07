@@ -129,6 +129,83 @@ For each change:
 
 Do not redesign the constructor in response to a downstream failure until the underlying construction contract has been verified.
 
+## Experimental chemistry
+
+This section is **experimental planning only**. No implementation work is committed by this section. Chemistry work is intentionally deferred until Bob/the construction system and the Geometry Reference Library are substantially established.
+
+The working direction is to make **BREAK and COMBINE consequences of formation chemistry rather than organism actions**. An organism should not need a special Break or Combine command, nor should the initial cell be designed with organelles whose purpose is to perform those operations. Structural changes should arise from the same general physical/chemical transition system that governs all material interactions.
+
+### Foundational chemical inputs
+
+The proposed interaction system derives local chemical behavior from four foundational inputs:
+
+1. **Composition** — constituent identities and quantities;
+2. **Bonded structure/topology** — which constituents are connected and how the formation is structurally arranged;
+3. **Exposed geometry** — the actual exposed surfaces/features and their relative physical contact configuration;
+4. **Bond strength / formation energy** — the energetic strength of the existing and newly formed bonds.
+
+These are intended to describe a formation without introducing hard-coded properties such as toxicity, acidity, or food value. Such behaviors should emerge from the transitions that formations permit and the consequences of those transitions.
+
+The desired universal transition model is approximately:
+
+    interaction of formations
+        -> evaluate composition, topology, exposed geometry, and bond strength/energy
+        -> determine whether a structural transition is permitted
+        -> no change, bond formation, bond rupture, rearrangement, separation, or another valid transition
+        -> realize the resulting physical formation
+
+**Natural BREAK must be supported as a chemical transition.** The current code can split a material when explicitly instructed to break an internal bond, but it does not yet provide a universal interaction-driven rule that spontaneously identifies an existing bond as unstable and ruptures it. The experimental chemistry system must support both formation and rupture; otherwise chemistry would be artificially one-directional.
+
+Likewise, **COMBINE should not be an organism command**. Physical contact and compatible geometry may make a new formation possible, but whether a bond actually forms is determined by the universal transition rules. The organism can influence contact and arrangement through physical behavior; it cannot simply command an impossible chemical combination.
+
+### Structural versus nonstructural material
+
+A key experimental hypothesis is to distinguish persistent **structural material** from **nonstructural material within an organism's accessible internal volume** without creating specialized biological organelles.
+
+Structural material participates in the organism's persistent physical graph and remains subject to formation chemistry. Nonstructural material is physically present inside the organism but is not yet part of that structural graph. The organism should be able to manipulate nonstructural material within its accessible boundary—moving it, positioning it, separating it, or bringing it into contact—while the chemistry system still determines which structural transitions are actually possible.
+
+In other words:
+
+    organism controls arrangement
+    chemistry controls what arrangements can actually do
+
+This is intended to provide a path for continuous growth without designing a dedicated "combine organelle," "break organelle," digestive organelle, metabolic organelle, or other pre-specified chemical machinery into the initial cell. Material could enter the organism, remain nonstructural, be physically manipulated, undergo valid chemical transitions, and potentially become structural material if the resulting formation is physically and chemically valid.
+
+The word **freely** here means freedom of physical manipulation within the organism's accessible region, not arbitrary violation of chemistry. The organism cannot simply force an incompatible bond to form or destroy a chemically stable bond because it wants to; those outcomes remain consequences of the universal transition system.
+
+### Permeable, stable formations
+
+The chemistry system should permit formations whose ordinary physical consequences produce useful combinations of stability and permeability without declaring them to be membranes or organelles. For example, different compositions/topologies/geometries may naturally produce:
+
+- dense, mechanically stable, minimally reactive structural material;
+- thin or loosely bonded boundary formations that remain stable while allowing substantial material passage;
+- open or porous formations with high permeability and different mechanical stability.
+
+Permeability should therefore be derived from physical formation and interaction behavior wherever possible rather than introduced as a special biological field. The goal is for a primitive organism to be able to acquire and manipulate material across or within a boundary using the same physical rules available to everything else.
+
+This is a hypothesis to test, not an assertion that the current resource catalogue already contains a sufficient membrane-like formation. The first chemistry experiments should determine whether the existing primitives actually produce stable, minimally reactive, sufficiently permeable formations.
+
+### Runtime and scaling principle
+
+Chemistry should not require scanning all environmental material pairs or maintaining a global registry of every active interface. That approach does not scale to large populations. The intended architecture is for formations/materials to carry or reference compact, reusable interaction information derived from canonical formation structure, so runtime behavior is primarily **lookup -> evaluate/apply transition -> realize physical result**, rather than repeatedly solving a chemistry problem from scratch.
+
+The construction/geometry library is the natural place to derive and cache reusable information for canonical formations and interfaces. This must not become a precomputed table of every possible formation against every other formation. Reusable interaction signatures should be compositional and based on the same four foundational inputs.
+
+### Emergence test
+
+The chemistry system must be tested against a deliberately simple initial organism rather than designing the organism around expected chemistry. In particular, we should ask whether a primitive qualifying-genome cell can, without predesigned chemical organelles:
+
+1. acquire material;
+2. manipulate nonstructural material inside its accessible boundary;
+3. undergo valid formation transitions, including both bond formation and bond rupture;
+4. incorporate useful resulting material into its structure;
+5. maintain a stable boundary while permitting useful material passage;
+6. grow continuously and eventually reproduce.
+
+If this fails, the first response should be to identify which physical/chemical primitive is insufficient—not to add an organelle whose sole purpose is to make the desired chemistry happen.
+
+If the system later produces internal specialization, compartmentalization, selective permeability, or organelle-like structures because those formations improve survival or reproduction, those structures should be treated as emergent evolutionary solutions rather than requirements baked into the initial cell.
+
 ## Project direction
 
 The long-term goal remains an open-ended simulation in which organisms can develop structure, acquire resources, sense their environment, reproduce, form niches, and potentially evolve multicellular cooperation from the same general physical and behavioral mechanisms.
