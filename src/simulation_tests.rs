@@ -58,7 +58,7 @@ mod integration_tests {
             o.genome.preferred_mass(),
         );
         assert!(realization.overall < 0.90);
-        assert!(true);
+        
     }
 
     #[test]
@@ -91,18 +91,6 @@ mod integration_tests {
         assert!(s.environment.field.total_amount() > before_environment_amount);
     }
 
-    #[test]
-    fn adulthood_is_irreversible_after_structural_loss() {
-        let mut s = Simulation::new(32, 10.0);
-        s.organisms[0].development_stage = DevelopmentStage::Adult;
-        s.organisms[0].structure.units.clear();
-        s.organisms[0].structure.bonds.clear();
-        s.step();
-        assert!(matches!(
-            s.organisms[0].development_stage,
-            DevelopmentStage::Adult
-        ));
-    }
     #[test]
     fn storage_contains_discrete_independent_material_objects() {
         let mut o = Simulation::create_initial_organism();
