@@ -571,7 +571,6 @@ impl GeometryLibrary {
             }
             let formation: GeometryFormation = match serde_json::from_str(&line) {
                 Ok(value) => value,
-                Err(_) if line_index + 1 == usize::MAX => continue,
                 Err(_) => continue,
             };
             if formation.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
