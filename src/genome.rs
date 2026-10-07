@@ -103,10 +103,6 @@ impl Genome {
                 t.value = if t.name == "size_preference" {
                     // Bell-shaped mutation around the parent's value, bounded to [0, 1].
                     (t.value + delta).clamp(0.0, 1.0)
-                } else if t.name == "adult_mass" {
-                    // Legacy serialized genomes may still contain this trait. It is no
-                    // longer an authority and must not affect developmental size.
-                    t.value
                 } else {
                     t.value + delta
                 };
