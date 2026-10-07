@@ -3,7 +3,7 @@
 //! The original viable seed realization is retained only as a physical
 //! construction calibration baseline. Developmental fields, not this baseline,
 //! determine descendant growth and realized architecture.
-use crate::juvenile_requirements::{validate_realized_juvenile, JuvenileViabilityRequirements};
+use crate::organism_viability::{validate_realized_organism, OrganismViabilityRequirements};
 use crate::resources::BaseResource;
 use crate::state::EnergyLedger;
 use crate::structural_blueprint::StructuralBlueprint;
@@ -167,10 +167,10 @@ pub(crate) fn realize_initial_with_reserve(
     reserve_energy: f64,
 ) -> Result<(OrganismStructure, EnergyLedger, f64), String> {
     if !blueprint.is_valid() {
-        return Err("juvenile construction target is invalid".into());
+        return Err("initial construction target is invalid".into());
     }
     if !reserve_energy.is_finite() || reserve_energy <= 0.0 {
-        return Err("juvenile energy reserve must be finite and positive".into());
+        return Err("initial reproductive energy allocation must be finite and positive".into());
     }
 
     let mut trial_ledger = EnergyLedger::default();
@@ -202,10 +202,10 @@ pub(crate) fn realize_initial_with_reserve(
         ));
     }
 
-    validate_realized_juvenile(
+    validate_realized_organism(
         &structure,
         catalog,
-        JuvenileViabilityRequirements::default(),
+        OrganismViabilityRequirements::default(),
     )?;
 
     let cavity = crate::cavity::analyze_genome_cavity(&structure, catalog)?.ok_or_else(|| {
