@@ -9,10 +9,10 @@ use crate::decision_runtime::{
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
 use crate::genome::initial_genome;
-use crate::state::{DevelopmentStage, EnergyLedger, Environment, Organism, Position, Simulation};
+use crate::state::{EnergyLedger, Environment, Organism, Position, Simulation};
 use crate::structure::Placement;
 
-const ADULTHOOD_GROWTH_FRACTION: f64 = 0.90;
+const BUDDING_AVAILABILITY_FRACTION: f64 = 0.90;
 
 impl Simulation {
     pub(crate) fn new(seed: u64, ticks_per_second: f64) -> Self {
@@ -103,7 +103,6 @@ impl Simulation {
             stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
             stored_material,
             structure,
-            development_stage: DevelopmentStage::Juvenile,
             active_transformation_id: None,
             active_movement: None,
             reproductive_construction: None,
@@ -193,35 +192,6 @@ impl Simulation {
         }
     }
 
-    fn update_development_stage(
-        organism: &mut Organism,
-        environment: &Environment,
-        seed_reference: Option<(f64, f64)>,
-    ) {
-        match organism.development_stage {
-            DevelopmentStage::Offspring => {
-                if organism.reproductive_construction.is_none() {
-                    organism.development_stage = DevelopmentStage::Juvenile
-                }
-            }
-            DevelopmentStage::Juvenile => {
-                if seed_reference
-                    .map(|reference| {
-                        crate::developmental_decision::growth_fraction_for_reference(
-                            organism,
-                            environment,
-                            reference,
-                        )
-                    })
-                    .unwrap_or(0.0)
-                    >= ADULTHOOD_GROWTH_FRACTION
-                {
-                    organism.development_stage = DevelopmentStage::Adult
-                }
-            }
-            DevelopmentStage::Adult => {}
-        }
-    }
     pub(crate) fn transfer_contained_environmental_material(
         organism: &mut Organism,
         environment: &mut Environment,
@@ -582,13 +552,13 @@ impl Simulation {
         // structure for every organism.
         let seed_reference = self.seed_scale_reference;
         for organism in &mut self.organisms {
-            Self::update_development_stage(organism, &self.environment, seed_reference);
             organism.apply_maintenance(&self.environment.catalog, &mut self.energy_ledger);
             crate::harmonics::update_organism_harmonics(organism, &self.environment);
             crate::memory::update_experience_memory(organism, &self.environment);
-            if matches!(organism.development_stage, DevelopmentStage::Adult)
-                && organism.reproductive_construction.is_none()
-            {
+            let budding_available = seed_reference
+                .and_then(|reference| organism.developmental_realization_cached_for_reference(&self.environment.catalog, reference))
+                .is_some_and(|realization| realization.overall > BUDDING_AVAILABILITY_FRACTION);
+            if budding_available && organism.reproductive_construction.is_none() {
                 let _ = crate::reproduction::begin_reproduction(
                     organism,
                     &mut self.rng,
