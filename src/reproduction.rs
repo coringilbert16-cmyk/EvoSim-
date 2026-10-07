@@ -514,7 +514,6 @@ fn anchor_structure(
         maintenance_debt: 0.0,
         stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
         stored_material: anchor_storage,
-        development_stage: DevelopmentStage::Juvenile,
         active_transformation_id: None,
         active_movement: None,
         reproductive_construction: None,
@@ -562,7 +561,7 @@ pub(crate) fn begin_reproduction(
     child_genome.mutate(rng);
     if child_genome.developmental_blueprint.validate().is_err()
         || !child_genome.reproductive_energy_allocation.is_finite()
-        || child_genome.juvenile_energy_reserve <= 0.0
+        || child_genome.reproductive_energy_allocation <= 0.0
     {
         return false;
     }
