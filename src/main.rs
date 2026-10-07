@@ -28,7 +28,7 @@ mod contact;
 mod initial_organism_constructor;
 mod interior_geometry;
 mod juvenile;
-mod juvenile_requirements;
+mod organism_viability;
 mod organism_geometry;
 mod physical_geometry;
 mod rigid_boundary;
