@@ -85,7 +85,7 @@ impl Simulation {
         }
 
         let construction_cost = (1.0e12 - construction.energy).max(0.0);
-        let initial_energy = construction_cost + genome.juvenile_energy_reserve;
+        let initial_energy = construction_cost + genome.reproductive_energy_allocation;
 
         Organism {
             id: "1".into(),
@@ -297,11 +297,7 @@ impl Simulation {
         }
         CurrentNeeds {
             survival,
-            reproduction: if matches!(organism.development_stage, DevelopmentStage::Adult) {
-                1.0
-            } else {
-                0.0
-            },
+            reproduction: if current_realization > 0.90 { 1.0 } else { 0.0 },
             development,
         }
     }
