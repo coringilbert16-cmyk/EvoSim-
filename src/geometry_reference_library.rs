@@ -557,7 +557,35 @@ impl GeometryLibrary {
         Ok(library)
     }
 
-    pub fn len(&self) -> usize {
+    pub fn load_formations_only(root: impl AsRef<Path>, catalog: &[BaseResource]) -> std::io::Result<Vec<GeometryFormation>> {
+        let path = root.as_ref().join("formations.jsonl");
+        let mut entries = BTreeMap::new();
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        let file = File::open(path)?;
+        for (line_index, line) in BufReader::new(file).lines().enumerate() {
+            let line = line?;
+            if line.trim().is_empty() {
+                continue;
+            }
+            let formation: GeometryFormation = match serde_json::from_str(&line) {
+                Ok(value) => value,
+                Err(_) if line_index + 1 == usize::MAX => continue,
+                Err(_) => continue,
+            };
+            if formation.schema_version != GEOMETRY_LIBRARY_SCHEMA_VERSION
+                || !validate_formation(&formation, catalog)
+                || formation.signature != formation.canonical_signature()
+            {
+                continue;
+            }
+            entries.insert(formation.signature.clone(), formation);
+        }
+        Ok(entries.into_values().collect())
+    }
+
+pub fn len(&self) -> usize {
         self.entries.len()
     }
 
