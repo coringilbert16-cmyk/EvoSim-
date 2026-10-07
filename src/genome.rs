@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use crate::developmental_blueprint::{
     default_developmental_blueprint, DevelopmentalFieldBlueprint,
 };
-use crate::resources::Material;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TraitDef {
@@ -19,10 +18,9 @@ pub struct TraitDef {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Genome {
     pub traits: Vec<TraitDef>,
-    #[serde(default = "default_juvenile_reserve")]
-    pub juvenile_reserve: Material,
-    #[serde(default = "default_juvenile_energy_reserve")]
-    pub juvenile_energy_reserve: f64,
+    /// Inherited energy allocation available to a newly constructed offspring during budding.
+    #[serde(default = "default_reproductive_energy_allocation", alias = "juvenile_energy_reserve")]
+    pub reproductive_energy_allocation: f64,
     /// Sole inherited structural-developmental authority. This stores continuous
     /// developmental tendencies, never exact constituent instances or topology.
     #[serde(default = "default_developmental_blueprint")]
@@ -60,7 +58,7 @@ impl Genome {
     ///
     /// M_MIN and M_MAX are experimental P6 parameter values, not permanent
     /// biological constants. The logarithmic mapping is the approved equation.
-    pub fn adult_mass(&self) -> f64 {
+    pub fn preferred_mass(&self) -> f64 {
         const M_MIN: f64 = 4.0; // EXPERIMENTAL: P6 developmental-size bound.
         const M_MAX: f64 = 225.0; // EXPERIMENTAL: chosen so default s=0.5 preserves 30.0.
         M_MIN * (M_MAX / M_MIN).powf(self.size_preference())
@@ -121,30 +119,6 @@ impl Genome {
     }
 }
 
-fn default_juvenile_reserve() -> Material {
-    Material {
-        parts: vec![
-            ("Carbon".into(), 1.0),
-            ("Carbon".into(), 1.0),
-            ("Sulfur".into(), 1.0),
-        ],
-        internal_bonds: vec![
-            crate::resources::InternalBond {
-                part_a: 0,
-                part_b: 1,
-            },
-            crate::resources::InternalBond {
-                part_a: 1,
-                part_b: 2,
-            },
-        ],
-    }
-}
-
-fn default_juvenile_energy_reserve() -> f64 {
-    16.0
-}
-
 fn gaussian_unit(rng: &mut ChaCha8Rng) -> f64 {
     let u1 = rng.gen_range(f64::MIN_POSITIVE..1.0);
     let u2 = rng.gen_range(0.0..1.0);
@@ -171,8 +145,7 @@ pub fn initial_genome() -> Genome {
             trait_def("movement_speed", 1.0, 0.05),
             trait_def("reproductive_investment", 0.5, 0.05),
         ],
-        juvenile_reserve: default_juvenile_reserve(),
-        juvenile_energy_reserve: default_juvenile_energy_reserve(),
+        reproductive_energy_allocation: default_reproductive_energy_allocation(),
         developmental_blueprint: default_developmental_blueprint(),
     }
 }
@@ -190,23 +163,7 @@ mod tests {
     fn size_preference_is_the_inherited_size_authority() {
         let genome = initial_genome();
         assert!((genome.size_preference() - 0.5).abs() < f64::EPSILON);
-        assert!((genome.adult_mass() - 30.0).abs() < 1e-9);
+        assert!((genome.preferred_mass() - 30.0).abs() < 1e-9);
     }
 
-    #[test]
-    fn reserves_remain_genome_defined() {
-        let genome = initial_genome();
-        assert!(genome.juvenile_reserve.is_valid());
-        assert_eq!(
-            genome.juvenile_reserve.parts,
-            vec![
-                ("Carbon".into(), 1.0),
-                ("Carbon".into(), 1.0),
-                ("Sulfur".into(), 1.0),
-            ]
-        );
-        assert_eq!(genome.juvenile_reserve.internal_bonds.len(), 2);
-        assert_eq!(genome.juvenile_reserve.total_amount(), 3.0);
-        assert!(genome.juvenile_energy_reserve.is_finite() && genome.juvenile_energy_reserve > 0.0);
-    }
 }
