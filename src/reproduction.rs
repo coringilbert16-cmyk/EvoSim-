@@ -417,15 +417,7 @@ fn developmental_linear_extent(structure: &OrganismStructure, origin: &Position)
         .fold(0.0, f64::max)
 }
 
-fn budding_scale_reached(
-    construction: &ReproductiveConstruction,
-    catalog: &[crate::resources::BaseResource],
-) -> bool {
-    let seed_reference = crate::juvenile::confirmed_seed_scale_reference(catalog).ok();
-    juvenile_scale_reached_with_reference(construction, catalog, seed_reference)
-}
-
-fn juvenile_scale_reached_with_reference(
+fn budding_scale_reached_with_reference(
     construction: &ReproductiveConstruction,
     catalog: &[crate::resources::BaseResource],
     seed_reference: Option<(f64, f64)>,
@@ -484,7 +476,7 @@ fn birth_ready_with_reference(
     {
         return false;
     }
-    juvenile_scale_reached_with_reference(construction, catalog, seed_reference)
+    budding_scale_reached_with_reference(construction, catalog, seed_reference)
 }
 
 fn anchor_structure(
@@ -780,7 +772,6 @@ pub(crate) fn finish_reproduction(
         maintenance_debt: construction.developing_maintenance_debt,
         stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
         stored_material: construction.committed_material,
-        development_stage: DevelopmentStage::Juvenile,
         active_transformation_id: None,
         active_movement: None,
         reproductive_construction: None,
