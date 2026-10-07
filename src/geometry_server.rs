@@ -43,15 +43,18 @@ async fn formation(Query(q):Query<FormationQuery>)->impl IntoResponse{
     let Ok(formations)=crate::geometry_reference_library::GeometryLibrary::load_formations_only("geometry_library/data",&cat)
         else{return Json(json!({"error":"library_unavailable"}))};
     let Some(f)=formations.into_iter().find(|f|f.signature==sig)else{return Json(json!({"error":"not_found"}))};
-    let constituents=f.constituents.iter().filter_map(|c|{
-        let resource=cat.iter().find(|r|r.name==c.resource)?;
-        Some(json!({
+    let mut constituents=Vec::with_capacity(f.constituents.len());
+    for c in &f.constituents {
+        let Some(resource)=cat.iter().find(|r|r.name==c.resource) else {
+            return Json(json!({"error":"catalog_resource_missing","resource":c.resource,"signature":f.signature}));
+        };
+        constituents.push(json!({
             "resource":c.resource,
             "placement":c.placement,
             "physical_state":resource.physical_state,
             "form":resource.shape.form.clone()
-        }))
-    }).collect::<Vec<_>>();
+        }));
+    }
     Json(json!({
         "formation":{
             "schema_version":f.schema_version,
