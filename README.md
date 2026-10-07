@@ -37,6 +37,35 @@ The final constructor should be forward-only and locally constructive:
 
 A blueprint, if used later, is only a preference. It must never become an authoritative future topology or placement command.
 
+## Growth, development, and reproduction
+
+The lifecycle model was simplified on 2026-10-07. EvoSim no longer uses Juvenile, Adult, or Offspring as biological lifecycle stages. There is no age-based maturation, adult-mass maturity gate, juvenile viability gate, or 40% reproductive threshold.
+
+Growth is continuous and is derived from the organism's realized physical structure against its inherited developmental preferences. The genome's size preference produces a **preferred mass**; it is a soft developmental preference, not a maturity authority and not a requirement that the organism reach an exact mass.
+
+A qualifying developmental realization above **0.90** makes budding available. This is an availability condition, not a lifecycle stage. Reproductive construction then proceeds as a separate physical developing organism graph attached to the parent by physical contact. The developing graph has its own genome, structure, stress, energy, and material accounting. Its inherited energy allocation is represented by `reproductive_energy_allocation`.
+
+The physical offspring graph is retained because it is required to model actual budding and detachment. It is not a biological "offspring stage" label. When the developing graph loses the required physical relationship to the parent, the physical graph can become a separate organism.
+
+The intended reproduction model is **80/80**: the reproducing organism grows to approximately 160% of its preferred scale and physically separates into two approximately 80% organisms. The current implementation has migrated away from lifecycle gating and the retired 40% rule, and its developing offspring construction currently uses an 80% preferred-scale readiness condition. The complete 160%-then-split physical implementation is **not yet complete** and must not be treated as finished.
+
+Construction may wait when required physical material is unavailable or cannot currently make a valid local bond. Waiting is a pending physical construction state, not a lifecycle state.
+
+### Migration status
+
+The following retired concepts have been removed from the live organism state:
+
+- `DevelopmentStage` and its Juvenile/Adult/Offspring variants;
+- age-based maturation;
+- adult-stage reproduction gating;
+- the old 40% developmental/reproduction gate;
+- the separate `juvenile_reserve` material concept;
+- the `adult_mass()` API, replaced by `preferred_mass()`.
+
+`juvenile_energy_reserve` remains only as a serialized compatibility alias for the renamed `reproductive_energy_allocation` field. It is not a lifecycle reserve.
+
+The physical construction/calibration module is still named `juvenile.rs` for now, but its retained seed machinery is a construction calibration artifact rather than a biological juvenile stage. The viability checks were moved to `organism_viability.rs` and now describe whole-organism physical viability.
+
 ## Immediate engineering plan
 
 The current priority is to make the initial constructor produce a valid organism in a timespan measured in milliseconds.
@@ -67,10 +96,10 @@ Work proceeds in this order:
 6. **Integrate waiting behavior where required.**
    - Resource shortage becomes a pending construction state rather than constructor failure or a simulation-thread block.
    - This is not yet part of the current catalog-backed genesis constructor.
-7. **Only then broaden validation.**
-   - Classify downstream failures by contract.
-   - Migrate tests that still encode retired assumptions.
-   - Run broader simulation/lifecycle validation after the construction layer is stable.
+7. **Keep lifecycle cleanup aligned with the physical model.**
+   - Retired lifecycle stages and maturity gates are no longer authoritative.
+   - Reproduction remains a physical developing graph and still requires the dedicated 160%-then-split migration.
+   - Migrate remaining tests and comments that still use retired juvenile/adult terminology.
 
 ## Construction invariants
 
