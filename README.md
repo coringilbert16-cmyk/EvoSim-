@@ -1,55 +1,55 @@
 # EvoSim
 
-EvoSim is an open-ended evolutionary organism simulation. The organism is built from physical material and physical bonds; the simulation should produce structure and behavior from general mechanisms rather than a fixed predator/prey or organism-size progression.
+EvoSim is an open-ended evolutionary organism simulation. Organisms are built from physical material and physical bonds; structure and behavior should emerge from general mechanisms rather than fixed predator/prey roles or a predefined organism-size progression.
 
 ## Current construction state
 
-The initial-organism constructor is currently in a **working-validation phase**.
+The initial-organism constructor is in a **transitional validation/migration phase**.
 
 The current implementation:
 
 - creates a deterministic physical Carbon scaffold;
 - creates each physical unit through the normal material/structure machinery;
-- forms every permanent connection through the normal physical bond transaction;
+- forms permanent connections through the normal physical bond transaction;
 - uses realized geometry and the realized bond graph for cavity analysis;
 - requires a qualifying genome cavity;
 - requires Water plus three additional acquirable resources;
-- checks acquisition by actual physical placement inside an accessible region;
-- performs no recursive body-plan search and has no arbitrary placement-attempt budget;
+- checks acquisition through physical placement in an accessible region;
+- does not use an arbitrary placement-attempt budget;
 - currently realizes genesis construction material from the catalog rather than waiting on environmental inventory.
 
-The current scaffold is **not the final constructor architecture**. It is a temporary deterministic construction baseline used to prove that the physical construction, bonding, cavity, and acquisition contracts can work quickly. The newly separated genome-phase entry point is an integration seam for replacing that baseline with the final free-form constructor; it does not make the blueprint authoritative topology acceptable as the final design.
+The current scaffold is **not the final constructor architecture**. It is a temporary deterministic baseline retained while the final free-form constructor is integrated and verified. The genome-phase entry point is an integration seam for that replacement; it does not make a blueprint an authoritative topology.
 
-The present scaffold is a fixed 54-unit Carbon geometry consisting of an inner ring, six radial supports, and an outer ring. Adjacent rigid units are sealed with distinct endpoint bonds at the two ends of each shared wall segment. This must not be confused with the intended final free-form constructor.
+The present scaffold is a fixed 54-unit Carbon geometry consisting of an inner ring, six radial supports, and an outer ring. Adjacent rigid units are sealed with distinct endpoint bonds at the two ends of each shared wall segment. This scaffold is a validation baseline, not the intended final organism-construction algorithm.
 
 ## Intended constructor architecture
 
-The final constructor should be forward-only and locally constructive:
+The final constructor is intended to be forward-only and locally constructive:
 
-1. start from the available physical starting material;
+1. start from available physical starting material;
 2. form a qualifying genome cavity;
 3. once the cavity qualifies as the genome, finish that construction phase;
 4. continue building the rest of the organism using locally valid physical bonds;
 5. require Water and at least three additional resources that the organism can physically acquire;
-6. if a required construction resource is temporarily unavailable during ordinary construction, wait without blocking the simulation;
+6. when ordinary construction temporarily lacks a required physical resource or a currently valid local continuation, wait rather than blocking the simulation or declaring permanent failure;
 7. never solve the entire future organism as a global placement problem;
 8. never backtrack already committed physical bonds.
 
-A blueprint, if used later, is only a preference. It must never become an authoritative future topology or placement command.
+A blueprint, if used, is only a preference. It must never become an authoritative future topology or placement command.
 
 ## Growth, development, and reproduction
 
-The lifecycle model was simplified on 2026-10-07. EvoSim no longer uses Juvenile, Adult, or Offspring as biological lifecycle stages. There is no age-based maturation, adult-mass maturity gate, juvenile viability gate, or 40% reproductive threshold.
+EvoSim uses continuous physical growth rather than biological Juvenile, Adult, or Offspring lifecycle stages. There is no age-based maturation, adult-mass maturity gate, juvenile viability gate, or 40% reproductive threshold.
 
 Growth is continuous and is derived from the organism's realized physical structure against its inherited developmental preferences. The genome's size preference produces a **preferred mass**; it is a soft developmental preference, not a maturity authority and not a requirement that the organism reach an exact mass.
 
-A qualifying developmental realization above **0.90** makes budding available. This is an availability condition, not a lifecycle stage. Reproductive construction then proceeds as a separate physical developing organism graph attached to the parent by physical contact. The developing graph has its own genome, structure, stress, energy, and material accounting. Its inherited energy allocation is represented by `reproductive_energy_allocation`.
+A qualifying developmental realization above **0.90** makes budding available. This is an availability condition, not a lifecycle stage. Reproductive construction proceeds as a separate physical developing organism graph attached to the parent by physical contact. The developing graph has its own genome, structure, stress, energy, and material accounting. Its inherited energy allocation is represented by `reproductive_energy_allocation`.
 
-The physical offspring graph is retained because it is required to model actual budding and detachment. It is not a biological "offspring stage" label. When the developing graph loses the required physical relationship to the parent, the physical graph can become a separate organism.
+The developing physical graph is retained because it is required to model actual budding and detachment. It is not a biological "offspring stage" label. When the physical relationship joining the developing graph to the parent is severed, graph separation can yield two independent organism graphs.
 
-The intended reproduction model is **80/80**: the reproducing organism grows to approximately 160% of its preferred scale and physically separates into two approximately 80% organisms. The current implementation has migrated away from lifecycle gating and the retired 40% rule, and its developing offspring construction currently uses an 80% preferred-scale readiness condition. The complete 160%-then-split physical implementation is **not yet complete** and must not be treated as finished.
+The intended reproduction model is **80/80**: the reproducing organism grows to approximately 160% of its preferred scale and physically separates into two approximately 80% organisms. The lifecycle gating and retired 40% rule have been removed, but the complete 160%-then-split physical implementation is **not yet complete**. The current developing construction uses an 80% preferred-scale readiness condition; that condition must not be confused with the finished 160%-then-split model.
 
-Construction may wait when required physical material is unavailable or cannot currently make a valid local bond. Waiting is a pending physical construction state, not a lifecycle state.
+Construction waiting is a physical construction state, not a lifecycle state. The construction runtime supports waiting when required physical material is unavailable or a valid local continuation cannot currently be made; final integration of that behavior into the catalog-backed genesis constructor remains unfinished.
 
 ### Migration status
 
@@ -62,58 +62,59 @@ The following retired concepts have been removed from the live organism state:
 - the separate `juvenile_reserve` material concept;
 - the `adult_mass()` API, replaced by `preferred_mass()`.
 
-`juvenile_energy_reserve` remains only as a serialized compatibility alias for the renamed `reproductive_energy_allocation` field. It is not a lifecycle reserve.
+The serialized field name `juvenile_energy_reserve` remains only as a backward-compatible alias for the renamed `reproductive_energy_allocation` field. It is not a lifecycle reserve.
 
-The physical construction/calibration module is still named `juvenile.rs` for now, but its retained seed machinery is a construction calibration artifact rather than a biological juvenile stage. The viability checks were moved to `organism_viability.rs` and now describe whole-organism physical viability.
+The physical construction/calibration module is still named `juvenile.rs`, but its retained seed machinery is a construction-calibration artifact rather than a biological juvenile stage. Physical viability checks live in `organism_viability.rs` and describe whole-organism physical viability.
 
 ## Immediate engineering plan
 
-The current priority is to make the initial constructor produce a valid organism in a timespan measured in milliseconds.
+The immediate priority is to replace the temporary genesis scaffold with the final local, free-form constructor while preserving the physical contracts already established.
 
-Work proceeds in this order:
-
-1. **Prove the current physical scaffold.**
-   - Identify the exact failing physical contract.
-   - Fix only genuine implementation defects.
-   - Keep construction deterministic and bounded.
+1. **Verify the current physical baseline.**
+   - Keep the deterministic scaffold only as a validation baseline.
+   - Fix genuine physical-contract defects rather than redesigning around downstream symptoms.
 2. **Make cavity formation a real construction milestone.**
-   - The construction runtime now has an explicit genome-phase entry point.
-   - It checks the realized physical graph immediately after committed construction/closure bonds.
-   - When the cavity qualifies, that phase returns immediately instead of treating the cavity as a post-build assertion.
-   - The current baseline still uses the temporary blueprint/scaffold to reach that milestone; it does not yet provide the final free-form topology.
-3. **Make bond-driven construction local and first-valid.**
-   - Exact boundary geometry is considered before declared blueprint pose.
-   - Face/edge alignment is preferred over arbitrary angular sampling.
-   - Once a physically valid continuation is found, it is committed immediately; the constructor does not continue searching for a "best" placement.
-   - No arbitrary angular sweep, candidate cap, timeout, or backtracking is used to control runtime.
-   - The remaining endpoint-pair search is transitional machinery and is the next target for replacement with direct frontier-feature construction.
+   - The construction runtime has an explicit genome-phase entry point.
+   - It checks the realized physical graph after committed construction/closure bonds.
+   - When the cavity qualifies, that phase returns immediately rather than treating the cavity as a post-build assertion.
+   - The current baseline still uses the temporary scaffold to reach that milestone; it does not yet provide the final free-form topology.
+3. **Replace transitional endpoint search with direct local construction.**
+   - Exact boundary geometry is authoritative for physical placement.
+   - Face/edge/surface contact is preferred over arbitrary angular sampling.
+   - Once a physically valid continuation is selected, it is committed immediately; the constructor does not continue searching for a globally "best" placement.
+   - No arbitrary angular sweep, candidate cap, timeout, or backtracking should be introduced as a runtime-control mechanism.
+   - The remaining endpoint-pair search is transitional machinery to be replaced by direct frontier-feature construction as the geometry reference library becomes usable by the constructor.
 4. **Build the remainder locally.**
    - Replace the temporary fixed scaffold with the intended free-form constructive mechanism.
    - Select only from geometrically valid local continuations.
    - Commit bonds immediately; no global search or backtracking.
 5. **Verify acquisition.**
    - Water plus any three additional resources must each be physically acquirable.
-6. **Integrate waiting behavior where required.**
+6. **Integrate waiting behavior into final genesis construction.**
    - Resource shortage becomes a pending construction state rather than constructor failure or a simulation-thread block.
-   - This is not yet part of the current catalog-backed genesis constructor.
-7. **Keep lifecycle cleanup aligned with the physical model.**
-   - Retired lifecycle stages and maturity gates are no longer authoritative.
-   - Reproduction remains a physical developing graph and still requires the dedicated 160%-then-split migration.
-   - Migrate remaining tests and comments that still use retired juvenile/adult terminology.
+   - The current catalog-backed genesis path does not yet provide this final behavior.
+7. **Finish the physical 80/80 reproduction migration.**
+   - Implement the full approximately 160% growth condition.
+   - Physically split the parent/developing graph into two approximately 80% organism graphs.
+   - Preserve physical material, energy, genome, and structural validity through detachment.
+8. **Keep documentation and compatibility cleanup aligned with the current physical model.**
+   - Remove remaining retired lifecycle terminology from current documentation and tests.
+   - Retain historical material only where it is explicitly identified as historical.
+   - Rename `juvenile.rs` only when doing so no longer obscures active constructor work.
 
 ## Construction invariants
 
-These are the constraints that matter to the current construction work:
+These are the constraints that matter to current and final construction work:
 
 - Physical geometry is authoritative.
 - A permanent bond is created through the shared physical bond transaction.
 - Intended bond contact is distinct from unintended penetration.
-- Construction does not need a universal grid, 4N topology, or predefined cavity shape.
+- Construction does not require a universal grid, 4N topology, or predefined cavity shape.
 - The genome is defined by a qualifying realized cavity, not by a hard-coded core.
 - Water is a physical material when instantiated; it is not logical material placed into storage merely to satisfy a test.
 - Composite physical material retains its internal structure.
 - Acquisition is based on physical contact/overlap, not exact coordinate identity.
-- Constructor performance must come from direct construction and bounded local decisions, not from brute-force candidate enumeration.
+- Construction decisions are local and forward-only; performance should come from direct geometric construction rather than global brute-force enumeration.
 
 ## Verification discipline
 
@@ -122,9 +123,9 @@ For each change:
 1. inspect the exact code path and contract being changed;
 2. make the smallest isolated implementation change;
 3. run formatting and compilation;
-4. run focused constructor tests first;
+4. run focused tests for the changed contract first;
 5. inspect the actual failure before changing the next layer;
-6. only broaden the test scope after the focused contract is proven.
+6. broaden the test scope only after the focused contract is proven.
 
 Do not redesign the constructor in response to a downstream failure until the underlying construction contract has been verified.
 
@@ -132,8 +133,7 @@ Do not redesign the constructor in response to a downstream failure until the un
 
 The long-term goal remains an open-ended simulation in which organisms can develop structure, acquire resources, sense their environment, reproduce, form niches, and potentially evolve multicellular cooperation from the same general physical and behavioral mechanisms.
 
-The current bottleneck is narrower: **constructing the first valid organism correctly and quickly.**
-
+The current core bottleneck is narrower: **replacing the temporary fixed genesis scaffold with a valid, fast, local free-form constructor and then completing the physical 80/80 reproduction split.**
 
 ## Base-resource geometry
 
@@ -141,47 +141,53 @@ Hydrogen is a **rigid rectangle 1.0 units long × 0.1 units thick**. It is a fin
 
 ## Geometry Reference Library
 
-The geometry catalogue is being separated from the live organism constructor into a **persistent geometry reference library**. This is durable knowledge, not test state and not a per-construction search cache.
+The geometry catalogue is a **persistent geometry reference library** separated from live organism state. It is durable knowledge, not test state and not a per-construction search cache.
 
 The intended catalogue grows exhaustively from the smallest physical formations upward:
 
 1. record every valid single-resource geometry;
 2. enumerate every physically valid two-constituent combination, including repeated resources;
-3. derive every valid three-constituent formation from the validated smaller formations;
-4. continue the same physically reachable expansion through larger composites, eventually up to 20 constituent resources;
+3. derive every valid three-constituent formation from validated smaller formations;
+4. continue physically reachable expansion through larger composites, eventually up to 20 constituent resources;
 5. canonicalize equivalent formations so the library stores each physical geometry once;
 6. preserve the library across tests, process restarts, and constructor runs.
 
-The first implementation provides the persistent store, schema/versioning, canonical formation representation, independent geometry validation, durable JSONL storage, and base-resource seeding. The store lives outside target/ and therefore is not reset by normal Rust builds or test cleanup.
+The implementation provides the persistent store, schema/versioning, canonical formation representation, independent geometry validation, durable JSONL storage, base-resource seeding, and durable frontier/progress records. The store lives outside `target/` and therefore is not reset by normal Rust builds or test cleanup.
 
 ### Library rules
 
-- The library is **knowledge**, not authority for the live organism state. A constructor may later use it as a read-only source of known-valid continuations, but committed simulation bonds still go through the normal physical transaction.
+- The library is **knowledge, not authority for live organism state**. The constructor may use it as a read-only source of known-valid continuations, but committed simulation bonds still go through the normal physical transaction.
 - Validation is independent of discovery. A formation is stored only after resource/shape validity, bond topology, connectivity, and non-penetration checks succeed.
 - Global translation and rigid rotation are canonicalized. Reflections are **not** collapsed: a mirror image is a distinct physical formation unless the geometry itself makes it identical.
-- Repeated constituents are allowed. “20 constituents” means twenty physical pieces; it does not mean twenty distinct resource types.
+- Repeated constituents are allowed. "20 constituents" means twenty physical pieces; it does not mean twenty distinct resource types.
 - Water remains a real resource. Fluid formations without a finite boundary are represented without inventing rigid collision geometry; their context-fitting realization remains a separate physical-field concern.
 - Fluid-to-fluid contact is not a rigid bond. Combining fluid with the same fluid produces the same fluid shape with greater volume; the geometry library must not represent that operation as two bonded fluid constituents.
 - Floating-point coordinates are represented in canonical signatures with a fixed geometric quantization tolerance. The geometry schema and resource-shape catalogue are versioned so stale geometry cannot silently become current knowledge.
 - Tests use isolated temporary library roots. They must never mutate the persistent production catalogue.
 
-### Worker direction
+### Worker
 
-The next layer is the non-stop catalogue worker. It will load the persistent library, select an unexplored formation/frontier, generate exact geometry candidates, validate and canonicalize them, append only new formations, and durably record progress so it can resume after interruption. It will not use the constructor's old brute-force placement loop or an arbitrary attempt budget.
+The geometry worker is a persistent, resumable catalogue process. It loads the persistent library, selects unexplored formation/frontier work, generates exact geometry candidates, validates and canonicalizes them, appends only new formations, and durably records progress so it can resume after interruption. It does not use the constructor's old brute-force placement loop or an arbitrary attempt budget.
 
-The worker now expands from validated formations rather than repeatedly solving each composite from scratch. It persists a frontier record for every formation/resource expansion, resumes unfinished work after restart, and idles rather than hot-spinning when no work is currently available. It can be started with `cargo run -- --geometry-worker`. Continuous contact families are no longer treated as a problem to solve by placement sampling: the first exact fluid model uses 2-D zero-gravity Young–Laplace capillary equilibrium. For Water against a rigid edge, conserved area and the effective wetting contact angle determine a constant-curvature circular arc analytically; the remaining translational freedom is an interval along the exposed edge. The worker currently records such cases as `ContinuousFamilyPending` until that symbolic contact-family representation is persisted and can participate in later composite expansion. This makes the geometry library the long-lived reference layer that the constructor can eventually query instead of rediscovering the same geometry during every organism construction.
+The worker expands from validated formations rather than repeatedly solving each composite from scratch. It persists frontier records for formation/resource expansions, resumes unfinished work after restart, and idles rather than hot-spinning when no work is currently available. It can be started with `cargo run -- --geometry-worker`.
 
-### Current implementation milestone
+Continuous contact families are represented separately from rigid candidate placement. The current fluid model uses 2-D zero-gravity Young–Laplace capillary equilibrium. For Water against a rigid edge, conserved area and the effective wetting contact angle determine a constant-curvature circular arc analytically, with remaining translational freedom along the exposed edge. These cases are represented as continuous-family work rather than being approximated by arbitrary placement sampling. The representation and expansion of all continuous contact families are not yet exhaustive.
 
-**Implemented:** persistent library core, canonical formation schema, independent validation, durable append-only storage, version manifest, base-resource seeding, and focused persistence/canonicalization tests.
+The geometry library is intended to become the long-lived reference layer that the constructor can query instead of rediscovering the same geometry during every organism construction.
 
-**Not yet implemented:** proof of exhaustive completion for continuous contact families, constructor integration, and the final completeness audit of symmetry reduction. The non-stop worker process and durable frontier/progress records are now implemented; its general expansion path can grow validated formations through 20 constituents. Exact rigid feature-contact generation is implemented for the current finite polygon/line feature model, but continuous contact families are not yet claimed exhaustive.
+### Current implementation status
 
+**Implemented:** persistent library core, canonical formation schema, independent validation, durable append-only storage, version manifest, base-resource seeding, durable frontier/progress records, resumable worker process, exact rigid feature-contact generation for the current finite polygon/line feature model, and expansion through the currently implemented constituent range.
+
+**Still incomplete:** exhaustive representation and expansion of every continuous contact family, the final completeness audit of symmetry reduction, and integration of the library into the live organism constructor.
 
 ### Geometry library progress
 
-The library now includes exact feature-contact generation for two-constituent rigid formations and expansion to three constituents. Two-body seeding considers every base resource against every single-resource formation, validates candidates, canonicalizes them, and persists only new formations. Three-body expansion reuses validated two-body contacts. Every declared rigid bond must correspond to actual physical boundary contact without positive-area/interior penetration. Fluid-to-fluid combinations are deliberately not represented as rigid bonds because they merge into the same fluid geometry with increased volume. This path does not use arbitrary angular sampling or an attempt budget. Runtime rigid surface-contact candidates likewise use exact polygon edge feature relationships (intersections and endpoint-to-edge projections), rather than a sampled angular sweep. Continuous contact families are intentionally not yet claimed exhaustive; the library now records polygon edge/endpoint families and line endpoint-to-interior families exactly, while true line-interior/line-interior crossing manifolds still require their own explicit representation before completeness can be guaranteed.
+The library includes exact feature-contact generation for rigid formations and expansion from validated smaller formations. Two-body seeding considers base resources against single-resource formations, validates candidates, canonicalizes them, and persists only new formations. Three-body expansion reuses validated smaller contacts, and the worker architecture can continue the same expansion toward 20 constituents.
 
+Every declared rigid bond must correspond to actual physical boundary contact without positive-area/interior penetration. Fluid-to-fluid combinations are deliberately not represented as rigid bonds because they merge into the same fluid geometry with increased volume. The rigid path does not use arbitrary angular sampling or an attempt budget. Runtime rigid surface-contact candidates likewise use exact polygon feature relationships rather than a sampled angular sweep.
+
+Continuous contact families are intentionally not claimed exhaustive. The library has exact representations for the currently supported rigid and point/endpoint contact families, but additional continuous manifolds still require explicit representation before completeness can be guaranteed.
 
 ### Geometry canonicalization
 
@@ -189,15 +195,15 @@ The geometry library removes redundant local rotations that leave a constituent'
 
 ## Geometry Library Visualizer
 
-The geometry library now has a dedicated read-only browser microscope. It reads the persistent catalogue without participating in generation or modifying library state. The browser refreshes only the catalogue list every five seconds so newly recorded formations become visible; an already selected formation is not re-read or changed.
+The geometry library has a dedicated read-only browser microscope. It reads the persistent catalogue without participating in generation or modifying library state. The browser refreshes the catalogue list every five seconds so newly recorded formations become visible; an already selected formation is not re-read or changed.
 
 Run it with:
 
     cargo run -- --geometry-viewer
 
-Then open http://localhost:3001/geometry. The viewer supports:
+Then open `http://localhost:3001/geometry`. The viewer supports:
 
-- browsing every persisted formation, ordered from smallest to largest;
+- browsing persisted formations, ordered from smallest to largest;
 - filtering by constituent count or resource/signature text;
 - selecting a formation and seeing its actual constituent placements and shapes;
 - displaying the persisted bond topology;
