@@ -80,10 +80,10 @@ mod tests {
         let blueprint = confirmed_seed_baseline(&catalog).unwrap();
         let mut structure = blueprint.realize(&catalog).unwrap();
         structure.bonds.clear();
-        assert!(validate_realized_juvenile(
+        assert!(validate_realized_organism(
             &structure,
             &catalog,
-            JuvenileViabilityRequirements::default(),
+            OrganismViabilityRequirements::default(),
         )
         .is_err());
     }
