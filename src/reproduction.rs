@@ -821,7 +821,7 @@ mod tests {
     fn anchor_starts_a_separate_physical_child_graph() {
         let mut simulation = Simulation::new(7, 20.0);
         let mut parent = simulation.organisms.remove(0);
-        parent.        let parent_structure = parent.structure.clone();
+        let parent_structure = parent.structure.clone();
         let mut ledger = EnergyLedger::default();
         assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
         assert!(begin_reproduction(
