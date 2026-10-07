@@ -10,13 +10,11 @@
 //! path with the inherited developmental fields guiding valid opportunities.
 use crate::combine_runtime::DevelopmentalContext;
 use crate::energy_ledger::EnergyLedgerAuthority;
-use crate::juvenile_requirements::{validate_realized_juvenile, JuvenileViabilityRequirements};
+use crate::organism_viability::{validate_realized_organism, OrganismViabilityRequirements};
 use crate::material_storage::MaterialStorage;
 use crate::physical_material::PhysicalMaterial;
 use crate::resources::Material;
-use crate::state::{
-    DevelopmentStage, EnergyLedger, Environment, Organism, Position, ReproductiveConstruction,
-};
+use crate::state::{EnergyLedger, Environment, Organism, Position, ReproductiveConstruction};
 use crate::structure::OrganismStructure;
 use rand_chacha::ChaCha8Rng;
 
@@ -160,8 +158,7 @@ fn developing_organism(construction: &ReproductiveConstruction) -> Organism {
         maintenance_debt: construction.developing_maintenance_debt,
         stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
         stored_material: construction.committed_material.clone(),
-        development_stage: DevelopmentStage::Juvenile,
-        active_transformation_id: None,
+                active_transformation_id: None,
         active_movement: None,
         reproductive_construction: None,
         structure: construction.developing_structure.clone(),
@@ -390,7 +387,7 @@ fn preferred_length_with_reference(
     Some(
         genome
             .developmental_blueprint
-            .preferred_developmental_length(genome.adult_mass(), seed_mass, seed_length),
+            .preferred_developmental_length(genome.preferred_mass(), seed_mass, seed_length),
     )
 }
 
@@ -420,7 +417,7 @@ fn developmental_linear_extent(structure: &OrganismStructure, origin: &Position)
         .fold(0.0, f64::max)
 }
 
-fn juvenile_scale_reached(
+fn budding_scale_reached(
     construction: &ReproductiveConstruction,
     catalog: &[crate::resources::BaseResource],
 ) -> bool {
@@ -448,7 +445,7 @@ fn juvenile_scale_reached_with_reference(
         &construction.developing_structure,
         &construction.developmental_origin,
     ) + 1e-9
-        >= 0.40 * preferred
+        >= 0.80 * preferred
 }
 
 fn birth_ready(
@@ -478,10 +475,10 @@ fn birth_ready_with_reference(
     {
         return false;
     }
-    if validate_realized_juvenile(
+    if validate_realized_organism(
         &construction.developing_structure,
         catalog,
-        JuvenileViabilityRequirements::default(),
+        OrganismViabilityRequirements::default(),
     )
     .is_err()
     {
@@ -557,15 +554,14 @@ pub(crate) fn begin_reproduction(
     catalog: &[crate::resources::BaseResource],
     _ledger: &mut EnergyLedger,
 ) -> bool {
-    if !matches!(parent.development_stage, DevelopmentStage::Adult)
-        || parent.reproductive_construction.is_some()
+    if parent.reproductive_construction.is_some()
     {
         return false;
     }
     let mut child_genome = parent.genome.clone();
     child_genome.mutate(rng);
     if child_genome.developmental_blueprint.validate().is_err()
-        || !child_genome.juvenile_energy_reserve.is_finite()
+        || !child_genome.reproductive_energy_allocation.is_finite()
         || child_genome.juvenile_energy_reserve <= 0.0
     {
         return false;
@@ -642,7 +638,7 @@ pub(crate) fn advance_construction(
     parent_body: &crate::organism_geometry::OrganismBodyGeometry,
     seed_reference: Option<(f64, f64)>,
 ) -> (ConstructionStatus, Option<f64>) {
-    let reserve_energy = construction.child_genome.juvenile_energy_reserve;
+    let reserve_energy = construction.child_genome.reproductive_energy_allocation;
     if reserve_energy.is_finite() && reserve_energy > construction.developing_energy {
         let transfer =
             (reserve_energy - construction.developing_energy).min(parent_energy.max(0.0));
@@ -810,7 +806,7 @@ mod tests {
     use crate::state::Simulation;
 
     #[test]
-    fn developmental_scale_uses_approved_forty_percent_linear_target() {
+    fn developmental_scale_requires_eighty_percent_linear_target() {
         let catalog = default_catalog();
         let genome = initial_genome();
         let origin = Position { x: 0.0, y: 0.0 };
@@ -832,37 +828,10 @@ mod tests {
     }
 
     #[test]
-    fn reserve_requirement_is_genome_defined() {
-        let mut storage = MaterialStorage::default();
-        let genome = initial_genome();
-        let catalog = default_catalog();
-        let placements = vec![
-            crate::structure::Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            };
-            genome.juvenile_reserve.parts.len()
-        ];
-        let instance =
-            PhysicalMaterial::realized(genome.juvenile_reserve.clone(), placements, &catalog)
-                .expect("reserve must be physically realizable");
-        assert!(storage.store_physical_instance(instance));
-        assert_eq!(
-            storage
-                .take_matching(&genome.juvenile_reserve)
-                .map(|instance| instance.material),
-            Some(genome.juvenile_reserve.clone())
-        );
-        assert!(genome.juvenile_energy_reserve > 0.0);
-    }
-
-    #[test]
     fn anchor_starts_a_separate_physical_child_graph() {
         let mut simulation = Simulation::new(7, 20.0);
         let mut parent = simulation.organisms.remove(0);
-        parent.development_stage = DevelopmentStage::Adult;
-        let parent_structure = parent.structure.clone();
+        parent.        let parent_structure = parent.structure.clone();
         let mut ledger = EnergyLedger::default();
         assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
         assert!(begin_reproduction(
