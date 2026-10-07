@@ -856,7 +856,6 @@ mod tests {
             stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
             stored_material: crate::material_storage::MaterialStorage::default(),
             structure,
-            development_stage: crate::state::DevelopmentStage::Juvenile,
             active_transformation_id: None,
             active_movement: None,
             reproductive_construction: None,
