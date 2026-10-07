@@ -3,7 +3,7 @@ mod integration_tests {
     use crate::decision::ActionKind;
     use crate::physical_material::PhysicalMaterial;
     use crate::resources::{InternalBond, Material};
-    use crate::state::{DevelopmentStage, Simulation};
+    use crate::state::Simulation;
     use crate::structure::Placement;
 
     fn structured_carbon_hydrogen() -> Material {
@@ -17,7 +17,7 @@ mod integration_tests {
     }
 
     #[test]
-    fn fresh_organism_is_a_physically_realized_juvenile() {
+    fn fresh_organism_is_a_physically_realized_organism() {
         let o = Simulation::create_initial_organism();
         assert!(!o.structure.units.is_empty());
         assert!(crate::cavity::analyze_genome_cavity(
@@ -28,7 +28,6 @@ mod integration_tests {
         .is_some());
         assert!(!o.structure.units.is_empty());
         assert!(!o.stored_material.is_empty());
-        assert!(matches!(o.development_stage, DevelopmentStage::Juvenile));
         let stored = o.stored_material.materials_snapshot();
         assert_eq!(stored.len(), 4);
         assert!(stored
@@ -41,7 +40,7 @@ mod integration_tests {
                 .count(),
             3
         );
-        assert!(o.usable_energy >= o.genome.juvenile_energy_reserve);
+        assert!(o.usable_energy >= o.genome.reproductive_energy_allocation);
         assert!(o.decision_history.entries.is_empty());
     }
 
@@ -56,7 +55,7 @@ mod integration_tests {
             &catalog,
             (o.developmental_origin.x, o.developmental_origin.y),
             o.developmental_orientation_radians,
-            o.genome.adult_mass(),
+            o.genome.preferred_mass(),
         );
         assert!(realization.overall < 0.90);
         assert!(matches!(o.development_stage, DevelopmentStage::Juvenile));
