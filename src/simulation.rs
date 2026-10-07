@@ -284,7 +284,7 @@ impl Simulation {
         } else {
             0.0
         };
-        // A developmental material mismatch is itself developmental pressure:
+        // A developmental material mismatch contributes to continuous structural-development pressure:
         // the organism should seek material that matches its inherited
         // structural preference instead of accepting a structurally poor
         // substitute merely because one exists.
