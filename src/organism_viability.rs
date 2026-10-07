@@ -15,7 +15,7 @@ pub struct OrganismViabilityRequirements {
     pub require_extra_structure: bool,
 }
 
-impl Default for JuvenileViabilityRequirements {
+impl Default for OrganismViabilityRequirements {
     fn default() -> Self {
         Self {
             require_sealed_genome_cavity: true,
@@ -31,7 +31,7 @@ impl Default for JuvenileViabilityRequirements {
 pub fn validate_realized_organism(
     structure: &OrganismStructure,
     catalog: &[BaseResource],
-    requirements: JuvenileViabilityRequirements,
+    requirements: OrganismViabilityRequirements,
 ) -> Result<(), String> {
     let cavity = if requirements.require_sealed_genome_cavity {
         Some(analyze_genome_cavity(structure, catalog)?.ok_or_else(|| {
@@ -66,10 +66,10 @@ mod tests {
         let catalog = default_catalog();
         let blueprint = confirmed_seed_baseline(&catalog).unwrap();
         let (structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
-        validate_realized_juvenile(
+        validate_realized_organism(
             &structure,
             &catalog,
-            JuvenileViabilityRequirements::default(),
+            OrganismViabilityRequirements::default(),
         )
         .unwrap();
     }
