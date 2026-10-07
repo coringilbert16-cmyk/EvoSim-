@@ -14,12 +14,6 @@ use std::sync::Arc;
 pub(crate) struct AppState {
     pub(crate) simulation: Arc<tokio::sync::Mutex<crate::runtime::SimulationProcess>>,
 }
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub(crate) enum DevelopmentStage {
-    Offspring,
-    Juvenile,
-    Adult,
-}
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub(crate) struct Position {
     pub(crate) x: f64,
@@ -191,7 +185,6 @@ pub(crate) struct Organism {
     pub(crate) stress_threshold: f64,
     pub(crate) stored_material: MaterialStorage,
     pub(crate) structure: OrganismStructure,
-    pub(crate) development_stage: DevelopmentStage,
     pub(crate) active_transformation_id: Option<u64>,
     #[serde(default)]
     pub(crate) reproductive_construction: Option<ReproductiveConstruction>,
@@ -292,7 +285,7 @@ impl Organism {
             let preferred_length = self
                 .genome
                 .developmental_blueprint
-                .preferred_developmental_length(self.genome.adult_mass(), seed_mass, seed_length);
+                .preferred_developmental_length(self.genome.preferred_mass(), seed_mass, seed_length);
             self.cached_developmental_realization =
                 Some(self.genome.developmental_blueprint.realization_at_length(
                     &self.structure,
