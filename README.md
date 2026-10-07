@@ -131,80 +131,158 @@ Do not redesign the constructor in response to a downstream failure until the un
 
 ## Experimental chemistry
 
-This section is **experimental planning only**. No implementation work is committed by this section. Chemistry work is intentionally deferred until Bob/the construction system and the Geometry Reference Library are substantially established.
+This section records the current chemistry model and design decisions. Chemistry is intentionally **primitive-driven and emergent**: acidity, toxicity, corrosion, catalysis, digestion, and selective chemical behavior are not dedicated fields or hard-coded organism abilities. They should arise from physical material, local chemical interaction, geometry, topology, bond stability, and the transitions those primitives permit.
 
-The working direction is to make **BREAK and COMBINE consequences of formation chemistry rather than organism actions**. An organism should not need a special Break or Combine command, nor should the initial cell be designed with organelles whose purpose is to perform those operations. Structural changes should arise from the same general physical/chemical transition system that governs all material interactions.
+### Formation chemistry
 
-### Foundational chemical inputs
+**BREAK and COMBINE are chemistry/formation consequences, not organism actions.** Organisms do not issue Break or Combine commands and the initial cell does not contain dedicated chemistry organelles. Organisms influence contact and arrangement through physical behavior; chemistry determines whether a resulting interaction can actually change material.
 
-The proposed interaction system derives local chemical behavior from four foundational inputs:
+The universal transition path is:
+
+    local encounter
+        -> evaluate material and interface
+        -> accumulate interaction
+        -> reach a transition threshold
+        -> no change, bond formation, bond rupture, rearrangement,
+           separation, deformation/material transfer, or another valid transition
+        -> realize the resulting physical state
+
+Favorable interaction is therefore not instantaneous. Contact can produce an interaction without immediately forming or breaking a bond.
+
+### Foundational inputs
+
+Local chemistry derives from:
 
 1. **Composition** — constituent identities and quantities;
-2. **Bonded structure/topology** — which constituents are connected and how the formation is structurally arranged;
-3. **Exposed geometry** — the actual exposed surfaces/features and their relative physical contact configuration;
-4. **Bond strength / formation energy** — the energetic strength of the existing and newly formed bonds.
+2. **Bonded topology** — which constituents are connected and how they are arranged;
+3. **Exposed geometry** — actual exposed surfaces/features and physical contact;
+4. **Bond strength and formation energy** — stability and energetic cost of existing/new bonds;
+5. **Chemical position** — each base resource's position on the ordered chemical spectrum.
 
-These are intended to describe a formation without introducing hard-coded properties such as toxicity, acidity, or food value. Such behaviors should emerge from the transitions that formations permit and the consequences of those transitions.
+Mass, potential energy, cohesion, geometry, topology, bond energy, and chemical position remain distinct concepts. No single aggregate value should silently replace them.
 
-The desired universal transition model is approximately:
+### Chemical spectrum
 
-    interaction of formations
-        -> evaluate composition, topology, exposed geometry, and bond strength/energy
-        -> determine whether a structural transition is permitted
-        -> no change, bond formation, bond rupture, rearrangement, separation, or another valid transition
-        -> realize the resulting physical formation
+Chemical position is an ordered **1–14 scale**, analogous to an acid/base scale but **not literal pH chemistry**:
 
-**Natural BREAK must be supported as a chemical transition.** The current code can split a material when explicitly instructed to break an internal bond, but it does not yet provide a universal interaction-driven rule that spontaneously identifies an existing bond as unstable and ruptures it. The experimental chemistry system must support both formation and rupture; otherwise chemistry would be artificially one-directional.
+    1 — 2 — 3 — 4 — 5 — 6 — [7 Water] — 8 — 9 — 10 — 11 — 12 — 13 — 14
 
-Likewise, **COMBINE should not be an organism command**. Physical contact and compatible geometry may make a new formation possible, but whether a bond actually forms is determined by the universal transition rules. The organism can influence contact and arrangement through physical behavior; it cannot simply command an impossible chemical combination.
+There are seven base resources: Water plus three resources on each side. Water is the midpoint at **7**. The three resources on each side are intended to be almost, but not quite, mirrored around Water. The exact resource-to-position mapping remains an explicit decision to finish before implementation.
 
-### Structural versus nonstructural material
+Chemical position is **not a reactivity magnitude**. It describes position on the spectrum. For a local pair:
 
-A key experimental hypothesis is to distinguish persistent **structural material** from **nonstructural material within an organism's accessible internal volume** without creating specialized biological organelles.
+    D = |position_A - position_B|
 
-Structural material participates in the organism's persistent physical graph and remains subject to formation chemistry. Nonstructural material is physically present inside the organism but is not yet part of that structural graph. The organism should be able to manipulate nonstructural material within its accessible boundary—moving it, positioning it, separating it, or bringing it into contact—while the chemistry system still determines which structural transitions are actually possible.
+D is the fundamental chemical separation. Greater separation means greater chemical opposition and therefore a stronger tendency to interact; nearby positions have less opposition.
 
-In other words:
+Chemistry must never average positions across a formation. A formation containing positions 2 and 12 is not chemically equivalent to a pure position-7 material. Multi-constituent chemistry must preserve the constituent identities and local interactions.
+
+Interaction strength should be a **bounded nonlinear function of D**, not simply D. Greater opposition must not produce less interaction. The exact curve remains an empirical tuning decision.
+
+Chemical position is also separate from potential energy. Chemical separation describes interaction tendency; potential energy and bond energy describe energetic consequences.
+
+### Local interaction, timing, and bonds
+
+Chemistry is local. EvoSim must not globally scan every environmental material pair or maintain a registry of every active interface.
+
+A local encounter produces an interaction that can accumulate over ticks:
+
+    encounter -> interaction -> accumulation -> threshold -> transition
+
+Strong interactions may cross a threshold quickly; weak interactions may require longer contact. Physical geometry and contact determine whether and how strongly an interface is engaged. Penetration is never a substitute for contact.
+
+Existing bonds have their own stability/energy. Chemical opposition must accumulate enough effective interaction to overcome relevant structural stability before rupture or rearrangement can occur. Strong chemistry cannot teleport through a strong structure.
+
+The exact coupling among chemical separation, cohesion, bond energy, and accumulated interaction is a remaining fine-detail decision; they must not be collapsed into one generic reactivity value.
+
+### Multiple constituents and rupture
+
+A formation must not be reduced to whichever two materials happen to be adjacent, nor to a formation-wide average.
+
+The first layer is **local constituent-pair interaction** at actual interfaces. The second is **recurring/coherent pattern detection** across those local interactions. When multiple local interactions repeatedly produce a coherent structural/energetic consequence, that pattern can justify a larger formation transition.
+
+The system must not assume in advance that the weakest bond, strongest bond, or one interface bond is always the one that breaks. Whether rupture is localized or distributed is an experimental question; the affected region should follow the interaction pattern.
+
+**Natural BREAK is required.** The current code can explicitly split an internal bond when instructed, but chemistry must eventually identify when ordinary local interaction makes an existing structure unstable and rupture it without an organism Break command.
+
+COMBINE follows the same rule: physical contact and compatible geometry make a formation possible, but only the universal transition rules permit the new bond.
+
+Products are not selected from a hard-coded product catalogue. Existing physical constituents and topology are transformed and then physically realized. For example:
+
+    A—B -> A + B
+    A + B -> A—B
+    A—B—C -> A—C + B
+
+### Energy conservation
+
+Chemical transitions must conserve energy. Chemical interaction is not automatically usable organism energy.
+
+Transition energy may be stored in newly formed bonds, released from broken bonds, transferred into usable organism energy, become heat/environmental energy, become kinetic movement, or remain associated with transferred/expelled material. Not every reaction must yield usable energy.
+
+### Structural and nonstructural material
+
+Material inside an organism may be persistent **structural material** or **nonstructural material within its accessible internal volume**.
+
+Structural material participates in the persistent physical graph. Nonstructural material is physically present but is not yet part of that structural graph. The organism can manipulate nonstructural material by moving, positioning, separating, or contacting it; chemistry still determines which arrangements can produce structural transitions.
 
     organism controls arrangement
     chemistry controls what arrangements can actually do
 
-This is intended to provide a path for continuous growth without designing a dedicated "combine organelle," "break organelle," digestive organelle, metabolic organelle, or other pre-specified chemical machinery into the initial cell. Material could enter the organism, remain nonstructural, be physically manipulated, undergo valid chemical transitions, and potentially become structural material if the resulting formation is physically and chemically valid.
+This deliberately provides no dedicated digestive, metabolic, combine, or break organelle.
 
-The word **freely** here means freedom of physical manipulation within the organism's accessible region, not arbitrary violation of chemistry. The organism cannot simply force an incompatible bond to form or destroy a chemically stable bond because it wants to; those outcomes remain consequences of the universal transition system.
+### Fluids
 
-### Permeable, stable formations
+Fluids use the same chemistry rules as rigid material. Their distinction is physical state: fluids flow, deform, and can pass through permeable structures, rather than acquiring rigid structural bonds simply because fluid pieces touch.
 
-The chemistry system should permit formations whose ordinary physical consequences produce useful combinations of stability and permeability without declaring them to be membranes or organelles. For example, different compositions/topologies/geometries may naturally produce:
+Water remains a real constituent at spectrum position 7 while retaining its existing continuous-fluid physical model.
 
-- dense, mechanically stable, minimally reactive structural material;
-- thin or loosely bonded boundary formations that remain stable while allowing substantial material passage;
-- open or porous formations with high permeability and different mechanical stability.
+### Emergent properties
 
-Permeability should therefore be derived from physical formation and interaction behavior wherever possible rather than introduced as a special biological field. The goal is for a primitive organism to be able to acquire and manipulate material across or within a boundary using the same physical rules available to everything else.
+Acidity, toxicity, corrosion, catalysis, digestion, and similar effects are expected **consequences**, not fields. A material that repeatedly damages another formation through permitted transitions can therefore behave corrosively without a corrosiveness property; a material that disrupts another formation can behave toxically without a toxicity field.
 
-This is a hypothesis to test, not an assertion that the current resource catalogue already contains a sufficient membrane-like formation. The first chemistry experiments should determine whether the existing primitives actually produce stable, minimally reactive, sufficiently permeable formations.
+If an expected phenomenon cannot emerge, first identify which physical/chemical primitive is insufficient rather than adding a dedicated organelle or property.
 
-### Runtime and scaling principle
+### Reusable chemistry information and scaling
 
-Chemistry should not require scanning all environmental material pairs or maintaining a global registry of every active interface. That approach does not scale to large populations. The intended architecture is for formations/materials to carry or reference compact, reusable interaction information derived from canonical formation structure, so runtime behavior is primarily **lookup -> evaluate/apply transition -> realize physical result**, rather than repeatedly solving a chemistry problem from scratch.
+Canonical formations may carry or reference compact reusable interaction signatures derived from composition, topology, exposed geometry, bond structure, and constituent chemical positions.
 
-The construction/geometry library is the natural place to derive and cache reusable information for canonical formations and interfaces. This must not become a precomputed table of every possible formation against every other formation. Reusable interaction signatures should be compositional and based on the same four foundational inputs.
+Runtime should approach:
 
-### Emergence test
+    lookup reusable information
+        -> evaluate local interface
+        -> accumulate/apply transition
+        -> realize physical result
 
-The chemistry system must be tested against a deliberately simple initial organism rather than designing the organism around expected chemistry. In particular, we should ask whether a primitive qualifying-genome cell can, without predesigned chemical organelles:
+The system must **not** precompute every formation × formation reaction. The Geometry Reference Library can cache reusable formation/interface information, but that information must remain compositional and reusable rather than becoming an exhaustive reaction table.
 
-1. acquire material;
-2. manipulate nonstructural material inside its accessible boundary;
-3. undergo valid formation transitions, including both bond formation and bond rupture;
-4. incorporate useful resulting material into its structure;
-5. maintain a stable boundary while permitting useful material passage;
-6. grow continuously and eventually reproduce.
+### Harmonics and constructor separation
 
-If this fails, the first response should be to identify which physical/chemical primitive is insufficient—not to add an organelle whose sole purpose is to make the desired chemistry happen.
+Chemical position is temporarily **decoupled from harmonics**. Resonance must not automatically use distance from Water; any future chemistry/resonance relationship must be demonstrated rather than assumed.
 
-If the system later produces internal specialization, compartmentalization, selective permeability, or organelle-like structures because those formations improve survival or reproduction, those structures should be treated as emergent evolutionary solutions rather than requirements baked into the initial cell.
+Chemical position is also **not a constructor structural-similarity metric**. Constructor matching should use physical properties relevant to structure and geometry, allowing chemically different material to produce later chemical consequences.
+
+### Completion criteria
+
+Chemistry is sufficiently complete for integration when:
+
+1. local interaction derives from spectrum position rather than obsolete reactivity magnitude;
+2. chemical separation, bond stability, and potential/bond energy remain distinct;
+3. interaction accumulates over time;
+4. natural bond rupture and bond formation use the same transition framework;
+5. multi-constituent transitions can arise from recurring/coherent local patterns without a universal weakest-bond rule;
+6. energy is conserved;
+7. acidity/toxicity/catalysis/etc. require no dedicated fields or organelles;
+8. rigid and fluid material share chemical transition logic while retaining different physical states;
+9. runtime uses local lookup/evaluation rather than global pair scanning or an exhaustive formation-pair reaction table;
+10. a simple qualifying-genome organism can acquire, manipulate, transform, incorporate, and survive material using these primitives.
+
+This does not require predicting every chemistry before simulation. Remaining curve and transition details should be settled by focused experiments once the primitive interfaces exist.
+
+### Current status
+
+The above is the current design target. Implementation has not yet migrated the old reactivity equations to this model. The old exponential reactivity magnitude, potential-energy-difference direction, reactivity-weighted break yield, and chemistry-dependent constructor similarity are therefore transitional code, not authoritative chemistry.
+
+The immediate chemistry work is to finish the remaining fine-detail decisions, then perform a bounded migration of those obsolete equations without redesigning unrelated physical systems.
 
 ## Project direction
 
