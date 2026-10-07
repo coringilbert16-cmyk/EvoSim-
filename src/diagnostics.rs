@@ -5,7 +5,7 @@
 
 use crate::state::Simulation;
 use serde_json::{json, Value};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 
@@ -31,15 +31,12 @@ struct DiagnosticSummary {
     transformation_completions: u64,
     transformation_types: HashMap<String, u64>,
     structure_changes: u64,
-    lifecycle_changes: u64,
     min_growth_fraction: Option<f64>,
     max_growth_fraction: Option<f64>,
     min_energy: Option<f64>,
     max_energy: Option<f64>,
     min_stress: Option<f64>,
     max_stress: Option<f64>,
-    first_lifecycle_change_tick: Option<u64>,
-    last_lifecycle_change_tick: Option<u64>,
     first_transformation_tick: Option<u64>,
     last_transformation_tick: Option<u64>,
 }
@@ -53,7 +50,6 @@ struct SimulationSnapshot {
 
 #[derive(Clone)]
 struct OrganismSnapshot {
-    stage: Value,
     energy: f64,
     stress: f64,
     stress_threshold: f64,
@@ -136,7 +132,6 @@ impl DiagnosticsRecorder {
         self.record_transformation_starts(&before, &after)?;
         self.record_transformation_completions(&before, &after)?;
         self.record_structure_changes(&before, &after)?;
-        self.record_lifecycle_changes(&before, &after)?;
         self.record_movement_attempts(&after)?;
 
         self.write_tick_snapshot(&before, &after)?;
@@ -178,8 +173,6 @@ impl DiagnosticsRecorder {
                 (
                     organism.id.clone(),
                     OrganismSnapshot {
-                        stage: serde_json::to_value(&organism.development_stage)
-                            .unwrap_or(Value::Null),
                         energy: organism.usable_energy,
                         stress: organism.stress,
                         stress_threshold: organism.stress_threshold,
@@ -351,45 +344,6 @@ impl DiagnosticsRecorder {
         Ok(())
     }
 
-    fn record_lifecycle_changes(
-        &mut self,
-        before: &SimulationSnapshot,
-        after: &SimulationSnapshot,
-    ) -> std::io::Result<()> {
-        let ids: HashSet<_> = before
-            .organisms
-            .keys()
-            .chain(after.organisms.keys())
-            .cloned()
-            .collect();
-
-        for id in ids {
-            let old = before.organisms.get(&id).map(|o| o.stage.clone());
-            let new = after.organisms.get(&id).map(|o| o.stage.clone());
-            if old != new {
-                self.summary.lifecycle_changes += 1;
-                self.summary
-                    .first_lifecycle_change_tick
-                    .get_or_insert(after.tick);
-                self.summary.last_lifecycle_change_tick = Some(after.tick);
-                self.write_event(json!({
-                    "event": "lifecycle_change",
-                    "tick": after.tick,
-                    "organism_id": id,
-                    "from": old,
-                    "to": new,
-                    "growth_fraction": after.organisms.get(&id)
-                        .and_then(|o| o.developmental_growth_fraction),
-                    "structural_delta": structural_delta(
-                        before.organisms.get(&id),
-                        after.organisms.get(&id),
-                    ),
-                }))?;
-            }
-        }
-        Ok(())
-    }
-
     fn record_movement_attempts(&mut self, snapshot: &SimulationSnapshot) -> std::io::Result<()> {
         for (organism_id, organism) in &snapshot.organisms {
             let Some(attempt) = &organism.movement_attempt else {
@@ -456,7 +410,6 @@ impl DiagnosticsRecorder {
 
     fn state_json(&self, state: &OrganismSnapshot) -> Value {
         json!({
-            "stage": state.stage,
             "energy": state.energy,
             "stress": state.stress,
             "stress_threshold": state.stress_threshold,
