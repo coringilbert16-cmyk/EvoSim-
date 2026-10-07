@@ -9,7 +9,7 @@
 
 use crate::decision::{ActionKind, CurrentNeeds};
 use crate::decision_runtime::ActionCandidate;
-use crate::state::{DevelopmentStage, Environment, Organism};
+use crate::state::{Environment, Organism};
 
 pub(crate) struct DevelopmentalContext {
     pub(crate) blueprint: crate::developmental_blueprint::DevelopmentalFieldBlueprint,
@@ -26,9 +26,6 @@ pub(crate) fn context(
     environment: &Environment,
     seed_reference: (f64, f64),
 ) -> Option<DevelopmentalContext> {
-    if !matches!(organism.development_stage, DevelopmentStage::Juvenile) {
-        return None;
-    }
     let (seed_mass, seed_length) = seed_reference;
     let current_realization = organism
         .developmental_realization_cached_for_reference(&environment.catalog, seed_reference)
@@ -45,7 +42,7 @@ pub(crate) fn context(
     );
     let orientation = organism.developmental_orientation_radians;
     let preferred_length = blueprint.preferred_developmental_length(
-        organism.genome.adult_mass(),
+        organism.genome.preferred_mass(),
         seed_mass,
         seed_length,
     );
