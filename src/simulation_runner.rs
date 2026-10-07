@@ -1,4 +1,4 @@
-use crate::state::{DevelopmentStage, Simulation};
+use crate::state::Simulation;
 
 const DEFAULT_MAX_TICKS: u64 = 10_000;
 const DEFAULT_TARGET_BIRTHS: u64 = 3;
@@ -137,21 +137,6 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
 }
 
 fn report(simulation: &Simulation, label: &str) {
-    let offspring = simulation
-        .organisms
-        .iter()
-        .filter(|organism| matches!(organism.development_stage, DevelopmentStage::Offspring))
-        .count();
-    let juveniles = simulation
-        .organisms
-        .iter()
-        .filter(|organism| matches!(organism.development_stage, DevelopmentStage::Juvenile))
-        .count();
-    let adults = simulation
-        .organisms
-        .iter()
-        .filter(|organism| matches!(organism.development_stage, DevelopmentStage::Adult))
-        .count();
     let reproducing = simulation
         .organisms
         .iter()
@@ -159,12 +144,9 @@ fn report(simulation: &Simulation, label: &str) {
         .count();
 
     println!(
-        "[{label}] tick={} population={} offspring={} juvenile={} adult={} reproducing={}          decomposing_bodies={} active_transformations={} completed_births={}",
+        "[{label}] tick={} population={} reproducing={}          decomposing_bodies={} active_transformations={} completed_births={}",
         simulation.tick,
         simulation.organisms.len(),
-        offspring,
-        juveniles,
-        adults,
         reproducing,
         simulation.decomposing_bodies.len(),
         simulation.active_transformations.len(),
