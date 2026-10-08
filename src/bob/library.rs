@@ -3351,3 +3351,51 @@ pub fn open_default_library() -> std::io::Result<GeometryLibrary> {
     let catalog = default_catalog();
     GeometryLibrary::open("geometry_library/data", &catalog)
 }
+
+
+#[cfg(test)]
+mod knowledge_state_tests {
+    use super::*;
+
+    #[test]
+    fn bob_distinguishes_unknown_positive_and_negative_knowledge() {
+        let root = std::env::temp_dir().join(format!(
+            "evosim-bob-knowledge-state-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        let catalog = default_catalog();
+        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
+        let formation = GeometryFormation::single("Carbon");
+        let signature = formation.signature.clone();
+
+        assert_eq!(
+            library.knowledge_state("missing"),
+            GeometryKnowledgeState::Unknown
+        );
+        assert!(library.insert(formation, &catalog).unwrap());
+        assert_eq!(
+            library.knowledge_state(&signature),
+            GeometryKnowledgeState::KnownPositive
+        );
+
+        assert!(library
+            .insert_rejection("known-negative", "test rejection")
+            .unwrap());
+        assert_eq!(
+            library.knowledge_state("known-negative"),
+            GeometryKnowledgeState::KnownNegative
+        );
+
+        let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
+        assert_eq!(
+            reopened.knowledge_state("known-negative"),
+            GeometryKnowledgeState::KnownNegative
+        );
+        assert_eq!(
+            reopened.knowledge_state(&signature),
+            GeometryKnowledgeState::KnownPositive
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+}
