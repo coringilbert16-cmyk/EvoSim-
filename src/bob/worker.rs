@@ -141,11 +141,24 @@ fn evaluate_formation_chemistry(
         for candidate in candidates {
             let unit_a = &structure.units[bond.constituent_a];
             let unit_b = &structure.units[bond.constituent_b];
-            let properties_a = unit_a
-                .properties(catalog)
+            // Geometry formations contain named base-resource constituents.
+            // StructuralUnit::properties intentionally clears chemical_position
+            // for composite materials, so use the immutable base-resource
+            // properties here rather than losing chemistry even for a single
+            // constituent.
+            let properties_a = catalog
+                .iter()
+                .find(|resource| {
+                    resource.name == formation.constituents[bond.constituent_a].resource
+                })
+                .map(|resource| resource.properties)
                 .ok_or_else(|| std::io::Error::other("missing resource properties"))?;
-            let properties_b = unit_b
-                .properties(catalog)
+            let properties_b = catalog
+                .iter()
+                .find(|resource| {
+                    resource.name == formation.constituents[bond.constituent_b].resource
+                })
+                .map(|resource| resource.properties)
                 .ok_or_else(|| std::io::Error::other("missing resource properties"))?;
 
             let interface = crate::geometry_reference_library::resolve_live_contact_candidate(
