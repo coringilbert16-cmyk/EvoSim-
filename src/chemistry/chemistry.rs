@@ -182,7 +182,7 @@ pub fn chemical_break_surplus(reaction_energy: f64, disruption_cost: f64) -> Opt
 /// or extra threshold once the physical disruption requirement has been met.
 pub fn can_chemical_break(reaction_energy: f64, disruption_cost: f64) -> bool {
     chemical_break_surplus(reaction_energy, disruption_cost)
-        .is_some_and(|surplus| reaction_energy > 0.0 && surplus >= 0.0)
+        .is_some_and(|surplus| reaction_energy >= disruption_cost && reaction_energy > 0.0 && surplus >= 0.0)
 }
 
 /// Whether accumulated interaction has reached the calculated activation
