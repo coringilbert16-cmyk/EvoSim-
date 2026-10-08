@@ -807,6 +807,44 @@ pub fn len(&self) -> usize {
     /// generating formations or sampling orientations. Multiple formation
     /// records that describe the same local interface collapse to one
     /// canonical projection; genuinely different projections remain ambiguous.
+    pub fn persistent_interface_projection(
+        &self,
+        interface: &LiveGeometryInterface,
+    ) -> Option<String> {
+        let mut projections = BTreeMap::<String, ()>::new();
+        match interface.interface_class {
+            "rigid_edge" => {
+                if let Some((a, b)) = parse_edge_pair(&interface.signature) {
+                    for family in self.rigid_contact_families.values() {
+                        if edge_pair_matches_family(&a, &b, family) {
+                            projections.insert(rigid_family_projection(family), ());
+                        }
+                    }
+                }
+            }
+            "rigid_point" => {
+                if let Some((a, b)) = parse_edge_pair(&interface.signature) {
+                    for family in self.rigid_point_contact_families.values() {
+                        if edge_point_pair_matches_family(&a, &b, family) {
+                            projections.insert(point_family_projection(family), ());
+                        }
+                    }
+                }
+            }
+            "rigid_vertex" => {
+                if let Some((a, b)) = parse_edge_pair(&interface.signature) {
+                    for family in self.rigid_vertex_contact_families.values() {
+                        if edge_vertex_pair_matches_family(&a, &b, family) {
+                            projections.insert(vertex_family_projection(family), ());
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        (projections.len() == 1).then(|| projections.into_keys().next().unwrap())
+    }
+
     pub fn resolve_persistent_interface(
         &self,
         interface: &LiveGeometryInterface,
