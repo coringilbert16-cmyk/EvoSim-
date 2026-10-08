@@ -51,16 +51,11 @@ pub fn chemical_interaction(
 /// of that force over the remaining approach distance. If the constituents are
 /// already touching, no additional formation work is charged; the work that
 /// occurred during their earlier approach belongs to physical motion.
-pub fn formation_work_cost(
-    a: ResourceProperties,
-    b: ResourceProperties,
-    distance: f64,
-) -> f64 {
+pub fn formation_work_cost(a: ResourceProperties, b: ResourceProperties, distance: f64) -> f64 {
     if !distance.is_finite() || distance < 0.0 {
         return f64::NAN;
     }
-    let (Some(position_a), Some(position_b)) = (a.chemical_position, b.chemical_position)
-    else {
+    let (Some(position_a), Some(position_b)) = (a.chemical_position, b.chemical_position) else {
         return 0.0;
     };
     let Some(static_potential) =
@@ -76,7 +71,11 @@ pub fn formation_work_cost(
     // performed by attraction while the interface closes.
     let integral = d - (d * d / radius) + (d * d * d / (3.0 * radius * radius));
     let work = static_potential * force_scale * integral;
-    if work.is_finite() { work.max(0.0) } else { f64::NAN }
+    if work.is_finite() {
+        work.max(0.0)
+    } else {
+        f64::NAN
+    }
 }
 
 /// Intrinsic potential stored by a newly formed structural bond.
