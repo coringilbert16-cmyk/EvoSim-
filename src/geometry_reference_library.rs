@@ -10,7 +10,7 @@ use crate::material_geometry::{placed_forms_penetrate, placed_forms_rigid_contac
 use crate::resources::{default_catalog, BaseResource, Form};
 use crate::structure::{ConnectionEndpoint, Placement};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -542,9 +542,11 @@ pub struct GeometryLibrary {
     contact_families: BTreeMap<String, GeometryContactFamily>,
     fluid_boundary_families: BTreeMap<String, GeometryFluidBoundaryFamily>,
     rigid_contact_families: BTreeMap<String, GeometryRigidContactFamily>,
-    rigid_contact_index: BTreeMap<(String, usize, usize), Vec<String>>,
+    rigid_contact_index: HashMap<(String, usize, usize), Vec<String>>,
     rigid_point_contact_families: BTreeMap<String, GeometryRigidPointContactFamily>,
+    rigid_point_contact_index: HashMap<(String, usize, usize), Vec<String>>,
     rigid_vertex_contact_families: BTreeMap<String, GeometryRigidVertexContactFamily>,
+    rigid_vertex_contact_index: HashMap<(String, usize, usize), Vec<String>>,
 }
 
 impl GeometryLibrary {
@@ -725,7 +727,7 @@ impl GeometryLibrary {
             catalog,
         );
 
-        let mut rigid_contact_index = BTreeMap::<(String, usize, usize), Vec<String>>::new();
+        let mut rigid_contact_index = HashMap::<(String, usize, usize), Vec<String>>::new();
         for (signature, family) in &rigid_contact_families {
             rigid_contact_index
                 .entry((
@@ -735,6 +737,15 @@ impl GeometryLibrary {
                 ))
                 .or_default()
                 .push(signature.clone());
+        }
+
+        let mut rigid_point_contact_index = HashMap::<(String, usize, usize), Vec<String>>::new();
+        for (signature, family) in &rigid_point_contact_families {
+            rigid_point_contact_index.entry((family.candidate_resource.clone(), family.anchor_edge, family.candidate_endpoint)).or_default().push(signature.clone());
+        }
+        let mut rigid_vertex_contact_index = HashMap::<(String, usize, usize), Vec<String>>::new();
+        for (signature, family) in &rigid_vertex_contact_families {
+            rigid_vertex_contact_index.entry((family.candidate_resource.clone(), family.anchor_edge, family.candidate_vertex)).or_default().push(signature.clone());
         }
 
         let mut equivalence_index = BTreeMap::<String, Vec<String>>::new();
@@ -756,7 +767,9 @@ impl GeometryLibrary {
             rigid_contact_families,
             rigid_contact_index,
             rigid_point_contact_families,
+            rigid_point_contact_index,
             rigid_vertex_contact_families,
+            rigid_vertex_contact_index,
         };
         library.manifest.entries = library.entries.len() as u64;
         library.write_manifest()?;
