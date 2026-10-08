@@ -2017,6 +2017,47 @@ fn exposed_line_intervals(
                     let d = world_point(vertices[(edge + 1) % vertices.len()], other.placement);
                     let cross_c = dx * (c.1 - anchor_start.1) - dy * (c.0 - anchor_start.0);
                     let cross_d = dx * (d.1 - anchor_start.1) - dy * (d.0 - anchor_start.0);
+                    let t0 = ((c.0 - anchor_start.0) * dx + (c.1 - anchor_start.1) * dy) / length_sq;
+                    let t1 = ((d.0 - anchor_start.0) * dx + (d.1 - anchor_start.1) * dy) / length_sq;
+                    let lo = t0.min(t1).max(0.0);
+                    let hi = t0.max(t1).min(1.0);
+                    if hi - lo > 1e-10 {
+                        covered.push((lo, hi));
+                    }
+                }
+            }
+        }
+    }
+
+    covered.sort_by(|a, b| {
+        a.0.partial_cmp(&b.0)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    let mut out = Vec::new();
+    let mut cursor = 0.0;
+    for (start, end) in covered {
+        if start > cursor + 1e-10 {
+            out.push(ExposedEdgeInterval {
+                edge: 0,
+                start: cursor,
+                end: start.min(1.0),
+            });
+        }
+        cursor = cursor.max(end);
+        if cursor >= 1.0 - 1e-10 {
+            break;
+        }
+    }
+    if cursor < 1.0 - 1e-10 {
+        out.push(ExposedEdgeInterval {
+            edge: 0,
+            start: cursor,
+            end: 1.0,
+        });
+    }
+    out
+}
 
 #[cfg(test)]
 mod bob_lookup_contract_tests {
