@@ -97,6 +97,37 @@ pub fn accumulate_reaction(
     Some(next.max(0.0))
 }
 
+/// Energy left after the physical work required to disrupt an existing bond.
+///
+/// Chemical BREAK is not a random extra failure mode: a reaction can disrupt
+/// a bond only when the reaction has produced enough energy to overcome that
+/// bond's physical disruption requirement. The caller supplies both quantities
+/// because the chemistry model does not invent a bond-strength or activation
+/// parameter.
+pub fn chemical_break_surplus(
+    reaction_energy: f64,
+    disruption_cost: f64,
+) -> Option<f64> {
+    if !reaction_energy.is_finite()
+        || !disruption_cost.is_finite()
+        || reaction_energy < 0.0
+        || disruption_cost < 0.0
+    {
+        return None;
+    }
+
+    Some((reaction_energy - disruption_cost).max(0.0))
+}
+
+/// Whether a chemical reaction has enough energy to disrupt a particular bond.
+///
+/// Equality is sufficient: the reaction does not need an arbitrary probability
+/// or extra threshold once the physical disruption requirement has been met.
+pub fn can_chemical_break(reaction_energy: f64, disruption_cost: f64) -> bool {
+    chemical_break_surplus(reaction_energy, disruption_cost)
+        .is_some_and(|surplus| reaction_energy > 0.0 && surplus >= 0.0)
+}
+
 /// Whether accumulated interaction has reached the calculated activation
 /// barrier. The barrier itself is deliberately supplied by the caller because
 /// it depends on physical structure and interface state.
@@ -167,6 +198,14 @@ mod tests {
     fn reaction_dissipates_without_new_interaction() {
         let next = accumulate_reaction(1.0, 0.0, 1.0, 1.0, 0.25).unwrap();
         assert!((next - 0.75).abs() < 1e-12);
+    }
+
+    #[test]
+    fn chemical_break_requires_enough_reaction_energy() {
+        assert_eq!(chemical_break_surplus(4.0, 5.0), Some(0.0));
+        assert!(!can_chemical_break(4.0, 5.0));
+        assert!(can_chemical_break(5.0, 5.0));
+        assert_eq!(chemical_break_surplus(8.0, 5.0), Some(3.0));
     }
 
     #[test]
