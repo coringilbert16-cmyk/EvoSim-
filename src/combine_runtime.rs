@@ -1004,7 +1004,7 @@ pub(crate) fn try_combine(
     for ua in 0..organism.structure.units.len() {
         for ub in ua + 1..organism.structure.units.len() {
             for candidate in eligible_candidates(&organism.structure, ua, ub, catalog, cache) {
-                if let Some((evaluation, _, _, _, required)) =
+                if let Some((evaluation, _, _, required)) =
                     evaluate_candidate(&organism.structure, ua, ub, candidate, catalog)
                 {
                     let developmental_score = developmental
