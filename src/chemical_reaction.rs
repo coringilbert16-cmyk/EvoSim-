@@ -105,8 +105,10 @@ pub(crate) fn accumulate(
         // physical energy quantity consumed by the BREAK ledger transaction.
         let Some(reaction_energy) = crate::chemistry::normalized_chemistry_to_energy(next) else { continue };
         if crate::chemistry::activated(reaction_energy, barrier) {
-            let Some(disruption_cost) =
-                crate::transformation::break_work_cost(bond.strength) else { continue };
+            // The activation barrier is the physical disruption work for
+            // this realized bond. Reuse that exact quantity; do not calculate
+            // a second constituent-derived BREAK cost.
+            let disruption_cost = barrier;
             operations.push(ChemicalBreakOperation {
                 organism_id: organism.id.clone(),
                 bond,
