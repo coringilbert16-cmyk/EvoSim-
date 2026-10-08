@@ -38,6 +38,7 @@ mod surface_geometry;
 mod combine;
 mod combine_runtime;
 mod chemistry;
+mod chemical_reaction;
 mod chemistry_library;
 mod decomposition;
 mod diagnostics;
