@@ -797,7 +797,10 @@ mod shape_tests {
             .map(|i| distance(vertices[i], vertices[(i + 1) % vertices.len()]))
             .collect();
         for (actual, expected) in lengths.iter().zip([1.5, 0.5, 1.0, 0.5]) {
-            assert!((actual - expected).abs() < 1e-9, "edge lengths: {lengths:?}");
+            assert!(
+                (actual - expected).abs() < 1e-9,
+                "edge lengths: {lengths:?}"
+            );
         }
 
         let height = vertices[2].1 - vertices[1].1;
