@@ -190,7 +190,7 @@ pub struct ChemistryLibraryManifest {
 #[derive(Clone)]
 pub struct ChemistryLibrary {
     root: PathBuf,
-    entries: BTreeMap<String, ChemistryRecord>,
+    entries: BTreeMap<ChemistryKey, ChemistryRecord>,
     manifest: ChemistryLibraryManifest,
 }
 
@@ -217,7 +217,7 @@ impl ChemistryLibrary {
                     Err(e) => return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
                 };
                 if record.is_valid() {
-                    entries.insert(record.key.signature(), record);
+                    entries.insert(record.key.clone(), record);
                 }
             }
         }
@@ -244,7 +244,7 @@ impl ChemistryLibrary {
     }
 
     pub fn get(&self, key: &ChemistryKey) -> Option<&ChemistryRecord> {
-        self.entries.get(&key.signature())
+        self.entries.get(key)
     }
     pub fn get_or_insert_static_potential(
         &mut self,
@@ -275,7 +275,7 @@ impl ChemistryLibrary {
         if !record.is_valid() {
             return Ok(false);
         }
-        let key = record.key.signature();
+        let key = record.key.clone();
         if self.entries.contains_key(&key) {
             return Ok(false);
         }
